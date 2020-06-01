@@ -105,6 +105,10 @@ def is_not_in_condition(exp: Expression) -> bool:
     return __is_set_condition(exp, ConditionFunctions.NOT_IN)
 
 
+def is_not_in_condition_pattern(lhs: Pattern[Expression]) -> FunctionCallPattern:
+    return __set_condition_pattern(lhs, ConditionFunctions.NOT_IN)
+
+
 def binary_condition(
     alias: Optional[str], function_name: str, lhs: Expression, rhs: Expression
 ) -> FunctionCall:

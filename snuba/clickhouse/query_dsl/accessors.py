@@ -104,7 +104,8 @@ def get_project_ids_in_query_ast(
     def get_project_ids_in_condition(condition: Expression) -> Optional[Set[int]]:
         """
         Extract project ids from an expression. Returns None if no project
-        if condition is found.
+        if condition is found. It returns an empty set of conflicting project_id
+        conditions are found.
         """
         match = FunctionCall(
             None,
