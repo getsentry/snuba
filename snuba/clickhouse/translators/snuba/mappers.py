@@ -1,4 +1,4 @@
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
@@ -25,7 +25,7 @@ from snuba.util import qualified_column
 
 
 @dataclass(frozen=True)
-class SimpleColumnMapper(ColumnMapper):
+class ColumnToColumn(ColumnMapper):
     """
     Maps a column with a name and a table into a column with a different name and table.
 
@@ -57,7 +57,7 @@ class SimpleColumnMapper(ColumnMapper):
 
 
 @dataclass(frozen=True)
-class ColumnToLiteralMapper(ColumnMapper):
+class ColumnToLiteral(ColumnMapper):
     """
     Maps a column name into a hardcoded literal preserving the alias.
     """
@@ -85,7 +85,7 @@ class ColumnToLiteralMapper(ColumnMapper):
 
 
 @dataclass(frozen=True)
-class ColumnToFunctionMapper(ColumnMapper):
+class ColumnToFunction(ColumnMapper):
     """
     Maps a column into a function expression that preserves the alias.
     """
@@ -115,7 +115,7 @@ class ColumnToFunctionMapper(ColumnMapper):
 
 
 @dataclass(frozen=True)
-class TagMapper(SubscriptableReferenceMapper):
+class SubscriptableMapper(SubscriptableReferenceMapper):
     """
     Basic implementation of a tag mapper that transforms a subscriptable
     into a Clickhouse array access.
@@ -146,7 +146,7 @@ class TagMapper(SubscriptableReferenceMapper):
 
 
 @dataclass(frozen=True)
-class ColumnToTagMapper(ColumnMapper):
+class ColumnToMapping(ColumnMapper):
     """
     Maps a column into a mapping expression thus into a Clickhouse
     array access.

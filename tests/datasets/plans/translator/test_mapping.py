@@ -2,7 +2,7 @@ import pytest
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.clickhouse.translators.snuba.mappers import SimpleColumnMapper, TagMapper
+from snuba.clickhouse.translators.snuba.mappers import ColumnToColumn, SubscriptableMapper
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.plans.translator.query import QueryTranslator
 from snuba.datasets.schemas.tables import TableSource
@@ -53,8 +53,8 @@ test_cases = [
     ),
     pytest.param(
         TranslationMappers(
-            columns=[SimpleColumnMapper(None, "column2", None, "not_column2")],
-            subscriptables=[TagMapper(None, "tags", None, "tags")],
+            columns=[ColumnToColumn(None, "column2", None, "not_column2")],
+            subscriptables=[SubscriptableMapper(None, "tags", None, "tags")],
         ),
         SnubaQuery(
             body={},

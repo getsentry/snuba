@@ -2,11 +2,11 @@ from datetime import timedelta
 from typing import Mapping, Sequence
 
 from snuba.clickhouse.translators.snuba.mappers import (
-    ColumnToFunctionMapper,
-    ColumnToLiteralMapper,
-    ColumnToTagMapper,
-    SimpleColumnMapper,
-    TagMapper,
+    ColumnToFunction,
+    ColumnToLiteral,
+    ColumnToMapping,
+    ColumnToColumn,
+    SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.dataset import TimeSeriesDataset
@@ -33,7 +33,7 @@ from snuba.query.timeseries_extension import TimeSeriesExtension
 # storage.
 transactions_translator = TranslationMappers(
     columns=[
-        ColumnToFunctionMapper(
+        ColumnToFunction(
             None,
             "ip_address",
             "coalesce",
@@ -51,22 +51,22 @@ transactions_translator = TranslationMappers(
         # ``discover`` dataset and the standalone ``transaction`` dataset. In
         # the future, these aliases should be defined on the Transaction entity
         # instead of the dataset.
-        ColumnToLiteralMapper(None, "type", "transaction"),
-        SimpleColumnMapper(None, "timestamp", None, "finish_ts"),
-        SimpleColumnMapper(None, "username", None, "user_name"),
-        SimpleColumnMapper(None, "email", None, "user_email"),
-        SimpleColumnMapper(None, "transaction", None, "transaction_name"),
-        SimpleColumnMapper(None, "message", None, "transaction_name"),
-        SimpleColumnMapper(None, "title", None, "transaction_name"),
-        ColumnToTagMapper(
+        ColumnToLiteral(None, "type", "transaction"),
+        ColumnToColumn(None, "timestamp", None, "finish_ts"),
+        ColumnToColumn(None, "username", None, "user_name"),
+        ColumnToColumn(None, "email", None, "user_email"),
+        ColumnToColumn(None, "transaction", None, "transaction_name"),
+        ColumnToColumn(None, "message", None, "transaction_name"),
+        ColumnToColumn(None, "title", None, "transaction_name"),
+        ColumnToMapping(
             None, "geo_country_code", None, "contexts", "geo.country_code"
         ),
-        ColumnToTagMapper(None, "geo_region", None, "contexts", "geo.region"),
-        ColumnToTagMapper(None, "geo_city", None, "contexts", "geo.city"),
+        ColumnToMapping(None, "geo_region", None, "contexts", "geo.region"),
+        ColumnToMapping(None, "geo_city", None, "contexts", "geo.city"),
     ],
     subscriptables=[
-        TagMapper(None, "tags", None, "tags"),
-        TagMapper(None, "contexts", None, "contexts"),
+        SubscriptableMapper(None, "tags", None, "tags"),
+        SubscriptableMapper(None, "contexts", None, "contexts"),
     ],
 )
 

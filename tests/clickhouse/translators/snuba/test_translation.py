@@ -2,11 +2,11 @@ import pytest
 
 from snuba.clickhouse.query import Expression as ClickhouseExpression
 from snuba.clickhouse.translators.snuba.mappers import (
-    ColumnToFunctionMapper,
-    ColumnToLiteralMapper,
-    ColumnToTagMapper,
-    SimpleColumnMapper,
-    TagMapper,
+    ColumnToFunction,
+    ColumnToLiteral,
+    ColumnToMapping,
+    ColumnToColumn,
+    SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import (
     SnubaClickhouseMappingTranslator,
@@ -23,21 +23,21 @@ from snuba.query.expressions import (
 
 
 def test_column_translation() -> None:
-    assert SimpleColumnMapper("table", "col", "table2", "col2").attempt_map(
+    assert ColumnToColumn("table", "col", "table2", "col2").attempt_map(
         Column(None, "table", "col"),
         SnubaClickhouseMappingTranslator(TranslationMappers()),
     ) == Column("table.col", "table2", "col2")
 
 
 def test_column_literal_translation() -> None:
-    assert ColumnToLiteralMapper("table", "col", "my_literal").attempt_map(
+    assert ColumnToLiteral("table", "col", "my_literal").attempt_map(
         Column("c_alias", "table", "col"),
         SnubaClickhouseMappingTranslator(TranslationMappers()),
     ) == Literal("c_alias", "my_literal")
 
 
 def test_column_function_translation() -> None:
-    assert ColumnToFunctionMapper(
+    assert ColumnToFunction(
         None,
         "ip_address",
         "coalesce",
@@ -53,7 +53,7 @@ def test_column_function_translation() -> None:
 
 
 def test_tag_translation() -> None:
-    translated = TagMapper(None, "tags", None, "tags").attempt_map(
+    translated = SubscriptableMapper(None, "tags", None, "tags").attempt_map(
         SubscriptableReference(
             "tags[release]", Column(None, None, "tags"), Literal(None, "release")
         ),
@@ -75,7 +75,7 @@ def test_tag_translation() -> None:
 
 
 def test_col_tag_translation() -> None:
-    translated = ColumnToTagMapper(
+    translated = ColumnToMapping(
         None, "geo_country_code", None, "contexts", "geo.country_code"
     ).attempt_map(
         Column(None, None, "geo_country_code"),
@@ -98,19 +98,19 @@ def test_col_tag_translation() -> None:
 
 test_data = [
     pytest.param(
-        TranslationMappers(columns=[SimpleColumnMapper(None, "col", None, "col2")]),
+        TranslationMappers(columns=[ColumnToColumn(None, "col", None, "col2")]),
         Column(None, None, "col3"),
         Column(None, None, "col3"),
         id="default rule",
     ),
     pytest.param(
-        TranslationMappers(columns=[SimpleColumnMapper(None, "col", None, "col2")]),
+        TranslationMappers(columns=[ColumnToColumn(None, "col", None, "col2")]),
         Column(None, None, "col"),
         Column("col", None, "col2"),
         id="simple column",
     ),
     pytest.param(
-        TranslationMappers(subscriptables=[TagMapper(None, "tags", "table", "tags")]),
+        TranslationMappers(subscriptables=[SubscriptableMapper(None, "tags", "table", "tags")]),
         SubscriptableReference(
             "tags[release]", Column(None, None, "tags"), Literal(None, "release")
         ),
@@ -130,10 +130,10 @@ test_data = [
     ),
     pytest.param(
         TranslationMappers(
-            subscriptables=[TagMapper(None, "tags", None, "tags")],
+            subscriptables=[SubscriptableMapper(None, "tags", None, "tags")],
             columns=[
-                SimpleColumnMapper(None, "col", None, "col2"),
-                SimpleColumnMapper(None, "cola", None, "colb"),
+                ColumnToColumn(None, "col", None, "col2"),
+                ColumnToColumn(None, "cola", None, "colb"),
             ],
         ),
         FunctionCall(
