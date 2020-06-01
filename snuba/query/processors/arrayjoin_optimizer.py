@@ -25,9 +25,10 @@ tags_key_pattern = FunctionCall(
 )
 
 
-def _get_tag_keys_in_condition(condition: Optional[Expression]) -> Optional[Set[str]]:
+def _get_tag_keys_in_condition(condition: Expression) -> Optional[Set[str]]:
     """
-    Finds the top level conditions that include tags_key in an expression.
+    Finds the top level conditions that include filter based on tags_key.
+    This is meant to be used to find the tag keys the query is filtering on.
     We can only apply the arrayFilter optimization to tag keys conditions
     that are not in OR with other columns. To simplify the problem, we only
     consider those conditions that are included in the first level of the query:
@@ -36,12 +37,9 @@ def _get_tag_keys_in_condition(condition: Optional[Expression]) -> Optional[Set[
 
     If we encounter an OR condition we return None, which means we cannot
     safely apply the optimization. Empty set means we did not find any
-    suitable taf key for optimization in this condition but that does
-    not disqualify the whole query as the OR condition does.
+    suitable tag key for optimization in this condition but that does
+    not disqualify the whole query in the way the OR condition does.
     """
-    if condition is None:
-        return set()
-
     tag_keys_found = set()
 
     conditions = get_first_level_conditions(condition)
@@ -85,12 +83,21 @@ def get_filtered_tag_keys(query: Query) -> Set[str]:
     if not tags_key_found:
         return set()
 
-    cond_tags_key = _get_tag_keys_in_condition(query.get_condition_from_ast())
+    ast_condition = query.get_condition_from_ast()
+    cond_tags_key = (
+        _get_tag_keys_in_condition(ast_condition)
+        if ast_condition is not None
+        else set()
+    )
     if cond_tags_key is None:
         # This means we found an OR. Cowardly we give up even though there could
         # be cases where this condition is still optimizable.
         return set()
-    having_tags_key = _get_tag_keys_in_condition(query.get_having_from_ast())
+
+    ast_having = query.get_having_from_ast()
+    having_tags_key = (
+        _get_tag_keys_in_condition(ast_having) if ast_having is not None else set()
+    )
     if having_tags_key is None:
         # Same as above
         return set()
@@ -100,9 +107,9 @@ def get_filtered_tag_keys(query: Query) -> Set[str]:
 
 class ArrayjoinOptimizer(QueryProcessor):
     """
-    Apply two optimizations to reduce the performance impact of tags_key
-    and tags_value expressions that are sent to clickhouse as
-    arrayJoin(tags.key)
+    Applies two optimizations to reduce the performance impact of
+    tags_key and tags_value expressions that are sent to clickhouse
+    as arrayJoin(tags.key)
 
     - it performs the arrayJoin only once in case both tags_key and
         tags_value are present in the query by arrayJoining on the
@@ -148,16 +155,16 @@ class ArrayjoinOptimizer(QueryProcessor):
                 # Both tags_key and tags_value expressions present int the query.
                 # do the arrayJoin on key-value pairs instead of independent
                 # arrayjoin for keys and values.
-                array_pos = (
+                array_index = (
                     LiteralExpr(None, 1)
                     if match.string("col") == "tags.key"
                     else LiteralExpr(None, 2)
                 )
 
                 if not filtered_tags:
-                    return _unfiltered_tag_pairs(expr.alias, array_pos)
+                    return _unfiltered_tag_pairs(expr.alias, array_index)
                 else:
-                    return _filtered_tag_pairs(expr.alias, filtered_tags, array_pos)
+                    return _filtered_tag_pairs(expr.alias, filtered_tags, array_index)
 
             elif filtered_tags:
                 # Only one between tags_key and tags_value is present, and
@@ -170,7 +177,7 @@ class ArrayjoinOptimizer(QueryProcessor):
         query.transform_expressions(replace_expression)
 
 
-def _unfiltered_tag_pairs(alias: Optional[str], array_pos: LiteralExpr) -> Expression:
+def _unfiltered_tag_pairs(alias: Optional[str], array_index: LiteralExpr) -> Expression:
     # (arrayJoin(
     #   arrayMap((x,y) -> [x,y], tags.key, tags.value)
     #  as all_tags)[1]
@@ -183,12 +190,14 @@ def _unfiltered_tag_pairs(alias: Optional[str], array_pos: LiteralExpr) -> Expre
                 ColumnExpr(None, None, "tags.value"),
             ),
         ),
-        array_pos,
+        array_index,
     )
 
 
 def _filtered_tag_pairs(
-    alias: Optional[str], filtered_tags: Sequence[LiteralExpr], array_pos: LiteralExpr,
+    alias: Optional[str],
+    filtered_tags: Sequence[LiteralExpr],
+    array_index: LiteralExpr,
 ) -> Expression:
     # (arrayJoin(arrayFilter(
     #       pair -> arrayElement(pair, 1) IN (tags),
@@ -206,7 +215,7 @@ def _filtered_tag_pairs(
                 filtered_tags,
             ),
         ),
-        array_pos,
+        array_index,
     )
 
 
@@ -263,6 +272,9 @@ def filter_key_values(
                 ("pair",),
                 in_condition(
                     None,
+                    # A pair here is an array with two elements (key
+                    # and value) and the index of the first element in
+                    # Clickhouse is 1 instead of 0.
                     arrayElement(None, Argument(None, "pair"), LiteralExpr(None, 1),),
                     tag_keys,
                 ),
