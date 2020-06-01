@@ -135,8 +135,8 @@ class TagMapper(SubscriptableReferenceMapper):
         children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[FunctionCallExpr]:
         if (
-            expression.column.column_name == self.from_column_name
-            and expression.column.table_name == self.from_column_table
+            expression.column.table_name == self.from_column_table
+            and expression.column.column_name == self.from_column_name
         ):
             return build_tag_expr(
                 expression.alias,
@@ -151,7 +151,7 @@ class TagMapper(SubscriptableReferenceMapper):
 @dataclass(frozen=True)
 class ColumnToTagMapper(ColumnMapper):
     """
-    Maps a column into a mapping column expression thus into a Clickhouse
+    Maps a column into a mapping expression thus into a Clickhouse
     array access.
     """
 
@@ -167,8 +167,8 @@ class ColumnToTagMapper(ColumnMapper):
         children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[FunctionCallExpr]:
         if (
-            expression.column_name == self.from_column_name
-            and expression.table_name == self.from_column_table
+            expression.table_name == self.from_column_table
+            and expression.column_name == self.from_column_name
         ):
             return build_tag_expr(
                 expression.alias

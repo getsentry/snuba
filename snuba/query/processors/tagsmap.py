@@ -109,8 +109,8 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         for node in expression:
             match = tag_pattern.match(node)
             if match is not None:
-                col_name, _ = match.string(KEY_COL_TAG_PARAM).split(".")
-                if col_name == self.__nested_col:
+                key_column_split = match.string(KEY_COL_TAG_PARAM).split(".")
+                if key_column_split[0] == self.__nested_col:
                     return True
         return False
 
