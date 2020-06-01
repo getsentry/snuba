@@ -83,7 +83,7 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         self.__storage = storage
         # The translation mappers to be used when translating the logical query
         # into the clickhouse query.
-        self.__mappers = mappers or TranslationMappers()
+        self.__mappers = mappers if mappers is not None else TranslationMappers()
         # This is a set of query processors that have to be executed on the
         # query after the storage selection but that are defined by the dataset.
         # Query processors defined by a Storage must be executable independently

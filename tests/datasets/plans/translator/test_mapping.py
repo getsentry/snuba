@@ -15,8 +15,8 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query as SnubaQuery
 
 test_cases = [
-    (
-        "default - no change",
+    pytest.param(
+        TranslationMappers(),
         SnubaQuery(
             body={},
             data_source=TableSource("my_table", ColumnSet([])),
@@ -49,10 +49,13 @@ test_cases = [
                 ],
             )
         ),
-        TranslationMappers(),
+        id="default - no change",
     ),
-    (
-        "some basic rules",
+    pytest.param(
+        TranslationMappers(
+            columns=[SimpleColumnMapper(None, "column2", None, "not_column2")],
+            subscriptables=[TagMapper(None, "tags", None, "tags")],
+        ),
         SnubaQuery(
             body={},
             data_source=TableSource("my_table", ColumnSet([])),
@@ -100,17 +103,14 @@ test_cases = [
                 ],
             )
         ),
-        TranslationMappers(
-            columns=[SimpleColumnMapper(None, "column2", None, "not_column2")],
-            subscriptables=[TagMapper(None, "tags", None, "tags")],
-        ),
+        id="some basic rules",
     ),
 ]
 
 
-@pytest.mark.parametrize("name, query, expected, mappers", test_cases)
+@pytest.mark.parametrize("mappers, query, expected", test_cases)
 def test_translation(
-    name: str, query: SnubaQuery, expected: ClickhouseQuery, mappers: TranslationMappers
+    mappers: TranslationMappers, query: SnubaQuery, expected: ClickhouseQuery
 ) -> None:
     translated = QueryTranslator(mappers).translate(query)
 
