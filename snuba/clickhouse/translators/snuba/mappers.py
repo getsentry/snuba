@@ -61,8 +61,8 @@ class TagMapper(SubscriptableReferenceMapper):
 
     from_column_table: Optional[str]
     from_column_name: str
-    to_table_name: Optional[str]
-    to_col_name: str
+    to_nested_col_table: Optional[str]
+    to_nested_col_name: str
 
     def attempt_map(
         self,
@@ -77,12 +77,16 @@ class TagMapper(SubscriptableReferenceMapper):
 
         return arrayElement(
             expression.alias,
-            ColumnExpr(None, self.to_table_name, f"{self.to_col_name}.value"),
+            ColumnExpr(
+                None, self.to_nested_col_table, f"{self.to_nested_col_name}.value"
+            ),
             FunctionCallExpr(
                 None,
                 "indexOf",
                 (
-                    ColumnExpr(None, self.to_table_name, f"{self.to_col_name}.key"),
+                    ColumnExpr(
+                        None, self.to_nested_col_table, f"{self.to_nested_col_name}.key"
+                    ),
                     expression.key.accept(children_translator),
                 ),
             ),
