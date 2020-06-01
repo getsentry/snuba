@@ -1,6 +1,6 @@
 import abc
 from uuid import UUID
-from typing import Collection, Tuple
+from typing import Iterable, Tuple
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
@@ -26,10 +26,10 @@ class SubscriptionDataStore(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def all(self) -> Collection[Tuple[UUID, SubscriptionData]]:
+    def all(self) -> Iterable[Tuple[UUID, SubscriptionData]]:
         """
         Fetches all `Subscriptions` from the store
-        :return: A collection of `Subscriptions`.
+        :return: An iterable of `Subscriptions`.
         """
         pass
 
@@ -63,10 +63,10 @@ class RedisSubscriptionDataStore(SubscriptionDataStore):
         """
         self.client.hdel(self.__key, key.hex.encode("utf-8"))
 
-    def all(self) -> Collection[Tuple[UUID, SubscriptionData]]:
+    def all(self) -> Iterable[Tuple[UUID, SubscriptionData]]:
         """
         Fetches all subscriptions from the store.
-        :return: A collection of `Subscriptions`.
+        :return: An iterable of `Subscriptions`.
         """
         return [
             (UUID(key.decode("utf-8")), self.codec.decode(val))
