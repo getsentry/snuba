@@ -45,8 +45,7 @@ def build_query(
 
 
 tags_filter_tests = [
-    (
-        "no tag filter",
+    pytest.param(
         build_query(
             selected_columns=[
                 FunctionCall(
@@ -55,9 +54,9 @@ tags_filter_tests = [
             ],
         ),
         set(),
+        id="no tag filter",
     ),
-    (
-        "simple equality",
+    pytest.param(
         build_query(
             selected_columns=[
                 FunctionCall(
@@ -74,9 +73,9 @@ tags_filter_tests = [
             ),
         ),
         {"tag"},
+        id="simple equality",
     ),
-    (
-        "tag IN condition",
+    pytest.param(
         build_query(
             selected_columns=[
                 FunctionCall(
@@ -92,9 +91,9 @@ tags_filter_tests = [
             ),
         ),
         {"tag1", "tag2"},
+        id="tag IN condition",
     ),
-    (
-        "conditions and having",
+    pytest.param(
         build_query(
             selected_columns=[
                 FunctionCall(
@@ -119,9 +118,9 @@ tags_filter_tests = [
             ),
         ),
         {"tag", "tag2"},
+        id="conditions and having",
     ),
-    (
-        "tag OR condition",
+    pytest.param(
         build_query(
             selected_columns=[
                 FunctionCall(
@@ -152,13 +151,14 @@ tags_filter_tests = [
             ),
         ),
         set(),
+        id="tag OR condition",
     ),
 ]
 
 
-@pytest.mark.parametrize("name, query, expected_result", tags_filter_tests)
+@pytest.mark.parametrize("query, expected_result", tags_filter_tests)
 def test_get_filtered_tag_keys(
-    name: str, query: ClickhouseQuery, expected_result: Set[str],
+    query: ClickhouseQuery, expected_result: Set[str],
 ) -> None:
     """
     Test the algorithm that identifies potential tag keys we can pre-filter
@@ -168,8 +168,7 @@ def test_get_filtered_tag_keys(
 
 
 test_data = [
-    (
-        "no tag in select clause",
+    pytest.param(
         {
             "aggregations": [],
             "groupby": [],
@@ -184,9 +183,9 @@ test_data = [
                 [Literal(None, "t1"), Literal(None, "t2")],
             ),
         ),
+        id="no tag in select clause",
     ),  # Individual tag, no change
-    (
-        "tags_key and tags_value in query no filter",
+    pytest.param(
         {
             "aggregations": [],
             "groupby": [],
@@ -224,9 +223,9 @@ test_data = [
                 [Literal(None, "t1"), Literal(None, "t2")],
             ),
         ),
+        id="tags_key and tags_value in query no filter",
     ),  # tags_key and value in select but no condition on it. No change
-    (
-        "filter on keys only",
+    pytest.param(
         {
             "aggregations": [],
             "groupby": [],
@@ -249,9 +248,9 @@ test_data = [
                 [Literal(None, "t1")],
             ),
         ),
+        id="filter on keys only",
     ),
-    (
-        "filter on key value pars",
+    pytest.param(
         {
             "aggregations": [],
             "groupby": [],
@@ -308,6 +307,7 @@ test_data = [
                 [Literal(None, "t1")],
             ),
         ),
+        id="filter on key value pars",
     ),
 ]
 
@@ -324,9 +324,9 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     return plan.query
 
 
-@pytest.mark.parametrize("name, query_body, expected_query", test_data)
+@pytest.mark.parametrize("query_body, expected_query", test_data)
 def test_tags_processor(
-    name: str, query_body: MutableMapping[str, Any], expected_query: ClickhouseQuery
+    query_body: MutableMapping[str, Any], expected_query: ClickhouseQuery
 ) -> None:
     """
     Tests the whole processing in some notable cases.
