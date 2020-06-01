@@ -82,6 +82,11 @@ def events_migrations(
             f"ALTER TABLE {clickhouse_table} ADD COLUMN _tags_flattened String DEFAULT '' AFTER tags"
         )
 
+    if "message_timestamp" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN message_timestamp DateTime AFTER partition"
+        )
+
     return ret
 
 
@@ -90,6 +95,7 @@ metadata_columns = ColumnSet(
         # optional stream related data
         ("offset", Nullable(UInt(64))),
         ("partition", Nullable(UInt(16))),
+        ("message_timestamp", DateTime()),
     ]
 )
 
