@@ -59,8 +59,7 @@ class SimpleColumnMapper(ColumnMapper):
 @dataclass(frozen=True)
 class ColumnToLiteralMapper(ColumnMapper):
     """
-    Maps a column name into a hardcoded literal in the query preserving
-    the alias.
+    Maps a column name into a hardcoded literal preserving the alias.
     """
 
     from_table_name: Optional[str]
@@ -152,7 +151,8 @@ class TagMapper(SubscriptableReferenceMapper):
 @dataclass(frozen=True)
 class ColumnToTagMapper(ColumnMapper):
     """
-    Maps a column into
+    Maps a column into a mapping column expression thus into a Clickhouse
+    array access.
     """
 
     from_column_table: Optional[str]
