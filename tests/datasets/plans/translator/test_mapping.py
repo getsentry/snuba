@@ -81,7 +81,7 @@ test_cases = [
                         "alias2",
                         "f1",
                         (
-                            Column(None, None, "not_column2"),
+                            Column("column2", None, "not_column2"),
                             Column(None, None, "column3"),
                         ),
                     ),
