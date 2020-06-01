@@ -224,7 +224,7 @@ test_data = [
             ),
         ),
         id="tags_key and tags_value in query no filter",
-    ),  # tags_key and value in select but no condition on it. No change
+    ),  # tags_key and value in select. Zip keys and columns into an array.
     pytest.param(
         {
             "aggregations": [],
@@ -249,7 +249,7 @@ test_data = [
             ),
         ),
         id="filter on keys only",
-    ),
+    ),  # Filtering tag keys. Apply arrayFilter into the arrayJoin.
     pytest.param(
         {
             "aggregations": [],
@@ -308,7 +308,8 @@ test_data = [
             ),
         ),
         id="filter on key value pars",
-    ),
+    ),  # tags_key and tags_value present together with conditions. Apply
+    # arrayFilter over the zip between tags_key and tags_value
 ]
 
 
