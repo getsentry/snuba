@@ -1,11 +1,20 @@
 from datetime import timedelta
 from typing import Mapping, Sequence
 
+from snuba.clickhouse.translators.snuba.mappers import (
+    ColumnToFunctionMapper,
+    ColumnToLiteralMapper,
+    ColumnToTagMapper,
+    SimpleColumnMapper,
+    TagMapper,
+)
+from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
+from snuba.query.expressions import Column, FunctionCall
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
@@ -18,6 +27,51 @@ from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
 from snuba.query.timeseries_extension import TimeSeriesExtension
+
+# TODO: This will be a property of the relationship between entity and
+# storage. Now we do not have entities so it is between dataset and
+# storage.
+transactions_translator = TranslationMappers(
+    columns=[
+        ColumnToFunctionMapper(
+            None,
+            "ip_address",
+            FunctionCall(
+                None,
+                "coalesce",
+                (
+                    FunctionCall(
+                        None, "IPv4NumToString", (Column(None, None, "ip_address_v4"),),
+                    ),
+                    FunctionCall(
+                        None, "IPv6NumToString", (Column(None, None, "ip_address_v6"),),
+                    ),
+                ),
+            ),
+        ),
+        # These column aliases originally existed in the ``discover`` dataset,
+        # but now live here to maintain compatibility between the composite
+        # ``discover`` dataset and the standalone ``transaction`` dataset. In
+        # the future, these aliases should be defined on the Transaction entity
+        # instead of the dataset.
+        ColumnToLiteralMapper(None, "type", "transaction"),
+        SimpleColumnMapper(None, "timestamp", None, "finish_ts"),
+        SimpleColumnMapper(None, "username", None, "user_name"),
+        SimpleColumnMapper(None, "email", None, "user_email"),
+        SimpleColumnMapper(None, "transaction", None, "transaction_name"),
+        SimpleColumnMapper(None, "message", None, "transaction_name"),
+        SimpleColumnMapper(None, "title", None, "transaction_name"),
+        ColumnToTagMapper(
+            None, "geo_country_code", None, "contexts", "geo.country_code"
+        ),
+        ColumnToTagMapper(None, "geo_region", None, "contexts", "geo.region"),
+        ColumnToTagMapper(None, "geo_city", None, "contexts", "geo.city"),
+    ],
+    subscriptables=[
+        TagMapper(None, "tags", None, "tags"),
+        TagMapper(None, "contexts", None, "contexts"),
+    ],
+)
 
 
 class TransactionsDataset(TimeSeriesDataset):
@@ -36,7 +90,9 @@ class TransactionsDataset(TimeSeriesDataset):
         }
         super().__init__(
             storages=[storage],
-            query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
+            query_plan_builder=SingleStorageQueryPlanBuilder(
+                storage=storage, mappers=transactions_translator
+            ),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,
             time_group_columns=self.__time_group_columns,
@@ -89,7 +145,7 @@ class TransactionsDataset(TimeSeriesDataset):
         # These column aliases originally existed in the ``discover`` dataset,
         # but now live here to maintain compatibility between the composite
         # ``discover`` dataset and the standalone ``transaction`` dataset. In
-        # the future, these aliases hould be defined on the Transaction entity
+        # the future, these aliases should be defined on the Transaction entity
         # instead of the dataset.
         if column_name == "type":
             return "'transaction'"
