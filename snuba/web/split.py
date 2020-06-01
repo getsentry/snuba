@@ -108,7 +108,7 @@ def _replace_ast_condition(
     in the query WHERE clause.
     """
 
-    def replaced_condition(expression: Expression) -> Expression:
+    def replace_condition(expression: Expression) -> Expression:
         match = FunctionCall(
             None,
             String(OPERATOR_TO_FUNCTION[operator]),
@@ -127,7 +127,7 @@ def _replace_ast_condition(
     if condition is not None:
         query.set_ast_condition(
             combine_and_conditions(
-                [replaced_condition(c) for c in get_first_level_conditions(condition)]
+                [replace_condition(c) for c in get_first_level_conditions(condition)]
             )
         )
 
