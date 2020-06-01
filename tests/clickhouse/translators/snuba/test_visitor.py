@@ -16,25 +16,25 @@ from snuba.query.expressions import (
 )
 
 test_data = [
-    Column("alias", "col", "table"),
+    Column("alias", "table", "col"),
     Literal("alias", 123),
     Argument("alias", "arg"),
     SubscriptableReference(
-        "tags[asd]", Column(None, "tags", None), Literal(None, "release")
+        "tags[asd]", Column(None, None, "tags"), Literal(None, "release")
     ),
     FunctionCall(
         "alias",
         "f",
         (
-            Column(None, "col", "table"),
+            Column(None, "table", "col"),
             Literal(None, 123),
-            FunctionCall(None, "f1", (Column(None, "col2", None),)),
+            FunctionCall(None, "f1", (Column(None, None, "col2"),)),
         ),
     ),
     CurriedFunctionCall(
         None,
-        FunctionCall(None, "f", (Column(None, "col", None), Literal(None, 12))),
-        (Column(None, "col3", None),),
+        FunctionCall(None, "f", (Column(None, None, "col"), Literal(None, 12))),
+        (Column(None, None, "col3"),),
     ),
     Lambda(None, ("a", "b"), FunctionCall(None, "f", (Argument(None, "a"),))),
 ]

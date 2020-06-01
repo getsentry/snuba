@@ -17,19 +17,19 @@ from snuba.query.expressions import (
 
 
 def test_column_translation() -> None:
-    col = Column(None, "col", "table")
-    translated = SimpleColumnMapper("col", "table", "col2", "table2").attempt_map(
+    col = Column(None, "table", "col")
+    translated = SimpleColumnMapper("table", "col", "table2", "col2").attempt_map(
         col, SnubaClickhouseMappingTranslator(TranslationMappers())
     )
 
-    assert translated == Column(None, "col2", "table2")
+    assert translated == Column(None, "table2", "col2")
 
 
 def test_tag_translation() -> None:
     col = SubscriptableReference(
-        "tags[release]", Column(None, "tags", None), Literal(None, "release")
+        "tags[release]", Column(None, None, "tags"), Literal(None, "release")
     )
-    translated = TagMapper("tags", None, "tags", None).attempt_map(
+    translated = TagMapper(None, "tags", None, "tags").attempt_map(
         col, SnubaClickhouseMappingTranslator(TranslationMappers())
     )
 
@@ -37,11 +37,11 @@ def test_tag_translation() -> None:
         "tags[release]",
         "arrayElement",
         (
-            Column(None, "tags.value", None),
+            Column(None, None, "tags.value"),
             FunctionCall(
                 None,
                 "indexOf",
-                (Column(None, "tags.key", None), Literal(None, "release")),
+                (Column(None, None, "tags.key"), Literal(None, "release")),
             ),
         ),
     )
@@ -50,31 +50,31 @@ def test_tag_translation() -> None:
 test_data = [
     (
         "default rule",
-        TranslationMappers(columns=[SimpleColumnMapper("col", None, "col2", None)]),
-        Column(None, "col3", None),
-        Column(None, "col3", None),
+        TranslationMappers(columns=[SimpleColumnMapper(None, "col", None, "col2")]),
+        Column(None, None, "col3"),
+        Column(None, None, "col3"),
     ),
     (
         "simple column",
-        TranslationMappers(columns=[SimpleColumnMapper("col", None, "col2", None)]),
-        Column(None, "col", None),
-        Column(None, "col2", None),
+        TranslationMappers(columns=[SimpleColumnMapper(None, "col", None, "col2")]),
+        Column(None, None, "col"),
+        Column(None, None, "col2"),
     ),
     (
         "tag mapper",
-        TranslationMappers(subscriptables=[TagMapper("tags", None, "tags", "table")]),
+        TranslationMappers(subscriptables=[TagMapper(None, "tags", "table", "tags")]),
         SubscriptableReference(
-            "tags[release]", Column(None, "tags", None), Literal(None, "release")
+            "tags[release]", Column(None, None, "tags"), Literal(None, "release")
         ),
         FunctionCall(
             "tags[release]",
             "arrayElement",
             (
-                Column(None, "tags.value", "table"),
+                Column(None, "table", "tags.value"),
                 FunctionCall(
                     None,
                     "indexOf",
-                    (Column(None, "tags.key", "table"), Literal(None, "release")),
+                    (Column(None, "table", "tags.key"), Literal(None, "release")),
                 ),
             ),
         ),
@@ -82,10 +82,10 @@ test_data = [
     (
         "complex translator with tags and columns",
         TranslationMappers(
-            subscriptables=[TagMapper("tags", None, "tags", None)],
+            subscriptables=[TagMapper(None, "tags", None, "tags")],
             columns=[
-                SimpleColumnMapper("col", None, "col2", None),
-                SimpleColumnMapper("cola", None, "colb", None),
+                SimpleColumnMapper(None, "col", None, "col2"),
+                SimpleColumnMapper(None, "cola", None, "colb"),
             ],
         ),
         FunctionCall(
@@ -95,7 +95,7 @@ test_data = [
                 FunctionCall(
                     None,
                     "anotherFunc",
-                    (Column(None, "col", None), Literal(None, 123)),
+                    (Column(None, None, "col"), Literal(None, 123)),
                 ),
                 CurriedFunctionCall(
                     None,
@@ -105,12 +105,12 @@ test_data = [
                         (
                             SubscriptableReference(
                                 "tags[release]",
-                                Column(None, "tags", None),
+                                Column(None, None, "tags"),
                                 Literal(None, "release"),
                             ),
                         ),
                     ),
-                    (Column(None, "cola", None), Literal(None, 123)),
+                    (Column(None, None, "cola"), Literal(None, 123)),
                 ),
             ),
         ),
@@ -121,7 +121,7 @@ test_data = [
                 FunctionCall(
                     None,
                     "anotherFunc",
-                    (Column(None, "col2", None), Literal(None, 123)),
+                    (Column(None, None, "col2"), Literal(None, 123)),
                 ),
                 CurriedFunctionCall(
                     None,
@@ -133,12 +133,12 @@ test_data = [
                                 "tags[release]",
                                 "arrayElement",
                                 (
-                                    Column(None, "tags.value", None),
+                                    Column(None, None, "tags.value"),
                                     FunctionCall(
                                         None,
                                         "indexOf",
                                         (
-                                            Column(None, "tags.key", None),
+                                            Column(None, None, "tags.key"),
                                             Literal(None, "release"),
                                         ),
                                     ),
@@ -146,7 +146,7 @@ test_data = [
                             ),
                         ),
                     ),
-                    (Column(None, "colb", None), Literal(None, 123)),
+                    (Column(None, None, "colb"), Literal(None, 123)),
                 ),
             ),
         ),

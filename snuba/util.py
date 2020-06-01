@@ -2,8 +2,11 @@ from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from dateutil.parser import parse as dateutil_parse
 from functools import wraps
+from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 from typing import (
     Any,
+    Callable,
+    cast,
     Iterator,
     List,
     Mapping,
@@ -14,10 +17,14 @@ from typing import (
     TypeVar,
     Union,
 )
+
+import inspect
 import logging
 import numbers
 import re
 import _strptime  # NOQA fixes _strptime deferred import issue
+
+import sentry_sdk
 
 from snuba import settings
 from snuba.clickhouse.escaping import escape_identifier, escape_string
@@ -42,6 +49,7 @@ APDEX_FUNCTION_RE = re.compile(r"^apdex\(\s*([^,]+)+\s*,\s*([\d]+)+\s*\)$")
 IMPACT_FUNCTION_RE = re.compile(
     r"^impact\(\s*([^,]+)+\s*,\s*([\d]+)+\s*,\s*([^,]+)+\s*\)$"
 )
+ERROR_RATE_FUNCTION_RE = re.compile(r"^error_rate\(\)$")
 
 
 def local_dataset_mode() -> bool:
@@ -97,6 +105,14 @@ def function_expr(fn: str, args_expr: str = "") -> str:
                 apdex=apdex, user_col=escape_identifier(match.group(3)),
             )
         raise ValueError("Invalid format for impact()")
+    elif fn.startswith("error_rate("):
+        match = ERROR_RATE_FUNCTION_RE.match(fn)
+        if match:
+            return "countIf((transaction_status != {ok} AND transaction_status != {unknown})) / count()".format(
+                ok=SPAN_STATUS_NAME_TO_CODE["ok"],
+                unknown=SPAN_STATUS_NAME_TO_CODE["unknown_error"],
+            )
+        raise ValueError("Invalid format for error_rate()")
     # For functions with no args, (or static args) we allow them to already
     # include them as part of the function name, eg, "count()" or "sleep(1)"
     if not args_expr and fn.endswith(")"):
@@ -325,3 +341,25 @@ def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
             else None,
         ),
     )
+
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def with_span(op: str = "function") -> Callable[[F], F]:
+    """ Wraps a function call in a Sentry AM span
+    """
+
+    def decorator(func: F) -> F:
+        frame_info = inspect.stack()[1]
+        filename = frame_info.filename
+
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> Any:
+            with sentry_sdk.start_span(description=func.__name__, op=op) as span:
+                span.set_data("filename", filename)
+                return func(*args, **kwargs)
+
+        return cast(F, wrapper)
+
+    return decorator

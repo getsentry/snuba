@@ -2,22 +2,16 @@ from collections import OrderedDict
 from typing import Any, Callable, Optional, Sequence, TypeVar
 
 from snuba.datasets.dataset import Dataset
-from snuba.query.expressions import (
-    Argument,
-    Expression,
-    Lambda,
-    Literal,
-    FunctionCall,
-)
 from snuba.query.conditions import (
-    binary_condition,
-    BooleanFunctions,
     OPERATOR_TO_FUNCTION,
+    binary_condition,
+    combine_and_conditions,
+    combine_or_conditions,
 )
+from snuba.query.expressions import Argument, Expression, FunctionCall, Lambda, Literal
 from snuba.query.parser.expressions import parse_expression
 from snuba.query.schema import POSITIVE_OPERATORS
 from snuba.util import is_condition
-
 
 TExpression = TypeVar("TExpression")
 
@@ -131,29 +125,15 @@ def parse_conditions_to_expr(
     Relies on parse_conditions to parse a list of conditions into an Expression.
     """
 
-    def multi_expression_builder(
-        expressions: Sequence[Expression], function: str
-    ) -> Expression:
-        assert len(expressions) > 0
-        if len(expressions) == 1:
-            return expressions[0]
-
-        return binary_condition(
-            None,
-            function,
-            expressions[0],
-            multi_expression_builder(expressions[1:], function),
-        )
-
     def and_builder(expressions: Sequence[Expression]) -> Optional[Expression]:
         if not expressions:
             return None
-        return multi_expression_builder(expressions, BooleanFunctions.AND)
+        return combine_and_conditions(expressions)
 
     def or_builder(expressions: Sequence[Expression]) -> Optional[Expression]:
         if not expressions:
             return None
-        return multi_expression_builder(expressions, BooleanFunctions.OR)
+        return combine_or_conditions(expressions)
 
     def preprocess_literal(op: str, literal: Any) -> Expression:
         """
