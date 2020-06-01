@@ -1,11 +1,9 @@
 import copy
 import logging
-
 from datetime import datetime
+from functools import partial
 
 import sentry_sdk
-
-from functools import partial
 
 from snuba import environment, settings, state
 from snuba.clickhouse.astquery import AstSqlQuery
@@ -166,8 +164,16 @@ def _format_storage_query_and_run(
     """
 
     source = clickhouse_query.get_data_source().format_from()
-    with sentry_sdk.start_span(description="create_query", op="db"):
-        formatted_query = DictSqlQuery(dataset, clickhouse_query, request_settings)
+    with sentry_sdk.start_span(description="create_query", op="db") as span:
+        dict_formatted_query = DictSqlQuery(dataset, clickhouse_query, request_settings)
+        span.set_data("dict_query", dict_formatted_query.sql_data())
+        try:
+            ast_formatted_query = AstSqlQuery(clickhouse_query, request_settings)
+            span.set_data("ast_query", ast_formatted_query.sql_data())
+        except Exception:
+
+            logger.warning("Failed to format ast query", exc_info=True)
+
     timer.mark("prepare_query")
 
     stats = {
@@ -179,19 +185,19 @@ def _format_storage_query_and_run(
     }
 
     with sentry_sdk.start_span(
-        description=formatted_query.format_sql(), op="db"
+        description=dict_formatted_query.format_sql(), op="db"
     ) as span:
         span.set_tag("table", source)
-        try:
-            span.set_data(
-                "ast_query", AstSqlQuery(clickhouse_query, request_settings).sql_data()
-            )
-            span.set_tag("query_type", "ast")
-        except Exception:
-            logger.warning("Failed to format ast query", exc_info=True)
-            span.set_tag("query_type", "dict")
 
-        span.set_data("dict_query", formatted_query.sql_data())
+        use_ast = state.get_config("query_with_ast", 0)
+        if use_ast and ast_formatted_query is not None:
+            formatted_query: SqlQuery = ast_formatted_query
+            query_type = "ast"
+        else:
+            formatted_query = dict_formatted_query
+            query_type = "dict"
+
+        span.set_tag("query_tag", query_type)
 
         return raw_query(
             clickhouse_query,
