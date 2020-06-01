@@ -1,5 +1,5 @@
 from dataclasses import dataclass, replace
-from typing import Optional
+from typing import Optional, Tuple
 
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.clickhouse.translators.snuba.allowed import (
@@ -88,16 +88,12 @@ class ColumnToLiteralMapper(ColumnMapper):
 class ColumnToFunctionMapper(ColumnMapper):
     """
     Maps a column into a function expression that preserves the alias.
-
-    WARNING: The alias of the FunctionCall object passed to the
-    constructor as `to_function` will be ignored. It will be replaced
-    with the one present in the expression being translated.
-    Otherwise the resulting query could be incorrect.
     """
 
     from_table_name: Optional[str]
     from_col_name: str
-    to_function: FunctionCallExpr
+    to_function_name: str
+    to_function_params: Tuple[Expression, ...]
 
     def attempt_map(
         self,
@@ -108,10 +104,11 @@ class ColumnToFunctionMapper(ColumnMapper):
             expression.table_name == self.from_table_name
             and expression.column_name == self.from_col_name
         ):
-            return replace(
-                self.to_function,
+            return FunctionCallExpr(
                 alias=expression.alias
                 or qualified_column(self.from_col_name, self.from_table_name or ""),
+                function_name=self.to_function_name,
+                parameters=self.to_function_params,
             )
         else:
             return None

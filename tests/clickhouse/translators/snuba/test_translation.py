@@ -40,11 +40,8 @@ def test_column_function_translation() -> None:
     assert ColumnToFunctionMapper(
         None,
         "ip_address",
-        FunctionCall(
-            None,
-            "coalesce",
-            (Column(None, None, "ip_address_v4"), Column(None, None, "ip_address_v6")),
-        ),
+        "coalesce",
+        (Column(None, None, "ip_address_v4"), Column(None, None, "ip_address_v6")),
     ).attempt_map(
         Column(None, None, "ip_address"),
         SnubaClickhouseMappingTranslator(TranslationMappers()),
