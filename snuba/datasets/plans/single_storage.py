@@ -5,6 +5,7 @@ import sentry_sdk
 from snuba import state
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
@@ -13,7 +14,7 @@ from snuba.datasets.plans.query_plan import (
     QueryRunner,
 )
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy
-from snuba.datasets.plans.translator.translators import QueryTranslator
+from snuba.datasets.plans.translator.query import QueryTranslator
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
@@ -75,10 +76,14 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     def __init__(
         self,
         storage: ReadableStorage,
+        mappers: Optional[TranslationMappers] = None,
         post_processors: Optional[Sequence[QueryProcessor]] = None,
     ) -> None:
         # The storage the query is based on
         self.__storage = storage
+        # The translation mappers to be used when translating the logical query
+        # into the clickhouse query.
+        self.__mappers = mappers if mappers is not None else TranslationMappers()
         # This is a set of query processors that have to be executed on the
         # query after the storage selection but that are defined by the dataset.
         # Query processors defined by a Storage must be executable independently
@@ -91,10 +96,7 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
     @with_span()
     def build_plan(self, request: Request) -> ClickhouseQueryPlan:
-        # TODO: The translator is going to be configured with a mapping between logical
-        # and physical schema that is a property of the relation between dataset (later
-        # entity) and storage.
-        clickhouse_query = QueryTranslator().translate(request.query)
+        clickhouse_query = QueryTranslator(self.__mappers).translate(request.query)
         clickhouse_query.set_data_source(
             self.__storage.get_schemas().get_read_schema().get_data_source()
         )
@@ -131,7 +133,9 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     @with_span()
     def build_plan(self, request: Request) -> ClickhouseQueryPlan:
         storage = self.__selector.select_storage(request.query, request.settings)
-        clickhouse_query = QueryTranslator().translate(request.query)
+        clickhouse_query = QueryTranslator(TranslationMappers()).translate(
+            request.query
+        )
         clickhouse_query.set_data_source(
             storage.get_schemas().get_read_schema().get_data_source()
         )
