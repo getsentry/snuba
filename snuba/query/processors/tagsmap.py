@@ -15,20 +15,24 @@ from snuba.datasets.events_format import escape_field
 from snuba.query.expressions import (
     Expression,
     SubscriptableReference,
-    FunctionCall,
     Literal,
     Column,
 )
 from snuba.query.parser.strings import NESTED_COL_EXPR_RE
 from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
-from snuba.util import is_condition, is_function, parse_datetime
-from snuba.query.conditions import get_first_level_conditions, combine_and_conditions
+from snuba.util import is_condition, is_function
 from snuba.query.matchers import Column as ColumnPattern
 from snuba.query.matchers import FunctionCall as FunctionCallPattern
 from snuba.query.matchers import Literal as LiteralPattern
 from snuba.query.matchers import Param, Or, Any, String
-from snuba.query.conditions import ConditionFunctions
+from snuba.query.conditions import (
+    ConditionFunctions,
+    OPERATOR_TO_FUNCTION,
+    binary_condition,
+    get_first_level_conditions,
+    combine_and_conditions,
+)
 
 
 class Operand(Enum):
@@ -179,8 +183,8 @@ class NestedFieldConditionOptimizer(QueryProcessor):
     def __apply_conditions(
         self,
         conditions: Sequence[CondType],
-        optimizable_checker: Callable[[CondType], Optional[OptimizableCondition]],
-        condition_builder: Callable[[str, str], CondType],
+        optimizable_checker: Callable[[CondType, str], Optional[OptimizableCondition]],
+        condition_builder: Callable[[str, str, str], CondType],
         conditions_writer: Callable[[Sequence[CondType]], None],
     ) -> None:
         new_conditions = []
@@ -188,7 +192,7 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         negative_like_expression: List[str] = []
 
         for c in conditions:
-            keyvalue = optimizable_checker(c)
+            keyvalue = optimizable_checker(c, self.__nested_col)
             if not keyvalue:
                 new_conditions.append(c)
             else:
@@ -202,103 +206,20 @@ class NestedFieldConditionOptimizer(QueryProcessor):
             # Positive conditions "=" are all merged together in one LIKE expression
             positive_like_expression = sorted(positive_like_expression)
             like_formatted = f"%|{'|%|'.join(positive_like_expression)}|%"
-            new_conditions.append(condition_builder("LIKE", like_formatted))
+            new_conditions.append(
+                condition_builder(self.__flattened_col, "LIKE", like_formatted)
+            )
 
         for expression in negative_like_expression:
             # Negative conditions "!=" cannot be merged together. We can still transform
             # them into NOT LIKE statements, but each condition has to be one
             # statement.
             not_like_formatted = f"%|{expression}|%"
-            new_conditions.append(condition_builder("NOT LIKE", not_like_formatted))
+            new_conditions.append(
+                condition_builder(self.__flattened_col, "NOT LIKE", not_like_formatted)
+            )
 
         conditions_writer(new_conditions)
-
-    def _apply_legacy_flattened(self, query: Query) -> None:
-        new_conditions = []
-        positive_like_expression: List[str] = []
-        negative_like_expression: List[str] = []
-
-        for c in query.get_conditions() or []:
-            keyvalue = self.__is_optimizable(c, self.__nested_col)
-            if not keyvalue:
-                new_conditions.append(c)
-            else:
-                expression = f"{escape_field(keyvalue.nested_col_key)}={escape_field(keyvalue.value)}"
-                if keyvalue.operand == Operand.EQ:
-                    positive_like_expression.append(expression)
-                else:
-                    negative_like_expression.append(expression)
-
-        if positive_like_expression:
-            # Positive conditions "=" are all merged together in one LIKE expression
-            positive_like_expression = sorted(positive_like_expression)
-            like_formatted = f"%|{'|%|'.join(positive_like_expression)}|%"
-            new_conditions.append([self.__flattened_col, "LIKE", like_formatted])
-
-        for expression in negative_like_expression:
-            # Negative conditions "!=" cannot be merged together. We can still transform
-            # them into NOT LIKE statements, but each condition has to be one
-            # statement.
-            not_like_formatted = f"%|{expression}|%"
-            new_conditions.append(
-                [self.__flattened_col, "NOT LIKE", not_like_formatted]
-            )
-
-        query.set_conditions(new_conditions)
-
-    def _apply_ast_flattened(self, query: Query) -> None:
-        ast_condition = query.get_condition_from_ast()
-        if ast_condition is None:
-            return
-
-        new_conditions = []
-        positive_like_expression: List[str] = []
-        negative_like_expression: List[str] = []
-
-        conditions = get_first_level_conditions(ast_condition)
-        for c in conditions:
-            keyvalue = self.__is_ast_optimizable(c, self.__nested_col)
-            if not keyvalue:
-                new_conditions.append(c)
-            else:
-                expression = f"{escape_field(keyvalue.nested_col_key)}={escape_field(keyvalue.value)}"
-                if keyvalue.operand == Operand.EQ:
-                    positive_like_expression.append(expression)
-                else:
-                    negative_like_expression.append(expression)
-
-        if positive_like_expression:
-            # Positive conditions "=" are all merged together in one LIKE expression
-            positive_like_expression = sorted(positive_like_expression)
-            like_formatted = f"%|{'|%|'.join(positive_like_expression)}|%"
-            new_conditions.append(
-                FunctionCall(
-                    None,
-                    ConditionFunctions.LIKE,
-                    (
-                        Column(None, None, self.__flattened_col),
-                        Literal(None, like_formatted),
-                    ),
-                )
-            )
-
-        for expression in negative_like_expression:
-            # Negative conditions "!=" cannot be merged together. We can still transform
-            # them into NOT LIKE statements, but each condition has to be one
-            # statement.
-            not_like_formatted = f"%|{expression}|%"
-            new_conditions.append(
-                FunctionCall(
-                    None,
-                    ConditionFunctions.NOT_LIKE,
-                    (
-                        Column(None, None, self.__flattened_col),
-                        Literal(None, not_like_formatted),
-                    ),
-                )
-            )
-
-        query.set_ast_condition(combine_and_conditions(new_conditions))
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         ast_condition = query.get_condition_from_ast()
@@ -358,5 +279,25 @@ class NestedFieldConditionOptimizer(QueryProcessor):
                 if self.__has_tags(orderby.expression):
                     return
 
-        self._apply_legacy_flattened(query)
-        self._apply_ast_flattened(query)
+        self.__apply_conditions(
+            query.get_conditions() or [],
+            self.__is_optimizable,
+            lambda col, operator, operand: [col, operator, operand],
+            lambda conditions: query.set_conditions(conditions),
+        )
+
+        ast_condition = query.get_condition_from_ast()
+        if ast_condition is not None:
+            self.__apply_conditions(
+                get_first_level_conditions(ast_condition),
+                self.__is_ast_optimizable,
+                lambda col, operator, operand: binary_condition(
+                    None,
+                    OPERATOR_TO_FUNCTION[operator],
+                    Column(None, None, col),
+                    Literal(None, operand),
+                ),
+                lambda conditions: query.set_ast_condition(
+                    combine_and_conditions(conditions)
+                ),
+            )
