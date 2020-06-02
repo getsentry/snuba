@@ -111,24 +111,24 @@ def get_project_ids_in_query_ast(
             None,
             String(ConditionFunctions.EQ),
             (
-                Column(None, None, String(project_column)),
-                Literal(None, Param("project_id", Any(int))),
+                Column(column_name=String(project_column)),
+                Literal(value=Param("project_id", Any(int))),
             ),
         ).match(condition)
         if match is not None:
             return {match.integer("project_id")}
 
         match = is_in_condition_pattern(
-            Column(None, None, String(project_column))
+            Column(column_name=String(project_column))
         ).match(condition)
         if match is not None:
             projects = match.expression("tuple")
-            if isinstance(projects, FunctionCallExpr):
-                return {
-                    l.value
-                    for l in projects.parameters
-                    if isinstance(l, LiteralExpr) and isinstance(l.value, int)
-                }
+            assert isinstance(projects, FunctionCallExpr)
+            return {
+                l.value
+                for l in projects.parameters
+                if isinstance(l, LiteralExpr) and isinstance(l.value, int)
+            }
 
         match = FunctionCall(
             None,
