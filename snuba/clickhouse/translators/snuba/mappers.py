@@ -135,7 +135,7 @@ class SubscriptableMapper(SubscriptableReferenceMapper):
             expression.column.table_name == self.from_column_table
             and expression.column.column_name == self.from_column_name
         ):
-            return build_tag_expr(
+            return build_mapping_expr(
                 expression.alias,
                 self.to_nested_col_table,
                 self.to_nested_col_name,
@@ -167,7 +167,7 @@ class ColumnToMapping(ColumnMapper):
             expression.table_name == self.from_column_table
             and expression.column_name == self.from_column_name
         ):
-            return build_tag_expr(
+            return build_mapping_expr(
                 expression.alias
                 or qualified_column(
                     self.from_column_name, self.from_column_table or ""
@@ -180,7 +180,7 @@ class ColumnToMapping(ColumnMapper):
             return None
 
 
-def build_tag_expr(
+def build_mapping_expr(
     alias: Optional[str], table_name: Optional[str], col_name: str, tag_key: Expression
 ) -> FunctionCallExpr:
     return arrayElement(
@@ -192,25 +192,25 @@ def build_tag_expr(
     )
 
 
-TABLE_TAG_PARAM = "table_name"
-VALUE_COL_TAG_PARAM = "value_column"
-KEY_COL_TAG_PARAM = "key_column"
-KEY_TAG_PARAM = "key"
-tag_pattern = FunctionCall(
+TABLE_MAPPING_PARAM = "table_name"
+VALUE_COL_MAPPING_PARAM = "value_column"
+KEY_COL_MAPPING_PARAM = "key_column"
+KEY_MAPPING_PARAM = "key"
+mapping_pattern = FunctionCall(
     None,
     String("arrayElement"),
     (
         Column(
             None,
-            Param(TABLE_TAG_PARAM, AnyOptionalString()),
-            Param(VALUE_COL_TAG_PARAM, Any(str)),
+            Param(TABLE_MAPPING_PARAM, AnyOptionalString()),
+            Param(VALUE_COL_MAPPING_PARAM, Any(str)),
         ),
         FunctionCall(
             None,
             String("indexOf"),
             (
-                Column(None, None, Param(KEY_COL_TAG_PARAM, Any(str))),
-                Literal(None, Param(KEY_TAG_PARAM, Any(str))),
+                Column(None, None, Param(KEY_COL_MAPPING_PARAM, Any(str))),
+                Literal(None, Param(KEY_MAPPING_PARAM, Any(str))),
             ),
         ),
     ),

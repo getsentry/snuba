@@ -5,7 +5,7 @@ from typing import List, NamedTuple, Optional, Set
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.translators.snuba.mappers import KEY_COL_TAG_PARAM, tag_pattern
+from snuba.clickhouse.translators.snuba.mappers import KEY_COL_MAPPING_PARAM, mapping_pattern
 from snuba.datasets.events_format import escape_field
 from snuba.query.expressions import Expression
 from snuba.query.parser.strings import NESTED_COL_EXPR_RE
@@ -107,9 +107,9 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         if not expression:
             return False
         for node in expression:
-            match = tag_pattern.match(node)
+            match = mapping_pattern.match(node)
             if match is not None:
-                key_column_split = match.string(KEY_COL_TAG_PARAM).split(".")
+                key_column_split = match.string(KEY_COL_MAPPING_PARAM).split(".")
                 if key_column_split[0] == self.__nested_col:
                     return True
         return False
