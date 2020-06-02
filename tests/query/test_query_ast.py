@@ -1,4 +1,5 @@
 from snuba.clickhouse.columns import ColumnSet
+from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.conditions import binary_condition, ConditionFunctions
 from snuba.query.expressions import (
@@ -8,6 +9,7 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.logical import OrderBy, OrderByDirection, Query
+from snuba.query.parser import parse_query
 
 
 def test_iterate_over_query():
@@ -119,3 +121,34 @@ def test_replace_expression():
     assert list(query.get_all_expressions()) == list(
         expected_query.get_all_expressions()
     )
+
+
+def test_get_all_columns() -> None:
+    query_body = {
+        "selected_columns": [
+            ["f1", ["column1", "column2"], "f1_alias"],
+            ["f2", [], "f2_alias"],
+            ["formatDateTime", ["timestamp", "'%Y-%m-%d'"], "formatted_time"],
+        ],
+        "aggregations": [
+            ["count", "platform", "platforms"],
+            ["uniq", "platform", "uniq_platforms"],
+            ["testF", ["platform", ["anotherF", ["field2"]]], "top_platforms"],
+        ],
+        "conditions": [["tags[sentry:dist]", "IN", ["dist1", "dist2"]]],
+        "having": [["times_seen", ">", 1]],
+        "groupby": [["format_eventid", ["event_id"]]],
+    }
+    events = get_dataset("events")
+    query = parse_query(query_body, events)
+
+    assert query.get_all_ast_referenced_columns() == {
+        Column(None, None, "column1"),
+        Column(None, None, "column2"),
+        Column(None, None, "platform"),
+        Column(None, None, "field2"),
+        Column(None, None, "tags"),
+        Column(None, None, "times_seen"),
+        Column(None, None, "event_id"),
+        Column(None, None, "timestamp"),
+    }

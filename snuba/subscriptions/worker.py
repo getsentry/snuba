@@ -5,6 +5,7 @@ import itertools
 import json
 import time
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from datetime import timedelta
 from typing import Mapping, NamedTuple, Optional, Sequence, Tuple
 
 from snuba.datasets.dataset import Dataset
@@ -45,6 +46,7 @@ class SubscriptionWorker(
         producer: Producer[SubscriptionTaskResult],
         topic: Topic,
         metrics: MetricsBackend,
+        time_shift: Optional[timedelta] = None,
     ) -> None:
         self.__dataset = dataset
         self.__executor = executor
@@ -52,6 +54,7 @@ class SubscriptionWorker(
         self.__producer = producer
         self.__topic = topic
         self.__metrics = metrics
+        self.__time_shift = time_shift if time_shift is not None else timedelta()
 
         self.__concurrent_gauge = Gauge(self.__metrics, "executor.concurrent")
 
@@ -99,7 +102,7 @@ class SubscriptionWorker(
         # waiting for them to complete during ``flush_batch`` may exceed the
         # consumer poll timeout (or session timeout during consumer
         # rebalancing) and cause the entire batch to be have to be replayed.
-        tick = message.payload
+        tick = message.payload.time_shift(self.__time_shift)
         return [
             SubscriptionTaskResultFuture(
                 task, self.__executor.submit(self.__execute, task, tick)
