@@ -216,4 +216,14 @@ mapping_pattern = FunctionCall(
     ),
 )
 
+
+def get_mapping_col_name(nested_col: str) -> str:
+    """
+    Splits the tag.key/tag.value column names and return the base column
+    name. This exists as long as we do not have structured Column classes
+    in the AST in order not to spread this logic around the code base.
+    """
+    return nested_col.split(".")[0]
+
+
 # TODO: build more of these mappers.

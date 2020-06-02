@@ -1,42 +1,34 @@
 import logging
 from datetime import datetime
-from typing import cast, TypeVar, Callable, Sequence
-
 from enum import Enum
-from typing import List, NamedTuple, Optional, Set
+from typing import Callable, List, NamedTuple, Optional, Sequence, Set, TypeVar, cast
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mappers import (
     KEY_COL_MAPPING_PARAM,
+    KEY_MAPPING_PARAM,
     mapping_pattern,
+    get_mapping_col_name,
 )
 from snuba.datasets.events_format import escape_field
-from snuba.query.expressions import (
-    Expression,
-    Literal,
-    Column,
+from snuba.query.conditions import (
+    OPERATOR_TO_FUNCTION,
+    ConditionFunctions,
+    binary_condition,
+    combine_and_conditions,
+    get_first_level_conditions,
 )
+from snuba.query.expressions import Column, Expression, Literal
+from snuba.query.matchers import Any
+from snuba.query.matchers import Column as ColumnPattern
+from snuba.query.matchers import FunctionCall as FunctionCallPattern
+from snuba.query.matchers import Literal as LiteralPattern
+from snuba.query.matchers import Or, Param, String
 from snuba.query.parser.strings import NESTED_COL_EXPR_RE
 from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition, is_function
-from snuba.query.matchers import Column as ColumnPattern
-from snuba.query.matchers import FunctionCall as FunctionCallPattern
-from snuba.query.matchers import Literal as LiteralPattern
-from snuba.query.matchers import Param, Or, Any, String
-from snuba.query.conditions import (
-    ConditionFunctions,
-    OPERATOR_TO_FUNCTION,
-    binary_condition,
-    get_first_level_conditions,
-    combine_and_conditions,
-)
-from snuba.clickhouse.translators.snuba.mappers import (
-    mapping_pattern,
-    KEY_COL_MAPPING_PARAM,
-    KEY_MAPPING_PARAM,
-)
 
 
 class Operand(Enum):
@@ -86,8 +78,8 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         # If a query goes back further than this date we cannot apply the optimization
         self.__beginning_of_time = beginning_of_time
 
-    def __is_optimizable(
-        self, condition: Condition, column: str
+    def __can_optimize_legacy(
+        self, condition: Condition
     ) -> Optional[OptimizableCondition]:
         """
         Recognize if the condition can be optimized.
@@ -128,9 +120,12 @@ class NestedFieldConditionOptimizer(QueryProcessor):
             )
         return None
 
-    def __is_ast_optimizable(
-        self, condition: Expression, column: str
+    def __can_optimize_ast(
+        self, condition: Expression
     ) -> Optional[OptimizableCondition]:
+        """
+        Same as from __can_optimize_legacy, but it relies on AST conditions.
+        """
         match = FunctionCallPattern(
             None,
             Param(
@@ -153,7 +148,10 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         if match is None:
             return None
 
-        if match.string(KEY_COL_MAPPING_PARAM).split(".")[0] == self.__nested_col:
+        if (
+            get_mapping_col_name(match.string(KEY_COL_MAPPING_PARAM))
+            == self.__nested_col
+        ):
             return OptimizableCondition(
                 nested_col_key=match.string(KEY_MAPPING_PARAM),
                 operand=Operand.EQ
@@ -169,8 +167,10 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         for node in expression:
             match = mapping_pattern.match(node)
             if match is not None:
-                key_column_split = match.string(KEY_COL_MAPPING_PARAM).split(".")
-                if key_column_split[0] == self.__nested_col:
+                if (
+                    get_mapping_col_name(match.string(KEY_COL_MAPPING_PARAM))
+                    == self.__nested_col
+                ):
                     return True
         return False
 
@@ -179,7 +179,7 @@ class NestedFieldConditionOptimizer(QueryProcessor):
     def __apply_conditions(
         self,
         conditions: Sequence[CondType],
-        optimizable_checker: Callable[[CondType, str], Optional[OptimizableCondition]],
+        optimizable_checker: Callable[[CondType], Optional[OptimizableCondition]],
         condition_builder: Callable[[str, str, str], CondType],
         conditions_writer: Callable[[Sequence[CondType]], None],
     ) -> None:
@@ -188,7 +188,7 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         negative_like_expression: List[str] = []
 
         for c in conditions:
-            keyvalue = optimizable_checker(c, self.__nested_col)
+            keyvalue = optimizable_checker(c)
             if not keyvalue:
                 new_conditions.append(c)
             else:
@@ -277,7 +277,7 @@ class NestedFieldConditionOptimizer(QueryProcessor):
 
         self.__apply_conditions(
             query.get_conditions() or [],
-            self.__is_optimizable,
+            self.__can_optimize_legacy,
             lambda col, operator, operand: [col, operator, operand],
             lambda conditions: query.set_conditions(conditions),
         )
@@ -286,7 +286,7 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         if ast_condition is not None:
             self.__apply_conditions(
                 get_first_level_conditions(ast_condition),
-                self.__is_ast_optimizable,
+                self.__can_optimize_ast,
                 lambda col, operator, operand: binary_condition(
                     None,
                     OPERATOR_TO_FUNCTION[operator],
