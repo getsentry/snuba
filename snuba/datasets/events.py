@@ -1,7 +1,7 @@
 from datetime import timedelta
 from typing import Mapping, Sequence
 
-from snuba.clickhouse.translators.snuba.mappers import TagMapper
+from snuba.clickhouse.translators.snuba.mappers import SubscriptableMapper
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -25,8 +25,8 @@ from snuba.util import qualified_column
 # storage.
 event_translator = TranslationMappers(
     subscriptables=[
-        TagMapper(None, "tags", None, "tags"),
-        TagMapper(None, "contexts", None, "contexts"),
+        SubscriptableMapper(None, "tags", None, "tags"),
+        SubscriptableMapper(None, "contexts", None, "contexts"),
     ],
 )
 
