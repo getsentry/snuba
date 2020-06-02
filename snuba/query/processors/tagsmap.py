@@ -14,7 +14,6 @@ from snuba.clickhouse.translators.snuba.mappers import (
 from snuba.datasets.events_format import escape_field
 from snuba.query.expressions import (
     Expression,
-    SubscriptableReference,
     Literal,
     Column,
 )
@@ -32,6 +31,11 @@ from snuba.query.conditions import (
     binary_condition,
     get_first_level_conditions,
     combine_and_conditions,
+)
+from snuba.clickhouse.translators.snuba.mappers import (
+    mapping_pattern,
+    KEY_COL_MAPPING_PARAM,
+    KEY_MAPPING_PARAM,
 )
 
 
@@ -137,11 +141,9 @@ class NestedFieldConditionOptimizer(QueryProcessor):
                 Or(
                     [
                         FunctionCallPattern(
-                            None,
-                            String("ifNull"),
-                            (Param("tag", Any(SubscriptableReference)),),
+                            None, String("ifNull"), (mapping_pattern,),
                         ),
-                        (Param("tag", Any(SubscriptableReference))),
+                        mapping_pattern,
                     ]
                 ),
                 LiteralPattern(None, Param("tag_key", Any(str))),
@@ -151,15 +153,9 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         if match is None:
             return None
 
-        if (
-            cast(SubscriptableReference, match.expression("tag")).column.column_name
-            == self.__nested_col
-        ):
-            nested_col_key = cast(
-                SubscriptableReference, match.expression("tag")
-            ).key.value
+        if match.string(KEY_COL_MAPPING_PARAM).split(".")[0] == self.__nested_col:
             return OptimizableCondition(
-                nested_col_key=str(nested_col_key),
+                nested_col_key=match.string(KEY_MAPPING_PARAM),
                 operand=Operand.EQ
                 if match.string("operator") == ConditionFunctions.EQ
                 else Operand.NEQ,
