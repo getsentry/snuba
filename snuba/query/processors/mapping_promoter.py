@@ -3,11 +3,11 @@ from typing import Mapping, NamedTuple, Optional
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mappers import (
-    KEY_COL_TAG_PARAM,
-    KEY_TAG_PARAM,
-    TABLE_TAG_PARAM,
-    VALUE_COL_TAG_PARAM,
-    tag_pattern,
+    KEY_COL_MAPPING_PARAM,
+    KEY_MAPPING_PARAM,
+    TABLE_MAPPING_PARAM,
+    VALUE_COL_MAPPING_PARAM,
+    mapping_pattern,
 )
 from snuba.query.expressions import Column, Expression, FunctionCall
 from snuba.request.request_settings import RequestSettings
@@ -36,7 +36,7 @@ def match_subscriptable_reference(exp: Expression) -> Optional[SubscriptableMatc
     called `value`.
     """
 
-    match = tag_pattern.match(exp)
+    match = mapping_pattern.match(exp)
     if match is None:
         return None
 
@@ -44,8 +44,8 @@ def match_subscriptable_reference(exp: Expression) -> Optional[SubscriptableMatc
     # to deal with references to nested columns instead of splitting
     # the column name string.
 
-    value_col_split = match.string(VALUE_COL_TAG_PARAM).split(".", 2)
-    key_col_split = match.string(KEY_COL_TAG_PARAM).split(".", 2)
+    value_col_split = match.string(VALUE_COL_MAPPING_PARAM).split(".", 2)
+    key_col_split = match.string(KEY_COL_MAPPING_PARAM).split(".", 2)
 
     if len(value_col_split) != 2 or len(key_col_split) != 2:
         return None
@@ -56,11 +56,11 @@ def match_subscriptable_reference(exp: Expression) -> Optional[SubscriptableMatc
     if val_column != key_column or key_field != "key" or val_field != "value":
         return None
 
-    table_name = match.scalar(TABLE_TAG_PARAM)
+    table_name = match.scalar(TABLE_MAPPING_PARAM)
     return SubscriptableMatch(
         table_name=str(table_name) if table_name is not None else None,
         column_name=val_column,
-        key=match.string(KEY_TAG_PARAM),
+        key=match.string(KEY_MAPPING_PARAM),
     )
 
 

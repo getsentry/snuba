@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from deprecation import deprecated
 from enum import Enum
 from itertools import chain
 from typing import (
@@ -13,15 +12,18 @@ from typing import (
     MutableSequence,
     Optional,
     Sequence,
+    Set,
     Tuple,
     TypeVar,
     Union,
 )
 
+from deprecation import deprecated
+
 from snuba.clickhouse.escaping import SAFE_COL_RE
 from snuba.datasets.schemas import RelationalSource
-from snuba.query.conditions import binary_condition, BooleanFunctions
-from snuba.query.expressions import Expression
+from snuba.query.conditions import BooleanFunctions, binary_condition
+from snuba.query.expressions import Column, Expression
 from snuba.query.types import Condition
 from snuba.util import columns_in_expr, is_condition, to_list
 
@@ -193,6 +195,9 @@ class Query:
     def set_selected_columns(self, columns: Sequence[Any],) -> None:
         self.__body["selected_columns"] = columns
 
+    def set_ast_selected_columns(self, selected_columns: Sequence[Expression]) -> None:
+        self.__selected_columns = selected_columns
+
     def get_aggregations(self) -> Optional[Sequence[Aggregation]]:
         return self.__body.get("aggregations")
 
@@ -361,6 +366,13 @@ class Query:
 
         # Return the set of all columns referenced in any expression
         return self.__get_referenced_columns(col_exprs)
+
+    def get_all_ast_referenced_columns(self) -> Set[Column]:
+        ret: Set[Column] = set()
+        all_expressions = self.get_all_expressions()
+        for expression in all_expressions:
+            ret |= {c for c in expression if isinstance(c, Column)}
+        return ret
 
     def get_columns_referenced_in_conditions(self) -> Sequence[Any]:
         col_exprs: MutableSequence[Any] = []
