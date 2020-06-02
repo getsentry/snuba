@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -9,6 +9,14 @@ from snuba.utils.streams.dummy import DummyBroker, DummyConsumer, DummyProducer,
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.utils.types import Interval
 from tests.assertions import assert_changes, assert_does_not_change
+
+
+def test_tick_time_shift() -> None:
+    offsets = Interval(0, 1)
+    tick = Tick(offsets, Interval(datetime(1970, 1, 1), datetime(1970, 1, 2)))
+    assert tick.time_shift(timedelta(hours=24)) == Tick(
+        offsets, Interval(datetime(1970, 1, 2), datetime(1970, 1, 3))
+    )
 
 
 def test_tick_consumer() -> None:
