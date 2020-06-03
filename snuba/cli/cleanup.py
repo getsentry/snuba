@@ -51,15 +51,15 @@ def cleanup(
     dataset = get_dataset(dataset_name)
     writable_storage = dataset.get_writable_storage()
     assert writable_storage is not None, "Dataset has no writable storage"
-    clickhouse_user, clickhouse_password = writable_storage.get_cluster().get_credentials()
+    (
+        clickhouse_user,
+        clickhouse_password,
+    ) = writable_storage.get_cluster().get_credentials()
     table = enforce_table_writer(dataset).get_schema().get_local_table_name()
 
     if clickhouse_host and clickhouse_port:
         connection = ClickhousePool(
-            clickhouse_host,
-            clickhouse_port,
-            clickhouse_user,
-            clickhouse_password,
+            clickhouse_host, clickhouse_port, clickhouse_user, clickhouse_password,
         )
     elif not local_dataset_mode():
         raise click.ClickException("Provide ClickHouse host and port for cleanup")

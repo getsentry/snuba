@@ -156,9 +156,7 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
     def __str__(self) -> str:
         return str(self.__query_node)
 
-    def get_credentials(
-        self
-    ) -> Tuple[str, str]:
+    def get_credentials(self) -> Tuple[str, str]:
         """
         Returns the user credentials for the Clickhouse connection
         """
