@@ -1,10 +1,11 @@
-import pytest
-
 from datetime import datetime
+
+import pytest
 
 from snuba.datasets.factory import get_dataset
 from snuba.query.parser import parse_query
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
+from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 
 test_data = [
@@ -223,14 +224,19 @@ test_data = [
 
 @pytest.mark.parametrize("query_body, expected_condition", test_data)
 def test_nested_optimizer(query_body, expected_condition) -> None:
-    query = parse_query(query_body, get_dataset("transactions"))
+    transactions = get_dataset("transactions")
+    query = parse_query(query_body, transactions)
     request_settings = HTTPRequestSettings()
+    request = Request("", query, request_settings, {}, "")
+
+    query_plan = transactions.get_query_plan_builder().build_plan(request)
     processor = NestedFieldConditionOptimizer(
         nested_col="tags",
         flattened_col="tags_map",
         timestamp_cols={"start_ts", "finish_ts"},
         beginning_of_time=datetime(2019, 12, 11, 0, 0, 0),
     )
-    processor.process_query(query, request_settings)
+    clickhouse_query = query_plan.query
+    processor.process_query(clickhouse_query, request_settings)
 
-    assert query.get_conditions() == expected_condition
+    assert clickhouse_query.get_conditions() == expected_condition

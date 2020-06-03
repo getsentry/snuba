@@ -105,6 +105,19 @@ test_cases = [
         MatchResult({"p1": ColumnExpr("relevant", "relevant", "relevant")}),
     ),
     (
+        "Wrong number of parameters, does not match",
+        FunctionCall(None, None, (Param("p1", Any(ColumnExpr)),)),
+        FunctionCallExpr(
+            "irrelevant",
+            "irrelevant",
+            (
+                ColumnExpr("relevant", "relevant", "relevant"),
+                ColumnExpr("relevant", "relevant", "relevant"),
+            ),
+        ),
+        None,
+    ),
+    (
         "Does not match any Column",
         FunctionCall(None, None, (Param("p1", Any(ColumnExpr)),)),
         FunctionCallExpr("irrelevant", "irrelevant", (LiteralExpr(None, "str"),),),

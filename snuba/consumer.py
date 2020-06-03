@@ -33,8 +33,8 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         metrics: MetricsBackend,
         producer: Optional[ConfluentKafkaProducer] = None,
         replacements_topic: Optional[Topic] = None,
-        rapidjson_deserialize: bool = False,
-        rapidjson_serialize: bool = False,
+        rapidjson_deserialize: bool = True,
+        rapidjson_serialize: bool = True,
     ) -> None:
         self.__storage = storage
         self.producer = producer

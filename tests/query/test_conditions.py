@@ -1,12 +1,15 @@
 from snuba.query.conditions import (
-    binary_condition,
     BooleanFunctions,
     ConditionFunctions,
+    binary_condition,
     is_binary_condition,
     is_in_condition,
+    is_in_condition_pattern,
 )
 from snuba.query.dsl import literals_tuple
-from snuba.query.expressions import FunctionCall, Column, Expression, Literal
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.matchers import Column as ColumnPattern
+from snuba.query.matchers import String
 
 
 def test_expressions_from_basic_condition() -> None:
@@ -16,7 +19,7 @@ def test_expressions_from_basic_condition() -> None:
     """
 
     c = Column(None, "t1", "c1")
-    f1 = FunctionCall(None, "f", [c])
+    f1 = FunctionCall(None, "f", (c,))
     c2 = Column(None, "t1", "c2")
 
     condition = binary_condition(None, ConditionFunctions.EQ, f1, c2)
@@ -35,7 +38,7 @@ def test_aliased_expressions_from_basic_condition() -> None:
     """
 
     c = Column(None, "t1", "c1")
-    f1 = FunctionCall("a", "f", [c])
+    f1 = FunctionCall("a", "f", (c,))
     c2 = Column("a2", "t1", "c2")
 
     condition = binary_condition(None, ConditionFunctions.EQ, f1, c2)
@@ -50,7 +53,7 @@ def test_map_expressions_in_basic_condition() -> None:
     Change the column name over the expressions in a basic condition
     """
     c = Column(None, "t1", "c1")
-    f1 = FunctionCall(None, "f", [c])
+    f1 = FunctionCall(None, "f", (c,))
     c2 = Column(None, "t1", "c2")
 
     c3 = Column(None, "t1", "c3")
@@ -141,10 +144,19 @@ def test_processing_functions() -> None:
     in_condition = binary_condition(
         None,
         ConditionFunctions.IN,
-        Column(None, None, "tag_keys"),
+        Column(None, None, "tags_key"),
         literals_tuple(None, [Literal(None, "t1"), Literal(None, "t2")]),
     )
     assert is_in_condition(in_condition)
+
+    match = is_in_condition_pattern(
+        ColumnPattern(None, None, String("tags_key"))
+    ).match(in_condition)
+    assert match is not None
+    assert match.expression("tuple") == literals_tuple(
+        None, [Literal(None, "t1"), Literal(None, "t2")]
+    )
+    assert match.expression("lhs") == Column(None, None, "tags_key")
 
     eq_condition = binary_condition(
         None, ConditionFunctions.EQ, Column(None, None, "test"), Literal(None, "1")

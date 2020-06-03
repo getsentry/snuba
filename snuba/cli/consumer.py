@@ -75,13 +75,13 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
 )
 @click.option(
     "--rapidjson-deserialize",
-    default=False,
+    default=True,
     type=bool,
     help="Uses rapidjson to deserialize messages",
 )
 @click.option(
     "--rapidjson-serialize",
-    default=False,
+    default=True,
     type=bool,
     help="Uses rapidjson to serialize messages",
 )

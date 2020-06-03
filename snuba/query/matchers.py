@@ -62,6 +62,15 @@ class MatchResult:
         assert isinstance(ret, str)
         return ret
 
+    def integer(self, name: str) -> int:
+        """
+        Returns a int present in the result, guaranteeing the int is there
+        or throws.
+        """
+        ret = self.results[name]
+        assert isinstance(ret, int)
+        return ret
+
     # TODO: Consider adding more utility method to assert and return specific types
     # from the Results if needed.
 
@@ -304,7 +313,7 @@ class FunctionCall(Pattern[FunctionCallExpr]):
                 result = result.merge(partial_result)
 
         if self.parameters:
-            if self.with_optionals is None:
+            if not self.with_optionals:
                 if len(self.parameters) != len(node.parameters):
                     return None
             else:
