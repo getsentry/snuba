@@ -25,6 +25,8 @@ class ClickhousePool(object):
         self,
         host: str,
         port: int,
+        user: str,
+        password: str,
         connect_timeout=1,
         send_receive_timeout=300,
         max_pool_size=settings.CLICKHOUSE_MAX_POOL_SIZE,
@@ -32,6 +34,8 @@ class ClickhousePool(object):
     ):
         self.host = host
         self.port = port
+        self.user = user
+        self.password = password
         self.connect_timeout = connect_timeout
         self.send_receive_timeout = send_receive_timeout
         self.client_settings = client_settings
@@ -127,6 +131,8 @@ class ClickhousePool(object):
         return Client(
             host=self.host,
             port=self.port,
+            user=self.user,
+            password=self.password,
             connect_timeout=self.connect_timeout,
             send_receive_timeout=self.send_receive_timeout,
             settings=self.client_settings,
