@@ -1,9 +1,11 @@
 import logging
 from datetime import timedelta
-from typing import Mapping, Sequence
+from dataclasses import dataclass
+from typing import Mapping, Sequence, Optional, Union
 
 from snuba import environment
 from snuba.clickhouse.columns import (
+    UUID,
     Array,
     ColumnSet,
     DateTime,
@@ -12,12 +14,22 @@ from snuba.clickhouse.columns import (
     Nullable,
     String,
     UInt,
-    UUID,
 )
+from snuba.util import qualified_column
+from snuba.clickhouse.translators.snuba.allowed import ColumnMapper
+from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
+from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.events import event_translator
+from snuba.datasets.transactions import transaction_translator
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
-from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
+from snuba.datasets.storage import (
+    QueryStorageSelector,
+    ReadableStorage,
+    SelectedStorage,
+)
+from snuba.clickhouse.translators.snuba.mappers import ColumnToMapping, ColumnToLiteral
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.query.extensions import QueryExtension
@@ -35,6 +47,7 @@ from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.query.expressions import Column, FunctionCall, Literal
 
 EVENTS = "events"
 TRANSACTIONS = "transactions"
@@ -114,33 +127,66 @@ def detect_table(
     return selected_table
 
 
+@dataclass(frozen=True)
+class DefaultNoneColumnMapper(ColumnMapper):
+    """
+    This maps a list of column names to None (NULL in SQL) as it is done
+    in the column_expr method today. It should not be used for any other
+    reason or use case.
+    """
+
+    columns: ColumnSet
+
+    def attempt_map(
+        self, expression: Column, children_translator: SnubaClickhouseStrictTranslator,
+    ) -> Optional[Union[Column, Literal, FunctionCall]]:
+        if expression.column_name in self.columns:
+            return Literal(
+                alias=expression.alias
+                or qualified_column(
+                    expression.column_name, expression.table_name or ""
+                ),
+                value=None,
+            )
+        else:
+            return None
+
+
 class DiscoverQueryStorageSelector(QueryStorageSelector):
     def __init__(
         self,
         events_table: ReadableStorage,
         abstract_events_columns: ColumnSet,
+        events_mappers: TranslationMappers,
         transactions_table: ReadableStorage,
         abstract_transactions_columns: ColumnSet,
+        transactions_mappers: TranslationMappers,
     ) -> None:
         self.__events_table = events_table
         # Columns from the abstract model that map to storage columns present only
         # in the Events table
         self.__abstract_events_columns = abstract_events_columns
+        self.__events_mappers = events_mappers
         self.__transactions_table = transactions_table
         # Columns from the abstract model that map to storage columns present only
         # in the Transactions table
         self.__abstract_transactions_columns = abstract_transactions_columns
+        self.__transactions_mappers = transactions_mappers
 
     def select_storage(
         self, query: Query, request_settings: RequestSettings
-    ) -> ReadableStorage:
+    ) -> SelectedStorage:
         table = detect_table(
             query,
             self.__abstract_events_columns,
             self.__abstract_transactions_columns,
             True,
         )
-        return self.__events_table if table == EVENTS else self.__transactions_table
+        return (
+            SelectedStorage(self.__events_table, self.__events_mappers)
+            if table == EVENTS
+            else SelectedStorage(self.__transactions_table, self.__transactions_mappers)
+        )
 
 
 class DiscoverDataset(TimeSeriesDataset):
@@ -249,14 +295,36 @@ class DiscoverDataset(TimeSeriesDataset):
         events_storage = get_storage(StorageKey.EVENTS)
         transactions_storage = get_storage(StorageKey.TRANSACTIONS)
 
+        discover_event_translator = event_translator.concat(
+            TranslationMappers(
+                columns=[
+                    ColumnToMapping(None, "release", None, "tags", "sentry:release"),
+                    ColumnToMapping(None, "dist", None, "tags", "sentry:dist"),
+                    ColumnToMapping(None, "user", None, "tags", "sentry:user"),
+                    DefaultNoneColumnMapper(self.__transactions_columns),
+                ]
+            )
+        )
+
+        discover_transaction_translator = transaction_translator.concat(
+            TranslationMappers(
+                columns=[
+                    ColumnToLiteral(None, "group_id", 0),
+                    DefaultNoneColumnMapper(self.__events_columns),
+                ]
+            )
+        )
+
         super().__init__(
             storages=[events_storage, transactions_storage],
             query_plan_builder=SelectedStorageQueryPlanBuilder(
                 selector=DiscoverQueryStorageSelector(
                     events_table=events_storage,
                     abstract_events_columns=self.__events_columns,
+                    events_mappers=discover_event_translator,
                     transactions_table=transactions_storage,
                     abstract_transactions_columns=self.__transactions_columns,
+                    transactions_mappers=discover_transaction_translator,
                 ),
             ),
             abstract_column_set=(
