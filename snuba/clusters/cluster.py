@@ -131,6 +131,8 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         self,
         host: str,
         port: int,
+        user: str,
+        password: str,
         http_port: int,
         storage_sets: Set[str],
         single_node: bool,
@@ -140,6 +142,8 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
     ):
         super().__init__(storage_sets)
         self.__query_node = ClickhouseNode(host, port)
+        self.__user = user
+        self.__password = password
         self.__http_port = http_port
         self.__single_node = single_node
         self.__cluster_name = cluster_name
@@ -151,6 +155,12 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
 
     def __str__(self) -> str:
         return str(self.__query_node)
+
+    def get_credentials(self) -> Tuple[str, str]:
+        """
+        Returns the user credentials for the Clickhouse connection
+        """
+        return self.__user, self.__password
 
     def get_query_connection(
         self, client_settings: ClickhouseClientSettings,
@@ -175,6 +185,8 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
             self.__connection_cache[cache_key] = ClickhousePool(
                 node.host_name,
                 node.port,
+                self.__user,
+                self.__password,
                 client_settings=settings,
                 send_receive_timeout=timeout,
             )
@@ -199,6 +211,8 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
             table_name,
             self.__query_node.host_name,
             self.__http_port,
+            self.__user,
+            self.__password,
             encoder,
             options,
             chunk_size,
@@ -239,6 +253,8 @@ CLUSTERS = [
     ClickhouseCluster(
         host=cluster["host"],
         port=cluster["port"],
+        user=cluster.get("user", "default"),
+        password=cluster.get("password", ""),
         http_port=cluster["http_port"],
         storage_sets=cluster["storage_sets"],
         single_node=cluster["single_node"],

@@ -49,7 +49,7 @@ APDEX_FUNCTION_RE = re.compile(r"^apdex\(\s*([^,]+)+\s*,\s*([\d]+)+\s*\)$")
 IMPACT_FUNCTION_RE = re.compile(
     r"^impact\(\s*([^,]+)+\s*,\s*([\d]+)+\s*,\s*([^,]+)+\s*\)$"
 )
-ERROR_RATE_FUNCTION_RE = re.compile(r"^error_rate\(\)$")
+FAILURE_RATE_FUNCTION_RE = re.compile(r"^failure_rate\(\)$")
 
 
 def to_list(value: Union[T, List[T]]) -> List[T]:
@@ -101,14 +101,14 @@ def function_expr(fn: str, args_expr: str = "") -> str:
                 apdex=apdex, user_col=escape_identifier(match.group(3)),
             )
         raise ValueError("Invalid format for impact()")
-    elif fn.startswith("error_rate("):
-        match = ERROR_RATE_FUNCTION_RE.match(fn)
+    elif fn.startswith("failure_rate("):
+        match = FAILURE_RATE_FUNCTION_RE.match(fn)
         if match:
             return "countIf((transaction_status != {ok} AND transaction_status != {unknown})) / count()".format(
                 ok=SPAN_STATUS_NAME_TO_CODE["ok"],
                 unknown=SPAN_STATUS_NAME_TO_CODE["unknown_error"],
             )
-        raise ValueError("Invalid format for error_rate()")
+        raise ValueError("Invalid format for failure_rate()")
     # For functions with no args, (or static args) we allow them to already
     # include them as part of the function name, eg, "count()" or "sleep(1)"
     if not args_expr and fn.endswith(")"):

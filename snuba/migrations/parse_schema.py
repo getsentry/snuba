@@ -1,7 +1,7 @@
 import logging
 import re
 
-from parsimonious.grammar import Grammar   # type: ignore
+from parsimonious.grammar import Grammar  # type: ignore
 from parsimonious.nodes import Node, NodeVisitor  # type: ignore
 from typing import Any, Iterable, Mapping, Sequence, Tuple
 
@@ -64,7 +64,9 @@ grammar = Grammar(
 
 
 class Visitor(NodeVisitor):
-    def visit_basic_type(self, node: Node, visited_children: Iterable[Any]) -> ColumnType:
+    def visit_basic_type(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> ColumnType:
         return {
             "Date": Date,
             "DateTime": DateTime,
@@ -82,7 +84,9 @@ class Visitor(NodeVisitor):
         size = int(node.children[1].text)
         return Float(size)
 
-    def visit_fixedstring(self, node: Node, visited_children: Iterable[Any]) -> ColumnType:
+    def visit_fixedstring(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> ColumnType:
         size = int(node.children[3].text)
         return FixedString(size)
 
@@ -90,10 +94,14 @@ class Visitor(NodeVisitor):
         _enum, _size, _open, _sp, pairs, _sp, _close = visited_children
         return Enum(pairs)
 
-    def visit_enum_pairs(self, node: Node, visited_children: Iterable[Any]) -> Sequence[Tuple[str, int]]:
+    def visit_enum_pairs(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> Sequence[Tuple[str, int]]:
         return [c[0] for c in visited_children]
 
-    def visit_enum_pair(self, node: Node, visited_children: Iterable[Any]) -> Tuple[str, int]:
+    def visit_enum_pair(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> Tuple[str, int]:
         (_quot, enum_str, _quot, _sp, _eq, _sp, enum_val) = visited_children
         return (enum_str, enum_val)
 
@@ -103,17 +111,34 @@ class Visitor(NodeVisitor):
     def visit_enum_val(self, node: Node, visited_children: Iterable[Any]) -> int:
         return int(node.text)
 
-    def visit_agg(self, node: Node, visited_children: Iterable[Any]) -> AggregateFunction:
-        (_agg, _paren, _sp, agg_func, _sp, _comma, _sp, agg_types, _sp, _paren) = visited_children
+    def visit_agg(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> AggregateFunction:
+        (
+            _agg,
+            _paren,
+            _sp,
+            agg_func,
+            _sp,
+            _comma,
+            _sp,
+            agg_types,
+            _sp,
+            _paren,
+        ) = visited_children
         return AggregateFunction(agg_func, *agg_types)
 
     def visit_agg_func(self, node: Node, visited_children: Iterable[Any]) -> str:
         return str(node.text)
 
-    def visit_agg_types(self, node: Node, visited_children: Iterable[Any]) -> Sequence[ColumnType]:
+    def visit_agg_types(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> Sequence[ColumnType]:
         return [c[0] for c in visited_children]
 
-    def visit_lowcardinality(self, node: Node, visited_children: Iterable[Any]) -> ColumnType:
+    def visit_lowcardinality(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> ColumnType:
         (_lc, _paren, _sp, inner_type, _sp, _paren) = visited_children
         return LowCardinality(inner_type)
 
@@ -132,6 +157,7 @@ class Visitor(NodeVisitor):
 
 
 STRIP_CAST_RE = re.compile(r"^CAST\((.*), (.*)\)$", re.IGNORECASE)
+
 
 def _strip_cast(default_expr: str) -> str:
     match = STRIP_CAST_RE.match(default_expr)
@@ -160,7 +186,6 @@ def get_local_schema(conn, table_name) -> Mapping[str, ColumnType]:
     return {
         column_name: _get_column(column_type, default_type, default_expr, codec_expr)
         for column_name, column_type, default_type, default_expr, _comment, codec_expr in [
-            cols[:6]
-            for cols in conn.execute("DESCRIBE TABLE %s" % table_name)
+            cols[:6] for cols in conn.execute("DESCRIBE TABLE %s" % table_name)
         ]
     }
