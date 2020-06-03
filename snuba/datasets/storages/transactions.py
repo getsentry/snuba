@@ -29,7 +29,7 @@ from snuba.datasets.transactions_processor import (
     UNKNOWN_SPAN_STATUS,
     TransactionsMessageProcessor,
 )
-from snuba.query.processors.arrayjoin_optimizer import ArrayJoinReducer
+from snuba.query.processors.arrayjoin_keyvalue_optimizer import ArrayJoinKeyValueOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.web.split import TimeSplitQueryStrategy
@@ -180,7 +180,7 @@ storage = WritableTableStorage(
             BEGINNING_OF_TIME,
         ),
         TransactionColumnProcessor(),
-        ArrayJoinReducer("tags"),
+        ArrayJoinKeyValueOptimizer("tags"),
         PrewhereProcessor(),
     ],
     stream_loader=KafkaStreamLoader(
