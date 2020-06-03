@@ -23,6 +23,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
         "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
         "storage_sets": {"events", "outcomes", "querylog", "sessions", "transactions"},
+        "single_node": True,
     },
 ]
 
