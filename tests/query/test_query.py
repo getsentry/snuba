@@ -114,10 +114,7 @@ def test_referenced_columns():
     # a = 1 AND b = 1
     dataset = get_dataset("events")
     source = (
-        dataset.get_all_storages()[0]
-        .get_schemas()
-        .get_read_schema()
-        .get_data_source()
+        dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
     )
     body = {"conditions": [["a", "=", "1"], ["b", "=", "1"]]}
     query = Query(body, source)

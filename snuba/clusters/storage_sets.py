@@ -14,6 +14,7 @@ class StorageSetKey(Enum):
 
     Storage sets are assigned to clusters via configuration.
     """
+
     EVENTS = "events"
     OUTCOMES = "outcomes"
     QUERYLOG = "querylog"

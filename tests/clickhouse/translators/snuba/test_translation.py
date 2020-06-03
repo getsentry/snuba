@@ -110,7 +110,9 @@ test_data = [
         id="simple column",
     ),
     pytest.param(
-        TranslationMappers(subscriptables=[SubscriptableMapper(None, "tags", "table", "tags")]),
+        TranslationMappers(
+            subscriptables=[SubscriptableMapper(None, "tags", "table", "tags")]
+        ),
         SubscriptableReference(
             "tags[release]", Column(None, None, "tags"), Literal(None, "release")
         ),

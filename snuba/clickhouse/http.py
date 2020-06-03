@@ -66,7 +66,7 @@ class HTTPBatchWriter(BatchWriter):
                 "X-ClickHouse-User": self.__user,
                 "X-ClickHouse-Key": self.__password,
                 "Connection": "keep-alive",
-                "Accept-Encoding": "gzip,deflate"
+                "Accept-Encoding": "gzip,deflate",
             },
             body=self._prepare_chunks(rows),
             chunked=True,

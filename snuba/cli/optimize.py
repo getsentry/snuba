@@ -41,7 +41,10 @@ def optimize(
     dataset = get_dataset(dataset_name)
     writable_storage = dataset.get_writable_storage()
     assert writable_storage is not None, "Dataset has no writable storage"
-    clickhouse_user, clickhouse_password = writable_storage.get_cluster().get_credentials()
+    (
+        clickhouse_user,
+        clickhouse_password,
+    ) = writable_storage.get_cluster().get_credentials()
     table = enforce_table_writer(dataset).get_schema().get_local_table_name()
 
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
