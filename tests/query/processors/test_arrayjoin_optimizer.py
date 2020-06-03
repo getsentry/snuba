@@ -12,16 +12,15 @@ from snuba.query.conditions import (
     binary_condition,
     in_condition,
 )
-from snuba.query.dsl import arrayElement
+from snuba.query.dsl import arrayElement, arrayJoin
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query as SnubaQuery
 from snuba.query.parser import parse_query
 from snuba.query.processors.arrayjoin_optimizer import (
-    ArrayjoinOptimizer,
-    array_join,
+    ArrayJoinReducer,
     filter_key_values,
     filter_keys,
-    get_filtered_tag_keys,
+    get_filtered_mapping_keys,
     zip_columns,
 )
 from snuba.request import Request
@@ -157,14 +156,14 @@ tags_filter_tests = [
 
 
 @pytest.mark.parametrize("query, expected_result", tags_filter_tests)
-def test_get_filtered_tag_keys(
+def test_get_filtered_mapping_keys(
     query: ClickhouseQuery, expected_result: Set[str],
 ) -> None:
     """
     Test the algorithm that identifies potential tag keys we can pre-filter
     through arrayFilter.
     """
-    assert get_filtered_tag_keys(query) == expected_result
+    assert get_filtered_mapping_keys(query, "tags") == expected_result
 
 
 test_data = [
@@ -179,7 +178,7 @@ test_data = [
             selected_columns=[Column(None, None, "col1")],
             condition=in_condition(
                 None,
-                array_join("tags_key", Column(None, None, "tags.key")),
+                arrayJoin("tags_key", Column(None, None, "tags.key")),
                 [Literal(None, "t1"), Literal(None, "t2")],
             ),
         ),
@@ -196,8 +195,8 @@ test_data = [
             selected_columns=[
                 arrayElement(
                     "tags_key",
-                    array_join(
-                        "all_tags",
+                    arrayJoin(
+                        "snuba_all_tags",
                         zip_columns(
                             Column(None, None, "tags.key"),
                             Column(None, None, "tags.value"),
@@ -207,8 +206,8 @@ test_data = [
                 ),
                 arrayElement(
                     "tags_value",
-                    array_join(
-                        "all_tags",
+                    arrayJoin(
+                        "snuba_all_tags",
                         zip_columns(
                             Column(None, None, "tags.key"),
                             Column(None, None, "tags.value"),
@@ -234,14 +233,14 @@ test_data = [
         },
         build_query(
             selected_columns=[
-                array_join(
+                arrayJoin(
                     "tags_key",
                     filter_keys(Column(None, None, "tags.key"), [Literal(None, "t1")]),
                 ),
             ],
             condition=in_condition(
                 None,
-                array_join(
+                arrayJoin(
                     "tags_key",
                     filter_keys(Column(None, None, "tags.key"), [Literal(None, "t1")]),
                 ),
@@ -261,8 +260,8 @@ test_data = [
             selected_columns=[
                 arrayElement(
                     "tags_key",
-                    array_join(
-                        "all_tags",
+                    arrayJoin(
+                        "snuba_all_tags",
                         filter_key_values(
                             zip_columns(
                                 Column(None, None, "tags.key"),
@@ -275,8 +274,8 @@ test_data = [
                 ),
                 arrayElement(
                     "tags_value",
-                    array_join(
-                        "all_tags",
+                    arrayJoin(
+                        "snuba_all_tags",
                         filter_key_values(
                             zip_columns(
                                 Column(None, None, "tags.key"),
@@ -292,8 +291,8 @@ test_data = [
                 None,
                 arrayElement(
                     "tags_key",
-                    array_join(
-                        "all_tags",
+                    arrayJoin(
+                        "snuba_all_tags",
                         filter_key_values(
                             zip_columns(
                                 Column(None, None, "tags.key"),
@@ -321,7 +320,7 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
         p.process_query(query, request.settings)
     plan = dataset.get_query_plan_builder().build_plan(request)
 
-    ArrayjoinOptimizer().process_query(plan.query, request.settings)
+    ArrayJoinReducer("tags").process_query(plan.query, request.settings)
     return plan.query
 
 
@@ -347,8 +346,8 @@ def test_formatting() -> None:
     """
     assert arrayElement(
         "tags_key",
-        array_join(
-            "all_tags",
+        arrayJoin(
+            "snuba_all_tags",
             zip_columns(
                 Column(None, None, "tags.key"), Column(None, None, "tags.value"),
             ),
@@ -356,13 +355,13 @@ def test_formatting() -> None:
         Literal(None, 1),
     ).accept(ClickhouseExpressionFormatter()) == (
         "(arrayElement((arrayJoin(arrayMap((x, y -> array(x, y)), "
-        "tags.key, tags.value)) AS all_tags), 1) AS tags_key)"
+        "tags.key, tags.value)) AS snuba_all_tags), 1) AS tags_key)"
     )
 
     assert arrayElement(
         "tags_key",
-        array_join(
-            "all_tags",
+        arrayJoin(
+            "snuba_all_tags",
             filter_key_values(
                 zip_columns(
                     Column(None, None, "tags.key"), Column(None, None, "tags.value"),
@@ -374,7 +373,7 @@ def test_formatting() -> None:
     ).accept(ClickhouseExpressionFormatter()) == (
         "(arrayElement((arrayJoin(arrayFilter((pair -> in("
         "arrayElement(pair, 1), tuple('t1', 't2'))), "
-        "arrayMap((x, y -> array(x, y)), tags.key, tags.value))) AS all_tags), 1) AS tags_key)"
+        "arrayMap((x, y -> array(x, y)), tags.key, tags.value))) AS snuba_all_tags), 1) AS tags_key)"
     )
 
 
@@ -395,7 +394,7 @@ def test_aliasing() -> None:
 
     assert sql == (
         "SELECT (arrayElement((arrayJoin(arrayMap((x, y -> array(x, y)), "
-        "tags.key, tags.value)) AS all_tags), 2) AS tags_value) "
+        "tags.key, tags.value)) AS snuba_all_tags), 2) AS tags_value) "
         "FROM test_transactions_local "
-        "WHERE in((arrayElement(all_tags, 1) AS tags_key), tuple('t1', 't2'))"
+        "WHERE in((arrayElement(snuba_all_tags, 1) AS tags_key), tuple('t1', 't2'))"
     )

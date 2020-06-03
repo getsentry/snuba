@@ -17,6 +17,10 @@ def arrayElement(
     return FunctionCall(alias, "arrayElement", (array, index))
 
 
+def arrayJoin(alias: Optional[str], content: Expression) -> Expression:
+    return FunctionCall(alias, "arrayJoin", (content,))
+
+
 # arithmetic function
 def plus(lhs: Expression, rhs: Expression, alias: Optional[str] = None) -> FunctionCall:
     return FunctionCall(alias, "plus", (lhs, rhs))

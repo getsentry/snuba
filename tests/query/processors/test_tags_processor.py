@@ -5,7 +5,7 @@ import pytest
 from snuba.clickhouse.dictquery import DictSqlQuery
 from snuba.datasets.factory import get_dataset
 from snuba.query.parser import parse_query
-from snuba.query.processors.arrayjoin_optimizer import ArrayjoinOptimizer
+from snuba.query.processors.arrayjoin_optimizer import ArrayjoinReducer
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 
@@ -175,7 +175,7 @@ def test_tags_processor(
     for p in dataset.get_query_processors():
         p.process_query(query, request_settings)
     plan = dataset.get_query_plan_builder().build_plan(request)
-    ArrayjoinOptimizer().process_query(plan.query, request.settings)
+    ArrayJoinReducer("tags").process_query(plan.query, request.settings)
 
     assert (
         DictSqlQuery(dataset, plan.query, request_settings).format_sql()
