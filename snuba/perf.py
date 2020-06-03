@@ -45,7 +45,7 @@ def run(events_file, dataset, repeat=1, profile_process=False, profile_write=Fal
     from snuba.consumer import ConsumerWorker
 
     for storage in dataset.get_all_storages():
-        clickhouse = storage.get_cluster().get_connection(
+        clickhouse = storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.INSERT
         )
         for statement in storage.get_schemas().get_create_statements():
