@@ -21,7 +21,7 @@ from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.error_rate_processor import ErrorRateProcessor
+from snuba.query.processors.failure_rate_processor import FailureRateProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
@@ -180,6 +180,6 @@ class TransactionsDataset(TimeSeriesDataset):
             BasicFunctionsProcessor(),
             ApdexProcessor(),
             ImpactProcessor(),
-            ErrorRateProcessor(),
+            FailureRateProcessor(),
             TimeSeriesColumnProcessor(self.__time_group_columns),
         ]

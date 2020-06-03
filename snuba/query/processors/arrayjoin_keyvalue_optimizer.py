@@ -124,7 +124,7 @@ def get_filtered_mapping_keys(query: Query, column_name: str) -> Set[str]:
     return cond_keys | having_keys
 
 
-class ArrayJoinReducer(QueryProcessor):
+class ArrayJoinKeyValueOptimizer(QueryProcessor):
     """
     Applies two optimizations to reduce the performance impact of
     arrayJoin operations performed on mapping columns.
@@ -312,7 +312,7 @@ def filter_key_values(
     key_values: Expression, keys: Sequence[LiteralExpr]
 ) -> Expression:
     """
-    Filter a an array of key value pairs based on a sequence of keys
+    Filter an array of key value pairs based on a sequence of keys
     (tag keys in this case).
     """
     return FunctionCallExpr(
@@ -338,7 +338,7 @@ def filter_key_values(
 
 def filter_keys(column: Expression, keys: Sequence[LiteralExpr]) -> Expression:
     """
-    Filter a a Column array based on a sequence of keys.
+    Filter a Column array based on a sequence of keys.
     """
     return FunctionCallExpr(
         None,

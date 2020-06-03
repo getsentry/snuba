@@ -2,15 +2,10 @@ from typing import Iterator
 
 import pytest
 
-# TODO: Remove this once querylog is in prod and no longer disabled
-from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import DATASET_NAMES
 from tests.base import dataset_manager
-
-
-settings.DISABLED_DATASETS = set()
 
 
 def test_runs_all_migrations_without_errors() -> None:
@@ -32,7 +27,7 @@ def test_no_schema_diffs(dataset: Dataset) -> None:
     if not writable_storage:
         pytest.skip(f"{dataset!r} has no writable storage")
 
-    clickhouse = writable_storage.get_cluster().get_connection(
+    clickhouse = writable_storage.get_cluster().get_query_connection(
         ClickhouseClientSettings.MIGRATE
     )
     table_writer = writable_storage.get_table_writer()
