@@ -92,6 +92,7 @@ class ClickhousePool(object):
         loop will be doubled by the retry in execute()
         """
         attempts_remaining = 3
+
         while True:
             try:
                 return self.execute(*args, **kwargs)
