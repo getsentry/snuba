@@ -1,15 +1,15 @@
 import logging
 from datetime import datetime
 from enum import Enum
-from typing import Callable, List, NamedTuple, Optional, Sequence, Set, TypeVar, cast
+from typing import Callable, List, NamedTuple, Optional, Sequence, Set, TypeVar
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mappers import (
     KEY_COL_MAPPING_PARAM,
     KEY_MAPPING_PARAM,
-    mapping_pattern,
     get_mapping_col_name,
+    mapping_pattern,
 )
 from snuba.datasets.events_format import escape_field
 from snuba.query.conditions import (
@@ -20,7 +20,7 @@ from snuba.query.conditions import (
     get_first_level_conditions,
 )
 from snuba.query.expressions import Column, Expression, Literal
-from snuba.query.matchers import Any
+from snuba.query.matchers import Any, AnyExpression
 from snuba.query.matchers import Column as ColumnPattern
 from snuba.query.matchers import FunctionCall as FunctionCallPattern
 from snuba.query.matchers import Literal as LiteralPattern
@@ -82,10 +82,12 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         self, condition: Condition
     ) -> Optional[OptimizableCondition]:
         """
-        Recognize if the condition can be optimized.
-        This includes these kind of conditions:
+        Recognize if the condition can be optimized and returns the useful
+        fields to compose the flattened column.
+        This finds these kind of conditions:
         - top level conditions. No nested OR
-        - the condition has to be either in the form tag[t] = value
+        - the condition has to be in the form tag[t] = value or
+          tag[t] != value
         - functions referencing the tags as parameters are not taken
           into account except for ifNull.
         - Both EQ and NEQ conditions are optimized.
@@ -124,7 +126,7 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         self, condition: Expression
     ) -> Optional[OptimizableCondition]:
         """
-        Same as from __can_optimize_legacy, but it relies on AST conditions.
+        Same as __can_optimize_legacy, but it relies on AST conditions.
         """
         match = FunctionCallPattern(
             None,
@@ -136,12 +138,12 @@ class NestedFieldConditionOptimizer(QueryProcessor):
                 Or(
                     [
                         FunctionCallPattern(
-                            None, String("ifNull"), (mapping_pattern,),
+                            None, String("ifNull"), (mapping_pattern, AnyExpression()),
                         ),
                         mapping_pattern,
                     ]
                 ),
-                LiteralPattern(None, Param("tag_key", Any(str))),
+                LiteralPattern(None, Param("nested_col_value", Any(str))),
             ),
         ).match(condition)
 
@@ -157,13 +159,11 @@ class NestedFieldConditionOptimizer(QueryProcessor):
                 operand=Operand.EQ
                 if match.string("operator") == ConditionFunctions.EQ
                 else Operand.NEQ,
-                value=match.string("tag_key"),
+                value=match.string("nested_col_value"),
             )
         return None
 
-    def __has_tags(self, expression: Optional[Expression]) -> bool:
-        if expression is None:
-            return False
+    def __has_nested_col(self, expression: Expression) -> bool:
         for node in expression:
             match = mapping_pattern.match(node)
             if match is not None:
@@ -176,20 +176,33 @@ class NestedFieldConditionOptimizer(QueryProcessor):
 
     CondType = TypeVar("CondType")
 
-    def __apply_conditions(
+    def __flatten_conditions(
         self,
         conditions: Sequence[CondType],
         optimizable_checker: Callable[[CondType], Optional[OptimizableCondition]],
         condition_builder: Callable[[str, str, str], CondType],
         conditions_writer: Callable[[Sequence[CondType]], None],
     ) -> None:
+        """
+        Template that contains the logic to build the flattened tag/context
+        conditions independently on the query representation. It takes
+        some functions in input that provide the legacy and ast specific
+        logic.
+
+        conditions: is the Sequence of existing conditions in the Query
+        optimizable_checker: is a function that tells whether a
+                condition can be moved to the flattened column field.
+        condition_builder: builds a condition object.
+        conditions_writer: writes back the new conditions to the Query
+        """
+
         new_conditions = []
         positive_like_expression: List[str] = []
         negative_like_expression: List[str] = []
 
         for c in conditions:
             keyvalue = optimizable_checker(c)
-            if not keyvalue:
+            if keyvalue is None:
                 new_conditions.append(c)
             else:
                 expression = f"{escape_field(keyvalue.nested_col_key)}={escape_field(keyvalue.value)}"
@@ -242,10 +255,9 @@ class NestedFieldConditionOptimizer(QueryProcessor):
                 ).match(condition)
                 if match is not None:
                     try:
-                        if (
-                            cast(datetime, match.scalar("timestamp"))
-                            - self.__beginning_of_time
-                        ).total_seconds() > 0:
+                        ts = match.scalar("timestamp")
+                        assert isinstance(ts, datetime)
+                        if (ts - self.__beginning_of_time).total_seconds() > 0:
                             apply_optimization = True
                     except Exception:
                         # We should not get here, it means the from timestamp is malformed
@@ -261,21 +273,23 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         # Do not use flattened tags if tags are being unpacked anyway. In that case
         # using flattened tags only implies loading an additional column thus making
         # the query heavier and slower
-        if self.__has_tags(query.get_arrayjoin_from_ast()):
-            return
-        if query.get_groupby_from_ast():
-            for expression in query.get_groupby_from_ast():
-                if self.__has_tags(expression):
-                    return
-        if self.__has_tags(query.get_having_from_ast()):
+        arrayjoin = query.get_arrayjoin_from_ast()
+        if arrayjoin is not None and self.__has_nested_col(arrayjoin):
             return
 
-        if query.get_orderby_from_ast():
-            for orderby in query.get_orderby_from_ast():
-                if self.__has_tags(orderby.expression):
-                    return
+        for expression in query.get_groupby_from_ast():
+            if self.__has_nested_col(expression):
+                return
 
-        self.__apply_conditions(
+        having = query.get_having_from_ast()
+        if having is not None and self.__has_nested_col(having):
+            return
+
+        for orderby in query.get_orderby_from_ast():
+            if self.__has_nested_col(orderby.expression):
+                return
+
+        self.__flatten_conditions(
             query.get_conditions() or [],
             self.__can_optimize_legacy,
             lambda col, operator, operand: [col, operator, operand],
@@ -284,7 +298,7 @@ class NestedFieldConditionOptimizer(QueryProcessor):
 
         ast_condition = query.get_condition_from_ast()
         if ast_condition is not None:
-            self.__apply_conditions(
+            self.__flatten_conditions(
                 get_first_level_conditions(ast_condition),
                 self.__can_optimize_ast,
                 lambda col, operator, operand: binary_condition(

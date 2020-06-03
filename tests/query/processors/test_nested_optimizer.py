@@ -1,24 +1,22 @@
 from datetime import datetime
 from typing import Union
+
 import pytest
 
+from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
 from snuba.datasets.factory import get_dataset
-from snuba.query.parser import parse_query
-from snuba.query.parser.conditions import parse_conditions_to_expr
-from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
-from snuba.request import Request
-from snuba.request.request_settings import HTTPRequestSettings
-from snuba.query.conditions import combine_and_conditions
-from snuba.query.expressions import FunctionCall, Column, Literal, Expression
 from snuba.query.conditions import (
-    binary_condition,
-    BooleanFunctions,
-    ConditionFunctions,
     OPERATOR_TO_FUNCTION,
+    ConditionFunctions,
+    binary_condition,
     combine_and_conditions,
     combine_or_conditions,
 )
-from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.parser import parse_query
+from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
+from snuba.request import Request
+from snuba.request.request_settings import HTTPRequestSettings
 
 
 def build_cond(
@@ -33,7 +31,7 @@ def build_cond(
 
 
 test_data = [
-    (
+    pytest.param(
         {
             "conditions": [
                 ["d", "=", "1"],
@@ -49,8 +47,9 @@ test_data = [
                 build_cond("start_ts", ">", datetime(2019, 12, 18, 6, 35, 17)),
             ]
         ),
+        id="no tags",
     ),  # No tags
-    (
+    pytest.param(
         {
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
@@ -70,8 +69,9 @@ test_data = [
                 build_cond("tags_map", "LIKE", "%|test.tag=1|%"),
             ]
         ),
+        id="simple flattened tag",
     ),  # One simple tag condition
-    (
+    pytest.param(
         {
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
@@ -91,8 +91,9 @@ test_data = [
                 build_cond("tags_map", "LIKE", "%|test.tag=1|%"),
             ]
         ),
+        id="simple flattened tag other timestamp",
     ),  # One simple tag condition, different timestamp
-    (
+    pytest.param(
         {
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
@@ -119,8 +120,9 @@ test_data = [
                 build_cond("start_ts", ">", datetime(2019, 1, 1, 6, 35, 17)),
             ]
         ),
+        id="start_ts too old",
     ),  # Query start from before the existence of tagsmap
-    (
+    pytest.param(
         {
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
@@ -143,8 +145,9 @@ test_data = [
                 build_cond("tags_map", "LIKE", "%|test.tag=1|%"),
             ]
         ),
+        id="two timestamps in the query",
     ),  # Two start conditions: apply
-    (
+    pytest.param(
         {
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
@@ -168,8 +171,9 @@ test_data = [
                 ),
             ]
         ),
+        id="multiple tag conditions",
     ),  # Multiple tags in the same merge
-    (
+    pytest.param(
         {
             "conditions": [
                 ["tags[test2.tag]", "=", "2"],
@@ -193,8 +197,9 @@ test_data = [
                 ),
             ]
         ),
+        id="enforce condition sorting",
     ),  # Multiple tags in the same merge and properly sorted
-    (
+    pytest.param(
         {
             "conditions": [
                 ["tags[test.tag]", "!=", "1"],
@@ -220,8 +225,9 @@ test_data = [
                 build_cond("tags_map", "NOT LIKE", "%|test3.tag=3|%"),
             ]
         ),
+        id="negative condition",
     ),  # Negative conditions mixed with positive ones
-    (
+    pytest.param(
         {
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
@@ -260,8 +266,9 @@ test_data = [
                 build_cond("tags_map", "LIKE", "%|test.tag=1|%"),
             ]
         ),
+        id="nested conditions",
     ),  # Nested condition. Only the external one is converted
-    (
+    pytest.param(
         {
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
@@ -282,8 +289,9 @@ test_data = [
                 build_cond("tags_map", "LIKE", "%|test.tag=1|%|test2.tag=2|%"),
             ]
         ),
+        id="ifNull function",
     ),  # Nested conditions in ifNull. This is converted.
-    (
+    pytest.param(
         {
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
@@ -316,8 +324,9 @@ test_data = [
                 build_cond("tags_map", "LIKE", "%|test.tag=1|%"),
             ]
         ),
+        id="contexts and tags",
     ),  # Both contexts and tags are present
-    (
+    pytest.param(
         {
             "conditions": [
                 [["tags[test.tag]", "=", "1"], ["c", "=", "3"]],
@@ -377,8 +386,9 @@ test_data = [
                 build_cond("start_ts", ">", datetime(2019, 12, 18, 6, 35, 17)),
             ]
         ),
+        id="OR condition",
     ),  # Nested conditions, ignored.
-    (
+    pytest.param(
         {
             "groupby": ["tags[another_tag]"],
             "having": [["tags[yet_another_tag]", "=", "1"]],
@@ -407,8 +417,9 @@ test_data = [
                 build_cond("start_ts", ">", datetime(2019, 12, 18, 6, 35, 17)),
             ]
         ),
+        id="tags outside conditions",
     ),  # Skip using flattened tags if the query requires tags unpacking anyway
-    (
+    pytest.param(
         {
             "orderby": ["tags[test.tag]"],
             "conditions": [
@@ -436,6 +447,7 @@ test_data = [
                 build_cond("start_ts", ">", datetime(2019, 12, 18, 6, 35, 17)),
             ]
         ),
+        id="tags in groupby",
     ),  # Skip using flattened tags if the query requires tags unpacking anyway
 ]
 
@@ -449,9 +461,10 @@ def test_nested_optimizer(
     transactions = get_dataset("transactions")
     query = parse_query(query_body, transactions)
     request_settings = HTTPRequestSettings()
-    request = Request("", query, request_settings, {}, "")
 
-    query_plan = transactions.get_query_plan_builder().build_plan(request)
+    query_plan = transactions.get_query_plan_builder().build_plan(
+        Request("", query, request_settings, {}, "")
+    )
     processor = NestedFieldConditionOptimizer(
         nested_col="tags",
         flattened_col="tags_map",
