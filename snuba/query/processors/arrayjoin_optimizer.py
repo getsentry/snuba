@@ -124,7 +124,7 @@ def get_filtered_mapping_keys(query: Query, column_name: str) -> Set[str]:
     return cond_keys | having_keys
 
 
-class ArrayJoinOptimizer(QueryProcessor):
+class ArrayJoinReducer(QueryProcessor):
     """
     Applies two optimizations to reduce the performance impact of
     arrayJoin operations performed on mapping columns.
