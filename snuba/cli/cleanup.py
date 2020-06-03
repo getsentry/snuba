@@ -5,7 +5,6 @@ import click
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
 from snuba.environment import setup_logging
-from snuba.util import local_dataset_mode
 
 
 @click.command()
@@ -61,7 +60,7 @@ def cleanup(
         connection = ClickhousePool(
             clickhouse_host, clickhouse_port, clickhouse_user, clickhouse_password,
         )
-    elif not local_dataset_mode():
+    elif not writable_storage.get_cluster().is_single_node():
         raise click.ClickException("Provide ClickHouse host and port for cleanup")
     else:
         connection = writable_storage.get_cluster().get_query_connection(

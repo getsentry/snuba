@@ -3,9 +3,8 @@ from typing import Optional
 import click
 
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
+from snuba.datasets.factory import DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging
-from snuba.util import local_dataset_mode
 
 
 @click.command()
@@ -45,7 +44,7 @@ def optimize(
         clickhouse_user,
         clickhouse_password,
     ) = writable_storage.get_cluster().get_credentials()
-    table = enforce_table_writer(dataset).get_schema().get_local_table_name()
+    table = writable_storage.get_table_writer().get_schema().get_local_table_name()
 
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -55,29 +54,19 @@ def optimize(
     # will ensure that optimize is performed on all of the individual nodes for
     # that cluster.
     if clickhouse_host and clickhouse_port:
-        clickhouse_connections = [
-            ClickhousePool(
-                clickhouse_host,
-                clickhouse_port,
-                clickhouse_user,
-                clickhouse_password,
-                send_receive_timeout=ClickhouseClientSettings.OPTIMIZE.value.timeout,
-            )
-        ]
-    elif not local_dataset_mode():
+        connection = ClickhousePool(
+            clickhouse_host,
+            clickhouse_port,
+            clickhouse_user,
+            clickhouse_password,
+            send_receive_timeout=ClickhouseClientSettings.OPTIMIZE.value.timeout,
+        )
+    elif not writable_storage.get_cluster().is_single_node():
         raise click.ClickException("Provide Clickhouse host and port for optimize")
     else:
-        # In local mode, we run optimize on each cluster relevant to the provided
-        # dataset using the cluster's host/port configuration.
-        clickhouse_connections = list(
-            set(
-                storage.get_cluster().get_query_connection(
-                    ClickhouseClientSettings.OPTIMIZE
-                )
-                for storage in dataset.get_all_storages()
-            )
+        connection = writable_storage.get_cluster().get_query_connection(
+            ClickhouseClientSettings.OPTIMIZE
         )
 
-    for connection in clickhouse_connections:
-        num_dropped = run_optimize(connection, database, table, before=today)
-        logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))
+    num_dropped = run_optimize(connection, database, table, before=today)
+    logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))

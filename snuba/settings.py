@@ -12,7 +12,6 @@ PORT = 1218
 
 DEFAULT_DATASET_NAME = "events"
 DISABLED_DATASETS: Set[str] = {"querylog"}
-DATASET_MODE = "local"
 
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
