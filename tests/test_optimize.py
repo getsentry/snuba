@@ -13,7 +13,7 @@ class TestOptimize(BaseEventsTest):
         clickhouse = (
             get_storage(StorageKey.EVENTS)
             .get_cluster()
-            .get_connection(ClickhouseClientSettings.OPTIMIZE)
+            .get_query_connection(ClickhouseClientSettings.OPTIMIZE)
         )
         # no data, 0 partitions to optimize
         parts = optimize.get_partitions_to_optimize(
