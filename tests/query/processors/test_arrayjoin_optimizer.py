@@ -21,7 +21,7 @@ from snuba.query.processors.arrayjoin_optimizer import (
     array_join,
     filter_key_values,
     filter_keys,
-    get_filtered_tag_keys,
+    get_filtered_mapping_keys,
     zip_columns,
 )
 from snuba.request import Request
@@ -157,14 +157,14 @@ tags_filter_tests = [
 
 
 @pytest.mark.parametrize("query, expected_result", tags_filter_tests)
-def test_get_filtered_tag_keys(
+def test_get_filtered_mapping_keys(
     query: ClickhouseQuery, expected_result: Set[str],
 ) -> None:
     """
     Test the algorithm that identifies potential tag keys we can pre-filter
     through arrayFilter.
     """
-    assert get_filtered_tag_keys(query) == expected_result
+    assert get_filtered_mapping_keys(query, "tags") == expected_result
 
 
 test_data = [
@@ -321,7 +321,7 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
         p.process_query(query, request.settings)
     plan = dataset.get_query_plan_builder().build_plan(request)
 
-    ArrayjoinOptimizer().process_query(plan.query, request.settings)
+    ArrayjoinOptimizer("tags").process_query(plan.query, request.settings)
     return plan.query
 
 
