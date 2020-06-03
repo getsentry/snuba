@@ -50,7 +50,7 @@ def dataset_manager(name: str) -> Iterator[Dataset]:
     dataset = get_dataset(name)
 
     for storage in dataset.get_all_storages():
-        clickhouse = storage.get_cluster().get_connection(
+        clickhouse = storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.MIGRATE
         )
         for statement in storage.get_schemas().get_drop_statements():
@@ -63,7 +63,7 @@ def dataset_manager(name: str) -> Iterator[Dataset]:
         yield dataset
     finally:
         for storage in dataset.get_all_storages():
-            clickhouse = storage.get_cluster().get_connection(
+            clickhouse = storage.get_cluster().get_query_connection(
                 ClickhouseClientSettings.MIGRATE
             )
             for statement in storage.get_schemas().get_drop_statements():

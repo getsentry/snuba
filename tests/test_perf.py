@@ -16,7 +16,7 @@ class TestPerf(BaseEventsTest):
         clickhouse = (
             get_storage(StorageKey.EVENTS)
             .get_cluster()
-            .get_connection(ClickhouseClientSettings.QUERY)
+            .get_query_connection(ClickhouseClientSettings.QUERY)
         )
 
         assert clickhouse.execute("SELECT COUNT() FROM %s" % table)[0][0] == 0
