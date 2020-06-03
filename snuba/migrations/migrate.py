@@ -51,7 +51,7 @@ def _run_schema(conn: Client, schema: Schema) -> None:
 def run() -> None:
     # Ensure all clusters are single node before attempting to migrate
     assert all(
-        [cluster.is_single_node() for cluster in CLUSTERS]
+        cluster.is_single_node() for cluster in CLUSTERS
     ), "Cannot run migrations for multi node clusters"
 
     # Create the tables for all of the storages to be migrated.
