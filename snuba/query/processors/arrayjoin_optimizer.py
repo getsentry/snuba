@@ -171,6 +171,15 @@ class ArrayJoinOptimizer(QueryProcessor):
             for key in get_filtered_mapping_keys(query, self.__column_name)
         ]
 
+        # Ensures the alias we apply to the arrayJoin is not already taken.
+        used_aliases = {exp.alias for exp in query.get_all_expressions()}
+        pair_alias_root = f"snuba_all_{self.__column_name}"
+        pair_alias = pair_alias_root
+        index = 0
+        while pair_alias in used_aliases:
+            index += 1
+            pair_alias = f"{pair_alias_root}_{index}"
+
         def replace_expression(expr: Expression) -> Expression:
             """
             Applies the appropriate optimization on a single arrayJoin expression.
@@ -194,11 +203,15 @@ class ArrayJoinOptimizer(QueryProcessor):
 
                 if not filtered_keys:
                     return _unfiltered_mapping_pairs(
-                        expr.alias, self.__column_name, array_index
+                        expr.alias, self.__column_name, pair_alias, array_index
                     )
                 else:
                     return _filtered_mapping_pairs(
-                        expr.alias, self.__column_name, filtered_keys, array_index
+                        expr.alias,
+                        self.__column_name,
+                        pair_alias,
+                        filtered_keys,
+                        array_index,
                     )
 
             elif filtered_keys:
@@ -216,7 +229,7 @@ class ArrayJoinOptimizer(QueryProcessor):
 
 
 def _unfiltered_mapping_pairs(
-    alias: Optional[str], column_name: str, array_index: LiteralExpr
+    alias: Optional[str], column_name: str, pair_alias: str, array_index: LiteralExpr
 ) -> Expression:
     # (arrayJoin(
     #   arrayMap((x,y) -> [x,y], tags.key, tags.value)
@@ -224,7 +237,7 @@ def _unfiltered_mapping_pairs(
     return arrayElement(
         alias,
         arrayJoin(
-            f"snuba:all_{column_name}",
+            pair_alias,
             zip_columns(
                 ColumnExpr(None, None, key_column(column_name)),
                 ColumnExpr(None, None, val_column(column_name)),
@@ -237,6 +250,7 @@ def _unfiltered_mapping_pairs(
 def _filtered_mapping_pairs(
     alias: Optional[str],
     column_name: str,
+    pair_alias: str,
     filtered_tags: Sequence[LiteralExpr],
     array_index: LiteralExpr,
 ) -> Expression:
@@ -247,7 +261,7 @@ def _filtered_mapping_pairs(
     return arrayElement(
         alias,
         arrayJoin(
-            f"snuba:all_{column_name}",
+            pair_alias,
             filter_key_values(
                 zip_columns(
                     ColumnExpr(None, None, key_column(column_name)),
