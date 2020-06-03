@@ -16,8 +16,8 @@ from snuba.query.dsl import arrayElement, arrayJoin
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query as SnubaQuery
 from snuba.query.parser import parse_query
-from snuba.query.processors.arrayjoin_optimizer import (
-    ArrayJoinReducer,
+from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
+    ArrayJoinKeyValueOptimizer,
     filter_key_values,
     filter_keys,
     get_filtered_mapping_keys,
@@ -320,7 +320,7 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
         p.process_query(query, request.settings)
     plan = dataset.get_query_plan_builder().build_plan(request)
 
-    ArrayJoinReducer("tags").process_query(plan.query, request.settings)
+    ArrayJoinKeyValueOptimizer("tags").process_query(plan.query, request.settings)
     return plan.query
 
 
