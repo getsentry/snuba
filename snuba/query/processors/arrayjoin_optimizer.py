@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, Set, cast
+from typing import Optional, Sequence, Set
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
@@ -10,7 +10,7 @@ from snuba.query.conditions import (
     is_binary_condition,
     is_in_condition_pattern,
 )
-from snuba.query.dsl import arrayElement
+from snuba.query.dsl import arrayElement, arrayJoin
 from snuba.query.expressions import Argument
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
@@ -33,7 +33,7 @@ def array_join_pattern(column_name: str) -> FunctionCall:
     return FunctionCall(
         None,
         String("arrayJoin"),
-        (Column(None, None, String(key_column(column_name))),),
+        (Column(column_name=String(key_column(column_name))),),
     )
 
 
@@ -72,7 +72,8 @@ def _get_mapping_keys_in_condition(
 
         match = is_in_condition_pattern(array_join_pattern(column_name)).match(c)
         if match is not None:
-            function = cast(FunctionCallExpr, match.expression("tuple"))
+            function = match.expression("tuple")
+            assert isinstance(function, FunctionCallExpr)
             keys_found |= {
                 l.value
                 for l in function.parameters
@@ -123,7 +124,7 @@ def get_filtered_mapping_keys(query: Query, column_name: str) -> Set[str]:
     return cond_keys | having_keys
 
 
-class ArrayjoinOptimizer(QueryProcessor):
+class ArrayJoinOptimizer(QueryProcessor):
     """
     Applies two optimizations to reduce the performance impact of
     arrayJoin operations performed on mapping columns.
@@ -146,9 +147,7 @@ class ArrayjoinOptimizer(QueryProcessor):
             String("arrayJoin"),
             (
                 Column(
-                    None,
-                    None,
-                    Param(
+                    column_name=Param(
                         "col",
                         Or(
                             [
@@ -224,8 +223,8 @@ def _unfiltered_mapping_pairs(
     #  as all_tags)[1]
     return arrayElement(
         alias,
-        array_join(
-            f"all_{column_name}",
+        arrayJoin(
+            f"snuba:all_{column_name}",
             zip_columns(
                 ColumnExpr(None, None, key_column(column_name)),
                 ColumnExpr(None, None, val_column(column_name)),
@@ -247,8 +246,8 @@ def _filtered_mapping_pairs(
     #  )) as all_tags)[1]
     return arrayElement(
         alias,
-        array_join(
-            f"all_{column_name}",
+        arrayJoin(
+            f"snuba:all_{column_name}",
             filter_key_values(
                 zip_columns(
                     ColumnExpr(None, None, key_column(column_name)),
@@ -268,14 +267,10 @@ def _filtered_mapping_keys(
     #   tag -> tag IN (tags),
     #   tags.key
     # ))
-    return array_join(
+    return arrayJoin(
         alias,
         filter_keys(ColumnExpr(None, None, key_column(column_name)), filtered_tags),
     )
-
-
-def array_join(alias: Optional[str], content: Expression) -> Expression:
-    return FunctionCallExpr(alias, "arrayJoin", (content,))
 
 
 def zip_columns(column1: ColumnExpr, column2: ColumnExpr) -> Expression:
