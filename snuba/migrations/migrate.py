@@ -59,7 +59,9 @@ def run() -> None:
         storage_name = storage_key.value
         logger.info("Creating tables for storage %s", storage_name)
         storage = get_storage(storage_key)
-        conn = storage.get_cluster().get_connection(ClickhouseClientSettings.MIGRATE)
+        conn = storage.get_cluster().get_query_connection(
+            ClickhouseClientSettings.MIGRATE
+        )
 
         for statement in storage.get_schemas().get_create_statements():
             logger.debug("Executing:\n%s", statement.statement)

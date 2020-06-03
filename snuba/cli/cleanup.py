@@ -57,7 +57,7 @@ def cleanup(
     elif not writable_storage.get_cluster().is_single_node():
         raise click.ClickException("Provide ClickHouse host and port for cleanup")
     else:
-        connection = writable_storage.get_cluster().get_connection(
+        connection = writable_storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.CLEANUP
         )
 
