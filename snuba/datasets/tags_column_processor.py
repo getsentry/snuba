@@ -152,33 +152,17 @@ class TagColumnProcessor:
             }
         )
 
-    def __extract_top_level_tag_conditions(self, condition: Condition) -> List[str]:
-        """
-        Finds the top level conditions that include tags_key in an expression.
-        For top level condition. In Snuba conditions are expressed in layers, the top level
-        ones are in AND, the nested ones are in OR and so on.
-        We can only apply the arrayFilter optimization to tag keys conditions that are not in
-        OR with other columns. To simplify the problem, we only consider those conditions that
-        are included in the first level of the query:
-        [['tagskey' '=' 'a'],['col' '=' 'b'],['col2' '=' 'c']]  works
-        [[['tagskey' '=' 'a'], ['col2' '=' 'b']], ['tagskey' '=' 'c']] does not
-        """
-
-        if is_condition(condition) and condition[1] == "=":
-            if condition[0] == "tags_key" and isinstance(condition[2], str):
-                return [condition[2]]
-
-        if is_condition(condition) and condition[1] == "IN":
-            if condition[0] == "tags_key" and isinstance(condition[2], (list, tuple)):
-                return [str(tag) for tag in condition[2]]
-
-        return []
-
     def __get_filter_tags(self, query: Query) -> List[str]:
         """
         Identifies the tag names we can apply the arrayFilter optimization on.
         Which means: if the tags_key column is in the select clause and there are
         one or more top level conditions on the tags_key column.
+
+        We can only apply the arrayFilter optimization to tag keys conditions
+        that are not in OR with other columns. To simplify the problem, we only
+        consider those conditions that are included in the first level of the query:
+        [['tagskey' '=' 'a'],['col' '=' 'b'],['col2' '=' 'c']]  works
+        [[['tagskey' '=' 'a'], ['col2' '=' 'b']], ['tagskey' '=' 'c']] does not
         """
         if not state.get_config("ast_tag_processor_enabled", 1):
             return []
@@ -196,12 +180,23 @@ class TagColumnProcessor:
         ) -> Optional[List[str]]:
             if not cond:
                 return []
-            if any(not is_condition(c) for c in cond):
-                # This is an OR
-                return None
+
             ret = []
             for c in cond:
-                ret.extend(self.__extract_top_level_tag_conditions(c))
+                if not is_condition(c):
+                    # This is an OR
+                    return None
+
+                if c[1] == "=" and c[0] == "tags_key" and isinstance(c[2], str):
+                    ret.append(c[2])
+
+                elif (
+                    c[1] == "IN"
+                    and c[0] == "tags_key"
+                    and isinstance(c[2], (list, tuple))
+                ):
+                    ret.extend([str(tag) for tag in c[2]])
+
             return ret
 
         cond_tags_key = extract_tags_from_condition(query.get_conditions() or [])
@@ -214,7 +209,7 @@ class TagColumnProcessor:
             # Same as above
             return []
 
-        return cond_tags_key + having_tags_key
+        return [*cond_tags_key, *having_tags_key]
 
     def __tags_expr(
         self,
