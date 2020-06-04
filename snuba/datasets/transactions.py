@@ -31,7 +31,7 @@ from snuba.query.timeseries_extension import TimeSeriesExtension
 # TODO: This will be a property of the relationship between entity and
 # storage. Now we do not have entities so it is between dataset and
 # storage.
-transactions_translator = TranslationMappers(
+transaction_translator = TranslationMappers(
     columns=[
         ColumnToFunction(
             None,
@@ -58,9 +58,7 @@ transactions_translator = TranslationMappers(
         ColumnToColumn(None, "transaction", None, "transaction_name"),
         ColumnToColumn(None, "message", None, "transaction_name"),
         ColumnToColumn(None, "title", None, "transaction_name"),
-        ColumnToMapping(
-            None, "geo_country_code", None, "contexts", "geo.country_code"
-        ),
+        ColumnToMapping(None, "geo_country_code", None, "contexts", "geo.country_code"),
         ColumnToMapping(None, "geo_region", None, "contexts", "geo.region"),
         ColumnToMapping(None, "geo_city", None, "contexts", "geo.city"),
     ],
@@ -88,7 +86,7 @@ class TransactionsDataset(TimeSeriesDataset):
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(
-                storage=storage, mappers=transactions_translator
+                storage=storage, mappers=transaction_translator
             ),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,

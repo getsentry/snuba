@@ -52,10 +52,6 @@ IMPACT_FUNCTION_RE = re.compile(
 FAILURE_RATE_FUNCTION_RE = re.compile(r"^failure_rate\(\)$")
 
 
-def local_dataset_mode() -> bool:
-    return settings.DATASET_MODE == "local"
-
-
 def to_list(value: Union[T, List[T]]) -> List[T]:
     return value if isinstance(value, list) else [value]
 

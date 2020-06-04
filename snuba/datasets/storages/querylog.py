@@ -64,6 +64,7 @@ schema = MergeTreeSchema(
     columns=columns,
     local_table_name="querylog_local",
     dist_table_name="querylog_dist",
+    storage_set_key=StorageSetKey.QUERYLOG,
     order_by="(toStartOfDay(timestamp), request_id)",
     partition_by="(toMonday(timestamp))",
     sample_expr="request_id",

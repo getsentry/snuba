@@ -428,7 +428,8 @@ def process_delete_tag(
         SELECT %(select_columns)s
         FROM %(dist_read_table_name)s FINAL
     """
-        + prewhere + where
+        + prewhere
+        + where
     )
 
     all_columns = [
@@ -470,7 +471,8 @@ def process_delete_tag(
         SELECT count()
         FROM %(dist_read_table_name)s FINAL
     """
-        + prewhere + where
+        + prewhere
+        + where
     )
 
     query_time_flags = (NEEDS_FINAL, message["project_id"])

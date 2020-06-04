@@ -14,6 +14,9 @@ class TestClusters:
             {
                 "host": "host_1",
                 "port": 9000,
+                "user": "default",
+                "password": "",
+                "database": "default",
                 "http_port": 8123,
                 "storage_sets": {"events", "outcomes", "querylog", "sessions"},
                 "single_node": True,
@@ -21,6 +24,9 @@ class TestClusters:
             {
                 "host": "host_2",
                 "port": 9000,
+                "user": "default",
+                "password": "",
+                "database": "default",
                 "http_port": 8123,
                 "storage_sets": {"transactions"},
                 "single_node": False,
@@ -65,7 +71,9 @@ class TestClusters:
             assert distributed_cluster.get_local_nodes()[1].host_name == "host_2"
 
     def test_cache_connections(self) -> None:
-        cluster_1 = cluster.ClickhouseCluster("localhost", 8000, 8001, {"events"}, True)
+        cluster_1 = cluster.ClickhouseCluster(
+            "localhost", 8000, "default", "", "default", 8001, {"events"}, True
+        )
 
         assert cluster_1.get_query_connection(
             cluster.ClickhouseClientSettings.QUERY

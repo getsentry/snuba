@@ -4,6 +4,7 @@ from snuba.clickhouse.columns import (
     String,
     Nested,
 )
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import MergeTreeSchema
 from snuba.datasets.schemas.join import (
     JoinConditionExpression,
@@ -24,6 +25,7 @@ table1 = MergeTreeSchema(
     ),
     local_table_name="table1",
     dist_table_name="table1",
+    storage_set_key=StorageSetKey.EVENTS,
     order_by="",
     partition_by="",
 ).get_data_source()
@@ -38,6 +40,7 @@ table2 = MergeTreeSchema(
     ),
     local_table_name="table2",
     dist_table_name="table2",
+    storage_set_key=StorageSetKey.EVENTS,
     order_by="",
     partition_by="",
 ).get_data_source()
@@ -52,6 +55,7 @@ table3 = MergeTreeSchema(
     ),
     local_table_name="table3",
     dist_table_name="table3",
+    storage_set_key=StorageSetKey.EVENTS,
     order_by="",
     partition_by="",
 ).get_data_source()
