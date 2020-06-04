@@ -17,4 +17,5 @@ def pytest_configure() -> None:
         cluster["host"], cluster["port"], "default", "", "default",
     )
 
-    connection.execute("CREATE DATABASE IF NOT EXISTS snuba_test;")
+    database_name = cluster["database"]
+    connection.execute(f"CREATE DATABASE IF NOT EXISTS {database_name};")
