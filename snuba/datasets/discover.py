@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Mapping, Optional, Sequence, Union
+from typing import Mapping, Optional, Sequence
 
 from snuba import environment
 from snuba.clickhouse.columns import (
@@ -31,7 +31,7 @@ from snuba.datasets.storage import (
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.transactions import transaction_translator
-from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
@@ -130,15 +130,16 @@ def detect_table(
 class DefaultNoneColumnMapper(ColumnMapper):
     """
     This maps a list of column names to None (NULL in SQL) as it is done
-    in the column_expr method today. It should not be used for any other
-    reason or use case.
+    in the discover column_expr method today. It should not be used for
+    any other reason or use case, thus it should not be moved out of
+    the discover dataset file.
     """
 
     columns: ColumnSet
 
     def attempt_map(
         self, expression: Column, children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[Union[Column, Literal, FunctionCall]]:
+    ) -> Optional[Literal]:
         if expression.column_name in self.columns:
             return Literal(
                 alias=expression.alias
