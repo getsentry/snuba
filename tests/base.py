@@ -1,4 +1,5 @@
 import calendar
+import os
 import uuid
 from contextlib import contextmanager
 from copy import deepcopy
@@ -76,7 +77,7 @@ class BaseTest(object):
             settings.TESTING
         ), "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
 
-        self.database = "default"
+        self.database = os.environ.get("CLICKHOUSE_DATABASE", "default")
         self.dataset_name = dataset_name
 
         if dataset_name is not None:
