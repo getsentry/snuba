@@ -156,21 +156,37 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
         self,
         events_table: ReadableStorage,
         abstract_events_columns: ColumnSet,
-        events_mappers: TranslationMappers,
         transactions_table: ReadableStorage,
         abstract_transactions_columns: ColumnSet,
-        transactions_mappers: TranslationMappers,
     ) -> None:
         self.__events_table = events_table
         # Columns from the abstract model that map to storage columns present only
         # in the Events table
         self.__abstract_events_columns = abstract_events_columns
-        self.__events_mappers = events_mappers
         self.__transactions_table = transactions_table
         # Columns from the abstract model that map to storage columns present only
         # in the Transactions table
         self.__abstract_transactions_columns = abstract_transactions_columns
-        self.__transactions_mappers = transactions_mappers
+
+        self.__event_translator = event_translator.concat(
+            TranslationMappers(
+                columns=[
+                    ColumnToMapping(None, "release", None, "tags", "sentry:release"),
+                    ColumnToMapping(None, "dist", None, "tags", "sentry:dist"),
+                    ColumnToMapping(None, "user", None, "tags", "sentry:user"),
+                    DefaultNoneColumnMapper(self.__abstract_transactions_columns),
+                ]
+            )
+        )
+
+        self.__transaction_translator = transaction_translator.concat(
+            TranslationMappers(
+                columns=[
+                    ColumnToLiteral(None, "group_id", 0),
+                    DefaultNoneColumnMapper(self.__abstract_events_columns),
+                ]
+            )
+        )
 
     def select_storage(
         self, query: Query, request_settings: RequestSettings
@@ -182,10 +198,10 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
             True,
         )
         return (
-            StorageAndMappers(self.__events_table, self.__events_mappers)
+            StorageAndMappers(self.__events_table, self.__event_translator)
             if table == EVENTS
             else StorageAndMappers(
-                self.__transactions_table, self.__transactions_mappers
+                self.__transactions_table, self.__transaction_translator
             )
         )
 
@@ -296,36 +312,14 @@ class DiscoverDataset(TimeSeriesDataset):
         events_storage = get_storage(StorageKey.EVENTS)
         transactions_storage = get_storage(StorageKey.TRANSACTIONS)
 
-        discover_event_translator = event_translator.concat(
-            TranslationMappers(
-                columns=[
-                    ColumnToMapping(None, "release", None, "tags", "sentry:release"),
-                    ColumnToMapping(None, "dist", None, "tags", "sentry:dist"),
-                    ColumnToMapping(None, "user", None, "tags", "sentry:user"),
-                    DefaultNoneColumnMapper(self.__transactions_columns),
-                ]
-            )
-        )
-
-        discover_transaction_translator = transaction_translator.concat(
-            TranslationMappers(
-                columns=[
-                    ColumnToLiteral(None, "group_id", 0),
-                    DefaultNoneColumnMapper(self.__events_columns),
-                ]
-            )
-        )
-
         super().__init__(
             storages=[events_storage, transactions_storage],
             query_plan_builder=SelectedStorageQueryPlanBuilder(
                 selector=DiscoverQueryStorageSelector(
                     events_table=events_storage,
                     abstract_events_columns=self.__events_columns,
-                    events_mappers=discover_event_translator,
                     transactions_table=transactions_storage,
                     abstract_transactions_columns=self.__transactions_columns,
-                    transactions_mappers=discover_transaction_translator,
                 ),
             ),
             abstract_column_set=(
