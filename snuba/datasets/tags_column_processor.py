@@ -209,7 +209,7 @@ class TagColumnProcessor:
             # Same as above
             return []
 
-        return [*cond_tags_key, *having_tags_key]
+        return cond_tags_key + having_tags_key
 
     def __tags_expr(
         self,
