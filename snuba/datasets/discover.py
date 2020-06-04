@@ -1,7 +1,7 @@
 import logging
-from datetime import timedelta
 from dataclasses import dataclass
-from typing import Mapping, Sequence, Optional, Union
+from datetime import timedelta
+from typing import Mapping, Optional, Sequence, Union
 
 from snuba import environment
 from snuba.clickhouse.columns import (
@@ -15,23 +15,23 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.util import qualified_column
-from snuba.clickhouse.translators.snuba.allowed import ColumnMapper
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
+from snuba.clickhouse.translators.snuba.allowed import ColumnMapper
+from snuba.clickhouse.translators.snuba.mappers import ColumnToLiteral, ColumnToMapping
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.dataset import TimeSeriesDataset
-from snuba.datasets.factory import get_dataset
 from snuba.datasets.events import event_translator
-from snuba.datasets.transactions import transaction_translator
+from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import (
     QueryStorageSelector,
     ReadableStorage,
-    SelectedStorage,
+    StorageAndMappers,
 )
-from snuba.clickhouse.translators.snuba.mappers import ColumnToMapping, ColumnToLiteral
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.transactions import transaction_translator
+from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
@@ -45,9 +45,8 @@ from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnP
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
-from snuba.util import is_condition
+from snuba.util import is_condition, qualified_column
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
-from snuba.query.expressions import Column, FunctionCall, Literal
 
 EVENTS = "events"
 TRANSACTIONS = "transactions"
@@ -175,7 +174,7 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
 
     def select_storage(
         self, query: Query, request_settings: RequestSettings
-    ) -> SelectedStorage:
+    ) -> StorageAndMappers:
         table = detect_table(
             query,
             self.__abstract_events_columns,
@@ -183,9 +182,11 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
             True,
         )
         return (
-            SelectedStorage(self.__events_table, self.__events_mappers)
+            StorageAndMappers(self.__events_table, self.__events_mappers)
             if table == EVENTS
-            else SelectedStorage(self.__transactions_table, self.__transactions_mappers)
+            else StorageAndMappers(
+                self.__transactions_table, self.__transactions_mappers
+            )
         )
 
 

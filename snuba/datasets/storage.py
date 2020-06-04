@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Sequence, NamedTuple
+from typing import NamedTuple, Optional, Sequence
 
 from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import (
     ClickhouseCluster,
     ClickhouseWriterOptions,
@@ -15,7 +16,6 @@ from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
 from snuba.query.logical import Query
 from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.request.request_settings import RequestSettings
-from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 
 
 class Storage(ABC):
@@ -160,7 +160,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         return self.__table_writer
 
 
-class SelectedStorage(NamedTuple):
+class StorageAndMappers(NamedTuple):
     storage: ReadableStorage
     mappers: TranslationMappers
 
@@ -174,5 +174,5 @@ class QueryStorageSelector(ABC):
     @abstractmethod
     def select_storage(
         self, query: Query, request_settings: RequestSettings
-    ) -> SelectedStorage:
+    ) -> StorageAndMappers:
         raise NotImplementedError
