@@ -2,11 +2,11 @@ import pytest
 
 from snuba.clickhouse.query import Expression as ClickhouseExpression
 from snuba.clickhouse.translators.snuba.mappers import (
-    ColumnToFunction,
+    ColumnToColumn,
     ColumnToCurriedFunction,
+    ColumnToFunction,
     ColumnToLiteral,
     ColumnToMapping,
-    ColumnToColumn,
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import (
