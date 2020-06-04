@@ -9,8 +9,7 @@ from snuba.clickhouse.translators.snuba.allowed import (
 )
 from snuba.query.dsl import arrayElement
 from snuba.query.expressions import Column as ColumnExpr
-from snuba.query.expressions import Expression
-from snuba.query.expressions import CurriedFunctionCall
+from snuba.query.expressions import CurriedFunctionCall, Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.expressions import OptionalScalarType, SubscriptableReference
