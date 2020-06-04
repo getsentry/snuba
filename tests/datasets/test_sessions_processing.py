@@ -9,14 +9,14 @@ from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.web import QueryResult
 
 
-def test_events_processing() -> None:
+def test_sessions_processing() -> None:
     query_body = {"selected_columns": ["duration_quantiles", "sessions", "users"]}
 
-    events = get_dataset("sessions")
-    query = parse_query(query_body, events)
+    sessions = get_dataset("sessions")
+    query = parse_query(query_body, sessions)
     request = Request("", query, HTTPRequestSettings(), {}, "")
 
-    query_plan = events.get_query_plan_builder().build_plan(request)
+    query_plan = sessions.get_query_plan_builder().build_plan(request)
     for clickhouse_processor in query_plan.plan_processors:
         clickhouse_processor.process_query(query_plan.query, request.settings)
 
