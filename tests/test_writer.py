@@ -51,6 +51,7 @@ class TestHTTPBatchWriter(BaseEventsTest):
             9000,
             "default",
             "",
+            "default",
             lambda a: a,
             None,
             chunk_size,

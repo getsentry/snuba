@@ -133,6 +133,7 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         port: int,
         user: str,
         password: str,
+        database: str,
         http_port: int,
         storage_sets: Set[str],
         single_node: bool,
@@ -144,6 +145,7 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         self.__query_node = ClickhouseNode(host, port)
         self.__user = user
         self.__password = password
+        self.__database = database
         self.__http_port = http_port
         self.__single_node = single_node
         self.__cluster_name = cluster_name
@@ -187,6 +189,7 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
                 node.port,
                 self.__user,
                 self.__password,
+                self.__database,
                 client_settings=settings,
                 send_receive_timeout=timeout,
             )
@@ -213,6 +216,7 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
             self.__http_port,
             self.__user,
             self.__password,
+            self.__database,
             encoder,
             options,
             chunk_size,
@@ -255,6 +259,7 @@ CLUSTERS = [
         port=cluster["port"],
         user=cluster.get("user", "default"),
         password=cluster.get("password", ""),
+        database=cluster.get("database", "default"),
         http_port=cluster["http_port"],
         storage_sets=cluster["storage_sets"],
         single_node=cluster["single_node"],

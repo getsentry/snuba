@@ -53,12 +53,13 @@ def optimize(
     # passing this information won't be necessary, and running this command once
     # will ensure that optimize is performed on all of the individual nodes for
     # that cluster.
-    if clickhouse_host and clickhouse_port:
+    if clickhouse_host and clickhouse_port and database:
         connection = ClickhousePool(
             clickhouse_host,
             clickhouse_port,
             clickhouse_user,
             clickhouse_password,
+            database,
             send_receive_timeout=ClickhouseClientSettings.OPTIMIZE.value.timeout,
         )
     elif not writable_storage.get_cluster().is_single_node():
