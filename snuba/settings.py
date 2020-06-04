@@ -12,7 +12,6 @@ PORT = 1218
 
 DEFAULT_DATASET_NAME = "events"
 DISABLED_DATASETS: Set[str] = {"querylog"}
-DATASET_MODE = "local"
 
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
@@ -23,6 +22,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
+        "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
         "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
         "storage_sets": {"events", "outcomes", "querylog", "sessions", "transactions"},
         "single_node": True,

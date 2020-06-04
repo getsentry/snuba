@@ -3,7 +3,7 @@ import logging
 from clickhouse_driver import Client
 from typing import MutableSequence
 
-from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.clusters.cluster import ClickhouseClientSettings, CLUSTERS
 from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import StorageKey
@@ -49,6 +49,11 @@ def _run_schema(conn: Client, schema: Schema) -> None:
 
 
 def run() -> None:
+    # Ensure all clusters are single node before attempting to migrate
+    assert all(
+        cluster.is_single_node() for cluster in CLUSTERS
+    ), "Cannot run migrations for multi node clusters"
+
     # Create the tables for all of the storages to be migrated.
     for storage_key in STORAGES_TO_MIGRATE:
         storage_name = storage_key.value

@@ -394,7 +394,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             query,
             self.__timestamp_column,
             ">=",
-            LiteralExpr(None, util.parse_datetime(min(timestamps)).isoformat()),
+            LiteralExpr(None, util.parse_datetime(min(timestamps))),
         )
         # We add 1 second since this gets translated to ('timestamp', '<', to_date)
         # and events are stored with a granularity of 1 second.
@@ -409,10 +409,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             self.__timestamp_column,
             "<",
             LiteralExpr(
-                None,
-                (
-                    util.parse_datetime(max(timestamps)) + timedelta(seconds=1)
-                ).isoformat(),
+                None, (util.parse_datetime(max(timestamps)) + timedelta(seconds=1)),
             ),
         )
 
