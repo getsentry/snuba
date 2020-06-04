@@ -123,7 +123,7 @@ class TestGroupassignee(BaseDatasetTest):
         self.write_processed_records(ret.data)
         ret = (
             get_cluster(StorageSetKey.EVENTS)
-            .get_connection(ClickhouseClientSettings.QUERY)
+            .get_query_connection(ClickhouseClientSettings.QUERY)
             .execute("SELECT * FROM test_groupassignee_local;")
         )
         assert ret[0] == (
@@ -182,7 +182,7 @@ class TestGroupassignee(BaseDatasetTest):
         self.write_processed_records(row.to_clickhouse())
         ret = (
             get_cluster(StorageSetKey.EVENTS)
-            .get_connection(ClickhouseClientSettings.QUERY)
+            .get_query_connection(ClickhouseClientSettings.QUERY)
             .execute("SELECT * FROM test_groupassignee_local;")
         )
         assert ret[0] == (

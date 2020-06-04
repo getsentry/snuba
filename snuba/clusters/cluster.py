@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import Enum
 from typing import (
     Any,
@@ -8,11 +9,14 @@ from typing import (
     MutableMapping,
     NamedTuple,
     Optional,
+    Sequence,
     Set,
+    Tuple,
     TypeVar,
 )
 
 from snuba import settings
+from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.http import HTTPBatchWriter
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clickhouse.sql import SqlQuery
@@ -46,6 +50,17 @@ class ClickhouseClientSettings(Enum):
         },
         None,
     )
+
+
+@dataclass(frozen=True)
+class ClickhouseNode:
+    host_name: str
+    port: int
+    shard: Optional[int] = None
+    replica: Optional[int] = None
+
+    def __str__(self) -> str:
+        return f"{self.host_name}:{self.port}"
 
 
 TWriterOptions = TypeVar("TWriterOptions")
@@ -96,44 +111,80 @@ ClickhouseWriterOptions = Optional[Mapping[str, Any]]
 class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
     """
     ClickhouseCluster provides a reader, writer and Clickhouse connections that are
-    shared by all storages located on the cluster
+    shared by all storages located on the cluster.
+
+    ClickhouseCluster is initialized with a single address (host/port/http_port),
+    which is used for all read and write operations related to the cluster. This
+    address can refer to either the address of the actual ClickHouse server, or a
+    proxy server (e.g. for load balancing).
+
+    However there are other operations (like some DDL operations) that must be executed
+    on each individual server node, as well as each distributed table node if there
+    are multiple. If we are operating a single node cluster, this is straightforward
+    since there is only one server on which to run our command and no distributed table.
+    If we are operating a multi node cluster we need to know the full set of shards
+    and replicas on which to run our commands. This is provided by the `get_local_nodes()`
+    and `get_distributed_nodes()` methods.
     """
 
-    def __init__(self, host: str, port: int, http_port: int, storage_sets: Set[str]):
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        http_port: int,
+        storage_sets: Set[str],
+        single_node: bool,
+        # The cluster name and distributed cluster name only apply if single_node is set to False
+        cluster_name: Optional[str] = None,
+        distributed_cluster_name: Optional[str] = None,
+    ):
         super().__init__(storage_sets)
-        self.__host = host
-        self.__port = port
+        self.__query_node = ClickhouseNode(host, port)
         self.__http_port = http_port
+        self.__single_node = single_node
+        self.__cluster_name = cluster_name
+        self.__distributed_cluster_name = distributed_cluster_name
         self.__reader: Optional[Reader[SqlQuery]] = None
         self.__connection_cache: MutableMapping[
-            ClickhouseClientSettings, ClickhousePool
+            Tuple[ClickhouseNode, ClickhouseClientSettings], ClickhousePool
         ] = {}
 
     def __str__(self) -> str:
-        return f"{self.__host}:{self.__port}"
+        return str(self.__query_node)
 
-    def get_connection(
+    def get_query_connection(
         self, client_settings: ClickhouseClientSettings,
     ) -> ClickhousePool:
         """
+        Get a connection to the query node
+        """
+        return self.get_node_connection(client_settings, self.__query_node)
+
+    def get_node_connection(
+        self, client_settings: ClickhouseClientSettings, node: ClickhouseNode,
+    ) -> ClickhousePool:
+        """
         Get a Clickhouse connection using the client settings provided. Reuse any
-        connection to the cluster with the same settings otherwise establish a new
+        connection to the same node with the same settings otherwise establish a new
         connection.
         """
-        if client_settings not in self.__connection_cache:
-            settings, timeout = client_settings.value
-            self.__connection_cache[client_settings] = ClickhousePool(
-                self.__host,
-                self.__port,
+
+        settings, timeout = client_settings.value
+        cache_key = (node, client_settings)
+        if cache_key not in self.__connection_cache:
+            self.__connection_cache[cache_key] = ClickhousePool(
+                node.host_name,
+                node.port,
                 client_settings=settings,
                 send_receive_timeout=timeout,
             )
-        return self.__connection_cache[client_settings]
+
+        return self.__connection_cache[cache_key]
 
     def get_reader(self) -> Reader[SqlQuery]:
         if not self.__reader:
             self.__reader = NativeDriverReader(
-                self.get_connection(ClickhouseClientSettings.QUERY)
+                self.get_query_connection(ClickhouseClientSettings.QUERY)
             )
         return self.__reader
 
@@ -145,8 +196,43 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         chunk_size: Optional[int],
     ) -> BatchWriter:
         return HTTPBatchWriter(
-            table_name, self.__host, self.__http_port, encoder, options, chunk_size
+            table_name,
+            self.__query_node.host_name,
+            self.__http_port,
+            encoder,
+            options,
+            chunk_size,
         )
+
+    def is_single_node(self) -> bool:
+        """
+        This will be used to determine:
+        - which migrations will be run (either just local or local and distributed tables)
+        - Differences in the query - such as whether the _local or _dist table is picked
+        """
+        return self.__single_node
+
+    def get_local_nodes(self) -> Sequence[ClickhouseNode]:
+        if self.__single_node:
+            return [self.__query_node]
+        return self.__get_cluster_nodes(self.__cluster_name)
+
+    def get_distributed_nodes(self) -> Sequence[ClickhouseNode]:
+        if self.__single_node:
+            return []
+        return self.__get_cluster_nodes(self.__distributed_cluster_name)
+
+    def __get_cluster_nodes(
+        self, cluster_name: Optional[str]
+    ) -> Sequence[ClickhouseNode]:
+        return [
+            ClickhouseNode(*host)
+            for host in self.get_query_connection(
+                ClickhouseClientSettings.QUERY
+            ).execute(
+                f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(cluster_name)}"
+            )
+        ]
 
 
 CLUSTERS = [
@@ -155,6 +241,11 @@ CLUSTERS = [
         port=cluster["port"],
         http_port=cluster["http_port"],
         storage_sets=cluster["storage_sets"],
+        single_node=cluster["single_node"],
+        cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
+        distributed_cluster_name=cluster["distributed_cluster_name"]
+        if "distributed_cluster_name" in cluster
+        else None,
     )
     for cluster in settings.CLUSTERS
 ]
