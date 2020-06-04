@@ -23,6 +23,7 @@ class HTTPBatchWriter(BatchWriter):
         port: int,
         user: str,
         password: str,
+        database: str,
         encoder: Callable[[WriterTableRow], bytes],
         options: Optional[Mapping[str, Any]] = None,
         chunk_size: Optional[int] = 1,
@@ -40,6 +41,7 @@ class HTTPBatchWriter(BatchWriter):
         self.__encoder = encoder
         self.__user = user
         self.__password = password
+        self.__database = database
 
     def _prepare_chunks(self, rows: Iterable[WriterTableRow]) -> Iterable[bytes]:
         chunk = []
@@ -59,7 +61,7 @@ class HTTPBatchWriter(BatchWriter):
             + urlencode(
                 {
                     **self.__options,
-                    "query": f"INSERT INTO {self.__table_name} FORMAT JSONEachRow",
+                    "query": f"INSERT INTO {self.__database}.{self.__table_name} FORMAT JSONEachRow",
                 }
             ),
             headers={
