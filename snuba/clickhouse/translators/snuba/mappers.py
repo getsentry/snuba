@@ -48,15 +48,13 @@ class ColumnToExpression(ColumnMapper, ABC):
             expression.column_name == self.from_col_name
             and expression.table_name == self.from_table_name
         ):
-            return self._produce_output(expression, children_translator)
+            return self._produce_output(expression)
         else:
             return None
 
     @abstractmethod
     def _produce_output(
-        self,
-        expression: ColumnExpr,
-        children_translator: SnubaClickhouseStrictTranslator,
+        self, expression: ColumnExpr,
     ) -> Union[ColumnExpr, LiteralExpr, FunctionCallExpr, CurriedFunctionCall]:
         raise NotImplementedError
 
@@ -72,11 +70,7 @@ class ColumnToColumn(ColumnToExpression):
     to_table_name: Optional[str]
     to_col_name: str
 
-    def _produce_output(
-        self,
-        expression: ColumnExpr,
-        children_translator: SnubaClickhouseStrictTranslator,
-    ) -> ColumnExpr:
+    def _produce_output(self, expression: ColumnExpr) -> ColumnExpr:
         return ColumnExpr(
             alias=expression.alias
             or qualified_column(self.from_col_name, self.from_table_name or ""),
@@ -93,11 +87,7 @@ class ColumnToLiteral(ColumnToExpression):
 
     to_literal_value: OptionalScalarType
 
-    def _produce_output(
-        self,
-        expression: ColumnExpr,
-        children_translator: SnubaClickhouseStrictTranslator,
-    ) -> LiteralExpr:
+    def _produce_output(self, expression: ColumnExpr,) -> LiteralExpr:
         return LiteralExpr(
             alias=expression.alias
             or qualified_column(self.from_col_name, self.from_table_name or ""),
@@ -114,11 +104,7 @@ class ColumnToFunction(ColumnToExpression):
     to_function_name: str
     to_function_params: Tuple[Expression, ...]
 
-    def _produce_output(
-        self,
-        expression: ColumnExpr,
-        children_translator: SnubaClickhouseStrictTranslator,
-    ) -> FunctionCallExpr:
+    def _produce_output(self, expression: ColumnExpr) -> FunctionCallExpr:
         return FunctionCallExpr(
             alias=expression.alias
             or qualified_column(self.from_col_name, self.from_table_name or ""),
@@ -136,11 +122,7 @@ class ColumnToCurriedFunction(ColumnToExpression):
     to_internal_function: FunctionCallExpr
     to_function_params: Tuple[Expression, ...]
 
-    def _produce_output(
-        self,
-        expression: ColumnExpr,
-        children_translator: SnubaClickhouseStrictTranslator,
-    ) -> CurriedFunctionCall:
+    def _produce_output(self, expression: ColumnExpr) -> CurriedFunctionCall:
         return CurriedFunctionCall(
             alias=expression.alias
             or qualified_column(self.from_col_name, self.from_table_name or ""),
@@ -191,11 +173,7 @@ class ColumnToMapping(ColumnToExpression):
     to_nested_col_name: str
     to_nested_tag_key: str
 
-    def _produce_output(
-        self,
-        expression: ColumnExpr,
-        children_translator: SnubaClickhouseStrictTranslator,
-    ) -> FunctionCallExpr:
+    def _produce_output(self, expression: ColumnExpr) -> FunctionCallExpr:
         return build_mapping_expr(
             expression.alias
             or qualified_column(self.from_col_name, self.from_table_name or ""),
