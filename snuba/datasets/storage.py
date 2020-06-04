@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Sequence
+from typing import NamedTuple, Optional, Sequence
 
 from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import (
     ClickhouseCluster,
     ClickhouseWriterOptions,
@@ -159,6 +160,11 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         return self.__table_writer
 
 
+class StorageAndMappers(NamedTuple):
+    storage: ReadableStorage
+    mappers: TranslationMappers
+
+
 class QueryStorageSelector(ABC):
     """
     The component provided by a dataset and used at the beginning of the
@@ -168,5 +174,5 @@ class QueryStorageSelector(ABC):
     @abstractmethod
     def select_storage(
         self, query: Query, request_settings: RequestSettings
-    ) -> ReadableStorage:
+    ) -> StorageAndMappers:
         raise NotImplementedError
