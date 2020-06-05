@@ -4,6 +4,8 @@ branches:
   only:
     - master
 
+cache: pip
+
 stages: [pre_commit, test]
 
 matrix:
