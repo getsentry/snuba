@@ -89,9 +89,6 @@ class Groups(TimeSeriesDataset):
                 table_name=groupedmessage_source.format_from(),
                 columns=groupedmessage_source.get_columns(),
                 mandatory_conditions=[
-                    # TODO: This will be replaced as soon as expressions won't be strings
-                    # thus we will be able to easily add an alias to a column in an
-                    # expression.
                     MandatoryCondition(
                         (qualified_column("record_deleted", self.GROUPS_ALIAS), "=", 0),
                         binary_condition(

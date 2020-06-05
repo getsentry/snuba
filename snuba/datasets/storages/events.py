@@ -26,11 +26,11 @@ from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
 from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.expressions import Column, Literal
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.readonly_events import ReadOnlyTableSelector
-from snuba.query.expressions import Column, Literal
-from snuba.query.conditions import binary_condition, ConditionFunctions
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 

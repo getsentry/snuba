@@ -5,13 +5,9 @@ from collections import ChainMap
 from dataclasses import dataclass
 from enum import Enum
 from typing import List, Mapping, NamedTuple, Optional, Sequence
-
-
-from snuba.datasets.schemas import MandatoryCondition
 from snuba.clickhouse.columns import ColumnSet, QualifiedColumnSet
-from snuba.datasets.schemas import Schema, RelationalSource
+from snuba.datasets.schemas import MandatoryCondition, RelationalSource, Schema
 from snuba.datasets.schemas.tables import TableSource
-from snuba.query.types import Condition
 
 
 class JoinType(Enum):
