@@ -27,8 +27,6 @@ def parse_string_to_expr(val: str) -> Expression:
             # and it will be applied to the Clickhouse query as alias. As a consequence,
             # no matter what expression this value is transformed into, the client will receive
             # the value they provided in the response (as alias).
-            #
-            # TODO: adopt this approach to all expression generated during parsing.
             alias=val,
             column=Column(None, None, col_name),
             key=Literal(None, key_name),
@@ -45,4 +43,4 @@ def parse_string_to_expr(val: str) -> Expression:
             if QUOTED_LITERAL_RE.match(val):
                 return Literal(None, val[1:-1])
             else:
-                return Column(None, None, val)
+                return Column(val, None, val)

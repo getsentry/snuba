@@ -175,7 +175,7 @@ test_data = [
             "conditions": [["tags_key", "IN", ["t1", "t2"]]],
         },
         build_query(
-            selected_columns=[Column(None, None, "col1")],
+            selected_columns=[Column("col1", None, "col1")],
             condition=in_condition(
                 None,
                 arrayJoin("tags_key", Column(None, None, "tags.key")),
@@ -218,7 +218,7 @@ test_data = [
             ],
             condition=in_condition(
                 None,
-                Column(None, None, "col"),
+                Column("col", None, "col"),
                 [Literal(None, "t1"), Literal(None, "t2")],
             ),
         ),

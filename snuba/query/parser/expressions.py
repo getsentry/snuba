@@ -50,7 +50,7 @@ class ClickhouseVisitor(NodeVisitor):
         return str(node.text)
 
     def visit_column_name(self, node: Node, visited_children: Iterable[Any]) -> Column:
-        return Column(None, None, node.text)
+        return Column(node.text, None, node.text)
 
     def visit_numeric_literal(
         self, node: Node, visited_children: Iterable[Any]
