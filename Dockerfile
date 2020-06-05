@@ -5,9 +5,6 @@ RUN groupadd -r snuba && useradd -r -g snuba snuba
 RUN mkdir -p /usr/src/snuba
 WORKDIR /usr/src/snuba
 
-ENV PIP_NO_CACHE_DIR=off \
-    PIP_DISABLE_PIP_VERSION_CHECK=on
-
 # these are required all the way through, and removing them will cause bad things
 RUN set -ex; \
     apt-get update; \
@@ -70,6 +67,9 @@ RUN set -ex; \
 COPY . /usr/src/snuba
 
 RUN chown -R snuba:snuba /usr/src/snuba/
+
+ENV PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on
 
 RUN set -ex; \
     \
