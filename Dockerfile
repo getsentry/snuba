@@ -17,41 +17,30 @@ RUN set -ex; \
     rm -rf /var/lib/apt/lists/*
 
 # grab gosu for easy step-down from root
-ENV GOSU_VERSION=1.11
-RUN set -ex; \
-    \
-    buildDeps=' \
-        bzip2 \
+RUN set -x \
+    && export GOSU_VERSION=1.11 \
+    && fetchDeps=" \
         dirmngr \
-        git \
-        g++ \
-        gcc \
-        libc6-dev \
-        liblz4-dev \
-        libpcre3-dev \
         gnupg \
-        make \
         wget \
-    '; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends multiarch-support libtinfo5 libexpat1 libffi6 liblz4-1 libpcre3 $buildDeps; \
-    rm -rf /var/lib/apt/lists/*; \
-    \
-    wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture)"; \
-    wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture).asc"; \
-    export GNUPGHOME="$(mktemp -d)"; \
-    for key in \
+    " \
+    && apt-get update && apt-get install -y --no-install-recommends $fetchDeps && rm -rf /var/lib/apt/lists/* \
+    && wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture)" \
+    && wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture).asc" \
+    && export GNUPGHOME="$(mktemp -d)" \
+    && for key in \
       B42F6819007F00F88E364FD4036A9C25BF357DD4 \
     ; do \
       gpg --batch --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys "$key" || \
       gpg --batch --keyserver hkp://ipv4.pool.sks-keyservers.net --recv-keys "$key" || \
       gpg --batch --keyserver hkp://pgp.mit.edu:80 --recv-keys "$key" ; \
-    done; \
-    gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu; \
-    rm -rf "$GNUPGHOME" /usr/local/bin/gosu.asc; \
-    chmod +x /usr/local/bin/gosu; \
-    gosu nobody true; \
-    apt-get purge -y --auto-remove $buildDeps
+    done \
+    && gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu \
+    && gpgconf --kill all \
+    && rm -r "$GNUPGHOME" /usr/local/bin/gosu.asc \
+    && chmod +x /usr/local/bin/gosu \
+    && gosu nobody true \
+    && apt-get purge -y --auto-remove $fetchDeps
 
 COPY . /usr/src/snuba
 
