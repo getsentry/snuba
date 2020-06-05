@@ -1,4 +1,5 @@
 from typing import Mapping, Sequence
+
 from snuba.clickhouse.columns import (
     UUID,
     Array,
@@ -21,6 +22,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
+from snuba.datasets.schemas import MandatoryCondition
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -28,6 +30,8 @@ from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
 from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.expressions import Column, Literal
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 
@@ -141,7 +145,17 @@ schema = ReplacingMergeTreeSchema(
     local_table_name="errors_local",
     dist_table_name="errors_dist",
     storage_set_key=StorageSetKey.EVENTS,
-    mandatory_conditions=[("deleted", "=", 0)],
+    mandatory_conditions=[
+        MandatoryCondition(
+            ("deleted", "=", 0),
+            binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                Column(None, None, "deleted"),
+                Literal(None, 0),
+            ),
+        )
+    ],
     prewhere_candidates=[
         "event_id",
         "group_id",
