@@ -4,10 +4,29 @@ branches:
   only:
     - master
 
-cache: pip
+cache:
+  pip: true
+  directories:
+    - '$VOLTA_HOME'
+
+env:
+  global:
+    - VOLTA_VERSION=0.8.1
+    - VOLTA_HOME="${HOME}/.volta"
+    - PATH="${HOME}/.volta/bin:${PATH}"
+
+install_volta: &install_volta |-
+  command -v volta && return 0
+  wget --quiet "https://github.com/volta-cli/volta/releases/download/v$VOLTA_VERSION/volta-$VOLTA_VERSION-linux-openssl-1.0.tar.gz"
+  tar -xzf "volta-$VOLTA_VERSION-linux-openssl-1.0.tar.gz" -C "${HOME}/bin"
+  # Running `volta -v` triggers setting up the shims in VOLTA_HOME (otherwise node won't work)
+  volta -v
+
+install_node: &install_node |-
+  command -v node && return 0
+  volta install node@10.16.3
 
 stages: [pre_commit, test]
-
 matrix:
   fast_finish: true
   include:
@@ -34,9 +53,11 @@ matrix:
       script:
         - SNUBA_IMAGE=getsentry/snuba docker-compose -f docker-compose.gcb.yml run --rm snuba-test
       after_script:
-        - npm install -g @zeus-ci/cli
-        - $(npm bin -g)/zeus upload -t "application/x-junit+xml" .artifacts/*.junit.xml
-        - $(npm bin -g)/zeus upload -t "application/x-cobertura+xml" .artifacts/coverage.xml
+        - *install_volta
+        - *install_node
+        - volta install @zeus-ci/cli
+        - zeus upload -t "application/x-junit+xml" .artifacts/*.junit.xml
+        - zeus upload -t "application/x-cobertura+xml" .artifacts/coverage.xml
 
 notifications:
   webhooks:
