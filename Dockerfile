@@ -6,8 +6,7 @@ RUN mkdir -p /usr/src/snuba
 WORKDIR /usr/src/snuba
 
 ENV PIP_NO_CACHE_DIR=off \
-    PIP_DISABLE_PIP_VERSION_CHECK=on \
-    PYTHONDONTWRITEBYTECODE=1
+    PIP_DISABLE_PIP_VERSION_CHECK=on
 
 # these are required all the way through, and removing them will cause bad things
 RUN set -ex; \
