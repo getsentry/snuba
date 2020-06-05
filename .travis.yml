@@ -1,15 +1,33 @@
-services:
-  - docker
-
 dist: xenial
 
-before_install:
-  - docker pull getsentry/snuba:latest || true
-  - docker build -t getsentry/snuba . --cache-from getsentry/snuba:latest
-  - docker network create --attachable cloudbuild
+stages: [pre_commit, test]
 
-script:
-  - SNUBA_IMAGE=getsentry/snuba docker-compose -f docker-compose.gcb.yml run --rm snuba-test
+matrix:
+  fast_finish: true
+  include:
+    - name: 'pre-commit hooks (includes python formatting + linting)'
+      stage: pre_commit
+      install:
+        - make setup-git
+      script:
+        # Run pre-commit to lint and format check files that were changed (but not deleted) compared to master.
+        # XXX: there is a very small chance that it'll expand to exceed Linux's limits
+        #      `getconf ARG_MAX` - max # bytes of args + environ for exec()
+        - pre-commit run --files $(git diff --diff-filter=d --name-only master)
+    - name: 'Test'
+      stage: test
+      services:
+        - docker
+      before_install:
+        - docker pull getsentry/snuba:latest || true
+        - docker build -t getsentry/snuba . --cache-from getsentry/snuba:latest
+        - docker network create --attachable cloudbuild
+      script:
+        - SNUBA_IMAGE=getsentry/snuba docker-compose -f docker-compose.gcb.yml run --rm snuba-test
+      after_script:
+        - npm install -g @zeus-ci/cli
+        - $(npm bin -g)/zeus upload -t "application/x-junit+xml" .artifacts/*.junit.xml
+        - $(npm bin -g)/zeus upload -t "application/x-cobertura+xml" .artifacts/coverage.xml
 
 notifications:
   webhooks:
@@ -20,7 +38,3 @@ notifications:
     on_start: always
     on_cancel: always
     on_error: always
-after_script:
-  - npm install -g @zeus-ci/cli
-  - $(npm bin -g)/zeus upload -t "application/x-junit+xml" .artifacts/*.junit.xml
-  - $(npm bin -g)/zeus upload -t "application/x-cobertura+xml" .artifacts/coverage.xml
