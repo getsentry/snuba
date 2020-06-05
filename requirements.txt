@@ -25,7 +25,6 @@ future==0.16.0
 honcho==1.0.1
 
 idna==2.7
-isodate==0.6.0
 itsdangerous==0.24
 Jinja2==2.10.1
 jsonschema==3.0.1
@@ -38,7 +37,6 @@ mypy>=0.761
 packaging==17.1
 parsimonious==0.8.1
 py==1.5.3
-Pygments==2.2.0
 pyparsing==2.2.0
 
 # dev
