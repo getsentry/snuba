@@ -5,7 +5,9 @@ import pytest
 from snuba.clickhouse.dictquery import DictSqlQuery
 from snuba.datasets.factory import get_dataset
 from snuba.query.parser import parse_query
-from snuba.query.processors.arrayjoin_keyvalue_optimizer import ArrayJoinKeyValueOptimizer
+from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
+    ArrayJoinKeyValueOptimizer,
+)
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 
