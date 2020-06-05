@@ -124,7 +124,7 @@ class TestGroupassignee(BaseDatasetTest):
         ret = (
             get_cluster(StorageSetKey.EVENTS)
             .get_query_connection(ClickhouseClientSettings.QUERY)
-            .execute("SELECT * FROM test_groupassignee_local;")
+            .execute("SELECT * FROM groupassignee_local;")
         )
         assert ret[0] == (
             42,  # offset
@@ -183,7 +183,7 @@ class TestGroupassignee(BaseDatasetTest):
         ret = (
             get_cluster(StorageSetKey.EVENTS)
             .get_query_connection(ClickhouseClientSettings.QUERY)
-            .execute("SELECT * FROM test_groupassignee_local;")
+            .execute("SELECT * FROM groupassignee_local;")
         )
         assert ret[0] == (
             0,  # offset
