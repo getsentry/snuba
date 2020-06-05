@@ -11,7 +11,7 @@ endif
 develop: install-python-dependencies setup-git
 
 setup-git:
-	pip install 'pre-commit==2.4.0'
+	pip install 'pre-commit==1.21.0'
 	pre-commit install --install-hooks
 
 test:
