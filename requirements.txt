@@ -59,7 +59,6 @@ prompt-toolkit==1.0.15
 ptyprocess==0.5.2
 py==1.5.3
 Pygments==2.2.0
-pylint==1.9.2
 pycodestyle<2.6.0,>=2.5.0
 pyparsing==2.2.0
 pytest==5.2.4
