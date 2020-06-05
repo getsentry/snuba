@@ -46,7 +46,7 @@ test_data = [
         CurriedFunctionCall(
             "p95",
             FunctionCall(None, "quantile", (Literal(None, 0.95),)),
-            (Column("duration", None, "duration"),),
+            (Column(None, None, "duration"),),
         ),
     ),  # Curried function
     (
@@ -54,7 +54,7 @@ test_data = [
         FunctionCall(
             "apdex_score",
             "apdex",
-            (Column("duration", None, "duration"), Literal(None, 300),),
+            (Column(None, None, "duration"), Literal(None, 300),),
         ),
     ),  # apdex formula
     (
@@ -80,14 +80,12 @@ test_data = [
                             "multiply",
                             (
                                 FunctionCall(
-                                    None,
-                                    "log",
-                                    (Column("times_seen", None, "times_seen"),),
+                                    None, "log", (Column(None, None, "times_seen"),),
                                 ),
                                 Literal(None, 600),
                             ),
                         ),
-                        Column("last_seen", None, "last_seen"),
+                        Column(None, None, "last_seen"),
                     ),
                 ),
             ),

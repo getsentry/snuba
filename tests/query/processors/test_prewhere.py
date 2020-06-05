@@ -39,7 +39,7 @@ test_data = [
                 FunctionCall(
                     None,
                     "positionCaseInsensitive",
-                    (Column("message", None, "message"), Literal(None, "abc")),
+                    (Column("message", None, "message"), Literal("abc", "abc")),
                 ),
                 Literal(None, 0),
             ),
