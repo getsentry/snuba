@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple
 
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.clickhouse.translators.snuba.allowed import (
     ColumnMapper,
     SubscriptableReferenceMapper,
+    ValidColumnMappings,
 )
 from snuba.query.dsl import arrayElement
 from snuba.query.expressions import Column as ColumnExpr
@@ -41,9 +42,7 @@ class ColumnToExpression(ColumnMapper, ABC):
         self,
         expression: ColumnExpr,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[
-        Union[ColumnExpr, LiteralExpr, FunctionCallExpr, CurriedFunctionCall]
-    ]:
+    ) -> Optional[ValidColumnMappings]:
         if (
             expression.column_name == self.from_col_name
             and expression.table_name == self.from_table_name
@@ -53,9 +52,7 @@ class ColumnToExpression(ColumnMapper, ABC):
             return None
 
     @abstractmethod
-    def _produce_output(
-        self, expression: ColumnExpr,
-    ) -> Union[ColumnExpr, LiteralExpr, FunctionCallExpr, CurriedFunctionCall]:
+    def _produce_output(self, expression: ColumnExpr,) -> ValidColumnMappings:
         raise NotImplementedError
 
 
@@ -171,7 +168,7 @@ class ColumnToMapping(ColumnToExpression):
 
     to_nested_col_table_name: Optional[str]
     to_nested_col_name: str
-    to_nested_tag_key: str
+    to_nested_mapping_key: str
 
     def _produce_output(self, expression: ColumnExpr) -> FunctionCallExpr:
         return build_mapping_expr(
@@ -179,18 +176,23 @@ class ColumnToMapping(ColumnToExpression):
             or qualified_column(self.from_col_name, self.from_table_name or ""),
             self.to_nested_col_table_name,
             self.to_nested_col_name,
-            LiteralExpr(None, self.to_nested_tag_key),
+            LiteralExpr(None, self.to_nested_mapping_key),
         )
 
 
 def build_mapping_expr(
-    alias: Optional[str], table_name: Optional[str], col_name: str, tag_key: Expression
+    alias: Optional[str],
+    table_name: Optional[str],
+    col_name: str,
+    mapping_key: Expression,
 ) -> FunctionCallExpr:
     return arrayElement(
         alias,
         ColumnExpr(None, table_name, f"{col_name}.value"),
         FunctionCallExpr(
-            None, "indexOf", (ColumnExpr(None, table_name, f"{col_name}.key"), tag_key),
+            None,
+            "indexOf",
+            (ColumnExpr(None, table_name, f"{col_name}.key"), mapping_key),
         ),
     )
 

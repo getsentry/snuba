@@ -36,11 +36,10 @@ class LiteralMapper(SnubaClickhouseMapper[Literal, Literal]):
     pass
 
 
-class ColumnMapper(
-    SnubaClickhouseMapper[
-        Column, Union[Column, Literal, FunctionCall, CurriedFunctionCall]
-    ]
-):
+ValidColumnMappings = Union[Column, Literal, FunctionCall, CurriedFunctionCall]
+
+
+class ColumnMapper(SnubaClickhouseMapper[Column, ValidColumnMappings]):
     """
     Columns can be translated into other Columns, or Literals (if a Snuba
     column has a hardcoded value on a storage like the event type on
