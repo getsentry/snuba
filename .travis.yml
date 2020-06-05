@@ -24,6 +24,7 @@ matrix:
         - pre-commit run --files $(git diff --diff-filter=d --name-only master)
     - name: 'Test'
       stage: test
+      language: minimal
       services:
         - docker
       before_install:
