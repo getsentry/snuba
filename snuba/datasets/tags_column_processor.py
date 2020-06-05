@@ -188,7 +188,7 @@ class TagColumnProcessor:
                     return None
 
                 if c[1] == "=" and c[0] == "tags_key" and isinstance(c[2], str):
-                    ret.append(c[2])
+                    ret.append(str(c[2]))
 
                 elif (
                     c[1] == "IN"
