@@ -5,7 +5,6 @@ from snuba.clickhouse.columns import (
     UUID,
     ColumnSet,
     ColumnType,
-    Date,
     DateTime,
     IPv4,
     IPv6,
