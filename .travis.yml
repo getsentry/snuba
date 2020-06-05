@@ -4,7 +4,9 @@ branches:
   only:
     - master
 
-cache: pip
+cache:
+  pip: true
+  npm: true
 
 stages: [pre_commit, test]
 
@@ -24,7 +26,8 @@ matrix:
         - pre-commit run --files $(git diff --diff-filter=d --name-only master)
     - name: 'Test'
       stage: test
-      language: minimal
+      language: node_js
+      node_js: 10
       services:
         - docker
       before_install:
