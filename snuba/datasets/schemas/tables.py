@@ -56,7 +56,7 @@ class TableSchema(Schema, ABC):
     a simple select and that provides DDL operations.
     """
 
-    TEST_TABLE_PREFIX = "test_"
+    TEST_TABLE_PREFIX = ""
 
     def __init__(
         self,
