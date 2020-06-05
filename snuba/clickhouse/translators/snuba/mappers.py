@@ -21,7 +21,6 @@ from snuba.query.matchers import (
     Param,
     String,
 )
-from snuba.util import qualified_column
 
 
 @dataclass(frozen=True)
@@ -47,8 +46,7 @@ class ColumnToColumn(ColumnMapper):
             and expression.table_name == self.from_table_name
         ):
             return ColumnExpr(
-                alias=expression.alias
-                or qualified_column(self.from_col_name, self.from_table_name or ""),
+                alias=expression.alias,
                 table_name=self.to_table_name,
                 column_name=self.to_col_name,
             )
@@ -75,11 +73,7 @@ class ColumnToLiteral(ColumnMapper):
             expression.table_name == self.from_table_name
             and expression.column_name == self.from_col_name
         ):
-            return LiteralExpr(
-                alias=expression.alias
-                or qualified_column(self.from_col_name, self.from_table_name or ""),
-                value=self.to_literal_value,
-            )
+            return LiteralExpr(alias=expression.alias, value=self.to_literal_value,)
         else:
             return None
 
@@ -105,8 +99,7 @@ class ColumnToFunction(ColumnMapper):
             and expression.column_name == self.from_col_name
         ):
             return FunctionCallExpr(
-                alias=expression.alias
-                or qualified_column(self.from_col_name, self.from_table_name or ""),
+                alias=expression.alias,
                 function_name=self.to_function_name,
                 parameters=self.to_function_params,
             )
@@ -168,10 +161,7 @@ class ColumnToMapping(ColumnMapper):
             and expression.column_name == self.from_column_name
         ):
             return build_mapping_expr(
-                expression.alias
-                or qualified_column(
-                    self.from_column_name, self.from_column_table or ""
-                ),
+                expression.alias,
                 self.to_nested_col_table,
                 self.to_nested_col_name,
                 LiteralExpr(None, self.to_nested_tag_key),

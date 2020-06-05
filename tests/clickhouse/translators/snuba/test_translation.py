@@ -24,7 +24,7 @@ from snuba.query.expressions import (
 
 def test_column_translation() -> None:
     assert ColumnToColumn("table", "col", "table2", "col2").attempt_map(
-        Column(None, "table", "col"),
+        Column("table.col", "table", "col"),
         SnubaClickhouseMappingTranslator(TranslationMappers()),
     ) == Column("table.col", "table2", "col2")
 
@@ -43,7 +43,7 @@ def test_column_function_translation() -> None:
         "coalesce",
         (Column(None, None, "ip_address_v4"), Column(None, None, "ip_address_v6")),
     ).attempt_map(
-        Column(None, None, "ip_address"),
+        Column("ip_address", None, "ip_address"),
         SnubaClickhouseMappingTranslator(TranslationMappers()),
     ) == FunctionCall(
         "ip_address",
@@ -78,7 +78,7 @@ def test_col_tag_translation() -> None:
     translated = ColumnToMapping(
         None, "geo_country_code", None, "contexts", "geo.country_code"
     ).attempt_map(
-        Column(None, None, "geo_country_code"),
+        Column("geo_country_code", None, "geo_country_code"),
         SnubaClickhouseMappingTranslator(TranslationMappers()),
     )
 
@@ -105,7 +105,7 @@ test_data = [
     ),
     pytest.param(
         TranslationMappers(columns=[ColumnToColumn(None, "col", None, "col2")]),
-        Column(None, None, "col"),
+        Column("col", None, "col"),
         Column("col", None, "col2"),
         id="simple column",
     ),
@@ -145,7 +145,7 @@ test_data = [
                 FunctionCall(
                     None,
                     "anotherFunc",
-                    (Column(None, None, "col"), Literal(None, 123)),
+                    (Column("col", None, "col"), Literal(None, 123)),
                 ),
                 CurriedFunctionCall(
                     None,
@@ -160,7 +160,7 @@ test_data = [
                             ),
                         ),
                     ),
-                    (Column(None, None, "cola"), Literal(None, 123)),
+                    (Column("cola", None, "cola"), Literal(None, 123)),
                 ),
             ),
         ),
