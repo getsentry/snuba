@@ -6,9 +6,9 @@ else
 	librdkafka_cmd = install-librdkafka-src
 endif
 
-.PHONY: test install-python-dependencies install-librdkafka install-librdkafka-homebrew install-librdkafka-src-
+.PHONY: test install-dependencies install-dev-dependencies install-librdkafka install-librdkafka-homebrew install-librdkafka-src-
 
-develop: install-python-dependencies setup-git
+develop: install-dev-dependencies setup-git
 
 setup-git:
 	pre-commit install
@@ -16,8 +16,11 @@ setup-git:
 test:
 	SNUBA_SETTINGS=test py.test -vv
 
-install-python-dependencies:
+install-dependencies:
 	pip install -e .
+
+install-dev-dependencies:
+	pip install -e ".[dev]"
 
 install-librdkafka-homebrew:
 	brew install librdkafka

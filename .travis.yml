@@ -13,6 +13,7 @@ before_install:
   - docker network create --attachable cloudbuild
 
 script:
+  # TODO: Testing docker image
   - SNUBA_IMAGE=getsentry/snuba docker-compose -f docker-compose.gcb.yml run --rm snuba-test
 
 notifications:
