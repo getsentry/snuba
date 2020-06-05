@@ -1,5 +1,6 @@
 atomicwrites==1.1.5
 attrs==18.1.0
+blinker==1.4
 
 # dev
 black==19.10b0
