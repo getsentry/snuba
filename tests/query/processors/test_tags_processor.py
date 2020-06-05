@@ -16,7 +16,7 @@ test_data = [
             "groupby": [],
             "conditions": [["c3", "IN", ["t1", "t2"]]],
         },
-        "SELECT c1, c2, c3 FROM test_transactions_local WHERE c3 IN ('t1', 't2')",
+        "SELECT c1, c2, c3 FROM transactions_local WHERE c3 IN ('t1', 't2')",
     ),
     (
         {
@@ -27,7 +27,7 @@ test_data = [
         },
         (
             "SELECT (tags.value[indexOf(tags.key, 't1')] AS `tags[t1]`) "
-            "FROM test_transactions_local "
+            "FROM transactions_local "
             "WHERE (arrayJoin(tags.key) AS tags_key) IN ('t1', 't2')"
         ),
     ),  # Individual tag, no change
@@ -41,7 +41,7 @@ test_data = [
         (
             "SELECT (((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) "
             "AS all_tags))[2] AS tags_value) "
-            "FROM test_transactions_local "
+            "FROM transactions_local "
             "WHERE ((all_tags)[1] AS tags_key) IN ('t1', 't2')"
         ),
     ),  # Tags key in condition but only value in select. This could technically be
@@ -56,7 +56,7 @@ test_data = [
         (
             "SELECT (((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) AS all_tags))[1] "
             "AS tags_key), ((all_tags)[2] AS tags_value) "
-            "FROM test_transactions_local "
+            "FROM transactions_local "
             "WHERE col IN ('t1', 't2')"
         ),
     ),  # tags_key and value in select but no condition on it. No change
@@ -69,7 +69,7 @@ test_data = [
         },
         (
             "SELECT (arrayJoin(arrayFilter(tag -> tag IN ('t1','t2'), tags.key)) AS tags_key) "
-            "FROM test_transactions_local "
+            "FROM transactions_local "
             "WHERE tags_key IN ('t1', 't2')"
         ),
     ),  # tags_key in both select and condition. Apply change
@@ -82,7 +82,7 @@ test_data = [
         },
         (
             "SELECT (arrayJoin(arrayFilter(tag -> tag IN ('t1','t2'), tags.key)) AS tags_key), tags_key "
-            "FROM test_transactions_local "
+            "FROM transactions_local "
             "GROUP BY (tags_key) "
             "HAVING tags_key IN ('t1', 't2')"
         ),
@@ -98,7 +98,7 @@ test_data = [
             "SELECT (((arrayJoin(arrayFilter(pair -> pair[1] IN ('t1','t2'), "
             "arrayMap((x,y) -> [x,y], tags.key, tags.value))) AS all_tags))[1] AS tags_key), "
             "((all_tags)[2] AS tags_value) "
-            "FROM test_transactions_local "
+            "FROM transactions_local "
             "WHERE tags_key IN ('t1', 't2')"
         ),
     ),  # tags_key and value in select and condition. Apply change
@@ -117,7 +117,7 @@ test_data = [
             "SELECT (((arrayJoin(arrayFilter(pair -> pair[1] IN ('t1','t2','t3','t4','t5'), "
             "arrayMap((x,y) -> [x,y], tags.key, tags.value))) AS all_tags))[1] AS tags_key), "
             "((all_tags)[2] AS tags_value) "
-            "FROM test_transactions_local "
+            "FROM transactions_local "
             "WHERE tags_key IN ('t1', 't2') AND "
             "tags_key IN ('t3', 't4') AND "
             "tags_key = 't5'"
@@ -137,7 +137,7 @@ test_data = [
         (
             "SELECT (((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) AS all_tags))[1] "
             "AS tags_key), ((all_tags)[2] AS tags_value) "
-            "FROM test_transactions_local "
+            "FROM transactions_local "
             "WHERE (tags_key IN ('t1', 't2') OR tags_key IN ('t3', 't4'))"
         ),
     ),  # Skip OR nested conditions
@@ -154,7 +154,7 @@ test_data = [
         (
             "SELECT (((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) AS all_tags))[1] "
             "AS tags_key), ((all_tags)[2] AS tags_value) "
-            "FROM test_transactions_local "
+            "FROM transactions_local "
             "WHERE tags_key IN ('t1', 't2') AND (tags_key IN ('t3', 't4') OR tags_key = 't5')"
         ),
     ),  # Mixed case, some tags_key on top level some are not. Cannot do anything.
