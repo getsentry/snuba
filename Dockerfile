@@ -20,7 +20,6 @@ RUN set -ex; \
 ENV GOSU_VERSION=1.11
 RUN set -ex; \
     \
-    LIBRDKAFKA_VERSION=0.11.5; \
     buildDeps=' \
         bzip2 \
         dirmngr \
@@ -52,16 +51,6 @@ RUN set -ex; \
     rm -rf "$GNUPGHOME" /usr/local/bin/gosu.asc; \
     chmod +x /usr/local/bin/gosu; \
     gosu nobody true; \
-    \
-    mkdir -p /usr/src/librdkafka; \
-    cd /usr/src/librdkafka; \
-    wget -O v${LIBRDKAFKA_VERSION}.tar.gz https://github.com/edenhill/librdkafka/archive/v${LIBRDKAFKA_VERSION}.tar.gz; \
-    tar xf v${LIBRDKAFKA_VERSION}.tar.gz --strip-components=1; \
-    ./configure --prefix=/usr; \
-    make; \
-    PREFIX=/usr make install; \
-    rm -r /usr/src/librdkafka; \
-    \
     apt-get purge -y --auto-remove $buildDeps
 
 COPY . /usr/src/snuba
@@ -106,7 +95,6 @@ ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA \
     UWSGI_NEED_PLUGIN=/var/lib/uwsgi/dogstatsd \
     UWSGI_STATS_PUSH=dogstatsd:127.0.0.1:8126 \
     UWSGI_DOGSTATSD_EXTRA_TAGS=service:snuba
-
 
 EXPOSE 1218
 
