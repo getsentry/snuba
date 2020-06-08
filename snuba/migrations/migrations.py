@@ -1,5 +1,6 @@
 import logging
 
+from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
 from importlib import import_module
@@ -35,19 +36,23 @@ class Dependency(NamedTuple):
     migration_id: str
 
 
-class Migration:
+class Migration(ABC):
     is_dangerous: bool
     dependencies: Optional[Sequence[Dependency]]
 
+    @abstractmethod
     def forwards_local(self) -> Sequence[Operation]:
         raise NotImplementedError
 
+    @abstractmethod
     def backwards_local(self) -> Sequence[Operation]:
         raise NotImplementedError
 
+    # @abstractmethod
     def forwards_dist(self) -> Sequence[Operation]:
         raise NotImplementedError
 
+    # @abstractmethod
     def backwards_dist(self) -> Sequence[Operation]:
         raise NotImplementedError
 
