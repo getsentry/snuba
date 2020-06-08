@@ -20,7 +20,6 @@ from typing import Optional
 
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
 from snuba.environment import setup_logging
-from snuba.util import local_dataset_mode
 
 
 @click.command()
@@ -60,8 +59,11 @@ def perf(
     setup_logging(log_level)
 
     dataset = get_dataset(dataset_name)
-    if not local_dataset_mode():
-        logger.error("The perf tool is only intended for local dataset environment.")
+
+    if not all(
+        storage.get_cluster().is_single_node() for storage in dataset.get_all_storages()
+    ):
+        logger.error("The perf tool is only intended for single node environment.")
         sys.exit(1)
 
     run(

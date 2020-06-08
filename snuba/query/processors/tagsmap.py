@@ -5,7 +5,10 @@ from typing import List, NamedTuple, Optional, Set
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.translators.snuba.mappers import KEY_COL_MAPPING_PARAM, mapping_pattern
+from snuba.clickhouse.translators.snuba.mappers import (
+    KEY_COL_MAPPING_PARAM,
+    mapping_pattern,
+)
 from snuba.datasets.events_format import escape_field
 from snuba.query.expressions import Expression
 from snuba.query.parser.strings import NESTED_COL_EXPR_RE

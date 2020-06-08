@@ -11,7 +11,8 @@ endif
 develop: install-python-dependencies setup-git
 
 setup-git:
-	pre-commit install
+	pip install 'pre-commit==2.4.0'
+	pre-commit install --install-hooks
 
 test:
 	SNUBA_SETTINGS=test py.test -vv
@@ -36,4 +37,3 @@ install-librdkafka-src:
 	rm -rf tmp-build-librdkafka
 
 install-librdkafka: $(librdkafka_cmd)
-

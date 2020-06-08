@@ -332,7 +332,7 @@ class FunctionCall(Pattern[FunctionCallExpr]):
                 result = result.merge(partial_result)
 
         if self.parameters:
-            if self.with_optionals is None:
+            if not self.with_optionals:
                 if len(self.parameters) != len(node.parameters):
                     return None
             else:

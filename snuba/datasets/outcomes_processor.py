@@ -11,6 +11,7 @@ from snuba.processor import (
     _unicodify,
 )
 
+
 class OutcomesProcessor(MessageProcessor):
     def process_message(self, value, metadata=None) -> Optional[ProcessedMessage]:
         assert isinstance(value, dict)

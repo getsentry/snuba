@@ -1,9 +1,11 @@
 import logging
+from dataclasses import dataclass
 from datetime import timedelta
-from typing import Mapping, Sequence
+from typing import Mapping, Optional, Sequence
 
 from snuba import environment
 from snuba.clickhouse.columns import (
+    UUID,
     Array,
     ColumnSet,
     DateTime,
@@ -12,28 +14,38 @@ from snuba.clickhouse.columns import (
     Nullable,
     String,
     UInt,
-    UUID,
 )
+from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
+from snuba.clickhouse.translators.snuba.allowed import ColumnMapper
+from snuba.clickhouse.translators.snuba.mappers import ColumnToLiteral, ColumnToMapping
+from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.dataset import TimeSeriesDataset
+from snuba.datasets.events import event_translator
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
-from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
+from snuba.datasets.storage import (
+    QueryStorageSelector,
+    ReadableStorage,
+    StorageAndMappers,
+)
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.transactions import transaction_translator
+from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.error_rate_processor import ErrorRateProcessor
+from snuba.query.processors.failure_rate_processor import FailureRateProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
-from snuba.util import is_condition
+from snuba.util import is_condition, qualified_column
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 
 EVENTS = "events"
@@ -114,6 +126,32 @@ def detect_table(
     return selected_table
 
 
+@dataclass(frozen=True)
+class DefaultNoneColumnMapper(ColumnMapper):
+    """
+    This maps a list of column names to None (NULL in SQL) as it is done
+    in the discover column_expr method today. It should not be used for
+    any other reason or use case, thus it should not be moved out of
+    the discover dataset file.
+    """
+
+    columns: ColumnSet
+
+    def attempt_map(
+        self, expression: Column, children_translator: SnubaClickhouseStrictTranslator,
+    ) -> Optional[Literal]:
+        if expression.column_name in self.columns:
+            return Literal(
+                alias=expression.alias
+                or qualified_column(
+                    expression.column_name, expression.table_name or ""
+                ),
+                value=None,
+            )
+        else:
+            return None
+
+
 class DiscoverQueryStorageSelector(QueryStorageSelector):
     def __init__(
         self,
@@ -131,16 +169,42 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
         # in the Transactions table
         self.__abstract_transactions_columns = abstract_transactions_columns
 
+        self.__event_translator = event_translator.concat(
+            TranslationMappers(
+                columns=[
+                    ColumnToMapping(None, "release", None, "tags", "sentry:release"),
+                    ColumnToMapping(None, "dist", None, "tags", "sentry:dist"),
+                    ColumnToMapping(None, "user", None, "tags", "sentry:user"),
+                    DefaultNoneColumnMapper(self.__abstract_transactions_columns),
+                ]
+            )
+        )
+
+        self.__transaction_translator = transaction_translator.concat(
+            TranslationMappers(
+                columns=[
+                    ColumnToLiteral(None, "group_id", 0),
+                    DefaultNoneColumnMapper(self.__abstract_events_columns),
+                ]
+            )
+        )
+
     def select_storage(
         self, query: Query, request_settings: RequestSettings
-    ) -> ReadableStorage:
+    ) -> StorageAndMappers:
         table = detect_table(
             query,
             self.__abstract_events_columns,
             self.__abstract_transactions_columns,
             True,
         )
-        return self.__events_table if table == EVENTS else self.__transactions_table
+        return (
+            StorageAndMappers(self.__events_table, self.__event_translator)
+            if table == EVENTS
+            else StorageAndMappers(
+                self.__transactions_table, self.__transaction_translator
+            )
+        )
 
 
 class DiscoverDataset(TimeSeriesDataset):
@@ -278,7 +342,7 @@ class DiscoverDataset(TimeSeriesDataset):
             # exist, so it would run before Storage selection.
             ApdexProcessor(),
             ImpactProcessor(),
-            ErrorRateProcessor(),
+            FailureRateProcessor(),
             TimeSeriesColumnProcessor({}),
         ]
 

@@ -3,11 +3,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Callable, Mapping, NamedTuple, Optional, Sequence
 
-from snuba import settings
 from snuba.clickhouse.columns import ColumnSet, ColumnType
+from snuba.clusters.cluster import get_cluster
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas import RelationalSource, Schema
 from snuba.query.types import Condition
-from snuba.util import local_dataset_mode
 
 
 class TableSource(RelationalSource):
@@ -55,14 +55,13 @@ class TableSchema(Schema, ABC):
     a simple select and that provides DDL operations.
     """
 
-    TEST_TABLE_PREFIX = "test_"
-
     def __init__(
         self,
         columns: ColumnSet,
         *,
         local_table_name: str,
         dist_table_name: str,
+        storage_set_key: StorageSetKey,
         mandatory_conditions: Optional[Sequence[Condition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
         migration_function: Optional[
@@ -73,7 +72,11 @@ class TableSchema(Schema, ABC):
             migration_function if migration_function else lambda table, schema: []
         )
         self.__local_table_name = local_table_name
-        self.__dist_table_name = dist_table_name
+        self.__table_name = (
+            local_table_name
+            if get_cluster(storage_set_key).is_single_node()
+            else dist_table_name
+        )
         self.__table_source = TableSource(
             self.get_table_name(), columns, mandatory_conditions, prewhere_candidates,
         )
@@ -85,29 +88,19 @@ class TableSchema(Schema, ABC):
         """
         return self.__table_source
 
-    def _make_test_table(self, table_name: str) -> str:
-        return (
-            table_name
-            if not settings.TESTING
-            else "%s%s" % (self.TEST_TABLE_PREFIX, table_name)
-        )
-
     def get_local_table_name(self) -> str:
         """
         This returns the local table name for a distributed environment.
         It is supposed to be used in DDL commands and for maintenance.
         """
-        return self._make_test_table(self.__local_table_name)
+        return self.__local_table_name
 
     def get_table_name(self) -> str:
         """
         This represents the table we interact with to send queries to Clickhouse.
         In distributed mode this will be a distributed table. In local mode it is a local table.
         """
-        table_name = (
-            self.__local_table_name if local_dataset_mode() else self.__dist_table_name
-        )
-        return self._make_test_table(table_name)
+        return self.__table_name
 
     def get_local_drop_table_statement(self) -> DDLStatement:
         return DDLStatement(
@@ -146,6 +139,7 @@ class MergeTreeSchema(WritableTableSchema):
         *,
         local_table_name: str,
         dist_table_name: str,
+        storage_set_key: StorageSetKey,
         mandatory_conditions: Optional[Sequence[Condition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
         order_by: str,
@@ -161,6 +155,7 @@ class MergeTreeSchema(WritableTableSchema):
             columns=columns,
             local_table_name=local_table_name,
             dist_table_name=dist_table_name,
+            storage_set_key=storage_set_key,
             mandatory_conditions=mandatory_conditions,
             prewhere_candidates=prewhere_candidates,
             migration_function=migration_function,
@@ -219,6 +214,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         *,
         local_table_name: str,
         dist_table_name: str,
+        storage_set_key: StorageSetKey,
         mandatory_conditions: Optional[Sequence[Condition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
         order_by: str,
@@ -235,6 +231,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
             columns=columns,
             local_table_name=local_table_name,
             dist_table_name=dist_table_name,
+            storage_set_key=storage_set_key,
             mandatory_conditions=mandatory_conditions,
             prewhere_candidates=prewhere_candidates,
             order_by=order_by,
@@ -267,6 +264,7 @@ class MaterializedViewSchema(TableSchema):
         *,
         local_materialized_view_name: str,
         dist_materialized_view_name: str,
+        storage_set_key: StorageSetKey,
         mandatory_conditions: Optional[Sequence[Condition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
         query: str,
@@ -282,6 +280,7 @@ class MaterializedViewSchema(TableSchema):
             columns=columns,
             local_table_name=local_materialized_view_name,
             dist_table_name=dist_materialized_view_name,
+            storage_set_key=storage_set_key,
             mandatory_conditions=mandatory_conditions,
             prewhere_candidates=prewhere_candidates,
             migration_function=migration_function,
@@ -297,10 +296,10 @@ class MaterializedViewSchema(TableSchema):
         self.__dist_destination_table_name = dist_destination_table_name
 
     def __get_local_source_table_name(self) -> str:
-        return self._make_test_table(self.__local_source_table_name)
+        return self.__local_source_table_name
 
     def __get_local_destination_table_name(self) -> str:
-        return self._make_test_table(self.__local_destination_table_name)
+        return self.__local_destination_table_name
 
     def __get_table_definition(
         self, name: str, source_table_name: str, destination_table_name: str

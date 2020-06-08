@@ -37,6 +37,7 @@ schema = ReplacingMergeTreeSchema(
     columns=columns,
     local_table_name="groupedmessage_local",
     dist_table_name="groupedmessage_dist",
+    storage_set_key=StorageSetKey.EVENTS,
     mandatory_conditions=[("record_deleted", "=", 0)],
     prewhere_candidates=["project_id", "id"],
     order_by="(project_id, id)",

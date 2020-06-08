@@ -5,6 +5,7 @@ class StorageKey(Enum):
     """
     A storage key is a unique identifier for a storage.
     """
+
     EVENTS = "events"
     ERRORS = "errors"
     GROUPEDMESSAGES = "groupedmessages"

@@ -1,4 +1,5 @@
 from typing import Mapping, Sequence
+
 from snuba.clickhouse.columns import (
     UUID,
     Array,
@@ -28,6 +29,9 @@ from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
 from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
+    ArrayJoinKeyValueOptimizer,
+)
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 
@@ -140,6 +144,7 @@ schema = ReplacingMergeTreeSchema(
     columns=all_columns,
     local_table_name="errors_local",
     dist_table_name="errors_dist",
+    storage_set_key=StorageSetKey.EVENTS,
     mandatory_conditions=[("deleted", "=", 0)],
     prewhere_candidates=[
         "event_id",
@@ -177,6 +182,7 @@ storage = WritableTableStorage(
             project_column="project_id", replacer_state_name=ReplacerState.ERRORS,
         ),
         MappingColumnPromoter(mapping_specs={"tags": promoted_tag_columns}),
+        ArrayJoinKeyValueOptimizer("tags"),
         PrewhereProcessor(),
     ],
     stream_loader=KafkaStreamLoader(

@@ -557,8 +557,8 @@ class TestUtil(BaseTest):
         ]
 
     @pytest.mark.parametrize("dataset", DATASETS)
-    def test_error_rate_expression(self, dataset):
-        body = {"aggregations": [["error_rate()", "", "error_percentage"]]}
+    def test_failure_rate_expression(self, dataset):
+        body = {"aggregations": [["failure_rate()", "", "error_percentage"]]}
         parsing_context = ParsingContext()
         source = (
             dataset.get_all_storages()[0]

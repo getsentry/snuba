@@ -132,10 +132,10 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
     @with_span()
     def build_plan(self, request: Request) -> ClickhouseQueryPlan:
-        storage = self.__selector.select_storage(request.query, request.settings)
-        clickhouse_query = QueryTranslator(TranslationMappers()).translate(
-            request.query
+        storage, mappers = self.__selector.select_storage(
+            request.query, request.settings
         )
+        clickhouse_query = QueryTranslator(mappers).translate(request.query)
         clickhouse_query.set_data_source(
             storage.get_schemas().get_read_schema().get_data_source()
         )

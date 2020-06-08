@@ -21,7 +21,7 @@ from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.error_rate_processor import ErrorRateProcessor
+from snuba.query.processors.failure_rate_processor import FailureRateProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
@@ -31,7 +31,7 @@ from snuba.query.timeseries_extension import TimeSeriesExtension
 # TODO: This will be a property of the relationship between entity and
 # storage. Now we do not have entities so it is between dataset and
 # storage.
-transactions_translator = TranslationMappers(
+transaction_translator = TranslationMappers(
     columns=[
         ColumnToFunction(
             None,
@@ -58,9 +58,7 @@ transactions_translator = TranslationMappers(
         ColumnToColumn(None, "transaction", None, "transaction_name"),
         ColumnToColumn(None, "message", None, "transaction_name"),
         ColumnToColumn(None, "title", None, "transaction_name"),
-        ColumnToMapping(
-            None, "geo_country_code", None, "contexts", "geo.country_code"
-        ),
+        ColumnToMapping(None, "geo_country_code", None, "contexts", "geo.country_code"),
         ColumnToMapping(None, "geo_region", None, "contexts", "geo.region"),
         ColumnToMapping(None, "geo_city", None, "contexts", "geo.city"),
     ],
@@ -88,7 +86,7 @@ class TransactionsDataset(TimeSeriesDataset):
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(
-                storage=storage, mappers=transactions_translator
+                storage=storage, mappers=transaction_translator
             ),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,
@@ -180,6 +178,6 @@ class TransactionsDataset(TimeSeriesDataset):
             BasicFunctionsProcessor(),
             ApdexProcessor(),
             ImpactProcessor(),
-            ErrorRateProcessor(),
+            FailureRateProcessor(),
             TimeSeriesColumnProcessor(self.__time_group_columns),
         ]

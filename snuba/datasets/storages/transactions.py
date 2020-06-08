@@ -5,7 +5,6 @@ from snuba.clickhouse.columns import (
     UUID,
     ColumnSet,
     ColumnType,
-    Date,
     DateTime,
     IPv4,
     IPv6,
@@ -29,6 +28,9 @@ from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.datasets.transactions_processor import (
     UNKNOWN_SPAN_STATUS,
     TransactionsMessageProcessor,
+)
+from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
+    ArrayJoinKeyValueOptimizer,
 )
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
@@ -154,6 +156,7 @@ schema = ReplacingMergeTreeSchema(
     columns=columns,
     local_table_name="transactions_local",
     dist_table_name="transactions_dist",
+    storage_set_key=StorageSetKey.TRANSACTIONS,
     mandatory_conditions=[],
     prewhere_candidates=["event_id", "project_id"],
     order_by="(project_id, toStartOfDay(finish_ts), transaction_name, cityHash64(span_id))",
@@ -181,7 +184,8 @@ storage = WritableTableStorage(
             BEGINNING_OF_TIME,
         ),
         TransactionColumnProcessor(),
-        UUIDColumnProcessor(set(["event_id", "trace_id"])),
+        UUIDColumnProcessor(["event_id", "trace_id"]),
+        ArrayJoinKeyValueOptimizer("tags"),
         PrewhereProcessor(),
     ],
     stream_loader=KafkaStreamLoader(
