@@ -19,22 +19,22 @@ tests = [
         Query(
             {},
             TableSource("transactions", ColumnSet([])),
-            selected_columns=[Column(None, "column2", None)],
+            selected_columns=[Column(None, None, "column2")],
             condition=binary_condition(
                 "mightaswell",
                 ConditionFunctions.EQ,
-                Column(None, "column1", None),
+                Column(None, None, "column1"),
                 Literal(None, "a7d67cf796774551a95be6543cacd459"),
             ),
         ),
         Query(
             {},
             TableSource("transactions", ColumnSet([])),
-            selected_columns=[Column(None, "column2", None)],
+            selected_columns=[Column(None, None, "column2")],
             condition=binary_condition(
                 "mightaswell",
                 ConditionFunctions.EQ,
-                Column(None, "column1", None),
+                Column(None, None, "column1"),
                 Literal(None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd459"))),
             ),
         ),
@@ -44,23 +44,48 @@ tests = [
         Query(
             {},
             TableSource("transactions", ColumnSet([])),
-            selected_columns=[Column(None, "column2", None)],
+            selected_columns=[Column(None, None, "column2")],
             condition=binary_condition(
                 "mightaswell",
                 ConditionFunctions.EQ,
+                Column(None, None, "notauuid"),
                 Literal(None, "a7d67cf796774551a95be6543cacd459"),
-                Column(None, "column1", None),
             ),
         ),
         Query(
             {},
             TableSource("transactions", ColumnSet([])),
-            selected_columns=[Column(None, "column2", None)],
+            selected_columns=[Column(None, None, "column2")],
+            condition=binary_condition(
+                "mightaswell",
+                ConditionFunctions.EQ,
+                Column(None, None, "notauuid"),
+                Literal(None, "a7d67cf796774551a95be6543cacd459"),
+            ),
+        ),
+        "(equals(notauuid, 'a7d67cf796774551a95be6543cacd459') AS mightaswell)",
+    ),
+    (
+        Query(
+            {},
+            TableSource("transactions", ColumnSet([])),
+            selected_columns=[Column(None, None, "column2")],
+            condition=binary_condition(
+                "mightaswell",
+                ConditionFunctions.EQ,
+                Literal(None, "a7d67cf796774551a95be6543cacd459"),
+                Column(None, None, "column1"),
+            ),
+        ),
+        Query(
+            {},
+            TableSource("transactions", ColumnSet([])),
+            selected_columns=[Column(None, None, "column2")],
             condition=binary_condition(
                 "mightaswell",
                 ConditionFunctions.EQ,
                 Literal(None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd459"))),
-                Column(None, "column1", None),
+                Column(None, None, "column1"),
             ),
         ),
         "(equals('a7d67cf7-9677-4551-a95b-e6543cacd459', column1) AS mightaswell)",
@@ -69,11 +94,11 @@ tests = [
         Query(
             {},
             TableSource("transactions", ColumnSet([])),
-            selected_columns=[Column(None, "column2", None)],
+            selected_columns=[Column(None, None, "column2")],
             condition=binary_condition(
                 "mightaswell",
                 ConditionFunctions.IN,
-                Column(None, "column1", None),
+                Column(None, None, "column1"),
                 FunctionCall(
                     None,
                     "tuple",
@@ -87,11 +112,11 @@ tests = [
         Query(
             {},
             TableSource("transactions", ColumnSet([])),
-            selected_columns=[Column(None, "column2", None)],
+            selected_columns=[Column(None, None, "column2")],
             condition=binary_condition(
                 "mightaswell",
                 ConditionFunctions.IN,
-                Column(None, "column1", None),
+                Column(None, None, "column1"),
                 FunctionCall(
                     None,
                     "tuple",
@@ -112,7 +137,7 @@ tests = [
         Query(
             {},
             TableSource("transactions", ColumnSet([])),
-            selected_columns=[Column(None, "column2", None)],
+            selected_columns=[Column(None, None, "column2")],
             condition=binary_condition(
                 "mightaswell",
                 ConditionFunctions.EQ,
@@ -121,7 +146,7 @@ tests = [
                     "replaceAll",
                     (
                         FunctionCall(
-                            None, "toString", (Column(None, "column1", None),),
+                            None, "toString", (Column(None, None, "column1"),),
                         ),
                         Literal(None, "-"),
                         Literal(None, ""),
@@ -133,22 +158,67 @@ tests = [
         Query(
             {},
             TableSource("transactions", ColumnSet([])),
-            selected_columns=[Column(None, "column2", None)],
+            selected_columns=[Column(None, None, "column2")],
             condition=binary_condition(
                 "mightaswell",
                 ConditionFunctions.EQ,
-                Column(None, "column1", None),
+                Column(None, None, "column1"),
                 Literal(None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd459"))),
             ),
         ),
         "(equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459') AS mightaswell)",
+    ),
+    (
+        Query(
+            {},
+            TableSource("transactions", ColumnSet([])),
+            selected_columns=[Column(None, None, "column2")],
+            condition=binary_condition(
+                "mightaswell",
+                ConditionFunctions.EQ,
+                FunctionCall(
+                    None,
+                    "replaceAll",
+                    (
+                        FunctionCall(
+                            None, "toString", (Column(None, None, "notauuid"),),
+                        ),
+                        Literal(None, "-"),
+                        Literal(None, ""),
+                    ),
+                ),
+                Literal(None, "a7d67cf796774551a95be6543cacd459"),
+            ),
+        ),
+        Query(
+            {},
+            TableSource("transactions", ColumnSet([])),
+            selected_columns=[Column(None, None, "column2")],
+            condition=binary_condition(
+                "mightaswell",
+                ConditionFunctions.EQ,
+                FunctionCall(
+                    None,
+                    "replaceAll",
+                    (
+                        FunctionCall(
+                            None, "toString", (Column(None, None, "notauuid"),),
+                        ),
+                        Literal(None, "-"),
+                        Literal(None, ""),
+                    ),
+                ),
+                Literal(None, "a7d67cf796774551a95be6543cacd459"),
+            ),
+        ),
+        "(equals(replaceAll(toString(notauuid), '-', ''), 'a7d67cf796774551a95be6543cacd459') AS mightaswell)",
     ),
 ]
 
 
 @pytest.mark.parametrize("unprocessed, expected, formatted_value", tests)
 def test_uuid_column_processor(unprocessed, expected, formatted_value) -> None:
-    UUIDColumnProcessor(set(["column1", "column2"])).process_query(
+    UUIDColumnProcessor(["column1", "column2"]).process_query(
         unprocessed, HTTPRequestSettings()
     )
     assert expected.get_condition_from_ast() == unprocessed.get_condition_from_ast()

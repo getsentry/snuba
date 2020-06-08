@@ -3,7 +3,7 @@ from typing import Mapping, Optional, Sequence
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Expression, FunctionCall, Literal
 from snuba.query.matchers import FunctionCall as FunctionCallPattern
-from snuba.query.matchers import Param, Pattern, String
+from snuba.query.matchers import AnyExpression, Or, Param, Pattern, String
 
 
 class ConditionFunctions:
@@ -189,8 +189,13 @@ def _combine_conditions(conditions: Sequence[Expression], function: str) -> Expr
     )
 
 
+condition_match = FunctionCallPattern(
+    None,
+    Or([String(op) for op in FUNCTION_TO_OPERATOR]),
+    (AnyExpression(),),
+    with_optionals=True,
+)
+
+
 def is_condition(exp: Expression) -> bool:
-    return (
-        isinstance(exp, FunctionCall)
-        and exp.function_name in FUNCTION_TO_OPERATOR
-        and len(exp.parameters) > 0
+    return condition_match.match(exp) is not None

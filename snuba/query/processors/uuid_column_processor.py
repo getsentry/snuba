@@ -1,14 +1,23 @@
-from typing import Set
+from typing import List
 import uuid
 
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.conditions import (
     binary_condition,
+    ConditionFunctions,
+    FUNCTION_TO_OPERATOR,
     is_condition,
-    is_in_condition,
-    is_not_in_condition,
 )
 from snuba.query.logical import Query
+from snuba.query.matchers import (
+    AnyOptionalString,
+    Or,
+    Param,
+    String,
+)
+from snuba.query.matchers import Column as ColumnMatch
+from snuba.query.matchers import FunctionCall as FunctionCallMatch
+from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.processors import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
@@ -19,94 +28,121 @@ class UUIDColumnProcessor(QueryProcessor):
     then change the condition to use a proper UUID instead of a string.
     """
 
-    def __init__(self, uuid_columns: Set[str]) -> None:
-        self.__uuid_columns = uuid_columns
-
-    def is_uuid_column(self, exp: Expression) -> bool:
-        return isinstance(exp, Column) and exp.column_name in self.__uuid_columns
-
-    def is_formatted_uuid(self, exp: Expression) -> bool:
-        return (
-            isinstance(exp, FunctionCall)
-            and exp.function_name == "replaceAll"
-            and isinstance(exp.parameters[0], FunctionCall)
-            and exp.parameters[0].function_name == "toString"
-            and isinstance(exp.parameters[0].parameters[0], Column)
-            and exp.parameters[0].parameters[0].column_name in self.__uuid_columns
+    def formatted_uuid_pattern(self, suffix: str = "") -> FunctionCallMatch:
+        return FunctionCallMatch(
+            Param("format_alias" + suffix, AnyOptionalString()),
+            String("replaceAll"),
+            (
+                FunctionCallMatch(
+                    None,
+                    String("toString"),
+                    (
+                        Param(
+                            "formatted_uuid_column" + suffix,
+                            ColumnMatch(None, None, self.__uuid_column_match),
+                        ),
+                    ),
+                ),
+            ),
         )
 
+    def uuid_column_pattern(self, suffix: str = "") -> Param:
+        return Param(
+            "uuid_column" + suffix, ColumnMatch(None, None, self.__uuid_column_match)
+        )
+
+    def __init__(self, uuid_columns: List[str]) -> None:
+        self.__unique_uuid_columns = set(uuid_columns)
+        self.__uuid_column_match = Or(
+            [String(u_col) for u_col in self.__unique_uuid_columns]
+        )
+        self.uuid_in_condition = FunctionCallMatch(
+            None,
+            Or((String(ConditionFunctions.IN), String(ConditionFunctions.NOT_IN))),
+            (
+                Or((self.uuid_column_pattern(), self.formatted_uuid_pattern())),
+                Param("params", FunctionCallMatch(None, String("tuple"), None)),
+            ),
+        )
+        self.uuid_condition = FunctionCallMatch(
+            None,
+            Or([String(op) for op in FUNCTION_TO_OPERATOR]),
+            (
+                Or(
+                    (
+                        Param("literal_0", LiteralMatch(None, AnyOptionalString())),
+                        self.uuid_column_pattern("_0"),
+                        self.formatted_uuid_pattern("_0"),
+                    )
+                ),
+                Or(
+                    (
+                        Param("literal_1", LiteralMatch(None, AnyOptionalString())),
+                        self.uuid_column_pattern("_1"),
+                        self.formatted_uuid_pattern("_1"),
+                    )
+                ),
+            ),
+        )
+
+    def parse_uuid(self, lit: Expression) -> Expression:
+        if not isinstance(lit, Literal):
+            return lit
+
+        try:
+            parsed = uuid.UUID(lit.value)
+            return Literal(lit.alias, str(parsed))
+        except Exception:
+            return lit
+
+    def process_condition(self, exp: Expression) -> Expression:
+        result = self.uuid_in_condition.match(exp)
+        if result:
+            new_params = []
+            if result.optional_expression("formatted_uuid_column") is not None:
+                alias = result.string("format_alias")
+                column = result.expression("formatted_uuid_column")
+                new_params.append(Column(alias, column.table_name, column.column_name,))
+            else:
+                new_params.append(result.expression("uuid_column"))
+
+            params_fn = result.expression("params")
+            new_fn_params = []
+            for param in params_fn.parameters:
+                new_fn_params.append(self.parse_uuid(param))
+
+            new_params.append(
+                FunctionCall(
+                    params_fn.alias, params_fn.function_name, tuple(new_fn_params)
+                )
+            )
+
+            return binary_condition(exp.alias, exp.function_name, *new_params)
+
+        result = self.uuid_condition.match(exp)
+        if result:
+            new_params = []
+            for suffix in ["_0", "_1"]:
+                if result.optional_expression("literal" + suffix):
+                    new_params.append(
+                        self.parse_uuid(result.expression("literal" + suffix))
+                    )
+                elif result.optional_expression("uuid_column" + suffix):
+                    new_params.append(result.expression("uuid_column" + suffix))
+                elif result.optional_expression("formatted_uuid_column" + suffix):
+                    alias = result.optional_string("format_alias" + suffix)
+                    column = result.expression("formatted_uuid_column" + suffix)
+                    new_params.append(
+                        Column(alias, column.table_name, column.column_name,)
+                    )
+
+            return binary_condition(exp.alias, exp.function_name, *new_params)
+
+        return exp
+
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
-        def process_condition(exp: Expression) -> Expression:
-            if is_condition(exp):
-                assert isinstance(exp, FunctionCall)
-                if len(exp.parameters) > 1:
-                    # This doesn't seem great but here it is: There is a separate processor that converts
-                    # all cases of UUID columns to do a string comparison. We want to to undo that work
-                    # for conditions only, so we need to handle the common case (no formatting) as well
-                    # as the case that the other processor has formatted the column already.
-
-                    # Check if we have a uuid column
-                    if any(
-                        self.is_uuid_column(param) or self.is_formatted_uuid(param)
-                        for param in exp.parameters
-                    ):
-                        new_params = []
-                        if is_in_condition(exp) or is_not_in_condition(exp):
-                            param = exp.parameters[0]
-                            if self.is_formatted_uuid(param):
-                                column = param.parameters[0].parameters[0]
-                                new_params.append(
-                                    Column(
-                                        param.alias,
-                                        column.table_name,
-                                        column.column_name,
-                                    )
-                                )
-                            else:
-                                new_params.append(param)
-
-                            literal_fn = exp.parameters[1]
-                            new_tuple = []
-                            for lit in literal_fn.parameters:
-                                try:
-                                    parsed = uuid.UUID(lit.value)
-                                    new_tuple.append(Literal(lit.alias, str(parsed)))
-                                except Exception:
-                                    new_tuple.append(lit)
-
-                            new_params.append(
-                                FunctionCall(
-                                    literal_fn.alias,
-                                    literal_fn.function_name,
-                                    tuple(new_tuple),
-                                )
-                            )
-                        else:
-                            for param in exp.parameters:
-                                if self.is_formatted_uuid(param):
-                                    column = param.parameters[0].parameters[0]
-                                    new_params.append(
-                                        Column(
-                                            param.alias,
-                                            column.column_name,
-                                            column.table_name,
-                                        )
-                                    )
-                                elif isinstance(param, Literal):
-                                    try:
-                                        parsed = uuid.UUID(param.value)
-                                        new_params.append(
-                                            Literal(param.alias, str(parsed))
-                                        )
-                                    except Exception:
-                                        new_params.append(param)
-                                else:
-                                    new_params.append(param)
-
-                        return binary_condition(
-                            exp.alias, exp.function_name, *new_params
-                        )
-
-            return exp
-
-        query.transform_expressions(process_condition)
+        condition = query.get_condition_from_ast()
+        query.set_ast_condition(None)
+        for cond in condition:
+            if is_condition(cond):
+                query.add_condition_to_ast(self.process_condition(cond))

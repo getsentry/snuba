@@ -39,6 +39,12 @@ class MatchResult:
         assert isinstance(ret, Expression)
         return ret
 
+    def optional_expression(self, name: str) -> Optional[Expression]:
+        try:
+            return self.expression(name)
+        except Exception:
+            return None
+
     def scalar(self, name: str) -> OptionalScalarType:
         """
         Return a scalar from the results given the name of the parameter
@@ -62,6 +68,12 @@ class MatchResult:
         assert isinstance(ret, str)
         return ret
 
+    def optional_string(self, name: str) -> Optional[str]:
+        try:
+            return self.string(name)
+        except Exception:
+            return None
+
     def integer(self, name: str) -> int:
         """
         Returns a int present in the result, guaranteeing the int is there
@@ -70,6 +82,12 @@ class MatchResult:
         ret = self.results[name]
         assert isinstance(ret, int)
         return ret
+
+    def optional_integer(self, name: str) -> Optional[int]:
+        try:
+            return self.integer(name)
+        except Exception:
+            return None
 
     # TODO: Consider adding more utility method to assert and return specific types
     # from the Results if needed.
@@ -136,6 +154,7 @@ class Param(Pattern[TMatchedType]):
     pattern: Pattern[TMatchedType]
 
     def match(self, node: AnyType) -> Optional[MatchResult]:
+        print("PARAM", self.name, self.pattern)
         result = self.pattern.match(node)
         if result is None:
             return None
