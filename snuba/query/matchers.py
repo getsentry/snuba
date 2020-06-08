@@ -154,7 +154,6 @@ class Param(Pattern[TMatchedType]):
     pattern: Pattern[TMatchedType]
 
     def match(self, node: AnyType) -> Optional[MatchResult]:
-        print("PARAM", self.name, self.pattern)
         result = self.pattern.match(node)
         if result is None:
             return None

@@ -125,7 +125,7 @@ def binary_condition(
 
 binary_condition_patterns = {
     op: FunctionCallPattern(None, String(op), (AnyExpression(), AnyExpression()))
-    for op, _ in FUNCTION_TO_OPERATOR
+    for op in FUNCTION_TO_OPERATOR
 }
 
 
@@ -144,7 +144,7 @@ def unary_condition(
 
 unary_condition_patterns = {
     op: FunctionCallPattern(None, String(op), (AnyExpression(),))
-    for op, _ in FUNCTION_TO_OPERATOR
+    for op in FUNCTION_TO_OPERATOR
 }
 
 

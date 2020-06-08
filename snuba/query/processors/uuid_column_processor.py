@@ -44,6 +44,7 @@ class UUIDColumnProcessor(QueryProcessor):
                     ),
                 ),
             ),
+            with_optionals=True,
         )
 
     def uuid_column_pattern(self, suffix: str = "") -> Param:
@@ -120,6 +121,7 @@ class UUIDColumnProcessor(QueryProcessor):
             return binary_condition(exp.alias, exp.function_name, *new_params)
 
         result = self.uuid_condition.match(exp)
+        print("UUID MATCH", result)
         if result:
             new_params = []
             for suffix in ["_0", "_1"]:
