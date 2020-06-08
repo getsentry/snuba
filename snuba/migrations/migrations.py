@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 from enum import Enum
 from importlib import import_module
-from typing import Optional, Sequence, Tuple
+from typing import NamedTuple, Optional, Sequence
 
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster, CLUSTERS
 from snuba.clusters.storage_sets import StorageSetKey
@@ -30,9 +30,14 @@ class Status(Enum):
     COMPLETED = "completed"
 
 
+class Dependency(NamedTuple):
+    app: App
+    migration_id: str
+
+
 class Migration:
     is_dangerous: bool
-    dependencies: Optional[Sequence[Tuple[str, str]]]
+    dependencies: Optional[Sequence[Dependency]]
 
     def forwards_local(self) -> Sequence[Operation]:
         raise NotImplementedError
@@ -47,7 +52,7 @@ class Migration:
         raise NotImplementedError
 
 
-class Manager:
+class Runner:
     def run_migration(self, app: App, migration_id: str) -> None:
         """
         Run a single migration given its ID.

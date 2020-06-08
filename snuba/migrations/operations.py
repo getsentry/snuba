@@ -11,6 +11,11 @@ class Operation:
         self.storage_set = storage_set
 
     def execute(self) -> None:
+        raise NotImplementedError
+
+
+class SqlOperation(Operation):
+    def execute(self) -> None:
         cluster = get_cluster(self.storage_set)
 
         for node in cluster.get_local_nodes():
@@ -23,7 +28,7 @@ class Operation:
         raise NotImplementedError
 
 
-class RunSql(Operation):
+class RunSql(SqlOperation):
     def __init__(self, storage_set: StorageSetKey, statement: str) -> None:
         self.statement = statement
         super().__init__(storage_set)
@@ -32,7 +37,7 @@ class RunSql(Operation):
         return self.statement
 
 
-class DropTable(Operation):
+class DropTable(SqlOperation):
     def __init__(self, storage_set: StorageSetKey, table_name: str) -> None:
         self.table_name = table_name
         super().__init__(storage_set)
