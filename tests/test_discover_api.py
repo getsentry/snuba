@@ -403,7 +403,7 @@ class TestDiscoverApi(BaseApiTest):
                     "project": self.project_id,
                     "selected_columns": ["contexts[device.charging]"],
                     "aggregations": [["count()", "", "count"]],
-                    "conditions": [["type", "=", "transaction"],],
+                    "conditions": [["type", "=", "transaction"]],
                     "groupby": ["contexts[device.charging]"],
                     "limit": 1000,
                 }
@@ -422,7 +422,7 @@ class TestDiscoverApi(BaseApiTest):
                     "project": self.project_id,
                     "selected_columns": ["contexts[device.charging]"],
                     "aggregations": [["count()", "", "count"]],
-                    "conditions": [["type", "=", "error"],],
+                    "conditions": [["type", "=", "error"]],
                     "groupby": ["contexts[device.charging]"],
                     "limit": 1000,
                 }

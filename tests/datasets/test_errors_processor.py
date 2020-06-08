@@ -68,7 +68,7 @@ def test_error_processor() -> None:
                     ],
                     "data": "",
                     "method": "POST",
-                    "env": {"SERVER_PORT": "1010", "SERVER_NAME": "snuba",},
+                    "env": {"SERVER_PORT": "1010", "SERVER_NAME": "snuba"},
                 },
                 "_relay_processed": True,
                 "breadcrumbs": {

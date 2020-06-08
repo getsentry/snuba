@@ -1,12 +1,15 @@
+from typing import Any, MutableMapping
+
 import pytest
 
-from snuba import state
 from snuba.clickhouse.dictquery import DictSqlQuery
 from snuba.datasets.factory import get_dataset
 from snuba.query.parser import parse_query
+from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
+    ArrayJoinKeyValueOptimizer,
+)
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
-
 
 test_data = [
     (
@@ -162,8 +165,11 @@ test_data = [
 
 
 @pytest.mark.parametrize("query_body, expected_query", test_data)
-def test_tags_processor(query_body, expected_query) -> None:
-    state.set_config("ast_tag_processor_enabled", 1)
+def test_tags_processor(
+    query_body: MutableMapping[str, Any], expected_query: str
+) -> None:
+    # TODO: build a reusable framework to trigger the the query
+    # processing pipeline for a dataset.
     dataset = get_dataset("transactions")
     query = parse_query(query_body, dataset)
     request_settings = HTTPRequestSettings()
@@ -171,6 +177,7 @@ def test_tags_processor(query_body, expected_query) -> None:
     for p in dataset.get_query_processors():
         p.process_query(query, request_settings)
     plan = dataset.get_query_plan_builder().build_plan(request)
+    ArrayJoinKeyValueOptimizer("tags").process_query(plan.query, request.settings)
 
     assert (
         DictSqlQuery(dataset, plan.query, request_settings).format_sql()
