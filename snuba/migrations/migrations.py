@@ -92,7 +92,6 @@ class Runner:
                 "migration_id": migration_id,
                 "timestamp": datetime.now(),
                 "status": Status.COMPLETED.value,
-                "consumer_offsets": "",
             }
         ]
         connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
