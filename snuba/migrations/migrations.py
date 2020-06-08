@@ -37,6 +37,11 @@ class Dependency(NamedTuple):
 
 
 class Migration(ABC):
+    # Set is_dangerous to True when a migration cannot be immediately completed,
+    # such as when it contains a data migration operation or some other manual
+    # step is required.
+    # Migrations marked as dangerous are considered blocking. Subsequent versions
+    # should not be run until the dangerous migration is completed.
     is_dangerous: bool
     dependencies: Optional[Sequence[Dependency]]
 
@@ -60,8 +65,7 @@ class Migration(ABC):
 class Runner:
     def run_migration(self, app: App, migration_id: str) -> None:
         """
-        Run a single migration given its ID.
-        Updates the migration in the table
+        Run a single migration given its ID and marks the migration as complete.
         """
         assert all(
             cluster.is_single_node() for cluster in CLUSTERS

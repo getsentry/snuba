@@ -1,8 +1,10 @@
+from abc import ABC, abstractmethod
+
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 
 
-class Operation:
+class Operation(ABC):
     """
     Executed on all the nodes of the cluster.
     """
@@ -10,11 +12,12 @@ class Operation:
     def __init__(self, storage_set: StorageSetKey):
         self.storage_set = storage_set
 
+    @abstractmethod
     def execute(self) -> None:
         raise NotImplementedError
 
 
-class SqlOperation(Operation):
+class SqlOperation(Operation, ABC):
     def execute(self) -> None:
         cluster = get_cluster(self.storage_set)
 
@@ -24,6 +27,7 @@ class SqlOperation(Operation):
             )
             connection.execute(self.format_sql())
 
+    @abstractmethod
     def format_sql(self) -> str:
         raise NotImplementedError
 
