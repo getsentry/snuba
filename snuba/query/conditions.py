@@ -61,17 +61,6 @@ def __set_condition(
     return binary_condition(alias, function, lhs, literals_tuple(None, rhs))
 
 
-def __is_set_condition(exp: Expression, operator: str) -> bool:
-    if is_binary_condition(exp, operator):
-        assert isinstance(exp, FunctionCall)
-        return (
-            isinstance(exp.parameters[1], FunctionCall)
-            and exp.parameters[1].function_name == "tuple"
-            and all(isinstance(c, Literal) for c in exp.parameters[1].parameters)
-        )
-    return False
-
-
 def __set_condition_pattern(
     lhs: Pattern[Expression], operator: str
 ) -> FunctionCallPattern:
@@ -83,6 +72,21 @@ def __set_condition_pattern(
             Param("tuple", FunctionCallPattern(None, String("tuple"), None)),
         ),
     )
+
+
+set_condition_pattern = {
+    op: __set_condition_pattern(AnyExpression(), op) for op in FUNCTION_TO_OPERATOR
+}
+
+
+def __is_set_condition(exp: Expression, operator: str) -> bool:
+    if is_binary_condition(exp, operator):
+        if operator in set_condition_pattern:
+            if set_condition_pattern[operator].match(exp) is not None:
+                # TODO(evanh) Not sure how to test this using the current matcher syntax
+                return all(isinstance(c, Literal) for c in exp.parameters[1].parameters)
+
+    return False
 
 
 def in_condition(
@@ -119,12 +123,17 @@ def binary_condition(
     return FunctionCall(alias, function_name, (lhs, rhs))
 
 
+binary_condition_patterns = {
+    op: FunctionCallPattern(None, String(op), (AnyExpression(), AnyExpression()))
+    for op, _ in FUNCTION_TO_OPERATOR
+}
+
+
 def is_binary_condition(exp: Expression, operator: str) -> bool:
-    return (
-        isinstance(exp, FunctionCall)
-        and exp.function_name == operator
-        and len(exp.parameters) == 2
-    )
+    if operator in binary_condition_patterns:
+        return binary_condition_patterns[operator].match(operator) is not None
+
+    return False
 
 
 def unary_condition(
@@ -133,12 +142,17 @@ def unary_condition(
     return FunctionCall(alias, function_name, (operand,))
 
 
+unary_condition_patterns = {
+    op: FunctionCallPattern(None, String(op), (AnyExpression(),))
+    for op, _ in FUNCTION_TO_OPERATOR
+}
+
+
 def is_unary_condition(exp: Expression, operator: str) -> bool:
-    return (
-        isinstance(exp, FunctionCall)
-        and exp.function_name == operator
-        and len(exp.parameters) == 1
-    )
+    if operator in unary_condition_patterns:
+        return unary_condition_patterns[operator].match(exp) is not None
+
+    return False
 
 
 def get_first_level_conditions(condition: Expression) -> Sequence[Expression]:
