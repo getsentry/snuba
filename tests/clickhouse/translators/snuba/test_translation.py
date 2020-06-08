@@ -2,10 +2,11 @@ import pytest
 
 from snuba.clickhouse.query import Expression as ClickhouseExpression
 from snuba.clickhouse.translators.snuba.mappers import (
+    ColumnToColumn,
+    ColumnToCurriedFunction,
     ColumnToFunction,
     ColumnToLiteral,
     ColumnToMapping,
-    ColumnToColumn,
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import (
@@ -49,6 +50,26 @@ def test_column_function_translation() -> None:
         "ip_address",
         "coalesce",
         (Column(None, None, "ip_address_v4"), Column(None, None, "ip_address_v6")),
+    )
+
+
+def test_column_curried_function_translation() -> None:
+    assert ColumnToCurriedFunction(
+        None,
+        "duration_quantiles",
+        FunctionCall(
+            None, "quantilesIfMerge", (Literal(None, 0.5), Literal(None, 0.9),)
+        ),
+        (Column(None, None, "duration_quantiles"),),
+    ).attempt_map(
+        Column(None, None, "duration_quantiles"),
+        SnubaClickhouseMappingTranslator(TranslationMappers()),
+    ) == CurriedFunctionCall(
+        "duration_quantiles",
+        FunctionCall(
+            None, "quantilesIfMerge", (Literal(None, 0.5), Literal(None, 0.9),)
+        ),
+        (Column(None, None, "duration_quantiles"),),
     )
 
 
