@@ -329,6 +329,12 @@ test_conditions = [
             ),
         ),
     ),  # Test that a duplicate IN condition is deduplicated even if the lists are in different orders.
+    (
+        [["group_id", "IS NULL", None]],
+        FunctionCall(
+            None, ConditionFunctions.IS_NULL, (Column(None, None, "group_id"),),
+        ),
+    ),  # Unary condition.
 ]
 
 
