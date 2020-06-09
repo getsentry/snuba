@@ -1,15 +1,12 @@
 import logging
 
-from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
-from importlib import import_module
-from typing import NamedTuple, Optional, Sequence
 
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster, CLUSTERS
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations.operations import Operation
-
+from snuba.migrations.migration import App
+from snuba.migrations.apps import get_app
 
 logger = logging.getLogger("snuba.migrations")
 
@@ -20,46 +17,10 @@ DIST_TABLE_NAME = "migrations_dist"
 TABLE_NAME = LOCAL_TABLE_NAME
 
 
-class App(Enum):
-    SYSTEM = "system"
-    SNUBA = "snuba"
-
-
 class Status(Enum):
     NOT_STARTED = "not_started"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
-
-
-class Dependency(NamedTuple):
-    app: App
-    migration_id: str
-
-
-class Migration(ABC):
-    # Set is_dangerous to True when a migration cannot be immediately completed,
-    # such as when it contains a data migration operation or some other manual
-    # step is required.
-    # Migrations marked as dangerous are considered blocking. Subsequent versions
-    # should not be run until the dangerous migration is completed.
-    is_dangerous: bool
-    dependencies: Optional[Sequence[Dependency]]
-
-    @abstractmethod
-    def forwards_local(self) -> Sequence[Operation]:
-        raise NotImplementedError
-
-    @abstractmethod
-    def backwards_local(self) -> Sequence[Operation]:
-        raise NotImplementedError
-
-    # @abstractmethod
-    def forwards_dist(self) -> Sequence[Operation]:
-        raise NotImplementedError
-
-    # @abstractmethod
-    def backwards_dist(self) -> Sequence[Operation]:
-        raise NotImplementedError
 
 
 class Runner:
@@ -73,7 +34,8 @@ class Runner:
 
         logger.info(f"Running migration: {app} {migration_id}")
 
-        migration = self._load_migration(app, migration_id)
+        migration = get_app(app).load_migration(migration_id)
+
         operations = migration.forwards_local()
         for op in operations:
             op.execute()
@@ -83,10 +45,6 @@ class Runner:
         self._mark_completed(app, migration_id)
 
         logger.info(f"Finished: {app} {migration_id}")
-
-    def _load_migration(self, app: App, migration_id: str) -> Migration:
-        module = import_module(f"snuba.migrations.{app.value}.{migration_id}")
-        return module.Migration()  # type: ignore
 
     def _mark_completed(self, app: App, migration_id: str) -> None:
         statement = f"INSERT INTO {TABLE_NAME} FORMAT JSONEachRow"

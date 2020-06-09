@@ -1,10 +1,10 @@
 from typing import Sequence
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations import migrations
+from snuba.migrations import migration
 from snuba.migrations import operations
 
 
-class Migration(migrations.Migration):
+class Migration(migration.Migration):
     is_dangerous = False
     dependencies = None
 
