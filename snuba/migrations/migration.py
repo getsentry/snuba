@@ -63,9 +63,9 @@ class Migration(ABC):
         raise NotImplementedError
 
     # @abstractmethod
-    def forwards_dist(self) -> Sequence[Operation]:
-        raise NotImplementedError
+    # def forwards_dist(self) -> Sequence[Operation]:
+    #     raise NotImplementedError
 
     # @abstractmethod
-    def backwards_dist(self) -> Sequence[Operation]:
-        raise NotImplementedError
+    # def backwards_dist(self) -> Sequence[Operation]:
+    #     raise NotImplementedError
