@@ -6,7 +6,7 @@ from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
 )
-from snuba.query.dsl import div, multiply, plus, minus, countIf, count
+from snuba.query.dsl import divide, multiply, plus, minus, countIf, count
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.impact_processor import ImpactProcessor
@@ -38,7 +38,7 @@ def test_impact_format_expressions() -> None:
             plus(
                 minus(
                     Literal(None, 1),
-                    div(
+                    divide(
                         plus(
                             countIf(
                                 binary_condition(
@@ -48,7 +48,7 @@ def test_impact_format_expressions() -> None:
                                     Literal(None, 300),
                                 ),
                             ),
-                            div(
+                            divide(
                                 countIf(
                                     binary_condition(
                                         None,
@@ -78,7 +78,7 @@ def test_impact_format_expressions() -> None:
                 multiply(
                     minus(
                         Literal(None, 1),
-                        div(
+                        divide(
                             Literal(None, 1),
                             FunctionCall(
                                 None,
@@ -113,8 +113,8 @@ def test_impact_format_expressions() -> None:
         ClickhouseExpressionFormatter()
     )
     assert ret == (
-        "plus(minus(1, div(plus(countIf(lessOrEquals(column1, 300)), "
-        "div(countIf(and(greater(column1, 300), lessOrEquals(column1, "
+        "plus(minus(1, divide(plus(countIf(lessOrEquals(column1, 300)), "
+        "divide(countIf(and(greater(column1, 300), lessOrEquals(column1, "
         "multiply(300, 4)))), 2)), count())), "
-        "multiply(minus(1, div(1, sqrt(user, uniq(user)))), 3))"
+        "multiply(minus(1, divide(1, sqrt(user, uniq(user)))), 3))"
     )
