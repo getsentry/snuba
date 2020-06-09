@@ -328,7 +328,7 @@ test_conditions = [
                 ),
             ),
         ),
-    ),  # Test that a duplicate IN condition is deduplicated even if the lists are in different orders.
+    ),  # Test that a duplicate IN condition is de-duplicated even if the lists are in different orders.
     (
         [["group_id", "IS NULL", None]],
         FunctionCall(
@@ -342,3 +342,14 @@ test_conditions = [
 def test_conditions_expr(conditions: Sequence[Any], expected: Expression) -> None:
     dataset = get_dataset("events")
     assert parse_conditions_to_expr(conditions, dataset, None) == expected
+
+
+def test_invalid_conditions() -> None:
+    dataset = get_dataset("events")
+    is_null = [["group_id", "IS NULL", "I am not valid"]]
+    with pytest.raises(Exception):
+        parse_conditions_to_expr(is_null, dataset, None)
+
+    binary = [["group_id", "=", None]]
+    with pytest.raises(Exception):
+        parse_conditions_to_expr(binary, dataset, None)
