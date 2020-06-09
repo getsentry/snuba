@@ -19,4 +19,4 @@ def pytest_configure() -> None:
 
     database_name = cluster["database"]
     connection.execute(f"DROP DATABASE IF EXISTS {database_name};")
-    connection.execute(f"CREATE DATABASE IF NOT EXISTS {database_name};")
+    connection.execute(f"CREATE DATABASE {database_name};")

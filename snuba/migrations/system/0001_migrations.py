@@ -15,8 +15,8 @@ class Migration(migration.Migration):
                 statement="""\
                     CREATE TABLE IF NOT EXISTS migrations_local (app String,
                     migration_id String, timestamp DateTime, status Enum('completed' = 0,
-                    'in_progress' = 1))
-                    ENGINE = ReplacingMergeTree() ORDER BY (app, migration_id);
+                    'in_progress' = 1)) ENGINE = ReplacingMergeTree(timestamp)
+                    ORDER BY (app, migration_id);
                 """,
             ),
         ]
