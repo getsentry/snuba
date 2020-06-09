@@ -1,4 +1,4 @@
-from snuba.query.dsl import div, minus, multiply, plus
+from snuba.query.dsl import divide, minus, multiply, plus
 from snuba.query.expressions import (
     Expression,
     FunctionCall,
@@ -30,7 +30,7 @@ class ImpactProcessor(QueryProcessor):
                     multiply(
                         minus(
                             Literal(None, 1),
-                            div(
+                            divide(
                                 Literal(None, 1),
                                 FunctionCall(
                                     None,

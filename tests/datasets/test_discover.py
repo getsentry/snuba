@@ -19,22 +19,19 @@ def get_dataset_source(dataset_name):
 
 
 test_data = [
-    ({"conditions": [["type", "=", "transaction"]]}, "test_transactions_local",),
-    ({"conditions": [["type", "!=", "transaction"]]}, "test_sentry_local",),
-    ({"conditions": []}, "test_sentry_local",),
-    ({"conditions": [["duration", "=", 0]]}, "test_transactions_local",),
+    ({"conditions": [["type", "=", "transaction"]]}, "transactions_local",),
+    ({"conditions": [["type", "!=", "transaction"]]}, "sentry_local",),
+    ({"conditions": []}, "sentry_local",),
+    ({"conditions": [["duration", "=", 0]]}, "transactions_local",),
     (
         {"conditions": [["event_id", "=", "asdasdasd"], ["duration", "=", 0]]},
-        "test_transactions_local",
+        "transactions_local",
     ),
     # No conditions, other referenced columns
-    ({"selected_columns": ["group_id"]}, "test_sentry_local"),
-    ({"selected_columns": ["trace_id"]}, "test_transactions_local"),
-    ({"selected_columns": ["group_id", "trace_id"]}, "test_sentry_local"),
-    (
-        {"aggregations": [["max", "duration", "max_duration"]]},
-        "test_transactions_local",
-    ),
+    ({"selected_columns": ["group_id"]}, "sentry_local"),
+    ({"selected_columns": ["trace_id"]}, "transactions_local"),
+    ({"selected_columns": ["group_id", "trace_id"]}, "sentry_local"),
+    ({"aggregations": [["max", "duration", "max_duration"]]}, "transactions_local",),
 ]
 
 
