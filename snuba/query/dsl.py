@@ -38,8 +38,10 @@ def multiply(
     return FunctionCall(alias, "multiply", (lhs, rhs))
 
 
-def div(lhs: Expression, rhs: Expression, alias: Optional[str] = None) -> FunctionCall:
-    return FunctionCall(alias, "div", (lhs, rhs))
+def divide(
+    lhs: Expression, rhs: Expression, alias: Optional[str] = None
+) -> FunctionCall:
+    return FunctionCall(alias, "divide", (lhs, rhs))
 
 
 # aggregate functions

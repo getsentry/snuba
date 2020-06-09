@@ -5,7 +5,7 @@ from snuba.query.conditions import (
     binary_condition,
     ConditionFunctions,
 )
-from snuba.query.dsl import count, countIf, div
+from snuba.query.dsl import count, countIf, divide
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.failure_rate_processor import FailureRateProcessor
@@ -26,7 +26,7 @@ def test_failure_rate_format_expressions() -> None:
         TableSource("events", ColumnSet([])),
         selected_columns=[
             Column(None, None, "column2"),
-            div(
+            divide(
                 countIf(
                     FunctionCall(
                         None,
@@ -63,5 +63,5 @@ def test_failure_rate_format_expressions() -> None:
         ClickhouseExpressionFormatter()
     )
     assert ret == (
-        "(div(countIf(and(notEquals(transaction_status, 0), notEquals(transaction_status, 2))), count()) AS perf)"
+        "(divide(countIf(and(notEquals(transaction_status, 0), notEquals(transaction_status, 2))), count()) AS perf)"
     )
