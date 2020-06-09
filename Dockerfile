@@ -5,10 +5,6 @@ RUN groupadd -r snuba && useradd -r -g snuba snuba
 RUN mkdir -p /usr/src/snuba
 WORKDIR /usr/src/snuba
 
-ENV PIP_NO_CACHE_DIR=off \
-    PIP_DISABLE_PIP_VERSION_CHECK=on \
-    PYTHONDONTWRITEBYTECODE=1
-
 # these are required all the way through, and removing them will cause bad things
 RUN set -ex; \
     apt-get update; \
@@ -21,56 +17,37 @@ RUN set -ex; \
     rm -rf /var/lib/apt/lists/*
 
 # grab gosu for easy step-down from root
-ENV GOSU_VERSION=1.11
-RUN set -ex; \
-    \
-    LIBRDKAFKA_VERSION=0.11.5; \
-    buildDeps=' \
-        bzip2 \
+RUN set -x \
+    && export GOSU_VERSION=1.11 \
+    && fetchDeps=" \
         dirmngr \
-        git \
-        g++ \
-        gcc \
-        libc6-dev \
-        liblz4-dev \
-        libpcre3-dev \
         gnupg \
-        make \
         wget \
-    '; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends multiarch-support libtinfo5 libexpat1 libffi6 liblz4-1 libpcre3 $buildDeps; \
-    rm -rf /var/lib/apt/lists/*; \
-    \
-    wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture)"; \
-    wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture).asc"; \
-    export GNUPGHOME="$(mktemp -d)"; \
-    for key in \
+    " \
+    && apt-get update && apt-get install -y --no-install-recommends $fetchDeps && rm -rf /var/lib/apt/lists/* \
+    && wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture)" \
+    && wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture).asc" \
+    && export GNUPGHOME="$(mktemp -d)" \
+    && for key in \
       B42F6819007F00F88E364FD4036A9C25BF357DD4 \
     ; do \
       gpg --batch --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys "$key" || \
       gpg --batch --keyserver hkp://ipv4.pool.sks-keyservers.net --recv-keys "$key" || \
       gpg --batch --keyserver hkp://pgp.mit.edu:80 --recv-keys "$key" ; \
-    done; \
-    gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu; \
-    rm -rf "$GNUPGHOME" /usr/local/bin/gosu.asc; \
-    chmod +x /usr/local/bin/gosu; \
-    gosu nobody true; \
-    \
-    mkdir -p /usr/src/librdkafka; \
-    cd /usr/src/librdkafka; \
-    wget -O v${LIBRDKAFKA_VERSION}.tar.gz https://github.com/edenhill/librdkafka/archive/v${LIBRDKAFKA_VERSION}.tar.gz; \
-    tar xf v${LIBRDKAFKA_VERSION}.tar.gz --strip-components=1; \
-    ./configure --prefix=/usr; \
-    make; \
-    PREFIX=/usr make install; \
-    rm -r /usr/src/librdkafka; \
-    \
-    apt-get purge -y --auto-remove $buildDeps
+    done \
+    && gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu \
+    && gpgconf --kill all \
+    && rm -r "$GNUPGHOME" /usr/local/bin/gosu.asc \
+    && chmod +x /usr/local/bin/gosu \
+    && gosu nobody true \
+    && apt-get purge -y --auto-remove $fetchDeps
 
 COPY . /usr/src/snuba
 
 RUN chown -R snuba:snuba /usr/src/snuba/
+
+ENV PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on
 
 RUN set -ex; \
     \
@@ -103,11 +80,11 @@ ARG SNUBA_VERSION_SHA
 ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA \
     FLASK_DEBUG=0 \
     PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
     UWSGI_ENABLE_METRICS=true \
     UWSGI_NEED_PLUGIN=/var/lib/uwsgi/dogstatsd \
     UWSGI_STATS_PUSH=dogstatsd:127.0.0.1:8126 \
     UWSGI_DOGSTATSD_EXTRA_TAGS=service:snuba
-
 
 EXPOSE 1218
 
