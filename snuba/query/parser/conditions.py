@@ -11,7 +11,7 @@ from snuba.query.conditions import (
 )
 from snuba.query.expressions import Argument, Expression, FunctionCall, Lambda, Literal
 from snuba.query.parser.expressions import parse_expression
-from snuba.query.schema import POSITIVE_OPERATORS
+from snuba.query.schema import POSITIVE_OPERATORS, UNARY_OPERATORS
 from snuba.util import is_condition
 
 TExpression = TypeVar("TExpression")
@@ -179,12 +179,19 @@ def parse_conditions_to_expr(
         )
 
     def simple_condition_builder(lhs: Expression, op: str, literal: Any) -> Expression:
-        if literal is not None:
+        if op in UNARY_OPERATORS:
+            assert (
+                literal is None
+            ), f"Right hand side operand {literal} provided to unary operator {op}"
+            return unary_condition(None, OPERATOR_TO_FUNCTION[op], lhs)
+
+        else:
+            assert (
+                literal is not None
+            ), f"Missing right hand side operand for binary operator {op}"
             return binary_condition(
                 None, OPERATOR_TO_FUNCTION[op], lhs, preprocess_literal(op, literal)
             )
-        else:
-            return unary_condition(None, OPERATOR_TO_FUNCTION[op], lhs)
 
     return parse_conditions(
         parse_expression,
