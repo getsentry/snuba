@@ -13,20 +13,20 @@ test_data = [
         ["t1.t1c1", "t2.t2c2"],
         [["t1.t2c2", "=", "a"]],
         [],
-        "test_table1 t1 INNER JOIN test_table2 t2 ON t1.t1c1 = t2.t2c2 AND t1.t1c3 = t2.t2c4",
+        "table1 t1 INNER JOIN table2 t2 ON t1.t1c1 = t2.t2c2 AND t1.t1c3 = t2.t2c4",
     ),
-    (["t1.t1c1"], [["t1.t1c2", "=", "a"]], [], "test_table1 t1"),
+    (["t1.t1c1"], [["t1.t1c2", "=", "a"]], [], "table1 t1"),
     (
         ["t1.t1c1"],
         [["t2.t1c1", "=", "a"]],
         [],
-        "test_table1 t1 INNER JOIN test_table2 t2 ON t1.t1c1 = t2.t2c2 AND t1.t1c3 = t2.t2c4",
+        "table1 t1 INNER JOIN table2 t2 ON t1.t1c1 = t2.t2c2 AND t1.t1c3 = t2.t2c4",
     ),
     (
         ["t1.t1c1"],
         [],
         ["t2.t2c2"],
-        "test_table1 t1 INNER JOIN test_table2 t2 ON t1.t1c1 = t2.t2c2 AND t1.t1c3 = t2.t2c4",
+        "table1 t1 INNER JOIN table2 t2 ON t1.t1c1 = t2.t2c2 AND t1.t1c3 = t2.t2c4",
     ),
 ]
 
