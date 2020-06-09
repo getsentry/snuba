@@ -123,15 +123,20 @@ def binary_condition(
     return FunctionCall(alias, function_name, (lhs, rhs))
 
 
+binary_operators = [opr for opr in FUNCTION_TO_OPERATOR] + [
+    BooleanFunctions.AND,
+    BooleanFunctions.OR,
+    BooleanFunctions.NOT,
+]
 binary_condition_patterns = {
     op: FunctionCallPattern(None, String(op), (AnyExpression(), AnyExpression()))
-    for op in FUNCTION_TO_OPERATOR
+    for op in binary_operators
 }
 
 
 def is_binary_condition(exp: Expression, operator: str) -> bool:
     if operator in binary_condition_patterns:
-        return binary_condition_patterns[operator].match(operator) is not None
+        return binary_condition_patterns[operator].match(exp) is not None
 
     return False
 
