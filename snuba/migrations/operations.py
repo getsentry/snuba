@@ -9,15 +9,15 @@ class Operation(ABC):
     Executed on all the nodes of the cluster.
     """
 
-    def __init__(self, storage_set: StorageSetKey):
-        self.storage_set = storage_set
-
     @abstractmethod
     def execute(self) -> None:
         raise NotImplementedError
 
 
 class SqlOperation(Operation, ABC):
+    def __init__(self, storage_set: StorageSetKey):
+        self.storage_set = storage_set
+
     def execute(self) -> None:
         cluster = get_cluster(self.storage_set)
 
