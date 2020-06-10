@@ -121,7 +121,6 @@ class UUIDColumnProcessor(QueryProcessor):
             return binary_condition(exp.alias, exp.function_name, *new_params)
 
         result = self.uuid_condition.match(exp)
-        print("UUID MATCH", result)
         if result:
             new_params = []
             for suffix in ["_0", "_1"]:
@@ -144,7 +143,15 @@ class UUIDColumnProcessor(QueryProcessor):
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         condition = query.get_condition_from_ast()
-        query.set_ast_condition(None)
-        for cond in condition:
-            if is_condition(cond):
-                query.add_condition_to_ast(self.process_condition(cond))
+        if condition:
+            query.set_ast_condition(None)
+            for cond in condition:
+                if is_condition(cond):
+                    query.add_condition_to_ast(self.process_condition(cond))
+
+        prewhere = query.get_prewhere_ast()
+        if prewhere:
+            query.set_prewhere_ast_condition(None)
+            for cond in prewhere:
+                if is_condition(cond):
+                    query.add_prewhere_condition_to_ast(self.process_condition(cond))

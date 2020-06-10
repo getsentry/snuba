@@ -39,6 +39,7 @@ tests = [
             ),
         ),
         "(equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459') AS mightaswell)",
+        None,
     ),
     (
         Query(
@@ -64,6 +65,7 @@ tests = [
             ),
         ),
         "(equals(notauuid, 'a7d67cf796774551a95be6543cacd459') AS mightaswell)",
+        None,
     ),
     (
         Query(
@@ -89,6 +91,7 @@ tests = [
             ),
         ),
         "(equals('a7d67cf7-9677-4551-a95b-e6543cacd459', column1) AS mightaswell)",
+        None,
     ),
     (
         Query(
@@ -132,6 +135,7 @@ tests = [
             ),
         ),
         "(in(column1, tuple('a7d67cf7-9677-4551-a95b-e6543cacd459', 'a7d67cf7-9677-4551-a95b-e6543cacd45a')) AS mightaswell)",
+        None,
     ),
     (
         Query(
@@ -167,6 +171,7 @@ tests = [
             ),
         ),
         "(equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459') AS mightaswell)",
+        None,
     ),
     (
         Query(
@@ -212,12 +217,65 @@ tests = [
             ),
         ),
         "(equals(replaceAll(toString(notauuid), '-', ''), 'a7d67cf796774551a95be6543cacd459') AS mightaswell)",
+        None,
+    ),
+    (
+        Query(
+            {},
+            TableSource("transactions", ColumnSet([])),
+            selected_columns=[Column(None, None, "column2")],
+            condition=binary_condition(
+                "mightaswell",
+                ConditionFunctions.EQ,
+                Column(None, None, "column1"),
+                Literal(None, "a7d67cf796774551a95be6543cacd459"),
+            ),
+            prewhere=binary_condition(
+                "butfirst",
+                ConditionFunctions.EQ,
+                FunctionCall(
+                    None,
+                    "replaceAll",
+                    (
+                        FunctionCall(
+                            None, "toString", (Column(None, None, "column2"),),
+                        ),
+                        Literal(None, "-"),
+                        Literal(None, ""),
+                    ),
+                ),
+                Literal(None, "a7d67cf796774551a95be6543cacd460"),
+            ),
+        ),
+        Query(
+            {},
+            TableSource("transactions", ColumnSet([])),
+            selected_columns=[Column(None, None, "column2")],
+            condition=binary_condition(
+                "mightaswell",
+                ConditionFunctions.EQ,
+                Column(None, None, "column1"),
+                Literal(None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd459"))),
+            ),
+            prewhere=binary_condition(
+                "butfirst",
+                ConditionFunctions.EQ,
+                Column(None, None, "column2"),
+                Literal(None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd460"))),
+            ),
+        ),
+        "(equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459') AS mightaswell)",
+        "(equals(column2, 'a7d67cf7-9677-4551-a95b-e6543cacd460') AS butfirst)",
     ),
 ]
 
 
-@pytest.mark.parametrize("unprocessed, expected, formatted_value", tests)
-def test_uuid_column_processor(unprocessed, expected, formatted_value) -> None:
+@pytest.mark.parametrize(
+    "unprocessed, expected, formatted_value, prewhere_formatted_value", tests
+)
+def test_uuid_column_processor(
+    unprocessed, expected, formatted_value, prewhere_formatted_value
+) -> None:
     UUIDColumnProcessor(["column1", "column2"]).process_query(
         unprocessed, HTTPRequestSettings()
     )
@@ -225,3 +283,7 @@ def test_uuid_column_processor(unprocessed, expected, formatted_value) -> None:
 
     ret = unprocessed.get_condition_from_ast().accept(ClickhouseExpressionFormatter())
     assert ret == formatted_value
+
+    if prewhere_formatted_value:
+        ret = unprocessed.get_prewhere_ast().accept(ClickhouseExpressionFormatter())
+        assert ret == prewhere_formatted_value

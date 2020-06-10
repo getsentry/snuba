@@ -254,6 +254,14 @@ class Query:
     def set_prewhere_ast_condition(self, condition: Optional[Expression]) -> None:
         self.__prewhere = condition
 
+    def add_prewhere_condition_to_ast(self, condition: Expression) -> None:
+        if not self.__prewhere:
+            self.__prewhere = condition
+        else:
+            self.__prewhere = binary_condition(
+                None, BooleanFunctions.AND, condition, self.__prewhere
+            )
+
     def set_prewhere(self, conditions: Sequence[Condition]) -> None:
         """
         Temporary method until pre where management is moved to Clickhouse query
