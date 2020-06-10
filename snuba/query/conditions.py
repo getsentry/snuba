@@ -128,6 +128,8 @@ binary_operators = [opr for opr in FUNCTION_TO_OPERATOR] + [
     BooleanFunctions.OR,
     BooleanFunctions.NOT,
 ]
+
+
 binary_condition_patterns = {
     op: FunctionCallPattern(None, String(op), (AnyExpression(), AnyExpression()))
     for op in binary_operators

@@ -1,13 +1,13 @@
 from typing import List
 import uuid
 
-from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.conditions import (
     binary_condition,
     ConditionFunctions,
     FUNCTION_TO_OPERATOR,
     is_condition,
 )
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.matchers import (
     AnyOptionalString,
@@ -98,9 +98,9 @@ class UUIDColumnProcessor(QueryProcessor):
 
     def process_condition(self, exp: Expression) -> Expression:
         result = self.uuid_in_condition.match(exp)
-        if result:
+        if result is not None:
             new_params = []
-            if result.optional_expression("formatted_uuid_column") is not None:
+            if result.contains("formatted_uuid_column"):
                 alias = result.string("format_alias")
                 column = result.expression("formatted_uuid_column")
                 new_params.append(Column(alias, column.table_name, column.column_name,))
@@ -121,17 +121,19 @@ class UUIDColumnProcessor(QueryProcessor):
             return binary_condition(exp.alias, exp.function_name, *new_params)
 
         result = self.uuid_condition.match(exp)
-        if result:
+        if result is not None:
             new_params = []
             for suffix in ["_0", "_1"]:
-                if result.optional_expression("literal" + suffix):
+                if result.contains("literal" + suffix):
                     new_params.append(
                         self.parse_uuid(result.expression("literal" + suffix))
                     )
-                elif result.optional_expression("uuid_column" + suffix):
+                elif result.contains("uuid_column" + suffix):
                     new_params.append(result.expression("uuid_column" + suffix))
-                elif result.optional_expression("formatted_uuid_column" + suffix):
-                    alias = result.optional_string("format_alias" + suffix)
+                elif result.contains("formatted_uuid_column" + suffix):
+                    alias = None
+                    if result.contains("format_alias" + suffix):
+                        alias = result.string("format_alias" + suffix)
                     column = result.expression("formatted_uuid_column" + suffix)
                     new_params.append(
                         Column(alias, column.table_name, column.column_name,)

@@ -28,6 +28,9 @@ class MatchResult:
 
     results: Mapping[str, MatchType] = field(default_factory=dict)
 
+    def contains(self, name: str) -> bool:
+        return name in self.results and self.results[name] is not None
+
     def expression(self, name: str) -> Expression:
         """
         Return an expression from the results given the name of the
@@ -38,12 +41,6 @@ class MatchResult:
         ret = self.results[name]
         assert isinstance(ret, Expression)
         return ret
-
-    def optional_expression(self, name: str) -> Optional[Expression]:
-        try:
-            return self.expression(name)
-        except Exception:
-            return None
 
     def scalar(self, name: str) -> OptionalScalarType:
         """
@@ -68,12 +65,6 @@ class MatchResult:
         assert isinstance(ret, str)
         return ret
 
-    def optional_string(self, name: str) -> Optional[str]:
-        try:
-            return self.string(name)
-        except Exception:
-            return None
-
     def integer(self, name: str) -> int:
         """
         Returns a int present in the result, guaranteeing the int is there
@@ -82,12 +73,6 @@ class MatchResult:
         ret = self.results[name]
         assert isinstance(ret, int)
         return ret
-
-    def optional_integer(self, name: str) -> Optional[int]:
-        try:
-            return self.integer(name)
-        except Exception:
-            return None
 
     # TODO: Consider adding more utility method to assert and return specific types
     # from the Results if needed.
