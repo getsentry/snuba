@@ -113,6 +113,11 @@ def abtest(value: Optional[Any]) -> Optional[Any]:
 
 
 def set_config(key: str, value: Optional[Any], user: Optional[str] = None) -> None:
+    if key in settings.CONFIG_STATE:
+        raise TypeError(
+            f"Key {key!r} has been declared in CONFIG_STATE and can't be overridden."
+        )
+
     if value is not None:
         value = "{}".format(value).encode("utf-8")
 
@@ -138,7 +143,10 @@ def set_configs(
     values: Mapping[str, Optional[Any]], user: Optional[str] = None
 ) -> None:
     for k, v in values.items():
-        set_config(k, v, user=user)
+        try:
+            set_config(k, v, user=user)
+        except TypeError:
+            pass
 
 
 def get_config(key: str, default: Optional[Any] = None) -> Optional[Any]:
@@ -161,13 +169,16 @@ def get_raw_configs() -> Mapping[str, Optional[Any]]:
     try:
         all_configs = rds.hgetall(config_hash)
         return {
-            k.decode("utf-8"): numeric(v.decode("utf-8"))
-            for k, v in all_configs.items()
-            if v is not None
+            **{
+                k.decode("utf-8"): numeric(v.decode("utf-8"))
+                for k, v in all_configs.items()
+                if v is not None
+            },
+            **settings.CONFIG_STATE,
         }
     except Exception as ex:
         logger.exception(ex)
-        return {}
+        return settings.CONFIG_STATE
 
 
 def delete_config(key: str, user: Optional[Any] = None) -> None:

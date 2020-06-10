@@ -49,6 +49,7 @@ QUERIES_TOPIC = "snuba-queries"
 
 # Runtime Config Options
 CONFIG_MEMOIZE_TIMEOUT = 10
+CONFIG_STATE = {}
 
 # Sentry Options
 SENTRY_DSN = None

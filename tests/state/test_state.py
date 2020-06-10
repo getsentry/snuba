@@ -2,6 +2,8 @@ import random
 import time
 from collections import ChainMap
 from functools import partial
+from unittest.mock import patch
+import pytest
 
 from snuba import state
 from snuba.state import safe_dumps
@@ -52,6 +54,12 @@ class TestState(BaseEventsTest):
         assert state.abtest("1000/2000:5") in (1000, 2000)
         assert state.abtest("1000/2000:0") == 1000
         assert state.abtest("1.5:1/-1.5:1") in (1.5, -1.5)
+
+    @patch("snuba.settings.CONFIG_STATE", {"foo": "bar"})
+    def test_config_local_state(self):
+        assert state.get_config("foo") == "bar"
+        with pytest.raises(TypeError):
+            state.set_config("foo", "other")
 
 
 def test_safe_dumps():
