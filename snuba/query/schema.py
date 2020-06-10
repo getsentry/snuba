@@ -13,6 +13,7 @@ CONDITION_OPERATORS = [
     "NOT LIKE",
 ]
 POSITIVE_OPERATORS = [">", "<", ">=", "<=", "=", "IN", "IS NULL", "LIKE"]
+UNARY_OPERATORS = ["IS NULL", "IS NOT NULL"]
 
 GENERIC_QUERY_SCHEMA = {
     "type": "object",

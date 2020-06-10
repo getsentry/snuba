@@ -28,6 +28,9 @@ from snuba.datasets.storages.processors.replaced_groups import (
 from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
+from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
+    ArrayJoinKeyValueOptimizer,
+)
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.readonly_events import ReadOnlyTableSelector
@@ -352,6 +355,7 @@ storage = WritableTableStorage(
                 },
             },
         ),
+        ArrayJoinKeyValueOptimizer("tags"),
         PrewhereProcessor(),
     ],
     stream_loader=KafkaStreamLoader(
