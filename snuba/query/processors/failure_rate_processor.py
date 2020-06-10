@@ -5,7 +5,7 @@ from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
 )
-from snuba.query.dsl import count, countIf, div
+from snuba.query.dsl import count, countIf, divide
 from snuba.query.expressions import (
     Column,
     Expression,
@@ -28,7 +28,7 @@ class FailureRateProcessor(QueryProcessor):
             if isinstance(exp, FunctionCall) and exp.function_name == "failure_rate":
                 assert len(exp.parameters) == 0
 
-                return div(
+                return divide(
                     countIf(
                         binary_condition(
                             None,

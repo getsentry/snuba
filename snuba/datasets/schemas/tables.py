@@ -3,7 +3,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Callable, Mapping, NamedTuple, Optional, Sequence
 
-from snuba import settings
 from snuba.clickhouse.columns import ColumnSet, ColumnType
 from snuba.clusters.cluster import get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
@@ -56,8 +55,6 @@ class TableSchema(Schema, ABC):
     a simple select and that provides DDL operations.
     """
 
-    TEST_TABLE_PREFIX = "test_"
-
     def __init__(
         self,
         columns: ColumnSet,
@@ -91,26 +88,19 @@ class TableSchema(Schema, ABC):
         """
         return self.__table_source
 
-    def _make_test_table(self, table_name: str) -> str:
-        return (
-            table_name
-            if not settings.TESTING
-            else "%s%s" % (self.TEST_TABLE_PREFIX, table_name)
-        )
-
     def get_local_table_name(self) -> str:
         """
         This returns the local table name for a distributed environment.
         It is supposed to be used in DDL commands and for maintenance.
         """
-        return self._make_test_table(self.__local_table_name)
+        return self.__local_table_name
 
     def get_table_name(self) -> str:
         """
         This represents the table we interact with to send queries to Clickhouse.
         In distributed mode this will be a distributed table. In local mode it is a local table.
         """
-        return self._make_test_table(self.__table_name)
+        return self.__table_name
 
     def get_local_drop_table_statement(self) -> DDLStatement:
         return DDLStatement(
@@ -306,10 +296,10 @@ class MaterializedViewSchema(TableSchema):
         self.__dist_destination_table_name = dist_destination_table_name
 
     def __get_local_source_table_name(self) -> str:
-        return self._make_test_table(self.__local_source_table_name)
+        return self.__local_source_table_name
 
     def __get_local_destination_table_name(self) -> str:
-        return self._make_test_table(self.__local_destination_table_name)
+        return self.__local_destination_table_name
 
     def __get_table_definition(
         self, name: str, source_table_name: str, destination_table_name: str

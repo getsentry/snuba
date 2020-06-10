@@ -6,7 +6,7 @@ from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
 )
-from snuba.query.dsl import div, multiply, plus
+from snuba.query.dsl import divide, multiply, plus
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.apdex_processor import ApdexProcessor
@@ -29,7 +29,7 @@ def test_apdex_format_expressions() -> None:
         TableSource("events", ColumnSet([])),
         selected_columns=[
             Column(None, None, "column2"),
-            div(
+            divide(
                 plus(
                     FunctionCall(
                         None,
@@ -43,7 +43,7 @@ def test_apdex_format_expressions() -> None:
                             ),
                         ),
                     ),
-                    div(
+                    divide(
                         FunctionCall(
                             None,
                             "countIf",
@@ -84,7 +84,7 @@ def test_apdex_format_expressions() -> None:
         ClickhouseExpressionFormatter()
     )
     assert ret == (
-        "div(plus(countIf(lessOrEquals(column1, 300)), "
-        "div(countIf(and(greater(column1, 300), "
+        "divide(plus(countIf(lessOrEquals(column1, 300)), "
+        "divide(countIf(and(greater(column1, 300), "
         "lessOrEquals(column1, multiply(300, 4)))), 2)), count())"
     )
