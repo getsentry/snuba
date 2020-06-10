@@ -14,6 +14,7 @@ CONDITION_OPERATORS = [
 ]
 POSITIVE_OPERATORS = [">", "<", ">=", "<=", "=", "IN", "IS NULL", "LIKE"]
 UNARY_OPERATORS = ["IS NULL", "IS NOT NULL"]
+BINARY_OPERATORS = [o for o in CONDITION_OPERATORS if o not in UNARY_OPERATORS]
 
 GENERIC_QUERY_SCHEMA = {
     "type": "object",
@@ -145,31 +146,54 @@ GENERIC_QUERY_SCHEMA = {
         # Conditions at the second level are ORed together.
         # eg: [(a, =, 1), (b, =, 2)] => "a = 1 AND b = 2"
         # eg: [(a, =, 1), [(b, =, 2), (c, =, 3)]] => "a = 1 AND (b = 2 OR c = 3)"
-        "condition": {
+        "condition_lhs": {
+            "anyOf": [
+                {"$ref": "#/definitions/column_name"},
+                {"$ref": "#/definitions/nested_expr"},
+            ],
+        },
+        "binary_condition": {
             "type": "array",
             "items": [
-                {
-                    "anyOf": [
-                        {"$ref": "#/definitions/column_name"},
-                        {"$ref": "#/definitions/nested_expr"},
-                    ],
-                },
+                {"$ref": "#/definitions/condition_lhs"},
                 {
                     # Operator
                     "type": "string",
-                    # TODO  enforce literal = NULL for unary operators
-                    "enum": CONDITION_OPERATORS,
+                    "enum": BINARY_OPERATORS,
                 },
                 {
                     # Literal
                     "anyOf": [
-                        {"type": ["string", "number", "null"]},
+                        {"type": ["string", "number"]},
                         {"type": "array", "items": {"type": ["string", "number"]}},
                     ],
                 },
             ],
             "minItems": 3,
             "maxItems": 3,
+        },
+        "unary_condition": {
+            "type": "array",
+            "items": [
+                {"$ref": "#/definitions/condition_lhs"},
+                {
+                    # Operator
+                    "type": "string",
+                    "enum": UNARY_OPERATORS,
+                },
+                {
+                    # Literal
+                    "type": "null",
+                },
+            ],
+            "minItems": 3,
+            "maxItems": 3,
+        },
+        "condition": {
+            "anyOf": [
+                {"$ref": "#/definitions/binary_condition"},
+                {"$ref": "#/definitions/unary_condition"},
+            ],
         },
     },
 }
