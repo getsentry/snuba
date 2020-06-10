@@ -3,8 +3,8 @@ from snuba.migrations.runner import Runner
 
 
 def test_run_migration() -> None:
-    manager = Runner()
-    manager.run_migration(MigrationGroup.SYSTEM, "0001_migrations")
+    runner = Runner()
+    runner.run_migration(MigrationGroup.SYSTEM, "0001_migrations")
 
     from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
     from snuba.clusters.storage_sets import StorageSetKey
