@@ -1,6 +1,6 @@
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, abstractproperty
 from enum import Enum
-from typing import NamedTuple, Optional, Sequence
+from typing import Optional, Sequence
 
 from snuba.migrations.operations import Operation
 
@@ -8,11 +8,6 @@ from snuba.migrations.operations import Operation
 class App(Enum):
     SYSTEM = "system"
     SNUBA = "snuba"
-
-
-class Dependency(NamedTuple):
-    app: App
-    migration_id: str
 
 
 class Migration(ABC):
@@ -51,8 +46,13 @@ class Migration(ABC):
     before the new version is downloaded and any subsequent migrations run.
     """
 
-    is_dangerous: bool
-    dependencies: Optional[Sequence[Dependency]]
+    @abstractproperty
+    def is_dangerous(self) -> bool:
+        raise NotImplementedError
+
+    @abstractproperty
+    def dependency(self) -> Optional[str]:
+        raise NotImplementedError
 
     @abstractmethod
     def forwards_local(self) -> Sequence[Operation]:
