@@ -15,6 +15,10 @@ from snuba.processor import (
 class OutcomesProcessor(MessageProcessor):
     def process_message(self, value, metadata=None) -> Optional[ProcessedMessage]:
         assert isinstance(value, dict)
+
+        if value.get("category") in ("transaction", "attachment", "session"):
+            return None
+
         v_uuid = value.get("event_id")
         message = {
             "org_id": value.get("org_id", 0),
