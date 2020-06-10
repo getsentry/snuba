@@ -27,7 +27,7 @@ class DirectoryLoader(GroupLoader):
     represents the migration ID.
     """
 
-    def __init__(self, module: str):
+    def __init__(self, module: str) -> None:
         self.__module = module
 
     def load_migration(self, migration_id: str) -> Migration:
