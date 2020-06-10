@@ -1,10 +1,10 @@
-from snuba.migrations import migration
+from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import Runner
 
 
 def test_run_migration() -> None:
     manager = Runner()
-    manager.run_migration(migration.App.SYSTEM, "0001_migrations")
+    manager.run_migration(MigrationGroup.SYSTEM, "0001_migrations")
 
     from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
     from snuba.clusters.storage_sets import StorageSetKey
@@ -13,5 +13,5 @@ def test_run_migration() -> None:
         ClickhouseClientSettings.MIGRATE
     )
     assert connection.execute(
-        "SELECT app, migration_id, status FROM migrations_local;"
+        "SELECT group, migration_id, status FROM migrations_local;"
     ) == [("system", "0001_migrations", "completed")]

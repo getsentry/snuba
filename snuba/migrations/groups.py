@@ -1,12 +1,18 @@
 from abc import ABC, abstractmethod
+from enum import Enum
 from importlib import import_module
 
-from snuba.migrations.migration import App, Migration
+from snuba.migrations.migration import Migration
 
 
-class AppLoader(ABC):
+class MigrationGroup(Enum):
+    SYSTEM = "system"
+    SNUBA = "snuba"
+
+
+class GroupLoader(ABC):
     """
-    Provides the list of migrations associated with an app and a loader that returns
+    Provides the list of migrations associated with an group and a loader that returns
     the requested migration.
     """
 
@@ -15,7 +21,7 @@ class AppLoader(ABC):
         raise NotImplementedError
 
 
-class DirectoryLoader(AppLoader):
+class DirectoryLoader(GroupLoader):
     """
     Loads migrations that are defined as files of a directory. The file name
     represents the migration ID.
@@ -29,11 +35,11 @@ class DirectoryLoader(AppLoader):
         return module.Migration()  # type: ignore
 
 
-_REGISTERED_APPS = {
-    App.SYSTEM: DirectoryLoader("snuba.migrations.system"),
-    App.SNUBA: DirectoryLoader("snuba.migrations.snuba"),
+_REGISTERED_GROUPS = {
+    MigrationGroup.SYSTEM: DirectoryLoader("snuba.migrations.system"),
+    MigrationGroup.SNUBA: DirectoryLoader("snuba.migrations.snuba"),
 }
 
 
-def get_app(app: App) -> AppLoader:
-    return _REGISTERED_APPS[app]
+def get_group_loader(group: MigrationGroup) -> GroupLoader:
+    return _REGISTERED_GROUPS[group]

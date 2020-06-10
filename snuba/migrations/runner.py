@@ -5,8 +5,7 @@ from enum import Enum
 
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster, CLUSTERS
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations.migration import App
-from snuba.migrations.apps import get_app
+from snuba.migrations.groups import get_group_loader, MigrationGroup
 
 logger = logging.getLogger("snuba.migrations")
 
@@ -24,7 +23,7 @@ class Status(Enum):
 
 
 class Runner:
-    def run_migration(self, app: App, migration_id: str) -> None:
+    def run_migration(self, group: MigrationGroup, migration_id: str) -> None:
         """
         Run a single migration given its ID and marks the migration as complete.
         """
@@ -32,25 +31,25 @@ class Runner:
             cluster.is_single_node() for cluster in CLUSTERS
         ), "Cannot run migrations for multi node clusters"
 
-        logger.info(f"Running migration: {app} {migration_id}")
+        logger.info(f"Running migration: {group} {migration_id}")
 
-        migration = get_app(app).load_migration(migration_id)
+        migration = get_group_loader(group).load_migration(migration_id)
 
         operations = migration.forwards_local()
         for op in operations:
             op.execute()
 
-        logger.info(f"Finished running, updating status: {app} {migration_id}")
+        logger.info(f"Finished running, updating status: {group} {migration_id}")
 
-        self._mark_completed(app, migration_id)
+        self._mark_completed(group, migration_id)
 
-        logger.info(f"Finished: {app} {migration_id}")
+        logger.info(f"Finished: {group} {migration_id}")
 
-    def _mark_completed(self, app: App, migration_id: str) -> None:
+    def _mark_completed(self, group: MigrationGroup, migration_id: str) -> None:
         statement = f"INSERT INTO {TABLE_NAME} FORMAT JSONEachRow"
         data = [
             {
-                "app": app.value,
+                "group": group.value,
                 "migration_id": migration_id,
                 "timestamp": datetime.now(),
                 "status": Status.COMPLETED.value,

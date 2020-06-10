@@ -13,9 +13,9 @@ class Migration(migration.Migration):
             operations.RunSql(
                 storage_set=StorageSetKey.MIGRATIONS,
                 statement="""\
-                    CREATE TABLE migrations_local (app String, migration_id String,
+                    CREATE TABLE migrations_local (group String, migration_id String,
                     timestamp DateTime, status Enum('completed' = 0, 'in_progress' = 1))
-                    ENGINE = ReplacingMergeTree(timestamp) ORDER BY (app, migration_id);
+                    ENGINE = ReplacingMergeTree(timestamp) ORDER BY (group, migration_id);
                 """,
             ),
         ]

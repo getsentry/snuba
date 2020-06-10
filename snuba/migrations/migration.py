@@ -1,13 +1,7 @@
 from abc import ABC, abstractmethod, abstractproperty
-from enum import Enum
 from typing import Optional, Sequence
 
 from snuba.migrations.operations import Operation
-
-
-class App(Enum):
-    SYSTEM = "system"
-    SNUBA = "snuba"
 
 
 class Migration(ABC):
