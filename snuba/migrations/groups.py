@@ -36,8 +36,8 @@ class DirectoryLoader(GroupLoader):
 
 
 _REGISTERED_GROUPS = {
-    MigrationGroup.SYSTEM: DirectoryLoader("snuba.migrations.system"),
-    MigrationGroup.SNUBA: DirectoryLoader("snuba.migrations.snuba"),
+    MigrationGroup.SYSTEM: DirectoryLoader("snuba.migrations.snuba_migrations.system"),
+    MigrationGroup.SNUBA: DirectoryLoader("snuba.migrations.snuba_migrations.snuba"),
 }
 
 
