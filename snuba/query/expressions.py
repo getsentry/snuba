@@ -78,31 +78,31 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
     """
 
     @abstractmethod
-    def visitLiteral(self, exp: Literal) -> TVisited:
+    def visit_literal(self, exp: Literal) -> TVisited:
         raise NotImplementedError
 
     @abstractmethod
-    def visitColumn(self, exp: Column) -> TVisited:
+    def visit_column(self, exp: Column) -> TVisited:
         raise NotImplementedError
 
     @abstractmethod
-    def visitSubscriptableReference(self, exp: SubscriptableReference) -> TVisited:
+    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> TVisited:
         raise NotImplementedError
 
     @abstractmethod
-    def visitFunctionCall(self, exp: FunctionCall) -> TVisited:
+    def visit_function_call(self, exp: FunctionCall) -> TVisited:
         raise NotImplementedError
 
     @abstractmethod
-    def visitCurriedFunctionCall(self, exp: CurriedFunctionCall) -> TVisited:
+    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> TVisited:
         raise NotImplementedError
 
     @abstractmethod
-    def visitArgument(self, exp: Argument) -> TVisited:
+    def visit_argument(self, exp: Argument) -> TVisited:
         raise NotImplementedError
 
     @abstractmethod
-    def visitLambda(self, exp: Lambda) -> TVisited:
+    def visit_lambda(self, exp: Lambda) -> TVisited:
         raise NotImplementedError
 
 
