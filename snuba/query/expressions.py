@@ -124,7 +124,7 @@ class Literal(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitLiteral(self)
+        return visitor.visit_literal(self)
 
 
 @dataclass(frozen=True)
@@ -143,7 +143,7 @@ class Column(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitColumn(self)
+        return visitor.visit_column(self)
 
 
 @dataclass(frozen=True)
@@ -162,7 +162,7 @@ class SubscriptableReference(Expression):
     key: Literal
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitSubscriptableReference(self)
+        return visitor.visit_subscriptable_reference(self)
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         transformed = replace(
@@ -229,7 +229,7 @@ class FunctionCall(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitFunctionCall(self)
+        return visitor.visit_function_call(self)
 
 
 @dataclass(frozen=True)
@@ -276,7 +276,7 @@ class CurriedFunctionCall(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitCurriedFunctionCall(self)
+        return visitor.visit_curried_function_call(self)
 
 
 @dataclass(frozen=True)
@@ -295,7 +295,7 @@ class Argument(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitArgument(self)
+        return visitor.visit_argument(self)
 
 
 @dataclass(frozen=True)
@@ -327,4 +327,4 @@ class Lambda(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitLambda(self)
+        return visitor.visit_lambda(self)
