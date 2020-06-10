@@ -7,7 +7,7 @@ from snuba.migrations.migration import Migration
 
 class MigrationGroup(Enum):
     SYSTEM = "system"
-    SNUBA = "snuba"
+    EVENTS = "events"
 
 
 class GroupLoader(ABC):
@@ -37,7 +37,7 @@ class DirectoryLoader(GroupLoader):
 
 _REGISTERED_GROUPS = {
     MigrationGroup.SYSTEM: DirectoryLoader("snuba.migrations.snuba_migrations.system"),
-    MigrationGroup.SNUBA: DirectoryLoader("snuba.migrations.snuba_migrations.snuba"),
+    MigrationGroup.EVENTS: DirectoryLoader("snuba.migrations.snuba_migrations.events"),
 }
 
 
