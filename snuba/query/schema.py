@@ -164,7 +164,7 @@ GENERIC_QUERY_SCHEMA = {
                 {
                     # Literal
                     "anyOf": [
-                        {"type": ["string", "number"]},
+                        {"type": ["string", "number", "null"]},
                         {"type": "array", "items": {"type": ["string", "number"]}},
                     ],
                 },
