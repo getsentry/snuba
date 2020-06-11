@@ -1,3 +1,5 @@
+from typing import Optional
+
 from snuba.query.conditions import (
     binary_condition,
     BooleanFunctions,
@@ -11,7 +13,7 @@ from snuba.query.expressions import (
 )
 
 
-def apdex(column: Column, satisfied: Literal) -> Expression:
+def apdex(alias: Optional[str], column: Column, satisfied: Literal) -> Expression:
     tolerated = multiply(satisfied, Literal(None, 4))
 
     return divide(
@@ -34,4 +36,5 @@ def apdex(column: Column, satisfied: Literal) -> Expression:
             ),
         ),
         count(),
+        alias,
     )

@@ -1,5 +1,6 @@
 from snuba.query.dsl import divide, minus, multiply, plus
 from snuba.query.expressions import (
+    Column,
     Expression,
     FunctionCall,
     Literal,
@@ -25,8 +26,11 @@ class ImpactProcessor(QueryProcessor):
                 satisfied = exp.parameters[1]
                 user_column = exp.parameters[2]
 
+                assert isinstance(column, Column)
+                assert isinstance(satisfied, Literal)
+
                 return plus(
-                    minus(Literal(None, 1), apdex(column, satisfied)),
+                    minus(Literal(None, 1), apdex(None, column, satisfied)),
                     multiply(
                         minus(
                             Literal(None, 1),
@@ -35,12 +39,13 @@ class ImpactProcessor(QueryProcessor):
                                 FunctionCall(
                                     None,
                                     "sqrt",
-                                    (FunctionCall(None, "uniq", user_column)),
+                                    (FunctionCall(None, "uniq", (user_column,)),),
                                 ),
                             ),
                         ),
                         Literal(None, 3),
                     ),
+                    exp.alias,
                 )
 
             return exp
