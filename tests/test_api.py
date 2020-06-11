@@ -706,11 +706,11 @@ class TestApi(BaseApiTest):
             ).data
         )
         assert (
-            # legacy
+            # legacy representation
             "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message"
             in result["sql"]
         ) or (
-            # ast
+            # ast representation
             "PREWHERE notEquals(positionCaseInsensitive((coalesce(search_message, message) AS message"
             in result["sql"]
         )
@@ -734,11 +734,11 @@ class TestApi(BaseApiTest):
             ).data
         )
         assert (
-            # legacy
+            # legacy representation
             "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc') != 0 AND project_id IN (1)"
             in result["sql"]
         ) or (
-            # ast
+            # ast representation
             "PREWHERE and(notEquals(positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc'), 0), in(project_id, tuple(1)))"
             in result["sql"]
         )
@@ -762,12 +762,14 @@ class TestApi(BaseApiTest):
 
         # make sure the conditions is in PREWHERE and nowhere else
         assert (
-            "PREWHERE project_id IN (1)" in result["sql"]  # legacy
-            or "PREWHERE in(project_id, tuple(1))" in result["sql"]  # ast
+            "PREWHERE project_id IN (1)" in result["sql"]  # legacy representation
+            or "PREWHERE in(project_id, tuple(1))"
+            in result["sql"]  # ast representation
         )
         assert (
-            result["sql"].count("project_id IN (1)") == 1  # legacy
-            or result["sql"].count("in(project_id, tuple(1))") == 1  # ast
+            result["sql"].count("project_id IN (1)") == 1  # legacy representation
+            or result["sql"].count("in(project_id, tuple(1))")
+            == 1  # ast representation
         )
 
     def test_aggregate(self):
@@ -1018,12 +1020,12 @@ class TestApi(BaseApiTest):
         )
         # Issue is expanded once, and alias used subsequently
         assert (
-            "group_id = 0" in response["sql"]
-            or "equals(group_id, 0)" in response["sql"]
+            "group_id = 0" in response["sql"]  # legacy representation
+            or "equals(group_id, 0)" in response["sql"]  # ast representation
         )
         assert (
-            "group_id = 1" in response["sql"]
-            or "equals(group_id, 1)" in response["sql"]
+            "group_id = 1" in response["sql"]  # legacy representation
+            or "equals(group_id, 1)" in response["sql"]  # ast representation
         )
 
     def test_sampling_expansion(self):
