@@ -35,6 +35,18 @@ transaction_translator = TranslationMappers(
     columns=[
         ColumnToFunction(
             None,
+            "ip_address_v4",
+            "IPv4NumToString",
+            (Column(None, None, "ip_address_v4"),),
+        ),
+        ColumnToFunction(
+            None,
+            "ip_address_v6",
+            "IPv6NumToString",
+            (Column(None, None, "ip_address_v6"),),
+        ),
+        ColumnToFunction(
+            None,
             "ip_address",
             "coalesce",
             (
