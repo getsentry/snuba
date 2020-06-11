@@ -52,7 +52,7 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             self.__parsing_context.add_alias(alias)
             return f"({formatted_exp} AS {escape_alias(alias)})"
 
-    def visitLiteral(self, exp: Literal) -> str:
+    def visit_literal(self, exp: Literal) -> str:
         if exp.value is None:
             return "NULL"
         elif exp.value is True:
@@ -71,7 +71,7 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
         else:
             raise ValueError(f"Unexpected literal type {type(exp.value)}")
 
-    def visitColumn(self, exp: Column) -> str:
+    def visit_column(self, exp: Column) -> str:
         ret = []
         if exp.table_name:
             ret.append(escape_identifier(exp.table_name) or "")
@@ -84,19 +84,19 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
         param_list = ", ".join(ret)
         return f"({param_list})"
 
-    def visitSubscriptableReference(self, exp: SubscriptableReference) -> str:
+    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> str:
         # Formatting SubscriptableReference does not make sense for a clickhouse
         # formatter, since the Clickhouse does not support this kind of nodes.
         # The Clickhouse Query AST will not have this node at all so this method will
         # not exist. Still now an implementation that does not throw has to be provided
         # until we actually resolve tags during query translation.
-        return f"{self.visitColumn(exp.column)}[{self.visitLiteral(exp.key)}]"
+        return f"{self.visit_column(exp.column)}[{self.visit_literal(exp.key)}]"
 
-    def visitFunctionCall(self, exp: FunctionCall) -> str:
+    def visit_function_call(self, exp: FunctionCall) -> str:
         ret = f"{escape_identifier(exp.function_name)}{self.__visit_params(exp.parameters)}"
         return self.__alias(ret, exp.alias)
 
-    def visitCurriedFunctionCall(self, exp: CurriedFunctionCall) -> str:
+    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:
         int_func = exp.internal_function.accept(self)
         ret = f"{int_func}{self.__visit_params(exp.parameters)}"
         return self.__alias(ret, exp.alias)
@@ -108,10 +108,10 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
         assert ret is not None
         return ret
 
-    def visitArgument(self, exp: Argument) -> str:
+    def visit_argument(self, exp: Argument) -> str:
         return self.__escape_identifier_enforce(exp.name)
 
-    def visitLambda(self, exp: Lambda) -> str:
+    def visit_lambda(self, exp: Lambda) -> str:
         parameters = [self.__escape_identifier_enforce(v) for v in exp.parameters]
         ret = f"({', '.join(parameters)} -> {exp.transformation.accept(self)})"
         return self.__alias(ret, exp.alias)

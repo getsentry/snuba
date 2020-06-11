@@ -20,21 +20,21 @@ class DummyVisitor(ExpressionVisitor[List[Expression]]):
     def get_visited_nodes(self) -> List[Expression]:
         return self.__visited_nodes
 
-    def visitLiteral(self, exp: Literal) -> List[Expression]:
+    def visit_literal(self, exp: Literal) -> List[Expression]:
         self.__visited_nodes.append(exp)
         return [exp]
 
-    def visitColumn(self, exp: Column) -> List[Expression]:
+    def visit_column(self, exp: Column) -> List[Expression]:
         self.__visited_nodes.append(exp)
         return [exp]
 
-    def visitSubscriptableReference(
+    def visit_subscriptable_reference(
         self, exp: SubscriptableReference
     ) -> List[Expression]:
         self.__visited_nodes.append(exp)
         return [exp, *exp.column.accept(self), *exp.key.accept(self)]
 
-    def visitFunctionCall(self, exp: FunctionCall) -> List[Expression]:
+    def visit_function_call(self, exp: FunctionCall) -> List[Expression]:
         ret = []
         self.__visited_nodes.append(exp)
         ret.append(exp)
@@ -42,7 +42,7 @@ class DummyVisitor(ExpressionVisitor[List[Expression]]):
             ret.extend(param.accept(self))
         return ret
 
-    def visitCurriedFunctionCall(self, exp: CurriedFunctionCall) -> List[Expression]:
+    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> List[Expression]:
         ret = []
         self.__visited_nodes.append(exp)
         ret.append(exp)
@@ -51,11 +51,11 @@ class DummyVisitor(ExpressionVisitor[List[Expression]]):
             ret.extend(param.accept(self))
         return ret
 
-    def visitArgument(self, exp: Argument) -> List[Expression]:
+    def visit_argument(self, exp: Argument) -> List[Expression]:
         self.__visited_nodes.append(exp)
         return [exp]
 
-    def visitLambda(self, exp: Lambda) -> List[Expression]:
+    def visit_lambda(self, exp: Lambda) -> List[Expression]:
         self.__visited_nodes.append(exp)
         self.__visited_nodes.append(exp.transform.accept(self))
         ret = [exp]
