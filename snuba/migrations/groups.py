@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from enum import Enum
 from importlib import import_module
+from typing import Sequence
 
 from snuba.migrations.migration import Migration
 
@@ -17,6 +18,13 @@ class GroupLoader(ABC):
     """
 
     @abstractmethod
+    def get_migrations(self) -> Sequence[str]:
+        """
+        Returns the list of migration IDs in the order they should be executed.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def load_migration(self, migration_id: str) -> Migration:
         raise NotImplementedError
 
@@ -29,6 +37,9 @@ class DirectoryLoader(GroupLoader):
 
     def __init__(self, module: str) -> None:
         self.__module = module
+
+    def get_migrations(self) -> Sequence[str]:
+        return ["0001_migrations"]
 
     def load_migration(self, migration_id: str) -> Migration:
         module = import_module(f"{self.__module}.{migration_id}")

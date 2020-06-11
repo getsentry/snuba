@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod, abstractproperty
-from typing import Optional, Sequence
+from typing import Sequence
 
 from snuba.migrations.operations import Operation
 
@@ -42,10 +42,6 @@ class Migration(ABC):
 
     @abstractproperty
     def blocking(self) -> bool:
-        raise NotImplementedError
-
-    @abstractproperty
-    def dependency(self) -> Optional[str]:
         raise NotImplementedError
 
     @abstractmethod
