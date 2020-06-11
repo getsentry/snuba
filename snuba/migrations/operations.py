@@ -16,10 +16,10 @@ class Operation(ABC):
 
 class SqlOperation(Operation, ABC):
     def __init__(self, storage_set: StorageSetKey):
-        self.storage_set = storage_set
+        self._storage_set = storage_set
 
     def execute(self) -> None:
-        cluster = get_cluster(self.storage_set)
+        cluster = get_cluster(self._storage_set)
 
         for node in cluster.get_local_nodes():
             connection = cluster.get_node_connection(
