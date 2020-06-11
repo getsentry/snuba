@@ -273,7 +273,7 @@ def raw_query(
 
     execute_query_strategy = (
         execute_query_with_readthrough_caching
-        if state.get_config("use_readthrough_query_cache", 0)
+        if state.get_config("use_readthrough_query_cache", 1)
         else execute_query_with_caching
     )
 
