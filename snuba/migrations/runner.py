@@ -41,6 +41,10 @@ class Runner:
 
         logger.info(f"Finished running, updating status: {group} {migration_id}")
 
+        # TODO: In addition to marking migrations as completed, we should also mark
+        # migrations as in-progress before we execute the operations. However we
+        # will need to have some mechanism that allows this to be skipped in certain
+        # cases, such as the initial migration that creates the migrations table itself.
         self._mark_completed(group, migration_id)
 
         logger.info(f"Finished: {group} {migration_id}")
