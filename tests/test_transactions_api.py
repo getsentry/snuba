@@ -302,7 +302,6 @@ class TestTransactionsApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 1, data
-        print(data)
         assert "apdex_score" in data["data"][0]
         assert data["data"][0] == {
             "transaction_name": "/api/do_things",
