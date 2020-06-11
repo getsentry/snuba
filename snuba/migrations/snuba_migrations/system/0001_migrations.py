@@ -5,7 +5,7 @@ from snuba.migrations import operations
 
 
 class Migration(migration.Migration):
-    is_dangerous = False
+    blocking = False
     dependency = None
 
     def forwards_local(self) -> Sequence[operations.Operation]:
