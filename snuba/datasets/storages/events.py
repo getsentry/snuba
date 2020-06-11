@@ -17,6 +17,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
+from snuba.datasets.schemas import MandatoryCondition
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -25,6 +26,8 @@ from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
 from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.expressions import Column, Literal
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
@@ -249,7 +252,17 @@ schema = ReplacingMergeTreeSchema(
     local_table_name="sentry_local",
     dist_table_name="sentry_dist",
     storage_set_key=StorageSetKey.EVENTS,
-    mandatory_conditions=[("deleted", "=", 0)],
+    mandatory_conditions=[
+        MandatoryCondition(
+            ("deleted", "=", 0),
+            binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                Column(None, None, "deleted"),
+                Literal(None, 0),
+            ),
+        )
+    ],
     prewhere_candidates=[
         "event_id",
         "group_id",
