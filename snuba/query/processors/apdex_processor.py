@@ -21,7 +21,7 @@ class ApdexProcessor(QueryProcessor):
                 assert len(exp.parameters) == 2
                 column = exp.parameters[0]
                 satisfied = exp.parameters[1]
-                return apdex(column, satisfied)
+                return apdex(exp.alias, column, satisfied)
 
             return exp
 

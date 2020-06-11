@@ -116,25 +116,25 @@ class SnubaClickhouseMappingTranslator(SnubaClickhouseStrictTranslator):
         )
         self.__translation_rules = translation_rules.concat(default_rules)
 
-    def visitLiteral(self, exp: Literal) -> Expression:
+    def visit_literal(self, exp: Literal) -> Expression:
         return apply_mappers(exp, self.__translation_rules.literals, self)
 
-    def visitColumn(self, exp: Column) -> Expression:
+    def visit_column(self, exp: Column) -> Expression:
         return apply_mappers(exp, self.__translation_rules.columns, self)
 
-    def visitSubscriptableReference(self, exp: SubscriptableReference) -> Expression:
+    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> Expression:
         return apply_mappers(exp, self.__translation_rules.subscriptables, self)
 
-    def visitFunctionCall(self, exp: FunctionCall) -> Expression:
+    def visit_function_call(self, exp: FunctionCall) -> Expression:
         return apply_mappers(exp, self.__translation_rules.functions, self)
 
-    def visitCurriedFunctionCall(self, exp: CurriedFunctionCall) -> Expression:
+    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> Expression:
         return apply_mappers(exp, self.__translation_rules.curried_functions, self)
 
-    def visitArgument(self, exp: Argument) -> Expression:
+    def visit_argument(self, exp: Argument) -> Expression:
         return apply_mappers(exp, self.__translation_rules.arguments, self)
 
-    def visitLambda(self, exp: Lambda) -> Expression:
+    def visit_lambda(self, exp: Lambda) -> Expression:
         return apply_mappers(exp, self.__translation_rules.lambdas, self)
 
     def translate_function_strict(self, exp: FunctionCall) -> FunctionCall:
