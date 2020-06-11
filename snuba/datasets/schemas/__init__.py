@@ -4,13 +4,13 @@ from abc import ABC, abstractmethod
 from typing import List, Mapping, NamedTuple, Sequence
 
 from snuba.clickhouse.columns import ColumnSet, ColumnType
-from snuba.query.expressions import Expression
+from snuba.query.expressions import FunctionCall
 from snuba.query.types import Condition
 
 
 class MandatoryCondition(NamedTuple):
     legacy: Condition
-    ast: Expression
+    ast: FunctionCall
 
 
 class RelationalSource(ABC):
