@@ -28,12 +28,12 @@ def test_tags_expander() -> None:
     processor.process_query(query, request_settings)
 
     assert query.get_selected_columns_from_ast() == [
-        FunctionCall("platforms", "count", (Column(None, None, "platform"),)),
+        FunctionCall("platforms", "count", (Column("platform", None, "platform"),)),
         FunctionCall(
             "top_platforms",
             "testF",
             (
-                Column(None, None, "platform"),
+                Column("platform", None, "platform"),
                 FunctionCall(
                     "tags_value", "arrayJoin", (Column(None, None, "tags.value"),)
                 ),
@@ -46,7 +46,7 @@ def test_tags_expander() -> None:
                 FunctionCall(
                     "tags_key", "arrayJoin", (Column(None, None, "tags.key"),)
                 ),
-                Column(None, None, "column2"),
+                Column("column2", None, "column2"),
             ),
         ),
         FunctionCall("f2_alias", "f2", tuple()),
