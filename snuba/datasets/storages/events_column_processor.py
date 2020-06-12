@@ -29,8 +29,8 @@ class EventsColumnProcessor(QueryProcessor):
                         exp.alias,
                         "coalesce",
                         (
-                            Column(None, exp.table_name, exp.column_name),
                             Column(None, exp.table_name, "search_message"),
+                            Column(None, exp.table_name, exp.column_name),
                         ),
                     )
 
