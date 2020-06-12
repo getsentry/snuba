@@ -571,5 +571,5 @@ class TestUtil(BaseTest):
             for (agg, col, alias) in body["aggregations"]
         ]
         assert exprs == [
-            "(countIf((transaction_status != 0 AND transaction_status != 2)) / count() AS error_percentage)"
+            "(countIf(notIn(transaction_status, tuple(0, 1, 2))) / count() AS error_percentage)"
         ]

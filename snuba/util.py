@@ -104,8 +104,9 @@ def function_expr(fn: str, args_expr: str = "") -> str:
     elif fn.startswith("failure_rate("):
         match = FAILURE_RATE_FUNCTION_RE.match(fn)
         if match:
-            return "countIf((transaction_status != {ok} AND transaction_status != {unknown})) / count()".format(
+            return "countIf(notIn(transaction_status, tuple({ok}, {cancelled}, {unknown}))) / count()".format(
                 ok=SPAN_STATUS_NAME_TO_CODE["ok"],
+                cancelled=SPAN_STATUS_NAME_TO_CODE["cancelled"],
                 unknown=SPAN_STATUS_NAME_TO_CODE["unknown_error"],
             )
         raise ValueError("Invalid format for failure_rate()")
