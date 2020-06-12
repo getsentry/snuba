@@ -24,7 +24,14 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
         "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
         "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
-        "storage_sets": {"events", "outcomes", "querylog", "sessions", "transactions"},
+        "storage_sets": {
+            "events",
+            "migrations",
+            "outcomes",
+            "querylog",
+            "sessions",
+            "transactions",
+        },
         "single_node": True,
     },
 ]
