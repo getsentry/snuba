@@ -88,16 +88,16 @@ class Cluster(ABC, Generic[TQuery, TWriterOptions]):
         self.__storage_sets = storage_sets
 
     def get_storage_set_keys(self) -> Set[StorageSetKey]:
+        all_storage_sets = set(key.value for key in StorageSetKey)
+
         storage_set_keys = set()
 
         for storage_set in self.__storage_sets:
-            try:
+            # We ignore invalid storage set keys since new storage sets will
+            # need to be registered to configuration before they can be used
+            # in Snuba.
+            if storage_set in all_storage_sets:
                 storage_set_keys.add(StorageSetKey(storage_set))
-            except ValueError:
-                # We ignore invalid storage set keys since new storage sets will
-                # need to be registered to configuration before they can be used
-                # in Snuba.
-                pass
 
         return storage_set_keys
 
