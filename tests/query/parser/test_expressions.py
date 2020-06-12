@@ -11,7 +11,7 @@ from snuba.query.parser.expressions import parse_aggregation
 test_data = [
     (
         ["count", "event_id", None],
-        FunctionCall(None, "count", (Column(None, None, "event_id"),)),
+        FunctionCall(None, "count", (Column("event_id", None, "event_id"),)),
     ),  # Simple aggregation
     (
         ["count()", "", None],
@@ -24,19 +24,21 @@ test_data = [
     (
         ["count()", "event_id", None],
         CurriedFunctionCall(
-            None, FunctionCall(None, "count", ()), (Column(None, None, "event_id"),)
+            None,
+            FunctionCall(None, "count", ()),
+            (Column("event_id", None, "event_id"),),
         ),
     ),  # This is probably wrong, but we cannot disambiguate it at this level
     (
         ["uniq", "platform", "uniq_platforms"],
-        FunctionCall("uniq_platforms", "uniq", (Column(None, None, "platform"),)),
+        FunctionCall("uniq_platforms", "uniq", (Column("platform", None, "platform"),)),
     ),  # Use the columns provided as parameters
     (
         ["topK(1)", "platform", "top_platforms"],
         CurriedFunctionCall(
             "top_platforms",
             FunctionCall(None, "topK", (Literal(None, 1),)),
-            (Column(None, None, "platform"),),
+            (Column("platform", None, "platform"),),
         ),
     ),  # Curried function
     (

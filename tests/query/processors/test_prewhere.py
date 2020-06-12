@@ -39,7 +39,7 @@ test_data = [
                 FunctionCall(
                     None,
                     "positionCaseInsensitive",
-                    (Column(None, None, "message"), Literal(None, "abc")),
+                    (Column("message", None, "message"), Literal("abc", "abc")),
                 ),
                 Literal(None, 0),
             ),
@@ -64,12 +64,12 @@ test_data = [
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column(None, None, "d"), Literal(None, "1")),
+                    (Column("d", None, "d"), Literal(None, "1")),
                 ),
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column(None, None, "c"), Literal(None, "3")),
+                    (Column("c", None, "c"), Literal(None, "3")),
                 ),
             ),
         ),
@@ -81,12 +81,12 @@ test_data = [
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column(None, None, "a"), Literal(None, "1")),
+                    (Column("a", None, "a"), Literal(None, "1")),
                 ),
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column(None, None, "b"), Literal(None, "2")),
+                    (Column("b", None, "b"), Literal(None, "2")),
                 ),
             ),
         ),
@@ -103,12 +103,12 @@ test_data = [
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column(None, None, "a"), Literal(None, "1")),
+                    (Column("a", None, "a"), Literal(None, "1")),
                 ),
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column(None, None, "b"), Literal(None, "2")),
+                    (Column("b", None, "b"), Literal(None, "2")),
                 ),
             ),
         ),
@@ -116,7 +116,7 @@ test_data = [
         FunctionCall(
             None,
             OPERATOR_TO_FUNCTION["="],
-            (Column(None, None, "c"), Literal(None, "3")),
+            (Column("c", None, "c"), Literal(None, "3")),
         ),
     ),
     (
@@ -131,13 +131,13 @@ test_data = [
             (
                 not_in_condition(
                     None,
-                    Column(None, None, "a"),
+                    Column("a", None, "a"),
                     [Literal(None, 1), Literal(None, 2), Literal(None, 3)],
                 ),
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column(None, None, "c"), Literal(None, "3")),
+                    (Column("c", None, "c"), Literal(None, "3")),
                 ),
             ),
         ),
@@ -145,7 +145,7 @@ test_data = [
         FunctionCall(
             None,
             OPERATOR_TO_FUNCTION["="],
-            (Column(None, None, "b"), Literal(None, "2")),
+            (Column("b", None, "b"), Literal(None, "2")),
         ),
     ),
 ]
