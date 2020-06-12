@@ -1,6 +1,6 @@
 import pytest
 
-from snuba.clickhouse.columns import ColumnSet, Nested, Nullable, String
+from snuba.clickhouse.columns import ColumnSet, Nested, Nullable, String, UInt
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -10,7 +10,7 @@ from snuba.request.request_settings import HTTPRequestSettings
 
 columns = ColumnSet(
     [
-        ("promoted", Nullable(String())),
+        ("promoted", Nullable(UInt(8))),
         ("tags", Nested([("key", String()), ("value", String())])),
     ]
 )
@@ -68,7 +68,7 @@ test_cases = [
                 selected_columns=[
                     FunctionCall(
                         "tags[promoted_tag]",
-                        "arrayValue",
+                        "arrayElement",
                         (
                             Column(None, "table", "tags.value"),
                             FunctionCall(
@@ -109,4 +109,7 @@ def test_format_expressions(
         query, HTTPRequestSettings()
     )
 
-    assert query.get_arrayjoin_from_ast() == expected_query.get_arrayjoin_from_ast()
+    assert (
+        query.get_selected_columns_from_ast()
+        == expected_query.get_selected_columns_from_ast()
+    )
