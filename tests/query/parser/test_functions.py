@@ -116,11 +116,11 @@ def test_complex_conditions_expr() -> None:
                 "in",
                 (
                     Column("release", None, "release"),
-                    FunctionCall(None, "tuple", (Literal("foo", "foo"),)),
+                    FunctionCall(None, "tuple", (Literal(None, "foo"),)),
                 ),
             ),
             Column("release", None, "release"),
-            Literal("other", "other"),
+            Literal(None, "other"),
         ),
     )
 
@@ -130,8 +130,5 @@ def test_complex_conditions_expr() -> None:
     ) == FunctionCall(
         None,
         "positionCaseInsensitive",
-        (
-            Column("message", None, "message"),
-            Literal("lol 'single' quotes", "lol 'single' quotes"),
-        ),
+        (Column("message", None, "message"), Literal(None, "lol 'single' quotes"),),
     )

@@ -42,12 +42,12 @@ def parse_string_to_expr(val: str) -> Expression:
     # TODO: This will use the schema of the dataset/entity to decide if the expression is
     # a column or a literal.
     if val.isdigit():
-        return Literal(val, int(val))
+        return Literal(None, int(val))
     else:
         try:
-            return Literal(val, float(val))
+            return Literal(None, float(val))
         except Exception:
             if QUOTED_LITERAL_RE.match(val):
-                return Literal(val[1:-1], val[1:-1])
+                return Literal(None, val[1:-1])
             else:
                 return Column(val, None, val)
