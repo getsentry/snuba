@@ -21,6 +21,7 @@ from snuba.datasets.schemas import MandatoryCondition
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsProcessor
 from snuba.datasets.storages.events_column_processor import EventsColumnProcessor
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
@@ -33,7 +34,6 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 )
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.processors.bool_context import BooleanContexts
 from snuba.query.processors.readonly_events import ReadOnlyTableSelector
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
@@ -356,7 +356,14 @@ storage = WritableTableStorage(
                 },
             },
         ),
-        BooleanContexts(),
+        # This processor must not be ported to the errors dataset. We should
+        # not support promoting tags/contexts with boolean values. There is
+        # no way to convert them back consistently to the value provided by
+        # the client when the event is ingested, in all ways to access
+        # tags/contexts. Once the errors dataset is in use, we will not have
+        # boolean promoted tags/contexts so this constraint will be easy
+        # to enforce.
+        EventsBooleanContextsProcessor(),
         ArrayJoinKeyValueOptimizer("tags"),
         PrewhereProcessor(),
     ],
