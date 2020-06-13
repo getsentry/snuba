@@ -33,6 +33,7 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 )
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.bool_context import BooleanContexts
 from snuba.query.processors.readonly_events import ReadOnlyTableSelector
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
@@ -355,6 +356,7 @@ storage = WritableTableStorage(
                 },
             },
         ),
+        BooleanContexts(),
         ArrayJoinKeyValueOptimizer("tags"),
         PrewhereProcessor(),
     ],
