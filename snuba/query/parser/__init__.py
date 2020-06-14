@@ -2,12 +2,22 @@ import logging
 import re
 from collections import defaultdict
 from dataclasses import replace
-from typing import Any, Mapping, MutableMapping, Optional, Set
+from typing import Any, Mapping, MutableMapping, Optional, Set, Sequence, Tuple
 
 from snuba import state
 from snuba.clickhouse.escaping import NEGATE_RE
 from snuba.datasets.dataset import Dataset
-from snuba.query.expressions import Column, Expression, Literal, SubscriptableReference
+from snuba.query.expressions import (
+    Column,
+    Expression,
+    Literal,
+    SubscriptableReference,
+    ExpressionVisitor,
+    FunctionCall,
+    CurriedFunctionCall,
+    Argument,
+    Lambda,
+)
 from snuba.query.logical import OrderBy, OrderByDirection, Query
 from snuba.query.parser.conditions import parse_conditions_to_expr
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
@@ -204,3 +214,94 @@ def _apply_column_aliases(query: Query) -> None:
             return replace(exp, alias=full_name)
 
     query.transform_expressions(apply_aliases)
+
+
+class AliasResolverVisitor(ExpressionVisitor[Expression]):
+    def __init__(
+        self, alias_lookup_table: Mapping[str, Expression], aliases_to_ignore: Set[str]
+    ) -> None:
+        self.__alias_lookup_table = alias_lookup_table
+        self.__aliases_to_ignore = aliases_to_ignore
+
+    def visit_literal(self, exp: Literal) -> Expression:
+        return exp
+
+    def visit_column(self, exp: Column) -> Expression:
+        name = exp.column_name
+        if name not in self.__alias_lookup_table or name in self.__aliases_to_ignore:
+            return exp
+        # The resolved expression may contain more alias references to expand
+        # TODO: There is a slightly more efficient way of doing this by pre
+        # processing the alias lookup table in multiple passes until there are
+        # no more reference to inline.
+        return self.__alias_lookup_table[name].accept(self)
+
+    def __add_alias(self, alias: Optional[str]) -> Set[str]:
+        return (
+            self.__aliases_to_ignore | {alias}
+            if alias is not None
+            else self.__aliases_to_ignore
+        )
+
+    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> Expression:
+        resolved_column = exp.column.accept(
+            AliasResolverVisitor(self.__alias_lookup_table, self.__add_alias(exp.alias))
+        )
+        assert isinstance(
+            resolved_column, Column
+        ), "A subscriptable column cannot be resolved to anything other than a column"
+        return replace(exp, column=resolved_column)
+
+    def __visit_parameters(
+        self, alias: Optional[str], parameters: Sequence[Expression]
+    ) -> Tuple[Expression, ...]:
+        return tuple(
+            [
+                p.accept(
+                    AliasResolverVisitor(
+                        self.__alias_lookup_table, self.__add_alias(alias)
+                    )
+                )
+                for p in parameters
+            ]
+        )
+
+    def visit_function_call(self, exp: FunctionCall) -> Expression:
+        assert (
+            exp.alias not in self.__aliases_to_ignore
+        ), "Aliases circular dependency on alias {exp.alias}"
+        return replace(
+            exp, parameters=self.__visit_parameters(exp.alias, exp.parameters)
+        )
+
+    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> Expression:
+        assert (
+            exp.alias not in self.__aliases_to_ignore
+        ), "Aliases circular dependency on alias {exp.alias}"
+
+        return replace(
+            exp,
+            internal_function=exp.internal_function.accept(
+                AliasResolverVisitor(
+                    self.__alias_lookup_table, self.__add_alias(exp.alias)
+                )
+            ),
+            parameters=self.__visit_parameters(exp.alias, exp.parameters),
+        )
+
+    def visit_argument(self, exp: Argument) -> Expression:
+        return exp
+
+    def visit_lambda(self, exp: Lambda) -> Expression:
+        assert (
+            exp.alias not in self.__aliases_to_ignore
+        ), "Aliases circular dependency on alias {exp.alias}"
+
+        return replace(
+            exp,
+            transformation=exp.transformation.accept(
+                AliasResolverVisitor(
+                    self.__alias_lookup_table, self.__add_alias(exp.alias)
+                )
+            ),
+        )
