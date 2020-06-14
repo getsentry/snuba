@@ -1,15 +1,13 @@
+import logging
+import re
 from collections import defaultdict
 from dataclasses import replace
-
-import re
-import logging
-
-from typing import Any, MutableMapping, Optional, Set, Mapping
+from typing import Any, Mapping, MutableMapping, Optional, Set
 
 from snuba import state
 from snuba.clickhouse.escaping import NEGATE_RE
 from snuba.datasets.dataset import Dataset
-from snuba.query.expressions import Expression, Column, Literal, SubscriptableReference
+from snuba.query.expressions import Column, Expression, Literal, SubscriptableReference
 from snuba.query.logical import OrderBy, OrderByDirection, Query
 from snuba.query.parser.conditions import parse_conditions_to_expr
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
@@ -23,9 +21,28 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     Parses the query body generating the AST. This only takes into
     account the initial query body. Extensions are parsed by extension
     processors and are supposed to update the AST.
+
+    Parsing includes two phases. The first transforms the json body into
+    a minimal query Object resolving expressions, conditions, etc.
+    The second phase performs some query processing to prepare the query
+    for query processing and validate its sanity.
+    - It validates that the query did not declare an alias twice on two
+      different expressions causing shadowing.
+    - It transforms columns from the tags[asd] form into
+      SubscriptableReference. This is done here in order not to cause
+      shadowing.
+    - Applies aliases to all columns that do not have one to prepare them
+      for query processing. During query processing a column can be
+      transformed into a different expression. If the column was in the
+      select clause and the query processor does not assign a proper
+      alias to the output, the user would not be able to find the column
+      they requested in the result set. By applying aliases at this stage
+      every processor just needs to preserve them to guarantee the
+      correctness of the query.
     """
     try:
         query = _parse_query_impl(body, dataset)
+        # These are the post processing phases
         aliases = _validate_aliases(query)
         _parse_subscriptables(query, aliases)
         _apply_column_aliases(query)
@@ -114,6 +131,10 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
 
 
 def _validate_aliases(query: Query) -> Mapping[str, Expression]:
+    """
+    Ensures that no alias has been defined multiple times for different
+    expressions in the query.
+    """
     all_declared_aliases: Mapping[str, Set[Expression]] = defaultdict(set)
     for exp in query.get_all_expressions():
         if exp.alias is not None:
@@ -135,6 +156,10 @@ NESTED_COL_EXPR_RE = re.compile(r"^([a-zA-Z0-9_\.]+)\[([a-zA-Z0-9_\.:-]+)\]$")
 
 
 def _parse_subscriptables(query: Query, aliases: Mapping[str, Expression]) -> None:
+    """
+    Turns columns formatted as tags[asd] into SubscriptableReference.
+    """
+
     def transform(exp: Expression) -> Expression:
         if not isinstance(exp, Column):
             return exp
@@ -153,6 +178,14 @@ def _parse_subscriptables(query: Query, aliases: Mapping[str, Expression]) -> No
 
 
 def _apply_column_aliases(query: Query) -> None:
+    """
+    Applies an alias to all the columns in the query equal to the column
+    name unless a column already has one or the alias is already defined.
+    In the first case we honor the alias the column already has, in the
+    second case the column serves as an alias reference.
+    TODO: inline the full referenced expression if the column is an alias
+    reference.
+    """
     current_aliases = {exp.alias for exp in query.get_all_expressions()}
 
     def apply_aliases(exp: Expression) -> Expression:
