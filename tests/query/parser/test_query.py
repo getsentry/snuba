@@ -14,7 +14,7 @@ from snuba.query.expressions import (
 )
 from snuba.query.logical import OrderBy, OrderByDirection, Query
 from snuba.query.parser import parse_query
-
+from snuba import state
 
 test_cases = [
     (
@@ -192,6 +192,22 @@ test_cases = [
             ],
         ),
     ),  # Unpack nested column both in a simple expression and in a function call.
+    (
+        {
+            "selected_columns": ["exp", "column2"],
+            "groupby": [["f", ["column3"], "exp"]],
+        },
+        Query(
+            {},
+            TableSource("events", ColumnSet([])),
+            selected_columns=[
+                FunctionCall("exp", "f", (Column("column3", None, "column3"),)),
+                Column(None, None, "exp"),
+                Column("column2", None, "column2"),
+            ],
+            groupby=[FunctionCall("exp", "f", (Column("column3", None, "column3"),))],
+        ),
+    ),  # Alias reference is kept as a Column that does not declare an alias
 ]
 
 
@@ -213,3 +229,20 @@ def test_format_expressions(
     assert query.get_arrayjoin_from_ast() == expected_query.get_arrayjoin_from_ast()
     assert query.get_having_from_ast() == expected_query.get_having_from_ast()
     assert query.get_orderby_from_ast() == expected_query.get_orderby_from_ast()
+
+
+def test_shadowing() -> None:
+    state.set_config("query_parsing_enforce_validity", 1)
+    with pytest.raises(ValueError):
+        parse_query(
+            {
+                "selected_columns": [
+                    ["f1", ["column1", "column2"], "f1_alias"],
+                    ["f2", [], "f2_alias"],
+                ],
+                "aggregations": [
+                    ["testF", ["platform", "field2"], "f1_alias"]  # Shadowing!
+                ],
+            },
+            get_dataset("events"),
+        )
