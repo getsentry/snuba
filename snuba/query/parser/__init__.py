@@ -49,6 +49,9 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
       they requested in the result set. By applying aliases at this stage
       every processor just needs to preserve them to guarantee the
       correctness of the query.
+    - Expand all the references to aliases to make aliasing transparent
+      to all query processing phases. References to aliases are
+      reintroduced at the end of the query processing.
     """
     try:
         query = _parse_query_impl(body, dataset)
@@ -56,6 +59,7 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
         aliases = _validate_aliases(query)
         _parse_subscriptables(query, aliases)
         _apply_column_aliases(query)
+        _resolve_aliases(query)
         return query
     except Exception as e:
         # During the development there is no need to fail Snuba queries if the parser
@@ -216,7 +220,57 @@ def _apply_column_aliases(query: Query) -> None:
     query.transform_expressions(apply_aliases)
 
 
+def _resolve_aliases(query: Query) -> None:
+    """
+    Recursively expand all the references to aliases in the query. This
+    makes life easy to query processors and translators that only have to
+    take care of not introducing shadowing (easy to enforce at runtime),
+    otherwise aliasing is transparent to them.
+    """
+    visitor = AliasResolverVisitor(
+        {
+            exp.alias: exp
+            for exp in query.get_all_expressions()
+            if exp.alias is not None
+        },
+        set(),
+    )
+    query.set_ast_selected_columns(
+        [e.accept(visitor) for e in (query.get_selected_columns_from_ast() or [])]
+    )
+    arrayjoin = query.get_arrayjoin_from_ast()
+    if arrayjoin is not None:
+        query.set_ast_arrayjoin(arrayjoin.accept(visitor))
+    condition = query.get_condition_from_ast()
+    if condition is not None:
+        query.set_ast_condition(condition.accept(visitor))
+    query.set_ast_groupby(
+        [e.accept(visitor) for e in (query.get_groupby_from_ast() or [])]
+    )
+    having = query.get_having_from_ast()
+    if having is not None:
+        query.set_ast_having(having.accept(visitor))
+    query.set_ast_orderby(
+        list(
+            map(
+                lambda clause: replace(
+                    clause, expression=clause.expression.accept(visitor)
+                ),
+                query.get_orderby_from_ast(),
+            )
+        )
+    )
+
+
 class AliasResolverVisitor(ExpressionVisitor[Expression]):
+    """
+    Traverse an expression and, when it finds a reference to an alias
+    (which is a Column that does not define an alias and such that its
+    name is in the lookup table) replaces the column with the expression
+    from the lookup table and recursively expand the newly introduced
+    expression.
+    """
+
     def __init__(
         self, alias_lookup_table: Mapping[str, Expression], aliases_to_ignore: Set[str]
     ) -> None:
@@ -228,7 +282,11 @@ class AliasResolverVisitor(ExpressionVisitor[Expression]):
 
     def visit_column(self, exp: Column) -> Expression:
         name = exp.column_name
-        if name not in self.__alias_lookup_table or name in self.__aliases_to_ignore:
+        if (
+            exp.alias is not None
+            or name not in self.__alias_lookup_table
+            or name in self.__aliases_to_ignore
+        ):
             return exp
         # The resolved expression may contain more alias references to expand
         # TODO: There is a slightly more efficient way of doing this by pre
@@ -252,7 +310,7 @@ class AliasResolverVisitor(ExpressionVisitor[Expression]):
         ), "A subscriptable column cannot be resolved to anything other than a column"
         return replace(exp, column=resolved_column)
 
-    def __visit_parameters(
+    def __visit_sequence(
         self, alias: Optional[str], parameters: Sequence[Expression]
     ) -> Tuple[Expression, ...]:
         return tuple(
@@ -270,9 +328,7 @@ class AliasResolverVisitor(ExpressionVisitor[Expression]):
         assert (
             exp.alias not in self.__aliases_to_ignore
         ), "Aliases circular dependency on alias {exp.alias}"
-        return replace(
-            exp, parameters=self.__visit_parameters(exp.alias, exp.parameters)
-        )
+        return replace(exp, parameters=self.__visit_sequence(exp.alias, exp.parameters))
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> Expression:
         assert (
@@ -286,7 +342,7 @@ class AliasResolverVisitor(ExpressionVisitor[Expression]):
                     self.__alias_lookup_table, self.__add_alias(exp.alias)
                 )
             ),
-            parameters=self.__visit_parameters(exp.alias, exp.parameters),
+            parameters=self.__visit_sequence(exp.alias, exp.parameters),
         )
 
     def visit_argument(self, exp: Argument) -> Expression:

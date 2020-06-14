@@ -192,6 +192,61 @@ test_cases = [
             ],
         ),
     ),  # Unpack nested column both in a simple expression and in a function call.
+    (
+        {
+            "selected_columns": ["group_id", ["g", ["something"], "issue_id"]],
+            "conditions": [[["f", ["issue_id"], "group_id"], "=", 1]],
+            "orderby": ["group_id"],
+        },
+        Query(
+            {},
+            TableSource("events", ColumnSet([])),
+            selected_columns=[
+                FunctionCall(
+                    "group_id",
+                    "f",
+                    (
+                        FunctionCall(
+                            "issue_id", "g", (Column("something", None, "something"),)
+                        ),
+                    ),
+                ),
+                FunctionCall(
+                    "issue_id", "g", (Column("something", None, "something"),)
+                ),
+            ],
+            condition=binary_condition(
+                None,
+                "equals",
+                FunctionCall(
+                    "group_id",
+                    "f",
+                    (
+                        FunctionCall(
+                            "issue_id", "g", (Column("something", None, "something"),)
+                        ),
+                    ),
+                ),
+                Literal(None, 1),
+            ),
+            order_by=[
+                OrderBy(
+                    OrderByDirection.ASC,
+                    FunctionCall(
+                        "group_id",
+                        "f",
+                        (
+                            FunctionCall(
+                                "issue_id",
+                                "g",
+                                (Column("something", None, "something"),),
+                            ),
+                        ),
+                    ),
+                ),
+            ],
+        ),
+    ),  # Alias references are expanded
 ]
 
 
