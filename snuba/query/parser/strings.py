@@ -1,14 +1,9 @@
-import re
-
 from snuba.query.expressions import (
     Column,
     Expression,
     Literal,
 )
 from snuba.util import QUOTED_LITERAL_RE
-
-# A column name like "tags[url]"
-NESTED_COL_EXPR_RE = re.compile(r"^([a-zA-Z0-9_\.]+)\[([a-zA-Z0-9_\.:-]+)\]$")
 
 
 def parse_string_to_expr(val: str) -> Expression:

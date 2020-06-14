@@ -1,11 +1,15 @@
+from collections import defaultdict
+from dataclasses import replace
+
+import re
 import logging
 
-from typing import Any, MutableMapping, Optional
+from typing import Any, MutableMapping, Optional, Set, Mapping
 
 from snuba import state
 from snuba.clickhouse.escaping import NEGATE_RE
 from snuba.datasets.dataset import Dataset
-from snuba.query.expressions import Expression
+from snuba.query.expressions import Expression, Column, Literal, SubscriptableReference
 from snuba.query.logical import OrderBy, OrderByDirection, Query
 from snuba.query.parser.conditions import parse_conditions_to_expr
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
@@ -21,7 +25,11 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     processors and are supposed to update the AST.
     """
     try:
-        return _parse_query_impl(body, dataset)
+        query = _parse_query_impl(body, dataset)
+        aliases = _validate_aliases(query)
+        _parse_subscriptables(query, aliases)
+        _apply_column_aliases(query)
+        return query
     except Exception as e:
         # During the development there is no need to fail Snuba queries if the parser
         # has an issue, anyway the production query is ran based on the old query
@@ -103,3 +111,63 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
         having=having_expr,
         order_by=orderby_exprs,
     )
+
+
+def _validate_aliases(query: Query) -> Mapping[str, Expression]:
+    all_declared_aliases: Mapping[str, Set[Expression]] = defaultdict(set)
+    for exp in query.get_all_expressions():
+        if exp.alias is not None:
+            all_declared_aliases[exp.alias].add(exp)
+
+    ret = {}
+    for alias, exps in all_declared_aliases.items():
+        if len(exps) > 1:
+            raise ValueError(
+                f"Shadowing aliases detected for alias: {alias}. Expressions: {exps}"
+            )
+        ret[alias] = exps.pop()
+
+    return ret
+
+
+# A column name like "tags[url]"
+NESTED_COL_EXPR_RE = re.compile(r"^([a-zA-Z0-9_\.]+)\[([a-zA-Z0-9_\.:-]+)\]$")
+
+
+def _parse_subscriptables(query: Query, aliases: Mapping[str, Expression]) -> None:
+    def transform(exp: Expression) -> Expression:
+        if not isinstance(exp, Column):
+            return exp
+        match = NESTED_COL_EXPR_RE.match(exp.column_name)
+        if match is None or exp.column_name in aliases:
+            return exp
+        col_name = match[1]
+        key_name = match[2]
+        return SubscriptableReference(
+            alias=exp.column_name,
+            column=Column(None, None, col_name),
+            key=Literal(None, key_name),
+        )
+
+    query.transform_expressions(transform)
+
+
+def _apply_column_aliases(query: Query) -> None:
+    current_aliases = {exp.alias for exp in query.get_all_expressions()}
+
+    def apply_aliases(exp: Expression) -> Expression:
+        if (
+            not isinstance(exp, Column)
+            or exp.alias is not None
+            or exp.column_name in current_aliases
+        ):
+            return exp
+        else:
+            full_name = (
+                exp.column_name
+                if not exp.table_name
+                else f"{exp.table_name}.{exp.column_name}"
+            )
+            return replace(exp, alias=full_name)
+
+    query.transform_expressions(apply_aliases)

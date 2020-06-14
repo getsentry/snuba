@@ -93,7 +93,7 @@ test_cases = [
                 "in",
                 SubscriptableReference(
                     "tags[sentry:dist]",
-                    Column(None, None, "tags"),
+                    Column("tags", None, "tags"),
                     Literal(None, "sentry:dist"),
                 ),
                 FunctionCall(
@@ -167,14 +167,14 @@ test_cases = [
                     (
                         SubscriptableReference(
                             "tags[test2]",
-                            Column(None, None, "tags"),
+                            Column("tags", None, "tags"),
                             Literal(None, "test2"),
                         ),
                     ),
                 ),
                 Column("column1", None, "column1"),
                 SubscriptableReference(
-                    "tags[test]", Column(None, None, "tags"), Literal(None, "test")
+                    "tags[test]", Column("tags", None, "tags"), Literal(None, "test")
                 ),
             ],
             groupby=[
@@ -184,7 +184,7 @@ test_cases = [
                     (
                         SubscriptableReference(
                             "tags[test2]",
-                            Column(None, None, "tags"),
+                            Column("tags", None, "tags"),
                             Literal(None, "test2"),
                         ),
                     ),
