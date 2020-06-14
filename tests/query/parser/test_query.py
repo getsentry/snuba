@@ -1,7 +1,8 @@
-import pytest
-
 from typing import Any, MutableMapping
 
+import pytest
+
+from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.tables import TableSource
@@ -14,7 +15,6 @@ from snuba.query.expressions import (
 )
 from snuba.query.logical import OrderBy, OrderByDirection, Query
 from snuba.query.parser import parse_query
-from snuba import state
 
 test_cases = [
     (
