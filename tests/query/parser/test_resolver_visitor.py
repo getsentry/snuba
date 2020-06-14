@@ -1,50 +1,43 @@
+from typing import Mapping
+
 import pytest
 
-from typing import Mapping, Set
-
-from snuba.query.parser import AliasResolverVisitor
 from snuba.query.expressions import (
     Column,
-    Expression,
-    Literal,
-    FunctionCall,
     CurriedFunctionCall,
+    Expression,
+    FunctionCall,
+    Lambda,
+    Literal,
 )
-
+from snuba.query.parser import AliasExpanderVisitor
 
 TEST_CASES = [
     pytest.param(
         Column("a", None, "a"),
         {"b": FunctionCall("b", "f", tuple())},
-        set(),
+        False,
         Column("a", None, "a"),
         id="Simple Column - do nothing",
     ),
     pytest.param(
         Literal(None, "a"),
         {},
-        set(),
+        False,
         Literal(None, "a"),
         id="Simple Literal - do nothing",
     ),
     pytest.param(
-        Column(None, None, "a"),
-        {"a": FunctionCall("a", "f", tuple())},
-        {"a"},
-        Column(None, None, "a"),
-        id="Alias to ignore",
-    ),
-    pytest.param(
         Column(None, None, "ref"),
         {"ref": FunctionCall("ref", "f", tuple())},
-        set(),
+        False,
         FunctionCall("ref", "f", tuple()),
         id="Alias resolves to a simple function",
     ),
     pytest.param(
         Column(None, None, "group_id"),
         {"group_id": FunctionCall("group_id", "f", (Column(None, None, "group_id"),))},
-        set(),
+        False,
         FunctionCall("group_id", "f", (Column(None, None, "group_id"),)),
         id="Function replaces column. Inner column not changed",
     ),
@@ -60,7 +53,7 @@ TEST_CASES = [
                 ),
             )
         },
-        set(),
+        False,
         FunctionCall(
             "group_id",
             "f",
@@ -77,18 +70,18 @@ TEST_CASES = [
             "group_id": FunctionCall("group_id", "f", (Column(None, None, "a"),)),
             "a": FunctionCall("a", "g", (Column(None, None, "b"),)),
         },
-        set(),
+        True,
         FunctionCall(
             "group_id", "f", (FunctionCall("a", "g", (Column(None, None, "b"),)),),
         ),
-        id="Nested multi-level aliases",
+        id="Nested multi-level aliases fully unpacked",
     ),
     pytest.param(
         CurriedFunctionCall(
             None, FunctionCall(None, "f", tuple()), (Column(None, None, "a"),)
         ),
         {"a": FunctionCall("a", "f", (Column("b", None, "b"),))},
-        set(),
+        False,
         CurriedFunctionCall(
             None,
             FunctionCall(None, "f", tuple()),
@@ -96,14 +89,56 @@ TEST_CASES = [
         ),
         id="Curried with parameter to expand",
     ),
+    pytest.param(
+        Column(None, None, "a"),
+        {
+            "a": Lambda(
+                "a", tuple(), FunctionCall("b", "f", (Column(None, None, "c"),))
+            ),
+            "c": Column("c", None, "x"),
+        },
+        True,
+        Lambda("a", tuple(), FunctionCall("b", "f", (Column("c", None, "x"),))),
+        id="Expand column into Lambda",
+    ),
 ]
 
 
-@pytest.mark.parametrize("expression, lookup, to_ignore, expected", TEST_CASES)
-def test_format_expressions(
+@pytest.mark.parametrize("expression, lookup, nested_resolution, expected", TEST_CASES)
+def test_expand_aliases(
     expression: Expression,
     lookup: Mapping[str, Expression],
-    to_ignore: Set[str],
+    nested_resolution: bool,
     expected: Expression,
 ) -> None:
-    assert expression.accept(AliasResolverVisitor(lookup, to_ignore)) == expected
+    assert (
+        expression.accept(AliasExpanderVisitor(lookup, [], nested_resolution))
+        == expected
+    )
+
+
+def test_circular_dependency() -> None:
+    with pytest.raises(AssertionError):
+        Column(None, None, "a").accept(
+            AliasExpanderVisitor(
+                {
+                    "a": FunctionCall("a", "f", (Column(None, None, "b"),)),
+                    "b": FunctionCall("b", "g", (Column(None, None, "a"),)),
+                },
+                [],
+                True,
+            )
+        )
+
+    with pytest.raises(AssertionError):
+        Column(None, None, "a").accept(
+            AliasExpanderVisitor(
+                {
+                    "a": FunctionCall(
+                        "a", "f", (FunctionCall("b", "g", (Column(None, None, "a"),)),)
+                    ),
+                },
+                [],
+                True,
+            )
+        )
