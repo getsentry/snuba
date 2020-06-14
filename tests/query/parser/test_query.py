@@ -1,7 +1,8 @@
-import pytest
-
 from typing import Any, MutableMapping
 
+import pytest
+
+from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.tables import TableSource
@@ -14,7 +15,6 @@ from snuba.query.expressions import (
 )
 from snuba.query.logical import OrderBy, OrderByDirection, Query
 from snuba.query.parser import parse_query
-
 
 test_cases = [
     (
@@ -268,3 +268,20 @@ def test_format_expressions(
     assert query.get_arrayjoin_from_ast() == expected_query.get_arrayjoin_from_ast()
     assert query.get_having_from_ast() == expected_query.get_having_from_ast()
     assert query.get_orderby_from_ast() == expected_query.get_orderby_from_ast()
+
+
+def test_shadowing() -> None:
+    state.set_config("query_parsing_enforce_validity", 1)
+    with pytest.raises(ValueError):
+        parse_query(
+            {
+                "selected_columns": [
+                    ["f1", ["column1", "column2"], "f1_alias"],
+                    ["f2", [], "f2_alias"],
+                ],
+                "aggregations": [
+                    ["testF", ["platform", "field2"], "f1_alias"]  # Shadowing!
+                ],
+            },
+            get_dataset("events"),
+        )

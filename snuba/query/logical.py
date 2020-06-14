@@ -213,8 +213,8 @@ class Query:
     def set_groupby(self, groupby: Sequence[Aggregation],) -> None:
         self.__body["groupby"] = groupby
 
-    def set_ast_groupby(self, groupby_columns: Sequence[Expression]) -> None:
-        self.__groupby = groupby_columns
+    def set_ast_groupby(self, groupby: Sequence[Expression]) -> None:
+        self.__groupby = groupby
 
     def add_groupby(self, groupby: Sequence[Groupby],) -> None:
         self.__extend_sequence("groupby", groupby)

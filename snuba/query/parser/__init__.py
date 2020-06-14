@@ -34,21 +34,19 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
 
     Parsing includes two phases. The first transforms the json body into
     a minimal query Object resolving expressions, conditions, etc.
-    The second phase performs some query processing to prepare the query
-    for query processing and validate its sanity.
-    - It validates that the query did not declare an alias twice on two
-      different expressions causing shadowing.
+    The second phase performs some query processing to provide a sane
+    query to the dataset specific section.
+    - It prevents alias shadowing.
     - It transforms columns from the tags[asd] form into
-      SubscriptableReference. This is done here in order not to cause
-      shadowing.
-    - Applies aliases to all columns that do not have one to prepare them
-      for query processing. During query processing a column can be
-      transformed into a different expression. If the column was in the
-      select clause and the query processor does not assign a proper
-      alias to the output, the user would not be able to find the column
-      they requested in the result set. By applying aliases at this stage
-      every processor just needs to preserve them to guarantee the
-      correctness of the query.
+      SubscriptableReference.
+    - Applies aliases to all columns that do not have one and that do not
+      represent a reference to an alias.
+      During query processing a column can be transformed into a different
+      expression. It is essential to preserve the original column name so
+      that the result set still has a column with the name provided by the
+      user no matter on which transformation we applied.
+      By applying aliases at this stage every processor just needs to
+      preserve them to guarantee the correctness of the query.
     - Expand all the references to aliases to make aliasing transparent
       to all query processing phases. References to aliases are
       reintroduced at the end of the query processing.
@@ -56,10 +54,12 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     try:
         query = _parse_query_impl(body, dataset)
         # These are the post processing phases
-        aliases = _validate_aliases(query)
-        _parse_subscriptables(query, aliases)
+        _validate_aliases(query)
+        _parse_subscriptables(query)
         _apply_column_aliases(query)
         _resolve_aliases(query)
+        # WARNING: These steps above assume table resolution did not happen
+        # yet. If it is put earlier than here (unlikely), we need to adapt them.
         return query
     except Exception as e:
         # During the development there is no need to fail Snuba queries if the parser
@@ -144,41 +144,41 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
     )
 
 
-def _validate_aliases(query: Query) -> Mapping[str, Expression]:
+def _validate_aliases(query: Query) -> None:
     """
     Ensures that no alias has been defined multiple times for different
-    expressions in the query.
+    expressions in the query. Thus rejecting queries with shadowing.
     """
     all_declared_aliases: Mapping[str, Set[Expression]] = defaultdict(set)
     for exp in query.get_all_expressions():
-        if exp.alias is not None:
+        # TODO: Make it impossible to assign empty string as an alias.
+        if exp.alias:
             all_declared_aliases[exp.alias].add(exp)
-
-    ret = {}
-    for alias, exps in all_declared_aliases.items():
-        if len(exps) > 1:
-            raise ValueError(
-                f"Shadowing aliases detected for alias: {alias}. Expressions: {exps}"
-            )
-        ret[alias] = exps.pop()
-
-    return ret
+            new_exps = all_declared_aliases[exp.alias]
+            if len(new_exps) > 1:
+                raise ValueError(
+                    f"Shadowing aliases detected for alias: {exp.alias}. Expressions: {new_exps}"
+                )
 
 
 # A column name like "tags[url]"
 NESTED_COL_EXPR_RE = re.compile(r"^([a-zA-Z0-9_\.]+)\[([a-zA-Z0-9_\.:-]+)\]$")
 
 
-def _parse_subscriptables(query: Query, aliases: Mapping[str, Expression]) -> None:
+def _parse_subscriptables(query: Query) -> None:
     """
     Turns columns formatted as tags[asd] into SubscriptableReference.
     """
+    current_aliases = {exp.alias for exp in query.get_all_expressions() if exp.alias}
 
     def transform(exp: Expression) -> Expression:
         if not isinstance(exp, Column):
             return exp
         match = NESTED_COL_EXPR_RE.match(exp.column_name)
-        if match is None or exp.column_name in aliases:
+        if match is None or exp.column_name in current_aliases:
+            # Either this is not a tag[asd] column or there is actually
+            # somewhere in the Query, an expression that declares the
+            # alias tags[asd]. So do not redefine it.
             return exp
         col_name = match[1]
         key_name = match[2]
@@ -196,26 +196,22 @@ def _apply_column_aliases(query: Query) -> None:
     Applies an alias to all the columns in the query equal to the column
     name unless a column already has one or the alias is already defined.
     In the first case we honor the alias the column already has, in the
-    second case the column serves as an alias reference.
-    TODO: inline the full referenced expression if the column is an alias
+    second case the column is a reference to such alias and we do not shadow
+    the alias.
+    TODO: Inline the full referenced expression if the column is an alias
     reference.
     """
-    current_aliases = {exp.alias for exp in query.get_all_expressions()}
+    current_aliases = {exp.alias for exp in query.get_all_expressions() if exp.alias}
 
     def apply_aliases(exp: Expression) -> Expression:
         if (
             not isinstance(exp, Column)
-            or exp.alias is not None
+            or exp.alias
             or exp.column_name in current_aliases
         ):
             return exp
         else:
-            full_name = (
-                exp.column_name
-                if not exp.table_name
-                else f"{exp.table_name}.{exp.column_name}"
-            )
-            return replace(exp, alias=full_name)
+            return replace(exp, alias=exp.column_name)
 
     query.transform_expressions(apply_aliases)
 
