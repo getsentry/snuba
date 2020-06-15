@@ -1,0 +1,16 @@
+minVersion: "0.10.0"
+github:
+  owner: getsentry
+  repo: snuba
+releaseBranchPrefix: releases
+preReleaseCommand: ''
+changelogPolicy: none
+artifactProvider:
+  name: none
+statusProvider:
+  name: github
+targets:
+  - name: github
+  - name: docker
+    source: us.gcr.io/sentryio/snuba
+    target: getsentry/snuba
