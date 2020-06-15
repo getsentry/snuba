@@ -307,10 +307,15 @@ class AliasExpanderVisitor(ExpressionVisitor[Expression]):
             #
             # Follows the same Clickhouse approach to cycles:
             # f(g(z(a))) as a -> allowed
+            # f(g(z(a) as a) as not_a -> allowed
             # f(g(a) as b) as a -> not allowed
             # f(a) as b, f(b) as a -> not allowed
             assert (
-                len(self.__visited_stack) == 1
+                # To be a valid case this name must be on the top of the
+                # stack. IF that's not the case we are in the second
+                # condition above.
+                self.__visited_stack[-1]
+                == name
             ), f"Cyclic aliases {name} resolves to {self.__alias_lookup_table[name]}"
             return exp
 

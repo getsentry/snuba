@@ -62,7 +62,7 @@ TEST_CASES = [
                 FunctionCall(None, "g", (Column(None, None, "group_id"),)),
             ),
         ),
-        id="Function replaces columns. Inner column not changed",
+        id="Function replaces columns nested. Inner column not changed",
     ),
     pytest.param(
         Column(None, None, "group_id"),
@@ -75,6 +75,16 @@ TEST_CASES = [
             "group_id", "f", (FunctionCall("a", "g", (Column(None, None, "b"),)),),
         ),
         id="Nested multi-level aliases fully unpacked",
+    ),
+    pytest.param(
+        Column(None, None, "a"),
+        {
+            "a": FunctionCall("a", "f", (Column(None, None, "b"),)),
+            "b": FunctionCall("b", "g", (Column(None, None, "b"),)),
+        },
+        True,
+        FunctionCall("a", "f", (FunctionCall("b", "g", (Column(None, None, "b"),)),),),
+        id="Funcion shadows inner column",
     ),
     pytest.param(
         CurriedFunctionCall(
