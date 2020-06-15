@@ -343,7 +343,7 @@ class DiscoverDataset(TimeSeriesDataset):
             ApdexProcessor(),
             ImpactProcessor(),
             FailureRateProcessor(),
-            TimeSeriesColumnProcessor({}),
+            TimeSeriesColumnProcessor({"time": "timestamp"}),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
