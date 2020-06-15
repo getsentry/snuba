@@ -232,7 +232,7 @@ def parse_request_body(http_request):
             raise BadRequest(str(error)) from error
 
 
-def _trace_tags(dataset: Dataset) -> None:
+def _trace_transaction_tags(dataset: Dataset) -> None:
     with sentry_sdk.configure_scope() as scope:
         if scope.span:
             scope.span.set_tag("dataset", get_dataset_name(dataset))
@@ -247,7 +247,7 @@ def unqualified_query_view(*, timer: Timer):
     elif http_request.method == "POST":
         body = parse_request_body(http_request)
         dataset = get_dataset(body.pop("dataset", settings.DEFAULT_DATASET_NAME))
-        _trace_tags(dataset)
+        _trace_transaction_tags(dataset)
         return dataset_query(dataset, body, timer)
     else:
         assert False, "unexpected fallthrough"
@@ -266,7 +266,7 @@ def dataset_query_view(*, dataset: Dataset, timer: Timer):
         )
     elif http_request.method == "POST":
         body = parse_request_body(http_request)
-        _trace_tags(dataset)
+        _trace_transaction_tags(dataset)
         return dataset_query(dataset, body, timer)
     else:
         assert False, "unexpected fallthrough"
