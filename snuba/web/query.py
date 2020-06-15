@@ -44,11 +44,6 @@ def parse_and_run_query(
         query_list=[],
     )
 
-    with sentry_sdk.configure_scope() as scope:
-        if scope.span:
-            scope.span.set_tag("dataset", get_dataset_name(dataset))
-            scope.span.set_tag("referrer", request.referrer)
-
     try:
         result = _run_query_pipeline(
             dataset=dataset, request=request, timer=timer, query_metadata=query_metadata
