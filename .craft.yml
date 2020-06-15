@@ -9,6 +9,8 @@ artifactProvider:
   name: none
 statusProvider:
   name: github
+  contexts:
+    - 'Trigger: 753987fc-383a-479a-803c-90301cfd2435'
 targets:
   - name: github
   - name: docker
