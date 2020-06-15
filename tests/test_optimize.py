@@ -3,13 +3,18 @@ from tests.base import BaseEventsTest
 from datetime import datetime, timedelta
 
 from snuba import optimize
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 
 
 class TestOptimize(BaseEventsTest):
     def test(self):
-        clickhouse = get_storage(StorageKey.EVENTS).get_cluster().get_clickhouse_rw()
+        clickhouse = (
+            get_storage(StorageKey.EVENTS)
+            .get_cluster()
+            .get_query_connection(ClickhouseClientSettings.OPTIMIZE)
+        )
         # no data, 0 partitions to optimize
         parts = optimize.get_partitions_to_optimize(
             clickhouse, self.database, self.table

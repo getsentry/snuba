@@ -1,4 +1,4 @@
-from typing import Any, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
+from typing import Any, Mapping, Optional, Sequence, Tuple
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
@@ -9,21 +9,6 @@ from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
 from snuba.util import parse_datetime, qualified_column
-
-
-class ColumnSplitSpec(NamedTuple):
-    """
-    Provides the column names needed to perform column splitting.
-    id_column represent the identity of the row.
-
-    """
-
-    id_column: str
-    project_column: str
-    timestamp_column: str
-
-    def get_min_columns(self) -> Sequence[str]:
-        return [self.id_column, self.project_column, self.timestamp_column]
 
 
 class Dataset(object):
@@ -148,12 +133,6 @@ class Dataset(object):
         """
         return condition
 
-    def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
-        """
-        Return the parameters to perform the column split of the query.
-        """
-        return None
-
 
 class TimeSeriesDataset(Dataset):
     def __init__(
@@ -186,12 +165,12 @@ class TimeSeriesDataset(Dataset):
     def time_expr(self, column_name: str, granularity: int, table_alias: str) -> str:
         real_column = qualified_column(column_name, table_alias)
         template = {
-            3600: "toStartOfHour({column})",
-            60: "toStartOfMinute({column})",
-            86400: "toDate({column})",
+            3600: "toStartOfHour({column}, 'Universal')",
+            60: "toStartOfMinute({column}, 'Universal')",
+            86400: "toDate({column}, 'Universal')",
         }.get(
             granularity,
-            "toDateTime(intDiv(toUInt32({column}), {granularity}) * {granularity})",
+            "toDateTime(intDiv(toUInt32({column}), {granularity}) * {granularity}, 'Universal')",
         )
         return template.format(column=real_column, granularity=granularity)
 

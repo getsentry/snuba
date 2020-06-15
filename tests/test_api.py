@@ -5,12 +5,13 @@ from functools import partial
 from unittest.mock import patch
 import pytest
 import pytz
-from sentry_sdk import Hub, Client
 import simplejson as json
 import time
 import uuid
 
 from snuba import settings, state
+from sentry_sdk import Hub, Client
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
@@ -141,7 +142,11 @@ class TestApi(BaseApiTest):
         """
         Test total counts are correct in the hourly time buckets for each project
         """
-        clickhouse = get_storage(StorageKey.EVENTS).get_cluster().get_clickhouse_rw()
+        clickhouse = (
+            get_storage(StorageKey.EVENTS)
+            .get_cluster()
+            .get_query_connection(ClickhouseClientSettings.QUERY)
+        )
         res = clickhouse.execute("SELECT count() FROM %s" % self.table)
         assert res[0][0] == 330
 
@@ -671,7 +676,12 @@ class TestApi(BaseApiTest):
             ).data
         )
         assert (
+            # legacy representation
             "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc') != 0"
+            in result["sql"]
+        ) or (
+            # ast representation
+            "PREWHERE notEquals(positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc'), 0)"
             in result["sql"]
         )
 
@@ -696,7 +706,12 @@ class TestApi(BaseApiTest):
             ).data
         )
         assert (
+            # legacy representation
             "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message"
+            in result["sql"]
+        ) or (
+            # ast representation
+            "PREWHERE notEquals(positionCaseInsensitive((coalesce(search_message, message) AS message"
             in result["sql"]
         )
 
@@ -719,7 +734,12 @@ class TestApi(BaseApiTest):
             ).data
         )
         assert (
+            # legacy representation
             "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc') != 0 AND project_id IN (1)"
+            in result["sql"]
+        ) or (
+            # ast representation
+            "PREWHERE and(notEquals(positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc'), 0), in(project_id, tuple(1)))"
             in result["sql"]
         )
 
@@ -741,8 +761,16 @@ class TestApi(BaseApiTest):
         )
 
         # make sure the conditions is in PREWHERE and nowhere else
-        assert "PREWHERE project_id IN (1)" in result["sql"]
-        assert result["sql"].count("project_id IN (1)") == 1
+        assert (
+            "PREWHERE project_id IN (1)" in result["sql"]  # legacy representation
+            or "PREWHERE in(project_id, tuple(1))"
+            in result["sql"]  # ast representation
+        )
+        assert (
+            result["sql"].count("project_id IN (1)") == 1  # legacy representation
+            or result["sql"].count("in(project_id, tuple(1))")
+            == 1  # ast representation
+        )
 
     def test_aggregate(self):
         result = json.loads(
@@ -991,8 +1019,14 @@ class TestApi(BaseApiTest):
             ).data
         )
         # Issue is expanded once, and alias used subsequently
-        assert "group_id = 0" in response["sql"]
-        assert "group_id = 1" in response["sql"]
+        assert (
+            "group_id = 0" in response["sql"]  # legacy representation
+            or "equals(group_id, 0)" in response["sql"]  # ast representation
+        )
+        assert (
+            "group_id = 1" in response["sql"]  # legacy representation
+            or "equals(group_id, 1)" in response["sql"]  # ast representation
+        )
 
     def test_sampling_expansion(self):
         response = json.loads(
@@ -1292,7 +1326,9 @@ class TestApi(BaseApiTest):
         writer = storage.get_table_writer()
         table = writer.get_schema().get_table_name()
         storage = get_storage(StorageKey.EVENTS)
-        clickhouse = storage.get_cluster().get_clickhouse_rw()
+        clickhouse = storage.get_cluster().get_query_connection(
+            ClickhouseClientSettings.QUERY
+        )
         assert table not in clickhouse.execute("SHOW TABLES")
         assert self.redis_db_size() == 0
 
@@ -1694,7 +1730,7 @@ class TestApi(BaseApiTest):
                 ),
             ).data
         )
-        assert "deleted = 0" in result["sql"]
+        assert "deleted = 0" in result["sql"] or "equals(deleted, 0)" in result["sql"]
 
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")
@@ -1706,7 +1742,17 @@ class TestApi(BaseApiTest):
                 self.app.post(
                     "/query",
                     data=json.dumps(
-                        {"project": 1, "selected_columns": ["event_id", "title", "transaction", "tags[a]", "tags[b]"], "limit": 5}
+                        {
+                            "project": 1,
+                            "selected_columns": [
+                                "event_id",
+                                "title",
+                                "transaction",
+                                "tags[a]",
+                                "tags[b]",
+                            ],
+                            "limit": 5,
+                        }
                     ),
                 ).data
             )

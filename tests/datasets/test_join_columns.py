@@ -69,7 +69,7 @@ def test_simple_column_expr():
 
     assert (
         column_expr(dataset, "events.time", deepcopy(query), ParsingContext())
-        == "(toDate(events.timestamp) AS `events.time`)"
+        == "(toDate(events.timestamp, 'Universal') AS `events.time`)"
     )
 
     assert (

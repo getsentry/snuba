@@ -1,11 +1,15 @@
 import calendar
-
+import os
+import uuid
+from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import md5
-import uuid
+from typing import Iterator, Optional
 
 from snuba import settings
+from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.redis import redis_client
 
@@ -42,34 +46,52 @@ def get_event():
     return wrap_raw_event(deepcopy(raw_event))
 
 
+@contextmanager
+def dataset_manager(name: str) -> Iterator[Dataset]:
+    dataset = get_dataset(name)
+
+    for storage in dataset.get_all_storages():
+        clickhouse = storage.get_cluster().get_query_connection(
+            ClickhouseClientSettings.MIGRATE
+        )
+        for statement in storage.get_schemas().get_drop_statements():
+            clickhouse.execute(statement.statement)
+
+        for statement in storage.get_schemas().get_create_statements():
+            clickhouse.execute(statement.statement)
+
+    try:
+        yield dataset
+    finally:
+        for storage in dataset.get_all_storages():
+            clickhouse = storage.get_cluster().get_query_connection(
+                ClickhouseClientSettings.MIGRATE
+            )
+            for statement in storage.get_schemas().get_drop_statements():
+                clickhouse.execute(statement.statement)
+
+
 class BaseTest(object):
-    def setup_method(self, test_method, dataset_name=None):
+    def setup_method(self, test_method, dataset_name: Optional[str] = None):
         assert (
             settings.TESTING
         ), "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
 
-        self.database = "default"
+        self.database = os.environ.get("CLICKHOUSE_DATABASE", "default")
         self.dataset_name = dataset_name
 
-        if self.dataset_name:
-            self.dataset = get_dataset(self.dataset_name)
-
-            for storage in self.dataset.get_all_storages():
-                clickhouse = storage.get_cluster().get_clickhouse_rw()
-                for statement in storage.get_schemas().get_drop_statements():
-                    clickhouse.execute(statement.statement)
-
-                for statement in storage.get_schemas().get_create_statements():
-                    clickhouse.execute(statement.statement)
+        if dataset_name is not None:
+            self.__dataset_manager = dataset_manager(dataset_name)
+            self.dataset = self.__dataset_manager.__enter__()
+        else:
+            self.__dataset_manager = None
+            self.dataset = None
 
         redis_client.flushdb()
 
     def teardown_method(self, test_method):
-        if self.dataset_name:
-            for storage in self.dataset.get_all_storages():
-                clickhouse = storage.get_cluster().get_clickhouse_rw()
-                for statement in storage.get_schemas().get_drop_statements():
-                    clickhouse.execute(statement.statement)
+        if self.__dataset_manager:
+            self.__dataset_manager.__exit__(None, None, None)
 
         redis_client.flushdb()
 

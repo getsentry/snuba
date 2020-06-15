@@ -3,7 +3,7 @@ import simplejson as json
 from datetime import datetime
 
 from tests.base import BaseDatasetTest
-from snuba.clusters.cluster import get_cluster
+from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.cdc.groupassignee_processor import (
@@ -94,7 +94,9 @@ class TestGroupassignee(BaseDatasetTest):
         processor = GroupAssigneeProcessor("sentry_groupasignee")
         message_filter = CdcTableNameMessageFilter(postgres_table=POSTGRES_TABLE)
 
-        metadata = KafkaMessageMetadata(offset=42, partition=0,)
+        metadata = KafkaMessageMetadata(
+            offset=42, partition=0, timestamp=datetime(1970, 1, 1)
+        )
 
         assert not message_filter.should_drop(
             self.__make_msg(0, 42, self.BEGIN_MSG, [])
@@ -121,8 +123,8 @@ class TestGroupassignee(BaseDatasetTest):
         self.write_processed_records(ret.data)
         ret = (
             get_cluster(StorageSetKey.EVENTS)
-            .get_clickhouse_ro()
-            .execute("SELECT * FROM test_groupassignee_local;")
+            .get_query_connection(ClickhouseClientSettings.QUERY)
+            .execute("SELECT * FROM groupassignee_local;")
         )
         assert ret[0] == (
             42,  # offset
@@ -180,8 +182,8 @@ class TestGroupassignee(BaseDatasetTest):
         self.write_processed_records(row.to_clickhouse())
         ret = (
             get_cluster(StorageSetKey.EVENTS)
-            .get_clickhouse_ro()
-            .execute("SELECT * FROM test_groupassignee_local;")
+            .get_query_connection(ClickhouseClientSettings.QUERY)
+            .execute("SELECT * FROM groupassignee_local;")
         )
         assert ret[0] == (
             0,  # offset

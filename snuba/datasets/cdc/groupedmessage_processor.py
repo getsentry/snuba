@@ -107,7 +107,7 @@ class GroupedMessageRow(CdcMessageRow):
 
 
 class GroupedMessageProcessor(CdcProcessor):
-    def __init__(self, postgres_table):
+    def __init__(self, postgres_table: str):
         super(GroupedMessageProcessor, self).__init__(
             pg_table=postgres_table, message_row_class=GroupedMessageRow,
         )

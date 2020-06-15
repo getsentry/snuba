@@ -4,7 +4,6 @@ import logging
 
 from snuba import util
 
-
 logger = logging.getLogger("snuba.optimize")
 
 

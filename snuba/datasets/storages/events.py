@@ -1,3 +1,4 @@
+from collections import ChainMap
 from typing import FrozenSet, Mapping, Sequence
 
 from snuba.clickhouse.columns import (
@@ -16,13 +17,24 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
+from snuba.datasets.schemas import MandatoryCondition
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.events_column_processor import EventsColumnProcessor
-from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.datasets.storages.processors.replaced_groups import (
+    PostReplacementConsistencyEnforcer,
+)
+from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.expressions import Column, Literal
+from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
+    ArrayJoinKeyValueOptimizer,
+)
+from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.readonly_events import ReadOnlyTableSelector
+from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 
 def events_migrations(
@@ -76,6 +88,11 @@ def events_migrations(
             f"ALTER TABLE {clickhouse_table} ADD COLUMN _tags_flattened String DEFAULT '' AFTER tags"
         )
 
+    if "message_timestamp" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN message_timestamp DateTime AFTER partition"
+        )
+
     return ret
 
 
@@ -84,6 +101,7 @@ metadata_columns = ColumnSet(
         # optional stream related data
         ("offset", Nullable(UInt(64))),
         ("partition", Nullable(UInt(16))),
+        ("message_timestamp", DateTime()),
     ]
 )
 
@@ -233,12 +251,24 @@ schema = ReplacingMergeTreeSchema(
     columns=all_columns,
     local_table_name="sentry_local",
     dist_table_name="sentry_dist",
-    mandatory_conditions=[("deleted", "=", 0)],
+    storage_set_key=StorageSetKey.EVENTS,
+    mandatory_conditions=[
+        MandatoryCondition(
+            ("deleted", "=", 0),
+            binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                Column(None, None, "deleted"),
+                Literal(None, 0),
+            ),
+        )
+    ],
     prewhere_candidates=[
         "event_id",
         "group_id",
         "tags[sentry:release]",
         "message",
+        "title",
         "environment",
         "project_id",
     ],
@@ -299,28 +329,55 @@ storage = WritableTableStorage(
     storage_key=StorageKey.EVENTS,
     storage_set_key=StorageSetKey.EVENTS,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
-    table_writer=TableWriter(
-        write_schema=schema,
-        stream_loader=KafkaStreamLoader(
-            processor=EventsProcessor(promoted_tag_columns),
-            default_topic="events",
-            replacement_topic="event-replacements",
-            commit_log_topic="snuba-commit-log",
-        ),
-        replacer_processor=ErrorsReplacer(
-            write_schema=schema,
-            read_schema=schema,
-            required_columns=[col.escaped for col in required_columns],
-            tag_column_map=get_tag_column_map(),
-            promoted_tags=get_promoted_tags(),
-            state_name=ReplacerState.EVENTS,
-        ),
-    ),
     query_processors=[
+        PostReplacementConsistencyEnforcer(
+            project_column="project_id",
+            # key migration is on going. As soon as all the keys we are interested
+            # into in redis are stored with "EVENTS" in the name, we can change this.
+            replacer_state_name=None,
+        ),
         # TODO: This one should become an entirely separate storage and picked
         # in the storage selector.
         ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
         EventsColumnProcessor(),
+        MappingColumnPromoter(
+            mapping_specs={
+                "tags": ChainMap(
+                    {col.flattened: col.flattened for col in promoted_tag_columns},
+                    {
+                        col.flattened.replace("_", "."): col.flattened
+                        for col in promoted_context_tag_columns
+                    },
+                ),
+                "contexts": {
+                    col.flattened.replace("_", "."): col.flattened
+                    for col in promoted_context_columns
+                },
+            },
+        ),
+        ArrayJoinKeyValueOptimizer("tags"),
         PrewhereProcessor(),
     ],
+    stream_loader=KafkaStreamLoader(
+        processor=EventsProcessor(promoted_tag_columns),
+        default_topic="events",
+        replacement_topic="event-replacements",
+        commit_log_topic="snuba-commit-log",
+    ),
+    query_splitters=[
+        ColumnSplitQueryStrategy(
+            id_column="event_id",
+            project_column="project_id",
+            timestamp_column="timestamp",
+        ),
+        TimeSplitQueryStrategy(timestamp_col="timestamp"),
+    ],
+    replacer_processor=ErrorsReplacer(
+        write_schema=schema,
+        read_schema=schema,
+        required_columns=[col.escaped for col in required_columns],
+        tag_column_map=get_tag_column_map(),
+        promoted_tags=get_promoted_tags(),
+        state_name=ReplacerState.EVENTS,
+    ),
 )

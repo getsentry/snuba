@@ -1,7 +1,7 @@
 from datetime import timedelta
-from typing import FrozenSet, Mapping, Sequence, Union
+from typing import FrozenSet, Mapping, Sequence
 
-from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
+from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
@@ -13,6 +13,7 @@ from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.timeseries_extension import TimeSeriesExtension
@@ -44,13 +45,6 @@ class ErrorsDataset(TimeSeriesDataset):
             columns=columns,
             promoted_columns=self._get_promoted_columns(),
             column_tag_map=self._get_column_tag_map(),
-        )
-
-    def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
-        return ColumnSplitSpec(
-            id_column="event_id",
-            project_column="project_id",
-            timestamp_column="timestamp",
         )
 
     def column_expr(
@@ -96,6 +90,7 @@ class ErrorsDataset(TimeSeriesDataset):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
+            TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             TimeSeriesColumnProcessor(self.__time_group_columns),
         ]

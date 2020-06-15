@@ -21,7 +21,7 @@ from snuba.datasets.storages.transactions import storage as transactions_storage
 
 CDC_STORAGES: Mapping[StorageKey, CdcStorage] = {
     storage.get_storage_key(): storage
-    for storage in [groupedmessages_storage, groupassignees_storage,]
+    for storage in [groupedmessages_storage, groupassignees_storage]
 }
 
 WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
@@ -41,7 +41,7 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
 
 NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
     storage.get_storage_key(): storage
-    for storage in [outcomes_hourly_storage, sessions_hourly_storage,]
+    for storage in [outcomes_hourly_storage, sessions_hourly_storage]
 }
 
 STORAGES: Mapping[StorageKey, ReadableTableStorage] = {

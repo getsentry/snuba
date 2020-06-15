@@ -1,6 +1,6 @@
-import collections
 import logging
-from typing import Any, Mapping, Optional, Sequence
+from datetime import datetime
+from typing import Any, Mapping, NamedTuple, Optional, Sequence
 
 import simplejson as json
 import rapidjson
@@ -15,9 +15,11 @@ from snuba.utils.streams.types import Message, Topic
 
 logger = logging.getLogger("snuba.consumer")
 
-KafkaMessageMetadata = collections.namedtuple(
-    "KafkaMessageMetadata", "offset partition"
-)
+
+class KafkaMessageMetadata(NamedTuple):
+    offset: int
+    partition: int
+    timestamp: datetime
 
 
 class InvalidActionType(Exception):
@@ -31,8 +33,8 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         metrics: MetricsBackend,
         producer: Optional[ConfluentKafkaProducer] = None,
         replacements_topic: Optional[Topic] = None,
-        rapidjson_deserialize: bool = False,
-        rapidjson_serialize: bool = False,
+        rapidjson_deserialize: bool = True,
+        rapidjson_serialize: bool = True,
     ) -> None:
         self.__storage = storage
         self.producer = producer
@@ -58,10 +60,16 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
             value = rapidjson.loads(message.payload.value)
         else:
             value = json.loads(message.payload.value)
-        metadata = KafkaMessageMetadata(
-            offset=message.offset, partition=message.partition.index
+
+        processed = self._process_message_impl(
+            value,
+            KafkaMessageMetadata(
+                offset=message.offset,
+                partition=message.partition.index,
+                timestamp=message.timestamp,
+            ),
         )
-        processed = self._process_message_impl(value, metadata)
+
         if processed is None:
             return None
 

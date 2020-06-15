@@ -25,6 +25,9 @@ class StorageSchemas(object):
     def get_read_schema(self) -> Schema:
         return self.__read_schema
 
+    def get_write_schema(self) -> Optional[WritableTableSchema]:
+        return self.__write_schema
+
     def __get_unique_schemas(self) -> Sequence[Schema]:
         unique_schemas: List[Schema] = []
 

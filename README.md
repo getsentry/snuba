@@ -37,7 +37,6 @@ A quick way to get these services running is to set up sentry, then use:
     mkvirtualenv snuba --python=python3.7
     workon snuba
     make install-python-dependencies
-    make install-librdkafka
     make setup-git
 
     # Run API server
@@ -56,9 +55,8 @@ Snuba exposes an HTTP API (default port: `1218`) with the following endpoints.
 
 Settings are found in `settings.py`
 
-- `CLICKHOUSE_HOST` : The hostname for the clickhouse service.
+- `CLUSTERS` : Provides the list of clusters and the hostname, port, and storage sets that should run on each cluster. Local vs distributed is also set per cluster.
 - `REDIS_HOST` : The host redis is running on.
-- `DATASET_MODE` : If "local" runs Clickhouse local tables instead of distributed ones.
 
 ## Tests
 

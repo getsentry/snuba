@@ -1,13 +1,20 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Sequence
+from typing import NamedTuple, Optional, Sequence
 
 from snuba.clickhouse.processors import QueryProcessor
-from snuba.clusters.cluster import ClickhouseCluster, get_cluster
+from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.clusters.cluster import (
+    ClickhouseCluster,
+    ClickhouseWriterOptions,
+    get_cluster,
+)
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.datasets.plans.split_strategy import QuerySplitStrategy
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.table_storage import TableWriter
+from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
 from snuba.query.logical import Query
+from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.request.request_settings import RequestSettings
 
 
@@ -71,6 +78,15 @@ class ReadableStorage(Storage):
         """
         raise NotImplementedError
 
+    def get_query_splitters(self) -> Sequence[QuerySplitStrategy]:
+        """
+        If this storage supports splitting queries as optimizations, they are provided here.
+        These are optimizations, the query plan builder may decide to override the storage
+        and to skip the splitters. So correctness of the query must not depend on these
+        strategies to be applied.
+        """
+        return []
+
 
 class WritableStorage(Storage):
     """
@@ -98,9 +114,11 @@ class ReadableTableStorage(ReadableStorage):
         storage_set_key: StorageSetKey,
         schemas: StorageSchemas,
         query_processors: Optional[Sequence[QueryProcessor]] = None,
+        query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
     ) -> None:
         self.__schemas = schemas
         self.__query_processors = query_processors or []
+        self.__query_splitters = query_splitters or []
         super().__init__(storage_key, storage_set_key)
 
     def get_schemas(self) -> StorageSchemas:
@@ -109,6 +127,9 @@ class ReadableTableStorage(ReadableStorage):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return self.__query_processors
 
+    def get_query_splitters(self) -> Sequence[QuerySplitStrategy]:
+        return self.__query_splitters
+
 
 class WritableTableStorage(ReadableTableStorage, WritableStorage):
     def __init__(
@@ -116,14 +137,32 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         storage_key: StorageKey,
         storage_set_key: StorageSetKey,
         schemas: StorageSchemas,
-        table_writer: TableWriter,
-        query_processors: Optional[Sequence[QueryProcessor]] = None,
+        query_processors: Sequence[QueryProcessor],
+        stream_loader: KafkaStreamLoader,
+        query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
+        replacer_processor: Optional[ReplacerProcessor] = None,
+        writer_options: ClickhouseWriterOptions = None,
     ) -> None:
-        super().__init__(storage_key, storage_set_key, schemas, query_processors)
-        self.__table_writer = table_writer
+        super().__init__(
+            storage_key, storage_set_key, schemas, query_processors, query_splitters
+        )
+        write_schema = schemas.get_write_schema()
+        assert write_schema is not None
+        self.__table_writer = TableWriter(
+            cluster=get_cluster(storage_set_key),
+            write_schema=write_schema,
+            stream_loader=stream_loader,
+            replacer_processor=replacer_processor,
+            writer_options=writer_options,
+        )
 
     def get_table_writer(self) -> TableWriter:
         return self.__table_writer
+
+
+class StorageAndMappers(NamedTuple):
+    storage: ReadableStorage
+    mappers: TranslationMappers
 
 
 class QueryStorageSelector(ABC):
@@ -135,5 +174,5 @@ class QueryStorageSelector(ABC):
     @abstractmethod
     def select_storage(
         self, query: Query, request_settings: RequestSettings
-    ) -> ReadableStorage:
+    ) -> StorageAndMappers:
         raise NotImplementedError

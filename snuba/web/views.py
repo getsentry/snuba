@@ -15,6 +15,7 @@ from werkzeug.exceptions import BadRequest
 
 from snuba import environment, settings, state, util
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
@@ -33,7 +34,7 @@ from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import InvalidSubscriptionError, PartitionId
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
-from snuba.util import local_dataset_mode
+from snuba.util import with_span
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.kafka import KafkaPayload
@@ -74,8 +75,10 @@ def check_clickhouse() -> bool:
             dataset = get_dataset(name)
 
             for storage in dataset.get_all_storages():
-                clickhouse_ro = storage.get_cluster().get_clickhouse_ro()
-                clickhouse_tables = clickhouse_ro.execute("show tables")
+                clickhouse = storage.get_cluster().get_query_connection(
+                    ClickhouseClientSettings.QUERY
+                )
+                clickhouse_tables = clickhouse.execute("show tables")
                 source = storage.get_schemas().get_read_schema()
                 if isinstance(source, TableSchema):
                     table_name = source.get_table_name()
@@ -260,19 +263,21 @@ def dataset_query_view(*, dataset: Dataset, timer: Timer):
         assert False, "unexpected fallthrough"
 
 
+@with_span()
 def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     assert http_request.method == "POST"
-    ensure_not_internal(dataset)
-    ensure_table_exists(dataset)
+
+    with sentry_sdk.start_span(description="ensure_dataset", op="validate"):
+        ensure_not_internal(dataset)
+        ensure_tables_migrated()
+
+    with sentry_sdk.start_span(description="build_schema", op="validate"):
+        schema = RequestSchema.build_with_extensions(
+            dataset.get_extensions(), HTTPRequestSettings
+        )
 
     request = validate_request_content(
-        body,
-        RequestSchema.build_with_extensions(
-            dataset.get_extensions(), HTTPRequestSettings
-        ),
-        timer,
-        dataset,
-        http_request.referrer,
+        body, schema, timer, dataset, http_request.referrer,
     )
 
     try:
@@ -356,32 +361,24 @@ if application.debug or application.testing:
     # These should only be used for testing/debugging. Note that the database name
     # is checked to avoid scary production mishaps.
 
-    _ensured: MutableMapping[Dataset, bool] = {}
+    _ensured = False
 
-    def ensure_table_exists(dataset: Dataset, force: bool = False) -> None:
-        if not force and _ensured.get(dataset, False):
+    def ensure_tables_migrated(force: bool = False) -> None:
+        global _ensured
+        if not force and _ensured:
             return
-
-        assert local_dataset_mode(), "Cannot create table in distributed mode"
 
         from snuba.migrations import migrate
 
-        # We cannot build distributed tables this way. So this only works in local
-        # mode.
-        for storage in dataset.get_all_storages():
-            clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
-            for statement in storage.get_schemas().get_create_statements():
-                clickhouse_rw.execute(statement.statement)
+        migrate.run()
 
-        migrate.run(dataset)
-
-        _ensured[dataset] = True
+        _ensured = True
 
     @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
     def write(*, dataset: Dataset):
         from snuba.processor import ProcessorAction
 
-        ensure_table_exists(dataset)
+        ensure_tables_migrated()
 
         rows = []
         offset_base = int(round(time.time() * 1000))
@@ -392,7 +389,10 @@ if application.debug or application.testing:
                 .get_stream_loader()
                 .get_processor()
                 .process_message(
-                    message, KafkaMessageMetadata(offset=offset, partition=0,)
+                    message,
+                    KafkaMessageMetadata(
+                        offset=offset, partition=0, timestamp=datetime.utcnow()
+                    ),
                 )
             )
             if processed_message:
@@ -405,7 +405,7 @@ if application.debug or application.testing:
 
     @application.route("/tests/<dataset:dataset>/eventstream", methods=["POST"])
     def eventstream(*, dataset: Dataset):
-        ensure_table_exists(dataset)
+        ensure_tables_migrated()
         record = json.loads(http_request.data)
 
         version = record[0]
@@ -426,11 +426,12 @@ if application.debug or application.testing:
 
         if type_ == "insert":
             from snuba.consumer import ConsumerWorker
+
             worker = ConsumerWorker(storage, metrics=metrics)
         else:
             from snuba.replacer import ReplacerWorker
-            clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
-            worker = ReplacerWorker(clickhouse_rw, storage, metrics=metrics)
+
+            worker = ReplacerWorker(storage, metrics=metrics)
 
         processed = worker.process_message(message)
         if processed is not None:
@@ -442,11 +443,13 @@ if application.debug or application.testing:
     @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
     def drop(*, dataset: Dataset):
         for storage in dataset.get_all_storages():
-            clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
+            clickhouse = storage.get_cluster().get_query_connection(
+                ClickhouseClientSettings.MIGRATE
+            )
             for statement in storage.get_schemas().get_drop_statements():
-                clickhouse_rw.execute(statement.statement)
+                clickhouse.execute(statement.statement)
 
-        ensure_table_exists(dataset, force=True)
+        ensure_tables_migrated(force=True)
         redis_client.flushdb()
         return ("ok", 200, {"Content-Type": "text/plain"})
 
@@ -457,5 +460,5 @@ if application.debug or application.testing:
 
 else:
 
-    def ensure_table_exists(dataset: Dataset, force: bool = False) -> None:
+    def ensure_tables_migrated(force: bool = False) -> None:
         pass

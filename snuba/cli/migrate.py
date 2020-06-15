@@ -1,35 +1,14 @@
-import sys
 from typing import Optional
 
 import click
 
-from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging
-from snuba.util import local_dataset_mode
+from snuba.migrations.migrate import run
 
 
 @click.command()
 @click.option("--log-level", help="Logging level to use.")
-@click.option(
-    "--dataset",
-    "dataset_name",
-    type=click.Choice(ACTIVE_DATASET_NAMES),
-    help="The dataset to target",
-)
-def migrate(
-    *, log_level: Optional[str] = None, dataset_name: Optional[str] = None
-) -> None:
-    from snuba.migrations.migrate import logger, run
-
+def migrate(*, log_level: Optional[str] = None) -> None:
     setup_logging(log_level)
 
-    if not local_dataset_mode():
-        logger.error("The migration tool can only work on local dataset mode.")
-        sys.exit(1)
-
-    dataset_names = [dataset_name] if dataset_name else ACTIVE_DATASET_NAMES
-    for name in dataset_names:
-        dataset = get_dataset(name)
-        logger.info("Migrating dataset %s", name)
-
-        run(dataset)
+    run()

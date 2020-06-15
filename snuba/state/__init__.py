@@ -1,20 +1,22 @@
 from __future__ import absolute_import
 
-from confluent_kafka import Producer
-from contextlib import contextmanager
 import logging
 import random
 import re
-import simplejson as json
 import time
-import uuid
 from functools import partial
-from typing import Any, Iterable, Iterator, Mapping, Optional, Sequence, Tuple
+from typing import Any, Iterable, Mapping, Optional, Sequence, Tuple
 
-from snuba import settings
+import simplejson as json
+from confluent_kafka import KafkaError
+from confluent_kafka import Message as KafkaMessage
+from confluent_kafka import Producer
+
+from snuba import environment, settings
 from snuba.redis import redis_client as rds
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 
-
+metrics = MetricsWrapper(environment.metrics, "snuba.state")
 logger = logging.getLogger("snuba.state")
 
 kfk = None
@@ -49,38 +51,6 @@ def get_rates(bucket: str, rollup: int = 60) -> Sequence[Any]:
     for i in reversed(range(now - rollup, now - rate_history_s, -rollup)):
         pipe.zcount(bucket, i, "({:f}".format(i + rollup))
     return [c / float(rollup) for c in pipe.execute()]
-
-
-@contextmanager
-def deduper(query_id: str) -> Iterator[bool]:
-    """
-    A simple redis distributed lock on a query_id to prevent multiple
-    concurrent queries running with the same id. Blocks subsequent
-    queries until the first is finished.
-
-    When used in conjunction with caching this means that the subsequent
-    queries can then use the cached result from the first query.
-    """
-
-    unlock = """
-        if redis.call('get', KEYS[1]) == ARGV[1]
-        then
-            return redis.call('del', KEYS[1])
-        else
-            return 0
-        end
-    """
-
-    lock = "{}{}".format(query_lock_prefix, query_id)
-    nonce = uuid.uuid4()
-    try:
-        is_dupe = False
-        while not rds.set(lock, nonce, nx=True, ex=max_query_duration_s):
-            is_dupe = True
-            time.sleep(0.01)
-        yield is_dupe
-    finally:
-        rds.eval(unlock, 1, lock, nonce)
 
 
 # Runtime Configuration
@@ -222,6 +192,18 @@ def safe_dumps_default(value: Any) -> Any:
 safe_dumps = partial(json.dumps, for_json=True, default=safe_dumps_default)
 
 
+def _record_query_delivery_callback(
+    error: Optional[KafkaError], message: KafkaMessage
+) -> None:
+    metrics.increment(
+        "record_query.delivery_callback",
+        tags={"status": "success" if error is None else "failure"},
+    )
+
+    if error is not None:
+        logger.warning("Could not record query due to error: %r", error)
+
+
 def record_query(query_metadata: Mapping[str, Any]) -> None:
     global kfk
     max_redis_queries = 200
@@ -234,8 +216,11 @@ def record_query(query_metadata: Mapping[str, Any]) -> None:
         if kfk is None:
             kfk = Producer({"bootstrap.servers": ",".join(settings.DEFAULT_BROKERS)})
 
+        kfk.poll(0)  # trigger queued delivery callbacks
         kfk.produce(
-            settings.QUERIES_TOPIC, data.encode("utf-8"),
+            settings.QUERIES_TOPIC,
+            data.encode("utf-8"),
+            on_delivery=_record_query_delivery_callback,
         )
     except Exception as ex:
         logger.exception("Could not record query due to error: %r", ex)

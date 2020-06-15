@@ -21,7 +21,7 @@ from snuba.datasets.schemas.tables import (
     MaterializedViewSchema,
 )
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
 
 WRITE_LOCAL_TABLE_NAME = "outcomes_raw_local"
@@ -46,9 +46,10 @@ raw_schema = MergeTreeSchema(
     # TODO: change to outcomes.raw_local when we add multi DB support
     local_table_name=WRITE_LOCAL_TABLE_NAME,
     dist_table_name=WRITE_DIST_TABLE_NAME,
+    storage_set_key=StorageSetKey.OUTCOMES,
     order_by="(org_id, project_id, timestamp)",
     partition_by="(toMonday(timestamp))",
-    settings={"index_granularity": 16384},
+    settings={"index_granularity": "16384"},
 )
 
 read_columns = ColumnSet(
@@ -67,9 +68,10 @@ read_schema = SummingMergeTreeSchema(
     columns=read_columns,
     local_table_name=READ_LOCAL_TABLE_NAME,
     dist_table_name=READ_DIST_TABLE_NAME,
+    storage_set_key=StorageSetKey.OUTCOMES,
     order_by="(org_id, project_id, key_id, outcome, reason, timestamp)",
     partition_by="(toMonday(timestamp))",
-    settings={"index_granularity": 256},
+    settings={"index_granularity": "256"},
 )
 
 materialized_view_columns = ColumnSet(
@@ -103,6 +105,7 @@ query = """
 materialized_view_schema = MaterializedViewSchema(
     local_materialized_view_name="outcomes_mv_hourly_local",
     dist_materialized_view_name="outcomes_mv_hourly_dist",
+    storage_set_key=StorageSetKey.OUTCOMES,
     prewhere_candidates=["project_id", "org_id"],
     columns=materialized_view_columns,
     query=query,
@@ -117,13 +120,10 @@ raw_storage = WritableTableStorage(
     storage_key=StorageKey.OUTCOMES_RAW,
     storage_set_key=StorageSetKey.OUTCOMES,
     schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
-    table_writer=TableWriter(
-        write_schema=raw_schema,
-        stream_loader=KafkaStreamLoader(
-            processor=OutcomesProcessor(), default_topic="outcomes",
-        ),
-    ),
     query_processors=[],
+    stream_loader=KafkaStreamLoader(
+        processor=OutcomesProcessor(), default_topic="outcomes",
+    ),
 )
 
 materialized_storage = ReadableTableStorage(

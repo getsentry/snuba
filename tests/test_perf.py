@@ -1,5 +1,6 @@
 from tests.base import BaseEventsTest
 
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
@@ -12,7 +13,11 @@ class TestPerf(BaseEventsTest):
         storage = dataset.get_writable_storage()
         assert storage is not None
         table = storage.get_table_writer().get_schema().get_local_table_name()
-        clickhouse = get_storage(StorageKey.EVENTS).get_cluster().get_clickhouse_rw()
+        clickhouse = (
+            get_storage(StorageKey.EVENTS)
+            .get_cluster()
+            .get_query_connection(ClickhouseClientSettings.QUERY)
+        )
 
         assert clickhouse.execute("SELECT COUNT() FROM %s" % table)[0][0] == 0
 

@@ -10,6 +10,17 @@ def literals_tuple(alias: Optional[str], literals: Sequence[Literal]) -> Functio
     return FunctionCall(alias, "tuple", tuple(literals))
 
 
+# Array functions
+def arrayElement(
+    alias: Optional[str], array: Expression, index: Expression
+) -> FunctionCall:
+    return FunctionCall(alias, "arrayElement", (array, index))
+
+
+def arrayJoin(alias: Optional[str], content: Expression) -> Expression:
+    return FunctionCall(alias, "arrayJoin", (content,))
+
+
 # arithmetic function
 def plus(lhs: Expression, rhs: Expression, alias: Optional[str] = None) -> FunctionCall:
     return FunctionCall(alias, "plus", (lhs, rhs))
@@ -27,8 +38,10 @@ def multiply(
     return FunctionCall(alias, "multiply", (lhs, rhs))
 
 
-def div(lhs: Expression, rhs: Expression, alias: Optional[str] = None) -> FunctionCall:
-    return FunctionCall(alias, "div", (lhs, rhs))
+def divide(
+    lhs: Expression, rhs: Expression, alias: Optional[str] = None
+) -> FunctionCall:
+    return FunctionCall(alias, "divide", (lhs, rhs))
 
 
 # aggregate functions

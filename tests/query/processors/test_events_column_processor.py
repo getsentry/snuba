@@ -12,25 +12,25 @@ def test_events_column_format_expressions() -> None:
         {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
-            Column("dr_claw", "culprit", None),
-            Column("the_group_id", "group_id", None),
-            Column("the_message", "message", None),
+            Column("dr_claw", None, "culprit"),
+            Column("the_group_id", None, "group_id"),
+            Column("the_message", None, "message"),
         ],
     )
     expected = Query(
         {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
-            Column("dr_claw", "culprit", None),
+            Column("dr_claw", None, "culprit"),
             FunctionCall(
                 "the_group_id",
                 "nullIf",
-                (Column(None, "group_id", None), Literal(None, 0),),
+                (Column(None, None, "group_id"), Literal(None, 0),),
             ),
             FunctionCall(
                 "the_message",
                 "coalesce",
-                (Column(None, "message", None), Column(None, "search_message", None),),
+                (Column(None, None, "search_message"), Column(None, None, "message")),
             ),
         ],
     )
@@ -43,7 +43,7 @@ def test_events_column_format_expressions() -> None:
 
     expected = (
         "(nullIf(group_id, 0) AS the_group_id)",
-        "(coalesce(message, search_message) AS the_message)",
+        "(coalesce(search_message, message) AS the_message)",
     )
 
     for idx, column in enumerate(unprocessed.get_selected_columns_from_ast()[1:]):

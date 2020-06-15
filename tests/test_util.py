@@ -28,14 +28,14 @@ class TestUtil(BaseTest):
     def test_escape(self):
         assert escape_literal(r"'") == r"'\''"
         assert escape_literal(r"\'") == r"'\\\''"
-        assert escape_literal(date(2001, 1, 1)) == "toDate('2001-01-01')"
+        assert escape_literal(date(2001, 1, 1)) == "toDate('2001-01-01', 'Universal')"
         assert (
             escape_literal(datetime(2001, 1, 1, 1, 1, 1))
-            == "toDateTime('2001-01-01T01:01:01')"
+            == "toDateTime('2001-01-01T01:01:01', 'Universal')"
         )
         assert (
             escape_literal([1, "a", date(2001, 1, 1)])
-            == "(1, 'a', toDate('2001-01-01'))"
+            == "(1, 'a', toDate('2001-01-01', 'Universal'))"
         )
 
     def test_escape_identifier(self):
@@ -554,4 +554,22 @@ class TestUtil(BaseTest):
         ]
         assert exprs == [
             "((1 - (countIf(duration <= 300) + (countIf((duration > 300) AND (duration <= 1200)) / 2)) / count()) + ((1 - (1 / sqrt(uniq(user)))) * 3) AS impact_score)"
+        ]
+
+    @pytest.mark.parametrize("dataset", DATASETS)
+    def test_failure_rate_expression(self, dataset):
+        body = {"aggregations": [["failure_rate()", "", "error_percentage"]]}
+        parsing_context = ParsingContext()
+        source = (
+            dataset.get_all_storages()[0]
+            .get_schemas()
+            .get_read_schema()
+            .get_data_source()
+        )
+        exprs = [
+            column_expr(dataset, col, Query(body, source), parsing_context, alias, agg)
+            for (agg, col, alias) in body["aggregations"]
+        ]
+        assert exprs == [
+            "(countIf((transaction_status != 0 AND transaction_status != 2)) / count() AS error_percentage)"
         ]

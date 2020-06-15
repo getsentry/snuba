@@ -27,14 +27,19 @@ test_cases = [
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                Column(None, "column2", None),
-                Column(None, "column3", None),
+                Column("column2", None, "column2"),
+                Column("column3", None, "column3"),
                 FunctionCall(
-                    "test_func_alias", "test_func", (Column(None, "column4", None),)
+                    "test_func_alias",
+                    "test_func",
+                    (Column("column4", None, "column4"),),
                 ),
-                Column(None, "column1", None),
+                Column("column1", None, "column1"),
             ],
-            groupby=[Column(None, "column2", None), Column(None, "column3", None)],
+            groupby=[
+                Column("column2", None, "column2"),
+                Column("column3", None, "column3"),
+            ],
         ),
     ),  # Basic SELECT composed through the selectedcols and aggregations
     (
@@ -56,20 +61,30 @@ test_cases = [
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                FunctionCall(None, "format_eventid", (Column(None, "event_id", None),)),
-                FunctionCall("platforms", "count", (Column(None, "platform", None),)),
                 FunctionCall(
-                    "uniq_platforms", "uniq", (Column(None, "platform", None),)
+                    None, "format_eventid", (Column("event_id", None, "event_id"),)
+                ),
+                FunctionCall(
+                    "platforms", "count", (Column("platform", None, "platform"),)
+                ),
+                FunctionCall(
+                    "uniq_platforms", "uniq", (Column("platform", None, "platform"),)
                 ),
                 FunctionCall(
                     "top_platforms",
                     "testF",
-                    (Column(None, "platform", None), Column(None, "field2", None)),
+                    (
+                        Column("platform", None, "platform"),
+                        Column("field2", None, "field2"),
+                    ),
                 ),
                 FunctionCall(
                     "f1_alias",
                     "f1",
-                    (Column(None, "column1", None), Column(None, "column2", None)),
+                    (
+                        Column("column1", None, "column1"),
+                        Column("column2", None, "column2"),
+                    ),
                 ),
                 FunctionCall("f2_alias", "f2", ()),
             ],
@@ -78,7 +93,7 @@ test_cases = [
                 "in",
                 SubscriptableReference(
                     "tags[sentry:dist]",
-                    Column(None, "tags", None),
+                    Column(None, None, "tags"),
                     Literal(None, "sentry:dist"),
                 ),
                 FunctionCall(
@@ -86,10 +101,15 @@ test_cases = [
                 ),
             ),
             having=binary_condition(
-                None, "greater", Column(None, "times_seen", None), Literal(None, 1)
+                None,
+                "greater",
+                Column("times_seen", None, "times_seen"),
+                Literal(None, 1),
             ),
             groupby=[
-                FunctionCall(None, "format_eventid", (Column(None, "event_id", None),))
+                FunctionCall(
+                    None, "format_eventid", (Column("event_id", None, "event_id"),)
+                )
             ],
         ),
     ),  # Format a query with functions in all fields
@@ -102,18 +122,18 @@ test_cases = [
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                Column(None, "column1", None),
-                Column(None, "column2", None),
+                Column("column1", None, "column1"),
+                Column("column2", None, "column2"),
             ],
             condition=None,
             groupby=None,
             having=None,
             order_by=[
-                OrderBy(OrderByDirection.ASC, Column(None, "column1", None)),
-                OrderBy(OrderByDirection.DESC, Column(None, "column2", None)),
+                OrderBy(OrderByDirection.ASC, Column("column1", None, "column1")),
+                OrderBy(OrderByDirection.DESC, Column("column2", None, "column2")),
                 OrderBy(
                     OrderByDirection.DESC,
-                    FunctionCall(None, "func", (Column(None, "column3", None),)),
+                    FunctionCall(None, "func", (Column("column3", None, "column3"),)),
                 ),
             ],
         ),
@@ -123,11 +143,13 @@ test_cases = [
         Query(
             {},
             TableSource("events", ColumnSet([])),
-            selected_columns=[Column(None, "column1", None)],
+            selected_columns=[Column("column1", None, "column1")],
             condition=None,
-            groupby=[Column(None, "column1", None)],
+            groupby=[Column("column1", None, "column1")],
             having=None,
-            order_by=[OrderBy(OrderByDirection.DESC, Column(None, "column1", None))],
+            order_by=[
+                OrderBy(OrderByDirection.DESC, Column("column1", None, "column1"))
+            ],
         ),
     ),  # Order and group by provided as string
     (
@@ -145,14 +167,14 @@ test_cases = [
                     (
                         SubscriptableReference(
                             "tags[test2]",
-                            Column(None, "tags", None),
+                            Column(None, None, "tags"),
                             Literal(None, "test2"),
                         ),
                     ),
                 ),
-                Column(None, "column1", None),
+                Column("column1", None, "column1"),
                 SubscriptableReference(
-                    "tags[test]", Column(None, "tags", None), Literal(None, "test")
+                    "tags[test]", Column(None, None, "tags"), Literal(None, "test")
                 ),
             ],
             groupby=[
@@ -162,7 +184,7 @@ test_cases = [
                     (
                         SubscriptableReference(
                             "tags[test2]",
-                            Column(None, "tags", None),
+                            Column(None, None, "tags"),
                             Literal(None, "test2"),
                         ),
                     ),

@@ -67,12 +67,12 @@ class TestEventsDataset(BaseEventsTest):
 
         assert (
             column_expr(self.dataset, "time", deepcopy(query), ParsingContext())
-            == "(toDate(timestamp) AS time)"
+            == "(toDate(timestamp, 'Universal') AS time)"
         )
 
         assert (
             column_expr(self.dataset, "rtime", deepcopy(query), ParsingContext())
-            == "(toDate(received) AS rtime)"
+            == "(toDate(received, 'Universal') AS rtime)"
         )
 
         assert (

@@ -14,20 +14,20 @@ def test_transaction_column_format_expressions() -> None:
         {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
-            Column("transaction.duration", "duration", None),
-            Column("the_event_id", "event_id", None),
+            Column("transaction.duration", None, "duration"),
+            Column("the_event_id", None, "event_id"),
         ],
     )
     expected = Query(
         {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
-            Column("transaction.duration", "duration", None),
+            Column("transaction.duration", None, "duration"),
             FunctionCall(
                 "the_event_id",
                 "replaceAll",
                 (
-                    FunctionCall(None, "toString", (Column(None, "event_id", None),),),
+                    FunctionCall(None, "toString", (Column(None, None, "event_id"),),),
                     Literal(None, "-"),
                     Literal(None, ""),
                 ),

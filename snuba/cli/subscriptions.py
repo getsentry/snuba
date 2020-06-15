@@ -14,11 +14,10 @@ from snuba.environment import setup_logging, setup_sentry
 from snuba.redis import redis_client
 from snuba.subscriptions.consumer import TickConsumer
 from snuba.subscriptions.data import PartitionId
-from snuba.subscriptions.executor import SubscriptionExecutor
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.worker import (
-    SubscriptionResultCodec,
+    SubscriptionTaskResultCodec,
     SubscriptionWorker,
 )
 from snuba.utils.codecs import PassthroughCodec
@@ -91,6 +90,7 @@ logger = logging.getLogger(__name__)
 @click.option("--schedule-ttl", type=int, default=60 * 5)
 @click.option("--result-topic")
 @click.option("--log-level", help="Logging level to use.")
+@click.option("--delay-seconds", type=int)
 def subscriptions(
     *,
     dataset_name: str,
@@ -107,6 +107,7 @@ def subscriptions(
     schedule_ttl: int,
     result_topic: Optional[str],
     log_level: Optional[str],
+    delay_seconds: Optional[int],
 ) -> None:
     """Evaluates subscribed queries for a dataset."""
 
@@ -166,7 +167,7 @@ def subscriptions(
             "partitioner": "consistent",
             "message.max.bytes": 50000000,  # 50MB, default is 1MB
         },
-        SubscriptionResultCodec(),
+        SubscriptionTaskResultCodec(),
     )
 
     executor = ThreadPoolExecutor(max_workers=max_query_workers)
@@ -182,7 +183,8 @@ def subscriptions(
                 else Topic(loader.get_default_topic_spec().topic_name)
             ),
             SubscriptionWorker(
-                SubscriptionExecutor(dataset, executor, metrics),
+                dataset,
+                executor,
                 {
                     index: SubscriptionScheduler(
                         RedisSubscriptionDataStore(
@@ -200,6 +202,12 @@ def subscriptions(
                 },
                 producer,
                 Topic(result_topic),
+                metrics,
+                time_shift=(
+                    timedelta(seconds=delay_seconds * -1)
+                    if delay_seconds is not None
+                    else None
+                ),
             ),
             max_batch_size,
             max_batch_time_ms,

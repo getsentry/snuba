@@ -105,7 +105,9 @@ class RequestSchema:
 
         query = parse_query(query_body, dataset)
         request_id = uuid.uuid4().hex
-        return Request(request_id, query, self.__setting_class(**settings), extensions, referrer)
+        return Request(
+            request_id, query, self.__setting_class(**settings), extensions, referrer
+        )
 
     def __generate_template_impl(self, schema) -> Any:
         """

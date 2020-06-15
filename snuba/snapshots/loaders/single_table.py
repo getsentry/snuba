@@ -7,6 +7,9 @@ from snuba.snapshots.loaders import BulkLoader
 from snuba.writer import BufferedWriterWrapper, WriterTableRow
 
 
+RowProcessor = Callable[[SnapshotTableRow], WriterTableRow]
+
+
 class SingleTableBulkLoader(BulkLoader):
     """
     Load data from a source table into one clickhouse destination table.
@@ -17,21 +20,23 @@ class SingleTableBulkLoader(BulkLoader):
         source: BulkLoadSource,
         dest_table: str,
         source_table: str,
-        row_processor: Callable[[SnapshotTableRow], WriterTableRow],
+        row_processor: RowProcessor,
+        clickhouse: ClickhousePool,
     ):
         self.__source = source
         self.__dest_table = dest_table
         self.__source_table = source_table
         self.__row_processor = row_processor
+        self.__clickhouse = clickhouse
 
-    def load(self, writer: BufferedWriterWrapper, clickhouse_ro: ClickhousePool) -> None:
+    def load(self, writer: BufferedWriterWrapper) -> None:
         logger = logging.getLogger("snuba.bulk-loader")
 
-        clickhouse_tables = clickhouse_ro.execute("show tables")
+        clickhouse_tables = self.__clickhouse.execute("show tables")
         if (self.__dest_table,) not in clickhouse_tables:
             raise ValueError("Destination table %s does not exists" % self.__dest_table)
 
-        table_content = clickhouse_ro.execute(
+        table_content = self.__clickhouse.execute(
             "select count(*) from %s" % self.__dest_table
         )
         if table_content != [(0,)]:

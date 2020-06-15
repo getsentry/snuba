@@ -1,11 +1,9 @@
 import copy
 import logging
-
 from datetime import datetime
+from functools import partial
 
 import sentry_sdk
-from flask import request as http_request
-from functools import partial
 
 from snuba import environment, settings, state
 from snuba.clickhouse.astquery import AstSqlQuery
@@ -14,22 +12,24 @@ from snuba.clickhouse.query import Query
 from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
+from snuba.query.conditions import combine_and_conditions
 from snuba.query.timeseries_extension import TimeSeriesExtensionProcessor
 from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
+from snuba.util import with_span
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
 from snuba.web.db_query import raw_query
 from snuba.web.query_metadata import SnubaQueryMetadata
-from snuba.web.split import split_query
 
 logger = logging.getLogger("snuba.query")
 
 metrics = MetricsWrapper(environment.metrics, "api")
 
 
+@with_span()
 def parse_and_run_query(
     dataset: Dataset, request: Request, timer: Timer
 ) -> QueryResult:
@@ -47,7 +47,7 @@ def parse_and_run_query(
     with sentry_sdk.configure_scope() as scope:
         if scope.span:
             scope.span.set_tag("dataset", get_dataset_name(dataset))
-            scope.span.set_tag("referrer", http_request.referrer)
+            scope.span.set_tag("referrer", request.referrer)
 
     try:
         result = _run_query_pipeline(
@@ -61,7 +61,6 @@ def parse_and_run_query(
     return result
 
 
-@split_query
 def _run_query_pipeline(
     dataset: Dataset,
     request: Request,
@@ -95,9 +94,12 @@ def _run_query_pipeline(
 
     extensions = dataset.get_extensions()
     for name, extension in extensions.items():
-        extension.get_processor().process_query(
-            request.query, request.extensions[name], request.settings
-        )
+        with sentry_sdk.start_span(
+            description=type(extension.get_processor()).__name__, op="extension"
+        ):
+            extension.get_processor().process_query(
+                request.query, request.extensions[name], request.settings
+            )
 
     # TODO: Fit this in a query processor. All query transformations should be driven by
     # datasets/storages and never hardcoded.
@@ -105,7 +107,10 @@ def _run_query_pipeline(
         request.query.set_final(False)
 
     for processor in dataset.get_query_processors():
-        processor.process_query(request.query, request.settings)
+        with sentry_sdk.start_span(
+            description=type(processor).__name__, op="processor"
+        ):
+            processor.process_query(request.query, request.settings)
 
     query_plan = dataset.get_query_plan_builder().build_plan(request)
     # From this point on. The logical query should not be used anymore by anyone.
@@ -117,10 +122,18 @@ def _run_query_pipeline(
     # components of the query plan.
     # TODO: This below should be a storage specific query processor.
     relational_source = query_plan.query.get_data_source()
-    query_plan.query.add_conditions(relational_source.get_mandatory_conditions())
+    mandatory_conditions = relational_source.get_mandatory_conditions()
+    query_plan.query.add_conditions([c.legacy for c in mandatory_conditions])
+    if len(mandatory_conditions) > 0:
+        query_plan.query.add_condition_to_ast(
+            combine_and_conditions([c.ast for c in mandatory_conditions])
+        )
 
     for clickhouse_processor in query_plan.plan_processors:
-        clickhouse_processor.process_query(query_plan.query, request.settings)
+        with sentry_sdk.start_span(
+            description=type(clickhouse_processor).__name__, op="processor"
+        ):
+            clickhouse_processor.process_query(query_plan.query, request.settings)
 
     query_runner = partial(
         _format_storage_query_and_run,
@@ -174,12 +187,15 @@ def _format_storage_query_and_run(
     ) as span:
         span.set_tag("table", source)
         try:
-            span.set_tag(
-                "ast_query",
-                AstSqlQuery(clickhouse_query, request_settings).format_sql(),
+            span.set_data(
+                "ast_query", AstSqlQuery(clickhouse_query, request_settings).sql_data()
             )
+            span.set_tag("query_type", "ast")
         except Exception:
             logger.warning("Failed to format ast query", exc_info=True)
+            span.set_tag("query_type", "dict")
+
+        span.set_data("dict_query", formatted_query.sql_data())
 
         return raw_query(
             clickhouse_query,

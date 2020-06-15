@@ -2,7 +2,6 @@ from unittest.mock import call, patch
 
 from clickhouse_driver import errors
 
-from snuba import settings
 from snuba.clickhouse.columns import Array, ColumnSet, Nested, Nullable, String, UInt
 from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.factory import enforce_table_writer
@@ -36,7 +35,7 @@ class TestClickhouse(BaseEventsTest):
             errors.NetworkError,
             '{"data": "to my face"}',
         ]
-        cp = ClickhousePool(settings.CLICKHOUSE_HOST, settings.CLICKHOUSE_PORT)
+        cp = ClickhousePool("0:0:0:0", 9000, "default", "", "default")
         cp.execute("SHOW TABLES")
         assert FakeClient.return_value.execute.mock_calls == [
             call("SHOW TABLES"),

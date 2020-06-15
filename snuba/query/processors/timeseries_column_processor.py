@@ -20,15 +20,22 @@ class TimeSeriesColumnProcessor(QueryProcessor):
     ) -> str:
         function_call = {
             3600: FunctionCall(
-                alias, "toStartOfHour", (Column(None, column_name, None),)
+                alias,
+                "toStartOfHour",
+                (Column(None, None, column_name), Literal(None, "Universal")),
             ),
             60: FunctionCall(
-                alias, "toStartOfMinute", (Column(None, column_name, None),)
+                alias,
+                "toStartOfMinute",
+                (Column(None, None, column_name), Literal(None, "Universal")),
             ),
-            86400: FunctionCall(alias, "toDate", (Column(None, column_name, None),)),
+            86400: FunctionCall(
+                alias,
+                "toDate",
+                (Column(None, None, column_name), Literal(None, "Universal")),
+            ),
         }.get(granularity)
         if not function_call:
-            # "toDateTime(intDiv(toUInt32({column}), {granularity}) * {granularity})",
             function_call = FunctionCall(
                 alias,
                 "toDateTime",
@@ -41,13 +48,14 @@ class TimeSeriesColumnProcessor(QueryProcessor):
                                 FunctionCall(
                                     None,
                                     "toUInt32",
-                                    (Column(None, column_name, None),),
+                                    (Column(None, None, column_name),),
                                 ),
                                 Literal(None, granularity),
                             ),
                         ),
                         Literal(None, granularity),
                     ),
+                    Literal(None, "Universal"),
                 ),
             )
 

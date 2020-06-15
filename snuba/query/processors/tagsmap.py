@@ -1,14 +1,16 @@
 import logging
-
 from datetime import datetime
-
 from enum import Enum
-from typing import Optional, List, NamedTuple, Set
+from typing import List, NamedTuple, Optional, Set
 
-from snuba.clickhouse.query import Query
 from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.query import Query
+from snuba.clickhouse.translators.snuba.mappers import (
+    KEY_COL_MAPPING_PARAM,
+    mapping_pattern,
+)
 from snuba.datasets.events_format import escape_field
-from snuba.query.expressions import Expression, SubscriptableReference
+from snuba.query.expressions import Expression
 from snuba.query.parser.strings import NESTED_COL_EXPR_RE
 from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
@@ -108,11 +110,10 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         if not expression:
             return False
         for node in expression:
-            if isinstance(node, SubscriptableReference):
-                # Unfortunately, being this a storage processor, as soon as we wrap query
-                # translation, here we will only have the resolved tag, so this condition
-                # will be more complex.
-                if node.column.column_name == self.__nested_col:
+            match = mapping_pattern.match(node)
+            if match is not None:
+                key_column_split = match.string(KEY_COL_MAPPING_PARAM).split(".")
+                if key_column_split[0] == self.__nested_col:
                     return True
         return False
 

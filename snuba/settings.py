@@ -12,17 +12,29 @@ PORT = 1218
 
 DEFAULT_DATASET_NAME = "events"
 DISABLED_DATASETS: Set[str] = {"querylog"}
-DATASET_MODE = "local"
 
 # Clickhouse Options
-# TODO: Warn about using `CLICKHOUSE_SERVER`, users should use the new settings instead.
-[default_clickhouse_host, default_clickhouse_port] = os.environ.get(
-    "CLICKHOUSE_SERVER", "localhost:9000"
-).split(":", 1)
-CLICKHOUSE_HOST = os.environ.get("CLICKHOUSE_HOST", default_clickhouse_host)
-CLICKHOUSE_PORT = int(os.environ.get("CLICKHOUSE_PORT", default_clickhouse_port))
-CLICKHOUSE_HTTP_PORT = int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123))
 CLICKHOUSE_MAX_POOL_SIZE = 25
+
+CLUSTERS: Sequence[Mapping[str, Any]] = [
+    {
+        "host": os.environ.get("CLICKHOUSE_HOST", "localhost"),
+        "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
+        "user": os.environ.get("CLICKHOUSE_USER", "default"),
+        "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
+        "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
+        "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
+        "storage_sets": {
+            "events",
+            "migrations",
+            "outcomes",
+            "querylog",
+            "sessions",
+            "transactions",
+        },
+        "single_node": True,
+    },
+]
 
 # Dogstatsd Options
 DOGSTATSD_HOST = "localhost"
@@ -57,7 +69,6 @@ BULK_CLICKHOUSE_BUFFER = 10000
 
 # Processor/Writer Options
 DEFAULT_BROKERS = ["localhost:9092"]
-DEFAULT_DATASET_BROKERS: Mapping[str, Sequence[str]] = {}
 DEFAULT_STORAGE_BROKERS: Mapping[str, Sequence[str]] = {}
 
 DEFAULT_MAX_BATCH_SIZE = 50000
@@ -83,6 +94,7 @@ REPLACER_MAX_MEMORY_USAGE = 10 * (1024 ** 3)  # 10GB
 # to queries.
 REPLACER_KEY_TTL = 12 * 60 * 60
 REPLACER_MAX_GROUP_IDS_TO_EXCLUDE = 256
+REPLACER_IMMEDIATE_OPTIMIZE = False
 
 TURBO_SAMPLE_RATE = 0.1
 
@@ -128,15 +140,3 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
 
 
 _load_settings()
-
-
-# Snuba currently only supports a single cluster to which all storage sets are assigned.
-# In future this will be configurable.
-CLUSTERS: Sequence[Mapping[str, Any]] = [
-    {
-        "host": CLICKHOUSE_HOST,
-        "port": CLICKHOUSE_PORT,
-        "http_port": CLICKHOUSE_HTTP_PORT,
-        "storage_sets": {"events", "outcomes", "querylog", "sessions", "transactions"},
-    },
-]

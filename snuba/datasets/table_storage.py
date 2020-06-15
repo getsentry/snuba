@@ -3,15 +3,22 @@ import json
 import rapidjson
 
 from datetime import datetime
-from typing import Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
+from snuba.clusters.cluster import (
+    ClickhouseClientSettings,
+    ClickhouseCluster,
+    ClickhouseWriterOptions,
+)
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import MessageProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
+from snuba.snapshots import BulkLoadSource
 from snuba.snapshots.loaders import BulkLoader
+from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.writer import BatchWriter
 
@@ -94,7 +101,7 @@ class KafkaStreamLoader:
 
 class TableWriter:
     """
-    This class provides to a dataset write support on a Clickhouse table.
+    This class provides to a storage write support on a Clickhouse table.
     It is schema aware (the Clickhouse write schema), it provides a writer
     to write on Clickhouse and a two loaders: one for bulk load of the table
     and the other for streaming load.
@@ -109,13 +116,17 @@ class TableWriter:
 
     def __init__(
         self,
+        cluster: ClickhouseCluster,
         write_schema: WritableTableSchema,
         stream_loader: KafkaStreamLoader,
         replacer_processor: Optional[ReplacerProcessor] = None,
+        writer_options: ClickhouseWriterOptions = None,
     ) -> None:
+        self.__cluster = cluster
         self.__table_schema = write_schema
         self.__stream_loader = stream_loader
         self.__replacer_processor = replacer_processor
+        self.__writer_options = writer_options
 
     def get_schema(self) -> WritableTableSchema:
         return self.__table_schema
@@ -124,7 +135,6 @@ class TableWriter:
         self, options=None, table_name=None, rapidjson_serialize=False
     ) -> BatchWriter:
         from snuba import settings
-        from snuba.clickhouse.http import HTTPBatchWriter
 
         def default(value):
             if isinstance(value, datetime):
@@ -132,17 +142,18 @@ class TableWriter:
             else:
                 raise TypeError
 
-        return HTTPBatchWriter(
-            self.__table_schema,
-            settings.CLICKHOUSE_HOST,
-            settings.CLICKHOUSE_HTTP_PORT,
+        table_name = table_name or self.__table_schema.get_table_name()
+
+        options = self.__update_writer_options(options)
+
+        return self.__cluster.get_writer(
+            table_name,
             lambda row: (
                 rapidjson.dumps(row, default=default)
                 if rapidjson_serialize
                 else json.dumps(row, default=default)
             ).encode("utf-8"),
             options,
-            table_name,
             chunk_size=settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
         )
 
@@ -155,24 +166,38 @@ class TableWriter:
         # once we will be confident it is reliable enough.
 
         from snuba import settings
-        from snuba.clickhouse.http import HTTPBatchWriter
 
-        return HTTPBatchWriter(
-            self.__table_schema,
-            settings.CLICKHOUSE_HOST,
-            settings.CLICKHOUSE_HTTP_PORT,
+        table_name = table_name or self.__table_schema.get_table_name()
+
+        options = self.__update_writer_options(options)
+
+        return self.__cluster.get_writer(
+            table_name,
             lambda row: rapidjson.dumps(row).encode("utf-8"),
             options,
-            table_name,
             chunk_size=settings.BULK_CLICKHOUSE_BUFFER,
         )
 
-    def get_bulk_loader(self, source, dest_table) -> BulkLoader:
+    def get_bulk_loader(
+        self,
+        source: BulkLoadSource,
+        source_table: str,
+        dest_table: str,
+        row_processor: RowProcessor,
+    ) -> BulkLoader:
         """
         Returns the instance of the bulk loader to populate the dataset from an
         external source when present.
         """
-        raise NotImplementedError
+        return SingleTableBulkLoader(
+            source=source,
+            source_table=source_table,
+            dest_table=dest_table,
+            row_processor=row_processor,
+            clickhouse=self.__cluster.get_query_connection(
+                ClickhouseClientSettings.QUERY
+            ),
+        )
 
     def get_stream_loader(self) -> KafkaStreamLoader:
         return self.__stream_loader
@@ -183,3 +208,12 @@ class TableWriter:
         replacements on the table it manages.
         """
         return self.__replacer_processor
+
+    def __update_writer_options(
+        self, options: ClickhouseWriterOptions = None,
+    ) -> Mapping[str, Any]:
+        if options is None:
+            options = {}
+        if self.__writer_options:
+            return {**options, **self.__writer_options}
+        return options

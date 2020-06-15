@@ -1,34 +1,18 @@
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.cdc.groupedmessage_processor import (
     GroupedMessageProcessor,
     GroupedMessageRow,
 )
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
 from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.datasets.schemas import MandatoryCondition
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.cdc import CdcStorage
-from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
-from snuba.snapshots import BulkLoadSource
-from snuba.snapshots.loaders.single_table import SingleTableBulkLoader
-
-
-class GroupedMessageTableWriter(TableWriter):
-    def __init__(
-        self, postgres_table: str, **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.__postgres_table = postgres_table
-
-    def get_bulk_loader(self, source: BulkLoadSource, dest_table: str) -> SingleTableBulkLoader:
-        return SingleTableBulkLoader(
-            source=source,
-            source_table=self.__postgres_table,
-            dest_table=dest_table,
-            row_processor=lambda row: GroupedMessageRow.from_bulk(row).to_clickhouse(),
-        )
-
+from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.expressions import Column, Literal
 
 columns = ColumnSet(
     [
@@ -55,7 +39,18 @@ schema = ReplacingMergeTreeSchema(
     columns=columns,
     local_table_name="groupedmessage_local",
     dist_table_name="groupedmessage_dist",
-    mandatory_conditions=[("record_deleted", "=", 0)],
+    storage_set_key=StorageSetKey.EVENTS,
+    mandatory_conditions=[
+        MandatoryCondition(
+            ("record_deleted", "=", 0),
+            binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                Column(None, None, "record_deleted"),
+                Literal(None, 0),
+            ),
+        )
+    ],
     prewhere_candidates=["project_id", "id"],
     order_by="(project_id, id)",
     partition_by=None,
@@ -69,16 +64,13 @@ storage = CdcStorage(
     storage_key=StorageKey.GROUPEDMESSAGES,
     storage_set_key=StorageSetKey.EVENTS,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
-    table_writer=GroupedMessageTableWriter(
-        write_schema=schema,
-        stream_loader=KafkaStreamLoader(
-            processor=GroupedMessageProcessor(POSTGRES_TABLE),
-            default_topic="cdc",
-            pre_filter=CdcTableNameMessageFilter(POSTGRES_TABLE),
-        ),
-        postgres_table=POSTGRES_TABLE,
-    ),
     query_processors=[],
+    stream_loader=KafkaStreamLoader(
+        processor=GroupedMessageProcessor(POSTGRES_TABLE),
+        default_topic="cdc",
+        pre_filter=CdcTableNameMessageFilter(POSTGRES_TABLE),
+    ),
     default_control_topic="cdc_control",
     postgres_table=POSTGRES_TABLE,
+    row_processor=lambda row: GroupedMessageRow.from_bulk(row).to_clickhouse(),
 )

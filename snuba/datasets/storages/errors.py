@@ -1,6 +1,10 @@
+from typing import Mapping, Sequence
+
 from snuba.clickhouse.columns import (
+    UUID,
     Array,
     ColumnSet,
+    ColumnType,
     DateTime,
     FixedString,
     IPv4,
@@ -11,7 +15,6 @@ from snuba.clickhouse.columns import (
     Nullable,
     String,
     UInt,
-    UUID,
     WithCodecs,
     WithDefault,
 )
@@ -19,11 +22,35 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
+from snuba.datasets.schemas import MandatoryCondition
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.datasets.storages.processors.replaced_groups import (
+    PostReplacementConsistencyEnforcer,
+)
+from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.expressions import Column, Literal
+from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
+    ArrayJoinKeyValueOptimizer,
+)
+from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
+
+
+def errors_migrations(
+    clickhouse_table: str, current_schema: Mapping[str, ColumnType]
+) -> Sequence[str]:
+    ret = []
+
+    if "message_timestamp" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN message_timestamp DateTime AFTER offset"
+        )
+
+    return ret
+
 
 all_columns = ColumnSet(
     [
@@ -34,8 +61,7 @@ all_columns = ColumnSet(
         (
             "event_hash",
             WithCodecs(
-                Materialized(UInt(64), "cityHash64(toString(event_id))",),
-                ["NONE"],
+                Materialized(UInt(64), "cityHash64(toString(event_id))",), ["NONE"],
             ),
         ),
         ("platform", LowCardinality(String())),
@@ -56,14 +82,12 @@ all_columns = ColumnSet(
         ("contexts", Nested([("key", String()), ("value", String())])),
         ("_contexts_flattened", String()),
         ("transaction_name", WithDefault(LowCardinality(String()), "''")),
-        (
-            "transaction_hash",
-            Materialized(UInt(64), "cityHash64(transaction_name)"),
-        ),
+        ("transaction_hash", Materialized(UInt(64), "cityHash64(transaction_name)"),),
         ("span_id", Nullable(UInt(64))),
         ("trace_id", Nullable(UUID())),
         ("partition", UInt(16)),
         ("offset", WithCodecs(UInt(64), ["DoubleDelta", "LZ4"])),
+        ("message_timestamp", DateTime()),
         ("retention_days", UInt(16)),
         ("deleted", UInt(8)),
         ("group_id", UInt(64)),
@@ -123,7 +147,18 @@ schema = ReplacingMergeTreeSchema(
     columns=all_columns,
     local_table_name="errors_local",
     dist_table_name="errors_dist",
-    mandatory_conditions=[("deleted", "=", 0)],
+    storage_set_key=StorageSetKey.EVENTS,
+    mandatory_conditions=[
+        MandatoryCondition(
+            ("deleted", "=", 0),
+            binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                Column(None, None, "deleted"),
+                Literal(None, 0),
+            ),
+        )
+    ],
     prewhere_candidates=[
         "event_id",
         "group_id",
@@ -138,6 +173,7 @@ schema = ReplacingMergeTreeSchema(
     sample_expr="event_hash",
     ttl_expr="timestamp + toIntervalDay(retention_days)",
     settings={"index_granularity": "8192"},
+    migration_function=errors_migrations,
 )
 
 required_columns = [
@@ -154,27 +190,25 @@ storage = WritableTableStorage(
     storage_key=StorageKey.ERRORS,
     storage_set_key=StorageSetKey.EVENTS,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
-    table_writer=TableWriter(
-        write_schema=schema,
-        stream_loader=KafkaStreamLoader(
-            processor=ErrorsProcessor(promoted_tag_columns),
-            default_topic="events",
-            replacement_topic="errors-replacements",
+    query_processors=[
+        PostReplacementConsistencyEnforcer(
+            project_column="project_id", replacer_state_name=ReplacerState.ERRORS,
         ),
-        replacer_processor=ErrorsReplacer(
-            write_schema=schema,
-            read_schema=schema,
-            required_columns=required_columns,
-            tag_column_map={
-                "tags": promoted_tag_columns,
-                "contexts": {},
-            },
-            promoted_tags={
-                "tags": promoted_tag_columns.keys(),
-                "contexts": {},
-            },
-            state_name=ReplacerState.ERRORS,
-        ),
+        MappingColumnPromoter(mapping_specs={"tags": promoted_tag_columns}),
+        ArrayJoinKeyValueOptimizer("tags"),
+        PrewhereProcessor(),
+    ],
+    stream_loader=KafkaStreamLoader(
+        processor=ErrorsProcessor(promoted_tag_columns),
+        default_topic="events",
+        replacement_topic="errors-replacements",
     ),
-    query_processors=[PrewhereProcessor()],
+    replacer_processor=ErrorsReplacer(
+        write_schema=schema,
+        read_schema=schema,
+        required_columns=required_columns,
+        tag_column_map={"tags": promoted_tag_columns, "contexts": {}},
+        promoted_tags={"tags": promoted_tag_columns.keys(), "contexts": {}},
+        state_name=ReplacerState.ERRORS,
+    ),
 )

@@ -6,7 +6,7 @@ from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
 )
-from snuba.query.dsl import div, multiply, plus
+from snuba.query.dsl import divide, multiply, plus
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.apdex_processor import ApdexProcessor
@@ -18,9 +18,9 @@ def test_apdex_format_expressions() -> None:
         {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
-            Column(None, "column2", None),
+            Column(None, None, "column2"),
             FunctionCall(
-                "perf", "apdex", (Column(None, "column1", None), Literal(None, 300))
+                "perf", "apdex", (Column(None, None, "column1"), Literal(None, 300))
             ),
         ],
     )
@@ -28,8 +28,8 @@ def test_apdex_format_expressions() -> None:
         {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
-            Column(None, "column2", None),
-            div(
+            Column(None, None, "column2"),
+            divide(
                 plus(
                     FunctionCall(
                         None,
@@ -38,12 +38,12 @@ def test_apdex_format_expressions() -> None:
                             binary_condition(
                                 None,
                                 ConditionFunctions.LTE,
-                                Column(None, "column1", None),
+                                Column(None, None, "column1"),
                                 Literal(None, 300),
                             ),
                         ),
                     ),
-                    div(
+                    divide(
                         FunctionCall(
                             None,
                             "countIf",
@@ -54,13 +54,13 @@ def test_apdex_format_expressions() -> None:
                                     binary_condition(
                                         None,
                                         ConditionFunctions.GT,
-                                        Column(None, "column1", None),
+                                        Column(None, None, "column1"),
                                         Literal(None, 300),
                                     ),
                                     binary_condition(
                                         None,
                                         ConditionFunctions.LTE,
-                                        Column(None, "column1", None),
+                                        Column(None, None, "column1"),
                                         multiply(Literal(None, 300), Literal(None, 4)),
                                     ),
                                 ),
@@ -70,6 +70,7 @@ def test_apdex_format_expressions() -> None:
                     ),
                 ),
                 FunctionCall(None, "count", (),),
+                "perf",
             ),
         ],
     )
@@ -84,7 +85,7 @@ def test_apdex_format_expressions() -> None:
         ClickhouseExpressionFormatter()
     )
     assert ret == (
-        "div(plus(countIf(lessOrEquals(column1, 300)), "
-        "div(countIf(and(greater(column1, 300), "
-        "lessOrEquals(column1, multiply(300, 4)))), 2)), count())"
+        "(divide(plus(countIf(lessOrEquals(column1, 300)), "
+        "divide(countIf(and(greater(column1, 300), "
+        "lessOrEquals(column1, multiply(300, 4)))), 2)), count()) AS perf)"
     )

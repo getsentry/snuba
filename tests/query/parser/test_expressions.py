@@ -11,7 +11,7 @@ from snuba.query.parser.expressions import parse_aggregation
 test_data = [
     (
         ["count", "event_id", None],
-        FunctionCall(None, "count", (Column(None, "event_id", None),)),
+        FunctionCall(None, "count", (Column("event_id", None, "event_id"),)),
     ),  # Simple aggregation
     (
         ["count()", "", None],
@@ -24,19 +24,21 @@ test_data = [
     (
         ["count()", "event_id", None],
         CurriedFunctionCall(
-            None, FunctionCall(None, "count", ()), (Column(None, "event_id", None),)
+            None,
+            FunctionCall(None, "count", ()),
+            (Column("event_id", None, "event_id"),),
         ),
     ),  # This is probably wrong, but we cannot disambiguate it at this level
     (
         ["uniq", "platform", "uniq_platforms"],
-        FunctionCall("uniq_platforms", "uniq", (Column(None, "platform", None),)),
+        FunctionCall("uniq_platforms", "uniq", (Column("platform", None, "platform"),)),
     ),  # Use the columns provided as parameters
     (
         ["topK(1)", "platform", "top_platforms"],
         CurriedFunctionCall(
             "top_platforms",
             FunctionCall(None, "topK", (Literal(None, 1),)),
-            (Column(None, "platform", None),),
+            (Column("platform", None, "platform"),),
         ),
     ),  # Curried function
     (
@@ -44,7 +46,7 @@ test_data = [
         CurriedFunctionCall(
             "p95",
             FunctionCall(None, "quantile", (Literal(None, 0.95),)),
-            (Column(None, "duration", None),),
+            (Column(None, None, "duration"),),
         ),
     ),  # Curried function
     (
@@ -52,7 +54,7 @@ test_data = [
         FunctionCall(
             "apdex_score",
             "apdex",
-            (Column(None, "duration", None), Literal(None, 300),),
+            (Column(None, None, "duration"), Literal(None, 300),),
         ),
     ),  # apdex formula
     (
@@ -78,12 +80,12 @@ test_data = [
                             "multiply",
                             (
                                 FunctionCall(
-                                    None, "log", (Column(None, "times_seen", None),),
+                                    None, "log", (Column(None, None, "times_seen"),),
                                 ),
                                 Literal(None, 600),
                             ),
                         ),
-                        Column(None, "last_seen", None),
+                        Column(None, None, "last_seen"),
                     ),
                 ),
             ),

@@ -1,48 +1,98 @@
 from __future__ import annotations
 
+import copy
 import itertools
 import json
-from concurrent.futures import Future, as_completed
-from typing import Mapping, NamedTuple, Optional, Sequence
+import time
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from datetime import timedelta
+from typing import Mapping, NamedTuple, Optional, Sequence, Tuple
 
+from snuba.datasets.dataset import Dataset
 from snuba.reader import Result
+from snuba.request import Request
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import Subscription
-from snuba.subscriptions.executor import SubscriptionExecutor
 from snuba.subscriptions.scheduler import ScheduledTask, Scheduler
 from snuba.utils.codecs import Codec
+from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.metrics.gauge import Gauge
+from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.batching import AbstractBatchWorker
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.producer import Producer
 from snuba.utils.streams.types import Message, Topic
+from snuba.web.query import parse_and_run_query
 
 
-class SubscriptionResultFuture(NamedTuple):
+class SubscriptionTaskResultFuture(NamedTuple):
     task: ScheduledTask[Subscription]
-    future: Future[Result]
+    future: Future[Tuple[Request, Result]]
 
 
-class SubscriptionResult(NamedTuple):
+class SubscriptionTaskResult(NamedTuple):
     task: ScheduledTask[Subscription]
-    result: Result
+    result: Tuple[Request, Result]
 
 
-class SubscriptionWorker(AbstractBatchWorker[Tick, Sequence[SubscriptionResultFuture]]):
+class SubscriptionWorker(
+    AbstractBatchWorker[Tick, Sequence[SubscriptionTaskResultFuture]]
+):
     def __init__(
         self,
-        executor: SubscriptionExecutor,
+        dataset: Dataset,
+        executor: ThreadPoolExecutor,
         schedulers: Mapping[int, Scheduler[Subscription]],
-        producer: Producer[SubscriptionResult],
+        producer: Producer[SubscriptionTaskResult],
         topic: Topic,
+        metrics: MetricsBackend,
+        time_shift: Optional[timedelta] = None,
     ) -> None:
+        self.__dataset = dataset
         self.__executor = executor
         self.__schedulers = schedulers
         self.__producer = producer
         self.__topic = topic
+        self.__metrics = metrics
+        self.__time_shift = time_shift if time_shift is not None else timedelta()
+
+        self.__concurrent_gauge = Gauge(self.__metrics, "executor.concurrent")
+
+    def __execute(
+        self, task: ScheduledTask[Subscription], tick: Tick
+    ) -> Tuple[Request, Result]:
+        # Measure the amount of time that took between this task being
+        # scheduled and it beginning to execute.
+        self.__metrics.timing(
+            "executor.latency", (time.time() - task.timestamp.timestamp()) * 1000
+        )
+
+        # XXX: The ``query`` name is taken from the web views so that all query
+        # performance metrics are reported to the same spot, regardless of
+        # execution environment.
+        timer = Timer("query")
+
+        request = task.task.data.build_request(
+            self.__dataset, task.timestamp, tick.offsets.upper, timer,
+        )
+
+        with self.__concurrent_gauge:
+            # XXX: The ``extra`` is discarded from ``QueryResult`` since it is
+            # not particularly useful in this context and duplicates data that
+            # is already being published to the query log.
+            # XXX: The ``request`` instance is copied when passed to
+            # ``parse_and_run_query`` since it can/will be mutated during
+            # processing.
+            return (
+                request,
+                parse_and_run_query(
+                    self.__dataset, copy.deepcopy(request), timer
+                ).result,
+            )
 
     def process_message(
         self, message: Message[Tick]
-    ) -> Optional[Sequence[SubscriptionResultFuture]]:
+    ) -> Optional[Sequence[SubscriptionTaskResultFuture]]:
         # Schedule all of the queries (tasks) associated with this tick message
         # for (asynchronous) execution.
         # NOTE: There is no backpressure here (tasks will be submitted to the
@@ -52,20 +102,24 @@ class SubscriptionWorker(AbstractBatchWorker[Tick, Sequence[SubscriptionResultFu
         # waiting for them to complete during ``flush_batch`` may exceed the
         # consumer poll timeout (or session timeout during consumer
         # rebalancing) and cause the entire batch to be have to be replayed.
-        tick = message.payload
+        tick = message.payload.time_shift(self.__time_shift)
         return [
-            SubscriptionResultFuture(task, self.__executor.execute(task, tick))
+            SubscriptionTaskResultFuture(
+                task, self.__executor.submit(self.__execute, task, tick)
+            )
             for task in self.__schedulers[message.partition.index].find(tick.timestamps)
         ]
 
-    def flush_batch(self, batch: Sequence[Sequence[SubscriptionResultFuture]]) -> None:
+    def flush_batch(
+        self, batch: Sequence[Sequence[SubscriptionTaskResultFuture]]
+    ) -> None:
         # Map over the batch, converting the ``SubscriptionResultFuture`` to a
         # ``SubscriptionResult``. This will block and wait for any unfinished
         # queries to complete, and raise any exceptions encountered during
         # query execution. Either the entire batch succeeds, or the entire
         # batch fails.
         results = [
-            SubscriptionResult(task, future.result())
+            SubscriptionTaskResult(task, future.result())
             for task, future in itertools.chain.from_iterable(batch)
         ]
 
@@ -78,22 +132,24 @@ class SubscriptionWorker(AbstractBatchWorker[Tick, Sequence[SubscriptionResultFu
             future.result()
 
 
-class SubscriptionResultCodec(Codec[KafkaPayload, SubscriptionResult]):
-    def encode(self, value: SubscriptionResult) -> KafkaPayload:
+class SubscriptionTaskResultCodec(Codec[KafkaPayload, SubscriptionTaskResult]):
+    def encode(self, value: SubscriptionTaskResult) -> KafkaPayload:
         subscription_id = str(value.task.task.identifier)
+        request, result = value.result
         return KafkaPayload(
             subscription_id.encode("utf-8"),
             json.dumps(
                 {
-                    "version": 1,
+                    "version": 2,
                     "payload": {
                         "subscription_id": subscription_id,
-                        "values": value.result,
+                        "request": {**request.body},
+                        "result": result,
                         "timestamp": value.task.timestamp.isoformat(),
                     },
                 }
             ).encode("utf-8"),
         )
 
-    def decode(self, value: KafkaPayload) -> SubscriptionResult:
+    def decode(self, value: KafkaPayload) -> SubscriptionTaskResult:
         raise NotImplementedError

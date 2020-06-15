@@ -1,31 +1,35 @@
 from datetime import timedelta
-from typing import Mapping, Optional, Sequence, Union
+from typing import Mapping, Optional, Sequence
 
 from snuba.clickhouse.processors import QueryProcessor as ClickhouseProcessor
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
+from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.storage import ReadableStorage
-from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.schemas import MandatoryCondition
 from snuba.datasets.schemas.join import (
-    JoinConditionExpression,
-    JoinCondition,
-    JoinedSchema,
     JoinClause,
+    JoinCondition,
+    JoinConditionExpression,
+    JoinedSchema,
     JoinType,
     TableJoinNode,
 )
+from snuba.datasets.storage import ReadableStorage
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
+from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor as LogicalProcessor
 from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.timeseries_extension import TimeSeriesExtension
@@ -85,10 +89,15 @@ class Groups(TimeSeriesDataset):
                 table_name=groupedmessage_source.format_from(),
                 columns=groupedmessage_source.get_columns(),
                 mandatory_conditions=[
-                    # TODO: This will be replaced as soon as expressions won't be strings
-                    # thus we will be able to easily add an alias to a column in an
-                    # expression.
-                    (qualified_column("record_deleted", self.GROUPS_ALIAS), "=", 0)
+                    MandatoryCondition(
+                        (qualified_column("record_deleted", self.GROUPS_ALIAS), "=", 0),
+                        binary_condition(
+                            None,
+                            ConditionFunctions.EQ,
+                            Column(None, self.GROUPS_ALIAS, "record_deleted"),
+                            Literal(None, 0),
+                        ),
+                    )
                 ],
                 prewhere_candidates=[
                     qualified_column(col, self.GROUPS_ALIAS)
@@ -100,7 +109,15 @@ class Groups(TimeSeriesDataset):
                 table_name=events_source.format_from(),
                 columns=events_source.get_columns(),
                 mandatory_conditions=[
-                    (qualified_column("deleted", self.EVENTS_ALIAS), "=", 0)
+                    MandatoryCondition(
+                        (qualified_column("deleted", self.EVENTS_ALIAS), "=", 0),
+                        binary_condition(
+                            None,
+                            ConditionFunctions.EQ,
+                            Column(None, self.EVENTS_ALIAS, "deleted"),
+                            Literal(None, 0),
+                        ),
+                    )
                 ],
                 prewhere_candidates=[
                     qualified_column(col, self.EVENTS_ALIAS)
@@ -198,12 +215,8 @@ class Groups(TimeSeriesDataset):
             ),
         }
 
-    def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
-        return ColumnSplitSpec(
-            id_column="events.event_id",
-            project_column="events.project_id",
-            timestamp_column="events.timestamp",
-        )
-
     def get_query_processors(self) -> Sequence[LogicalProcessor]:
-        return [TimeSeriesColumnProcessor(self.__time_group_columns)]
+        return [
+            TagsExpanderProcessor(),
+            TimeSeriesColumnProcessor(self.__time_group_columns),
+        ]

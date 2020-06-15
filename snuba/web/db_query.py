@@ -10,6 +10,7 @@ from typing import (
     Optional,
 )
 
+import sentry_sdk
 from sentry_sdk.api import configure_scope
 
 from snuba import settings, state
@@ -26,7 +27,7 @@ from snuba.state.rate_limit import (
     RateLimitAggregator,
     RateLimitExceeded,
 )
-from snuba.util import force_bytes
+from snuba.util import force_bytes, with_span
 from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
@@ -62,6 +63,7 @@ def update_query_metadata_and_stats(
     return stats
 
 
+@with_span(op="db")
 def execute_query(
     clickhouse_query: Query,
     request_settings: RequestSettings,
@@ -104,6 +106,7 @@ def execute_query(
     return result
 
 
+@with_span(op="db")
 def execute_query_with_rate_limits(
     clickhouse_query: Query,
     request_settings: RequestSettings,
@@ -150,6 +153,7 @@ def get_query_cache_key(formatted_query: SqlQuery) -> str:
     return md5(force_bytes(formatted_query.format_sql())).hexdigest()
 
 
+@with_span(op="db")
 def execute_query_with_caching(
     clickhouse_query: Query,
     request_settings: RequestSettings,
@@ -179,51 +183,26 @@ def execute_query_with_caching(
         query_settings,
     )
 
-    if use_cache:
-        key = get_query_cache_key(formatted_query)
-        result = cache.get(key)
-        timer.mark("cache_get")
-        stats["cache_hit"] = result is not None
-        if result is not None:
+    with sentry_sdk.start_span(description="execute", op="db") as span:
+        if use_cache:
+            key = get_query_cache_key(formatted_query)
+            result = cache.get(key)
+            timer.mark("cache_get")
+            stats["cache_hit"] = result is not None
+            if result is not None:
+                span.set_tag("cache", "hit")
+                return result
+
+            span.set_tag("cache", "miss")
+            result = execute()
+            cache.set(key, result)
+            timer.mark("cache_set")
             return result
-        result = execute()
-        cache.set(key, result)
-        timer.mark("cache_set")
-        return result
-    else:
-        return execute()
-
-
-def execute_query_with_deduplication(
-    clickhouse_query: Query,
-    request_settings: RequestSettings,
-    formatted_query: SqlQuery,
-    reader: Reader[SqlQuery],
-    timer: Timer,
-    stats: MutableMapping[str, Any],
-    query_settings: MutableMapping[str, Any],
-) -> Result:
-    execute = partial(
-        execute_query_with_caching,
-        clickhouse_query,
-        request_settings,
-        formatted_query,
-        reader,
-        timer,
-        stats,
-        query_settings,
-    )
-    if state.get_config("use_deduper", 1):
-        query_id = md5(force_bytes(formatted_query.format_sql())).hexdigest()
-        with state.deduper(query_id) as is_dupe:
-            timer.mark("dedupe_wait")
-            stats.update({"is_duplicate": is_dupe})
-            query_settings["query_id"] = query_id
+        else:
             return execute()
-    else:
-        return execute()
 
 
+@with_span(op="db")
 def execute_query_with_readthrough_caching(
     clickhouse_query: Query,
     request_settings: RequestSettings,
@@ -294,8 +273,8 @@ def raw_query(
 
     execute_query_strategy = (
         execute_query_with_readthrough_caching
-        if state.get_config("use_readthrough_query_cache", 0)
-        else execute_query_with_deduplication
+        if state.get_config("use_readthrough_query_cache", 1)
+        else execute_query_with_caching
     )
 
     try:
