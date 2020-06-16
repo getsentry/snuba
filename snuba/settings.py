@@ -102,6 +102,11 @@ PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 
+AST_DATASET_ROLLOUT: Mapping[str, int] = {}  # (dataset name: percentage)
+AST_REFERRER_ROLLOUT: Mapping[
+    str, Mapping[str, int]
+] = {}  # (dataset name: (referrer: percentage))
+
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment
