@@ -208,6 +208,17 @@ test_cases = [
             groupby=[FunctionCall("exp", "f", (Column("column3", None, "column3"),))],
         ),
     ),  # Alias reference is kept as a Column that does not declare an alias
+    (
+        {"selected_columns": [["f", ["column3"], "exp"], ["f", ["column3"], "exp"]]},
+        Query(
+            {},
+            TableSource("events", ColumnSet([])),
+            selected_columns=[
+                FunctionCall("exp", "f", (Column("column3", None, "column3"),)),
+                FunctionCall("exp", "f", (Column("column3", None, "column3"),)),
+            ],
+        ),
+    ),  # Allowed duplicate alias (same expression)
 ]
 
 
