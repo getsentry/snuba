@@ -22,6 +22,22 @@ test_data = [
         FunctionCall(None, "count", ()),
     ),  # Common way to provide count()
     (
+        ["f(123)", None, None],
+        FunctionCall(None, "f", (Literal(None, 123),)),
+    ),  # Int literal
+    (
+        ["f(123e+06)", None, None],
+        FunctionCall(None, "f", (Literal(None, float(123e06)),)),
+    ),  # Int literal exp
+    (
+        ["f(123.2)", None, None],
+        FunctionCall(None, "f", (Literal(None, 123.2),)),
+    ),  # Float literal
+    (
+        ["f(123.2e-06)", None, None],
+        FunctionCall(None, "f", (Literal(None, 123.2e-06),)),
+    ),  # Float literal exp
+    (
         ["count()", "event_id", None],
         CurriedFunctionCall(
             None,

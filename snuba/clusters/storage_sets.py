@@ -16,6 +16,7 @@ class StorageSetKey(Enum):
     """
 
     EVENTS = "events"
+    MIGRATIONS = "migrations"
     OUTCOMES = "outcomes"
     QUERYLOG = "querylog"
     SESSIONS = "sessions"
