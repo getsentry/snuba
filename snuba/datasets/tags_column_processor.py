@@ -7,7 +7,7 @@ from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.query.logical import Query
-from snuba.query.parser.strings import NESTED_COL_EXPR_RE
+from snuba.query.parser import NESTED_COL_EXPR_RE
 from snuba.query.parsing import ParsingContext
 from snuba.query.types import Condition
 from snuba.util import (
