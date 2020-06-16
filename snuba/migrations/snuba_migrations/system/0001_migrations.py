@@ -13,8 +13,9 @@ class Migration(migration.Migration):
                 storage_set=StorageSetKey.MIGRATIONS,
                 statement="""\
                     CREATE TABLE migrations_local (group String, migration_id String,
-                    timestamp DateTime, status Enum('completed' = 0, 'in_progress' = 1))
-                    ENGINE = ReplacingMergeTree(timestamp) ORDER BY (group, migration_id);
+                    timestamp DateTime, status Enum('completed' = 0, 'in_progress' = 1,
+                    'not_started' = 2)) ENGINE = ReplacingMergeTree(timestamp) ORDER
+                    BY (group, migration_id);
                 """,
             ),
         ]
