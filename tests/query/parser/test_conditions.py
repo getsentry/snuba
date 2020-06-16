@@ -24,13 +24,13 @@ test_conditions = [
     (
         [["a", "=", 1]],
         FunctionCall(
-            None, ConditionFunctions.EQ, (Column("a", None, "a"), Literal(None, 1))
+            None, ConditionFunctions.EQ, (Column(None, None, "a"), Literal(None, 1))
         ),
     ),
     (
         [[["a", "=", 1]]],
         FunctionCall(
-            None, ConditionFunctions.EQ, (Column("a", None, "a"), Literal(None, 1))
+            None, ConditionFunctions.EQ, (Column(None, None, "a"), Literal(None, 1))
         ),
     ),
     (
@@ -42,12 +42,12 @@ test_conditions = [
                 FunctionCall(
                     None,
                     ConditionFunctions.EQ,
-                    (Column("a", None, "a"), Literal(None, 1)),
+                    (Column(None, None, "a"), Literal(None, 1)),
                 ),
                 FunctionCall(
                     None,
                     ConditionFunctions.EQ,
-                    (Column("b", None, "b"), Literal(None, 2)),
+                    (Column(None, None, "b"), Literal(None, 2)),
                 ),
             ),
         ),
@@ -61,7 +61,7 @@ test_conditions = [
                 FunctionCall(
                     None,
                     ConditionFunctions.EQ,
-                    (Column("a", None, "a"), Literal(None, 1)),
+                    (Column(None, None, "a"), Literal(None, 1)),
                 ),
                 FunctionCall(
                     None,
@@ -70,12 +70,12 @@ test_conditions = [
                         FunctionCall(
                             None,
                             ConditionFunctions.EQ,
-                            (Column("b", None, "b"), Literal(None, 2)),
+                            (Column(None, None, "b"), Literal(None, 2)),
                         ),
                         FunctionCall(
                             None,
                             ConditionFunctions.EQ,
-                            (Column("c", None, "c"), Literal(None, 3)),
+                            (Column(None, None, "c"), Literal(None, 3)),
                         ),
                     ),
                 ),
@@ -91,12 +91,12 @@ test_conditions = [
                 FunctionCall(
                     None,
                     ConditionFunctions.EQ,
-                    (Column("a", None, "a"), Literal(None, 1)),
+                    (Column(None, None, "a"), Literal(None, 1)),
                 ),
                 FunctionCall(
                     None,
                     ConditionFunctions.EQ,
-                    (Column("b", None, "b"), Literal(None, 2)),
+                    (Column(None, None, "b"), Literal(None, 2)),
                 ),
             ),
         ),
@@ -110,7 +110,7 @@ test_conditions = [
                 FunctionCall(
                     None,
                     ConditionFunctions.EQ,
-                    (Column("a", None, "a"), Literal(None, 1)),
+                    (Column(None, None, "a"), Literal(None, 1)),
                 ),
                 FunctionCall(
                     None,
@@ -119,12 +119,12 @@ test_conditions = [
                         FunctionCall(
                             None,
                             ConditionFunctions.EQ,
-                            (Column("b", None, "b"), Literal(None, 2)),
+                            (Column(None, None, "b"), Literal(None, 2)),
                         ),
                         FunctionCall(
                             None,
                             ConditionFunctions.EQ,
-                            (Column("c", None, "c"), Literal(None, 3)),
+                            (Column(None, None, "c"), Literal(None, 3)),
                         ),
                     ),
                 ),
@@ -144,19 +144,19 @@ test_conditions = [
                         FunctionCall(
                             None,
                             ConditionFunctions.EQ,
-                            (Column("a", None, "a"), Literal(None, 1)),
+                            (Column(None, None, "a"), Literal(None, 1)),
                         ),
                         FunctionCall(
                             None,
                             ConditionFunctions.EQ,
-                            (Column("b", None, "b"), Literal(None, 2)),
+                            (Column(None, None, "b"), Literal(None, 2)),
                         ),
                     ),
                 ),
                 FunctionCall(
                     None,
                     ConditionFunctions.EQ,
-                    (Column("c", None, "c"), Literal(None, 3)),
+                    (Column(None, None, "c"), Literal(None, 3)),
                 ),
             ),
         ),
@@ -174,12 +174,12 @@ test_conditions = [
                         FunctionCall(
                             None,
                             ConditionFunctions.EQ,
-                            (Column("a", None, "a"), Literal(None, 1)),
+                            (Column(None, None, "a"), Literal(None, 1)),
                         ),
                         FunctionCall(
                             None,
                             ConditionFunctions.EQ,
-                            (Column("b", None, "b"), Literal(None, 2)),
+                            (Column(None, None, "b"), Literal(None, 2)),
                         ),
                     ),
                 ),
@@ -190,12 +190,12 @@ test_conditions = [
                         FunctionCall(
                             None,
                             ConditionFunctions.EQ,
-                            (Column("c", None, "c"), Literal(None, 3)),
+                            (Column(None, None, "c"), Literal(None, 3)),
                         ),
                         FunctionCall(
                             None,
                             ConditionFunctions.EQ,
-                            (Column("d", None, "d"), Literal(None, 4)),
+                            (Column(None, None, "d"), Literal(None, 4)),
                         ),
                     ),
                 ),
@@ -205,7 +205,7 @@ test_conditions = [
     (
         [[["a", "=", 1], []]],
         FunctionCall(
-            None, ConditionFunctions.EQ, (Column("a", None, "a"), Literal(None, 1)),
+            None, ConditionFunctions.EQ, (Column(None, None, "a"), Literal(None, 1)),
         ),
     ),  # Malformed Condition Input
     (
@@ -218,14 +218,14 @@ test_conditions = [
                     None,
                     ConditionFunctions.EQ,
                     (
-                        FunctionCall(None, "tag", (Column("foo", None, "foo"),)),
+                        FunctionCall(None, "tag", (Column(None, None, "foo"),)),
                         Literal(None, 1),
                     ),
                 ),
                 FunctionCall(
                     None,
                     ConditionFunctions.EQ,
-                    (Column("b", None, "b"), Literal(None, 2)),
+                    (Column(None, None, "b"), Literal(None, 2)),
                 ),
             ),
         ),
@@ -235,7 +235,7 @@ test_conditions = [
         FunctionCall(
             None,
             ConditionFunctions.LIKE,
-            (Column("primary_hash", None, "primary_hash"), Literal(None, "%foo%")),
+            (Column(None, None, "primary_hash"), Literal(None, "%foo%")),
         ),
     ),  # Test output format of LIKE
     (
@@ -252,11 +252,7 @@ test_conditions = [
                             None,
                             "arrayElement",
                             (
-                                Column(
-                                    "exception_stacks.type",
-                                    None,
-                                    "exception_stacks.type",
-                                ),
+                                Column(None, None, "exception_stacks.type",),
                                 Literal(None, 1),
                             ),
                         ),
@@ -287,7 +283,7 @@ test_conditions = [
                         ),
                     ),
                 ),
-                Column("exception_frames.filename", None, "exception_frames.filename"),
+                Column(None, None, "exception_frames.filename"),
             ),
         ),
     ),  # Test scalar condition on array column is expanded as an iterator.
@@ -312,7 +308,7 @@ test_conditions = [
                         ),
                     ),
                 ),
-                Column("exception_frames.filename", None, "exception_frames.filename"),
+                Column(None, None, "exception_frames.filename"),
             ),
         ),
     ),  # Test negative scalar condition on array column is expanded as an all() type iterator.
@@ -324,7 +320,7 @@ test_conditions = [
             None,
             ConditionFunctions.IN,
             (
-                Column("platform", None, "platform"),
+                Column(None, None, "platform"),
                 FunctionCall(
                     None,
                     "tuple",
@@ -336,7 +332,7 @@ test_conditions = [
     (
         [["group_id", "IS NULL", None]],
         FunctionCall(
-            None, ConditionFunctions.IS_NULL, (Column("group_id", None, "group_id"),),
+            None, ConditionFunctions.IS_NULL, (Column(None, None, "group_id"),),
         ),
     ),  # Unary condition.
 ]
