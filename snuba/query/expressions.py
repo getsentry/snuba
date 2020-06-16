@@ -27,6 +27,7 @@ class Expression(ABC):
     All expressions can have an optional alias.
     """
 
+    # TODO: Make it impossible to assign empty string as an alias.
     alias: Optional[str]
 
     @abstractmethod
