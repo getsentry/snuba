@@ -12,10 +12,10 @@ from snuba.query.parser.conditions import parse_conditions
 from snuba.query.parser.functions import parse_function
 from snuba.query.parsing import ParsingContext
 from snuba.query.schema import POSITIVE_OPERATORS
+from snuba.query.parser.functions import function_expr
 from snuba.util import (
     alias_expr,
     escape_literal,
-    function_expr,
     is_function,
     QUOTED_LITERAL_RE,
 )

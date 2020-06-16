@@ -82,7 +82,7 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
     def __visit_params(self, parameters: Sequence[Expression]) -> str:
         ret = [p.accept(self) for p in parameters]
         param_list = ", ".join(ret)
-        return f"({param_list})"
+        return f"{param_list}"
 
     def visit_subscriptable_reference(self, exp: SubscriptableReference) -> str:
         # Formatting SubscriptableReference does not make sense for a clickhouse
@@ -93,12 +93,18 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
         return f"{self.visit_column(exp.column)}[{self.visit_literal(exp.key)}]"
 
     def visit_function_call(self, exp: FunctionCall) -> str:
-        ret = f"{escape_identifier(exp.function_name)}{self.__visit_params(exp.parameters)}"
+        if exp.function_name == "array":
+            # Workaround for https://github.com/ClickHouse/ClickHouse/issues/11622
+            # Some distributed queries fail when arrays are passed as array(1,2,3)
+            # and work when they are passed as [1, 2, 3]
+            return self.__alias(f"[{self.__visit_params(exp.parameters)}]", exp.alias)
+
+        ret = f"{escape_identifier(exp.function_name)}({self.__visit_params(exp.parameters)})"
         return self.__alias(ret, exp.alias)
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:
         int_func = exp.internal_function.accept(self)
-        ret = f"{int_func}{self.__visit_params(exp.parameters)}"
+        ret = f"{int_func}({self.__visit_params(exp.parameters)})"
         return self.__alias(ret, exp.alias)
 
     def __escape_identifier_enforce(self, expr: str) -> str:
