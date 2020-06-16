@@ -85,6 +85,11 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             ret_unescaped.append(".")
         ret.append(escape_identifier(exp.column_name) or "")
         ret_unescaped.append(exp.column_name)
+        # De-clutter the output query by not applying an alias to a
+        # column if the column name is the same as the alias to make
+        # the query more readable.
+        # This happens often since we apply column aliases during
+        # parsing so the names are preserved during query processing.
         if exp.alias != "".join(ret_unescaped):
             return self.__alias("".join(ret), exp.alias)
         else:
