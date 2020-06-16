@@ -14,8 +14,8 @@ class Migration(migration.Migration):
                 statement="""\
                     CREATE TABLE migrations_local (group String, migration_id String,
                     timestamp DateTime, status Enum('completed' = 0, 'in_progress' = 1,
-                    'not_started' = 2)) ENGINE = ReplacingMergeTree(timestamp) ORDER
-                    BY (group, migration_id);
+                    'not_started' = 2), version UInt64 DEFAULT 1)
+                    ENGINE = ReplacingMergeTree(version) ORDER BY (group, migration_id);
                 """,
             ),
         ]
