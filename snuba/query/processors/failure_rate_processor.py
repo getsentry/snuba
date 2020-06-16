@@ -4,7 +4,7 @@ from snuba.query.conditions import (
     binary_condition,
     ConditionFunctions,
 )
-from snuba.query.dsl import count, countIf, divide
+from snuba.query.dsl import count, countIf, divide, literals_tuple
 from snuba.query.expressions import (
     Column,
     Expression,
@@ -27,24 +27,19 @@ class FailureRateProcessor(QueryProcessor):
             if isinstance(exp, FunctionCall) and exp.function_name == "failure_rate":
                 assert len(exp.parameters) == 0
 
+                successful_codes = ["ok", "cancelled", "unknown_error"]
                 return divide(
                     countIf(
                         binary_condition(
                             None,
                             ConditionFunctions.NOT_IN,
                             Column(None, None, "transaction_status"),
-                            FunctionCall(
+                            literals_tuple(
                                 None,
-                                "tuple",
-                                (
-                                    Literal(None, SPAN_STATUS_NAME_TO_CODE["ok"]),
-                                    Literal(
-                                        None, SPAN_STATUS_NAME_TO_CODE["cancelled"]
-                                    ),
-                                    Literal(
-                                        None, SPAN_STATUS_NAME_TO_CODE["unknown_error"]
-                                    ),
-                                ),
+                                [
+                                    Literal(None, SPAN_STATUS_NAME_TO_CODE[code])
+                                    for code in successful_codes
+                                ],
                             ),
                         ),
                     ),
