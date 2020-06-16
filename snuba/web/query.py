@@ -2,6 +2,7 @@ import copy
 import logging
 from datetime import datetime
 from functools import partial
+from typing import Optional
 
 import sentry_sdk
 
@@ -23,6 +24,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
 from snuba.web.db_query import raw_query
 from snuba.web.query_metadata import SnubaQueryMetadata
+from snuba.web.ast_rollout import is_ast_rolled_out
 
 logger = logging.getLogger("snuba.query")
 
@@ -165,8 +167,31 @@ def _format_storage_query_and_run(
     """
 
     source = clickhouse_query.get_data_source().format_from()
-    with sentry_sdk.start_span(description="create_query", op="db"):
-        formatted_query = DictSqlQuery(dataset, clickhouse_query, request_settings)
+    with sentry_sdk.start_span(description="create_query", op="db") as span:
+        legacy_query = DictSqlQuery(dataset, clickhouse_query, request_settings)
+        span.set_data("legacy_query", legacy_query.sql_data())
+        try:
+            ast_query: Optional[AstSqlQuery] = AstSqlQuery(
+                clickhouse_query, request_settings
+            )
+            # For mypy
+            assert ast_query is not None
+            span.set_data("ast_query", ast_query.sql_data())
+
+        except Exception:
+            logger.warning("Failed to format ast query", exc_info=True)
+            ast_query = None
+
+        if (
+            is_ast_rolled_out(get_dataset_name(dataset), referrer)
+            and ast_query is not None
+        ):
+            formatted_query: SqlQuery = ast_query
+            span.set_tag("query_type", "ast")
+        else:
+            formatted_query = legacy_query
+            span.set_tag("query_type", "legacy")
+
     timer.mark("prepare_query")
 
     stats = {
@@ -181,16 +206,6 @@ def _format_storage_query_and_run(
         description=formatted_query.format_sql(), op="db"
     ) as span:
         span.set_tag("table", source)
-        try:
-            span.set_data(
-                "ast_query", AstSqlQuery(clickhouse_query, request_settings).sql_data()
-            )
-            span.set_tag("query_type", "ast")
-        except Exception:
-            logger.warning("Failed to format ast query", exc_info=True)
-            span.set_tag("query_type", "dict")
-
-        span.set_data("dict_query", formatted_query.sql_data())
 
         return raw_query(
             clickhouse_query,
