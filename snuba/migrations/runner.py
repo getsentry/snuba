@@ -57,6 +57,9 @@ class Runner:
                 "migration_id": migration_id,
                 "timestamp": datetime.now(),
                 "status": Status.COMPLETED.value,
+                # TODO: Version should be incremented each time we update that
+                # migration status
+                "version": 1,
             }
         ]
         connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
