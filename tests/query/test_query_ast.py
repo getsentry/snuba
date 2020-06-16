@@ -147,9 +147,7 @@ def test_get_all_columns() -> None:
         Column("column2", None, "column2"),
         Column("platform", None, "platform"),
         Column("field2", None, "field2"),
-        # This does not have an alias because it is not a column directly
-        # referenced by the user.
-        Column(None, None, "tags"),
+        Column("tags", None, "tags"),
         Column("times_seen", None, "times_seen"),
         Column("event_id", None, "event_id"),
         Column("timestamp", None, "timestamp"),
