@@ -11,7 +11,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.datasets.events_format import escape_field
 from snuba.query.expressions import Expression
-from snuba.query.parser.strings import NESTED_COL_EXPR_RE
+from snuba.query.parser import NESTED_COL_EXPR_RE
 from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition, is_function, parse_datetime

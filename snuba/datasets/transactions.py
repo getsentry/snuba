@@ -127,11 +127,6 @@ class TransactionsDataset(TimeSeriesDataset):
         parsing_context: ParsingContext,
         table_alias: str = "",
     ):
-        # TODO remove these casts when clickhouse-driver is >= 0.0.19
-        if column_name == "ip_address_v4":
-            return "IPv4NumToString(ip_address_v4)"
-        if column_name == "ip_address_v6":
-            return "IPv6NumToString(ip_address_v6)"
         if column_name == "ip_address":
             return f"coalesce(IPv4NumToString(ip_address_v4), IPv6NumToString(ip_address_v6))"
         if column_name == "event_id":
