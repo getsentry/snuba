@@ -1,8 +1,11 @@
 import logging
 
+from clickhouse_driver import errors
 from datetime import datetime
 from enum import Enum
+from typing import NamedTuple
 
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster, CLUSTERS
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.groups import get_group_loader, MigrationGroup
@@ -22,44 +25,70 @@ class Status(Enum):
     COMPLETED = "completed"
 
 
+class MigrationKey(NamedTuple):
+    group: MigrationGroup
+    migration_id: str
+
+    def __str__(self) -> str:
+        return f"{self.group.value} {self.migration_id}"
+
+
 class Runner:
-    def run_migration(self, group: MigrationGroup, migration_id: str) -> None:
+    def __init__(self) -> None:
+        self.__connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
+            ClickhouseClientSettings.MIGRATE
+        )
+
+    def run_migration(self, migration_key: MigrationKey) -> None:
         """
-        Run a single migration given its ID and marks the migration as complete.
+        Run a single migration given its migration key and marks the migration as complete.
         """
+        group = migration_key.group
+        migration_id = migration_key.migration_id
+
         assert all(
             cluster.is_single_node() for cluster in CLUSTERS
         ), "Cannot run migrations for multi node clusters"
 
-        logger.info(f"Running migration: {group} {migration_id}")
+        logger.info(f"Running migration: {migration_key}")
 
         migration = get_group_loader(group).load_migration(migration_id)
+
+        self._update_migration_status(migration_key, Status.IN_PROGRESS)
 
         operations = migration.forwards_local()
         for op in operations:
             op.execute()
 
-        logger.info(f"Finished running, updating status: {group} {migration_id}")
+        logger.info(f"Finished running, updating status: {migration_key}")
 
-        # TODO: In addition to marking migrations as completed, we should also mark
-        # migrations as in-progress before we execute the operations. However we
-        # will need to have some mechanism that allows this to be skipped in certain
-        # cases, such as the initial migration that creates the migrations table itself.
-        self._mark_completed(group, migration_id)
+        self._update_migration_status(migration_key, Status.COMPLETED)
 
-        logger.info(f"Finished: {group} {migration_id}")
+        logger.info(f"Finished: {migration_key}")
 
-    def _mark_completed(self, group: MigrationGroup, migration_id: str) -> None:
+    def _update_migration_status(
+        self, migration_key: MigrationKey, status: Status
+    ) -> None:
         statement = f"INSERT INTO {TABLE_NAME} FORMAT JSONEachRow"
         data = [
             {
-                "group": group.value,
-                "migration_id": migration_id,
+                "group": migration_key.group.value,
+                "migration_id": migration_key.migration_id,
                 "timestamp": datetime.now(),
-                "status": Status.COMPLETED.value,
+                "status": status.value,
             }
         ]
-        connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
-            ClickhouseClientSettings.MIGRATE
-        )
-        connection.execute(statement, data)
+
+        try:
+            self.__connection.execute(statement, data)
+        except ClickhouseError as e:
+            # HACK: Ignore failures related to non existent table when we're
+            # setting system migrations to non completed statuses. This is required
+            # since the migrations table might not yet exist.
+            allow_fail = (
+                migration_key.group == MigrationGroup.SYSTEM
+                and status != Status.COMPLETED
+            )
+
+            if not allow_fail or e.code != errors.ErrorCodes.UNKNOWN_TABLE:
+                raise e
