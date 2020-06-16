@@ -1,8 +1,7 @@
 import logging
 import re
-from collections import defaultdict
 from dataclasses import replace
-from typing import Any, Mapping, MutableMapping, Optional, Set
+from typing import Any, MutableMapping, Optional
 
 from snuba import environment, state
 from snuba.clickhouse.escaping import NEGATE_RE
@@ -152,19 +151,26 @@ def _validate_aliases(query: Query) -> None:
     Ensures that no alias has been defined multiple times for different
     expressions in the query. Thus rejecting queries with shadowing.
     """
-    all_declared_aliases: Mapping[str, Set[Expression]] = defaultdict(set)
+    all_declared_aliases: MutableMapping[str, Expression] = {}
     for exp in query.get_all_expressions():
         if exp.alias is not None:
             if exp.alias == "":
                 # TODO: Enforce this in the parser when we are sure it is not
                 # happening.
                 metrics.increment("empty_alias")
-            all_declared_aliases[exp.alias].add(exp)
-            new_exps = all_declared_aliases[exp.alias]
-            if len(new_exps) > 1:
+
+            if (
+                exp.alias in all_declared_aliases
+                and exp != all_declared_aliases[exp.alias]
+            ):
                 raise ValueError(
-                    f"Shadowing aliases detected for alias: {exp.alias}. Expressions: {new_exps}"
+                    (
+                        f"Shadowing aliases detected for alias: {exp.alias}. "
+                        + f"Expressions: {all_declared_aliases[exp.alias]}"
+                    )
                 )
+            else:
+                all_declared_aliases[exp.alias] = exp
 
 
 # A column name like "tags[url]"
@@ -178,13 +184,11 @@ def _parse_subscriptables(query: Query) -> None:
     current_aliases = {exp.alias for exp in query.get_all_expressions() if exp.alias}
 
     def transform(exp: Expression) -> Expression:
-        if not isinstance(exp, Column):
+        if not isinstance(exp, Column) or exp.column_name in current_aliases:
             return exp
         match = NESTED_COL_EXPR_RE.match(exp.column_name)
-        if match is None or exp.column_name in current_aliases:
-            # Either this is not a tag[asd] column or there is actually
-            # somewhere in the Query, an expression that declares the
-            # alias tags[asd]. So do not redefine it.
+        if match is None:
+            # This is not a tag[asd] column.
             return exp
         col_name = match[1]
         key_name = match[2]
