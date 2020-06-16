@@ -1,10 +1,9 @@
 import logging
 import re
-from collections import defaultdict
 from dataclasses import replace
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set, Tuple
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple
 
-from snuba import state
+from snuba import environment, state
 from snuba.clickhouse.escaping import NEGATE_RE
 from snuba.datasets.dataset import Dataset
 from snuba.query.expressions import (
@@ -22,8 +21,11 @@ from snuba.query.logical import OrderBy, OrderByDirection, Query
 from snuba.query.parser.conditions import parse_conditions_to_expr
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
 from snuba.util import is_function, to_list, tuplify
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
+
+metrics = MetricsWrapper(environment.metrics, "parser")
 
 
 def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
@@ -56,6 +58,7 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     try:
         query = _parse_query_impl(body, dataset)
         # These are the post processing phases
+        _validate_empty_table_names(query)
         _validate_aliases(query)
         _parse_subscriptables(query)
         _apply_column_aliases(query)
@@ -146,21 +149,44 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
     )
 
 
+def _validate_empty_table_names(query: Query) -> None:
+    found_table_names = set()
+    for e in query.get_all_expressions():
+        if isinstance(e, Column) and e.table_name:
+            found_table_names.add(e.table_name)
+
+    if found_table_names:
+        logger.warning(
+            "Table names already populated before alias resolution",
+            extra={"names": found_table_names},
+        )
+
+
 def _validate_aliases(query: Query) -> None:
     """
     Ensures that no alias has been defined multiple times for different
     expressions in the query. Thus rejecting queries with shadowing.
     """
-    all_declared_aliases: Mapping[str, Set[Expression]] = defaultdict(set)
+    all_declared_aliases: MutableMapping[str, Expression] = {}
     for exp in query.get_all_expressions():
-        # TODO: Make it impossible to assign empty string as an alias.
-        if exp.alias:
-            all_declared_aliases[exp.alias].add(exp)
-            new_exps = all_declared_aliases[exp.alias]
-            if len(new_exps) > 1:
+        if exp.alias is not None:
+            if exp.alias == "":
+                # TODO: Enforce this in the parser when we are sure it is not
+                # happening.
+                metrics.increment("empty_alias")
+
+            if (
+                exp.alias in all_declared_aliases
+                and exp != all_declared_aliases[exp.alias]
+            ):
                 raise ValueError(
-                    f"Shadowing aliases detected for alias: {exp.alias}. Expressions: {new_exps}"
+                    (
+                        f"Shadowing aliases detected for alias: {exp.alias}. "
+                        + f"Expressions: {all_declared_aliases[exp.alias]}"
+                    )
                 )
+            else:
+                all_declared_aliases[exp.alias] = exp
 
 
 # A column name like "tags[url]"
@@ -174,13 +200,11 @@ def _parse_subscriptables(query: Query) -> None:
     current_aliases = {exp.alias for exp in query.get_all_expressions() if exp.alias}
 
     def transform(exp: Expression) -> Expression:
-        if not isinstance(exp, Column):
+        if not isinstance(exp, Column) or exp.column_name in current_aliases:
             return exp
         match = NESTED_COL_EXPR_RE.match(exp.column_name)
-        if match is None or exp.column_name in current_aliases:
-            # Either this is not a tag[asd] column or there is actually
-            # somewhere in the Query, an expression that declares the
-            # alias tags[asd]. So do not redefine it.
+        if match is None:
+            # This is not a tag[asd] column.
             return exp
         col_name = match[1]
         key_name = match[2]

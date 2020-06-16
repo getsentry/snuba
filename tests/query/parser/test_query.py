@@ -260,6 +260,18 @@ test_cases = [
         ),
         id="Alias references are expanded",
     ),
+    pytest.param(
+        {"selected_columns": [["f", ["column3"], "exp"], ["f", ["column3"], "exp"]]},
+        Query(
+            {},
+            TableSource("events", ColumnSet([])),
+            selected_columns=[
+                FunctionCall("exp", "f", (Column("column3", None, "column3"),)),
+                FunctionCall("exp", "f", (Column("column3", None, "column3"),)),
+            ],
+        ),
+        id="Allowed duplicate alias (same expression)",
+    ),
 ]
 
 
