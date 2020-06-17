@@ -14,8 +14,9 @@ def is_ast_rolled_out(dataset_name: str, referrer: Optional[str]) -> bool:
     on the AST or on the legacy representation.
 
     - if the emergency killswitch is on, then no rollout
-    - if the referrer is rolled out for a specific dataset then use ast
-    - if a dataset is rolled out then use ast
+    - if the referrer percentage is configured for the requested dataset
+      honor that percentage
+    - if a dataset is configured, then honor that percentage
     - if none of the above decide according to the master
         rollout percentage
     """
@@ -27,13 +28,12 @@ def is_ast_rolled_out(dataset_name: str, referrer: Optional[str]) -> bool:
     referrer_rollout_config = settings.AST_REFERRER_ROLLOUT.get(dataset_name, None)
     if referrer_rollout_config:
         referrer_percentage = referrer_rollout_config.get(referrer, None)
-        if referrer_percentage is not None and current_percentage < referrer_percentage:
-            return True
+        if referrer_percentage is not None:
+            return current_percentage < referrer_percentage
 
     dataset_rollout_percentage = settings.AST_DATASET_ROLLOUT.get(dataset_name, None)
     if dataset_rollout_percentage is not None:
-        if current_percentage < dataset_rollout_percentage:
-            return True
+        return current_percentage < dataset_rollout_percentage
 
     rollout_rate = get_config(ROLLOUT_RATE_CONFIG, 0)
     if rollout_rate is None:
