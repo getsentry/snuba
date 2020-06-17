@@ -3,7 +3,7 @@ import pytest
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
 from snuba.environment import setup_sentry
-from snuba.state import set_config
+from snuba.state import delete_config, set_config
 from snuba.web.ast_rollout import ROLLOUT_RATE_CONFIG
 
 
@@ -29,3 +29,5 @@ def pytest_configure() -> None:
 @pytest.fixture(params=[0, 100], ids=["legacy", "ast"])
 def ast(request) -> None:
     set_config(ROLLOUT_RATE_CONFIG, request.param)
+    yield
+    delete_config(ROLLOUT_RATE_CONFIG)

@@ -1,5 +1,5 @@
 from snuba import settings
-from snuba.state import set_config
+from snuba.state import set_config, delete_config
 from snuba.web.ast_rollout import (
     is_ast_rolled_out,
     KILLSWITCH_CONFIG,
@@ -26,3 +26,6 @@ def test_rollout() -> None:
 
     set_config(ROLLOUT_RATE_CONFIG, 100)
     assert is_ast_rolled_out("outcomes", "something_else") == True
+
+    delete_config(ROLLOUT_RATE_CONFIG)
+    delete_config(KILLSWITCH_CONFIG)

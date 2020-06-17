@@ -187,10 +187,15 @@ def _format_storage_query_and_run(
             and ast_query is not None
         ):
             formatted_query: SqlQuery = ast_query
-            span.set_tag("query_type", "ast")
+            query_type = "ast"
+            metric = "execute.ast"
         else:
             formatted_query = legacy_query
-            span.set_tag("query_type", "legacy")
+            query_type = "legacy"
+            metric = "execute.legacy"
+
+        metrics.increment(metric)
+        span.set_tag("query_type", query_type)
 
     timer.mark("prepare_query")
 
