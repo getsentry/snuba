@@ -1,0 +1,2 @@
+class MigrationInProgress(Exception):
+    pass
