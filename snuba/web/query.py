@@ -22,9 +22,9 @@ from snuba.util import with_span
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
+from snuba.web.ast_rollout import is_ast_rolled_out
 from snuba.web.db_query import raw_query
 from snuba.web.query_metadata import SnubaQueryMetadata
-from snuba.web.ast_rollout import is_ast_rolled_out
 
 logger = logging.getLogger("snuba.query")
 
@@ -188,13 +188,11 @@ def _format_storage_query_and_run(
         ):
             formatted_query: SqlQuery = ast_query
             query_type = "ast"
-            metric = "execute.ast"
         else:
             formatted_query = legacy_query
             query_type = "legacy"
-            metric = "execute.legacy"
 
-        metrics.increment(metric)
+        metrics.increment("execute", tags={"query_type": query_type})
         span.set_tag("query_type", query_type)
 
     timer.mark("prepare_query")

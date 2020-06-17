@@ -21,7 +21,7 @@ from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.base import BaseApiTest
 
 
-@pytest.mark.usefixtures("ast")
+@pytest.mark.usefixtures("query_type")
 class TestApi(BaseApiTest):
     def setup_method(self, test_method, dataset_name="events"):
         super().setup_method(test_method, dataset_name)

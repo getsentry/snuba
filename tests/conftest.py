@@ -27,7 +27,7 @@ def pytest_configure() -> None:
 
 
 @pytest.fixture(params=[0, 100], ids=["legacy", "ast"])
-def ast(request) -> None:
+def query_type(request) -> None:
     set_config(ROLLOUT_RATE_CONFIG, request.param)
     yield
     delete_config(ROLLOUT_RATE_CONFIG)
