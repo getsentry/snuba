@@ -147,11 +147,7 @@ class TestTransactionsApi(BaseApiTest):
                 {
                     "dataset": "transactions",
                     "project": 1,
-                    "selected_columns": [
-                        "transaction_name",
-                        "ip_address_v4",
-                        "ip_address_v6",
-                    ],
+                    "selected_columns": ["transaction_name", "ip_address"],
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
                     "orderby": "start_ts",
@@ -161,8 +157,7 @@ class TestTransactionsApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) > 1, data
-        assert "ip_address_v4" in data["data"][0]
-        assert "ip_address_v6" in data["data"][0]
+        assert "ip_address" in data["data"][0]
 
     def test_read_lowcard(self):
         response = self.app.post(
