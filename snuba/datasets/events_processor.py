@@ -142,15 +142,6 @@ class EventsProcessor(EventsProcessorBase):
         output["device_online"] = _boolify(device_ctx.pop("online", None))
         output["device_charging"] = _boolify(device_ctx.pop("charging", None))
 
-    def extract_contexts_custom(
-        self,
-        output: MutableMapping[str, Any],
-        event: Mapping[str, Any],
-        tags: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
-    ) -> None:
-        pass
-
     def extract_geo(self, output, geo):
         output["geo_country_code"] = _unicodify(geo.get("country_code", None))
         output["geo_region"] = _unicodify(geo.get("region", None))

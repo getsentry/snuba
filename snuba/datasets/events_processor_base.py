@@ -11,7 +11,6 @@ from snuba.datasets.events_format import (
     extract_extra_contexts,
     extract_extra_tags,
     extract_project_id,
-    flatten_nested_field,
 )
 from snuba.processor import (
     InvalidMessageType,
@@ -76,16 +75,6 @@ class EventsProcessorBase(MessageProcessor, ABC):
         output: MutableMapping[str, Any],
         contexts: Mapping[str, Any],
         tags: Mapping[str, Any],
-    ) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    def extract_contexts_custom(
-        self,
-        output: MutableMapping[str, Any],
-        event: Mapping[str, Any],
-        contexts: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
     ) -> None:
         raise NotImplementedError
 
@@ -226,15 +215,11 @@ class EventsProcessorBase(MessageProcessor, ABC):
 
         contexts = data.get("contexts", None) or {}
         self.extract_promoted_contexts(processed, contexts, tags)
-        self.extract_contexts_custom(processed, event, contexts, metadata)
 
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             contexts
         )
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
-        processed["_tags_flattened"] = flatten_nested_field(
-            processed["tags.key"], processed["tags.value"]
-        )
 
         exception = (
             data.get("exception", data.get("sentry.interfaces.Exception", None)) or {}
