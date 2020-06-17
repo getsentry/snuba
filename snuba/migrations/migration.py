@@ -47,18 +47,18 @@ class Migration(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def forwards_local(self) -> Sequence[Operation]:
+    def _forwards_local(self) -> Sequence[Operation]:
         raise NotImplementedError
 
     @abstractmethod
-    def backwards_local(self) -> Sequence[Operation]:
+    def _backwards_local(self) -> Sequence[Operation]:
         raise NotImplementedError
 
     def forwards(self, context: Context) -> None:
         migration_id, logger, update_status = context
         logger.info(f"Running migration: {migration_id}")
         update_status(Status.IN_PROGRESS)
-        for op in self.forwards_local():
+        for op in self._forwards_local():
             op.execute()
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
