@@ -4,6 +4,9 @@ import random
 from snuba import settings
 from snuba.state import get_config
 
+ROLLOUT_RATE_CONFIG = "ast_rollout_rate"
+KILLSWITCH_CONFIG = "ast_shutdown"
+
 
 def is_ast_rolled_out(dataset_name: str, referrer: Optional[str]) -> bool:
     """
@@ -17,7 +20,7 @@ def is_ast_rolled_out(dataset_name: str, referrer: Optional[str]) -> bool:
         rollout percentage
     """
 
-    if get_config("ast_shutdown", 0):
+    if get_config(KILLSWITCH_CONFIG, 0):
         return False
 
     current_percentage = random.random() * 100
@@ -36,7 +39,7 @@ def is_ast_rolled_out(dataset_name: str, referrer: Optional[str]) -> bool:
         if referrer_percentage is not None and current_percentage < referrer_percentage:
             return True
 
-    rollout_rate = get_config("ast_rollout_rate", 0)
+    rollout_rate = get_config(ROLLOUT_RATE_CONFIG, 0)
     if rollout_rate is None:
         # This is for mypy since it does not believe
         # (rightfully) that rollout_rate is an int.

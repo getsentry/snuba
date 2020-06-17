@@ -1,16 +1,18 @@
 import calendar
+import uuid
 from datetime import datetime, timedelta
 from functools import partial
+
+import pytest
 import pytz
 import simplejson as json
-import uuid
 
 from snuba import settings, state
 from snuba.datasets.factory import enforce_table_writer
-
 from tests.base import BaseApiTest
 
 
+@pytest.mark.usefixtures("ast")
 class TestTransactionsApi(BaseApiTest):
     def setup_method(self, test_method, dataset_name="transactions"):
         super().setup_method(test_method, dataset_name)

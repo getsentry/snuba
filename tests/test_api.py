@@ -1,16 +1,17 @@
 import calendar
+import time
+import uuid
 from datetime import datetime, timedelta
-from dateutil.parser import parse as parse_datetime
 from functools import partial
 from unittest.mock import patch
+
 import pytest
 import pytz
 import simplejson as json
-import time
-import uuid
+from dateutil.parser import parse as parse_datetime
+from sentry_sdk import Client, Hub
 
 from snuba import settings, state
-from sentry_sdk import Hub, Client
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.datasets.storages import StorageKey
@@ -20,6 +21,7 @@ from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.base import BaseApiTest
 
 
+@pytest.mark.usefixtures("ast")
 class TestApi(BaseApiTest):
     def setup_method(self, test_method, dataset_name="events"):
         super().setup_method(test_method, dataset_name)
