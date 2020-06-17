@@ -1,11 +1,9 @@
 import copy
 import logging
-
 from datetime import datetime
+from functools import partial
 
 import sentry_sdk
-
-from functools import partial
 
 from snuba import environment, settings, state
 from snuba.clickhouse.astquery import AstSqlQuery
@@ -14,6 +12,7 @@ from snuba.clickhouse.query import Query
 from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
+from snuba.query.conditions import combine_and_conditions
 from snuba.query.timeseries_extension import TimeSeriesExtensionProcessor
 from snuba.reader import Reader
 from snuba.request import Request
@@ -44,11 +43,6 @@ def parse_and_run_query(
         timer=timer,
         query_list=[],
     )
-
-    with sentry_sdk.configure_scope() as scope:
-        if scope.span:
-            scope.span.set_tag("dataset", get_dataset_name(dataset))
-            scope.span.set_tag("referrer", request.referrer)
 
     try:
         result = _run_query_pipeline(
@@ -123,7 +117,12 @@ def _run_query_pipeline(
     # components of the query plan.
     # TODO: This below should be a storage specific query processor.
     relational_source = query_plan.query.get_data_source()
-    query_plan.query.add_conditions(relational_source.get_mandatory_conditions())
+    mandatory_conditions = relational_source.get_mandatory_conditions()
+    query_plan.query.add_conditions([c.legacy for c in mandatory_conditions])
+    if len(mandatory_conditions) > 0:
+        query_plan.query.add_condition_to_ast(
+            combine_and_conditions([c.ast for c in mandatory_conditions])
+        )
 
     for clickhouse_processor in query_plan.plan_processors:
         with sentry_sdk.start_span(

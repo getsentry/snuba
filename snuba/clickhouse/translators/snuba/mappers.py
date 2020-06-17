@@ -23,7 +23,6 @@ from snuba.query.matchers import (
     Param,
     String,
 )
-from snuba.util import qualified_column
 
 
 @dataclass(frozen=True)
@@ -52,7 +51,7 @@ class ColumnToExpression(ColumnMapper, ABC):
             return None
 
     @abstractmethod
-    def _produce_output(self, expression: ColumnExpr,) -> ValidColumnMappings:
+    def _produce_output(self, expression: ColumnExpr) -> ValidColumnMappings:
         raise NotImplementedError
 
 
@@ -69,8 +68,7 @@ class ColumnToColumn(ColumnToExpression):
 
     def _produce_output(self, expression: ColumnExpr) -> ColumnExpr:
         return ColumnExpr(
-            alias=expression.alias
-            or qualified_column(self.from_col_name, self.from_table_name or ""),
+            alias=expression.alias,
             table_name=self.to_table_name,
             column_name=self.to_col_name,
         )
@@ -84,12 +82,8 @@ class ColumnToLiteral(ColumnToExpression):
 
     to_literal_value: OptionalScalarType
 
-    def _produce_output(self, expression: ColumnExpr,) -> LiteralExpr:
-        return LiteralExpr(
-            alias=expression.alias
-            or qualified_column(self.from_col_name, self.from_table_name or ""),
-            value=self.to_literal_value,
-        )
+    def _produce_output(self, expression: ColumnExpr) -> LiteralExpr:
+        return LiteralExpr(alias=expression.alias, value=self.to_literal_value)
 
 
 @dataclass(frozen=True)
@@ -103,8 +97,7 @@ class ColumnToFunction(ColumnToExpression):
 
     def _produce_output(self, expression: ColumnExpr) -> FunctionCallExpr:
         return FunctionCallExpr(
-            alias=expression.alias
-            or qualified_column(self.from_col_name, self.from_table_name or ""),
+            alias=expression.alias,
             function_name=self.to_function_name,
             parameters=self.to_function_params,
         )
@@ -121,8 +114,7 @@ class ColumnToCurriedFunction(ColumnToExpression):
 
     def _produce_output(self, expression: ColumnExpr) -> CurriedFunctionCall:
         return CurriedFunctionCall(
-            alias=expression.alias
-            or qualified_column(self.from_col_name, self.from_table_name or ""),
+            alias=expression.alias,
             internal_function=self.to_internal_function,
             parameters=self.to_function_params,
         )
@@ -172,8 +164,7 @@ class ColumnToMapping(ColumnToExpression):
 
     def _produce_output(self, expression: ColumnExpr) -> FunctionCallExpr:
         return build_mapping_expr(
-            expression.alias
-            or qualified_column(self.from_col_name, self.from_table_name or ""),
+            expression.alias,
             self.to_nested_col_table_name,
             self.to_nested_col_name,
             LiteralExpr(None, self.to_nested_mapping_key),

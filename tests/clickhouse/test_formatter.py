@@ -15,11 +15,17 @@ from snuba.query.parsing import ParsingContext
 test_expressions = [
     (Literal(None, "test"), "'test'"),  # String literal
     (Literal(None, 123), "123",),  # INT literal
+    (Literal("something", 123), "(123 AS something)",),  # INT literal with alias
     (Literal(None, 123.321), "123.321",),  # FLOAT literal
     (Literal(None, None), "NULL",),  # NULL
+    (Literal("not_null", None), "(NULL AS not_null)",),  # NULL with alias
     (Literal(None, True), "true",),  # True
     (Literal(None, False), "false",),  # False
     (Column(None, "table1", "column1"), "table1.column1"),  # Basic Column no alias
+    (
+        Column("table1.column1", "table1", "column1"),
+        "table1.column1",
+    ),  # Declutter aliases - column name is the same as the alias. Do not alias
     (Column(None, None, "column1"), "column1"),  # Basic Column with no table
     (
         Column("alias", "table1", "column1"),
@@ -122,7 +128,7 @@ def test_aliases() -> None:
     assert col1.accept(ClickhouseExpressionFormatter(pc)) == "(table1.column1 AS al1)"
     assert col2.accept(ClickhouseExpressionFormatter(pc)) == "al1"
 
-    # Hierarchical expression inherits parsing context and applies alaises
+    # Hierarchical expression inherits parsing context and applies aliases
     f = FunctionCall(
         None,
         "f1",

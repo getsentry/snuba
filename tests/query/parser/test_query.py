@@ -1,7 +1,8 @@
-import pytest
-
 from typing import Any, MutableMapping
 
+import pytest
+
+from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.tables import TableSource
@@ -15,7 +16,6 @@ from snuba.query.expressions import (
 from snuba.query.logical import OrderBy, OrderByDirection, Query
 from snuba.query.parser import parse_query
 
-
 test_cases = [
     (
         {
@@ -27,14 +27,19 @@ test_cases = [
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                Column(None, None, "column2"),
-                Column(None, None, "column3"),
+                Column("column2", None, "column2"),
+                Column("column3", None, "column3"),
                 FunctionCall(
-                    "test_func_alias", "test_func", (Column(None, None, "column4"),)
+                    "test_func_alias",
+                    "test_func",
+                    (Column("column4", None, "column4"),),
                 ),
-                Column(None, None, "column1"),
+                Column("column1", None, "column1"),
             ],
-            groupby=[Column(None, None, "column2"), Column(None, None, "column3")],
+            groupby=[
+                Column("column2", None, "column2"),
+                Column("column3", None, "column3"),
+            ],
         ),
     ),  # Basic SELECT composed through the selectedcols and aggregations
     (
@@ -56,20 +61,30 @@ test_cases = [
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                FunctionCall(None, "format_eventid", (Column(None, None, "event_id"),)),
-                FunctionCall("platforms", "count", (Column(None, None, "platform"),)),
                 FunctionCall(
-                    "uniq_platforms", "uniq", (Column(None, None, "platform"),)
+                    None, "format_eventid", (Column("event_id", None, "event_id"),)
+                ),
+                FunctionCall(
+                    "platforms", "count", (Column("platform", None, "platform"),)
+                ),
+                FunctionCall(
+                    "uniq_platforms", "uniq", (Column("platform", None, "platform"),)
                 ),
                 FunctionCall(
                     "top_platforms",
                     "testF",
-                    (Column(None, None, "platform"), Column(None, None, "field2")),
+                    (
+                        Column("platform", None, "platform"),
+                        Column("field2", None, "field2"),
+                    ),
                 ),
                 FunctionCall(
                     "f1_alias",
                     "f1",
-                    (Column(None, None, "column1"), Column(None, None, "column2")),
+                    (
+                        Column("column1", None, "column1"),
+                        Column("column2", None, "column2"),
+                    ),
                 ),
                 FunctionCall("f2_alias", "f2", ()),
             ],
@@ -78,7 +93,7 @@ test_cases = [
                 "in",
                 SubscriptableReference(
                     "tags[sentry:dist]",
-                    Column(None, None, "tags"),
+                    Column("tags", None, "tags"),
                     Literal(None, "sentry:dist"),
                 ),
                 FunctionCall(
@@ -86,10 +101,15 @@ test_cases = [
                 ),
             ),
             having=binary_condition(
-                None, "greater", Column(None, None, "times_seen"), Literal(None, 1)
+                None,
+                "greater",
+                Column("times_seen", None, "times_seen"),
+                Literal(None, 1),
             ),
             groupby=[
-                FunctionCall(None, "format_eventid", (Column(None, None, "event_id"),))
+                FunctionCall(
+                    None, "format_eventid", (Column("event_id", None, "event_id"),)
+                )
             ],
         ),
     ),  # Format a query with functions in all fields
@@ -102,18 +122,18 @@ test_cases = [
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                Column(None, None, "column1"),
-                Column(None, None, "column2"),
+                Column("column1", None, "column1"),
+                Column("column2", None, "column2"),
             ],
             condition=None,
             groupby=None,
             having=None,
             order_by=[
-                OrderBy(OrderByDirection.ASC, Column(None, None, "column1")),
-                OrderBy(OrderByDirection.DESC, Column(None, None, "column2")),
+                OrderBy(OrderByDirection.ASC, Column("column1", None, "column1")),
+                OrderBy(OrderByDirection.DESC, Column("column2", None, "column2")),
                 OrderBy(
                     OrderByDirection.DESC,
-                    FunctionCall(None, "func", (Column(None, None, "column3"),)),
+                    FunctionCall(None, "func", (Column("column3", None, "column3"),)),
                 ),
             ],
         ),
@@ -123,11 +143,13 @@ test_cases = [
         Query(
             {},
             TableSource("events", ColumnSet([])),
-            selected_columns=[Column(None, None, "column1")],
+            selected_columns=[Column("column1", None, "column1")],
             condition=None,
-            groupby=[Column(None, None, "column1")],
+            groupby=[Column("column1", None, "column1")],
             having=None,
-            order_by=[OrderBy(OrderByDirection.DESC, Column(None, None, "column1"))],
+            order_by=[
+                OrderBy(OrderByDirection.DESC, Column("column1", None, "column1"))
+            ],
         ),
     ),  # Order and group by provided as string
     (
@@ -145,14 +167,14 @@ test_cases = [
                     (
                         SubscriptableReference(
                             "tags[test2]",
-                            Column(None, None, "tags"),
+                            Column("tags", None, "tags"),
                             Literal(None, "test2"),
                         ),
                     ),
                 ),
-                Column(None, None, "column1"),
+                Column("column1", None, "column1"),
                 SubscriptableReference(
-                    "tags[test]", Column(None, None, "tags"), Literal(None, "test")
+                    "tags[test]", Column("tags", None, "tags"), Literal(None, "test")
                 ),
             ],
             groupby=[
@@ -162,7 +184,7 @@ test_cases = [
                     (
                         SubscriptableReference(
                             "tags[test2]",
-                            Column(None, None, "tags"),
+                            Column("tags", None, "tags"),
                             Literal(None, "test2"),
                         ),
                     ),
@@ -170,6 +192,33 @@ test_cases = [
             ],
         ),
     ),  # Unpack nested column both in a simple expression and in a function call.
+    (
+        {
+            "selected_columns": ["exp", "column2"],
+            "groupby": [["f", ["column3"], "exp"]],
+        },
+        Query(
+            {},
+            TableSource("events", ColumnSet([])),
+            selected_columns=[
+                FunctionCall("exp", "f", (Column("column3", None, "column3"),)),
+                Column(None, None, "exp"),
+                Column("column2", None, "column2"),
+            ],
+            groupby=[FunctionCall("exp", "f", (Column("column3", None, "column3"),))],
+        ),
+    ),  # Alias reference is kept as a Column that does not declare an alias
+    (
+        {"selected_columns": [["f", ["column3"], "exp"], ["f", ["column3"], "exp"]]},
+        Query(
+            {},
+            TableSource("events", ColumnSet([])),
+            selected_columns=[
+                FunctionCall("exp", "f", (Column("column3", None, "column3"),)),
+                FunctionCall("exp", "f", (Column("column3", None, "column3"),)),
+            ],
+        ),
+    ),  # Allowed duplicate alias (same expression)
 ]
 
 
@@ -191,3 +240,20 @@ def test_format_expressions(
     assert query.get_arrayjoin_from_ast() == expected_query.get_arrayjoin_from_ast()
     assert query.get_having_from_ast() == expected_query.get_having_from_ast()
     assert query.get_orderby_from_ast() == expected_query.get_orderby_from_ast()
+
+
+def test_shadowing() -> None:
+    state.set_config("query_parsing_enforce_validity", 1)
+    with pytest.raises(ValueError):
+        parse_query(
+            {
+                "selected_columns": [
+                    ["f1", ["column1", "column2"], "f1_alias"],
+                    ["f2", [], "f2_alias"],
+                ],
+                "aggregations": [
+                    ["testF", ["platform", "field2"], "f1_alias"]  # Shadowing!
+                ],
+            },
+            get_dataset("events"),
+        )
