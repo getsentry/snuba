@@ -1,11 +1,10 @@
 from snuba.migrations.groups import MigrationGroup
-from snuba.migrations.runner import MigrationKey, Runner
+from snuba.migrations.runner import Runner
 
 
 def test_run_migration() -> None:
     runner = Runner()
-    migration_key = MigrationKey(MigrationGroup.SYSTEM, "0001_migrations")
-    runner.run_migration(migration_key)
+    runner.run_migration(MigrationGroup.SYSTEM, "0001_migrations")
 
     from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
     from snuba.clusters.storage_sets import StorageSetKey
