@@ -50,6 +50,9 @@ class Runner:
                 "migration_id": migration_id,
                 "timestamp": datetime.now(),
                 "status": status.value,
+                # TODO: Version should be incremented each time we update that
+                # migration status
+                "version": 1,
             }
         ]
 
