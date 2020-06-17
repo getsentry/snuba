@@ -59,7 +59,6 @@ class Migration(ABC):
         logger.info(f"Running migration: {migration_id}")
         update_status(Status.IN_PROGRESS)
         for op in self.forwards_local():
-            context.logger
             op.execute()
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
