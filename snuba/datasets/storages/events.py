@@ -346,12 +346,12 @@ storage = WritableTableStorage(
                 "tags": ChainMap(
                     {col.flattened: col.flattened for col in promoted_tag_columns},
                     {
-                        col.flattened.replace("_", "."): col.flattened
+                        col.flattened.replace("_", ".", 1): col.flattened
                         for col in promoted_context_tag_columns
                     },
                 ),
                 "contexts": {
-                    col.flattened.replace("_", "."): col.flattened
+                    col.flattened.replace("_", ".", 1): col.flattened
                     for col in promoted_context_columns
                 },
             },
