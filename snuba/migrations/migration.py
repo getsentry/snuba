@@ -6,7 +6,17 @@ from snuba.migrations.operations import Operation
 from snuba.migrations.status import Status
 
 
-class Migration(ABC):
+class CustomMigration(ABC):
+    @abstractproperty
+    def blocking(self) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def forwards(self, context: Context) -> None:
+        raise NotImplementedError
+
+
+class Migration(CustomMigration):
     """
     A migration consists of one or more forward operations which will be executed
     on all of the local and distributed nodes of the cluster. Upon error, the backwards
@@ -42,23 +52,19 @@ class Migration(ABC):
     before the new version is downloaded and any subsequent migrations run.
     """
 
-    @abstractproperty
-    def blocking(self) -> bool:
+    @abstractmethod
+    def forwards_local(self) -> Sequence[Operation]:
         raise NotImplementedError
 
     @abstractmethod
-    def _forwards_local(self) -> Sequence[Operation]:
-        raise NotImplementedError
-
-    @abstractmethod
-    def _backwards_local(self) -> Sequence[Operation]:
+    def backwards_local(self) -> Sequence[Operation]:
         raise NotImplementedError
 
     def forwards(self, context: Context) -> None:
         migration_id, logger, update_status = context
         logger.info(f"Running migration: {migration_id}")
         update_status(Status.IN_PROGRESS)
-        for op in self._forwards_local():
+        for op in self.forwards_local():
             op.execute()
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)

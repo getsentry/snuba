@@ -6,10 +6,10 @@ from snuba.migrations.context import Context
 from snuba.migrations.status import Status
 
 
-class Migration(migration.Migration):
+class Migration(migration.CustomMigration):
     blocking = False
 
-    def _forwards_local(self) -> Sequence[operations.Operation]:
+    def __forwards_local(self) -> Sequence[operations.Operation]:
         return [
             operations.RunSql(
                 storage_set=StorageSetKey.MIGRATIONS,
@@ -22,7 +22,7 @@ class Migration(migration.Migration):
             ),
         ]
 
-    def _backwards_local(self) -> Sequence[operations.Operation]:
+    def __backwards_local(self) -> Sequence[operations.Operation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.MIGRATIONS, table_name="migrations_local",
@@ -34,7 +34,7 @@ class Migration(migration.Migration):
         # in progress status since the migrations table won't be created yet.
         migration_id, logger, update_status = context
         logger.info(f"Running migration: {migration_id}")
-        for op in self._forwards_local():
+        for op in self.__forwards_local():
             op.execute()
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
