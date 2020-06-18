@@ -1,5 +1,5 @@
 import pytest
-
+from typing import List
 
 # from snuba.clickhouse.columns import ColumnSet, String
 
@@ -8,16 +8,54 @@ from snuba.query.logical import Query
 from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
 
 from snuba.request.request_settings import HTTPRequestSettings
+from snuba.datasets.schemas import MandatoryCondition
+from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.expressions import Column, Literal
 
 
 test_data = [
-    ("table1", ["time1", "=", "1"]),
-    ("table2", ["time2", "=", "2"]),
+    (
+        "table1",
+        [
+            MandatoryCondition(
+                ["deleted", "=", "0"],
+                binary_condition(
+                    None,
+                    ConditionFunctions.EQ,
+                    Column(None, None, "deleted"),
+                    Literal(None, 0),
+                ),
+            )
+        ],
+    ),
+    (
+        "table2",
+        [
+            MandatoryCondition(
+                ["time", "=", "1"],
+                binary_condition(
+                    None,
+                    ConditionFunctions.EQ,
+                    Column(None, None, "time"),
+                    Literal(None, 0),
+                ),
+            ),
+            MandatoryCondition(
+                ["time2", "=", "2"],
+                binary_condition(
+                    None,
+                    ConditionFunctions.EQ,
+                    Column(None, None, "time2"),
+                    Literal(None, 0),
+                ),
+            ),
+        ],
+    ),
 ]
 
 
 @pytest.mark.parametrize("table, mand_condition", test_data)
-def test_prewhere(table, mand_condition) -> None:
+def test_mand_condition(table: str, mand_condition: List[MandatoryCondition]) -> None:
 
     body = {
         "conditions": [
@@ -39,11 +77,4 @@ def test_prewhere(table, mand_condition) -> None:
     processor = MandatoryConditionApplier()
     processor.process_query(query, request_settings)
 
-    source = query.get_data_source()
-
-    assert isinstance(source, TableSource)
-    assert source.get_columns() == cols
-    assert source.get_prewhere_candidates() == ["c1"]
-
-    # want to check that the mandatory condition from TableSource object was added
-    assert source.get_conditions() == body["conditions"].append(mand_condition)
+    assert query.get_conditions() == body["conditions"]
