@@ -121,7 +121,8 @@ class Runner:
             try:
                 data = {}
                 for row in self.__connection.execute(
-                    f"SELECT group, migration_id, status FROM {TABLE_NAME} FINAL;"
+                    f"SELECT group, migration_id, status FROM {TABLE_NAME} FINAL",
+                    settings={"load_balancing": "in_order"},
                 ):
                     group_name, migration_id, status_name = row
                     data[
