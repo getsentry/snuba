@@ -6,7 +6,7 @@ from snuba.migrations.context import Context
 from snuba.migrations.status import Status
 
 
-class Migration(migration.CustomMigration):
+class Migration(migration.Migration):
     blocking = False
 
     def __forwards_local(self) -> Sequence[operations.Operation]:
