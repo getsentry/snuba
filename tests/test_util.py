@@ -327,6 +327,16 @@ class TestUtil(BaseTest):
             )
             == "(foo() AS a)"
         )
+        state.set_config("format_clickhouse_arrays", 1)
+        assert (
+            complex_column_expr(
+                dataset,
+                tuplify(["array", [1, 2, 3], "a"]),
+                deepcopy(query),
+                ParsingContext(),
+            )
+            == "([1, 2, 3] AS a)"
+        )
         assert (
             complex_column_expr(
                 dataset,

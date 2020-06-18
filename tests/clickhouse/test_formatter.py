@@ -106,6 +106,10 @@ test_expressions = [
         ),
         "arrayExists((x, y -> testFunc(x, y)), test)",
     ),  # Lambda expression
+    (
+        FunctionCall("alias", "array", (Literal(None, 1), Literal(None, 2))),
+        "([1, 2] AS alias)",
+    ),  # Formatting an array as [...]
 ]
 
 
