@@ -354,7 +354,7 @@ def test_formatting() -> None:
         ),
         Literal(None, 1),
     ).accept(ClickhouseExpressionFormatter()) == (
-        "(arrayElement((arrayJoin(arrayMap((x, y -> array(x, y)), "
+        "(arrayElement((arrayJoin(arrayMap((x, y -> [x, y]), "
         "tags.key, tags.value)) AS snuba_all_tags), 1) AS tags_key)"
     )
 
@@ -373,7 +373,7 @@ def test_formatting() -> None:
     ).accept(ClickhouseExpressionFormatter()) == (
         "(arrayElement((arrayJoin(arrayFilter((pair -> in("
         "arrayElement(pair, 1), tuple('t1', 't2'))), "
-        "arrayMap((x, y -> array(x, y)), tags.key, tags.value))) AS snuba_all_tags), 1) AS tags_key)"
+        "arrayMap((x, y -> [x, y]), tags.key, tags.value))) AS snuba_all_tags), 1) AS tags_key)"
     )
 
 
@@ -393,7 +393,7 @@ def test_aliasing() -> None:
     sql = AstSqlQuery(processed, HTTPRequestSettings()).format_sql()
 
     assert sql == (
-        "SELECT (arrayElement((arrayJoin(arrayMap((x, y -> array(x, y)), "
+        "SELECT (arrayElement((arrayJoin(arrayMap((x, y -> [x, y]), "
         "tags.key, tags.value)) AS snuba_all_tags), 2) AS tags_value) "
         "FROM transactions_local "
         "WHERE in((arrayElement(snuba_all_tags, 1) AS tags_key), tuple('t1', 't2'))"
