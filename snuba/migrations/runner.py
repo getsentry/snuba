@@ -3,7 +3,7 @@ import logging
 from clickhouse_driver import errors
 from datetime import datetime
 from enum import Enum
-from typing import List, MutableMapping, NamedTuple, Optional
+from typing import List, Mapping, MutableMapping, NamedTuple
 
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster, CLUSTERS
@@ -36,7 +36,6 @@ class Runner:
         self.__connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
             ClickhouseClientSettings.MIGRATE
         )
-        self.__migrations_status: Optional[MutableMapping[MigrationKey, Status]] = None
 
     def run_all(self) -> None:
         """
@@ -48,13 +47,18 @@ class Runner:
     def get_pending_migrations(self) -> List[MigrationKey]:
         migrations: List[MigrationKey] = []
 
+        migration_status = self._get_migration_status()
+
+        def get_status(migration_key: MigrationKey) -> Status:
+            return migration_status.get(migration_key, Status.NOT_STARTED)
+
         for group in MigrationGroup:
             group_loader = get_group_loader(group)
             group_migrations: List[MigrationKey] = []
 
             for migration_id in group_loader.get_migrations():
                 migration_key = MigrationKey(group, migration_id)
-                status = self._get_migration_status(migration_key)
+                status = get_status(migration_key)
                 if status == Status.IN_PROGRESS:
                     raise MigrationInProgress(migration_key)
                 if status == Status.NOT_STARTED:
@@ -122,29 +126,21 @@ class Runner:
         )
         connection.execute(statement, data)
 
-        if self.__migrations_status is not None:
-            self.__migrations_status[migration_key] = status
+    def _get_migration_status(self) -> Mapping[MigrationKey, Status]:
+        data: MutableMapping[MigrationKey, Status] = {}
 
-    def _get_migration_status(self, migration_key: MigrationKey) -> Status:
-        if self.__migrations_status is None:
-            data: MutableMapping[MigrationKey, Status] = {}
+        try:
+            for row in self.__connection.execute(
+                f"SELECT group, migration_id, status FROM {TABLE_NAME} FINAL",
+                settings={"load_balancing": "in_order"},
+            ):
+                group_name, migration_id, status_name = row
+                data[MigrationKey(MigrationGroup(group_name), migration_id)] = Status(
+                    status_name
+                )
+        except ClickhouseError as e:
+            # If the table wasn't created yet, no migrations have started.
+            if e.code != errors.ErrorCodes.UNKNOWN_TABLE:
+                raise e
 
-            try:
-                data = {}
-                for row in self.__connection.execute(
-                    f"SELECT group, migration_id, status FROM {TABLE_NAME} FINAL",
-                    settings={"load_balancing": "in_order"},
-                ):
-                    group_name, migration_id, status_name = row
-                    data[
-                        MigrationKey(MigrationGroup(group_name), migration_id)
-                    ] = Status(status_name)
-                self.__migrations_status = data
-            except ClickhouseError as e:
-                # If the table wasn't created yet, no migrations have started yet.
-                if e.code == errors.ErrorCodes.UNKNOWN_TABLE:
-                    self.__migrations_status = {}
-                else:
-                    raise e
-
-        return self.__migrations_status.get(migration_key, Status.NOT_STARTED)
+        return data
