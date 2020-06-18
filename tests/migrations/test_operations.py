@@ -16,9 +16,13 @@ def test_create_table() -> None:
 
     assert (
         CreateTable(
-            StorageSetKey.EVENTS, "test_table", columns, ReplacingMergeTree("version")
+            StorageSetKey.EVENTS,
+            "test_table",
+            columns,
+            ReplacingMergeTree("version"),
+            "version",
         ).format_sql()
-        == "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64 ENGINE ReplacingMergeTree(version));"
+        == "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64) ENGINE ReplacingMergeTree(version) ORDER BY version;"
     )
 
 

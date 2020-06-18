@@ -72,13 +72,15 @@ class CreateTable(SqlOperation):
         table_name: str,
         columns: Sequence[Column],
         engine: TableEngine,
+        order_by: str,
     ):
         self.__table_name = table_name
         self.__columns = columns
         self.__engine = engine
+        self.__order_by = order_by
         super().__init__(storage_set)
 
     def format_sql(self) -> str:
         columns = ", ".join([col.for_schema() for col in self.__columns])
 
-        return f"CREATE TABLE IF NOT EXISTS {self.__table_name} ({columns} ENGINE {self.__engine});"
+        return f"CREATE TABLE IF NOT EXISTS {self.__table_name} ({columns}) ENGINE {self.__engine} ORDER BY {self.__order_by};"
