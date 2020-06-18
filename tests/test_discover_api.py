@@ -4,6 +4,7 @@ from contextlib import ExitStack
 from datetime import datetime
 from functools import partial
 
+import pytest
 import simplejson as json
 
 from snuba import settings
@@ -11,6 +12,7 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
 from tests.base import BaseApiTest, dataset_manager, get_event
 
 
+@pytest.mark.usefixtures("query_type")
 class TestDiscoverApi(BaseApiTest):
     def setup_method(self, test_method):
         super().setup_method(test_method)
