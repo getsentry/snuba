@@ -54,30 +54,46 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
 
     def visit_literal(self, exp: Literal) -> str:
         if exp.value is None:
-            return "NULL"
+            return self.__alias("NULL", exp.alias)
         elif exp.value is True:
-            return "true"
+            return self.__alias("true", exp.alias)
         elif exp.value is False:
-            return "false"
+            return self.__alias("false", exp.alias)
         elif isinstance(exp.value, str):
-            return escape_string(exp.value)
+            return self.__alias(escape_string(exp.value), exp.alias)
         elif isinstance(exp.value, (int, float)):
-            return str(exp.value)
+            return self.__alias(str(exp.value), exp.alias)
         elif isinstance(exp.value, datetime):
             value = exp.value.replace(tzinfo=None, microsecond=0)
-            return "toDateTime('{}', 'Universal')".format(value.isoformat())
+            return self.__alias(
+                "toDateTime('{}', 'Universal')".format(value.isoformat()), exp.alias
+            )
         elif isinstance(exp.value, date):
-            return "toDate('{}', 'Universal')".format(exp.value.isoformat())
+            return self.__alias(
+                "toDate('{}', 'Universal')".format(exp.value.isoformat()), exp.alias
+            )
         else:
             raise ValueError(f"Unexpected literal type {type(exp.value)}")
 
     def visit_column(self, exp: Column) -> str:
         ret = []
+        ret_unescaped = []
         if exp.table_name:
             ret.append(escape_identifier(exp.table_name) or "")
+            ret_unescaped.append(exp.table_name or "")
             ret.append(".")
+            ret_unescaped.append(".")
         ret.append(escape_identifier(exp.column_name) or "")
-        return self.__alias("".join(ret), exp.alias)
+        ret_unescaped.append(exp.column_name)
+        # De-clutter the output query by not applying an alias to a
+        # column if the column name is the same as the alias to make
+        # the query more readable.
+        # This happens often since we apply column aliases during
+        # parsing so the names are preserved during query processing.
+        if exp.alias != "".join(ret_unescaped):
+            return self.__alias("".join(ret), exp.alias)
+        else:
+            return "".join(ret)
 
     def __visit_params(self, parameters: Sequence[Expression]) -> str:
         ret = [p.accept(self) for p in parameters]
