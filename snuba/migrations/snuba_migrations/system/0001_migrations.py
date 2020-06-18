@@ -7,6 +7,14 @@ from snuba.migrations.status import Status
 
 
 class Migration(migration.Migration):
+    """
+    This migration extends Migration instead of MultiStepMigration since it is
+    responsible for bootstrapping the migration system itself. It skips setting
+    the in progress status in the forwards method and the not started status in
+    the backwards method. Since the migration table doesn't exist yet, we can't
+    write any statuses until this migration is completed.
+    """
+
     blocking = False
 
     def __forwards_local(self) -> Sequence[operations.Operation]:
@@ -30,8 +38,6 @@ class Migration(migration.Migration):
         ]
 
     def forwards(self, context: Context) -> None:
-        # The same as the base forwards methods, only it skips setting the
-        # in progress status since the migrations table won't be created yet.
         migration_id, logger, update_status = context
         logger.info(f"Running migration: {migration_id}")
         for op in self.__forwards_local():
