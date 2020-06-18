@@ -52,6 +52,10 @@ class TableSchema(Schema, ABC):
 
     Specifically a TableSchema is something we can read from through
     a simple select and that provides DDL operations.
+
+    Once the new migration system is rolled out, TableSchema will only
+    be used for querying, and any methods that provide DDL operations will
+    be removed.
     """
 
     def __init__(
