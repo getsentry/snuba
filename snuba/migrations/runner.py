@@ -8,7 +8,7 @@ from typing import List, MutableMapping, NamedTuple, Optional
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster, CLUSTERS
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations.errors import MigrationInProgress
+from snuba.migrations.errors import InvalidMigrationState, MigrationInProgress
 from snuba.migrations.groups import get_group_loader, MigrationGroup
 
 logger = logging.getLogger("snuba.migrations")
@@ -50,6 +50,7 @@ class Runner:
 
         for group in MigrationGroup:
             group_loader = get_group_loader(group)
+            group_migrations: List[MigrationKey] = []
 
             for migration_id in group_loader.get_migrations():
                 migration_key = MigrationKey(group, migration_id)
@@ -57,7 +58,17 @@ class Runner:
                 if status == Status.IN_PROGRESS:
                     raise MigrationInProgress(migration_key)
                 if status == Status.NOT_STARTED:
-                    migrations.append(migration_key)
+                    group_migrations.append(migration_key)
+                elif status == Status.COMPLETED and len(group_migrations):
+                    # We should never have a completed migration after a pending one for that group
+                    missing_migrations = ", ".join(
+                        [m.migration_id for m in group_migrations]
+                    )
+                    raise InvalidMigrationState(
+                        f"Missing migrations: {missing_migrations}"
+                    )
+
+            migrations.extend(group_migrations)
 
         return migrations
 
