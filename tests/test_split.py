@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, MutableMapping, Sequence
 
 from snuba import state
-from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.columns import ColumnSet, String
 from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.factory import get_dataset
@@ -185,6 +185,18 @@ def test_col_split(
     strategy.execute(query, HTTPRequestSettings(), do_query)
 
 
+column_set = ColumnSet(
+    [
+        ("event_id", String()),
+        ("project_id", String()),
+        ("timestamp", String()),
+        ("level", String()),
+        ("logger", String()),
+        ("server_name", String()),
+        ("transaction", String()),
+    ]
+)
+
 column_split_tests = [
     (
         "event_id",
@@ -210,7 +222,7 @@ column_split_tests = [
                     "groupby": ["timestamp"],
                     "limit": 10,
                 },
-                TableSource("events", ColumnSet([])),
+                TableSource("events", column_set),
             )
         ),
         False,
@@ -238,7 +250,7 @@ column_split_tests = [
                     ],
                     "limit": 10,
                 },
-                TableSource("events", ColumnSet([])),
+                TableSource("events", column_set),
             )
         ),
         True,
@@ -258,11 +270,32 @@ column_split_tests = [
                     ],
                     "limit": 10,
                 },
-                TableSource("events", ColumnSet([])),
+                TableSource("events", column_set),
             )
         ),
         False,
     ),  # Valid query but not enough columns to split.
+    (
+        "event_id",
+        "project_id",
+        "timestamp",
+        ClickhouseQuery(
+            LogicalQuery(
+                {
+                    "selected_columns": [["f", ["event_id"], "not_event_id"]],
+                    "conditions": [
+                        ("timestamp", ">=", "2019-09-19T10:00:00"),
+                        ("timestamp", "<", "2019-09-19T12:00:00"),
+                        ("project_id", "IN", [1, 2, 3]),
+                    ],
+                    "orderby": ["-not_event_id"],
+                    "limit": 10,
+                },
+                TableSource("events", column_set),
+            )
+        ),
+        False,
+    ),  # Splitting by column would generate an invalid query
 ]
 
 

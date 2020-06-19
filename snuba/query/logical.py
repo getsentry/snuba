@@ -533,3 +533,38 @@ class Query:
                     to_list(self.get_conditions()), old_column, new_column,
                 )
             )
+
+    def validate_aliases(self) -> bool:
+        """
+        Returns true if all the alias reference in this query can be resolved.
+
+        Which means, they are either declared somewhere in the query itself
+        or they are referencing columns in the table.
+
+        Caution: for this to work, data_source needs to be already populated,
+        otherwise it would throw.
+        """
+        declared_symbols: Set[str] = set()
+        referenced_symbols: Set[str] = set()
+        for e in self.get_all_expressions():
+            # SELECT f(g(x)) as A -> declared_symbols = {A}
+            # SELECT a as B -> declared_symbols = {B} referenced_symbols = {a}
+            # SELECT a AS a -> referenced_symbols = {a}
+            if e.alias:
+                if isinstance(e, Column):
+                    qualified_col_name = (
+                        e.column_name
+                        if not e.table_name
+                        else f"{e.table_name}.{e.column_name}"
+                    )
+                    referenced_symbols.add(qualified_col_name)
+                    if e.alias != qualified_col_name:
+                        declared_symbols.add(e.alias)
+                else:
+                    declared_symbols.add(e.alias)
+            else:
+                if isinstance(e, Column) and not e.alias and not e.table_name:
+                    referenced_symbols.add(e.column_name)
+
+        declared_symbols |= {c.flattened for c in self.get_data_source().get_columns()}
+        return not referenced_symbols - declared_symbols
