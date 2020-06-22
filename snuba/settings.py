@@ -1,5 +1,5 @@
 import os
-from typing import Any, Mapping, MutableMapping, Sequence, Set
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
 
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
@@ -24,7 +24,14 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
         "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
         "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
-        "storage_sets": {"events", "outcomes", "querylog", "sessions", "transactions"},
+        "storage_sets": {
+            "events",
+            "migrations",
+            "outcomes",
+            "querylog",
+            "sessions",
+            "transactions",
+        },
         "single_node": True,
     },
 ]
@@ -94,6 +101,13 @@ TURBO_SAMPLE_RATE = 0.1
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
+
+AST_DATASET_ROLLOUT: Mapping[str, int] = {
+    "outcomes": 100,
+}  # (dataset name: percentage)
+AST_REFERRER_ROLLOUT: Mapping[
+    str, Mapping[Optional[str], int]
+] = {}  # (dataset name: (referrer: percentage))
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

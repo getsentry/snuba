@@ -67,7 +67,10 @@ test_cases = [
                 FunctionCall(
                     "alias2",
                     "f1",
-                    (Column(None, None, "column2"), Column(None, None, "column3")),
+                    (
+                        Column("column2", None, "column2"),
+                        Column("column3", None, "column3"),
+                    ),
                 ),
                 SubscriptableReference(
                     "tags[myTag]", Column(None, None, "tags"), Literal(None, "myTag")
@@ -85,7 +88,7 @@ test_cases = [
                         "f1",
                         (
                             Column("column2", None, "not_column2"),
-                            Column(None, None, "column3"),
+                            Column("column3", None, "column3"),
                         ),
                     ),
                     FunctionCall(

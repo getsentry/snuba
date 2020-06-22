@@ -252,7 +252,7 @@ test_conditions = [
                             None,
                             "arrayElement",
                             (
-                                Column(None, None, "exception_stacks.type"),
+                                Column(None, None, "exception_stacks.type",),
                                 Literal(None, 1),
                             ),
                         ),

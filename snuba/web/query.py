@@ -1,11 +1,10 @@
 import copy
 import logging
-
 from datetime import datetime
+from functools import partial
+from typing import Optional
 
 import sentry_sdk
-
-from functools import partial
 
 from snuba import environment, settings, state
 from snuba.clickhouse.astquery import AstSqlQuery
@@ -14,6 +13,7 @@ from snuba.clickhouse.query import Query
 from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
+from snuba.query.conditions import combine_and_conditions
 from snuba.query.timeseries_extension import TimeSeriesExtensionProcessor
 from snuba.reader import Reader
 from snuba.request import Request
@@ -22,6 +22,7 @@ from snuba.util import with_span
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
+from snuba.web.ast_rollout import is_ast_rolled_out
 from snuba.web.db_query import raw_query
 from snuba.web.query_metadata import SnubaQueryMetadata
 
@@ -44,11 +45,6 @@ def parse_and_run_query(
         timer=timer,
         query_list=[],
     )
-
-    with sentry_sdk.configure_scope() as scope:
-        if scope.span:
-            scope.span.set_tag("dataset", get_dataset_name(dataset))
-            scope.span.set_tag("referrer", request.referrer)
 
     try:
         result = _run_query_pipeline(
@@ -123,7 +119,12 @@ def _run_query_pipeline(
     # components of the query plan.
     # TODO: This below should be a storage specific query processor.
     relational_source = query_plan.query.get_data_source()
-    query_plan.query.add_conditions(relational_source.get_mandatory_conditions())
+    mandatory_conditions = relational_source.get_mandatory_conditions()
+    query_plan.query.add_conditions([c.legacy for c in mandatory_conditions])
+    if len(mandatory_conditions) > 0:
+        query_plan.query.add_condition_to_ast(
+            combine_and_conditions([c.ast for c in mandatory_conditions])
+        )
 
     for clickhouse_processor in query_plan.plan_processors:
         with sentry_sdk.start_span(
@@ -166,8 +167,34 @@ def _format_storage_query_and_run(
     """
 
     source = clickhouse_query.get_data_source().format_from()
-    with sentry_sdk.start_span(description="create_query", op="db"):
-        formatted_query = DictSqlQuery(dataset, clickhouse_query, request_settings)
+    with sentry_sdk.start_span(description="create_query", op="db") as span:
+        legacy_query = DictSqlQuery(dataset, clickhouse_query, request_settings)
+        span.set_data("legacy_query", legacy_query.sql_data())
+        try:
+            ast_query: Optional[AstSqlQuery] = AstSqlQuery(
+                clickhouse_query, request_settings
+            )
+            # For mypy
+            assert ast_query is not None
+            span.set_data("ast_query", ast_query.sql_data())
+
+        except Exception:
+            logger.warning("Failed to format ast query", exc_info=True)
+            ast_query = None
+
+        if (
+            is_ast_rolled_out(get_dataset_name(dataset), referrer)
+            and ast_query is not None
+        ):
+            formatted_query: SqlQuery = ast_query
+            query_type = "ast"
+        else:
+            formatted_query = legacy_query
+            query_type = "legacy"
+
+        metrics.increment("execute", tags={"query_type": query_type})
+        span.set_tag("query_type", query_type)
+
     timer.mark("prepare_query")
 
     stats = {
@@ -182,16 +209,6 @@ def _format_storage_query_and_run(
         description=formatted_query.format_sql(), op="db"
     ) as span:
         span.set_tag("table", source)
-        try:
-            span.set_data(
-                "ast_query", AstSqlQuery(clickhouse_query, request_settings).sql_data()
-            )
-            span.set_tag("query_type", "ast")
-        except Exception:
-            logger.warning("Failed to format ast query", exc_info=True)
-            span.set_tag("query_type", "dict")
-
-        span.set_data("dict_query", formatted_query.sql_data())
 
         return raw_query(
             clickhouse_query,

@@ -5,12 +5,9 @@ from collections import ChainMap
 from dataclasses import dataclass
 from enum import Enum
 from typing import List, Mapping, NamedTuple, Optional, Sequence
-
-
 from snuba.clickhouse.columns import ColumnSet, QualifiedColumnSet
-from snuba.datasets.schemas import Schema, RelationalSource
+from snuba.datasets.schemas import MandatoryCondition, RelationalSource, Schema
 from snuba.datasets.schemas.tables import TableSource
-from snuba.query.types import Condition
 
 
 class JoinType(Enum):
@@ -80,7 +77,7 @@ class TableJoinNode(TableSource, JoinNode):
         self,
         table_name: str,
         columns: ColumnSet,
-        mandatory_conditions: Optional[Sequence[Condition]],
+        mandatory_conditions: Optional[Sequence[MandatoryCondition]],
         prewhere_candidates: Optional[Sequence[str]],
         alias: str,
     ) -> None:
@@ -140,9 +137,9 @@ class JoinClause(JoinNode):
         column_sets = {alias: table.get_columns() for alias, table in tables.items()}
         return QualifiedColumnSet(column_sets)
 
-    def get_mandatory_conditions(self) -> Sequence[Condition]:
+    def get_mandatory_conditions(self) -> Sequence[MandatoryCondition]:
         tables = self.get_tables()
-        all_conditions: List[Condition] = []
+        all_conditions: List[MandatoryCondition] = []
         for table in tables.values():
             all_conditions.extend(table.get_mandatory_conditions())
         return all_conditions

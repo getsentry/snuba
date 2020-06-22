@@ -6,8 +6,7 @@ from typing import Callable, Mapping, NamedTuple, Optional, Sequence
 from snuba.clickhouse.columns import ColumnSet, ColumnType
 from snuba.clusters.cluster import get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.schemas import RelationalSource, Schema
-from snuba.query.types import Condition
+from snuba.datasets.schemas import MandatoryCondition, RelationalSource, Schema
 
 
 class TableSource(RelationalSource):
@@ -20,7 +19,7 @@ class TableSource(RelationalSource):
         self,
         table_name: str,
         columns: ColumnSet,
-        mandatory_conditions: Optional[Sequence[Condition]] = None,
+        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
     ) -> None:
         self.__table_name = table_name
@@ -34,7 +33,7 @@ class TableSource(RelationalSource):
     def get_columns(self) -> ColumnSet:
         return self.__columns
 
-    def get_mandatory_conditions(self) -> Sequence[Condition]:
+    def get_mandatory_conditions(self) -> Sequence[MandatoryCondition]:
         return self.__mandatory_conditions
 
     def get_prewhere_candidates(self) -> Sequence[str]:
@@ -53,6 +52,10 @@ class TableSchema(Schema, ABC):
 
     Specifically a TableSchema is something we can read from through
     a simple select and that provides DDL operations.
+
+    Once the new migration system is rolled out, TableSchema will only
+    be used for querying, and any methods that provide DDL operations will
+    be removed.
     """
 
     def __init__(
@@ -62,7 +65,7 @@ class TableSchema(Schema, ABC):
         local_table_name: str,
         dist_table_name: str,
         storage_set_key: StorageSetKey,
-        mandatory_conditions: Optional[Sequence[Condition]] = None,
+        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
         migration_function: Optional[
             Callable[[str, Mapping[str, ColumnType]], Sequence[str]]
@@ -140,7 +143,7 @@ class MergeTreeSchema(WritableTableSchema):
         local_table_name: str,
         dist_table_name: str,
         storage_set_key: StorageSetKey,
-        mandatory_conditions: Optional[Sequence[Condition]] = None,
+        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
         order_by: str,
         partition_by: Optional[str],
@@ -215,7 +218,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         local_table_name: str,
         dist_table_name: str,
         storage_set_key: StorageSetKey,
-        mandatory_conditions: Optional[Sequence[Condition]] = None,
+        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
         order_by: str,
         partition_by: Optional[str],
@@ -265,7 +268,7 @@ class MaterializedViewSchema(TableSchema):
         local_materialized_view_name: str,
         dist_materialized_view_name: str,
         storage_set_key: StorageSetKey,
-        mandatory_conditions: Optional[Sequence[Condition]] = None,
+        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
         query: str,
         local_source_table_name: str,

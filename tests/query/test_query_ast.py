@@ -143,12 +143,12 @@ def test_get_all_columns() -> None:
     query = parse_query(query_body, events)
 
     assert query.get_all_ast_referenced_columns() == {
-        Column(None, None, "column1"),
-        Column(None, None, "column2"),
-        Column(None, None, "platform"),
-        Column(None, None, "field2"),
-        Column(None, None, "tags"),
-        Column(None, None, "times_seen"),
-        Column(None, None, "event_id"),
-        Column(None, None, "timestamp"),
+        Column("column1", None, "column1"),
+        Column("column2", None, "column2"),
+        Column("platform", None, "platform"),
+        Column("field2", None, "field2"),
+        Column("tags", None, "tags"),
+        Column("times_seen", None, "times_seen"),
+        Column("event_id", None, "event_id"),
+        Column("timestamp", None, "timestamp"),
     }
