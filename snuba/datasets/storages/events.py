@@ -281,6 +281,20 @@ schema = ReplacingMergeTreeSchema(
 )
 
 
+def get_promoted_context_col_mapping() -> Mapping[str, str]:
+    return {
+        col.flattened.replace("_", ".", 1): col.flattened
+        for col in promoted_context_columns
+    }
+
+
+def get_promoted_context_tag_col_mapping() -> Mapping[str, str]:
+    return {
+        col.flattened.replace("_", ".", 1): col.flattened
+        for col in promoted_context_tag_columns
+    }
+
+
 def get_promoted_columns() -> Mapping[str, FrozenSet[str]]:
     # The set of columns, and associated keys that have been promoted
     # to the top level table namespace.
@@ -299,12 +313,11 @@ def get_column_tag_map() -> Mapping[str, Mapping[str, str]]:
 
     return {
         "tags": {
-            col.flattened: col.flattened.replace("_", ".")
-            for col in promoted_context_tag_columns
+            col: context
+            for context, col in get_promoted_context_tag_col_mapping().items()
         },
         "contexts": {
-            col.flattened: col.flattened.replace("_", ".", 1)
-            for col in promoted_context_columns
+            col: context for context, col in get_promoted_context_col_mapping().items()
         },
     }
 
@@ -345,15 +358,9 @@ storage = WritableTableStorage(
             mapping_specs={
                 "tags": ChainMap(
                     {col.flattened: col.flattened for col in promoted_tag_columns},
-                    {
-                        col.flattened.replace("_", ".", 1): col.flattened
-                        for col in promoted_context_tag_columns
-                    },
+                    get_promoted_context_tag_col_mapping(),
                 ),
-                "contexts": {
-                    col.flattened.replace("_", ".", 1): col.flattened
-                    for col in promoted_context_columns
-                },
+                "contexts": get_promoted_context_col_mapping(),
             },
         ),
         # This processor must not be ported to the errors dataset. We should
