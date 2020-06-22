@@ -2,10 +2,9 @@ from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
 from snuba.query.conditions import (
     binary_condition,
-    BooleanFunctions,
     ConditionFunctions,
 )
-from snuba.query.dsl import count, countIf, divide
+from snuba.query.dsl import count, countIf, divide, literals_tuple
 from snuba.query.expressions import (
     Column,
     Expression,
@@ -28,26 +27,21 @@ class FailureRateProcessor(QueryProcessor):
             if isinstance(exp, FunctionCall) and exp.function_name == "failure_rate":
                 assert len(exp.parameters) == 0
 
+                successful_codes = ["ok", "cancelled", "unknown_error"]
                 return divide(
                     countIf(
                         binary_condition(
                             None,
-                            BooleanFunctions.AND,
-                            binary_condition(
+                            ConditionFunctions.NOT_IN,
+                            Column(None, None, "transaction_status"),
+                            literals_tuple(
                                 None,
-                                ConditionFunctions.NEQ,
-                                Column(None, None, "transaction_status"),
-                                Literal(None, SPAN_STATUS_NAME_TO_CODE["ok"]),
+                                [
+                                    Literal(None, SPAN_STATUS_NAME_TO_CODE[code])
+                                    for code in successful_codes
+                                ],
                             ),
-                            binary_condition(
-                                None,
-                                ConditionFunctions.NEQ,
-                                Column(None, None, "transaction_status"),
-                                Literal(
-                                    None, SPAN_STATUS_NAME_TO_CODE["unknown_error"]
-                                ),
-                            ),
-                        )
+                        ),
                     ),
                     count(),
                     exp.alias,
