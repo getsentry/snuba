@@ -103,7 +103,9 @@ class Runner:
                 "version": 1,
             }
         ]
-        self.__connection.execute(statement, data)
+        self.__connection.execute(
+            statement, data, settings={"load_balancing": "in_order"}
+        )
 
     def _get_migration_status(self) -> Mapping[MigrationKey, Status]:
         data: MutableMapping[MigrationKey, Status] = {}
