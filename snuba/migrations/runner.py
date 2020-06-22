@@ -103,10 +103,7 @@ class Runner:
                 "version": 1,
             }
         ]
-        connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
-            ClickhouseClientSettings.MIGRATE
-        )
-        connection.execute(statement, data)
+        self.__connection.execute(statement, data)
 
     def _get_migration_status(self) -> Mapping[MigrationKey, Status]:
         data: MutableMapping[MigrationKey, Status] = {}
