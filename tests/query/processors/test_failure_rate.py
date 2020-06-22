@@ -1,10 +1,6 @@
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.datasets.schemas.tables import TableSource
-from snuba.query.conditions import (
-    binary_condition,
-    ConditionFunctions,
-)
 from snuba.query.dsl import count, countIf, divide
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
@@ -30,19 +26,13 @@ def test_failure_rate_format_expressions() -> None:
                 countIf(
                     FunctionCall(
                         None,
-                        "and",
+                        "notIn",
                         (
-                            binary_condition(
+                            Column(None, None, "transaction_status"),
+                            FunctionCall(
                                 None,
-                                ConditionFunctions.NEQ,
-                                Column(None, None, "transaction_status"),
-                                Literal(None, 0),
-                            ),
-                            binary_condition(
-                                None,
-                                ConditionFunctions.NEQ,
-                                Column(None, None, "transaction_status"),
-                                Literal(None, 2),
+                                "tuple",
+                                (Literal(None, 0), Literal(None, 1), Literal(None, 2)),
                             ),
                         ),
                     )
@@ -63,5 +53,5 @@ def test_failure_rate_format_expressions() -> None:
         ClickhouseExpressionFormatter()
     )
     assert ret == (
-        "(divide(countIf(and(notEquals(transaction_status, 0), notEquals(transaction_status, 2))), count()) AS perf)"
+        "(divide(countIf(notIn(transaction_status, tuple(0, 1, 2))), count()) AS perf)"
     )

@@ -102,7 +102,9 @@ PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 
-AST_DATASET_ROLLOUT: Mapping[str, int] = {}  # (dataset name: percentage)
+AST_DATASET_ROLLOUT: Mapping[str, int] = {
+    "outcomes": 100,
+}  # (dataset name: percentage)
 AST_REFERRER_ROLLOUT: Mapping[
     str, Mapping[Optional[str], int]
 ] = {}  # (dataset name: (referrer: percentage))
