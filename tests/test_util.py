@@ -189,7 +189,7 @@ class TestUtil(BaseTest):
         )
         assert (
             conditions_expr(dataset, conditions, Query({}, source), ParsingContext())
-            == """(notEmpty((tags.value[indexOf(tags.key, 'sentry:environment')] AS `tags[sentry:environment]`)) = 'dev' OR notEmpty(`tags[sentry:environment]`) = 'prod') AND (notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 'joe' OR notEmpty(`tags[sentry:user]`) = 'bob')"""
+            == """(notEmpty((arrayElement(tags.value, indexOf(tags.key, 'sentry:environment')) AS `tags[sentry:environment]`)) = 'dev' OR notEmpty(`tags[sentry:environment]`) = 'prod') AND (notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 'joe' OR notEmpty(`tags[sentry:user]`) = 'bob')"""
         )
 
         # Test scalar condition on array column is expanded as an iterator.
