@@ -2,14 +2,16 @@ import logging
 
 from clickhouse_driver import errors
 from datetime import datetime
-from enum import Enum
+from functools import partial
 from typing import List, Mapping, MutableMapping, NamedTuple
 
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster, CLUSTERS
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.migrations.context import Context
 from snuba.migrations.errors import InvalidMigrationState, MigrationInProgress
 from snuba.migrations.groups import get_group_loader, MigrationGroup
+from snuba.migrations.status import Status
 
 logger = logging.getLogger("snuba.migrations")
 
@@ -18,12 +20,6 @@ DIST_TABLE_NAME = "migrations_dist"
 
 # Currently only local migrations are supported
 TABLE_NAME = LOCAL_TABLE_NAME
-
-
-class Status(Enum):
-    NOT_STARTED = "not_started"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
 
 
 class MigrationKey(NamedTuple):
@@ -78,37 +74,23 @@ class Runner:
 
     def run_migration(self, migration_key: MigrationKey) -> None:
         """
-        Run a single migration given its group and ID.
-        Marks the migration as completed.
+        Run a single migration given its migration key and marks the migration as complete.
         """
-        group = migration_key.group
         migration_id = migration_key.migration_id
 
         assert all(
             cluster.is_single_node() for cluster in CLUSTERS
         ), "Cannot run migrations for multi node clusters"
 
-        logger.info(f"Running migration: {group} {migration_id}")
+        context = Context(
+            migration_id, logger, partial(self._update_migration_status, migration_key),
+        )
+        migration = get_group_loader(migration_key.group).load_migration(migration_id)
+        migration.forwards(context)
 
-        migration = get_group_loader(group).load_migration(migration_id)
-
-        operations = migration.forwards_local()
-        for op in operations:
-            op.execute()
-
-        logger.info(f"Finished running, updating status: {group} {migration_id}")
-
-        # TODO: In addition to marking migrations as completed, we should also mark
-        # migrations as in-progress before we execute the operations. However we
-        # will need to have some mechanism that allows this to be skipped in certain
-        # cases, such as the initial migration that creates the migrations table itself.
-        self._mark_completed(migration_key)
-
-        logger.info(f"Finished: {group} {migration_id}")
-
-    def _mark_completed(self, migration_key: MigrationKey) -> None:
-        status = Status.COMPLETED
-
+    def _update_migration_status(
+        self, migration_key: MigrationKey, status: Status
+    ) -> None:
         statement = f"INSERT INTO {TABLE_NAME} FORMAT JSONEachRow"
         data = [
             {
