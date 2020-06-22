@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import itertools
 import uuid
-
 from typing import Any, Mapping, Type
 
+from snuba import environment
 from snuba.datasets.dataset import Dataset
+from snuba.query.expressions import Column
 from snuba.query.extensions import QueryExtension
 from snuba.query.parser import parse_query
 from snuba.query.schema import GENERIC_QUERY_SCHEMA
@@ -16,6 +17,9 @@ from snuba.request.request_settings import (
     SubscriptionRequestSettings,
 )
 from snuba.schemas import Schema, validate_jsonschema
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+
+metrics = MetricsWrapper(environment.metrics, "parser")
 
 
 class RequestSchema:
@@ -104,6 +108,18 @@ class RequestSchema:
             }
 
         query = parse_query(query_body, dataset)
+        # Temporary code to collect some metrics about the usage of
+        # alias references.
+        alias_references_present = any(
+            e
+            for e in query.get_all_expressions()
+            if isinstance(e, Column) and e.alias is None
+        )
+        if alias_references_present:
+            metrics.increment(
+                "alias_reference_found", tags={"referrer": referrer or ""}
+            )
+
         request_id = uuid.uuid4().hex
         return Request(
             request_id, query, self.__setting_class(**settings), extensions, referrer
