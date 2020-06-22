@@ -282,6 +282,10 @@ schema = ReplacingMergeTreeSchema(
 
 
 def get_promoted_context_col_mapping() -> Mapping[str, str]:
+    """
+    Produces the mapping between contexts and the related
+    promoted columns.
+    """
     return {
         col.flattened.replace("_", ".", 1): col.flattened
         for col in promoted_context_columns
@@ -289,6 +293,10 @@ def get_promoted_context_col_mapping() -> Mapping[str, str]:
 
 
 def get_promoted_context_tag_col_mapping() -> Mapping[str, str]:
+    """
+    Produces the mapping between contexts-tags and the related
+    promoted columns.
+    """
     return {
         col.flattened.replace("_", ".", 1): col.flattened
         for col in promoted_context_tag_columns
