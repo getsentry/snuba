@@ -41,10 +41,10 @@ class Runner:
         """
         Run all pending migrations. Throws an error if any migration is in progress.
         """
-        for migration in self.get_pending_migrations():
+        for migration in self._get_pending_migrations():
             self.run_migration(migration)
 
-    def get_pending_migrations(self) -> List[MigrationKey]:
+    def _get_pending_migrations(self) -> List[MigrationKey]:
         migrations: List[MigrationKey] = []
 
         migration_status = self._get_migration_status()
