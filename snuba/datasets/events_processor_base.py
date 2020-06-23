@@ -78,6 +78,16 @@ class EventsProcessorBase(MessageProcessor, ABC):
     ) -> None:
         raise NotImplementedError
 
+    @abstractmethod
+    def extract_contexts_custom(
+        self,
+        output: MutableMapping[str, Any],
+        event: Mapping[str, Any],
+        contexts: Mapping[str, Any],
+        metadata: Optional[KafkaMessageMetadata] = None,
+    ) -> None:
+        raise NotImplementedError
+
     def extract_required(
         self, output: MutableMapping[str, Any], event: Mapping[str, Any]
     ) -> None:
@@ -215,11 +225,13 @@ class EventsProcessorBase(MessageProcessor, ABC):
 
         contexts = data.get("contexts", None) or {}
         self.extract_promoted_contexts(processed, contexts, tags)
+        self.extract_contexts_custom(processed, event, contexts, metadata)
 
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             contexts
         )
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
+        processed["_tags_flattened"] = ""
 
         exception = (
             data.get("exception", data.get("sentry.interfaces.Exception", None)) or {}
