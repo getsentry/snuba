@@ -21,6 +21,7 @@ from snuba.datasets.schemas import MandatoryCondition
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsProcessor
 from snuba.datasets.storages.events_column_processor import EventsColumnProcessor
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
@@ -280,6 +281,28 @@ schema = ReplacingMergeTreeSchema(
 )
 
 
+def get_promoted_context_col_mapping() -> Mapping[str, str]:
+    """
+    Produces the mapping between contexts and the related
+    promoted columns.
+    """
+    return {
+        col.flattened.replace("_", ".", 1): col.flattened
+        for col in promoted_context_columns
+    }
+
+
+def get_promoted_context_tag_col_mapping() -> Mapping[str, str]:
+    """
+    Produces the mapping between contexts-tags and the related
+    promoted columns.
+    """
+    return {
+        col.flattened.replace("_", ".", 1): col.flattened
+        for col in promoted_context_tag_columns
+    }
+
+
 def get_promoted_columns() -> Mapping[str, FrozenSet[str]]:
     # The set of columns, and associated keys that have been promoted
     # to the top level table namespace.
@@ -298,12 +321,11 @@ def get_column_tag_map() -> Mapping[str, Mapping[str, str]]:
 
     return {
         "tags": {
-            col.flattened: col.flattened.replace("_", ".")
-            for col in promoted_context_tag_columns
+            col: context
+            for context, col in get_promoted_context_tag_col_mapping().items()
         },
         "contexts": {
-            col.flattened: col.flattened.replace("_", ".", 1)
-            for col in promoted_context_columns
+            col: context for context, col in get_promoted_context_col_mapping().items()
         },
     }
 
@@ -344,17 +366,19 @@ storage = WritableTableStorage(
             mapping_specs={
                 "tags": ChainMap(
                     {col.flattened: col.flattened for col in promoted_tag_columns},
-                    {
-                        col.flattened.replace("_", "."): col.flattened
-                        for col in promoted_context_tag_columns
-                    },
+                    get_promoted_context_tag_col_mapping(),
                 ),
-                "contexts": {
-                    col.flattened.replace("_", "."): col.flattened
-                    for col in promoted_context_columns
-                },
+                "contexts": get_promoted_context_col_mapping(),
             },
         ),
+        # This processor must not be ported to the errors dataset. We should
+        # not support promoting tags/contexts with boolean values. There is
+        # no way to convert them back consistently to the value provided by
+        # the client when the event is ingested, in all ways to access
+        # tags/contexts. Once the errors dataset is in use, we will not have
+        # boolean promoted tags/contexts so this constraint will be easy
+        # to enforce.
+        EventsBooleanContextsProcessor(),
         ArrayJoinKeyValueOptimizer("tags"),
         PrewhereProcessor(),
     ],
