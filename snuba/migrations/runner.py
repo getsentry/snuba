@@ -6,7 +6,6 @@ from functools import partial
 from typing import List, Mapping, MutableMapping, NamedTuple
 
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.escaping import escape_string
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster, CLUSTERS
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.context import Context
@@ -107,12 +106,12 @@ class Runner:
         self.__connection.execute(statement, data)
 
     def _get_next_version(self, migration_key: MigrationKey) -> int:
-        group = escape_string(migration_key.group.value)
-        migration_id = escape_string(migration_key.migration_id)
-        conditions = f"group = {group} AND migration_id = {migration_id}"
-
         result = self.__connection.execute(
-            f"SELECT version FROM {TABLE_NAME} FINAL WHERE {conditions};"
+            f"SELECT version FROM {TABLE_NAME} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s;",
+            {
+                "group": migration_key.group.value,
+                "migration_id": migration_key.migration_id,
+            },
         )
         if result:
             (version,) = result[0]
