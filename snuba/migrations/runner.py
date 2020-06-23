@@ -6,6 +6,7 @@ from functools import partial
 from typing import List, Mapping, MutableMapping, NamedTuple
 
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.escaping import escape_string
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster, CLUSTERS
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.context import Context
@@ -91,6 +92,8 @@ class Runner:
     def _update_migration_status(
         self, migration_key: MigrationKey, status: Status
     ) -> None:
+        next_version = self._get_next_version(migration_key)
+
         statement = f"INSERT INTO {TABLE_NAME} FORMAT JSONEachRow"
         data = [
             {
@@ -98,14 +101,27 @@ class Runner:
                 "migration_id": migration_key.migration_id,
                 "timestamp": datetime.now(),
                 "status": status.value,
-                # TODO: Version should be incremented each time we update that
-                # migration status
-                "version": 1,
+                "version": next_version,
             }
         ]
         self.__connection.execute(
             statement, data, settings={"load_balancing": "in_order"}
         )
+
+    def _get_next_version(self, migration_key: MigrationKey) -> int:
+        group = escape_string(migration_key.group.value)
+        migration_id = escape_string(migration_key.migration_id)
+        conditions = f"group = {group} AND migration_id = {migration_id}"
+
+        result = self.__connection.execute(
+            f"SELECT version FROM {TABLE_NAME} FINAL WHERE {conditions};",
+            settings={"load_balancing": "in_order"},
+        )
+        if result:
+            (version,) = result[0]
+            return int(version) + 1
+
+        return 1
 
     def _get_migration_status(self) -> Mapping[MigrationKey, Status]:
         data: MutableMapping[MigrationKey, Status] = {}
