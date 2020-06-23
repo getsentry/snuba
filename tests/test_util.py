@@ -327,6 +327,16 @@ class TestUtil(BaseTest):
             )
             == "(foo() AS a)"
         )
+        state.set_config("format_clickhouse_arrays", 1)
+        assert (
+            complex_column_expr(
+                dataset,
+                tuplify(["array", [1, 2, 3], "a"]),
+                deepcopy(query),
+                ParsingContext(),
+            )
+            == "([1, 2, 3] AS a)"
+        )
         assert (
             complex_column_expr(
                 dataset,
@@ -571,5 +581,5 @@ class TestUtil(BaseTest):
             for (agg, col, alias) in body["aggregations"]
         ]
         assert exprs == [
-            "(countIf((transaction_status != 0 AND transaction_status != 2)) / count() AS error_percentage)"
+            "(countIf(notIn(transaction_status, tuple(0, 1, 2))) / count() AS error_percentage)"
         ]
