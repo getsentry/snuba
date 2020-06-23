@@ -104,9 +104,7 @@ class Runner:
                 "version": next_version,
             }
         ]
-        self.__connection.execute(
-            statement, data, settings={"load_balancing": "in_order"}
-        )
+        self.__connection.execute(statement, data)
 
     def _get_next_version(self, migration_key: MigrationKey) -> int:
         group = escape_string(migration_key.group.value)
@@ -114,8 +112,7 @@ class Runner:
         conditions = f"group = {group} AND migration_id = {migration_id}"
 
         result = self.__connection.execute(
-            f"SELECT version FROM {TABLE_NAME} FINAL WHERE {conditions};",
-            settings={"load_balancing": "in_order"},
+            f"SELECT version FROM {TABLE_NAME} FINAL WHERE {conditions};"
         )
         if result:
             (version,) = result[0]
@@ -128,8 +125,7 @@ class Runner:
 
         try:
             for row in self.__connection.execute(
-                f"SELECT group, migration_id, status FROM {TABLE_NAME} FINAL",
-                settings={"load_balancing": "in_order"},
+                f"SELECT group, migration_id, status FROM {TABLE_NAME} FINAL"
             ):
                 group_name, migration_id, status_name = row
                 data[MigrationKey(MigrationGroup(group_name), migration_id)] = Status(
