@@ -291,7 +291,7 @@ column_split_tests = [
 def test_col_split_conditions(
     id_column: str, project_column: str, timestamp_column: str, query, expected_result
 ) -> None:
-    dataset = get_dataset("transactions")
+    dataset = get_dataset("events")
     query = parse_query(query, dataset)
     splitter = ColumnSplitQueryStrategy(id_column, project_column, timestamp_column)
     request = Request("a", query, HTTPRequestSettings(), {}, "r")
