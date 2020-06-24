@@ -29,7 +29,7 @@ test_data = [
             "conditions": [["tags_key", "IN", ["t1", "t2"]]],
         },
         (
-            "SELECT (tags.value[indexOf(tags.key, 't1')] AS `tags[t1]`) "
+            "SELECT (arrayElement(tags.value, indexOf(tags.key, 't1')) AS `tags[t1]`) "
             "FROM transactions_local "
             "WHERE (arrayJoin(tags.key) AS tags_key) IN ('t1', 't2')"
         ),
@@ -42,10 +42,10 @@ test_data = [
             "conditions": [["tags_key", "IN", ["t1", "t2"]]],
         },
         (
-            "SELECT (((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) "
-            "AS all_tags))[2] AS tags_value) "
+            "SELECT (arrayElement((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) "
+            "AS all_tags), 2) AS tags_value) "
             "FROM transactions_local "
-            "WHERE ((all_tags)[1] AS tags_key) IN ('t1', 't2')"
+            "WHERE (arrayElement(all_tags, 1) AS tags_key) IN ('t1', 't2')"
         ),
     ),  # Tags key in condition but only value in select. This could technically be
     # optimized but it would add more complexity
@@ -57,8 +57,8 @@ test_data = [
             "conditions": [["col", "IN", ["t1", "t2"]]],
         },
         (
-            "SELECT (((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) AS all_tags))[1] "
-            "AS tags_key), ((all_tags)[2] AS tags_value) "
+            "SELECT (arrayElement((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) AS all_tags), 1) "
+            "AS tags_key), (arrayElement(all_tags, 2) AS tags_value) "
             "FROM transactions_local "
             "WHERE col IN ('t1', 't2')"
         ),
@@ -71,7 +71,7 @@ test_data = [
             "conditions": [["tags_key", "IN", ["t1", "t2"]]],
         },
         (
-            "SELECT (arrayJoin(arrayFilter(tag -> tag IN ('t1','t2'), tags.key)) AS tags_key) "
+            "SELECT (arrayJoin(arrayFilter(tag -> in(tag, tuple('t1','t2')), tags.key)) AS tags_key) "
             "FROM transactions_local "
             "WHERE tags_key IN ('t1', 't2')"
         ),
@@ -84,7 +84,7 @@ test_data = [
             "having": [["tags_key", "IN", ["t1", "t2"]]],
         },
         (
-            "SELECT (arrayJoin(arrayFilter(tag -> tag IN ('t1','t2'), tags.key)) AS tags_key), tags_key "
+            "SELECT (arrayJoin(arrayFilter(tag -> in(tag, tuple('t1','t2')), tags.key)) AS tags_key), tags_key "
             "FROM transactions_local "
             "GROUP BY (tags_key) "
             "HAVING tags_key IN ('t1', 't2')"
@@ -98,9 +98,9 @@ test_data = [
             "conditions": [["tags_key", "IN", ["t1", "t2"]]],
         },
         (
-            "SELECT (((arrayJoin(arrayFilter(pair -> pair[1] IN ('t1','t2'), "
-            "arrayMap((x,y) -> [x,y], tags.key, tags.value))) AS all_tags))[1] AS tags_key), "
-            "((all_tags)[2] AS tags_value) "
+            "SELECT (arrayElement((arrayJoin(arrayFilter(pair -> in(arrayElement(pair, 1), tuple('t1','t2')), "
+            "arrayMap((x,y) -> [x,y], tags.key, tags.value))) AS all_tags), 1) AS tags_key), "
+            "(arrayElement(all_tags, 2) AS tags_value) "
             "FROM transactions_local "
             "WHERE tags_key IN ('t1', 't2')"
         ),
@@ -117,9 +117,9 @@ test_data = [
             ],
         },
         (
-            "SELECT (((arrayJoin(arrayFilter(pair -> pair[1] IN ('t1','t2','t3','t4','t5'), "
-            "arrayMap((x,y) -> [x,y], tags.key, tags.value))) AS all_tags))[1] AS tags_key), "
-            "((all_tags)[2] AS tags_value) "
+            "SELECT (arrayElement((arrayJoin(arrayFilter(pair -> in(arrayElement(pair, 1), tuple('t1','t2','t3','t4','t5')), "
+            "arrayMap((x,y) -> [x,y], tags.key, tags.value))) AS all_tags), 1) AS tags_key), "
+            "(arrayElement(all_tags, 2) AS tags_value) "
             "FROM transactions_local "
             "WHERE tags_key IN ('t1', 't2') AND "
             "tags_key IN ('t3', 't4') AND "
@@ -138,8 +138,8 @@ test_data = [
             ],
         },
         (
-            "SELECT (((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) AS all_tags))[1] "
-            "AS tags_key), ((all_tags)[2] AS tags_value) "
+            "SELECT (arrayElement((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) AS all_tags), 1) "
+            "AS tags_key), (arrayElement(all_tags, 2) AS tags_value) "
             "FROM transactions_local "
             "WHERE (tags_key IN ('t1', 't2') OR tags_key IN ('t3', 't4'))"
         ),
@@ -155,8 +155,8 @@ test_data = [
             ],
         },
         (
-            "SELECT (((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) AS all_tags))[1] "
-            "AS tags_key), ((all_tags)[2] AS tags_value) "
+            "SELECT (arrayElement((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) AS all_tags), 1) "
+            "AS tags_key), (arrayElement(all_tags, 2) AS tags_value) "
             "FROM transactions_local "
             "WHERE tags_key IN ('t1', 't2') AND (tags_key IN ('t3', 't4') OR tags_key = 't5')"
         ),
