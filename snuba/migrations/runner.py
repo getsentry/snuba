@@ -91,6 +91,8 @@ class Runner:
     def _update_migration_status(
         self, migration_key: MigrationKey, status: Status
     ) -> None:
+        next_version = self._get_next_version(migration_key)
+
         statement = f"INSERT INTO {TABLE_NAME} FORMAT JSONEachRow"
         data = [
             {
@@ -98,22 +100,31 @@ class Runner:
                 "migration_id": migration_key.migration_id,
                 "timestamp": datetime.now(),
                 "status": status.value,
-                # TODO: Version should be incremented each time we update that
-                # migration status
-                "version": 1,
+                "version": next_version,
             }
         ]
-        self.__connection.execute(
-            statement, data, settings={"load_balancing": "in_order"}
+        self.__connection.execute(statement, data)
+
+    def _get_next_version(self, migration_key: MigrationKey) -> int:
+        result = self.__connection.execute(
+            f"SELECT version FROM {TABLE_NAME} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s;",
+            {
+                "group": migration_key.group.value,
+                "migration_id": migration_key.migration_id,
+            },
         )
+        if result:
+            (version,) = result[0]
+            return int(version) + 1
+
+        return 1
 
     def _get_migration_status(self) -> Mapping[MigrationKey, Status]:
         data: MutableMapping[MigrationKey, Status] = {}
 
         try:
             for row in self.__connection.execute(
-                f"SELECT group, migration_id, status FROM {TABLE_NAME} FINAL",
-                settings={"load_balancing": "in_order"},
+                f"SELECT group, migration_id, status FROM {TABLE_NAME} FINAL"
             ):
                 group_name, migration_id, status_name = row
                 data[MigrationKey(MigrationGroup(group_name), migration_id)] = Status(
