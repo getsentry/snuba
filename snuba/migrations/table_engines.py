@@ -1,8 +1,19 @@
+from abc import ABC, abstractmethod
+
 from typing import Mapping, Optional
 
 
-class TableEngine:
-    pass
+class TableEngine(ABC):
+    """
+    Represents a ClickHouse table engine, such as any table or view.
+
+    Any changes made to these classes should ensure the result of every migration
+    does not change.
+    """
+
+    @abstractmethod
+    def get_sql(self) -> str:
+        raise NotImplementedError
 
 
 class MergeTree(TableEngine):
@@ -20,8 +31,8 @@ class MergeTree(TableEngine):
         self.__ttl = ttl
         self.__settings = settings
 
-    def get_create_table_statement(self) -> str:
-        sql = f"{self.get_engine_type()} ORDER BY {self.__order_by}"
+    def get_sql(self) -> str:
+        sql = f"{self._get_engine_type()} ORDER BY {self.__order_by}"
 
         if self.__partition_by:
             sql += f" PARTITION BY {self.__partition_by}"
@@ -38,7 +49,7 @@ class MergeTree(TableEngine):
 
         return sql
 
-    def get_engine_type(self) -> str:
+    def _get_engine_type(self) -> str:
         return "MergeTree()"
 
 
@@ -55,5 +66,5 @@ class ReplacingMergeTree(MergeTree):
         super().__init__(order_by, partition_by, sample_by, ttl, settings)
         self.__version_column = version_column
 
-    def get_engine_type(self) -> str:
+    def _get_engine_type(self) -> str:
         return f"ReplacingMergeTree({self.__version_column})"
