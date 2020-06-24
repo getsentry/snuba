@@ -43,6 +43,9 @@ class SessionsProcessor(MessageProcessor):
         if message["status"] in ("crashed", "abnormal"):
             errors = max(errors, 1)
 
+        received = _ensure_valid_date(datetime.utcfromtimestamp(message["received"]))
+        started = _ensure_valid_date(datetime.utcfromtimestamp(message["started"]))
+
         processed = {
             "session_id": str(uuid.UUID(message["session_id"])),
             "distinct_id": str(uuid.UUID(message.get("distinct_id") or NIL_UUID)),
@@ -53,12 +56,8 @@ class SessionsProcessor(MessageProcessor):
             "duration": duration,
             "status": STATUS_MAPPING[message["status"]],
             "errors": errors,
-            "received": _ensure_valid_date(
-                datetime.utcfromtimestamp(message["received"])
-            ),
-            "started": _ensure_valid_date(
-                datetime.utcfromtimestamp(message["started"])
-            ),
+            "received": received if received is not None else datetime.now(),
+            "started": started if started is not None else datetime.now(),
             "release": message["release"],
             "environment": message.get("environment") or "",
         }
