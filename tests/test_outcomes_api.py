@@ -1,13 +1,15 @@
+import uuid
 from datetime import datetime, timedelta
+
+import pytest
 import pytz
 import simplejson as json
-import uuid
-
-from tests.base import BaseApiTest
 
 from snuba.datasets.factory import enforce_table_writer
+from tests.base import BaseApiTest
 
 
+@pytest.mark.usefixtures("query_type")
 class TestOutcomesApi(BaseApiTest):
     def setup_method(self, test_method, dataset_name="outcomes"):
         super().setup_method(test_method, dataset_name)

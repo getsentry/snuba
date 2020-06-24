@@ -317,7 +317,15 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             return None
 
         total_col_count = len(query.get_all_referenced_columns())
-        total_ast_count = len(query.get_all_ast_referenced_columns())
+        total_ast_count = len(
+            # We need to count the number of table/column name pairs
+            # not the number of distinct Column objects in the query
+            # so to avoid counting aliased columns multiple times.
+            {
+                (col.table_name, col.column_name)
+                for col in query.get_all_ast_referenced_columns()
+            }
+        )
         if total_col_count != total_ast_count:
             metrics.increment("mismatch.total_referenced_columns")
 
@@ -335,12 +343,21 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             ]
         )
 
-        minimal_ast_count = len(minimal_query.get_all_ast_referenced_columns())
+        minimal_ast_count = len(
+            {
+                (col.table_name, col.column_name)
+                for col in minimal_query.get_all_ast_referenced_columns()
+            }
+        )
         minimal_count = len(minimal_query.get_all_referenced_columns())
         if minimal_count != minimal_ast_count:
             metrics.increment("mismatch.minimaL_query_referenced_columns")
 
         if total_col_count <= minimal_count:
+            return None
+
+        # Ensure the minimal query is actually runnable on its own.
+        if not minimal_query.validate_aliases():
             return None
 
         result = runner(minimal_query, request_settings)
