@@ -15,101 +15,191 @@ from snuba.query.parser.exceptions import CyclicAliasException
 
 TEST_CASES = [
     pytest.param(
-        Column("a", None, "a"),
-        {"b": FunctionCall("b", "f", tuple())},
+        Column(alias="a", table_name=None, column_name="a"),
+        {"b": FunctionCall(alias="b", function_name="f", parameters=tuple())},
         False,
-        Column("a", None, "a"),
+        Column(alias="a", table_name=None, column_name="a"),
         id="Simple Column - do nothing",
     ),
     pytest.param(
-        Literal(None, "a"),
+        Literal(alias=None, value="a"),
         {},
         False,
-        Literal(None, "a"),
+        Literal(alias=None, value="a"),
         id="Simple Literal - do nothing",
     ),
     pytest.param(
-        Column(None, None, "ref"),
-        {"ref": FunctionCall("ref", "f", tuple())},
+        Column(alias=None, table_name=None, column_name="ref"),
+        {"ref": FunctionCall(alias="ref", function_name="f", parameters=tuple())},
         False,
-        FunctionCall("ref", "f", tuple()),
+        FunctionCall(alias="ref", function_name="f", parameters=tuple()),
         id="Alias resolves to a simple function",
     ),
     pytest.param(
-        Column(None, None, "group_id"),
-        {"group_id": FunctionCall("group_id", "f", (Column(None, None, "group_id"),))},
-        False,
-        FunctionCall("group_id", "f", (Column(None, None, "group_id"),)),
-        id="Function replaces column. Inner column not changed",
-    ),
-    pytest.param(
-        Column(None, None, "group_id"),
+        Column(alias=None, table_name=None, column_name="group_id"),
         {
             "group_id": FunctionCall(
                 "group_id",
-                "f",
-                (
-                    Column(None, None, "group_id"),
-                    FunctionCall(None, "g", (Column(None, None, "group_id"),)),
+                function_name="f",
+                parameters=(
+                    Column(alias=None, table_name=None, column_name="group_id"),
                 ),
             )
         },
         False,
         FunctionCall(
-            "group_id",
-            "f",
-            (
-                Column(None, None, "group_id"),
-                FunctionCall(None, "g", (Column(None, None, "group_id"),)),
+            alias="group_id",
+            function_name="f",
+            parameters=(Column(alias=None, table_name=None, column_name="group_id"),),
+        ),
+        id="Function replaces column. Inner column not changed",
+    ),
+    pytest.param(
+        Column(alias=None, table_name=None, column_name="group_id"),
+        {
+            "group_id": FunctionCall(
+                alias="group_id",
+                function_name="f",
+                parameters=(
+                    Column(alias=None, table_name=None, column_name="group_id"),
+                    FunctionCall(
+                        alias=None,
+                        function_name="g",
+                        parameters=(
+                            Column(alias=None, table_name=None, column_name="group_id"),
+                        ),
+                    ),
+                ),
+            )
+        },
+        False,
+        FunctionCall(
+            alias="group_id",
+            function_name="f",
+            parameters=(
+                Column(alias=None, table_name=None, column_name="group_id"),
+                FunctionCall(
+                    alias=None,
+                    function_name="g",
+                    parameters=(
+                        Column(alias=None, table_name=None, column_name="group_id"),
+                    ),
+                ),
             ),
         ),
         id="Function replaces columns nested. Inner column not changed",
     ),
     pytest.param(
-        Column(None, None, "group_id"),
+        Column(alias=None, table_name=None, column_name="group_id"),
         {
-            "group_id": FunctionCall("group_id", "f", (Column(None, None, "a"),)),
-            "a": FunctionCall("a", "g", (Column(None, None, "b"),)),
+            "group_id": FunctionCall(
+                alias="group_id",
+                function_name="f",
+                parameters=(Column(alias=None, table_name=None, column_name="a"),),
+            ),
+            "a": FunctionCall(
+                alias="a",
+                function_name="g",
+                parameters=(Column(alias=None, table_name=None, column_name="b"),),
+            ),
         },
         True,
         FunctionCall(
-            "group_id", "f", (FunctionCall("a", "g", (Column(None, None, "b"),)),),
+            "group_id",
+            "f",
+            (
+                FunctionCall(
+                    alias="a",
+                    function_name="g",
+                    parameters=(Column(alias=None, table_name=None, column_name="b"),),
+                ),
+            ),
         ),
         id="Nested multi-level aliases fully unpacked",
     ),
     pytest.param(
-        Column(None, None, "a"),
+        Column(alias=None, table_name=None, column_name="a"),
         {
-            "a": FunctionCall("a", "f", (Column(None, None, "b"),)),
-            "b": FunctionCall("b", "g", (Column(None, None, "b"),)),
+            "a": FunctionCall(
+                alias="a",
+                function_name="f",
+                parameters=(Column(alias=None, table_name=None, column_name="b"),),
+            ),
+            "b": FunctionCall(
+                alias="b",
+                function_name="g",
+                parameters=(Column(alias=None, table_name=None, column_name="b"),),
+            ),
         },
         True,
-        FunctionCall("a", "f", (FunctionCall("b", "g", (Column(None, None, "b"),)),),),
-        id="Funcion shadows inner column",
+        FunctionCall(
+            alias="a",
+            function_name="f",
+            parameters=(
+                FunctionCall(
+                    alias="b",
+                    function_name="g",
+                    parameters=(Column(alias=None, table_name=None, column_name="b"),),
+                ),
+            ),
+        ),
+        id="Function shadows inner column",
     ),
     pytest.param(
         CurriedFunctionCall(
-            None, FunctionCall(None, "f", tuple()), (Column(None, None, "a"),)
+            alias=None,
+            internal_function=FunctionCall(
+                alias=None, function_name="f", parameters=tuple()
+            ),
+            parameters=(Column(alias=None, table_name=None, column_name="a"),),
         ),
-        {"a": FunctionCall("a", "f", (Column("b", None, "b"),))},
+        {
+            "a": FunctionCall(
+                alias="a",
+                function_name="f",
+                parameters=(Column(alias="b", table_name=None, column_name="b"),),
+            )
+        },
         False,
         CurriedFunctionCall(
-            None,
-            FunctionCall(None, "f", tuple()),
-            (FunctionCall("a", "f", (Column("b", None, "b"),)),),
+            alias=None,
+            internal_function=FunctionCall(
+                alias=None, function_name="f", parameters=tuple()
+            ),
+            parameters=(
+                FunctionCall(
+                    alias="a",
+                    function_name="f",
+                    parameters=(Column(alias="b", table_name=None, column_name="b"),),
+                ),
+            ),
         ),
         id="Curried with parameter to expand",
     ),
     pytest.param(
-        Column(None, None, "a"),
+        Column(alias=None, table_name=None, column_name="a"),
         {
             "a": Lambda(
-                "a", tuple(), FunctionCall("b", "f", (Column(None, None, "c"),))
+                alias="a",
+                parameters=tuple(),
+                transformation=FunctionCall(
+                    alias="b",
+                    function_name="f",
+                    parameters=(Column(alias=None, table_name=None, column_name="c"),),
+                ),
             ),
-            "c": Column("c", None, "x"),
+            "c": Column(alias="c", table_name=None, column_name="x"),
         },
         True,
-        Lambda("a", tuple(), FunctionCall("b", "f", (Column("c", None, "x"),))),
+        Lambda(
+            alias="a",
+            parameters=tuple(),
+            transformation=FunctionCall(
+                alias="b",
+                function_name="f",
+                parameters=(Column(alias="c", table_name=None, column_name="x"),),
+            ),
+        ),
         id="Expand column into Lambda",
     ),
 ]
@@ -130,11 +220,23 @@ def test_expand_aliases(
 
 def test_circular_dependency() -> None:
     with pytest.raises(CyclicAliasException):
-        Column(None, None, "a").accept(
+        Column(alias=None, table_name=None, column_name="a").accept(
             AliasExpanderVisitor(
                 {
-                    "a": FunctionCall("a", "f", (Column(None, None, "b"),)),
-                    "b": FunctionCall("b", "g", (Column(None, None, "a"),)),
+                    "a": FunctionCall(
+                        alias="a",
+                        function_name="f",
+                        parameters=(
+                            Column(alias=None, table_name=None, column_name="b"),
+                        ),
+                    ),
+                    "b": FunctionCall(
+                        alias="b",
+                        function_name="g",
+                        parameters=(
+                            Column(alias=None, table_name=None, column_name="a"),
+                        ),
+                    ),
                 },
                 [],
                 True,
@@ -142,11 +244,23 @@ def test_circular_dependency() -> None:
         )
 
     with pytest.raises(CyclicAliasException):
-        Column(None, None, "a").accept(
+        Column(alias=None, table_name=None, column_name="a").accept(
             AliasExpanderVisitor(
                 {
                     "a": FunctionCall(
-                        "a", "f", (FunctionCall("b", "g", (Column(None, None, "a"),)),)
+                        alias="a",
+                        function_name="f",
+                        parameters=(
+                            FunctionCall(
+                                alias="b",
+                                function_name="g",
+                                parameters=(
+                                    Column(
+                                        alias=None, table_name=None, column_name="a"
+                                    ),
+                                ),
+                            ),
+                        ),
                     ),
                 },
                 [],
