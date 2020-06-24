@@ -1,16 +1,21 @@
-import pytest
+import copy
 from typing import List
 
-# from snuba.clickhouse.columns import ColumnSet, String
+import pytest
 
+from snuba.datasets.schemas import MandatoryCondition
 from snuba.datasets.schemas.tables import TableSource
+from snuba.query.conditions import (
+    OPERATOR_TO_FUNCTION,
+    BooleanFunctions,
+    ConditionFunctions,
+    binary_condition,
+    combine_and_conditions,
+)
+from snuba.query.expressions import Column, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
-
 from snuba.request.request_settings import HTTPRequestSettings
-from snuba.datasets.schemas import MandatoryCondition
-from snuba.query.conditions import ConditionFunctions, binary_condition
-from snuba.query.expressions import Column, Literal
 
 
 test_data = [
@@ -22,8 +27,8 @@ test_data = [
                 binary_condition(
                     None,
                     ConditionFunctions.EQ,
-                    Column(None, None, "deleted"),
-                    Literal(None, 0),
+                    Column("deleted", None, "deleted"),
+                    Literal(None, "0"),
                 ),
             )
         ],
@@ -36,8 +41,8 @@ test_data = [
                 binary_condition(
                     None,
                     ConditionFunctions.EQ,
-                    Column(None, None, "time"),
-                    Literal(None, 0),
+                    Column("time", None, "time"),
+                    Literal(None, "1"),
                 ),
             ),
             MandatoryCondition(
@@ -45,8 +50,8 @@ test_data = [
                 binary_condition(
                     None,
                     ConditionFunctions.EQ,
-                    Column(None, None, "time2"),
-                    Literal(None, 0),
+                    Column("time2", None, "time2"),
+                    Literal(None, "2"),
                 ),
             ),
         ],
@@ -66,15 +71,71 @@ def test_mand_condition(table: str, mand_condition: List[MandatoryCondition]) ->
         ],
     }
 
-    # cols = ColumnSet([("col", String())])
+    body2 = copy.deepcopy(body)
+    #   body3 = copy.deepcopy(body)
 
     cols = None
     consistent = True
 
-    query = Query(body, TableSource(table, cols, mand_condition, ["c1"]),)
+    #  query = Query(body2, TableSource(table, cols, mand_condition, ["c1"]),)
+
+    query = Query(
+        body2,
+        TableSource(table, cols, mand_condition, ["c1"]),
+        None,
+        None,
+        binary_condition(
+            None,
+            BooleanFunctions.AND,
+            binary_condition(
+                None,
+                BooleanFunctions.AND,
+                binary_condition(
+                    None,
+                    OPERATOR_TO_FUNCTION["="],
+                    Column("d", None, "d"),
+                    Literal(None, "1"),
+                ),
+                binary_condition(
+                    None,
+                    OPERATOR_TO_FUNCTION["="],
+                    Column("c", None, "c"),
+                    Literal(None, "3"),
+                ),
+            ),
+            binary_condition(
+                None,
+                BooleanFunctions.AND,
+                binary_condition(
+                    None,
+                    OPERATOR_TO_FUNCTION["="],
+                    Column("a", None, "a"),
+                    Literal(None, "1"),
+                ),
+                binary_condition(
+                    None,
+                    OPERATOR_TO_FUNCTION["="],
+                    Column("b", None, "b"),
+                    Literal(None, "2"),
+                ),
+            ),
+        ),
+    )
+
+    query3 = copy.deepcopy(query)
 
     request_settings = HTTPRequestSettings(consistent=consistent)
     processor = MandatoryConditionApplier()
     processor.process_query(query, request_settings)
 
+    body["conditions"].extend([c.legacy for c in mand_condition])
     assert query.get_conditions() == body["conditions"]
+
+    #    query3 = copy.deepcopy(query)
+
+    query3.add_condition_to_ast(combine_and_conditions([c.ast for c in mand_condition]))
+
+    assert query.get_condition_from_ast() == query3.get_condition_from_ast()
+
+
+##############################
