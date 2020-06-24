@@ -19,6 +19,7 @@ from snuba.query.expressions import (
 )
 from snuba.query.logical import OrderBy, OrderByDirection, Query
 from snuba.query.parser.conditions import parse_conditions_to_expr
+from snuba.query.parser.exceptions import CyclicAliasException
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
 from snuba.util import is_function, to_list, tuplify
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
@@ -306,17 +307,22 @@ class AliasExpanderVisitor(ExpressionVisitor[Expression]):
             # column. Example: f(a) as a.
             #
             # Follows the same Clickhouse approach to cycles:
-            # f(g(z(a))) as a -> allowed
-            # f(g(z(a) as a) as not_a -> allowed
-            # f(g(a) as b) as a -> not allowed
-            # f(a) as b, f(b) as a -> not allowed
-            assert (
-                # To be a valid case this name must be on the top of the
-                # stack. IF that's not the case we are in the second
-                # condition above.
-                self.__visited_stack[-1]
-                == name
-            ), f"Cyclic aliases {name} resolves to {self.__alias_lookup_table[name]}"
+            # `f(g(z(a))) as a` -> allowed
+            # `f(g(z(a) as a) as not_a` -> allowed
+            # `f(g(a) as b) as a` -> not allowed
+            # `f(a) as b, f(b) as a` -> not allowed
+            if self.__visited_stack[-1] != name:
+                # We need to reject conditions like `f(g(a) as b) as a`
+                # but accept `f(g(a)) as a`.
+                # If we are here it means we already found, in this nested
+                # expression, an alias declared that has the same name of
+                # the column we are visiting (shadowing). So the previously
+                # visited alias must be on top of the stack, to be valid.
+                # In `f(g(a) as b) as a`, instead, b would be on top of the
+                # stack instead of a.
+                raise CyclicAliasException(
+                    f"Cyclic aliases {name} resolves to {self.__alias_lookup_table[name]}"
+                )
             return exp
 
         if self.__expand_nested:

@@ -11,6 +11,7 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.parser import AliasExpanderVisitor
+from snuba.query.parser.exceptions import CyclicAliasException
 
 TEST_CASES = [
     pytest.param(
@@ -128,7 +129,7 @@ def test_expand_aliases(
 
 
 def test_circular_dependency() -> None:
-    with pytest.raises(AssertionError):
+    with pytest.raises(CyclicAliasException):
         Column(None, None, "a").accept(
             AliasExpanderVisitor(
                 {
@@ -140,7 +141,7 @@ def test_circular_dependency() -> None:
             )
         )
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(CyclicAliasException):
         Column(None, None, "a").accept(
             AliasExpanderVisitor(
                 {
