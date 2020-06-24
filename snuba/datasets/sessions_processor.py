@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
+from snuba import environment
 from snuba.processor import (
     MAX_UINT32,
     MessageProcessor,
@@ -12,6 +13,7 @@ from snuba.processor import (
     _collapse_uint32,
     _ensure_valid_date,
 )
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 
 STATUS_MAPPING = {
     "ok": 0,
@@ -19,6 +21,8 @@ STATUS_MAPPING = {
     "crashed": 2,
     "abnormal": 3,
 }
+
+metrics = MetricsWrapper(environment.metrics, "sessions.processor")
 
 
 class SessionsProcessor(MessageProcessor):
@@ -45,6 +49,11 @@ class SessionsProcessor(MessageProcessor):
 
         received = _ensure_valid_date(datetime.utcfromtimestamp(message["received"]))
         started = _ensure_valid_date(datetime.utcfromtimestamp(message["started"]))
+
+        if started is None:
+            metrics.increment("empty_started_date")
+        if received is None:
+            metrics.increment("empty_received_date")
 
         processed = {
             "session_id": str(uuid.UUID(message["session_id"])),
