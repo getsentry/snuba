@@ -15,9 +15,9 @@ def test_table_engines() -> None:
         ReplacingMergeTree(
             version_column="timestamp",
             order_by="timestamp",
-            partition_by="(toMonday(timestamp)",
+            partition_by="(toMonday(timestamp))",
             sample_by="id",
             ttl="timestamp + INTERVAL 1 MONTH",
         ).get_sql()
-        == "ReplacingMergeTree(timestamp) ORDER BY timestamp PARTITION BY (toMonday(timestamp) SAMPLE BY id TTL timestamp + INTERVAL 1 MONTH"
+        == "ReplacingMergeTree(timestamp) ORDER BY timestamp PARTITION BY (toMonday(timestamp)) SAMPLE BY id TTL timestamp + INTERVAL 1 MONTH"
     )
