@@ -1,19 +1,20 @@
-from snuba.query.logical import Query
 from snuba.clickhouse.processors import QueryProcessor
-from snuba.request.request_settings import RequestSettings
-
-# from snuba.request import Request
-# from snuba.datasets.dataset import Dataset
 from snuba.query.conditions import combine_and_conditions
+from snuba.query.logical import Query
+from snuba.request.request_settings import RequestSettings
 
 
 class MandatoryConditionApplier(QueryProcessor):
+
+    """
+    Obtains mandatory conditions from a Query object’s underlying storage and applies them to both legacy and AST
+    query representations, adding on to existing conditions.
+
+    """
+
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
 
-        # query_plan = Dataset.get_query_plan_builder().build_plan(Request)
-
-        relational_source = query.get_data_source()
-        mandatory_conditions = relational_source.get_mandatory_conditions()
+        mandatory_conditions = query.get_data_source().get_mandatory_conditions()
         query.add_conditions([c.legacy for c in mandatory_conditions])
 
         if len(mandatory_conditions) > 0:
