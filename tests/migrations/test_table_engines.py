@@ -1,23 +1,37 @@
-from snuba.migrations.table_engines import MergeTree, ReplacingMergeTree
+import pytest
+
+from snuba.migrations.context import OperationContext
+from snuba.migrations.table_engines import MergeTree, ReplacingMergeTree, TableEngine
 
 
-def test_table_engines() -> None:
-    assert (
-        MergeTree(order_by="timestamp",).get_sql() == "MergeTree() ORDER BY timestamp"
-    )
-
-    assert (
-        MergeTree(order_by="date", settings={"index_granularity": "256"}).get_sql()
-        == "MergeTree() ORDER BY date SETTINGS index_granularity=256"
-    )
-
-    assert (
+test_cases = [
+    (
+        MergeTree(order_by="timestamp"),
+        "MergeTree() ORDER BY timestamp",
+        "ReplicatedMergeTree('/clickhouse/tables/{layer}-{shard})/test_table', '{replica}') ORDER BY timestamp",
+    ),
+    (
+        MergeTree(order_by="date", settings={"index_granularity": "256"}),
+        "MergeTree() ORDER BY date SETTINGS index_granularity=256",
+        "ReplicatedMergeTree('/clickhouse/tables/{layer}-{shard})/test_table', '{replica}') ORDER BY date SETTINGS index_granularity=256",
+    ),
+    (
         ReplacingMergeTree(
             version_column="timestamp",
             order_by="timestamp",
             partition_by="(toMonday(timestamp))",
             sample_by="id",
             ttl="timestamp + INTERVAL 1 MONTH",
-        ).get_sql()
-        == "ReplacingMergeTree(timestamp) ORDER BY timestamp PARTITION BY (toMonday(timestamp)) SAMPLE BY id TTL timestamp + INTERVAL 1 MONTH"
-    )
+        ),
+        "ReplacingMergeTree(timestamp) ORDER BY timestamp PARTITION BY (toMonday(timestamp)) SAMPLE BY id TTL timestamp + INTERVAL 1 MONTH",
+        "ReplicatedReplacingMergeTree('/clickhouse/tables/{layer}-{shard})/test_table', '{replica}', timestamp) ORDER BY timestamp PARTITION BY (toMonday(timestamp)) SAMPLE BY id TTL timestamp + INTERVAL 1 MONTH",
+    ),
+]
+
+
+@pytest.mark.parametrize("engine, single_node_sql, multi_node_sql", test_cases)
+def test_table_engines(
+    engine: TableEngine, single_node_sql: str, multi_node_sql: str
+) -> None:
+    assert engine.get_sql(OperationContext(True, "test_table")) == single_node_sql
+    assert engine.get_sql(OperationContext(False, "test_table")) == multi_node_sql

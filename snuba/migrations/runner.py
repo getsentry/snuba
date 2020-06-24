@@ -8,7 +8,7 @@ from typing import List, Mapping, MutableMapping, NamedTuple
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster, CLUSTERS
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations.context import Context
+from snuba.migrations.context import MigrationContext
 from snuba.migrations.errors import InvalidMigrationState, MigrationInProgress
 from snuba.migrations.groups import get_group_loader, MigrationGroup
 from snuba.migrations.status import Status
@@ -82,7 +82,7 @@ class Runner:
             cluster.is_single_node() for cluster in CLUSTERS
         ), "Cannot run migrations for multi node clusters"
 
-        context = Context(
+        context = MigrationContext(
             migration_id, logger, partial(self._update_migration_status, migration_key),
         )
         migration = get_group_loader(migration_key.group).load_migration(migration_id)

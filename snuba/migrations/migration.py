@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod, abstractproperty
 from typing import Sequence
 
-from snuba.migrations.context import Context
+from snuba.migrations.context import MigrationContext
 from snuba.migrations.operations import Operation
 from snuba.migrations.status import Status
 
@@ -36,7 +36,7 @@ class Migration(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def forwards(self, context: Context) -> None:
+    def forwards(self, context: MigrationContext) -> None:
         raise NotImplementedError
 
 
@@ -68,7 +68,7 @@ class MultiStepMigration(Migration, ABC):
     def backwards_local(self) -> Sequence[Operation]:
         raise NotImplementedError
 
-    def forwards(self, context: Context) -> None:
+    def forwards(self, context: MigrationContext) -> None:
         migration_id, logger, update_status = context
         logger.info(f"Running migration: {migration_id}")
         update_status(Status.IN_PROGRESS)

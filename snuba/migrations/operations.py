@@ -5,6 +5,7 @@ from typing import Sequence
 from snuba.clickhouse.columns import Column
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.migrations.context import OperationContext
 from snuba.migrations.table_engines import TableEngine
 
 
@@ -75,6 +76,10 @@ class CreateTable(SqlOperation):
 
     def format_sql(self) -> str:
         columns = ", ".join([col.for_schema() for col in self.__columns])
-        engine = self.__engine.get_sql()
+
+        single_node = get_cluster(self._storage_set).is_single_node()
+
+        context = OperationContext(single_node, self.__table_name)
+        engine = self.__engine.get_sql(context)
 
         return f"CREATE TABLE IF NOT EXISTS {self.__table_name} ({columns}) ENGINE {engine};"
