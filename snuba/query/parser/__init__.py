@@ -17,7 +17,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.logical import OrderBy, OrderByDirection, Query
+from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
 from snuba.query.parser.conditions import parse_conditions_to_expr
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
 from snuba.util import is_function, to_list, tuplify
@@ -102,7 +102,15 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
         parse_expression(tuplify(select)) for select in body.get("selected_columns", [])
     ]
 
-    selected_cols = groupby_exprs + aggregate_exprs + select_exprs
+    select_clause = []
+    for e in groupby_exprs + aggregate_exprs + select_exprs:
+        if e.alias is not None:
+            name: Optional[str] = e.alias
+        elif isinstance(e, Column):
+            name = e.column_name
+        else:
+            name = None
+        select_clause.append(SelectedExpression(name=name, expression=e))
 
     arrayjoin = body.get("arrayjoin")
     if arrayjoin:
@@ -140,7 +148,7 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
     return Query(
         body,
         None,
-        selected_columns=selected_cols,
+        selected_columns=select_clause,
         array_join=array_join_expr,
         condition=where_expr,
         groupby=groupby_exprs,
@@ -265,7 +273,10 @@ def _expand_aliases(query: Query) -> None:
 
     visitor = AliasExpanderVisitor(fully_resolved_aliases, [])
     query.set_ast_selected_columns(
-        [e.accept(visitor) for e in (query.get_selected_columns_from_ast() or [])]
+        [
+            replace(e, expression=e.expression.accept(visitor))
+            for e in (query.get_selected_columns_from_ast() or [])
+        ]
     )
     arrayjoin = query.get_arrayjoin_from_ast()
     if arrayjoin is not None:

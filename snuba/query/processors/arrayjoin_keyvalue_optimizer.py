@@ -93,8 +93,8 @@ def get_filtered_mapping_keys(query: Query, column_name: str) -> Set[str]:
     """
     array_join_found = any(
         array_join_pattern(column_name).match(f) is not None
-        for expression in query.get_selected_columns_from_ast() or []
-        for f in expression
+        for selected in query.get_selected_columns_from_ast() or []
+        for f in selected.expression
     )
 
     if not array_join_found:

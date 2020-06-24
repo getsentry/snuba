@@ -12,6 +12,7 @@ from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
 from snuba.query.expressions import Column
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.logical import SelectedExpression
 from snuba.query.parser import parse_query
 from snuba.reader import Reader
 from snuba.request import Request
@@ -141,9 +142,9 @@ def test_col_split(
     ) -> QueryResult:
         selected_cols = query.get_selected_columns()
         assert selected_cols == [
-            c.column_name
+            c.expression.column_name
             for c in query.get_selected_columns_from_ast() or []
-            if isinstance(c, Column)
+            if isinstance(c.expression, Column)
         ]
         if selected_cols == list(first_query_data[0].keys()):
             return QueryResult({"data": first_query_data}, {})
@@ -168,7 +169,10 @@ def test_col_split(
             .get_read_schema()
             .get_data_source(),
             selected_columns=[
-                Column(None, None, col_name) for col_name in second_query_data[0].keys()
+                SelectedExpression(
+                    name=col_name, expression=Column(None, None, col_name)
+                )
+                for col_name in second_query_data[0].keys()
             ],
         )
     )
