@@ -33,7 +33,7 @@ class ClickhouseClientSettingsType(NamedTuple):
 class ClickhouseClientSettings(Enum):
     CLEANUP = ClickhouseClientSettingsType({}, None)
     INSERT = ClickhouseClientSettingsType({}, None)
-    MIGRATE = ClickhouseClientSettingsType({}, None)
+    MIGRATE = ClickhouseClientSettingsType({"load_balancing": "in_order"}, None)
     OPTIMIZE = ClickhouseClientSettingsType({}, 10000)
     QUERY = ClickhouseClientSettingsType({"readonly": True}, None)
     REPLACE = ClickhouseClientSettingsType(

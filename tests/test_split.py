@@ -1,27 +1,27 @@
-import pytest
-
 from datetime import datetime
 from typing import Any, MutableMapping, Sequence
 
+import pytest
+
 from snuba import state
-from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.columns import ColumnSet, String
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
-from snuba.web.split import (
-    _get_time_range,
-    ColumnSplitQueryStrategy,
-    TimeSplitQueryStrategy,
-)
-from snuba.datasets.schemas.tables import TableSource
-from snuba.query.logical import Query as LogicalQuery
-from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query.expressions import Column
+from snuba.query.logical import Query as LogicalQuery
 from snuba.query.parser import parse_query
 from snuba.reader import Reader
+from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.web import QueryResult
+from snuba.web.split import (
+    ColumnSplitQueryStrategy,
+    TimeSplitQueryStrategy,
+    _get_time_range,
+)
 
 
 def setup_function(function) -> None:
@@ -185,84 +185,102 @@ def test_col_split(
     strategy.execute(query, HTTPRequestSettings(), do_query)
 
 
+column_set = ColumnSet(
+    [
+        ("event_id", String()),
+        ("project_id", String()),
+        ("timestamp", String()),
+        ("level", String()),
+        ("logger", String()),
+        ("server_name", String()),
+        ("transaction", String()),
+    ]
+)
+
 column_split_tests = [
     (
         "event_id",
         "project_id",
         "timestamp",
-        ClickhouseQuery(
-            LogicalQuery(
-                {
-                    "selected_columns": [
-                        "event_id",
-                        "level",
-                        "logger",
-                        "server_name",
-                        "transaction",
-                        "timestamp",
-                        "project_id",
-                    ],
-                    "conditions": [
-                        ("timestamp", ">=", "2019-09-19T10:00:00"),
-                        ("timestamp", "<", "2019-09-19T12:00:00"),
-                        ("project_id", "IN", [1, 2, 3]),
-                    ],
-                    "groupby": ["timestamp"],
-                    "limit": 10,
-                },
-                TableSource("events", ColumnSet([])),
-            )
-        ),
+        {
+            "selected_columns": [
+                "event_id",
+                "level",
+                "logger",
+                "server_name",
+                "transaction",
+                "timestamp",
+                "project_id",
+            ],
+            "conditions": [
+                ("timestamp", ">=", "2019-09-19T10:00:00"),
+                ("timestamp", "<", "2019-09-19T12:00:00"),
+                ("project_id", "IN", [1, 2, 3]),
+            ],
+            "groupby": ["timestamp"],
+            "limit": 10,
+        },
         False,
     ),  # Query with group by. No split
     (
         "event_id",
         "project_id",
         "timestamp",
-        ClickhouseQuery(
-            LogicalQuery(
-                {
-                    "selected_columns": [
-                        "event_id",
-                        "level",
-                        "logger",
-                        "server_name",
-                        "transaction",
-                        "timestamp",
-                        "project_id",
-                    ],
-                    "conditions": [
-                        ("timestamp", ">=", "2019-09-19T10:00:00"),
-                        ("timestamp", "<", "2019-09-19T12:00:00"),
-                        ("project_id", "IN", [1, 2, 3]),
-                    ],
-                    "limit": 10,
-                },
-                TableSource("events", ColumnSet([])),
-            )
-        ),
+        {
+            "selected_columns": [
+                "event_id",
+                "level",
+                "logger",
+                "server_name",
+                "transaction",
+                "timestamp",
+                "project_id",
+            ],
+            "conditions": [
+                ("timestamp", ">=", "2019-09-19T10:00:00"),
+                ("timestamp", "<", "2019-09-19T12:00:00"),
+                ("project_id", "IN", [1, 2, 3]),
+            ],
+            "limit": 10,
+        },
         True,
     ),  # Valid query to split
     (
         "event_id",
         "project_id",
         "timestamp",
-        ClickhouseQuery(
-            LogicalQuery(
-                {
-                    "selected_columns": ["event_id"],
-                    "conditions": [
-                        ("timestamp", ">=", "2019-09-19T10:00:00"),
-                        ("timestamp", "<", "2019-09-19T12:00:00"),
-                        ("project_id", "IN", [1, 2, 3]),
-                    ],
-                    "limit": 10,
-                },
-                TableSource("events", ColumnSet([])),
-            )
-        ),
+        {
+            "selected_columns": ["event_id"],
+            "conditions": [
+                ("timestamp", ">=", "2019-09-19T10:00:00"),
+                ("timestamp", "<", "2019-09-19T12:00:00"),
+                ("project_id", "IN", [1, 2, 3]),
+            ],
+            "limit": 10,
+        },
         False,
     ),  # Valid query but not enough columns to split.
+    (
+        "event_id",
+        "project_id",
+        "timestamp",
+        {
+            "selected_columns": [
+                ["f", ["event_id"], "not_event_id"],
+                "level",
+                "logger",
+                "server_name",
+            ],
+            "conditions": [
+                ("timestamp", ">=", "2019-09-19T10:00:00"),
+                ("timestamp", "<", "2019-09-19T12:00:00"),
+                ("project_id", "IN", [1, 2, 3]),
+            ],
+            "orderby": ["-not_event_id"],
+            "limit": 10,
+        },
+        False,
+    ),  # Splitting by column would generate an invalid query
 ]
 
 
@@ -273,7 +291,11 @@ column_split_tests = [
 def test_col_split_conditions(
     id_column: str, project_column: str, timestamp_column: str, query, expected_result
 ) -> None:
+    dataset = get_dataset("events")
+    query = parse_query(query, dataset)
     splitter = ColumnSplitQueryStrategy(id_column, project_column, timestamp_column)
+    request = Request("a", query, HTTPRequestSettings(), {}, "r")
+    plan = dataset.get_query_plan_builder().build_plan(request)
 
     def do_query(
         query: ClickhouseQuery, request_settings: RequestSettings,
@@ -292,7 +314,7 @@ def test_col_split_conditions(
         )
 
     assert (
-        splitter.execute(query, HTTPRequestSettings(), do_query) is not None
+        splitter.execute(plan.query, HTTPRequestSettings(), do_query) is not None
     ) == expected_result
 
 
