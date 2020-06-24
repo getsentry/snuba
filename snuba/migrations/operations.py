@@ -55,6 +55,12 @@ class DropTable(SqlOperation):
 
 
 class CreateTable(SqlOperation):
+    """
+    The create table operation takes a table name, column list and table engine.
+    Engine specific clauses like ORDER BY, PARTITION BY, SETTINGS, etc are
+    defined by the table engine.
+    """
+
     def __init__(
         self,
         storage_set: StorageSetKey,
