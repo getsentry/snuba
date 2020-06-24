@@ -105,9 +105,21 @@ TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 AST_DATASET_ROLLOUT: Mapping[str, int] = {
     "outcomes": 100,
 }  # (dataset name: percentage)
-AST_REFERRER_ROLLOUT: Mapping[
-    str, Mapping[Optional[str], int]
-] = {}  # (dataset name: (referrer: percentage))
+AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
+    "events": {
+        # Simple queries without splitting or user customizations
+        "Group.filter_by_event_id": 100,
+        "api.group-hashes": 100,
+        # Simple time bucketed queries
+        "api.organization-events-stats": 100,
+        "incidents.get_incident_event_stats": 100,
+        "incidents.get_incident_aggregates": 100,
+    },
+    "transactions": {
+        # Simple time bucketed queries
+        "incidents.get_incident_event_stats": 100,
+    },
+}  # (dataset name: (referrer: percentage))
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

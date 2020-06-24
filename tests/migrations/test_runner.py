@@ -2,6 +2,7 @@ from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.groups import get_group_loader, MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
+from snuba.migrations.status import Status
 
 
 def setup_function() -> None:
@@ -19,8 +20,8 @@ def test_run_migration() -> None:
         ClickhouseClientSettings.MIGRATE
     )
     assert connection.execute(
-        "SELECT group, migration_id, status FROM migrations_local;"
-    ) == [("system", "0001_migrations", "completed")]
+        "SELECT group, migration_id, status, version FROM migrations_local;"
+    ) == [("system", "0001_migrations", "completed", 1)]
 
 
 def test_get_pending_migrations() -> None:
@@ -44,3 +45,14 @@ def get_total_migration_count() -> int:
     for group in MigrationGroup:
         count += len(get_group_loader(group).get_migrations())
     return count
+
+
+def test_version() -> None:
+    runner = Runner()
+    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    migration_key = MigrationKey(MigrationGroup.EVENTS, "test")
+    assert runner._get_next_version(migration_key) == 1
+    runner._update_migration_status(migration_key, Status.IN_PROGRESS)
+    assert runner._get_next_version(migration_key) == 2
+    runner._update_migration_status(migration_key, Status.COMPLETED)
+    assert runner._get_next_version(migration_key) == 3

@@ -84,8 +84,8 @@ class EventsDataset(TimeSeriesDataset):
                 "contexts[device.charging]",
             }
             boolean_context_template = (
-                "multiIf(%(processed_column)s == '', '', "
-                "%(processed_column)s IN ('1', 'True'), 'True', 'False')"
+                "multiIf(equals(%(processed_column)s, ''), '', "
+                "in(%(processed_column)s, tuple('1', 'True')), 'True', 'False')"
             )
             if column_name in boolean_contexts:
                 return boolean_context_template % (

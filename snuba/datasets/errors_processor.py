@@ -5,11 +5,7 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 import uuid
 
 from snuba.consumer import KafkaMessageMetadata
-from snuba.datasets.events_format import (
-    extract_extra_contexts,
-    extract_user,
-    flatten_nested_field,
-)
+from snuba.datasets.events_format import extract_user
 from snuba.datasets.events_processor_base import EventsProcessorBase
 from snuba.processor import (
     _as_dict_safe,
@@ -109,8 +105,7 @@ class ErrorsProcessor(EventsProcessorBase):
         contexts: Mapping[str, Any],
         metadata: Optional[KafkaMessageMetadata] = None,
     ) -> None:
-        key, value = extract_extra_contexts(contexts)
-        output["_contexts_flattened"] = flatten_nested_field(key, value)
+        output["_contexts_flattened"] = ""
 
     def extract_promoted_contexts(
         self,
