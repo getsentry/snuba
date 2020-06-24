@@ -245,9 +245,6 @@ class Query:
     def set_groupby(self, groupby: Sequence[Aggregation],) -> None:
         self.__body["groupby"] = groupby
 
-    def set_ast_groupby(self, groupby: Sequence[Expression]) -> None:
-        self.__groupby = groupby
-
     def add_groupby(self, groupby: Sequence[Groupby],) -> None:
         self.__extend_sequence("groupby", groupby)
 
@@ -298,9 +295,6 @@ class Query:
     def set_arrayjoin(self, arrayjoin: str) -> None:
         self.__body["arrayjoin"] = arrayjoin
 
-    def set_ast_arrayjoin(self, arrayjoin: Expression) -> None:
-        self.__array_join = arrayjoin
-
     def get_arrayjoin(self) -> Optional[str]:
         return self.__body.get("arrayjoin", None)
 
@@ -313,9 +307,6 @@ class Query:
     def get_having_from_ast(self) -> Optional[Expression]:
         return self.__having
 
-    def set_ast_having(self, having: Optional[Expression]) -> None:
-        self.__having = having
-
     def get_orderby(self) -> Optional[Sequence[Any]]:
         return self.__body.get("orderby")
 
@@ -324,9 +315,6 @@ class Query:
 
     def set_orderby(self, orderby: Sequence[Any]) -> None:
         self.__body["orderby"] = orderby
-
-    def set_ast_orderby(self, orderby: Sequence[OrderBy]) -> None:
-        self.__order_by = orderby
 
     def get_limitby(self) -> Optional[Limitby]:
         return self.__body.get("limitby")
