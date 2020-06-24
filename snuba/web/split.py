@@ -356,6 +356,10 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         if total_col_count <= minimal_count:
             return None
 
+        # Ensure the minimal query is actually runnable on its own.
+        if not minimal_query.validate_aliases():
+            return None
+
         result = runner(minimal_query, request_settings)
         del minimal_query
 
