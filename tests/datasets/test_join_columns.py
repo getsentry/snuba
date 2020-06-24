@@ -40,7 +40,7 @@ def test_simple_column_expr():
     # Single tag expression
     assert (
         column_expr(dataset, "events.tags[foo]", deepcopy(query), ParsingContext())
-        == "(events.tags.value[indexOf(events.tags.key, 'foo')] AS `events.tags[foo]`)"
+        == "(arrayElement(events.tags.value, indexOf(events.tags.key, 'foo')) AS `events.tags[foo]`)"
     )
 
     # Promoted tag expression / no translation
@@ -63,8 +63,8 @@ def test_simple_column_expr():
     assert column_expr(
         dataset, "events.tags_key", Query(tag_group_body, source), parsing_context
     ) == (
-        "(((arrayJoin(arrayMap((x,y) -> [x,y], events.tags.key, events.tags.value)) "
-        "AS all_tags))[1] AS `events.tags_key`)"
+        "(arrayElement((arrayJoin(arrayMap((x,y) -> [x,y], events.tags.key, events.tags.value)) "
+        "AS all_tags), 1) AS `events.tags_key`)"
     )
 
     assert (
@@ -156,8 +156,8 @@ def test_alias_in_alias():
     query = Query(body, source)
     parsing_context = ParsingContext()
     assert column_expr(dataset, "events.tags_key", query, parsing_context) == (
-        "(((arrayJoin(arrayMap((x,y) -> [x,y], events.tags.key, events.tags.value)) "
-        "AS all_tags))[1] AS `events.tags_key`)"
+        "(arrayElement((arrayJoin(arrayMap((x,y) -> [x,y], events.tags.key, events.tags.value)) "
+        "AS all_tags), 1) AS `events.tags_key`)"
     )
 
     # If we want to use `tags_key` again, make sure we use the
@@ -170,7 +170,7 @@ def test_alias_in_alias():
     # the `all_tags` alias instead of re-expanding the tags arrayJoin
     assert (
         column_expr(dataset, "events.tags_value", query, parsing_context)
-        == "((all_tags)[2] AS `events.tags_value`)"
+        == "(arrayElement(all_tags, 2) AS `events.tags_value`)"
     )
 
 

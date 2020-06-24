@@ -20,7 +20,7 @@ class TestEventsDataset(BaseEventsTest):
         # Single tag expression
         assert (
             column_expr(self.dataset, "tags[foo]", deepcopy(query), ParsingContext())
-            == "(tags.value[indexOf(tags.key, 'foo')] AS `tags[foo]`)"
+            == "(arrayElement(tags.value, indexOf(tags.key, 'foo')) AS `tags[foo]`)"
         )
 
         # Promoted tag expression / no translation
@@ -61,8 +61,8 @@ class TestEventsDataset(BaseEventsTest):
         assert column_expr(
             self.dataset, "tags_key", Query(tag_group_body, source), ParsingContext()
         ) == (
-            "(((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) "
-            "AS all_tags))[1] AS tags_key)"
+            "(arrayElement((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) "
+            "AS all_tags), 1) AS tags_key)"
         )
 
         assert (
@@ -175,8 +175,8 @@ class TestEventsDataset(BaseEventsTest):
         query = Query({"groupby": ["tags_key", "tags_value"]}, source,)
         context = ParsingContext()
         assert column_expr(self.dataset, "tags_key", query, context) == (
-            "(((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) "
-            "AS all_tags))[1] AS tags_key)"
+            "(arrayElement((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) "
+            "AS all_tags), 1) AS tags_key)"
         )
 
         # If we want to use `tags_key` again, make sure we use the
@@ -186,7 +186,7 @@ class TestEventsDataset(BaseEventsTest):
         # the `all_tags` alias instead of re-expanding the tags arrayJoin
         assert (
             column_expr(self.dataset, "tags_value", query, context)
-            == "((all_tags)[2] AS tags_value)"
+            == "(arrayElement(all_tags, 2) AS tags_value)"
         )
 
     def test_order_by(self):
@@ -254,7 +254,7 @@ class TestEventsDataset(BaseEventsTest):
 
         assert (
             column_expr(self.dataset, "-tags[myTag]", deepcopy(query), ParsingContext())
-            == "-(tags.value[indexOf(tags.key, 'myTag')] AS `tags[myTag]`)"
+            == "-(arrayElement(tags.value, indexOf(tags.key, 'myTag')) AS `tags[myTag]`)"
         )
 
         context = ParsingContext()
