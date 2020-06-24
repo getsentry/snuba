@@ -436,19 +436,6 @@ class TestReplacer(BaseEventsTest):
                 ).data
             )["data"]
 
-        assert _fetch_flattened_tags() == [
-            {
-                "tags.key": [
-                    "browser|name",
-                    "browser|to_delete",
-                    "notbrowser",
-                    "notbrowser2",
-                ],
-                "tags.value": ["foo=1", "foo=2", "foo\\3", "foo4"],
-                "_tags_flattened": "|browser\\|name=foo\\=1||browser\\|to_delete=foo\\=2||notbrowser=foo\\\\3||notbrowser2=foo4|",
-            }
-        ]
-
         timestamp = datetime.now(tz=pytz.utc)
 
         message: Message[KafkaPayload] = Message(
