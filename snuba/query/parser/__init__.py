@@ -264,31 +264,7 @@ def _expand_aliases(query: Query) -> None:
     }
 
     visitor = AliasExpanderVisitor(fully_resolved_aliases, [])
-    query.set_ast_selected_columns(
-        [e.accept(visitor) for e in (query.get_selected_columns_from_ast() or [])]
-    )
-    arrayjoin = query.get_arrayjoin_from_ast()
-    if arrayjoin is not None:
-        query.set_ast_arrayjoin(arrayjoin.accept(visitor))
-    condition = query.get_condition_from_ast()
-    if condition is not None:
-        query.set_ast_condition(condition.accept(visitor))
-    query.set_ast_groupby(
-        [e.accept(visitor) for e in (query.get_groupby_from_ast() or [])]
-    )
-    having = query.get_having_from_ast()
-    if having is not None:
-        query.set_ast_having(having.accept(visitor))
-    query.set_ast_orderby(
-        list(
-            map(
-                lambda clause: replace(
-                    clause, expression=clause.expression.accept(visitor)
-                ),
-                query.get_orderby_from_ast(),
-            )
-        )
-    )
+    query.transform_query(visitor)
 
 
 class AliasExpanderVisitor(ExpressionVisitor[Expression]):
