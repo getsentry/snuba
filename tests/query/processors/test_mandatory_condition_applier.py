@@ -17,7 +17,6 @@ from snuba.query.logical import Query
 from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
 from snuba.request.request_settings import HTTPRequestSettings
 
-
 test_data = [
     (
         "table1",
@@ -71,16 +70,13 @@ def test_mand_condition(table: str, mand_condition: List[MandatoryCondition]) ->
         ],
     }
 
-    body2 = copy.deepcopy(body)
-    #   body3 = copy.deepcopy(body)
+    body_copy = copy.deepcopy(body)
 
     cols = None
     consistent = True
 
-    #  query = Query(body2, TableSource(table, cols, mand_condition, ["c1"]),)
-
     query = Query(
-        body2,
+        body_copy,
         TableSource(table, cols, mand_condition, ["c1"]),
         None,
         None,
@@ -122,7 +118,7 @@ def test_mand_condition(table: str, mand_condition: List[MandatoryCondition]) ->
         ),
     )
 
-    query3 = copy.deepcopy(query)
+    query_ast_copy = copy.deepcopy(query)
 
     request_settings = HTTPRequestSettings(consistent=consistent)
     processor = MandatoryConditionApplier()
@@ -131,11 +127,8 @@ def test_mand_condition(table: str, mand_condition: List[MandatoryCondition]) ->
     body["conditions"].extend([c.legacy for c in mand_condition])
     assert query.get_conditions() == body["conditions"]
 
-    #    query3 = copy.deepcopy(query)
+    query_ast_copy.add_condition_to_ast(
+        combine_and_conditions([c.ast for c in mand_condition])
+    )
 
-    query3.add_condition_to_ast(combine_and_conditions([c.ast for c in mand_condition]))
-
-    assert query.get_condition_from_ast() == query3.get_condition_from_ast()
-
-
-##############################
+    assert query.get_condition_from_ast() == query_ast_copy.get_condition_from_ast()
