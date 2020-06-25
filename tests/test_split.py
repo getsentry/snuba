@@ -260,27 +260,6 @@ column_split_tests = [
         },
         False,
     ),  # Valid query but not enough columns to split.
-    (
-        "event_id",
-        "project_id",
-        "timestamp",
-        {
-            "selected_columns": [
-                ["f", ["event_id"], "not_event_id"],
-                "level",
-                "logger",
-                "server_name",
-            ],
-            "conditions": [
-                ("timestamp", ">=", "2019-09-19T10:00:00"),
-                ("timestamp", "<", "2019-09-19T12:00:00"),
-                ("project_id", "IN", [1, 2, 3]),
-            ],
-            "orderby": ["-not_event_id"],
-            "limit": 10,
-        },
-        False,
-    ),  # Splitting by column would generate an invalid query
 ]
 
 
