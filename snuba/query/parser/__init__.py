@@ -1,14 +1,25 @@
 import logging
 import re
 from dataclasses import replace
-from typing import Any, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 from snuba import environment, state
 from snuba.clickhouse.escaping import NEGATE_RE
 from snuba.datasets.dataset import Dataset
-from snuba.query.expressions import Column, Expression, Literal, SubscriptableReference
+from snuba.query.expressions import (
+    Argument,
+    Column,
+    CurriedFunctionCall,
+    Expression,
+    ExpressionVisitor,
+    FunctionCall,
+    Lambda,
+    Literal,
+    SubscriptableReference,
+)
 from snuba.query.logical import OrderBy, OrderByDirection, Query
 from snuba.query.parser.conditions import parse_conditions_to_expr
+from snuba.query.parser.exceptions import CyclicAliasException
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
 from snuba.util import is_function, to_list, tuplify
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
@@ -32,13 +43,18 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     - It transforms columns from the tags[asd] form into
       SubscriptableReference.
     - Applies aliases to all columns that do not have one and that do not
-      represent a reference to an alias.
+      represent a reference to an existing alias.
       During query processing a column can be transformed into a different
       expression. It is essential to preserve the original column name so
       that the result set still has a column with the name provided by the
       user no matter on which transformation we applied.
       By applying aliases at this stage every processor just needs to
       preserve them to guarantee the correctness of the query.
+    - Expands all the references to aliases by inlining the expression
+      to make aliasing transparent to all query processing phases.
+      References to aliases are reintroduced at the end of the query
+      processing.
+      Alias references are packaged back at the end of processing.
     """
     try:
         query = _parse_query_impl(body, dataset)
@@ -47,6 +63,7 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
         _validate_aliases(query)
         _parse_subscriptables(query)
         _apply_column_aliases(query)
+        _expand_aliases(query)
         # WARNING: These steps above assume table resolution did not happen
         # yet. If it is put earlier than here (unlikely), we need to adapt them.
         return query
@@ -224,3 +241,169 @@ def _apply_column_aliases(query: Query) -> None:
             return replace(exp, alias=exp.column_name)
 
     query.transform_expressions(apply_aliases)
+
+
+def _expand_aliases(query: Query) -> None:
+    """
+    Recursively expand all the references to aliases in the query. This
+    makes life easy to query processors and translators that only have to
+    take care of not introducing shadowing (easy to enforce at runtime),
+    otherwise aliasing is transparent to them.
+    """
+    if not state.get_config("query_parsing_expand_aliases", 0):
+        return
+    # Pre-inline all nested aliases. This reduces the number of iterations
+    # we need to do on the query.
+    # Example:
+    # {"a": f(x), "x": g(k)} -> {"a": f(g(k)), "x": g(k)}
+    aliased_expressions = {
+        exp.alias: exp for exp in query.get_all_expressions() if exp.alias is not None
+    }
+    fully_resolved_aliases = {
+        alias: exp.accept(
+            AliasExpanderVisitor(aliased_expressions, [], expand_nested=True)
+        )
+        for alias, exp in aliased_expressions.items()
+    }
+
+    visitor = AliasExpanderVisitor(fully_resolved_aliases, [])
+    query.transform(visitor)
+
+
+class AliasExpanderVisitor(ExpressionVisitor[Expression]):
+    """
+    Traverses an expression and, when it finds a reference to an alias
+    (which is a Column that does not define an alias and such that its
+    name is in the lookup table), replaces the column with the expression
+    from the lookup table and recursively expand the newly introduced
+    expression if requested.
+
+    See visit_column for details on how cycles are managed.
+    """
+
+    def __init__(
+        self,
+        alias_lookup_table: Mapping[str, Expression],
+        visited_stack: Sequence[str],
+        expand_nested: bool = False,
+    ) -> None:
+        self.__alias_lookup_table = alias_lookup_table
+        # Aliases being visited from the root node till the node
+        # we are currently visiting
+        self.__visited_stack = visited_stack
+        # Recursively expand aliases after resolving them. If True,
+        # then, after resolving an alias we visit the result.
+        self.__expand_nested = expand_nested
+
+    def visit_literal(self, exp: Literal) -> Expression:
+        return exp
+
+    def visit_column(self, exp: Column) -> Expression:
+        name = exp.column_name
+        if exp.alias is not None or name not in self.__alias_lookup_table:
+            return exp
+
+        if name in self.__visited_stack:
+            # This means this column is being shadowed (correctly) by an
+            # expression that declares an alias equal to the name of the
+            # column. Example: f(a) as a.
+            #
+            # Follows the same Clickhouse approach to cycles:
+            # `f(g(z(a))) as a` -> allowed
+            # `f(g(z(a) as a) as not_a` -> allowed
+            # `f(g(a) as b) as a` -> not allowed
+            # `f(a) as b, f(b) as a` -> not allowed
+            if self.__visited_stack[-1] != name:
+                # We need to reject conditions like `f(g(a) as b) as a`
+                # but accept `f(g(a)) as a`.
+                # If we are here it means we already found, in this nested
+                # expression, an alias declared that has the same name of
+                # the column we are visiting (shadowing). So the previously
+                # visited alias must be on top of the stack, to be valid.
+                # In `f(g(a) as b) as a`, instead, b would be on top of the
+                # stack instead of a.
+                raise CyclicAliasException(
+                    f"Cyclic aliases {name} resolves to {self.__alias_lookup_table[name]}"
+                )
+            return exp
+
+        if self.__expand_nested:
+            # The expanded expression may contain more alias references to expand.
+            return self.__alias_lookup_table[name].accept(self)
+        else:
+            return self.__alias_lookup_table[name]
+
+    def __append_alias(self, alias: Optional[str]) -> Sequence[str]:
+        return (
+            [*self.__visited_stack, alias]
+            if alias is not None
+            else self.__visited_stack
+        )
+
+    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> Expression:
+        expanded_column = exp.column.accept(
+            AliasExpanderVisitor(
+                self.__alias_lookup_table,
+                self.__append_alias(exp.alias),
+                self.__expand_nested,
+            )
+        )
+        assert isinstance(
+            expanded_column, Column
+        ), "A subscriptable column cannot be resolved to anything other than a column"
+        return replace(
+            exp,
+            column=expanded_column,
+            key=exp.key.accept(
+                AliasExpanderVisitor(
+                    self.__alias_lookup_table,
+                    self.__append_alias(exp.alias),
+                    self.__expand_nested,
+                )
+            ),
+        )
+
+    def __visit_sequence(
+        self, alias: Optional[str], parameters: Sequence[Expression]
+    ) -> Tuple[Expression, ...]:
+        return tuple(
+            p.accept(
+                AliasExpanderVisitor(
+                    self.__alias_lookup_table,
+                    self.__append_alias(alias),
+                    self.__expand_nested,
+                )
+            )
+            for p in parameters
+        )
+
+    def visit_function_call(self, exp: FunctionCall) -> Expression:
+        return replace(exp, parameters=self.__visit_sequence(exp.alias, exp.parameters))
+
+    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> Expression:
+        return replace(
+            exp,
+            internal_function=exp.internal_function.accept(
+                AliasExpanderVisitor(
+                    self.__alias_lookup_table,
+                    self.__append_alias(exp.alias),
+                    self.__expand_nested,
+                )
+            ),
+            parameters=self.__visit_sequence(exp.alias, exp.parameters),
+        )
+
+    def visit_argument(self, exp: Argument) -> Expression:
+        return exp
+
+    def visit_lambda(self, exp: Lambda) -> Expression:
+        return replace(
+            exp,
+            transformation=exp.transformation.accept(
+                AliasExpanderVisitor(
+                    self.__alias_lookup_table,
+                    self.__append_alias(exp.alias),
+                    self.__expand_nested,
+                )
+            ),
+        )

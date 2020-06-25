@@ -23,7 +23,7 @@ from deprecation import deprecated
 from snuba.clickhouse.escaping import SAFE_COL_RE
 from snuba.datasets.schemas import RelationalSource
 from snuba.query.conditions import BooleanFunctions, binary_condition
-from snuba.query.expressions import Column, Expression
+from snuba.query.expressions import Column, Expression, ExpressionVisitor
 from snuba.query.types import Condition
 from snuba.util import columns_in_expr, is_condition, to_list
 
@@ -164,6 +164,36 @@ class Query:
             map(
                 lambda clause: replace(
                     clause, expression=clause.expression.transform(func)
+                ),
+                self.__order_by,
+            )
+        )
+
+    def transform(self, visitor: ExpressionVisitor[Expression]) -> None:
+        """
+        Applies a transformation, defined through a Visitor, to the
+        entire query. Here the visitor is supposed to return a new
+        Expression and it is applied to each root Expression in this
+        query, where a root Expression is an Expression that does not
+        have another Expression as parent.
+        The transformation happens in place.
+        """
+        self.__selected_columns = [
+            e.accept(visitor) for e in (self.__selected_columns or [])
+        ]
+        if self.__array_join is not None:
+            self.__array_join = self.__array_join.accept(visitor)
+        if self.__condition is not None:
+            self.__condition = self.__condition.accept(visitor)
+        if self.__prewhere is not None:
+            self.__prewhere = self.__prewhere.accept(visitor)
+        self.__groupby = [e.accept(visitor) for e in (self.__groupby or [])]
+        if self.__having is not None:
+            self.__having = self.__having.accept(visitor)
+        self.__order_by = list(
+            map(
+                lambda clause: replace(
+                    clause, expression=clause.expression.accept(visitor)
                 ),
                 self.__order_by,
             )
