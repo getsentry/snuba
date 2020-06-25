@@ -18,7 +18,7 @@ from snuba.query.processors.mandatory_condition_applier import MandatoryConditio
 from snuba.request.request_settings import HTTPRequestSettings
 
 test_data = [
-    (
+    pytest.param(
         "table1",
         [
             MandatoryCondition(
@@ -31,8 +31,9 @@ test_data = [
                 ),
             )
         ],
+        id="Single Mandatory Condition TestCase",
     ),
-    (
+    pytest.param(
         "table2",
         [
             MandatoryCondition(
@@ -54,30 +55,19 @@ test_data = [
                 ),
             ),
         ],
+        id="Multiple Mandatory Condition TestCase",
     ),
 ]
 
 
-@pytest.mark.parametrize("table, mand_condition", test_data)
-def test_mand_condition(table: str, mand_condition: List[MandatoryCondition]) -> None:
+@pytest.mark.parametrize("table, mand_conditions", test_data)
+def test_mand_conditions(table: str, mand_conditions: List[MandatoryCondition]) -> None:
 
-    body = {
-        "conditions": [
-            ["d", "=", "1"],
-            ["c", "=", "3"],
-            ["a", "=", "1"],
-            ["b", "=", "2"],
-        ],
-    }
-
-    body_copy = copy.deepcopy(body)
-
-    cols = None
-    consistent = True
+    body = {"conditions": [["d", "=", "1"], ["c", "=", "3"]]}
 
     query = Query(
-        body_copy,
-        TableSource(table, cols, mand_condition, ["c1"]),
+        copy.deepcopy(body),
+        TableSource(table, None, mand_conditions, ["c1"]),
         None,
         None,
         binary_condition(
@@ -85,50 +75,30 @@ def test_mand_condition(table: str, mand_condition: List[MandatoryCondition]) ->
             BooleanFunctions.AND,
             binary_condition(
                 None,
-                BooleanFunctions.AND,
-                binary_condition(
-                    None,
-                    OPERATOR_TO_FUNCTION["="],
-                    Column("d", None, "d"),
-                    Literal(None, "1"),
-                ),
-                binary_condition(
-                    None,
-                    OPERATOR_TO_FUNCTION["="],
-                    Column("c", None, "c"),
-                    Literal(None, "3"),
-                ),
+                OPERATOR_TO_FUNCTION["="],
+                Column("d", None, "d"),
+                Literal(None, "1"),
             ),
             binary_condition(
                 None,
-                BooleanFunctions.AND,
-                binary_condition(
-                    None,
-                    OPERATOR_TO_FUNCTION["="],
-                    Column("a", None, "a"),
-                    Literal(None, "1"),
-                ),
-                binary_condition(
-                    None,
-                    OPERATOR_TO_FUNCTION["="],
-                    Column("b", None, "b"),
-                    Literal(None, "2"),
-                ),
+                OPERATOR_TO_FUNCTION["="],
+                Column("c", None, "c"),
+                Literal(None, "3"),
             ),
         ),
     )
 
     query_ast_copy = copy.deepcopy(query)
 
-    request_settings = HTTPRequestSettings(consistent=consistent)
+    request_settings = HTTPRequestSettings(consistent=True)
     processor = MandatoryConditionApplier()
     processor.process_query(query, request_settings)
 
-    body["conditions"].extend([c.legacy for c in mand_condition])
+    body["conditions"].extend([c.legacy for c in mand_conditions])
     assert query.get_conditions() == body["conditions"]
 
     query_ast_copy.add_condition_to_ast(
-        combine_and_conditions([c.ast for c in mand_condition])
+        combine_and_conditions([c.ast for c in mand_conditions])
     )
 
     assert query.get_condition_from_ast() == query_ast_copy.get_condition_from_ast()
