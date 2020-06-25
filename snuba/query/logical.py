@@ -169,7 +169,7 @@ class Query:
             )
         )
 
-    def transform_query(self, visitor: ExpressionVisitor[Expression]) -> None:
+    def transform(self, visitor: ExpressionVisitor[Expression]) -> None:
         """
         Applies a transformation, defined through a Visitor, to the
         entire query. Here the visitor is supposed to return a new

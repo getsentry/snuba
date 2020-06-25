@@ -267,7 +267,7 @@ def _expand_aliases(query: Query) -> None:
     }
 
     visitor = AliasExpanderVisitor(fully_resolved_aliases, [])
-    query.transform_query(visitor)
+    query.transform(visitor)
 
 
 class AliasExpanderVisitor(ExpressionVisitor[Expression]):
