@@ -2,8 +2,6 @@ from abc import ABC, abstractmethod
 
 from typing import Mapping, Optional
 
-from snuba.migrations.context import OperationContext
-
 
 class TableEngine(ABC):
     """
@@ -14,7 +12,7 @@ class TableEngine(ABC):
     """
 
     @abstractmethod
-    def get_sql(self, context: OperationContext) -> str:
+    def get_sql(self, single_node: bool, table_name: str) -> str:
         raise NotImplementedError
 
 
@@ -43,8 +41,8 @@ class MergeTree(TableEngine):
         self.__ttl = ttl
         self.__settings = settings
 
-    def get_sql(self, context: OperationContext) -> str:
-        sql = f"{self._get_engine_type(context)} ORDER BY {self.__order_by}"
+    def get_sql(self, single_node: bool, table_name: str) -> str:
+        sql = f"{self._get_engine_type(single_node, table_name)} ORDER BY {self.__order_by}"
 
         if self.__partition_by:
             sql += f" PARTITION BY {self.__partition_by}"
@@ -61,11 +59,11 @@ class MergeTree(TableEngine):
 
         return sql
 
-    def _get_engine_type(self, context: OperationContext) -> str:
-        if context.single_node:
+    def _get_engine_type(self, single_node: bool, table_name: str) -> str:
+        if single_node:
             return "MergeTree()"
         else:
-            return f"ReplicatedMergeTree('/clickhouse/tables/{{layer}}-{{shard}})/{context.table_name}', '{{replica}}')"
+            return f"ReplicatedMergeTree('/clickhouse/tables/{{layer}}-{{shard}})/{table_name}', '{{replica}}')"
 
 
 class ReplacingMergeTree(MergeTree):
@@ -81,8 +79,8 @@ class ReplacingMergeTree(MergeTree):
         super().__init__(order_by, partition_by, sample_by, ttl, settings)
         self.__version_column = version_column
 
-    def _get_engine_type(self, context: OperationContext) -> str:
-        if context.single_node:
+    def _get_engine_type(self, single_node: bool, table_name: str) -> str:
+        if single_node:
             return f"ReplacingMergeTree({self.__version_column})"
         else:
-            return f"ReplicatedReplacingMergeTree('/clickhouse/tables/{{layer}}-{{shard}})/{context.table_name}', '{{replica}}', {self.__version_column})"
+            return f"ReplicatedReplacingMergeTree('/clickhouse/tables/{{layer}}-{{shard}})/{table_name}', '{{replica}}', {self.__version_column})"

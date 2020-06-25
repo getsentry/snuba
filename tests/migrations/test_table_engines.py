@@ -1,6 +1,5 @@
 import pytest
 
-from snuba.migrations.context import OperationContext
 from snuba.migrations.table_engines import MergeTree, ReplacingMergeTree, TableEngine
 
 
@@ -33,5 +32,5 @@ test_cases = [
 def test_table_engines(
     engine: TableEngine, single_node_sql: str, multi_node_sql: str
 ) -> None:
-    assert engine.get_sql(OperationContext(True, "test_table")) == single_node_sql
-    assert engine.get_sql(OperationContext(False, "test_table")) == multi_node_sql
+    assert engine.get_sql(True, "test_table") == single_node_sql
+    assert engine.get_sql(False, "test_table") == multi_node_sql

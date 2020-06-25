@@ -2,7 +2,7 @@ from typing import Sequence
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration
 from snuba.migrations import operations
-from snuba.migrations.context import MigrationContext
+from snuba.migrations.context import Context
 from snuba.migrations.status import Status
 
 
@@ -37,7 +37,7 @@ class Migration(migration.Migration):
             )
         ]
 
-    def forwards(self, context: MigrationContext) -> None:
+    def forwards(self, context: Context) -> None:
         migration_id, logger, update_status = context
         logger.info(f"Running migration: {migration_id}")
         for op in self.__forwards_local():
