@@ -57,8 +57,8 @@ class DropTable(SqlOperation):
 class CreateTable(SqlOperation):
     """
     The create table operation takes a table name, column list and table engine.
-    Engine specific clauses like ORDER BY, PARTITION BY, SETTINGS, etc are
-    defined by the table engine.
+    All other clauses (e.g. ORDER BY, PARTITION BY, SETTINGS) are parameters to
+    engine as they are specific to the ClickHouse table engine selected.
     """
 
     def __init__(
@@ -75,9 +75,7 @@ class CreateTable(SqlOperation):
 
     def format_sql(self) -> str:
         columns = ", ".join([col.for_schema() for col in self.__columns])
-
         single_node = get_cluster(self._storage_set).is_single_node()
-
         engine = self.__engine.get_sql(single_node, self.__table_name)
 
         return f"CREATE TABLE IF NOT EXISTS {self.__table_name} ({columns}) ENGINE {engine};"
