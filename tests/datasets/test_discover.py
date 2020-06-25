@@ -3,7 +3,6 @@ from typing import Any, MutableMapping
 from tests.base import BaseDatasetTest
 
 from snuba.datasets.factory import get_dataset
-from snuba.query.logical import Query
 from snuba.query.parser import parse_query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
