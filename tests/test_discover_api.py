@@ -258,7 +258,7 @@ class TestDiscoverApi(BaseApiTest):
                     "dataset": "discover",
                     "project": self.project_id,
                     "aggregations": [["uniq", ["trace_id"], "uniq_trace_id"]],
-                    "conditions": [["type", "!=", "transaction"]],
+                    "conditions": [["type", "=", "error"]],
                     "groupby": "type",
                     "limit": 1000,
                 }
