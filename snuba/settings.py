@@ -114,10 +114,15 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         "api.organization-events-stats": 100,
         "incidents.get_incident_event_stats": 100,
         "incidents.get_incident_aggregates": 100,
+        # Queries with tags resolution
+        "tagstore.get_tag_value_paginator_for_projects": 100,
+        "tagstore.get_group_tag_value_iter": 100,
     },
     "transactions": {
         # Simple time bucketed queries
         "incidents.get_incident_event_stats": 100,
+        # Queries with tags resolution
+        "incidents.get_incident_aggregates": 100,
     },
 }  # (dataset name: (referrer: percentage))
 
