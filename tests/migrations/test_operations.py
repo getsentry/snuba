@@ -3,8 +3,8 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.operations import (
     CreateTable,
     DropTable,
-    ReplacingMergeTree,
 )
+from snuba.migrations.table_engines import ReplacingMergeTree
 
 
 def test_create_table() -> None:
@@ -19,10 +19,13 @@ def test_create_table() -> None:
             StorageSetKey.EVENTS,
             "test_table",
             columns,
-            ReplacingMergeTree("version"),
-            "version",
+            ReplacingMergeTree(
+                version_column="version",
+                order_by="version",
+                settings={"index_granularity": "256"},
+            ),
         ).format_sql()
-        == "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64) ENGINE ReplacingMergeTree(version) ORDER BY version;"
+        == "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64) ENGINE ReplacingMergeTree(version) ORDER BY version SETTINGS index_granularity=256;"
     )
 
 
