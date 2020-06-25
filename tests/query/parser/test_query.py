@@ -280,6 +280,7 @@ test_cases = [
 def test_format_expressions(
     query_body: MutableMapping[str, Any], expected_query: Query
 ) -> None:
+    state.set_config("query_parsing_expand_aliases", 1)
     events = get_dataset("events")
     query = parse_query(query_body, events)
 
@@ -298,6 +299,7 @@ def test_format_expressions(
 
 def test_shadowing() -> None:
     state.set_config("query_parsing_enforce_validity", 1)
+    state.set_config("query_parsing_expand_aliases", 1)
     with pytest.raises(ValueError):
         parse_query(
             {
@@ -315,6 +317,7 @@ def test_shadowing() -> None:
 
 def test_circular_aliases() -> None:
     state.set_config("query_parsing_enforce_validity", 1)
+    state.set_config("query_parsing_expand_aliases", 1)
     with pytest.raises(CyclicAliasException):
         parse_query(
             {
