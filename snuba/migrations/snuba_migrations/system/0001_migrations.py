@@ -42,5 +42,6 @@ class Migration(migration.Migration):
         logger.info(f"Running migration: {migration_id}")
         for op in self.__forwards_local():
             op.execute()
+        # TODO: Add and run the forwards_dist method here as well
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)

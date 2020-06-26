@@ -18,6 +18,7 @@ from snuba.migrations import migration, operations, table_engines
 
 
 class Migration(migration.MultiStepMigration):
+    # TODO: Provide the forwards_dist and backwards_dist methods for this migration
     blocking = False
 
     def forwards_local(self) -> Sequence[operations.Operation]:
