@@ -194,9 +194,15 @@ class Query:
         have another Expression as parent.
         The transformation happens in place.
         """
-        self.__selected_columns = [
-            e.accept(visitor) for e in (self.__selected_columns or [])
-        ]
+
+        self.__selected_columns = list(
+            map(
+                lambda selected: replace(
+                    selected, expression=selected.expression.accept(visitor)
+                ),
+                self.__selected_columns,
+            )
+        )
         if self.__array_join is not None:
             self.__array_join = self.__array_join.accept(visitor)
         if self.__condition is not None:

@@ -6,6 +6,7 @@ from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.logical import SelectedExpression
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.request.request_settings import HTTPRequestSettings
 
@@ -22,17 +23,20 @@ def test_events_boolean_context() -> None:
             {},
             TableSource("events", columns),
             selected_columns=[
-                FunctionCall(
+                SelectedExpression(
                     "contexts[device.charging]",
-                    "arrayElement",
-                    (
-                        Column(None, None, "contexts.value"),
-                        FunctionCall(
-                            None,
-                            "indexOf",
-                            (
-                                Column(None, None, "contexts.key"),
-                                Literal(None, "device.charging"),
+                    FunctionCall(
+                        "contexts[device.charging]",
+                        "arrayElement",
+                        (
+                            Column(None, None, "contexts.value"),
+                            FunctionCall(
+                                None,
+                                "indexOf",
+                                (
+                                    Column(None, None, "contexts.key"),
+                                    Literal(None, "device.charging"),
+                                ),
                             ),
                         ),
                     ),
@@ -46,35 +50,38 @@ def test_events_boolean_context() -> None:
             {},
             TableSource("events", columns),
             selected_columns=[
-                FunctionCall(
+                SelectedExpression(
                     "contexts[device.charging]",
-                    "multiIf",
-                    (
-                        binary_condition(
-                            None,
-                            ConditionFunctions.EQ,
-                            FunctionCall(
+                    FunctionCall(
+                        "contexts[device.charging]",
+                        "multiIf",
+                        (
+                            binary_condition(
                                 None,
-                                "toString",
-                                (Column(None, None, "device_charging"),),
+                                ConditionFunctions.EQ,
+                                FunctionCall(
+                                    None,
+                                    "toString",
+                                    (Column(None, None, "device_charging"),),
+                                ),
+                                Literal(None, ""),
                             ),
                             Literal(None, ""),
-                        ),
-                        Literal(None, ""),
-                        binary_condition(
-                            None,
-                            ConditionFunctions.IN,
-                            FunctionCall(
+                            binary_condition(
                                 None,
-                                "toString",
-                                (Column(None, None, "device_charging"),),
+                                ConditionFunctions.IN,
+                                FunctionCall(
+                                    None,
+                                    "toString",
+                                    (Column(None, None, "device_charging"),),
+                                ),
+                                literals_tuple(
+                                    None, [Literal(None, "1"), Literal(None, "True")]
+                                ),
                             ),
-                            literals_tuple(
-                                None, [Literal(None, "1"), Literal(None, "True")]
-                            ),
+                            Literal(None, "True"),
+                            Literal(None, "False"),
                         ),
-                        Literal(None, "True"),
-                        Literal(None, "False"),
                     ),
                 )
             ],

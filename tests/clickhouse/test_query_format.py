@@ -88,22 +88,19 @@ test_cases = [
                 ),
             ),
             groupby=[
-                SelectedExpression(
+                CurriedFunctionCall(
                     "my_complex_math",
-                    CurriedFunctionCall(
-                        "my_complex_math",
-                        FunctionCall(
-                            None,
-                            "doSomething",
-                            (
-                                Column(None, None, "column1"),
-                                Column(None, "table1", "column2"),
-                                Column("al", None, "column3"),
-                            ),
+                    FunctionCall(
+                        None,
+                        "doSomething",
+                        (
+                            Column(None, None, "column1"),
+                            Column(None, "table1", "column2"),
+                            Column("al", None, "column3"),
                         ),
-                        (Column(None, None, "column1"),),
                     ),
-                )
+                    (Column(None, None, "column1"),),
+                ),
             ],
             order_by=[
                 OrderBy(
