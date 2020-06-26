@@ -5,6 +5,7 @@ from typing import Sequence
 from snuba.clickhouse.columns import Column
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.migrations.table_engines import TableEngine
 
 
 class Operation(ABC):
@@ -53,34 +54,27 @@ class DropTable(SqlOperation):
         return f"DROP TABLE IF EXISTS {self.table_name};"
 
 
-class TableEngine:
-    pass
-
-
-class ReplacingMergeTree(TableEngine):
-    def __init__(self, version_column: str):
-        self.__version_column = version_column
-
-    def __str__(self) -> str:
-        return f"ReplacingMergeTree({self.__version_column})"
-
-
 class CreateTable(SqlOperation):
+    """
+    The create table operation takes a table name, column list and table engine.
+    All other clauses (e.g. ORDER BY, PARTITION BY, SETTINGS) are parameters to
+    engine as they are specific to the ClickHouse table engine selected.
+    """
+
     def __init__(
         self,
         storage_set: StorageSetKey,
         table_name: str,
         columns: Sequence[Column],
         engine: TableEngine,
-        order_by: str,
     ):
         self.__table_name = table_name
         self.__columns = columns
         self.__engine = engine
-        self.__order_by = order_by
         super().__init__(storage_set)
 
     def format_sql(self) -> str:
         columns = ", ".join([col.for_schema() for col in self.__columns])
+        engine = self.__engine.get_sql()
 
-        return f"CREATE TABLE IF NOT EXISTS {self.__table_name} ({columns}) ENGINE {self.__engine} ORDER BY {self.__order_by};"
+        return f"CREATE TABLE IF NOT EXISTS {self.__table_name} ({columns}) ENGINE {engine};"
