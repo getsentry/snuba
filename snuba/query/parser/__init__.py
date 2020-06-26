@@ -1,7 +1,7 @@
 import logging
 import re
 from dataclasses import replace
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple
+from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 from snuba import environment, state
 from snuba.clickhouse.escaping import NEGATE_RE
@@ -82,6 +82,25 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
 
 
 def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
+    def build_selected_expressions(
+        raw_expressions: Sequence[Any],
+    ) -> List[SelectedExpression]:
+        output = []
+        for raw_expression in raw_expressions:
+            exp = parse_expression(tuplify(raw_expression))
+            output.append(
+                SelectedExpression(
+                    # An expression in the query can be a string or a
+                    # complex list with an alias. In the second case
+                    # we trust the parser to find the alias.
+                    name=raw_expression
+                    if isinstance(raw_expression, str)
+                    else exp.alias,
+                    expression=exp,
+                )
+            )
+        return output
+
     aggregate_exprs = []
     for aggregation in body.get("aggregations", []):
         assert isinstance(aggregation, (list, tuple))
@@ -92,26 +111,19 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
         alias = alias if alias else None
 
         aggregate_exprs.append(
-            parse_aggregation(aggregation_function, column_expr, alias)
+            SelectedExpression(
+                name=alias,
+                expression=parse_aggregation(aggregation_function, column_expr, alias),
+            )
         )
 
-    groupby_exprs = [
-        parse_expression(tuplify(group_by))
-        for group_by in to_list(body.get("groupby", []))
-    ]
-    select_exprs = [
-        parse_expression(tuplify(select)) for select in body.get("selected_columns", [])
-    ]
+    groupby_exprs = build_selected_expressions(to_list(body.get("groupby", [])))
 
-    select_clause = []
-    for e in groupby_exprs + aggregate_exprs + select_exprs:
-        if e.alias is not None:
-            name: Optional[str] = e.alias
-        elif isinstance(e, Column):
-            name = e.column_name
-        else:
-            name = None
-        select_clause.append(SelectedExpression(name=name, expression=e))
+    select_clause = (
+        groupby_exprs
+        + aggregate_exprs
+        + build_selected_expressions(body.get("selected_columns", []))
+    )
 
     arrayjoin = body.get("arrayjoin")
     if arrayjoin:
@@ -152,7 +164,7 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
         selected_columns=select_clause,
         array_join=array_join_expr,
         condition=where_expr,
-        groupby=groupby_exprs,
+        groupby=[g.expression for g in groupby_exprs],
         having=having_expr,
         order_by=orderby_exprs,
     )
