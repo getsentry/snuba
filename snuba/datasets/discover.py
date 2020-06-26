@@ -72,6 +72,11 @@ def detect_table(
             event_columns.add(col)
         elif transactions_only_columns.get(col):
             transaction_columns.add(col)
+    for col in query.get_all_ast_referenced_columns():
+        if events_only_columns.get(col.column_name):
+            event_columns.add(col.column_name)
+        elif transactions_only_columns.get(col.column_name):
+            transaction_columns.add(col.column_name)
 
     selected_table = None
 
