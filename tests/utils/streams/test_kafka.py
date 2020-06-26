@@ -9,7 +9,7 @@ import pytest
 from confluent_kafka.admin import AdminClient, NewTopic
 
 from snuba import settings
-from snuba.utils.codecs import Codec
+from snuba.utils.codecs import PassthroughCodec
 from snuba.utils.streams.consumer import ConsumerError, EndOfPartition
 from snuba.utils.streams.kafka import (
     CommitCodec,
@@ -38,18 +38,10 @@ def test_payload_equality() -> None:
     )
 
 
-class TestCodec(Codec[KafkaPayload, int]):
-    def encode(self, value: int) -> KafkaPayload:
-        return KafkaPayload(None, f"{value}".encode("utf-8"))
-
-    def decode(self, value: KafkaPayload) -> int:
-        return int(value.value.decode("utf-8"))
-
-
-class KafkaStreamsTestCase(StreamsTestMixin[int], TestCase):
+class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
 
     configuration = {"bootstrap.servers": ",".join(settings.DEFAULT_BROKERS)}
-    codec = TestCodec()
+    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
 
     @contextlib.contextmanager
     def get_topic(self, partitions: int = 1) -> Iterator[Topic]:
@@ -72,7 +64,7 @@ class KafkaStreamsTestCase(StreamsTestMixin[int], TestCase):
         group: Optional[str] = None,
         enable_end_of_partition: bool = True,
         auto_offset_reset: str = "earliest",
-    ) -> KafkaConsumer[int]:
+    ) -> KafkaConsumer[KafkaPayload]:
         return KafkaConsumer(
             {
                 **self.configuration,
@@ -86,11 +78,12 @@ class KafkaStreamsTestCase(StreamsTestMixin[int], TestCase):
             self.codec,
         )
 
-    def get_producer(self) -> KafkaProducer[int]:
+    def get_producer(self) -> KafkaProducer[KafkaPayload]:
         return KafkaProducer(self.configuration, self.codec)
 
-    def get_payloads(self) -> Iterator[int]:
-        return itertools.count()
+    def get_payloads(self) -> Iterator[KafkaPayload]:
+        for i in itertools.count():
+            yield KafkaPayload(None, f"{i}".encode("utf8"))
 
     def test_auto_offset_reset_earliest(self) -> None:
         with self.get_topic() as topic:
@@ -137,7 +130,7 @@ class KafkaStreamsTestCase(StreamsTestMixin[int], TestCase):
         # a mock.
         commit_log_producer = FakeConfluentKafkaProducer()
 
-        consumer: KafkaConsumer[int] = KafkaConsumerWithCommitLog(
+        consumer: KafkaConsumer[KafkaPayload] = KafkaConsumerWithCommitLog(
             {
                 **self.configuration,
                 "auto.offset.reset": "earliest",
