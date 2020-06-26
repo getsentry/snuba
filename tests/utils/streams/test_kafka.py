@@ -12,14 +12,13 @@ from snuba import settings
 from snuba.utils.codecs import PassthroughCodec
 from snuba.utils.streams.consumer import ConsumerError, EndOfPartition
 from snuba.utils.streams.kafka import (
-    CommitCodec,
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
     KafkaPayload,
     KafkaProducer,
     as_kafka_configuration_bool,
 )
-from snuba.utils.streams.synchronized import Commit
+from snuba.utils.streams.synchronized import Commit, commit_codec
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.utils.streams.mixins import StreamsTestMixin
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
@@ -164,15 +163,14 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
             commit_message = commit_log_producer.messages[0]
             assert commit_message.topic() == "commit-log"
 
-            assert CommitCodec().decode(
+            assert commit_codec.decode(
                 KafkaPayload(commit_message.key(), commit_message.value())
             ) == Commit("test", Partition(topic, 0), message.get_next_offset())
 
 
 def test_commit_codec() -> None:
-    codec = CommitCodec()
     commit = Commit("group", Partition(Topic("topic"), 0), 0)
-    assert codec.decode(codec.encode(commit)) == commit
+    assert commit_codec.decode(commit_codec.encode(commit)) == commit
 
 
 def test_as_kafka_configuration_bool() -> None:

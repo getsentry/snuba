@@ -37,7 +37,6 @@ from snuba.utils.concurrent import execute
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
 from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
 from snuba.utils.streams.producer import Producer
-from snuba.utils.streams.synchronized import Commit
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 
@@ -660,27 +659,8 @@ def build_kafka_consumer_configuration(
     }
 
 
-class CommitCodec(Codec[KafkaPayload, Commit]):
-    def encode(self, value: Commit) -> KafkaPayload:
-        return KafkaPayload(
-            f"{value.partition.topic.name}:{value.partition.index}:{value.group}".encode(
-                "utf-8"
-            ),
-            f"{value.offset}".encode("utf-8"),
-        )
-
-    def decode(self, value: KafkaPayload) -> Commit:
-        key = value.key
-        if not isinstance(key, bytes):
-            raise TypeError("payload key must be a bytes object")
-
-        val = value.value
-        if not isinstance(val, bytes):
-            raise TypeError("payload value must be a bytes object")
-
-        topic_name, partition_index, group = key.decode("utf-8").split(":", 3)
-        offset = int(val.decode("utf-8"))
-        return Commit(group, Partition(Topic(topic_name), int(partition_index)), offset)
+# XXX: This must be imported after `KafkaPayload` to avoid a circular import.
+from snuba.utils.streams.synchronized import Commit, commit_codec
 
 
 class KafkaConsumerWithCommitLog(KafkaConsumer[TPayload]):
@@ -711,9 +691,9 @@ class KafkaConsumerWithCommitLog(KafkaConsumer[TPayload]):
     def commit_offsets(self) -> Mapping[Partition, int]:
         offsets = super().commit_offsets()
 
-        codec = CommitCodec()
         for partition, offset in offsets.items():
-            payload = codec.encode(Commit(self.__group_id, partition, offset))
+            commit = Commit(self.__group_id, partition, offset)
+            payload = commit_codec.encode(commit)
             self.__producer.produce(
                 self.__commit_log_topic.name,
                 key=payload.key,
