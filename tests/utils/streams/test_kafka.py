@@ -1,4 +1,5 @@
 import contextlib
+import itertools
 import uuid
 from contextlib import closing
 from typing import Iterator, Optional
@@ -45,7 +46,7 @@ class TestCodec(Codec[KafkaPayload, int]):
         return int(value.value.decode("utf-8"))
 
 
-class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
+class KafkaStreamsTestCase(StreamsTestMixin[int], TestCase):
 
     configuration = {"bootstrap.servers": ",".join(settings.DEFAULT_BROKERS)}
     codec = TestCodec()
@@ -88,10 +89,13 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
     def get_producer(self) -> KafkaProducer[int]:
         return KafkaProducer(self.configuration, self.codec)
 
+    def get_payloads(self) -> Iterator[int]:
+        return itertools.count()
+
     def test_auto_offset_reset_earliest(self) -> None:
         with self.get_topic() as topic:
             with closing(self.get_producer()) as producer:
-                producer.produce(topic, 0).result(5.0)
+                producer.produce(topic, next(self.get_payloads())).result(5.0)
 
             with closing(self.get_consumer(auto_offset_reset="earliest")) as consumer:
                 consumer.subscribe([topic])
@@ -103,7 +107,7 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
     def test_auto_offset_reset_latest(self) -> None:
         with self.get_topic() as topic:
             with closing(self.get_producer()) as producer:
-                producer.produce(topic, 0).result(5.0)
+                producer.produce(topic, next(self.get_payloads())).result(5.0)
 
             with closing(self.get_consumer(auto_offset_reset="latest")) as consumer:
                 consumer.subscribe([topic])
@@ -119,7 +123,7 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
     def test_auto_offset_reset_error(self) -> None:
         with self.get_topic() as topic:
             with closing(self.get_producer()) as producer:
-                producer.produce(topic, 0).result(5.0)
+                producer.produce(topic, next(self.get_payloads())).result(5.0)
 
             with closing(self.get_consumer(auto_offset_reset="error")) as consumer:
                 consumer.subscribe([topic])
@@ -152,7 +156,7 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
             consumer.subscribe([topic])
 
             with closing(self.get_producer()) as producer:
-                producer.produce(topic, 0).result(5.0)
+                producer.produce(topic, next(self.get_payloads())).result(5.0)
 
             message = consumer.poll(10.0)  # XXX: getting the subscription is slow
             assert isinstance(message, Message)
