@@ -19,6 +19,7 @@ from snuba.query.expressions import (
 )
 from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
 from snuba.query.parser.conditions import parse_conditions_to_expr
+from snuba.query.parser.exceptions import CyclicAliasException
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
 from snuba.util import is_function, to_list, tuplify
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
@@ -257,6 +258,8 @@ def _expand_aliases(query: Query) -> None:
     take care of not introducing shadowing (easy to enforce at runtime),
     otherwise aliasing is transparent to them.
     """
+    if not state.get_config("query_parsing_expand_aliases", 0):
+        return
     # Pre-inline all nested aliases. This reduces the number of iterations
     # we need to do on the query.
     # Example:
@@ -272,34 +275,7 @@ def _expand_aliases(query: Query) -> None:
     }
 
     visitor = AliasExpanderVisitor(fully_resolved_aliases, [])
-    query.set_ast_selected_columns(
-        [
-            replace(e, expression=e.expression.accept(visitor))
-            for e in (query.get_selected_columns_from_ast() or [])
-        ]
-    )
-    arrayjoin = query.get_arrayjoin_from_ast()
-    if arrayjoin is not None:
-        query.set_ast_arrayjoin(arrayjoin.accept(visitor))
-    condition = query.get_condition_from_ast()
-    if condition is not None:
-        query.set_ast_condition(condition.accept(visitor))
-    query.set_ast_groupby(
-        [e.accept(visitor) for e in (query.get_groupby_from_ast() or [])]
-    )
-    having = query.get_having_from_ast()
-    if having is not None:
-        query.set_ast_having(having.accept(visitor))
-    query.set_ast_orderby(
-        list(
-            map(
-                lambda clause: replace(
-                    clause, expression=clause.expression.accept(visitor)
-                ),
-                query.get_orderby_from_ast(),
-            )
-        )
-    )
+    query.transform(visitor)
 
 
 class AliasExpanderVisitor(ExpressionVisitor[Expression]):
@@ -341,17 +317,22 @@ class AliasExpanderVisitor(ExpressionVisitor[Expression]):
             # column. Example: f(a) as a.
             #
             # Follows the same Clickhouse approach to cycles:
-            # f(g(z(a))) as a -> allowed
-            # f(g(z(a) as a) as not_a -> allowed
-            # f(g(a) as b) as a -> not allowed
-            # f(a) as b, f(b) as a -> not allowed
-            assert (
-                # To be a valid case this name must be on the top of the
-                # stack. IF that's not the case we are in the second
-                # condition above.
-                self.__visited_stack[-1]
-                == name
-            ), f"Cyclic aliases {name} resolves to {self.__alias_lookup_table[name]}"
+            # `f(g(z(a))) as a` -> allowed
+            # `f(g(z(a) as a) as not_a` -> allowed
+            # `f(g(a) as b) as a` -> not allowed
+            # `f(a) as b, f(b) as a` -> not allowed
+            if self.__visited_stack[-1] != name:
+                # We need to reject conditions like `f(g(a) as b) as a`
+                # but accept `f(g(a)) as a`.
+                # If we are here it means we already found, in this nested
+                # expression, an alias declared that has the same name of
+                # the column we are visiting (shadowing). So the previously
+                # visited alias must be on top of the stack, to be valid.
+                # In `f(g(a) as b) as a`, instead, b would be on top of the
+                # stack instead of a.
+                raise CyclicAliasException(
+                    f"Cyclic aliases {name} resolves to {self.__alias_lookup_table[name]}"
+                )
             return exp
 
         if self.__expand_nested:

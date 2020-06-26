@@ -9,6 +9,7 @@ from snuba.migrations.migration import Migration
 class MigrationGroup(Enum):
     SYSTEM = "system"
     EVENTS = "events"
+    QUERYLOG = "querylog"
 
 
 class GroupLoader(ABC):
@@ -63,9 +64,18 @@ class EventsLoader(DirectoryLoader):
         return []
 
 
+class QuerylogLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.migrations.snuba_migrations.querylog")
+
+    def get_migrations(self) -> Sequence[str]:
+        return ["0001_querylog"]
+
+
 _REGISTERED_GROUPS = {
     MigrationGroup.SYSTEM: SystemLoader(),
     MigrationGroup.EVENTS: EventsLoader(),
+    MigrationGroup.QUERYLOG: QuerylogLoader(),
 }
 
 
