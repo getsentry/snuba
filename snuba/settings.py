@@ -117,6 +117,11 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         # Queries with tags resolution
         "tagstore.get_tag_value_paginator_for_projects": 100,
         "tagstore.get_group_tag_value_iter": 100,
+        # Time/column split queries
+        "api.organization-events-direct-hit": 100,
+        "eventstore.get_unfetched_events": 100,
+        "api.organization-events": 100,
+        "api.group-events": 100,
     },
     "transactions": {
         # Simple time bucketed queries

@@ -2,7 +2,6 @@ from typing import Mapping
 
 import pytest
 
-from snuba import state
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -213,7 +212,6 @@ def test_expand_aliases(
     nested_resolution: bool,
     expected: Expression,
 ) -> None:
-    state.set_config("query_parsing_expand_aliases", 1)
     assert (
         expression.accept(AliasExpanderVisitor(lookup, [], nested_resolution))
         == expected
@@ -221,7 +219,6 @@ def test_expand_aliases(
 
 
 def test_circular_dependency() -> None:
-    state.set_config("query_parsing_expand_aliases", 1)
     with pytest.raises(CyclicAliasException):
         Column(alias=None, table_name=None, column_name="a").accept(
             AliasExpanderVisitor(

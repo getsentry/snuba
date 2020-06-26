@@ -258,7 +258,7 @@ class TestDiscoverApi(BaseApiTest):
                     "dataset": "discover",
                     "project": self.project_id,
                     "aggregations": [["uniq", ["trace_id"], "uniq_trace_id"]],
-                    "conditions": [["type", "!=", "transaction"]],
+                    "conditions": [["type", "=", "error"]],
                     "groupby": "type",
                     "limit": 1000,
                 }
@@ -537,3 +537,27 @@ class TestDiscoverApi(BaseApiTest):
             ).data
         )
         assert result["data"] == [{"contexts[device.online]": "True"}]
+
+    def test_ast_impossibe_queries(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [
+                        ["apdex(duration, 300)", None, "apdex_duration_300"]
+                    ],
+                    "groupby": ["project_id", "tags[foo]"],
+                    "conditions": [],
+                    "orderby": "apdex_duration_300",
+                    "limit": 1000,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data["data"] == [
+            {"apdex_duration_300": 1, "tags[foo]": "baz", "project_id": 1}
+        ]
