@@ -1,9 +1,11 @@
 from typing import Sequence
+
+from snuba.clickhouse.columns import Column, Enum, String, UInt, WithDefault
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations import migration
-from snuba.migrations import operations
+from snuba.migrations import migration, operations
 from snuba.migrations.context import Context
 from snuba.migrations.status import Status
+from snuba.migrations.table_engines import Distributed
 
 
 class Migration(migration.Migration):
@@ -37,11 +39,41 @@ class Migration(migration.Migration):
             )
         ]
 
+    def __forwards_dist(self) -> Sequence[operations.Operation]:
+        return [
+            operations.CreateTable(
+                storage_set=StorageSetKey.MIGRATIONS,
+                table_name="migrations_dist",
+                columns=[
+                    Column("group", String()),
+                    Column("migration_id", String()),
+                    Column("timestamp", String()),
+                    Column(
+                        "status",
+                        Enum(
+                            [("completed", 0), ("in_progress", 1), ("not_started", 2)]
+                        ),
+                    ),
+                    Column("version", WithDefault(UInt(64), "1")),
+                ],
+                engine=Distributed(
+                    local_table_name="migrations_local", sharding_key=None
+                ),
+            )
+        ]
+
+    def __backwards_dist(self) -> Sequence[operations.Operation]:
+        return [
+            operations.DropTable(
+                storage_set=StorageSetKey.MIGRATIONS, table_name="migrations_dist"
+            )
+        ]
+
     def forwards(self, context: Context) -> None:
         migration_id, logger, update_status = context
         logger.info(f"Running migration: {migration_id}")
         for op in self.__forwards_local():
             op.execute()
-        # TODO: Add and run the forwards_dist method here as well
+        # TODO: Run the forwards_dist operations here when multi node clusters are supported
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)

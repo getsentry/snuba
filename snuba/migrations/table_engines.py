@@ -2,6 +2,9 @@ from abc import ABC, abstractmethod
 
 from typing import Mapping, Optional
 
+from snuba.clusters.cluster import get_cluster
+from snuba.clusters.storage_sets import StorageSetKey
+
 
 class TableEngine(ABC):
     """
@@ -12,7 +15,7 @@ class TableEngine(ABC):
     """
 
     @abstractmethod
-    def get_sql(self, single_node: bool, table_name: str) -> str:
+    def get_sql(self, storage_set_key: StorageSetKey, table_name: str) -> str:
         raise NotImplementedError
 
 
@@ -41,8 +44,8 @@ class MergeTree(TableEngine):
         self.__ttl = ttl
         self.__settings = settings
 
-    def get_sql(self, single_node: bool, table_name: str) -> str:
-        sql = f"{self._get_engine_type(single_node, table_name)} ORDER BY {self.__order_by}"
+    def get_sql(self, storage_set_key: StorageSetKey, table_name: str) -> str:
+        sql = f"{self._get_engine_type(storage_set_key, table_name)} ORDER BY {self.__order_by}"
 
         if self.__partition_by:
             sql += f" PARTITION BY {self.__partition_by}"
@@ -59,8 +62,8 @@ class MergeTree(TableEngine):
 
         return sql
 
-    def _get_engine_type(self, single_node: bool, table_name: str) -> str:
-        if single_node:
+    def _get_engine_type(self, storage_set_key: StorageSetKey, table_name: str) -> str:
+        if get_cluster(storage_set_key).is_single_node():
             return "MergeTree()"
         else:
             return f"ReplicatedMergeTree('/clickhouse/tables/{{layer}}-{{shard}})/{table_name}', '{{replica}}')"
@@ -79,8 +82,27 @@ class ReplacingMergeTree(MergeTree):
         super().__init__(order_by, partition_by, sample_by, ttl, settings)
         self.__version_column = version_column
 
-    def _get_engine_type(self, single_node: bool, table_name: str) -> str:
-        if single_node:
+    def _get_engine_type(self, storage_set_key: StorageSetKey, table_name: str) -> str:
+        if get_cluster(storage_set_key).is_single_node():
             return f"ReplacingMergeTree({self.__version_column})"
         else:
             return f"ReplicatedReplacingMergeTree('/clickhouse/tables/{{layer}}-{{shard}})/{table_name}', '{{replica}}', {self.__version_column})"
+
+
+class Distributed(TableEngine):
+    def __init__(self, local_table_name: str, sharding_key: Optional[str]) -> None:
+        self.__local_table_name = local_table_name
+        self.__sharding_key = sharding_key
+
+    def get_sql(self, storage_set_key: StorageSetKey, table_name: str) -> str:
+        cluster = get_cluster(storage_set_key)
+        cluster_name = cluster.get_cluster_name()
+        assert (
+            cluster_name is not None
+        ), "Cluster name must be set for Distributed engine"
+        database_name = cluster.get_database()
+        optional_sharding_key = (
+            f", {self.__sharding_key}" if self.__sharding_key else ""
+        )
+
+        return f"Distributed({cluster_name}, {database_name}, {self.__local_table_name}{optional_sharding_key})"

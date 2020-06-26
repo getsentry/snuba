@@ -68,6 +68,7 @@ class CreateTable(SqlOperation):
         columns: Sequence[Column],
         engine: TableEngine,
     ):
+        self.__storage_set_key = storage_set
         self.__table_name = table_name
         self.__columns = columns
         self.__engine = engine
@@ -75,8 +76,6 @@ class CreateTable(SqlOperation):
 
     def format_sql(self) -> str:
         columns = ", ".join([col.for_schema() for col in self.__columns])
-        engine = self.__engine.get_sql(
-            get_cluster(self._storage_set).is_single_node(), self.__table_name
-        )
+        engine = self.__engine.get_sql(self.__storage_set_key, self.__table_name)
 
         return f"CREATE TABLE IF NOT EXISTS {self.__table_name} ({columns}) ENGINE {engine};"
