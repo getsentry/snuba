@@ -17,7 +17,6 @@ from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.worker import SubscriptionWorker
-from snuba.utils.codecs import PassthroughCodec
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.streams.batching import BatchingConsumer
 from snuba.utils.streams.kafka import (
@@ -138,7 +137,6 @@ def subscriptions(
                     consumer_group,
                     auto_offset_reset=auto_offset_reset,
                 ),
-                PassthroughCodec(),
             ),
             KafkaConsumer(
                 build_kafka_consumer_configuration(
@@ -146,7 +144,6 @@ def subscriptions(
                     f"subscriptions-commit-log-{uuid.uuid1().hex}",
                     auto_offset_reset="earliest",
                 ),
-                PassthroughCodec(),
             ),
             (
                 Topic(commit_log_topic)

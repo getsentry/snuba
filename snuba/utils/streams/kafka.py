@@ -32,12 +32,11 @@ from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
-from snuba.utils.codecs import Codec
 from snuba.utils.concurrent import execute
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
 from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
 from snuba.utils.streams.producer import Producer
-from snuba.utils.streams.types import Message, Partition, Topic, TPayload
+from snuba.utils.streams.types import Message, Partition, Topic
 
 
 logger = logging.getLogger(__name__)
@@ -125,7 +124,7 @@ def as_kafka_configuration_bool(value: Any) -> bool:
     raise TypeError(f"cannot interpret {value!r} as boolean")
 
 
-class KafkaConsumer(Consumer[TPayload]):
+class KafkaConsumer(Consumer[KafkaPayload]):
     """
     The behavior of this consumer differs slightly from the Confluent
     consumer during rebalancing operations. Whenever a partition is assigned
@@ -165,7 +164,6 @@ class KafkaConsumer(Consumer[TPayload]):
     def __init__(
         self,
         configuration: Mapping[str, Any],
-        codec: Codec[KafkaPayload, TPayload],
         *,
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
@@ -209,8 +207,6 @@ class KafkaConsumer(Consumer[TPayload]):
         self.__consumer = ConfluentConsumer(
             {**configuration, "auto.offset.reset": "error"}
         )
-
-        self.__codec = codec
 
         self.__offsets: MutableMapping[Partition, int] = {}
         self.__staged_offsets: MutableMapping[Partition, int] = {}
@@ -365,7 +361,7 @@ class KafkaConsumer(Consumer[TPayload]):
 
         self.__consumer.unsubscribe()
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message[KafkaPayload]]:
         """
         Return the next message available to be consumed, if one is
         available. If no message is available, this method will block up to
@@ -419,12 +415,8 @@ class KafkaConsumer(Consumer[TPayload]):
         result = Message(
             Partition(Topic(message.topic()), message.partition()),
             message.offset(),
-            self.__codec.decode(
-                KafkaPayload(
-                    message.key(),
-                    message.value(),
-                    headers if headers is not None else [],
-                )
+            KafkaPayload(
+                message.key(), message.value(), headers if headers is not None else [],
             ),
             datetime.utcfromtimestamp(message.timestamp()[1] / 1000.0),
         )
@@ -663,22 +655,21 @@ def build_kafka_consumer_configuration(
 from snuba.utils.streams.synchronized import Commit, commit_codec
 
 
-class KafkaConsumerWithCommitLog(KafkaConsumer[TPayload]):
+class KafkaConsumerWithCommitLog(KafkaConsumer):
     def __init__(
         self,
         configuration: Mapping[str, Any],
-        codec: Codec[KafkaPayload, TPayload],
         *,
         producer: ConfluentProducer,
         commit_log_topic: Topic,
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
-        super().__init__(configuration, codec, commit_retry_policy=commit_retry_policy)
+        super().__init__(configuration, commit_retry_policy=commit_retry_policy)
         self.__producer = producer
         self.__commit_log_topic = commit_log_topic
         self.__group_id = configuration["group.id"]
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message[KafkaPayload]]:
         self.__producer.poll(0.0)
         return super().poll(timeout)
 

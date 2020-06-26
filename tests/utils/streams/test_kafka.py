@@ -9,7 +9,6 @@ import pytest
 from confluent_kafka.admin import AdminClient, NewTopic
 
 from snuba import settings
-from snuba.utils.codecs import PassthroughCodec
 from snuba.utils.streams.consumer import ConsumerError, EndOfPartition
 from snuba.utils.streams.kafka import (
     KafkaConsumer,
@@ -40,7 +39,6 @@ def test_payload_equality() -> None:
 class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
 
     configuration = {"bootstrap.servers": ",".join(settings.DEFAULT_BROKERS)}
-    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
 
     @contextlib.contextmanager
     def get_topic(self, partitions: int = 1) -> Iterator[Topic]:
@@ -63,7 +61,7 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
         group: Optional[str] = None,
         enable_end_of_partition: bool = True,
         auto_offset_reset: str = "earliest",
-    ) -> KafkaConsumer[KafkaPayload]:
+    ) -> KafkaConsumer:
         return KafkaConsumer(
             {
                 **self.configuration,
@@ -74,7 +72,6 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
                 "group.id": group if group is not None else uuid.uuid1().hex,
                 "session.timeout.ms": 10000,
             },
-            self.codec,
         )
 
     def get_producer(self) -> KafkaProducer:
@@ -129,7 +126,7 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
         # a mock.
         commit_log_producer = FakeConfluentKafkaProducer()
 
-        consumer: KafkaConsumer[KafkaPayload] = KafkaConsumerWithCommitLog(
+        consumer: KafkaConsumer = KafkaConsumerWithCommitLog(
             {
                 **self.configuration,
                 "auto.offset.reset": "earliest",
@@ -139,7 +136,6 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
                 "group.id": "test",
                 "session.timeout.ms": 10000,
             },
-            codec=self.codec,
             producer=commit_log_producer,
             commit_log_topic=Topic("commit-log"),
         )
