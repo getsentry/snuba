@@ -4,17 +4,19 @@ from snuba.migrations.table_engines import MergeTree, ReplacingMergeTree, TableE
 
 
 test_cases = [
-    (
+    pytest.param(
         MergeTree(order_by="timestamp"),
         "MergeTree() ORDER BY timestamp",
-        "ReplicatedMergeTree('/clickhouse/tables/{layer}-{shard})/test_table', '{replica}') ORDER BY timestamp",
+        "ReplicatedMergeTree('/clickhouse/tables/{layer}-{shard})/test_table', '{replica}') ORDER BY timestampa",
+        id="Merge tree",
     ),
-    (
+    pytest.param(
         MergeTree(order_by="date", settings={"index_granularity": "256"}),
         "MergeTree() ORDER BY date SETTINGS index_granularity=256",
         "ReplicatedMergeTree('/clickhouse/tables/{layer}-{shard})/test_table', '{replica}') ORDER BY date SETTINGS index_granularity=256",
+        id="Merge tree with settings",
     ),
-    (
+    pytest.param(
         ReplacingMergeTree(
             version_column="timestamp",
             order_by="timestamp",
@@ -24,6 +26,7 @@ test_cases = [
         ),
         "ReplacingMergeTree(timestamp) ORDER BY timestamp PARTITION BY (toMonday(timestamp)) SAMPLE BY id TTL timestamp + INTERVAL 1 MONTH",
         "ReplicatedReplacingMergeTree('/clickhouse/tables/{layer}-{shard})/test_table', '{replica}', timestamp) ORDER BY timestamp PARTITION BY (toMonday(timestamp)) SAMPLE BY id TTL timestamp + INTERVAL 1 MONTH",
+        id="Replicated merge tree with partition, sample, ttl clauses",
     ),
 ]
 
