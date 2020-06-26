@@ -7,7 +7,7 @@ test_cases = [
     pytest.param(
         MergeTree(order_by="timestamp"),
         "MergeTree() ORDER BY timestamp",
-        "ReplicatedMergeTree('/clickhouse/tables/{layer}-{shard})/test_table', '{replica}') ORDER BY timestampa",
+        "ReplicatedMergeTree('/clickhouse/tables/{layer}-{shard})/test_table', '{replica}') ORDER BY timestamp",
         id="Merge tree",
     ),
     pytest.param(
