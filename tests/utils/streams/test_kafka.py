@@ -78,8 +78,8 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
             self.codec,
         )
 
-    def get_producer(self) -> KafkaProducer[KafkaPayload]:
-        return KafkaProducer(self.configuration, self.codec)
+    def get_producer(self) -> KafkaProducer:
+        return KafkaProducer(self.configuration)
 
     def get_payloads(self) -> Iterator[KafkaPayload]:
         for i in itertools.count():

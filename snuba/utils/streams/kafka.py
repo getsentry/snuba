@@ -730,12 +730,9 @@ class KafkaConsumerWithCommitLog(KafkaConsumer[TPayload]):
             raise TimeoutError(f"{messages} commit log messages pending delivery")
 
 
-class KafkaProducer(Producer[TPayload]):
-    def __init__(
-        self, configuration: Mapping[str, Any], codec: Codec[KafkaPayload, TPayload]
-    ) -> None:
+class KafkaProducer(Producer[KafkaPayload]):
+    def __init__(self, configuration: Mapping[str, Any]) -> None:
         self.__configuration = configuration
-        self.__codec = codec
 
         self.__producer = ConfluentProducer(configuration)
         self.__shutdown_requested = Event()
@@ -759,8 +756,8 @@ class KafkaProducer(Producer[TPayload]):
 
     def __delivery_callback(
         self,
-        future: Future[Message[TPayload]],
-        payload: TPayload,
+        future: Future[Message[KafkaPayload]],
+        payload: KafkaPayload,
         error: KafkaError,
         message: ConfluentMessage,
     ) -> None:
@@ -784,8 +781,8 @@ class KafkaProducer(Producer[TPayload]):
                 future.set_exception(error)
 
     def produce(
-        self, destination: Union[Topic, Partition], payload: TPayload
-    ) -> Future[Message[TPayload]]:
+        self, destination: Union[Topic, Partition], payload: KafkaPayload,
+    ) -> Future[Message[KafkaPayload]]:
         if self.__shutdown_requested.is_set():
             raise RuntimeError("producer has been closed")
 
@@ -800,14 +797,12 @@ class KafkaProducer(Producer[TPayload]):
         else:
             raise TypeError("invalid destination type")
 
-        encoded = self.__codec.encode(payload)
-
-        future: Future[Message[TPayload]] = Future()
+        future: Future[Message[KafkaPayload]] = Future()
         future.set_running_or_notify_cancel()
         produce(
-            value=encoded.value,
-            key=encoded.key,
-            headers=encoded.headers,
+            value=payload.value,
+            key=payload.key,
+            headers=payload.headers,
             on_delivery=partial(self.__delivery_callback, future, payload),
         )
         return future
