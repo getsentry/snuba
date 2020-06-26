@@ -258,8 +258,6 @@ def _expand_aliases(query: Query) -> None:
     take care of not introducing shadowing (easy to enforce at runtime),
     otherwise aliasing is transparent to them.
     """
-    if not state.get_config("query_parsing_expand_aliases", 0):
-        return
     # Pre-inline all nested aliases. This reduces the number of iterations
     # we need to do on the query.
     # Example:

@@ -2,17 +2,17 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from contextlib import closing
-from typing import ContextManager, Mapping, Optional, Sequence
+from typing import ContextManager, Generic, Iterator, Mapping, Optional, Sequence
 
 import pytest
 
 from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
 from snuba.utils.streams.producer import Producer
-from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 from tests.assertions import assert_changes, assert_does_not_change
 
 
-class StreamsTestMixin(ABC):
+class StreamsTestMixin(ABC, Generic[TPayload]):
     @abstractmethod
     def get_topic(self, partitions: int = 1) -> ContextManager[Topic]:
         raise NotImplementedError
@@ -20,21 +20,28 @@ class StreamsTestMixin(ABC):
     @abstractmethod
     def get_consumer(
         self, group: Optional[str] = None, enable_end_of_partition: bool = True
-    ) -> Consumer[int]:
+    ) -> Consumer[TPayload]:
         raise NotImplementedError
 
     @abstractmethod
-    def get_producer(self) -> Producer[int]:
+    def get_producer(self) -> Producer[TPayload]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_payloads(self) -> Iterator[TPayload]:
         raise NotImplementedError
 
     def test_consumer(self) -> None:
         group = uuid.uuid1().hex
+        payloads = self.get_payloads()
 
         with self.get_topic() as topic:
             with closing(self.get_producer()) as producer:
-                messages: Sequence[Message[int]] = [
+                messages = [
                     future.result(timeout=5.0)
-                    for future in [producer.produce(topic, i) for i in range(2)]
+                    for future in [
+                        producer.produce(topic, next(payloads)) for i in range(2)
+                    ]
                 ]
 
             consumer = self.get_consumer(group)
@@ -67,7 +74,7 @@ class StreamsTestMixin(ABC):
             assert isinstance(message, Message)
             assert message.partition == Partition(topic, 0)
             assert message.offset == messages[1].offset
-            assert message.payload == 1
+            assert message.payload == messages[1].payload
 
             assert consumer.tell() == {Partition(topic, 0): message.get_next_offset()}
             assert getattr(assignment_callback, "called", False)
@@ -90,7 +97,7 @@ class StreamsTestMixin(ABC):
             assert isinstance(message, Message)
             assert message.partition == Partition(topic, 0)
             assert message.offset == messages[0].offset
-            assert message.payload == 0
+            assert message.payload == messages[0].payload
 
             assert consumer.commit_offsets() == {}
 
@@ -158,7 +165,7 @@ class StreamsTestMixin(ABC):
             assert isinstance(message, Message)
             assert message.partition == Partition(topic, 0)
             assert message.offset == messages[1].offset
-            assert message.payload == 1
+            assert message.payload == messages[1].payload
 
             try:
                 assert consumer.poll(1.0) is None
@@ -171,9 +178,11 @@ class StreamsTestMixin(ABC):
             consumer.close()
 
     def test_working_offsets(self) -> None:
+        payloads = self.get_payloads()
+
         with self.get_topic() as topic:
             with closing(self.get_producer()) as producer:
-                messages = [producer.produce(topic, 0).result(5.0)]
+                messages = [producer.produce(topic, next(payloads)).result(5.0)]
 
             def on_assign(partitions: Mapping[Partition, int]) -> None:
                 # NOTE: This will eventually need to be controlled by a generalized
@@ -188,7 +197,7 @@ class StreamsTestMixin(ABC):
             consumer.subscribe([topic], on_assign=on_assign)
 
             for i in range(5):
-                message: Optional[Message[int]] = consumer.poll(1.0)
+                message = consumer.poll(1.0)
                 if message is not None:
                     break
                 else:
@@ -256,11 +265,14 @@ class StreamsTestMixin(ABC):
                 consumer.seek({message.partition: -1})
 
     def test_pause_resume(self) -> None:
+        payloads = self.get_payloads()
+
         with self.get_topic() as topic, closing(
             self.get_consumer()
         ) as consumer, closing(self.get_producer()) as producer:
-            messages: Sequence[Message[int]] = [
-                producer.produce(topic, i).result(timeout=5.0) for i in range(5)
+            messages = [
+                producer.produce(topic, next(payloads)).result(timeout=5.0)
+                for i in range(5)
             ]
 
             consumer.subscribe([topic])
@@ -324,6 +336,8 @@ class StreamsTestMixin(ABC):
                 consumer.resume([Partition(topic, 0), Partition(topic, 1)])
 
     def test_pause_resume_rebalancing(self) -> None:
+        payloads = self.get_payloads()
+
         with self.get_topic(2) as topic, closing(
             self.get_producer()
         ) as producer, closing(
@@ -331,8 +345,10 @@ class StreamsTestMixin(ABC):
         ) as consumer_a, closing(
             self.get_consumer("group", enable_end_of_partition=False)
         ) as consumer_b:
-            messages: Sequence[Message[int]] = [
-                producer.produce(Partition(topic, i), i).result(timeout=5.0)
+            messages = [
+                producer.produce(Partition(topic, i), next(payloads)).result(
+                    timeout=5.0
+                )
                 for i in range(2)
             ]
 
