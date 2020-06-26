@@ -24,6 +24,19 @@ from tests.utils.streams.mixins import StreamsTestMixin
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
 
+def test_payload_equality() -> None:
+    assert KafkaPayload(None, b"") == KafkaPayload(None, b"")
+    assert KafkaPayload(b"key", b"value") == KafkaPayload(b"key", b"value")
+    assert KafkaPayload(None, b"", [("key", b"value")]) == KafkaPayload(
+        None, b"", [("key", b"value")]
+    )
+    assert not KafkaPayload(None, b"a") == KafkaPayload(None, b"b")
+    assert not KafkaPayload(b"this", b"") == KafkaPayload(b"that", b"")
+    assert not KafkaPayload(None, b"", [("key", b"this")]) == KafkaPayload(
+        None, b"", [("key", b"that")]
+    )
+
+
 class TestCodec(Codec[KafkaPayload, int]):
     def encode(self, value: int) -> KafkaPayload:
         return KafkaPayload(None, f"{value}".encode("utf-8"))
