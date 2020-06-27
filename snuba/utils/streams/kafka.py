@@ -62,6 +62,11 @@ Headers = Sequence[Tuple[str, bytes]]
 
 
 class KafkaPayload:
+    # XXX: This is not a dataclass since dataclasses do not support classes
+    # with __slots__ *and* default values. Since we create a lot of these
+    # objects, it's probably more important to preserve their performance and
+    # memory impact than it is their developer friendliness (unfortunately.)
+
     __slots__ = ["__key", "__value", "__headers"]
 
     def __init__(
@@ -82,6 +87,16 @@ class KafkaPayload:
     @property
     def headers(self) -> Headers:
         return self.__headers
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, KafkaPayload):
+            return False
+        else:
+            return (
+                self.key == other.key
+                and self.value == other.value
+                and self.headers == other.headers
+            )
 
 
 def as_kafka_configuration_bool(value: Any) -> bool:

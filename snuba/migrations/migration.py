@@ -58,6 +58,9 @@ class MultiStepMigration(Migration, ABC):
     each. Generally if the intermediate state between operations is not considered to
     be valid, they should be put into the same migration. If the operations are
     completely unrelated, they are probably better as separate migrations.
+
+    TODO: This class should be extended to also run the forwards and backwards distributed
+    operations where relevant.
     """
 
     @abstractmethod
