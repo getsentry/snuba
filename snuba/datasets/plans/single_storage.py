@@ -113,6 +113,7 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                 db_query_processors=[
                     *self.__storage.get_query_processors(),
                     *self.__post_processors,
+                    MandatoryConditionApplier(),
                 ],
                 splitters=self.__storage.get_query_splitters(),
             ),
