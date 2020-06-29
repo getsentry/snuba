@@ -44,7 +44,7 @@ sentry-relay>=0.5.7,<0.6.0
 sentry-sdk==0.13.5
 simplejson==3.15.0
 typing-extensions==3.7.4.1
-urllib3==1.25.3
+urllib3==1.25.8
 uWSGI==2.0.18
 wcwidth==0.1.7
 Werkzeug==0.15.3
