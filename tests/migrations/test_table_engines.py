@@ -5,7 +5,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import table_engines
 
 
-def test_setup_function() -> None:
+def setup_function() -> None:
     from snuba import settings
     from snuba.clusters import cluster
 
@@ -39,6 +39,14 @@ def test_setup_function() -> None:
             "distributed_cluster_name": "dist_hosts",
         },
     ]
+    importlib.reload(cluster)
+
+
+def teardown_function() -> None:
+    from snuba import settings
+    from snuba.clusters import cluster
+
+    importlib.reload(settings)
     importlib.reload(cluster)
 
 
