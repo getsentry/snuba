@@ -122,9 +122,11 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         "eventstore.get_unfetched_events": 100,
         "api.organization-events": 100,
         "api.group-events": 100,
+        "Group.get_latest": 100,
         # Higher volume tag queries
         "tagstore.__get_tag_key_and_top_values": 100,
         "tagstore.__get_tag_keys_and_top_values": 100,
+        "tagstore.__get_release": 100,
     },
     "transactions": {
         # Simple time bucketed queries
