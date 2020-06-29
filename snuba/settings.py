@@ -1,5 +1,5 @@
 import os
-from typing import Any, Mapping, MutableMapping, Sequence, Set
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
 
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
@@ -101,6 +101,38 @@ TURBO_SAMPLE_RATE = 0.1
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
+
+AST_DATASET_ROLLOUT: Mapping[str, int] = {
+    "outcomes": 100,
+}  # (dataset name: percentage)
+AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
+    "events": {
+        # Simple queries without splitting or user customizations
+        "Group.filter_by_event_id": 100,
+        "api.group-hashes": 100,
+        # Simple time bucketed queries
+        "api.organization-events-stats": 100,
+        "incidents.get_incident_event_stats": 100,
+        "incidents.get_incident_aggregates": 100,
+        # Queries with tags resolution
+        "tagstore.get_tag_value_paginator_for_projects": 100,
+        "tagstore.get_group_tag_value_iter": 100,
+        # Time/column split queries
+        "api.organization-events-direct-hit": 100,
+        "eventstore.get_unfetched_events": 100,
+        "api.organization-events": 100,
+        "api.group-events": 100,
+        # Higher volume tag queries
+        "tagstore.__get_tag_key_and_top_values": 100,
+        "tagstore.__get_tag_keys_and_top_values": 100,
+    },
+    "transactions": {
+        # Simple time bucketed queries
+        "incidents.get_incident_event_stats": 100,
+        # Queries with tags resolution
+        "incidents.get_incident_aggregates": 100,
+    },
+}  # (dataset name: (referrer: percentage))
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

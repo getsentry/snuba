@@ -251,11 +251,7 @@ def test_error_processor() -> None:
             "this_is_me",
             "snuba",
         ],
-        "_tags_flattened": (
-            "|environment=dev||handled=no||level=error||mechanism=excepthook|"
-            "|runtime=CPython 3.7.6||runtime.name=CPython|"
-            "|sentry:release=4d23338017cdee67daf25f2c||sentry:user=this_is_me||server_name=snuba|"
-        ),
+        "_tags_flattened": "",
         "contexts.key": [
             "runtime.version",
             "runtime.name",
@@ -276,11 +272,7 @@ def test_error_processor() -> None:
             "POST",
             "tagstore.something",
         ],
-        "_contexts_flattened": (
-            "|geo.city=fake_city||geo.country_code=XY||geo.region=fake_region|"
-            "|request.http_method=POST||request.http_referer=tagstore.something|"
-            "|runtime.build=3.7.6||runtime.name=CPython||runtime.version=3.7.6|"
-        ),
+        "_contexts_flattened": "",
         "partition": 1,
         "offset": 2,
         "message_timestamp": datetime(1970, 1, 1),

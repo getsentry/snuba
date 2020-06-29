@@ -23,7 +23,7 @@ from deprecation import deprecated
 from snuba.clickhouse.escaping import SAFE_COL_RE
 from snuba.datasets.schemas import RelationalSource
 from snuba.query.conditions import BooleanFunctions, binary_condition
-from snuba.query.expressions import Column, Expression
+from snuba.query.expressions import Column, Expression, ExpressionVisitor
 from snuba.query.types import Condition
 from snuba.util import columns_in_expr, is_condition, to_list
 
@@ -164,6 +164,36 @@ class Query:
             map(
                 lambda clause: replace(
                     clause, expression=clause.expression.transform(func)
+                ),
+                self.__order_by,
+            )
+        )
+
+    def transform(self, visitor: ExpressionVisitor[Expression]) -> None:
+        """
+        Applies a transformation, defined through a Visitor, to the
+        entire query. Here the visitor is supposed to return a new
+        Expression and it is applied to each root Expression in this
+        query, where a root Expression is an Expression that does not
+        have another Expression as parent.
+        The transformation happens in place.
+        """
+        self.__selected_columns = [
+            e.accept(visitor) for e in (self.__selected_columns or [])
+        ]
+        if self.__array_join is not None:
+            self.__array_join = self.__array_join.accept(visitor)
+        if self.__condition is not None:
+            self.__condition = self.__condition.accept(visitor)
+        if self.__prewhere is not None:
+            self.__prewhere = self.__prewhere.accept(visitor)
+        self.__groupby = [e.accept(visitor) for e in (self.__groupby or [])]
+        if self.__having is not None:
+            self.__having = self.__having.accept(visitor)
+        self.__order_by = list(
+            map(
+                lambda clause: replace(
+                    clause, expression=clause.expression.accept(visitor)
                 ),
                 self.__order_by,
             )
@@ -533,3 +563,38 @@ class Query:
                     to_list(self.get_conditions()), old_column, new_column,
                 )
             )
+
+    def validate_aliases(self) -> bool:
+        """
+        Returns true if all the alias reference in this query can be resolved.
+
+        Which means, they are either declared somewhere in the query itself
+        or they are referencing columns in the table.
+
+        Caution: for this to work, data_source needs to be already populated,
+        otherwise it would throw.
+        """
+        declared_symbols: Set[str] = set()
+        referenced_symbols: Set[str] = set()
+        for e in self.get_all_expressions():
+            # SELECT f(g(x)) as A -> declared_symbols = {A}
+            # SELECT a as B -> declared_symbols = {B} referenced_symbols = {a}
+            # SELECT a AS a -> referenced_symbols = {a}
+            if e.alias:
+                if isinstance(e, Column):
+                    qualified_col_name = (
+                        e.column_name
+                        if not e.table_name
+                        else f"{e.table_name}.{e.column_name}"
+                    )
+                    referenced_symbols.add(qualified_col_name)
+                    if e.alias != qualified_col_name:
+                        declared_symbols.add(e.alias)
+                else:
+                    declared_symbols.add(e.alias)
+            else:
+                if isinstance(e, Column) and not e.alias and not e.table_name:
+                    referenced_symbols.add(e.column_name)
+
+        declared_symbols |= {c.flattened for c in self.get_data_source().get_columns()}
+        return not referenced_symbols - declared_symbols

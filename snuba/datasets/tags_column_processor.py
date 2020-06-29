@@ -7,7 +7,7 @@ from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.query.logical import Query
-from snuba.query.parser.strings import NESTED_COL_EXPR_RE
+from snuba.query.parser import NESTED_COL_EXPR_RE
 from snuba.query.parsing import ParsingContext
 from snuba.query.types import Condition
 from snuba.util import (
@@ -145,7 +145,7 @@ class TagColumnProcessor:
                 return qualified_column(self.__string_col(actual_tag), table_alias)
 
         # For the rest, return an expression that looks it up in the nested tags.
-        return "{col}.value[indexOf({col}.key, {tag})]".format(
+        return "arrayElement({col}.value, indexOf({col}.key, {tag}))".format(
             **{
                 "col": qualified_column(col, table_alias),
                 "tag": escape_literal(tag_name),
@@ -256,9 +256,7 @@ class TagColumnProcessor:
             # on (key, value) tag tuples.
             mapping = f"arrayMap((x,y) -> [x,y], {key_list}, {val_list})"
             if filter_tags:
-                filtering = (
-                    f"arrayFilter(pair -> pair[1] IN ({filter_tags}), {mapping})"
-                )
+                filtering = f"arrayFilter(pair -> in(arrayElement(pair, 1), tuple({filter_tags})), {mapping})"
             else:
                 filtering = mapping
 
@@ -268,14 +266,12 @@ class TagColumnProcessor:
             # to refer to it next time (eg. 'all_tags[1] AS tags_key'). instead of
             # expanding the whole tags expression again.
             expr = alias_expr(expr, "all_tags", parsing_context)
-            return "({})[{}]".format(expr, 1 if k_or_v == "key" else 2)
+            return "arrayElement({}, {})".format(expr, 1 if k_or_v == "key" else 2)
         else:
             # If we are only ever going to use one of tags_key or tags_value, don't
             # bother creating the k/v tuples to arrayJoin on, or the all_tags alias
             # to re-use as we won't need it.
             if filter_tags:
-                return (
-                    f"arrayJoin(arrayFilter(tag -> tag IN ({filter_tags}), {key_list}))"
-                )
+                return f"arrayJoin(arrayFilter(tag -> in(tag, tuple({filter_tags})), {key_list}))"
             else:
                 return f"arrayJoin({key_list if k_or_v == 'key' else val_list})"

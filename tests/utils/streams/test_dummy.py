@@ -1,4 +1,5 @@
 import contextlib
+import itertools
 import uuid
 from typing import Iterator, Optional
 from unittest import TestCase
@@ -14,7 +15,7 @@ from snuba.utils.streams.types import Topic
 from tests.utils.streams.mixins import StreamsTestMixin
 
 
-class DummyStreamsTestCase(StreamsTestMixin, TestCase):
+class DummyStreamsTestCase(StreamsTestMixin[int], TestCase):
     def setUp(self) -> None:
         self.broker: DummyBroker[int] = DummyBroker()
 
@@ -35,6 +36,9 @@ class DummyStreamsTestCase(StreamsTestMixin, TestCase):
 
     def get_producer(self) -> DummyProducer[int]:
         return DummyProducer(self.broker)
+
+    def get_payloads(self) -> Iterator[int]:
+        return itertools.count()
 
     @pytest.mark.xfail(
         strict=True, reason="rebalancing not implemented", raises=NotImplementedError

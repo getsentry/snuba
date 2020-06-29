@@ -23,6 +23,7 @@ from snuba.datasets.factory import (
     enforce_table_writer,
     ensure_not_internal,
     get_dataset,
+    get_dataset_name,
     get_enabled_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
@@ -39,10 +40,9 @@ from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
-from snuba.web.converters import DatasetConverter
 from snuba.web import QueryException
+from snuba.web.converters import DatasetConverter
 from snuba.web.query import parse_and_run_query
-
 
 metrics = MetricsWrapper(environment.metrics, "api")
 
@@ -232,6 +232,13 @@ def parse_request_body(http_request):
             raise BadRequest(str(error)) from error
 
 
+def _trace_transaction(dataset: Dataset) -> None:
+    with sentry_sdk.configure_scope() as scope:
+        if scope.span:
+            scope.span.set_tag("dataset", get_dataset_name(dataset))
+            scope.span.set_tag("referrer", http_request.referrer)
+
+
 @application.route("/query", methods=["GET", "POST"])
 @util.time_request("query")
 def unqualified_query_view(*, timer: Timer):
@@ -240,6 +247,7 @@ def unqualified_query_view(*, timer: Timer):
     elif http_request.method == "POST":
         body = parse_request_body(http_request)
         dataset = get_dataset(body.pop("dataset", settings.DEFAULT_DATASET_NAME))
+        _trace_transaction(dataset)
         return dataset_query(dataset, body, timer)
     else:
         assert False, "unexpected fallthrough"
@@ -258,6 +266,7 @@ def dataset_query_view(*, dataset: Dataset, timer: Timer):
         )
     elif http_request.method == "POST":
         body = parse_request_body(http_request)
+        _trace_transaction(dataset)
         return dataset_query(dataset, body, timer)
     else:
         assert False, "unexpected fallthrough"
