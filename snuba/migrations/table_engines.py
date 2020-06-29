@@ -12,11 +12,21 @@ class TableEngine(ABC):
     """
 
     @abstractmethod
-    def get_sql(self) -> str:
+    def get_sql(self, single_node: bool, table_name: str) -> str:
         raise NotImplementedError
 
 
 class MergeTree(TableEngine):
+    """
+    Provides the SQL for create table operations.
+
+    If the operation is being performed on a cluster marked as multi node, the
+    replicated versions of the tables will be created instead of the regular ones.
+
+    The layer, shard and replica values will be taken from the macros configuration
+    for multi node clusters, so these need to be set prior to running the migration.
+    """
+
     def __init__(
         self,
         order_by: str,
@@ -31,8 +41,8 @@ class MergeTree(TableEngine):
         self.__ttl = ttl
         self.__settings = settings
 
-    def get_sql(self) -> str:
-        sql = f"{self._get_engine_type()} ORDER BY {self.__order_by}"
+    def get_sql(self, single_node: bool, table_name: str) -> str:
+        sql = f"{self._get_engine_type(single_node, table_name)} ORDER BY {self.__order_by}"
 
         if self.__partition_by:
             sql += f" PARTITION BY {self.__partition_by}"
@@ -49,8 +59,11 @@ class MergeTree(TableEngine):
 
         return sql
 
-    def _get_engine_type(self) -> str:
-        return "MergeTree()"
+    def _get_engine_type(self, single_node: bool, table_name: str) -> str:
+        if single_node:
+            return "MergeTree()"
+        else:
+            return f"ReplicatedMergeTree('/clickhouse/tables/{{layer}}-{{shard}})/{table_name}', '{{replica}}')"
 
 
 class ReplacingMergeTree(MergeTree):
@@ -66,5 +79,8 @@ class ReplacingMergeTree(MergeTree):
         super().__init__(order_by, partition_by, sample_by, ttl, settings)
         self.__version_column = version_column
 
-    def _get_engine_type(self) -> str:
-        return f"ReplacingMergeTree({self.__version_column})"
+    def _get_engine_type(self, single_node: bool, table_name: str) -> str:
+        if single_node:
+            return f"ReplacingMergeTree({self.__version_column})"
+        else:
+            return f"ReplicatedReplacingMergeTree('/clickhouse/tables/{{layer}}-{{shard}})/{table_name}', '{{replica}}', {self.__version_column})"
