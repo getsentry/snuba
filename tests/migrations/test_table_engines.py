@@ -1,82 +1,96 @@
+import importlib
 import pytest
-from typing import Any
-from unittest.mock import patch
 
-from snuba.clusters.cluster import ClickhouseCluster
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.migrations import table_engines
 
 
-@patch("snuba.clusters.cluster.get_cluster")
-def test_table_engines(get_cluster_mock: Any) -> None:
-    single_node_cluster = ClickhouseCluster(
-        "host", 9000, "user", "pass", "default", 3000, {"events"}, True
-    )
-    multi_node_cluster = ClickhouseCluster(
-        "host",
-        9000,
-        "user",
-        "pass",
-        "default",
-        3000,
-        {"transactions"},
-        False,
-        "cluster_1",
-        "dist_cluster_1",
-    )
+def test_setup_function() -> None:
+    from snuba import settings
+    from snuba.clusters import cluster
 
-    get_cluster_mock.side_effect = (
-        lambda storage_set: single_node_cluster
-        if storage_set == StorageSetKey.EVENTS
-        else multi_node_cluster
-    )
+    settings.CLUSTERS = [
+        {
+            "host": "host_1",
+            "port": 9000,
+            "user": "default",
+            "password": "",
+            "database": "default",
+            "http_port": 8123,
+            "storage_sets": {
+                "events",
+                "migrations",
+                "outcomes",
+                "querylog",
+                "sessions",
+            },
+            "single_node": True,
+        },
+        {
+            "host": "host_2",
+            "port": 9000,
+            "user": "default",
+            "password": "",
+            "database": "default",
+            "http_port": 8123,
+            "storage_sets": {"transactions"},
+            "single_node": False,
+            "cluster_name": "cluster_1",
+            "distributed_cluster_name": "dist_hosts",
+        },
+    ]
+    importlib.reload(cluster)
 
-    from snuba.migrations.table_engines import (
-        Distributed,
-        MergeTree,
-        ReplacingMergeTree,
-    )
 
-    for merge_test_case in [
-        (
-            MergeTree(order_by="timestamp"),
-            "MergeTree() ORDER BY timestamp",
-            "ReplicatedMergeTree('/clickhouse/tables/{layer}-{shard})/test_table', '{replica}') ORDER BY timestamp",
+merge_test_cases = [
+    pytest.param(
+        table_engines.MergeTree(order_by="timestamp"),
+        "MergeTree() ORDER BY timestamp",
+        "ReplicatedMergeTree('/clickhouse/tables/{layer}-{shard})/test_table', '{replica}') ORDER BY timestamp",
+        id="Merge tree",
+    ),
+    pytest.param(
+        table_engines.MergeTree(order_by="date", settings={"index_granularity": "256"}),
+        "MergeTree() ORDER BY date SETTINGS index_granularity=256",
+        "ReplicatedMergeTree('/clickhouse/tables/{layer}-{shard})/test_table', '{replica}') ORDER BY date SETTINGS index_granularity=256",
+        id="Merge tree with settings",
+    ),
+    pytest.param(
+        table_engines.ReplacingMergeTree(
+            version_column="timestamp",
+            order_by="timestamp",
+            partition_by="(toMonday(timestamp))",
+            sample_by="id",
+            ttl="timestamp + INTERVAL 1 MONTH",
         ),
-        (
-            MergeTree(order_by="date", settings={"index_granularity": "256"}),
-            "MergeTree() ORDER BY date SETTINGS index_granularity=256",
-            "ReplicatedMergeTree('/clickhouse/tables/{layer}-{shard})/test_table', '{replica}') ORDER BY date SETTINGS index_granularity=256",
-        ),
-        (
-            ReplacingMergeTree(
-                version_column="timestamp",
-                order_by="timestamp",
-                partition_by="(toMonday(timestamp))",
-                sample_by="id",
-                ttl="timestamp + INTERVAL 1 MONTH",
-            ),
-            "ReplacingMergeTree(timestamp) ORDER BY timestamp PARTITION BY (toMonday(timestamp)) SAMPLE BY id TTL timestamp + INTERVAL 1 MONTH",
-            "ReplicatedReplacingMergeTree('/clickhouse/tables/{layer}-{shard})/test_table', '{replica}', timestamp) ORDER BY timestamp PARTITION BY (toMonday(timestamp)) SAMPLE BY id TTL timestamp + INTERVAL 1 MONTH",
-        ),
-    ]:
-        assert (
-            merge_test_case[0].get_sql(StorageSetKey.EVENTS, "test_table")
-            == merge_test_case[1]
-        )
-        assert (
-            merge_test_case[0].get_sql(StorageSetKey.TRANSACTIONS, "test_table")
-            == merge_test_case[2]
-        )
+        "ReplacingMergeTree(timestamp) ORDER BY timestamp PARTITION BY (toMonday(timestamp)) SAMPLE BY id TTL timestamp + INTERVAL 1 MONTH",
+        "ReplicatedReplacingMergeTree('/clickhouse/tables/{layer}-{shard})/test_table', '{replica}', timestamp) ORDER BY timestamp PARTITION BY (toMonday(timestamp)) SAMPLE BY id TTL timestamp + INTERVAL 1 MONTH",
+        id="Replicated merge tree with partition, sample, ttl clauses",
+    ),
+]
 
-    for dist_test_case in [
-        (
-            Distributed(local_table_name="test_table_local", sharding_key="event_id"),
-            "Distributed(cluster_1, default, test_table_local, event_id)",
-        )
-    ]:
-        with pytest.raises(AssertionError):
-            dist_test_case[0].get_sql(StorageSetKey.EVENTS, "test_table")
-        assert (
-            dist_test_case[0].get_sql(StorageSetKey.TRANSACTIONS, "test_table")
-            == dist_test_case[1]
-        )
+
+@pytest.mark.parametrize("engine, single_node_sql, multi_node_sql", merge_test_cases)
+def test_merge_table(
+    engine: table_engines.TableEngine, single_node_sql: str, multi_node_sql: str
+) -> None:
+    assert engine.get_sql(StorageSetKey.EVENTS, "test_table") == single_node_sql
+    assert engine.get_sql(StorageSetKey.TRANSACTIONS, "test_table") == multi_node_sql
+
+
+dist_test_cases = [
+    pytest.param(
+        table_engines.Distributed(
+            local_table_name="test_table_local", sharding_key="event_id"
+        ),
+        "Distributed(cluster_1, default, test_table_local, event_id)",
+        id="Disributed",
+    )
+]
+
+
+@pytest.mark.parametrize("engine, sql", dist_test_cases)
+def test_distributed(engine: table_engines.TableEngine, sql: str) -> None:
+    with pytest.raises(AssertionError):
+        engine.get_sql(StorageSetKey.EVENTS, "test_table")
+    assert engine.get_sql(StorageSetKey.TRANSACTIONS, "test_table") == sql

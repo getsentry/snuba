@@ -97,9 +97,8 @@ class Distributed(TableEngine):
     def get_sql(self, storage_set_key: StorageSetKey, table_name: str) -> str:
         cluster = get_cluster(storage_set_key)
         cluster_name = cluster.get_cluster_name()
-        assert (
-            cluster_name is not None
-        ), "Cluster name must be set for Distributed engine"
+        assert not cluster.is_single_node()
+        assert cluster_name is not None
         database_name = cluster.get_database()
         optional_sharding_key = (
             f", {self.__sharding_key}" if self.__sharding_key else ""
