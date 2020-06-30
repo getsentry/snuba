@@ -163,45 +163,6 @@ class TestEventsProcessor(BaseEventsTest):
             "location": "bar.py",
         }
 
-    def test_extract_common_search_message(self):
-        now = datetime.utcnow().replace(microsecond=0)
-        event = {
-            "primary_hash": "a" * 32,
-            "message": "the message",
-            "platform": "the_platform",
-            "search_message": "the search message",
-            "data": {"received": int(calendar.timegm(now.timetuple()))},
-        }
-        output = {}
-        processor = (
-            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
-        )
-        processor.extract_common(output, event)
-        processor.extract_custom(output, event)
-
-        assert output["search_message"] == "the search message"
-
-        # with optional short message
-        now = datetime.utcnow().replace(microsecond=0)
-        event = {
-            "primary_hash": "a" * 32,
-            "message": "the message",
-            "platform": "the_platform",
-            "search_message": "the search message",
-            "data": {
-                "received": int(calendar.timegm(now.timetuple())),
-                "message": "the short message",
-            },
-        }
-        output = {}
-        processor = (
-            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
-        )
-        processor.extract_common(output, event)
-        processor.extract_custom(output, event)
-        assert output["search_message"] == "the search message"
-        assert output["message"] == "the short message"
-
     def test_v1_delete_groups_skipped(self):
         assert (
             enforce_table_writer(self.dataset)

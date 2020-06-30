@@ -47,30 +47,8 @@ class EventsProcessor(EventsProcessorBase):
         metadata: Optional[KafkaMessageMetadata] = None,
     ) -> None:
         data = event.get("data", {})
-        # The following concerns the change to message/search_message
-        # There are 2 Scenarios:
-        #   Pre-rename:
-        #        - Payload contains:
-        #             "message": "a long search message"
-        #        - Does NOT contain a `search_message` property
-        #        - "message" value saved in `message` column
-        #        - `search_message` column nonexistent or Null
-        #   Post-rename:
-        #        - Payload contains:
-        #             "search_message": "a long search message"
-        #        - Optionally the payload's "data" dict (event body) contains:
-        #             "message": "short message"
-        #        - "search_message" value stored in `search_message` column
-        #        - "message" value stored in `message` column
-        #
-        output["search_message"] = _unicodify(event.get("search_message", None))
-        if output["search_message"] is None:
-            # Pre-rename scenario, we expect to find "message" at the top level
-            output["message"] = _unicodify(event["message"])
-        else:
-            # Post-rename scenario, we check in case we have the optional
-            # "message" in the event body.
-            output["message"] = _unicodify(data.get("message", None))
+
+        output["message"] = _unicodify(event["message"])
 
         # USER REQUEST GEO
         user = data.get("user", data.get("sentry.interfaces.User", None)) or {}
