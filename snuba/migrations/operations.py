@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Sequence
+from typing import Optional, Sequence
 
 
 from snuba.clickhouse.columns import Column
@@ -38,8 +38,8 @@ class SqlOperation(Operation, ABC):
 
 class RunSql(SqlOperation):
     def __init__(self, storage_set: StorageSetKey, statement: str) -> None:
-        self.statement = statement
         super().__init__(storage_set)
+        self.statement = statement
 
     def format_sql(self) -> str:
         return self.statement
@@ -47,8 +47,8 @@ class RunSql(SqlOperation):
 
 class DropTable(SqlOperation):
     def __init__(self, storage_set: StorageSetKey, table_name: str) -> None:
-        self.table_name = table_name
         super().__init__(storage_set)
+        self.table_name = table_name
 
     def format_sql(self) -> str:
         return f"DROP TABLE IF EXISTS {self.table_name};"
@@ -68,10 +68,10 @@ class CreateTable(SqlOperation):
         columns: Sequence[Column],
         engine: TableEngine,
     ):
+        super().__init__(storage_set)
         self.__table_name = table_name
         self.__columns = columns
         self.__engine = engine
-        super().__init__(storage_set)
 
     def format_sql(self) -> str:
         columns = ", ".join([col.for_schema() for col in self.__columns])
@@ -101,3 +101,113 @@ class CreateMaterializedView(SqlOperation):
         columns = ", ".join([col.for_schema() for col in self.__columns])
 
         return f"CREATE MATERIALIZED VIEW IF NOT EXISTS {self.__view_name} TO {self.__destination_table_name} ({columns}) AS {self.__query};"
+
+
+class AddColumn(SqlOperation):
+    """
+    Adds a column to a table.
+    """
+
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        column: Column,
+        after: Optional[str],
+    ):
+        super().__init__(storage_set)
+        self.__table_name = table_name
+        self.__column = column
+        self.__after = after
+
+    def format_sql(self) -> str:
+        column = self.__column.for_schema()
+        optional_after_clause = (
+            f" AFTER {self.__after}" if self.__after is not None else ""
+        )
+        return f"ALTER TABLE {self.__table_name} ADD COLUMN IF NOT EXISTS {column}{optional_after_clause};"
+
+
+class DropColumn(SqlOperation):
+    """
+    Drops a column from a table.
+
+    You cannot drop a column that is part of the the primary key or the sampling
+    key in the engine expression.
+    """
+
+    def __init__(self, storage_set: StorageSetKey, table_name: str, column_name: str):
+        super().__init__(storage_set)
+        self.__table_name = table_name
+        self.__column_name = column_name
+
+    def format_sql(self) -> str:
+        return f"ALTER TABLE {self.__table_name} DROP COLUMN IF EXISTS {self.__column_name};"
+
+
+class ModifyColumn(SqlOperation):
+    """
+    Modify a column in a table.
+
+    For columns that are included in the primary key, you can only change the type
+    if it doesn't modify the data. e.g. You can add values to an Enum or change a
+    type from DateTime to UInt32.
+    """
+
+    def __init__(self, storage_set: StorageSetKey, table_name: str, column: Column):
+        super().__init__(storage_set)
+        self.__table_name = table_name
+        self.__column = column
+
+    def format_sql(self) -> str:
+        column = self.__column.for_schema()
+        return f"ALTER TABLE {self.__table_name} MODIFY COLUMN {column};"
+
+
+class AddIndex(SqlOperation):
+    """
+    Adds an index.
+
+    Only works with the MergeTree family of tables.
+
+    In ClickHouse versions prior to 20.1.2.4, this requires setting
+    allow_experimental_data_skipping_indices = 1
+    """
+
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        index_name: str,
+        index_expression: str,
+        index_type: str,
+        granularity: int,
+        after: Optional[str],
+    ):
+        super().__init__(storage_set)
+        self.__table_name = table_name
+        self.__index_name = index_name
+        self.__index_expression = index_expression
+        self.__index_type = index_type
+        self.__granularity = granularity
+        self.__after = after
+
+    def format_sql(self) -> str:
+        optional_after_clause = (
+            f" AFTER {self.__after}" if self.__after is not None else ""
+        )
+        return f"ALTER TABLE {self.__table_name} ADD INDEX {self.__index_name} {self.__index_expression} TYPE {self.__index_type} GRANULARITY {self.__granularity}{optional_after_clause};"
+
+
+class DropIndex(SqlOperation):
+    """
+    Drops an index.
+    """
+
+    def __init__(self, storage_set: StorageSetKey, table_name: str, index_name: str):
+        super().__init__(storage_set)
+        self.__table_name = table_name
+        self.__index_name = index_name
+
+    def format_sql(self) -> str:
+        return f"ALTER TABLE {self.__table_name} DROP INDEX {self.__index_name};"
