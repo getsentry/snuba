@@ -1,11 +1,20 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import Column, Enum, String, UInt, WithDefault
+from snuba.clickhouse.columns import Column, DateTime, Enum, String, UInt, WithDefault
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.context import Context
 from snuba.migrations.status import Status
-from snuba.migrations.table_engines import Distributed
+from snuba.migrations.table_engines import Distributed, ReplacingMergeTree
+
+
+columns = [
+    Column("group", String()),
+    Column("migration_id", String()),
+    Column("timestamp", DateTime()),
+    Column("status", Enum([("completed", 0), ("in_progress", 1), ("not_started", 2)]),),
+    Column("version", WithDefault(UInt(64), "1")),
+]
 
 
 class Migration(migration.Migration):
@@ -21,14 +30,13 @@ class Migration(migration.Migration):
 
     def __forwards_local(self) -> Sequence[operations.Operation]:
         return [
-            operations.RunSql(
+            operations.CreateTable(
                 storage_set=StorageSetKey.MIGRATIONS,
-                statement="""\
-                    CREATE TABLE migrations_local (group String, migration_id String,
-                    timestamp DateTime, status Enum('completed' = 0, 'in_progress' = 1,
-                    'not_started' = 2), version UInt64 DEFAULT 1)
-                    ENGINE = ReplacingMergeTree(version) ORDER BY (group, migration_id);
-                """,
+                table_name="migrations_local",
+                columns=columns,
+                engine=ReplacingMergeTree(
+                    version_column="version", order_by="(group, migration_id)"
+                ),
             ),
         ]
 
@@ -44,18 +52,7 @@ class Migration(migration.Migration):
             operations.CreateTable(
                 storage_set=StorageSetKey.MIGRATIONS,
                 table_name="migrations_dist",
-                columns=[
-                    Column("group", String()),
-                    Column("migration_id", String()),
-                    Column("timestamp", String()),
-                    Column(
-                        "status",
-                        Enum(
-                            [("completed", 0), ("in_progress", 1), ("not_started", 2)]
-                        ),
-                    ),
-                    Column("version", WithDefault(UInt(64), "1")),
-                ],
+                columns=columns,
                 engine=Distributed(
                     local_table_name="migrations_local", sharding_key=None
                 ),
