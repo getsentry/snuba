@@ -157,19 +157,11 @@ class BaseEventsTest(BaseDatasetTest):
 
         self.write_processed_events(out)
 
-    def write_processed_events(
-        self, events: Union[ProcessedMessage, Sequence[ProcessedMessage]]
-    ) -> None:
-        if not isinstance(events, (list, tuple)) or isinstance(
-            events, ProcessedMessage
-        ):
-            events = [events]
-
+    def write_processed_events(self, events: Sequence[ProcessedMessage]) -> None:
         rows = []
         for event in events:
             assert event.action is ProcessorAction.INSERT
             rows.extend(event.data)
-
         self.write_rows(rows)
 
     def write_rows(self, rows) -> None:
