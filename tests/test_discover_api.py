@@ -36,13 +36,14 @@ class TestDiscoverApi(BaseApiTest):
     def generate_event(self):
         self.dataset = get_dataset("events")
         assert self.event["project_id"] == self.project_id
-        event = (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_insert(self.event)
+        self.write_processed_messages(
+            [
+                enforce_table_writer(self.dataset)
+                .get_stream_loader()
+                .get_processor()
+                .process_message(self.event)
+            ]
         )
-        self.write_processed_records([event])
 
     def generate_transaction(self):
         self.dataset = get_dataset("transactions")

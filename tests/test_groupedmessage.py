@@ -131,7 +131,7 @@ class TestGroupedMessage(BaseDatasetTest):
         insert_msg = json.loads(self.INSERT_MSG)
         ret = processor.process_message(insert_msg, metadata)
         assert ret.data == [self.PROCESSED]
-        self.write_processed_records(ret.data)
+        self.write_processed_messages([ret])
         ret = (
             get_cluster(StorageSetKey.EVENTS)
             .get_query_connection(ClickhouseClientSettings.INSERT)
@@ -186,7 +186,7 @@ class TestGroupedMessage(BaseDatasetTest):
                 "first_release_id": "26",
             }
         )
-        self.write_processed_records(row.to_clickhouse())
+        self.write_rows([row.to_clickhouse()])
         ret = (
             get_cluster(StorageSetKey.EVENTS)
             .get_query_connection(ClickhouseClientSettings.QUERY)

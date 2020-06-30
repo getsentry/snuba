@@ -64,14 +64,14 @@ class TestApi(BaseApiTest):
                         enforce_table_writer(self.dataset)
                         .get_stream_loader()
                         .get_processor()
-                        .process_insert(
+                        .process_message(
                             {
                                 "project_id": p,
                                 "event_id": uuid.uuid4().hex,
                                 "deleted": 0,
                                 "datetime": (
                                     self.base_time + timedelta(minutes=tick)
-                                ).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                                ).strftime(settings.PAYLOAD_DATETIME_FORMAT),
                                 "message": "a message",
                                 "search_message": "a long search message"
                                 if p == 3
@@ -129,7 +129,7 @@ class TestApi(BaseApiTest):
                             }
                         )
                     )
-        self.write_processed_records(events)
+        self.write_processed_messages(events)
 
     def redis_db_size(self):
         # dbsize could be an integer for a single node cluster or a dictionary
@@ -1171,7 +1171,7 @@ class TestApi(BaseApiTest):
         }
         result1 = json.loads(self.app.post("/query", data=json.dumps(query)).data)
 
-        self.write_processed_records(
+        self.write_rows(
             [
                 {
                     "event_id": "9" * 32,
