@@ -1,9 +1,8 @@
 from dataclasses import dataclass
-import json
-import rapidjson
-
 from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence
+
+import rapidjson
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
@@ -131,9 +130,7 @@ class TableWriter:
     def get_schema(self) -> WritableTableSchema:
         return self.__table_schema
 
-    def get_writer(
-        self, options=None, table_name=None, rapidjson_serialize=False
-    ) -> BatchWriter:
+    def get_writer(self, options=None, table_name=None) -> BatchWriter:
         from snuba import settings
 
         def default(value):
@@ -148,11 +145,7 @@ class TableWriter:
 
         return self.__cluster.get_writer(
             table_name,
-            lambda row: (
-                rapidjson.dumps(row, default=default)
-                if rapidjson_serialize
-                else json.dumps(row, default=default)
-            ).encode("utf-8"),
+            lambda row: rapidjson.dumps(row, default=default).encode("utf-8"),
             options,
             chunk_size=settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
         )

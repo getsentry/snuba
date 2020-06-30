@@ -33,8 +33,6 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         metrics: MetricsBackend,
         producer: Optional[ConfluentKafkaProducer] = None,
         replacements_topic: Optional[Topic] = None,
-        rapidjson_deserialize: bool = True,
-        rapidjson_serialize: bool = True,
     ) -> None:
         self.__storage = storage
         self.producer = producer
@@ -43,10 +41,8 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         table_writer = storage.get_table_writer()
         self.__writer = table_writer.get_writer(
             {"load_balancing": "in_order", "insert_distributed_sync": 1},
-            rapidjson_serialize=rapidjson_serialize,
         )
 
-        self.__rapidjson_deserialize = rapidjson_deserialize
         self.__pre_filter = table_writer.get_stream_loader().get_pre_filter()
 
     def process_message(
@@ -56,13 +52,8 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         if self.__pre_filter and self.__pre_filter.should_drop(message):
             return None
 
-        if self.__rapidjson_deserialize:
-            value = rapidjson.loads(message.payload.value)
-        else:
-            value = json.loads(message.payload.value)
-
         processed = self._process_message_impl(
-            value,
+            rapidjson.loads(message.payload.value),
             KafkaMessageMetadata(
                 offset=message.offset,
                 partition=message.partition.index,
