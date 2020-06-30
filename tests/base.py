@@ -166,12 +166,6 @@ class BaseEventsTest(BaseDatasetTest):
             rows.extend(event.data)
         self.write_rows(rows)
 
-    def write_rows(self, rows) -> None:
-        if not isinstance(rows, (list, tuple)):
-            rows = [rows]
-
-        enforce_table_writer(self.dataset).get_writer().write(rows)
-
 
 class BaseApiTest(BaseEventsTest):
     def setup_method(self, test_method, dataset_name="events"):
