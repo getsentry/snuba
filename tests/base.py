@@ -5,13 +5,14 @@ from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import md5
-from typing import Any, Iterator, Mapping, Optional
+from typing import Any, Iterator, Mapping, Optional, Sequence, Union
 
 from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.datasets.events_processor_base import InsertEvent
+from snuba.processor import ProcessorAction, ProcessedMessage
 from snuba.redis import redis_client
 
 
@@ -149,17 +150,22 @@ class BaseEventsTest(BaseDatasetTest):
             out.extend(processed.data)
         return self.write_processed_records(out)
 
-    def write_processed_events(self, events):
-        if not isinstance(events, (list, tuple)):
+    def write_processed_events(
+        self, events: Union[ProcessedMessage, Sequence[ProcessedMessage]]
+    ) -> None:
+        if not isinstance(events, (list, tuple)) or isinstance(
+            events, ProcessedMessage
+        ):
             events = [events]
 
         rows = []
         for event in events:
-            rows.append(event)
+            assert event.action is ProcessorAction.INSERT
+            rows.extend(event.data)
 
-        return self.write_rows(rows)
+        self.write_rows(rows)
 
-    def write_rows(self, rows):
+    def write_rows(self, rows) -> None:
         if not isinstance(rows, (list, tuple)):
             rows = [rows]
 

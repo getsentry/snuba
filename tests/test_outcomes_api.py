@@ -50,7 +50,7 @@ class TestOutcomesApi(BaseApiTest):
                 )
             )
 
-            outcomes.extend(processed.data)
+            outcomes.append(processed)
 
         self.write_processed_events(outcomes)
 
