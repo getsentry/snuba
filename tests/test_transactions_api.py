@@ -140,7 +140,7 @@ class TestTransactionsApi(BaseApiTest):
                         )
                     )
                     events.append(processed)
-        self.write_processed_events(events)
+        self.write_processed_messages(events)
 
     def test_read_ip(self):
         response = self.app.post(

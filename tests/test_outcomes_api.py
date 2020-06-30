@@ -52,7 +52,7 @@ class TestOutcomesApi(BaseApiTest):
 
             outcomes.append(processed)
 
-        self.write_processed_events(outcomes)
+        self.write_processed_messages(outcomes)
 
     def format_time(self, time: datetime) -> str:
         return time.replace(tzinfo=pytz.utc).isoformat()

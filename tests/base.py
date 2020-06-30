@@ -81,6 +81,13 @@ class BaseDatasetTest(BaseTest):
 
         return self.write_rows(rows)
 
+    def write_processed_messages(self, messages: Sequence[ProcessedMessage]) -> None:
+        rows = []
+        for message in messages:
+            assert message.action is ProcessorAction.INSERT
+            rows.extend(message.data)
+        self.write_rows(rows)
+
     def write_rows(self, rows):
         if not isinstance(rows, (list, tuple)):
             rows = [rows]
@@ -143,28 +150,20 @@ class BaseEventsTest(BaseDatasetTest):
         return event
 
     def write_raw_events(self, events: Sequence[Union[RawEvent, InsertEvent]]) -> None:
-        out = []
+        processor = (
+            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
+        )
+
+        processed_messages = []
         for event in events:
             if self.__is_raw_event(event):
                 event = self.__wrap_raw_event(event)
 
-            processed = (
-                enforce_table_writer(self.dataset)
-                .get_stream_loader()
-                .get_processor()
-                .process_message(event)
-            )
-            assert processed is not None
-            out.append(processed)
+            processed_message = processor.process_message(event)
+            assert processed_message is not None
+            processed_messages.append(processed_message)
 
-        self.write_processed_events(out)
-
-    def write_processed_events(self, events: Sequence[ProcessedMessage]) -> None:
-        rows = []
-        for event in events:
-            assert event.action is ProcessorAction.INSERT
-            rows.extend(event.data)
-        self.write_rows(rows)
+        self.write_processed_messages(processed_messages)
 
 
 class BaseApiTest(BaseEventsTest):

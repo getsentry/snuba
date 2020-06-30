@@ -126,7 +126,7 @@ class TestDiscoverApi(BaseApiTest):
             )
         )
 
-        self.write_processed_events([processed])
+        self.write_processed_messages([processed])
 
     def test_raw_data(self):
         response = self.app.post(
