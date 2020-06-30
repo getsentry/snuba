@@ -1,18 +1,13 @@
-import pytest
-
 from typing import List, Tuple
+
+import pytest
 
 from snuba.clickhouse.astquery import AstSqlQuery
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.conditions import binary_condition
-from snuba.query.expressions import (
-    Column,
-    CurriedFunctionCall,
-    FunctionCall,
-    Literal,
-)
-from snuba.query.logical import OrderBy, OrderByDirection, Query
+from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
+from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
 from snuba.request.request_settings import HTTPRequestSettings
 
 test_cases = [
@@ -22,9 +17,9 @@ test_cases = [
             {},
             TableSource("my_table", ColumnSet([])),
             selected_columns=[
-                Column(None, None, "column1"),
-                Column(None, "table1", "column2"),
-                Column("al", None, "column3"),
+                SelectedExpression("column1", Column(None, None, "column1")),
+                SelectedExpression("column2", Column(None, "table1", "column2")),
+                SelectedExpression("column3", Column("al", None, "column3")),
             ],
             condition=binary_condition(
                 None,
@@ -61,18 +56,21 @@ test_cases = [
             {},
             TableSource("my_table", ColumnSet([])),
             selected_columns=[
-                CurriedFunctionCall(
+                SelectedExpression(
                     "my_complex_math",
-                    FunctionCall(
-                        None,
-                        "doSomething",
-                        (
-                            Column(None, None, "column1"),
-                            Column(None, "table1", "column2"),
-                            Column("al", None, "column3"),
+                    CurriedFunctionCall(
+                        "my_complex_math",
+                        FunctionCall(
+                            None,
+                            "doSomething",
+                            (
+                                Column(None, None, "column1"),
+                                Column(None, "table1", "column2"),
+                                Column("al", None, "column3"),
+                            ),
                         ),
+                        (Column(None, None, "column1"),),
                     ),
-                    (Column(None, None, "column1"),),
                 )
             ],
             condition=binary_condition(
@@ -128,8 +126,8 @@ test_cases = [
             {},
             TableSource("my_table", ColumnSet([])),
             selected_columns=[
-                Column("al1", None, "field_##$$%"),
-                Column("al2", "t&^%$", "f@!@"),
+                SelectedExpression("field_##$$%", Column("al1", None, "field_##$$%")),
+                SelectedExpression("f@!@", Column("al2", "t&^%$", "f@!@")),
             ],
             groupby=[
                 Column("al1", None, "field_##$$%"),
@@ -163,8 +161,8 @@ def test_format_clickhouse_specific_query() -> None:
         {"sample": 0.1, "totals": True, "limitby": (10, "environment")},
         TableSource("my_table", ColumnSet([])),
         selected_columns=[
-            Column(None, None, "column1"),
-            Column(None, "table1", "column2"),
+            SelectedExpression("column1", Column(None, None, "column1")),
+            SelectedExpression("column2", Column(None, "table1", "column2")),
         ],
         condition=binary_condition(
             None, "eq", lhs=Column(None, None, "column1"), rhs=Literal(None, "blabla"),

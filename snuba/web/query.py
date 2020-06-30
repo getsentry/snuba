@@ -157,6 +157,11 @@ def _format_storage_query_and_run(
     to collapse and disappear.
     """
 
+    # TODO: This function (well, it will be a wrapper of this function)
+    # where we will transform the result according to the SelectedExpression
+    # object in the query to ensure the fields in the QueryResult have
+    # the same name the user expects.
+
     source = clickhouse_query.get_data_source().format_from()
     with sentry_sdk.start_span(description="create_query", op="db") as span:
         legacy_query = DictSqlQuery(dataset, clickhouse_query, request_settings)

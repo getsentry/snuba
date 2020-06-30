@@ -15,6 +15,7 @@ from snuba.query.conditions import (
 from snuba.query.dsl import arrayElement, arrayJoin
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query as SnubaQuery
+from snuba.query.logical import SelectedExpression
 from snuba.query.parser import parse_query
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
@@ -36,7 +37,10 @@ def build_query(
         SnubaQuery(
             {},
             None,
-            selected_columns=selected_columns,
+            selected_columns=[
+                SelectedExpression(name=s.alias, expression=s)
+                for s in selected_columns or []
+            ],
             condition=condition,
             having=having,
         )

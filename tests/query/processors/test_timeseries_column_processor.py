@@ -4,12 +4,11 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.transactions import TransactionsDataset
-from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.dsl import multiply
-from snuba.query.logical import Query
+from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.logical import Query, SelectedExpression
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.request.request_settings import HTTPRequestSettings
-
 
 tests = [
     (
@@ -74,14 +73,21 @@ def test_timeseries_column_format_expressions(
         {"granularity": granularity},
         TableSource("transactions", ColumnSet([])),
         selected_columns=[
-            Column("transaction.duration", None, "duration"),
-            Column("my_time", None, "time"),
+            SelectedExpression(
+                "transaction.duration", Column("transaction.duration", None, "duration")
+            ),
+            SelectedExpression("my_time", Column("my_time", None, "time")),
         ],
     )
     expected = Query(
         {"granularity": granularity},
         TableSource("transactions", ColumnSet([])),
-        selected_columns=[Column("transaction.duration", None, "duration"), ast_value],
+        selected_columns=[
+            SelectedExpression(
+                "transaction.duration", Column("transaction.duration", None, "duration")
+            ),
+            SelectedExpression(ast_value.alias, ast_value),
+        ],
     )
 
     dataset = TransactionsDataset()
@@ -93,7 +99,7 @@ def test_timeseries_column_format_expressions(
         == unprocessed.get_selected_columns_from_ast()
     )
 
-    ret = unprocessed.get_selected_columns_from_ast()[1].accept(
+    ret = unprocessed.get_selected_columns_from_ast()[1].expression.accept(
         ClickhouseExpressionFormatter()
     )
     assert ret == formatted_value
