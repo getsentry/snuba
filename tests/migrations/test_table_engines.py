@@ -1,54 +1,32 @@
-import importlib
 import pytest
 
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.cluster import ClickhouseCluster
 from snuba.migrations import table_engines
 
 
-def setup_function() -> None:
-    from snuba import settings
-    from snuba.clusters import cluster
+single_node_cluster = ClickhouseCluster(
+    host="host_1",
+    port=9000,
+    user="default",
+    password="",
+    database="default",
+    http_port=8123,
+    storage_sets={"events"},
+    single_node=True,
+)
 
-    settings.CLUSTERS = [
-        {
-            "host": "host_1",
-            "port": 9000,
-            "user": "default",
-            "password": "",
-            "database": "default",
-            "http_port": 8123,
-            "storage_sets": {
-                "events",
-                "migrations",
-                "outcomes",
-                "querylog",
-                "sessions",
-            },
-            "single_node": True,
-        },
-        {
-            "host": "host_2",
-            "port": 9000,
-            "user": "default",
-            "password": "",
-            "database": "default",
-            "http_port": 8123,
-            "storage_sets": {"transactions"},
-            "single_node": False,
-            "cluster_name": "cluster_1",
-            "distributed_cluster_name": "dist_hosts",
-        },
-    ]
-    importlib.reload(cluster)
-
-
-def teardown_function() -> None:
-    from snuba import settings
-    from snuba.clusters import cluster
-
-    importlib.reload(settings)
-    importlib.reload(cluster)
-
+multi_node_cluster = ClickhouseCluster(
+    host="host_2",
+    port=9000,
+    user="default",
+    password="",
+    database="default",
+    http_port=8123,
+    storage_sets={"events"},
+    single_node=False,
+    cluster_name="cluster_1",
+    distributed_cluster_name="dist_hosts",
+)
 
 merge_test_cases = [
     pytest.param(
@@ -82,8 +60,8 @@ merge_test_cases = [
 def test_merge_table(
     engine: table_engines.TableEngine, single_node_sql: str, multi_node_sql: str
 ) -> None:
-    assert engine.get_sql(StorageSetKey.EVENTS, "test_table") == single_node_sql
-    assert engine.get_sql(StorageSetKey.TRANSACTIONS, "test_table") == multi_node_sql
+    assert engine.get_sql(single_node_cluster, "test_table") == single_node_sql
+    assert engine.get_sql(multi_node_cluster, "test_table") == multi_node_sql
 
 
 dist_test_cases = [
@@ -100,5 +78,5 @@ dist_test_cases = [
 @pytest.mark.parametrize("engine, sql", dist_test_cases)
 def test_distributed(engine: table_engines.TableEngine, sql: str) -> None:
     with pytest.raises(AssertionError):
-        engine.get_sql(StorageSetKey.EVENTS, "test_table")
-    assert engine.get_sql(StorageSetKey.TRANSACTIONS, "test_table") == sql
+        engine.get_sql(single_node_cluster, "test_table")
+    assert engine.get_sql(multi_node_cluster, "test_table") == sql

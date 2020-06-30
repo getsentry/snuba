@@ -76,6 +76,7 @@ class CreateTable(SqlOperation):
 
     def format_sql(self) -> str:
         columns = ", ".join([col.for_schema() for col in self.__columns])
-        engine = self.__engine.get_sql(self.__storage_set_key, self.__table_name)
+        cluster = get_cluster(self.__storage_set_key)
+        engine = self.__engine.get_sql(cluster, self.__table_name)
 
         return f"CREATE TABLE IF NOT EXISTS {self.__table_name} ({columns}) ENGINE {engine};"
