@@ -43,7 +43,7 @@ class SubscriptionWorker(
         dataset: Dataset,
         executor: ThreadPoolExecutor,
         schedulers: Mapping[int, Scheduler[Subscription]],
-        producer: Producer[SubscriptionTaskResult],
+        producer: Producer[KafkaPayload],
         topic: Topic,
         metrics: MetricsBackend,
         time_shift: Optional[timedelta] = None,
@@ -127,7 +127,12 @@ class SubscriptionWorker(
         # them to complete. Again, either the entire batch succeeds, or the
         # entire batch fails.
         for future in as_completed(
-            [self.__producer.produce(self.__topic, result) for result in results]
+            [
+                self.__producer.produce(
+                    self.__topic, subscription_task_result_codec.encode(result)
+                )
+                for result in results
+            ]
         ):
             future.result()
 
@@ -153,3 +158,6 @@ class SubscriptionTaskResultCodec(Codec[KafkaPayload, SubscriptionTaskResult]):
 
     def decode(self, value: KafkaPayload) -> SubscriptionTaskResult:
         raise NotImplementedError
+
+
+subscription_task_result_codec = SubscriptionTaskResultCodec()
