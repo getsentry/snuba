@@ -9,7 +9,7 @@ import simplejson as json
 
 from snuba import settings
 from snuba.datasets.factory import enforce_table_writer, get_dataset
-from tests.base import BaseApiTest, dataset_manager, get_event
+from tests.base import BaseApiTest, dataset_manager
 
 
 @pytest.mark.usefixtures("query_type")
@@ -24,7 +24,7 @@ class TestDiscoverApi(BaseApiTest):
             self.__dataset_manager.enter_context(dataset_manager(dataset_name))
 
         self.app.post = partial(self.app.post, headers={"referer": "test"})
-        self.project_id = 1
+        self.project_id = self.event["project_id"]
 
         self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
         self.generate_event()
@@ -35,15 +35,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def generate_event(self):
         self.dataset = get_dataset("events")
-        event = get_event()
-        event["project_id"] = self.project_id
-        event = (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_insert(event)
-        )
-        self.write_processed_records([event])
+        self.write_events([self.event])
 
     def generate_transaction(self):
         self.dataset = get_dataset("transactions")
@@ -127,7 +119,7 @@ class TestDiscoverApi(BaseApiTest):
             )
         )
 
-        self.write_processed_events(processed.data)
+        self.write_processed_messages([processed])
 
     def test_raw_data(self):
         response = self.app.post(
@@ -158,7 +150,7 @@ class TestDiscoverApi(BaseApiTest):
             data=json.dumps(
                 {
                     "dataset": "discover",
-                    "project": 1,
+                    "project": self.project_id,
                     "selected_columns": [
                         "type",
                         "tags[foo]",
@@ -204,7 +196,11 @@ class TestDiscoverApi(BaseApiTest):
 
         assert response.status_code == 200
         assert data["data"] == [
-            {"count": 1, "tags[custom_tag]": "custom_value", "project_id": 1}
+            {
+                "count": 1,
+                "tags[custom_tag]": "custom_value",
+                "project_id": self.project_id,
+            }
         ]
 
         response = self.app.post(
@@ -224,7 +220,9 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
 
         assert response.status_code == 200
-        assert data["data"] == [{"count": 1, "tags[foo]": "baz", "project_id": 1}]
+        assert data["data"] == [
+            {"count": 1, "tags[foo]": "baz", "project_id": self.project_id}
+        ]
 
     def test_handles_columns_from_other_dataset(self):
         response = self.app.post(
@@ -559,5 +557,5 @@ class TestDiscoverApi(BaseApiTest):
 
         assert response.status_code == 200
         assert data["data"] == [
-            {"apdex_duration_300": 1, "tags[foo]": "baz", "project_id": 1}
+            {"apdex_duration_300": 1, "tags[foo]": "baz", "project_id": self.project_id}
         ]

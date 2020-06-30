@@ -6,7 +6,7 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 from snuba.clickhouse.columns import ColumnSet
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.events_format import extract_user
-from snuba.datasets.events_processor_base import EventsProcessorBase
+from snuba.datasets.events_processor_base import EventsProcessorBase, InsertEvent
 from snuba.processor import (
     _as_dict_safe,
     _boolify,
@@ -32,18 +32,18 @@ class EventsProcessor(EventsProcessorBase):
             }
         )
 
-    def _should_process(self, event: Mapping[str, Any]) -> bool:
+    def _should_process(self, event: InsertEvent) -> bool:
         return True
 
     def _extract_event_id(
-        self, output: MutableMapping[str, Any], event: Mapping[str, Any],
+        self, output: MutableMapping[str, Any], event: InsertEvent,
     ) -> None:
         output["event_id"] = event["event_id"]
 
     def extract_custom(
         self,
         output: MutableMapping[str, Any],
-        event: Mapping[str, Any],
+        event: InsertEvent,
         metadata: Optional[KafkaMessageMetadata] = None,
     ) -> None:
         data = event.get("data", {})
@@ -63,7 +63,7 @@ class EventsProcessor(EventsProcessorBase):
     def extract_tags_custom(
         self,
         output: MutableMapping[str, Any],
-        event: Mapping[str, Any],
+        event: InsertEvent,
         tags: Mapping[str, Any],
         metadata: Optional[KafkaMessageMetadata] = None,
     ) -> None:
@@ -123,7 +123,7 @@ class EventsProcessor(EventsProcessorBase):
     def extract_contexts_custom(
         self,
         output: MutableMapping[str, Any],
-        event: Mapping[str, Any],
+        event: InsertEvent,
         tags: Mapping[str, Any],
         metadata: Optional[KafkaMessageMetadata] = None,
     ) -> None:
