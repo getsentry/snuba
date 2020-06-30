@@ -2,7 +2,6 @@ import logging
 from datetime import datetime
 from typing import Any, Mapping, NamedTuple, Optional, Sequence
 
-import simplejson as json
 import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
@@ -106,7 +105,7 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
                 self.producer.produce(
                     self.replacements_topic.name,
                     key=str(key).encode("utf-8"),
-                    value=json.dumps(replacement).encode("utf-8"),
+                    value=rapidjson.dumps(replacement).encode("utf-8"),
                     on_delivery=self.delivery_callback,
                 )
 
