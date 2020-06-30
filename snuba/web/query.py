@@ -116,7 +116,6 @@ def _run_query_pipeline(
     # between plan specific processors and DB query specific processors and with
     # the soon to come ClickhouseCluster, there is more coupling between the
     # components of the query plan.
-    # TODO: This below should be a storage specific query processor.
 
     for clickhouse_processor in query_plan.plan_processors:
         with sentry_sdk.start_span(
