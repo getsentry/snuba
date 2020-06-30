@@ -13,7 +13,6 @@ from snuba.clickhouse.query import Query
 from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
-from snuba.query.conditions import combine_and_conditions
 from snuba.query.timeseries_extension import TimeSeriesExtensionProcessor
 from snuba.reader import Reader
 from snuba.request import Request
@@ -117,14 +116,6 @@ def _run_query_pipeline(
     # between plan specific processors and DB query specific processors and with
     # the soon to come ClickhouseCluster, there is more coupling between the
     # components of the query plan.
-    # TODO: This below should be a storage specific query processor.
-    relational_source = query_plan.query.get_data_source()
-    mandatory_conditions = relational_source.get_mandatory_conditions()
-    query_plan.query.add_conditions([c.legacy for c in mandatory_conditions])
-    if len(mandatory_conditions) > 0:
-        query_plan.query.add_condition_to_ast(
-            combine_and_conditions([c.ast for c in mandatory_conditions])
-        )
 
     for clickhouse_processor in query_plan.plan_processors:
         with sentry_sdk.start_span(

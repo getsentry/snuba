@@ -2,8 +2,10 @@ from dataclasses import dataclass
 from threading import Event
 from typing import Callable, Mapping, MutableMapping, Optional, Sequence, Set
 
+from snuba.utils.codecs import Codec
 from snuba.utils.concurrent import Synchronized, execute
 from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
+from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 
@@ -14,6 +16,32 @@ class Commit:
     group: str
     partition: Partition
     offset: int
+
+
+class CommitCodec(Codec[KafkaPayload, Commit]):
+    def encode(self, value: Commit) -> KafkaPayload:
+        return KafkaPayload(
+            f"{value.partition.topic.name}:{value.partition.index}:{value.group}".encode(
+                "utf-8"
+            ),
+            f"{value.offset}".encode("utf-8"),
+        )
+
+    def decode(self, value: KafkaPayload) -> Commit:
+        key = value.key
+        if not isinstance(key, bytes):
+            raise TypeError("payload key must be a bytes object")
+
+        val = value.value
+        if not isinstance(val, bytes):
+            raise TypeError("payload value must be a bytes object")
+
+        topic_name, partition_index, group = key.decode("utf-8").split(":", 3)
+        offset = int(val.decode("utf-8"))
+        return Commit(group, Partition(Topic(topic_name), int(partition_index)), offset)
+
+
+commit_codec = CommitCodec()
 
 
 class SynchronizedConsumer(Consumer[TPayload]):
@@ -43,7 +71,7 @@ class SynchronizedConsumer(Consumer[TPayload]):
     def __init__(
         self,
         consumer: Consumer[TPayload],
-        commit_log_consumer: Consumer[Commit],
+        commit_log_consumer: Consumer[KafkaPayload],
         commit_log_topic: Topic,
         commit_log_groups: Set[str],
     ) -> None:
@@ -81,7 +109,7 @@ class SynchronizedConsumer(Consumer[TPayload]):
             if message is None:
                 continue
 
-            commit = message.payload
+            commit = commit_codec.decode(message.payload)
             if commit.group not in self.__commit_log_groups:
                 continue
 
