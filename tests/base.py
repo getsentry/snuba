@@ -14,6 +14,7 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.processor import ProcessorAction, ProcessedMessage
 from snuba.redis import redis_client
+from snuba.writer import WriterTableRow
 
 
 # A "raw event" is only the ``data`` member of ``InsertEvent``.
@@ -88,9 +89,7 @@ class BaseDatasetTest(BaseTest):
             rows.extend(message.data)
         self.write_rows(rows)
 
-    def write_rows(self, rows):
-        if not isinstance(rows, (list, tuple)):
-            rows = [rows]
+    def write_rows(self, rows: Sequence[WriterTableRow]) -> None:
         enforce_table_writer(self.dataset).get_writer().write(rows)
 
 
