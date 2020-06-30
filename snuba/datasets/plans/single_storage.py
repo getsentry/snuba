@@ -26,6 +26,8 @@ from snuba.request.request_settings import RequestSettings
 from snuba.util import with_span
 from snuba.web import QueryResult
 
+from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
+
 
 class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
     def __init__(
@@ -111,6 +113,7 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                 db_query_processors=[
                     *self.__storage.get_query_processors(),
                     *self.__post_processors,
+                    MandatoryConditionApplier(),
                 ],
                 splitters=self.__storage.get_query_splitters(),
             ),
@@ -150,6 +153,7 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                 db_query_processors=[
                     *storage.get_query_processors(),
                     *self.__post_processors,
+                    MandatoryConditionApplier(),
                 ],
                 splitters=storage.get_query_splitters(),
             ),
