@@ -23,17 +23,6 @@ from snuba.datasets.events_format import (
 
 
 class TestEventsProcessor(BaseEventsTest):
-    def test_simple(self):
-        processed = (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message(self.event)
-        )
-
-        for field in ("event_id", "project_id", "message", "platform"):
-            assert processed.data[0][field] == self.event[field]
-
     def test_invalid_version(self):
         with pytest.raises(InvalidMessageVersion):
             enforce_table_writer(
