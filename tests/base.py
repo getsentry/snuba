@@ -16,6 +16,10 @@ from snuba.processor import ProcessorAction, ProcessedMessage
 from snuba.redis import redis_client
 
 
+def is_raw_event(data: Union[Mapping[str, Any], InsertEvent]) -> bool:
+    return not data.keys() == InsertEvent.__annotations__.keys()
+
+
 def wrap_raw_event(data: Mapping[str, Any]) -> InsertEvent:
     "Wrap a raw event like the Sentry codebase does before sending to Kafka."
 
@@ -139,16 +143,19 @@ class BaseEventsTest(BaseDatasetTest):
 
         out = []
         for event in events:
-            if "primary_hash" not in event:
+            if is_raw_event(event):
                 event = wrap_raw_event(event)
+
             processed = (
                 enforce_table_writer(self.dataset)
                 .get_stream_loader()
                 .get_processor()
                 .process_message(event)
             )
-            out.extend(processed.data)
-        return self.write_processed_records(out)
+            assert processed is not None
+            out.append(processed)
+
+        self.write_processed_events(out)
 
     def write_processed_events(
         self, events: Union[ProcessedMessage, Sequence[ProcessedMessage]]
