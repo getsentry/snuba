@@ -5,16 +5,17 @@ from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import md5
-from typing import Iterator, Optional, Sequence, Union
+from typing import Iterator, Optional, Sequence
 
 from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import enforce_table_writer, get_dataset
-from snuba.datasets.events_processor_base import EventData, InsertEvent
-from snuba.processor import ProcessorAction, ProcessedMessage
+from snuba.processor import ProcessedMessage, ProcessorAction
 from snuba.redis import redis_client
 from snuba.writer import WriterTableRow
+from tests.fixtures import raw_event
 
 
 @contextmanager
@@ -85,11 +86,18 @@ class BaseEventsTest(BaseDatasetTest):
         self.table = enforce_table_writer(self.dataset).get_schema().get_table_name()
         self.event = self.__get_event()
 
-    def __is_event_data(self, data: Union[EventData, InsertEvent]) -> bool:
-        return not data.keys() == InsertEvent.__annotations__.keys()
+    def __get_event(self) -> InsertEvent:
+        timestamp = datetime.utcnow()
 
-    def __wrap_event_data(self, data: EventData) -> InsertEvent:
-        "Wrap a raw event like the Sentry codebase does before sending to Kafka."
+        data = {
+            "datetime": (timestamp - timedelta(seconds=2)).strftime(
+                settings.PAYLOAD_DATETIME_FORMAT,
+            ),
+            "received": int(
+                calendar.timegm((timestamp - timedelta(seconds=1)).timetuple())
+            ),
+            **deepcopy(raw_event),
+        }
 
         unique = "%s:%s" % (str(data["project"]), data["id"])
         primary_hash = md5(unique.encode("utf-8")).hexdigest()
@@ -109,22 +117,6 @@ class BaseEventsTest(BaseDatasetTest):
             }
         )
 
-    def __get_event(self) -> InsertEvent:
-        from tests.fixtures import raw_event
-
-        timestamp = datetime.utcnow()
-        return self.__wrap_event_data(
-            {
-                "datetime": (timestamp - timedelta(seconds=2)).strftime(
-                    settings.PAYLOAD_DATETIME_FORMAT,
-                ),
-                "received": int(
-                    calendar.timegm((timestamp - timedelta(seconds=1)).timetuple())
-                ),
-                **deepcopy(raw_event),
-            }
-        )
-
     def create_event_row_for_date(
         self, dt: datetime, retention_days=settings.DEFAULT_RETENTION_DAYS
     ):
@@ -137,16 +129,13 @@ class BaseEventsTest(BaseDatasetTest):
             "retention_days": retention_days,
         }
 
-    def write_events(self, events: Sequence[Union[EventData, InsertEvent]]) -> None:
+    def write_events(self, events: Sequence[InsertEvent]) -> None:
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
 
         processed_messages = []
         for event in events:
-            if self.__is_event_data(event):
-                event = self.__wrap_event_data(event)
-
             processed_message = processor.process_message(event)
             assert processed_message is not None
             processed_messages.append(processed_message)
