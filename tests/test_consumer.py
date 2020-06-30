@@ -26,7 +26,7 @@ class TestConsumer(BaseEventsTest):
             Partition(Topic("events"), 456),
             123,
             KafkaPayload(
-                None, json.dumps((0, "insert", event)).encode("utf-8")
+                None, json.dumps((2, "insert", event)).encode("utf-8")
             ),  # event doesn't really matter
             datetime.now(),
         )
@@ -78,7 +78,7 @@ class TestConsumer(BaseEventsTest):
         message: Message[KafkaPayload] = Message(
             Partition(Topic("events"), 1),
             42,
-            KafkaPayload(None, json.dumps((0, "insert", event)).encode("utf-8")),
+            KafkaPayload(None, json.dumps((2, "insert", event)).encode("utf-8")),
             datetime.now(),
         )
 
@@ -110,6 +110,6 @@ class TestConsumer(BaseEventsTest):
         )
 
         assert [(m._topic, m._key, m._value) for m in producer.messages] == [
-            ("event-replacements", b"1", b'{"project_id": 1}'),
-            ("event-replacements", b"2", b'{"project_id": 2}'),
+            ("event-replacements", b"1", b'{"project_id":1}'),
+            ("event-replacements", b"2", b'{"project_id":2}'),
         ]

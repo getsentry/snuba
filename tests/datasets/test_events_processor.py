@@ -1,5 +1,4 @@
 import calendar
-import copy
 import pytest
 from collections import OrderedDict
 from datetime import datetime, timedelta
@@ -34,33 +33,6 @@ class TestEventsProcessor(BaseEventsTest):
 
         for field in ("event_id", "project_id", "message", "platform"):
             assert processed.data[0][field] == self.event[field]
-
-    def test_simple_version_0(self):
-        processed = (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message((0, "insert", self.event))
-        )
-
-        for field in ("event_id", "project_id", "message", "platform"):
-            assert processed.data[0][field] == self.event[field]
-
-    def test_simple_version_1(self):
-        processor = (
-            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
-        )
-        assert processor.process_message(
-            (0, "insert", copy.deepcopy(self.event))
-        ) == processor.process_message((1, "insert", copy.deepcopy(self.event), {}))
-
-    def test_invalid_type_version_0(self):
-        with pytest.raises(InvalidMessageType):
-            enforce_table_writer(
-                self.dataset
-            ).get_stream_loader().get_processor().process_message(
-                (0, "invalid", self.event)
-            )
 
     def test_invalid_version(self):
         with pytest.raises(InvalidMessageVersion):
@@ -162,33 +134,6 @@ class TestEventsProcessor(BaseEventsTest):
             "title": "FooError",
             "location": "bar.py",
         }
-
-    def test_v1_delete_groups_skipped(self):
-        assert (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message((1, "delete_groups", {}))
-            is None
-        )
-
-    def test_v1_merge_skipped(self):
-        assert (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message((1, "merge", {}))
-            is None
-        )
-
-    def test_v1_unmerge_skipped(self):
-        assert (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message((1, "unmerge", {}))
-            is None
-        )
 
     def test_v2_invalid_type(self):
         with pytest.raises(InvalidMessageType):
