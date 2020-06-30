@@ -20,43 +20,6 @@ from snuba.redis import redis_client
 RawEvent = Mapping[str, Any]
 
 
-def is_raw_event(data: Union[RawEvent, InsertEvent]) -> bool:
-    return not data.keys() == InsertEvent.__annotations__.keys()
-
-
-def wrap_raw_event(data: RawEvent) -> InsertEvent:
-    "Wrap a raw event like the Sentry codebase does before sending to Kafka."
-
-    unique = "%s:%s" % (str(data["project"]), data["id"])
-    primary_hash = md5(unique.encode("utf-8")).hexdigest()
-
-    return {
-        "event_id": data["id"],
-        "group_id": int(primary_hash[:16], 16),
-        "primary_hash": primary_hash,
-        "project_id": data["project"],
-        "message": data["message"],
-        "platform": data["platform"],
-        "datetime": data["datetime"],
-        "data": data,
-        "organization_id": data["organization_id"],
-        "retention_days": settings.DEFAULT_RETENTION_DAYS,
-    }
-
-
-def get_event() -> InsertEvent:
-    from tests.fixtures import raw_event
-
-    timestamp = datetime.utcnow()
-    raw_event["datetime"] = (timestamp - timedelta(seconds=2)).strftime(
-        "%Y-%m-%dT%H:%M:%S.%fZ"
-    )
-    raw_event["received"] = int(
-        calendar.timegm((timestamp - timedelta(seconds=1)).timetuple())
-    )
-    return wrap_raw_event(deepcopy(raw_event))
-
-
 @contextmanager
 def dataset_manager(name: str) -> Iterator[Dataset]:
     dataset = get_dataset(name)
@@ -128,7 +91,45 @@ class BaseEventsTest(BaseDatasetTest):
     def setup_method(self, test_method, dataset_name="events"):
         super(BaseEventsTest, self).setup_method(test_method, dataset_name)
         self.table = enforce_table_writer(self.dataset).get_schema().get_table_name()
-        self.event = get_event()
+        self.event = self.__get_event()
+
+    def __is_raw_event(self, data: Union[RawEvent, InsertEvent]) -> bool:
+        return not data.keys() == InsertEvent.__annotations__.keys()
+
+    def __wrap_raw_event(self, data: RawEvent) -> InsertEvent:
+        "Wrap a raw event like the Sentry codebase does before sending to Kafka."
+
+        unique = "%s:%s" % (str(data["project"]), data["id"])
+        primary_hash = md5(unique.encode("utf-8")).hexdigest()
+
+        return {
+            "event_id": data["id"],
+            "group_id": int(primary_hash[:16], 16),
+            "primary_hash": primary_hash,
+            "project_id": data["project"],
+            "message": data["message"],
+            "platform": data["platform"],
+            "datetime": data["datetime"],
+            "data": data,
+            "organization_id": data["organization_id"],
+            "retention_days": settings.DEFAULT_RETENTION_DAYS,
+        }
+
+    def __get_event(self) -> InsertEvent:
+        from tests.fixtures import raw_event
+
+        timestamp = datetime.utcnow()
+        return self.__wrap_raw_event(
+            {
+                "datetime": (timestamp - timedelta(seconds=2)).strftime(
+                    settings.PAYLOAD_DATETIME_FORMAT,
+                ),
+                "received": int(
+                    calendar.timegm((timestamp - timedelta(seconds=1)).timetuple())
+                ),
+                **deepcopy(raw_event),
+            }
+        )
 
     def create_event_for_date(self, dt, retention_days=settings.DEFAULT_RETENTION_DAYS):
         event = {
@@ -144,8 +145,8 @@ class BaseEventsTest(BaseDatasetTest):
     def write_raw_events(self, events: Sequence[Union[RawEvent, InsertEvent]]) -> None:
         out = []
         for event in events:
-            if is_raw_event(event):
-                event = wrap_raw_event(event)
+            if self.__is_raw_event(event):
+                event = self.__wrap_raw_event(event)
 
             processed = (
                 enforce_table_writer(self.dataset)
