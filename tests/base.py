@@ -16,11 +16,15 @@ from snuba.processor import ProcessorAction, ProcessedMessage
 from snuba.redis import redis_client
 
 
-def is_raw_event(data: Union[Mapping[str, Any], InsertEvent]) -> bool:
+# A "raw event" is only the ``data`` member of ``InsertEvent``.
+RawEvent = Mapping[str, Any]
+
+
+def is_raw_event(data: Union[RawEvent, InsertEvent]) -> bool:
     return not data.keys() == InsertEvent.__annotations__.keys()
 
 
-def wrap_raw_event(data: Mapping[str, Any]) -> InsertEvent:
+def wrap_raw_event(data: RawEvent) -> InsertEvent:
     "Wrap a raw event like the Sentry codebase does before sending to Kafka."
 
     unique = "%s:%s" % (str(data["project"]), data["id"])
@@ -137,7 +141,7 @@ class BaseEventsTest(BaseDatasetTest):
         event["retention_days"] = retention_days
         return event
 
-    def write_raw_events(self, events):
+    def write_raw_events(self, events: Sequence[Union[RawEvent, InsertEvent]]) -> None:
         out = []
         for event in events:
             if is_raw_event(event):
