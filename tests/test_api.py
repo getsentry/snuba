@@ -13,7 +13,8 @@ from sentry_sdk import Client, Hub
 
 from snuba import settings, state
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.datasets.factory import enforce_table_writer, get_dataset
+from snuba.datasets.events_processor_base import InsertEvent
+from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.redis import redis_client
@@ -49,7 +50,7 @@ class TestApi(BaseApiTest):
         state.delete_config("project_per_second_limit")
         state.delete_config("date_align_seconds")
 
-    def generate_fizzbuzz_events(self):
+    def generate_fizzbuzz_events(self) -> None:
         """
         Generate a deterministic set of events across a time range.
         """
@@ -61,21 +62,15 @@ class TestApi(BaseApiTest):
                 # project N sends an event every Nth minute
                 if tock % p == 0:
                     events.append(
-                        enforce_table_writer(self.dataset)
-                        .get_stream_loader()
-                        .get_processor()
-                        .process_message(
+                        InsertEvent(
                             {
+                                "organization_id": 1,
                                 "project_id": p,
                                 "event_id": uuid.uuid4().hex,
-                                "deleted": 0,
                                 "datetime": (
                                     self.base_time + timedelta(minutes=tick)
                                 ).strftime(settings.PAYLOAD_DATETIME_FORMAT),
                                 "message": "a message",
-                                "search_message": "a long search message"
-                                if p == 3
-                                else None,
                                 "platform": self.platforms[
                                     (tock * p) % len(self.platforms)
                                 ],
@@ -129,7 +124,7 @@ class TestApi(BaseApiTest):
                             }
                         )
                     )
-        self.write_processed_messages(events)
+        self.write_events(events)
 
     def redis_db_size(self):
         # dbsize could be an integer for a single node cluster or a dictionary
