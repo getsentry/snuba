@@ -239,7 +239,7 @@ class TestReplacer(BaseEventsTest):
     def test_delete_groups_insert(self):
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
-        self.write_raw_events(self.event)
+        self.write_raw_events([self.event])
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
@@ -275,7 +275,7 @@ class TestReplacer(BaseEventsTest):
     def test_merge_insert(self):
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
-        self.write_raw_events(self.event)
+        self.write_raw_events([self.event])
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
@@ -313,7 +313,7 @@ class TestReplacer(BaseEventsTest):
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "a" * 32
-        self.write_raw_events(self.event)
+        self.write_raw_events([self.event])
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
@@ -353,7 +353,7 @@ class TestReplacer(BaseEventsTest):
         self.event["group_id"] = 1
         self.event["data"]["tags"].append(["browser.name", "foo"])
         self.event["data"]["tags"].append(["notbrowser", "foo"])
-        self.write_raw_events(self.event)
+        self.write_raw_events([self.event])
 
         project_id = self.project_id
 
@@ -415,7 +415,7 @@ class TestReplacer(BaseEventsTest):
         self.event["data"]["tags"].append(["browser|to_delete", "foo=2"])
         self.event["data"]["tags"].append(["notbrowser", "foo\\3"])
         self.event["data"]["tags"].append(["notbrowser2", "foo4"])
-        self.write_raw_events(self.event)
+        self.write_raw_events([self.event])
 
         project_id = self.project_id
 

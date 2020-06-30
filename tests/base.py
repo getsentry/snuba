@@ -138,9 +138,6 @@ class BaseEventsTest(BaseDatasetTest):
         return event
 
     def write_raw_events(self, events):
-        if not isinstance(events, (list, tuple)):
-            events = [events]
-
         out = []
         for event in events:
             if is_raw_event(event):
