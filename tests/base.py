@@ -94,18 +94,20 @@ class BaseEventsTest(BaseDatasetTest):
         unique = "%s:%s" % (str(data["project"]), data["id"])
         primary_hash = md5(unique.encode("utf-8")).hexdigest()
 
-        return {
-            "event_id": data["id"],
-            "group_id": int(primary_hash[:16], 16),
-            "primary_hash": primary_hash,
-            "project_id": data["project"],
-            "message": data["message"],
-            "platform": data["platform"],
-            "datetime": data["datetime"],
-            "data": data,
-            "organization_id": data["organization_id"],
-            "retention_days": settings.DEFAULT_RETENTION_DAYS,
-        }
+        return InsertEvent(
+            {
+                "event_id": data["id"],
+                "group_id": int(primary_hash[:16], 16),
+                "primary_hash": primary_hash,
+                "project_id": data["project"],
+                "message": data["message"],
+                "platform": data["platform"],
+                "datetime": data["datetime"],
+                "data": data,
+                "organization_id": data["organization_id"],
+                "retention_days": settings.DEFAULT_RETENTION_DAYS,
+            }
+        )
 
     def __get_event(self) -> InsertEvent:
         from tests.fixtures import raw_event
