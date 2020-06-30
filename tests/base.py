@@ -5,35 +5,37 @@ from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import md5
-from typing import Iterator, Optional
+from typing import Any, Iterator, Mapping, Optional
 
 from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import enforce_table_writer, get_dataset
+from snuba.datasets.events_processor_base import InsertEvent
 from snuba.redis import redis_client
 
 
-def wrap_raw_event(event):
+def wrap_raw_event(data: Mapping[str, Any]) -> InsertEvent:
     "Wrap a raw event like the Sentry codebase does before sending to Kafka."
 
-    unique = "%s:%s" % (str(event["project"]), event["id"])
+    unique = "%s:%s" % (str(data["project"]), data["id"])
     primary_hash = md5(unique.encode("utf-8")).hexdigest()
 
     return {
-        "event_id": event["id"],
+        "event_id": data["id"],
         "group_id": int(primary_hash[:16], 16),
         "primary_hash": primary_hash,
-        "project_id": event["project"],
-        "message": event["message"],
-        "platform": event["platform"],
-        "datetime": event["datetime"],
-        "data": event,
-        "organization_id": event["organization_id"],
+        "project_id": data["project"],
+        "message": data["message"],
+        "platform": data["platform"],
+        "datetime": data["datetime"],
+        "data": data,
+        "organization_id": data["organization_id"],
+        "retention_days": settings.DEFAULT_RETENTION_DAYS,
     }
 
 
-def get_event():
+def get_event() -> InsertEvent:
     from tests.fixtures import raw_event
 
     timestamp = datetime.utcnow()
