@@ -68,16 +68,6 @@ class BaseTest(object):
 
 
 class BaseDatasetTest(BaseTest):
-    def write_processed_records(self, records):
-        if not isinstance(records, (list, tuple)):
-            records = [records]
-
-        rows = []
-        for event in records:
-            rows.append(event)
-
-        return self.write_rows(rows)
-
     def write_processed_messages(self, messages: Sequence[ProcessedMessage]) -> None:
         rows = []
         for message in messages:
@@ -133,16 +123,17 @@ class BaseEventsTest(BaseDatasetTest):
             }
         )
 
-    def create_event_for_date(self, dt, retention_days=settings.DEFAULT_RETENTION_DAYS):
-        event = {
+    def create_event_row_for_date(
+        self, dt: datetime, retention_days=settings.DEFAULT_RETENTION_DAYS
+    ):
+        return {
             "event_id": uuid.uuid4().hex,
             "project_id": 1,
             "group_id": 1,
             "deleted": 0,
+            "timestamp": dt,
+            "retention_days": retention_days,
         }
-        event["timestamp"] = dt
-        event["retention_days"] = retention_days
-        return event
 
     def write_events(self, events: Sequence[Union[EventData, InsertEvent]]) -> None:
         processor = (
