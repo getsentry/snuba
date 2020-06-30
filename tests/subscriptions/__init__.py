@@ -17,7 +17,7 @@ class BaseSubscriptionTest(BaseEventsTest):
             minute=0, second=0, microsecond=0
         ) - timedelta(minutes=self.minutes)
 
-        self.write_raw_events(
+        self.write_events(
             [
                 {
                     "event_id": uuid.uuid4().hex,

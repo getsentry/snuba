@@ -31,6 +31,9 @@ from snuba.processor import (
 logger = logging.getLogger(__name__)
 
 
+EventData = Mapping[str, Any]
+
+
 class InsertEvent(TypedDict):
     group_id: int
     event_id: str
@@ -39,7 +42,7 @@ class InsertEvent(TypedDict):
     message: str
     platform: str
     datetime: str  # snuba.settings.PAYLOAD_DATETIME_FORMAT
-    data: Mapping[str, Any]
+    data: EventData
     primary_hash: str
     retention_days: int
 

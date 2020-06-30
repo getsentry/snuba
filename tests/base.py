@@ -5,20 +5,16 @@ from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import md5
-from typing import Any, Iterator, Mapping, Optional, Sequence, Union
+from typing import Iterator, Optional, Sequence, Union
 
 from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import enforce_table_writer, get_dataset
-from snuba.datasets.events_processor_base import InsertEvent
+from snuba.datasets.events_processor_base import EventData, InsertEvent
 from snuba.processor import ProcessorAction, ProcessedMessage
 from snuba.redis import redis_client
 from snuba.writer import WriterTableRow
-
-
-# A "raw event" is only the ``data`` member of ``InsertEvent``.
-RawEvent = Mapping[str, Any]
 
 
 @contextmanager
@@ -99,10 +95,10 @@ class BaseEventsTest(BaseDatasetTest):
         self.table = enforce_table_writer(self.dataset).get_schema().get_table_name()
         self.event = self.__get_event()
 
-    def __is_raw_event(self, data: Union[RawEvent, InsertEvent]) -> bool:
+    def __is_event_data(self, data: Union[EventData, InsertEvent]) -> bool:
         return not data.keys() == InsertEvent.__annotations__.keys()
 
-    def __wrap_raw_event(self, data: RawEvent) -> InsertEvent:
+    def __wrap_event_data(self, data: EventData) -> InsertEvent:
         "Wrap a raw event like the Sentry codebase does before sending to Kafka."
 
         unique = "%s:%s" % (str(data["project"]), data["id"])
@@ -125,7 +121,7 @@ class BaseEventsTest(BaseDatasetTest):
         from tests.fixtures import raw_event
 
         timestamp = datetime.utcnow()
-        return self.__wrap_raw_event(
+        return self.__wrap_event_data(
             {
                 "datetime": (timestamp - timedelta(seconds=2)).strftime(
                     settings.PAYLOAD_DATETIME_FORMAT,
@@ -148,15 +144,15 @@ class BaseEventsTest(BaseDatasetTest):
         event["retention_days"] = retention_days
         return event
 
-    def write_raw_events(self, events: Sequence[Union[RawEvent, InsertEvent]]) -> None:
+    def write_events(self, events: Sequence[Union[EventData, InsertEvent]]) -> None:
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
 
         processed_messages = []
         for event in events:
-            if self.__is_raw_event(event):
-                event = self.__wrap_raw_event(event)
+            if self.__is_event_data(event):
+                event = self.__wrap_event_data(event)
 
             processed_message = processor.process_message(event)
             assert processed_message is not None
