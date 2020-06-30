@@ -9,7 +9,6 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
-from snuba.utils.codecs import PassthroughCodec
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
 from snuba.utils.streams.batching import BatchingConsumer
@@ -126,17 +125,13 @@ class ConsumerBuilder:
             queued_min_messages=self.queued_min_messages,
         )
 
-        codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
         if self.commit_log_topic is None:
             consumer = KafkaConsumer(
-                configuration,
-                codec=codec,
-                commit_retry_policy=self.__commit_retry_policy,
+                configuration, commit_retry_policy=self.__commit_retry_policy,
             )
         else:
             consumer = KafkaConsumerWithCommitLog(
                 configuration,
-                codec=codec,
                 producer=self.producer,
                 commit_log_topic=self.commit_log_topic,
                 commit_retry_policy=self.__commit_retry_policy,

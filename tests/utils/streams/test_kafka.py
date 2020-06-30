@@ -9,17 +9,15 @@ import pytest
 from confluent_kafka.admin import AdminClient, NewTopic
 
 from snuba import settings
-from snuba.utils.codecs import PassthroughCodec
 from snuba.utils.streams.consumer import ConsumerError, EndOfPartition
 from snuba.utils.streams.kafka import (
-    CommitCodec,
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
     KafkaPayload,
     KafkaProducer,
     as_kafka_configuration_bool,
 )
-from snuba.utils.streams.synchronized import Commit
+from snuba.utils.streams.synchronized import Commit, commit_codec
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.utils.streams.mixins import StreamsTestMixin
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
@@ -41,7 +39,6 @@ def test_payload_equality() -> None:
 class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
 
     configuration = {"bootstrap.servers": ",".join(settings.DEFAULT_BROKERS)}
-    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
 
     @contextlib.contextmanager
     def get_topic(self, partitions: int = 1) -> Iterator[Topic]:
@@ -64,7 +61,7 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
         group: Optional[str] = None,
         enable_end_of_partition: bool = True,
         auto_offset_reset: str = "earliest",
-    ) -> KafkaConsumer[KafkaPayload]:
+    ) -> KafkaConsumer:
         return KafkaConsumer(
             {
                 **self.configuration,
@@ -75,11 +72,10 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
                 "group.id": group if group is not None else uuid.uuid1().hex,
                 "session.timeout.ms": 10000,
             },
-            self.codec,
         )
 
-    def get_producer(self) -> KafkaProducer[KafkaPayload]:
-        return KafkaProducer(self.configuration, self.codec)
+    def get_producer(self) -> KafkaProducer:
+        return KafkaProducer(self.configuration)
 
     def get_payloads(self) -> Iterator[KafkaPayload]:
         for i in itertools.count():
@@ -130,7 +126,7 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
         # a mock.
         commit_log_producer = FakeConfluentKafkaProducer()
 
-        consumer: KafkaConsumer[KafkaPayload] = KafkaConsumerWithCommitLog(
+        consumer: KafkaConsumer = KafkaConsumerWithCommitLog(
             {
                 **self.configuration,
                 "auto.offset.reset": "earliest",
@@ -140,7 +136,6 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
                 "group.id": "test",
                 "session.timeout.ms": 10000,
             },
-            codec=self.codec,
             producer=commit_log_producer,
             commit_log_topic=Topic("commit-log"),
         )
@@ -164,15 +159,14 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
             commit_message = commit_log_producer.messages[0]
             assert commit_message.topic() == "commit-log"
 
-            assert CommitCodec().decode(
+            assert commit_codec.decode(
                 KafkaPayload(commit_message.key(), commit_message.value())
             ) == Commit("test", Partition(topic, 0), message.get_next_offset())
 
 
 def test_commit_codec() -> None:
-    codec = CommitCodec()
     commit = Commit("group", Partition(Topic("topic"), 0), 0)
-    assert codec.decode(codec.encode(commit)) == commit
+    assert commit_codec.decode(commit_codec.encode(commit)) == commit
 
 
 def test_as_kafka_configuration_bool() -> None:
