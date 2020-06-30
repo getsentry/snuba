@@ -159,14 +159,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         """
         action_type = None
 
-        if isinstance(message, dict):
-            # deprecated unwrapped event message == insert
-            action_type = ProcessorAction.INSERT
-            try:
-                processed = self.process_insert(message, metadata)
-            except EventTooOld:
-                return None
-        elif isinstance(message, (list, tuple)) and len(message) >= 2:
+        if isinstance(message, (list, tuple)) and len(message) >= 2:
             version = message[0]
             if version != 2:
                 raise InvalidMessageVersion(f"Unsupported message version: {version}")
