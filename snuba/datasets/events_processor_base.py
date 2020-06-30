@@ -50,7 +50,7 @@ EventData = Mapping[str, Any]
 
 
 class InsertEvent(TypedDict):
-    group_id: int
+    group_id: Optional[int]
     event_id: str
     organization_id: int
     project_id: int
@@ -58,7 +58,7 @@ class InsertEvent(TypedDict):
     platform: str
     datetime: str  # snuba.settings.PAYLOAD_DATETIME_FORMAT
     data: EventData
-    primary_hash: str
+    primary_hash: str  # empty string represents None
     retention_days: int
 
 
