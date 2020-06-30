@@ -157,36 +157,26 @@ class EventsProcessorBase(MessageProcessor, ABC):
         * processed_message: dict representing the processed column -> value(s)
         Returns `None` if the event is too old to be written.
         """
-        action_type = None
+        version = message[0]
+        if version != 2:
+            raise InvalidMessageVersion(f"Unsupported message version: {version}")
 
-        if isinstance(message, (list, tuple)) and len(message) >= 2:
-            version = message[0]
-            if version != 2:
-                raise InvalidMessageVersion(f"Unsupported message version: {version}")
-
-            # version 2: (2, type, data, [state])
-            type_, event = message[1:3]
-            if type_ == "insert":
-                action_type = ProcessorAction.INSERT
-                try:
-                    processed = self.process_insert(event, metadata)
-                except EventTooOld:
-                    return None
-            else:
-                if type_ in REPLACEMENT_EVENT_TYPES:
-                    # pass raw events along to republish
-                    action_type = ProcessorAction.REPLACE
-                    processed = (str(event["project_id"]), message)
-                else:
-                    raise InvalidMessageType(f"Invalid message type: {type_}")
-
-        if action_type is None:
-            raise InvalidMessageVersion(f"Unknown message format: {message}")
-
-        if processed is None:
-            return None
-
-        return ProcessedMessage(action=action_type, data=[processed])
+        # version 2: (2, type, data, [state])
+        type_, event = message[1:3]
+        if type_ == "insert":
+            try:
+                return ProcessedMessage(
+                    ProcessorAction.INSERT, [self.process_insert(event, metadata)]
+                )
+            except EventTooOld:
+                return None
+        elif type_ in REPLACEMENT_EVENT_TYPES:
+            # pass raw events along to republish
+            return ProcessedMessage(
+                ProcessorAction.REPLACE, [(str(event["project_id"]), message)]
+            )
+        else:
+            raise InvalidMessageType(f"Invalid message type: {type_}")
 
     def process_insert(
         self, event: InsertEvent, metadata: Optional[KafkaMessageMetadata] = None
