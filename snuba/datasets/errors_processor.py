@@ -31,9 +31,7 @@ class ErrorsProcessor(EventsProcessorBase):
         )
 
     def _should_process(self, event: InsertEvent) -> bool:
-        # This is to convince mypy that we actually return a bool
-        data: Mapping[str, Any] = event["data"]
-        return data.get("type") != "transaction"
+        return event["data"].get("type") != "transaction"
 
     def _extract_event_id(
         self, output: MutableMapping[str, Any], event: InsertEvent,
