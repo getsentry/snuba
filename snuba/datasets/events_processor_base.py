@@ -46,9 +46,6 @@ REPLACEMENT_EVENT_TYPES = frozenset(
 )
 
 
-EventData = Mapping[str, Any]
-
-
 class InsertEvent(TypedDict):
     group_id: Optional[int]
     event_id: str
@@ -57,7 +54,7 @@ class InsertEvent(TypedDict):
     message: str
     platform: str
     datetime: str  # snuba.settings.PAYLOAD_DATETIME_FORMAT
-    data: EventData
+    data: Mapping[str, Any]
     primary_hash: str  # empty string represents None
     retention_days: int
 
