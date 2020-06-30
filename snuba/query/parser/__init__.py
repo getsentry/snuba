@@ -101,7 +101,7 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
             )
         return output
 
-    aggregate_exprs = []
+    aggregations = []
     for aggregation in body.get("aggregations", []):
         assert isinstance(aggregation, (list, tuple))
         aggregation_function = aggregation[0]
@@ -110,18 +110,18 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
         alias = aggregation[2]
         alias = alias if alias else None
 
-        aggregate_exprs.append(
+        aggregations.append(
             SelectedExpression(
                 name=alias,
                 expression=parse_aggregation(aggregation_function, column_expr, alias),
             )
         )
 
-    groupby_exprs = build_selected_expressions(to_list(body.get("groupby", [])))
+    groupby_clause = build_selected_expressions(to_list(body.get("groupby", [])))
 
     select_clause = (
-        groupby_exprs
-        + aggregate_exprs
+        groupby_clause
+        + aggregations
         + build_selected_expressions(body.get("selected_columns", []))
     )
 
@@ -164,7 +164,7 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
         selected_columns=select_clause,
         array_join=array_join_expr,
         condition=where_expr,
-        groupby=[g.expression for g in groupby_exprs],
+        groupby=[g.expression for g in groupby_clause],
         having=having_expr,
         order_by=orderby_exprs,
     )
