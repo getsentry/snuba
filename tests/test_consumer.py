@@ -110,6 +110,6 @@ class TestConsumer(BaseEventsTest):
         )
 
         assert [(m._topic, m._key, m._value) for m in producer.messages] == [
-            ("event-replacements", b"1", b'{"project_id": 1}'),
-            ("event-replacements", b"2", b'{"project_id": 2}'),
+            ("event-replacements", b"1", b'{"project_id":1}'),
+            ("event-replacements", b"2", b'{"project_id":2}'),
         ]
