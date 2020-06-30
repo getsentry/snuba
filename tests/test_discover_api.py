@@ -24,7 +24,7 @@ class TestDiscoverApi(BaseApiTest):
             self.__dataset_manager.enter_context(dataset_manager(dataset_name))
 
         self.app.post = partial(self.app.post, headers={"referer": "test"})
-        self.project_id = 70156
+        self.project_id = self.event["project_id"]
 
         self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
         self.generate_event()
@@ -35,15 +35,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def generate_event(self):
         self.dataset = get_dataset("events")
-        assert self.event["project_id"] == self.project_id
-        self.write_processed_messages(
-            [
-                enforce_table_writer(self.dataset)
-                .get_stream_loader()
-                .get_processor()
-                .process_message(self.event)
-            ]
-        )
+        self.write_events([self.event])
 
     def generate_transaction(self):
         self.dataset = get_dataset("transactions")
