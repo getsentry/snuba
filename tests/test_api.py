@@ -1672,39 +1672,6 @@ class TestApi(BaseApiTest):
         )
         assert response["stats"]["consistent"]
 
-    def test_message_is_search_message(self):
-        # all messages contain 'message'
-        response = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
-                    {
-                        "project": [1, 2, 3],
-                        "conditions": [["message", "LIKE", "%message%"]],
-                        "groupby": "project_id",
-                        "debug": True,
-                    }
-                ),
-            ).data
-        )
-        assert sorted(r["project_id"] for r in response["data"]) == [1, 2, 3]
-
-        # only project 3 has a search_message with 'long search' in it
-        response = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
-                    {
-                        "project": [1, 2, 3],
-                        "conditions": [["message", "LIKE", "%long search%"]],
-                        "groupby": "project_id",
-                        "debug": True,
-                    }
-                ),
-            ).data
-        )
-        assert sorted(r["project_id"] for r in response["data"]) == [3]
-
     def test_gracefully_handle_multiple_conditions_on_same_column(self):
         response = self.app.post(
             "/query",
