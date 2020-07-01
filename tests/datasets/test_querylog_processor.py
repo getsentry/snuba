@@ -3,7 +3,7 @@ import uuid
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.processor import ProcessedMessage, ProcessorAction
+from snuba.processor import InsertBatch
 from snuba.query.logical import Query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
@@ -59,8 +59,7 @@ def test_simple():
         .get_processor()
     )
 
-    assert processor.process_message(message) == ProcessedMessage(
-        ProcessorAction.INSERT,
+    assert processor.process_message(message) == InsertBatch(
         [
             {
                 "request_id": str(uuid.UUID("a" * 32)),

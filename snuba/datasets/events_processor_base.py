@@ -15,11 +15,12 @@ from snuba.datasets.events_format import (
     extract_project_id,
 )
 from snuba.processor import (
+    InsertBatch,
     InvalidMessageType,
     InvalidMessageVersion,
     MessageProcessor,
     ProcessedMessage,
-    ProcessorAction,
+    ReplacementMessage,
     _as_dict_safe,
     _boolify,
     _collapse_uint32,
@@ -27,7 +28,6 @@ from snuba.processor import (
     _hashify,
     _unicodify,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -169,12 +169,10 @@ class EventsProcessorBase(MessageProcessor, ABC):
             if row is None:  # the processor cannot/does not handle this input
                 return None
 
-            return ProcessedMessage(ProcessorAction.INSERT, [row])
+            return InsertBatch([row])
         elif type_ in REPLACEMENT_EVENT_TYPES:
             # pass raw events along to republish
-            return ProcessedMessage(
-                ProcessorAction.REPLACE, [(str(event["project_id"]), message)]
-            )
+            return ReplacementMessage(str(event["project_id"]), message)
         else:
             raise InvalidMessageType(f"Invalid message type: {type_}")
 
