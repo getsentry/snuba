@@ -124,6 +124,7 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         # Time/column split queries
         "api.organization-events-direct-hit": 100,
         "eventstore.get_unfetched_events": 100,
+        "eventstore.get_event_by_id_nodestore": 100,
         "api.organization-events": 100,
         "api.group-events": 100,
         "Group.get_latest": 100,
