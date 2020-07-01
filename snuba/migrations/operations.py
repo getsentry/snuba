@@ -80,3 +80,24 @@ class CreateTable(SqlOperation):
         engine = self.__engine.get_sql(cluster, self.__table_name)
 
         return f"CREATE TABLE IF NOT EXISTS {self.__table_name} ({columns}) ENGINE {engine};"
+
+
+class CreateMaterializedView(SqlOperation):
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        view_name: str,
+        destination_table_name: str,
+        columns: Sequence[Column],
+        query: str,
+    ) -> None:
+        self.__view_name = view_name
+        self.__destination_table_name = destination_table_name
+        self.__columns = columns
+        self.__query = query
+        super().__init__(storage_set)
+
+    def format_sql(self) -> str:
+        columns = ", ".join([col.for_schema() for col in self.__columns])
+
+        return f"CREATE MATERIALIZED VIEW IF NOT EXISTS {self.__view_name} TO {self.__destination_table_name} ({columns}) AS {self.__query};"

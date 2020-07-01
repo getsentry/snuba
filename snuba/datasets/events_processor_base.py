@@ -3,6 +3,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
+from typing_extensions import TypedDict
+
 from snuba import settings
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.events_format import (
@@ -26,7 +28,38 @@ from snuba.processor import (
     _unicodify,
 )
 
+
 logger = logging.getLogger(__name__)
+
+
+REPLACEMENT_EVENT_TYPES = frozenset(
+    [
+        "start_delete_groups",
+        "start_merge",
+        "start_unmerge",
+        "start_delete_tag",
+        "end_delete_groups",
+        "end_merge",
+        "end_unmerge",
+        "end_delete_tag",
+    ]
+)
+
+
+EventData = Mapping[str, Any]
+
+
+class InsertEvent(TypedDict):
+    group_id: Optional[int]
+    event_id: str
+    organization_id: int
+    project_id: int
+    message: str
+    platform: str
+    datetime: str  # snuba.settings.PAYLOAD_DATETIME_FORMAT
+    data: EventData
+    primary_hash: str  # empty string represents None
+    retention_days: int
 
 
 class EventsProcessorBase(MessageProcessor, ABC):
@@ -35,12 +68,12 @@ class EventsProcessorBase(MessageProcessor, ABC):
     """
 
     @abstractmethod
-    def _should_process(self, event: Mapping[str, Any]) -> bool:
+    def _should_process(self, event: InsertEvent) -> bool:
         raise NotImplementedError
 
     @abstractmethod
     def _extract_event_id(
-        self, output: MutableMapping[str, Any], event: Mapping[str, Any],
+        self, output: MutableMapping[str, Any], event: InsertEvent,
     ) -> None:
         raise NotImplementedError
 
@@ -48,7 +81,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
     def extract_custom(
         self,
         output: MutableMapping[str, Any],
-        event: Mapping[str, Any],
+        event: InsertEvent,
         metadata: Optional[KafkaMessageMetadata] = None,
     ) -> None:
         raise NotImplementedError
@@ -63,7 +96,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
     def extract_tags_custom(
         self,
         output: MutableMapping[str, Any],
-        event: Mapping[str, Any],
+        event: InsertEvent,
         tags: Mapping[str, Any],
         metadata: Optional[KafkaMessageMetadata] = None,
     ) -> None:
@@ -82,14 +115,14 @@ class EventsProcessorBase(MessageProcessor, ABC):
     def extract_contexts_custom(
         self,
         output: MutableMapping[str, Any],
-        event: Mapping[str, Any],
+        event: InsertEvent,
         contexts: Mapping[str, Any],
         metadata: Optional[KafkaMessageMetadata] = None,
     ) -> None:
         raise NotImplementedError
 
     def extract_required(
-        self, output: MutableMapping[str, Any], event: Mapping[str, Any]
+        self, output: MutableMapping[str, Any], event: InsertEvent,
     ) -> None:
         output["group_id"] = event["group_id"] or 0
 
@@ -135,57 +168,27 @@ class EventsProcessorBase(MessageProcessor, ABC):
                 return None
         elif isinstance(message, (list, tuple)) and len(message) >= 2:
             version = message[0]
+            if version != 2:
+                raise InvalidMessageVersion(f"Unsupported message version: {version}")
 
-            if version in (0, 1, 2):
-                # version 0: (0, 'insert', data)
-                # version 1: (1, type, data, [state])
-                #   NOTE: types 'delete_groups', 'merge' and 'unmerge' are ignored
-                # version 2: (2, type, data, [state])
-                type_, event = message[1:3]
-                if type_ == "insert":
-                    action_type = ProcessorAction.INSERT
-                    try:
-                        processed = self.process_insert(event, metadata)
-                    except EventTooOld:
-                        return None
+            # version 2: (2, type, data, [state])
+            type_, event = message[1:3]
+            if type_ == "insert":
+                action_type = ProcessorAction.INSERT
+                try:
+                    processed = self.process_insert(event, metadata)
+                except EventTooOld:
+                    return None
+            else:
+                if type_ in REPLACEMENT_EVENT_TYPES:
+                    # pass raw events along to republish
+                    action_type = ProcessorAction.REPLACE
+                    processed = (str(event["project_id"]), message)
                 else:
-                    if version == 0:
-                        raise InvalidMessageType(
-                            "Invalid message type: {}".format(type_)
-                        )
-                    elif version == 1:
-                        if type_ in ("delete_groups", "merge", "unmerge"):
-                            # these didn't contain the necessary data to handle replacements
-                            return None
-                        else:
-                            raise InvalidMessageType(
-                                "Invalid message type: {}".format(type_)
-                            )
-                    elif version == 2:
-                        # we temporarily sent these invalid message types from Sentry
-                        if type_ in ("delete_groups", "merge"):
-                            return None
-
-                        if type_ in (
-                            "start_delete_groups",
-                            "start_merge",
-                            "start_unmerge",
-                            "start_delete_tag",
-                            "end_delete_groups",
-                            "end_merge",
-                            "end_unmerge",
-                            "end_delete_tag",
-                        ):
-                            # pass raw events along to republish
-                            action_type = ProcessorAction.REPLACE
-                            processed = (str(event["project_id"]), message)
-                        else:
-                            raise InvalidMessageType(
-                                "Invalid message type: {}".format(type_)
-                            )
+                    raise InvalidMessageType(f"Invalid message type: {type_}")
 
         if action_type is None:
-            raise InvalidMessageVersion("Unknown message format: " + str(message))
+            raise InvalidMessageVersion(f"Unknown message format: {message}")
 
         if processed is None:
             return None
@@ -193,7 +196,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         return ProcessedMessage(action=action_type, data=[processed])
 
     def process_insert(
-        self, event: Mapping[str, Any], metadata: Optional[KafkaMessageMetadata] = None
+        self, event: InsertEvent, metadata: Optional[KafkaMessageMetadata] = None
     ) -> Optional[Mapping[str, Any]]:
         if not self._should_process(event):
             return None
@@ -249,7 +252,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
     def extract_common(
         self,
         output: MutableMapping[str, Any],
-        event: Mapping[str, Any],
+        event: InsertEvent,
         metadata: Optional[KafkaMessageMetadata] = None,
     ) -> None:
         # Properties we get from the top level of the message payload

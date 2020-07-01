@@ -13,7 +13,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.logical import OrderBy, OrderByDirection, Query
+from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
 from snuba.query.parser import parse_query
 from snuba.query.parser.exceptions import CyclicAliasException
 
@@ -28,14 +28,17 @@ test_cases = [
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                Column("column2", None, "column2"),
-                Column("column3", None, "column3"),
-                FunctionCall(
+                SelectedExpression("column2", Column("column2", None, "column2")),
+                SelectedExpression("column3", Column("column3", None, "column3")),
+                SelectedExpression(
                     "test_func_alias",
-                    "test_func",
-                    (Column("column4", None, "column4"),),
+                    FunctionCall(
+                        "test_func_alias",
+                        "test_func",
+                        (Column("column4", None, "column4"),),
+                    ),
                 ),
-                Column("column1", None, "column1"),
+                SelectedExpression("column1", Column("column1", None, "column1")),
             ],
             groupby=[
                 Column("column2", None, "column2"),
@@ -63,32 +66,49 @@ test_cases = [
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                FunctionCall(
-                    None, "format_eventid", (Column("event_id", None, "event_id"),)
+                SelectedExpression(
+                    None,
+                    FunctionCall(
+                        None, "format_eventid", (Column("event_id", None, "event_id"),)
+                    ),
                 ),
-                FunctionCall(
-                    "platforms", "count", (Column("platform", None, "platform"),)
+                SelectedExpression(
+                    "platforms",
+                    FunctionCall(
+                        "platforms", "count", (Column("platform", None, "platform"),)
+                    ),
                 ),
-                FunctionCall(
-                    "uniq_platforms", "uniq", (Column("platform", None, "platform"),)
+                SelectedExpression(
+                    "uniq_platforms",
+                    FunctionCall(
+                        "uniq_platforms",
+                        "uniq",
+                        (Column("platform", None, "platform"),),
+                    ),
                 ),
-                FunctionCall(
+                SelectedExpression(
                     "top_platforms",
-                    "testF",
-                    (
-                        Column("platform", None, "platform"),
-                        Column("field2", None, "field2"),
+                    FunctionCall(
+                        "top_platforms",
+                        "testF",
+                        (
+                            Column("platform", None, "platform"),
+                            Column("field2", None, "field2"),
+                        ),
                     ),
                 ),
-                FunctionCall(
+                SelectedExpression(
                     "f1_alias",
-                    "f1",
-                    (
-                        Column("column1", None, "column1"),
-                        Column("column2", None, "column2"),
+                    FunctionCall(
+                        "f1_alias",
+                        "f1",
+                        (
+                            Column("column1", None, "column1"),
+                            Column("column2", None, "column2"),
+                        ),
                     ),
                 ),
-                FunctionCall("f2_alias", "f2", ()),
+                SelectedExpression("f2_alias", FunctionCall("f2_alias", "f2", ())),
             ],
             condition=binary_condition(
                 None,
@@ -125,8 +145,8 @@ test_cases = [
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                Column("column1", None, "column1"),
-                Column("column2", None, "column2"),
+                SelectedExpression("column1", Column("column1", None, "column1")),
+                SelectedExpression("column2", Column("column2", None, "column2")),
             ],
             condition=None,
             groupby=None,
@@ -147,7 +167,9 @@ test_cases = [
         Query(
             {},
             TableSource("events", ColumnSet([])),
-            selected_columns=[Column("column1", None, "column1")],
+            selected_columns=[
+                SelectedExpression("column1", Column("column1", None, "column1"))
+            ],
             condition=None,
             groupby=[Column("column1", None, "column1")],
             having=None,
@@ -166,20 +188,28 @@ test_cases = [
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                FunctionCall(
-                    None,
-                    "f",
-                    (
-                        SubscriptableReference(
-                            "tags[test2]",
-                            Column("tags", None, "tags"),
-                            Literal(None, "test2"),
+                SelectedExpression(
+                    name=None,
+                    expression=FunctionCall(
+                        None,
+                        "f",
+                        (
+                            SubscriptableReference(
+                                "tags[test2]",
+                                Column("tags", None, "tags"),
+                                Literal(None, "test2"),
+                            ),
                         ),
                     ),
                 ),
-                Column("column1", None, "column1"),
-                SubscriptableReference(
-                    "tags[test]", Column("tags", None, "tags"), Literal(None, "test")
+                SelectedExpression("column1", Column("column1", None, "column1")),
+                SelectedExpression(
+                    "tags[test]",
+                    SubscriptableReference(
+                        "tags[test]",
+                        Column("tags", None, "tags"),
+                        Literal(None, "test"),
+                    ),
                 ),
             ],
             groupby=[
@@ -212,20 +242,31 @@ test_cases = [
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                FunctionCall(
+                SelectedExpression(
                     "group_id",
-                    "f",
-                    (
-                        FunctionCall(
-                            "issue_id", "g", (Column("something", None, "something"),)
+                    FunctionCall(
+                        "group_id",
+                        "f",
+                        (
+                            FunctionCall(
+                                "issue_id",
+                                "g",
+                                (Column("something", None, "something"),),
+                            ),
                         ),
                     ),
                 ),
-                FunctionCall(
-                    "issue_id", "g", (Column("something", None, "something"),)
+                SelectedExpression(
+                    "issue_id",
+                    FunctionCall(
+                        "issue_id", "g", (Column("something", None, "something"),)
+                    ),
                 ),
-                FunctionCall(
-                    "a", "f", (FunctionCall(None, "z", (Column(None, None, "a"),)),)
+                SelectedExpression(
+                    "a",
+                    FunctionCall(
+                        "a", "f", (FunctionCall(None, "z", (Column(None, None, "a"),)),)
+                    ),
                 ),
             ],
             condition=binary_condition(
@@ -267,8 +308,14 @@ test_cases = [
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                FunctionCall("exp", "f", (Column("column3", None, "column3"),)),
-                FunctionCall("exp", "f", (Column("column3", None, "column3"),)),
+                SelectedExpression(
+                    "exp",
+                    FunctionCall("exp", "f", (Column("column3", None, "column3"),)),
+                ),
+                SelectedExpression(
+                    "exp",
+                    FunctionCall("exp", "f", (Column("column3", None, "column3"),)),
+                ),
             ],
         ),
         id="Allowed duplicate alias (same expression)",

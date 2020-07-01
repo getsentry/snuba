@@ -55,7 +55,9 @@ class AstSqlQuery(SqlQuery):
         parsing_context = ParsingContext()
         formatter = ClickhouseExpressionFormatter(parsing_context)
 
-        selected_cols = [e.accept(formatter) for e in self.__selected_columns]
+        selected_cols = [
+            e.expression.accept(formatter) for e in self.__selected_columns
+        ]
         select_clause = f"SELECT {', '.join(selected_cols)}"
 
         # TODO: The visitor approach will be used for the FROM clause as well.

@@ -18,6 +18,7 @@ from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
 from snuba.query.expressions import Literal as LiteralExpr
+from snuba.query.logical import SelectedExpression
 from snuba.query.matchers import (
     Any,
     AnyExpression,
@@ -337,9 +338,16 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         # in joins.
         minimal_query.set_ast_selected_columns(
             [
-                ColumnExpr(None, None, self.__id_column),
-                ColumnExpr(None, None, self.__project_column),
-                ColumnExpr(None, None, self.__timestamp_column),
+                SelectedExpression(
+                    self.__id_column, ColumnExpr(None, None, self.__id_column)
+                ),
+                SelectedExpression(
+                    self.__project_column, ColumnExpr(None, None, self.__project_column)
+                ),
+                SelectedExpression(
+                    self.__timestamp_column,
+                    ColumnExpr(None, None, self.__timestamp_column),
+                ),
             ]
         )
 
