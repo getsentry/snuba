@@ -71,6 +71,14 @@ class MultiStepMigration(Migration, ABC):
     def backwards_local(self) -> Sequence[Operation]:
         raise NotImplementedError
 
+    @abstractmethod
+    def forwards_dist(self) -> Sequence[Operation]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def backwards_dist(self) -> Sequence[Operation]:
+        raise NotImplementedError
+
     def forwards(self, context: Context) -> None:
         migration_id, logger, update_status = context
         logger.info(f"Running migration: {migration_id}")
