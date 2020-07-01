@@ -94,7 +94,7 @@ class Distributed(TableEngine):
         self.__sharding_key = sharding_key
 
     def get_sql(self, cluster: ClickhouseCluster, table_name: str) -> str:
-        cluster_name = cluster.get_cluster_name()
+        cluster_name = cluster.get_clickhouse_cluster_name()
         assert not cluster.is_single_node()
         assert cluster_name is not None
         database_name = cluster.get_database()

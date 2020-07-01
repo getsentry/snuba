@@ -241,7 +241,7 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         """
         return self.__single_node
 
-    def get_cluster_name(self) -> Optional[str]:
+    def get_clickhouse_cluster_name(self) -> Optional[str]:
         return self.__cluster_name
 
     def get_database(self) -> str:
