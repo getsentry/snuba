@@ -8,7 +8,7 @@ import pytz
 from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.processor import ProcessedMessage, InsertBatch
+from snuba.processor import InsertBatch, ProcessedMessage
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.kafka import KafkaPayload
