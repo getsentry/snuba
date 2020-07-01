@@ -20,7 +20,7 @@ from snuba.processor import (
     InvalidMessageVersion,
     MessageProcessor,
     ProcessedMessage,
-    ReplacementMessage,
+    ReplacementBatch,
     _as_dict_safe,
     _boolify,
     _collapse_uint32,
@@ -172,7 +172,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
             return InsertBatch([row])
         elif type_ in REPLACEMENT_EVENT_TYPES:
             # pass raw events along to republish
-            return ReplacementMessage(str(event["project_id"]), message)
+            return ReplacementBatch(str(event["project_id"]), [message])
         else:
             raise InvalidMessageType(f"Invalid message type: {type_}")
 

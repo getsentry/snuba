@@ -6,7 +6,7 @@ import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba.datasets.storage import WritableTableStorage
-from snuba.processor import InsertBatch, ProcessedMessage, ReplacementMessage
+from snuba.processor import InsertBatch, ProcessedMessage, ReplacementBatch
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker
 from snuba.utils.streams.kafka import KafkaPayload
@@ -79,12 +79,12 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         """First write out all new INSERTs as a single batch, then reproduce any
         event replacements such as deletions, merges and unmerges."""
         inserts: MutableSequence[WriterTableRow] = []
-        replacements: MutableSequence[ReplacementMessage] = []
+        replacements: MutableSequence[ReplacementBatch] = []
 
         for item in batch:
             if isinstance(item, InsertBatch):
                 inserts.extend(item.rows)
-            elif isinstance(item, ReplacementMessage):
+            elif isinstance(item, ReplacementBatch):
                 replacements.append(item)
             else:
                 raise TypeError(f"unexpected type: {item}")
@@ -96,11 +96,13 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
 
         if replacements:
             for replacement in replacements:
-                self.producer.produce(
-                    self.replacements_topic.name,
-                    key=str(replacement.key).encode("utf-8"),
-                    value=rapidjson.dumps(replacement.value).encode("utf-8"),
-                    on_delivery=self.delivery_callback,
-                )
+                key = replacement.key.encode("utf-8")
+                for value in replacement.values:
+                    self.producer.produce(
+                        self.replacements_topic.name,
+                        key=key,
+                        value=rapidjson.dumps(value).encode("utf-8"),
+                        on_delivery=self.delivery_callback,
+                    )
 
             self.producer.flush()

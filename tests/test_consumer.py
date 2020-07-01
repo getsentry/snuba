@@ -8,7 +8,7 @@ from snuba.consumer import ConsumerWorker
 from snuba.datasets.factory import enforce_table_writer
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.processor import ReplacementMessage
+from snuba.processor import ReplacementBatch
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
@@ -101,8 +101,8 @@ class TestConsumer(BaseEventsTest):
 
         test_worker.flush_batch(
             [
-                ReplacementMessage("1", {"project_id": 1}),
-                ReplacementMessage("2", {"project_id": 2}),
+                ReplacementBatch("1", [{"project_id": 1}]),
+                ReplacementBatch("2", [{"project_id": 2}]),
             ]
         )
 

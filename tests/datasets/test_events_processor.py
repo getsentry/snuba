@@ -20,7 +20,7 @@ from snuba.processor import (
     InvalidMessageType,
     InvalidMessageVersion,
     ProcessedMessage,
-    ReplacementMessage,
+    ReplacementBatch,
 )
 from tests.base import BaseEventsTest
 
@@ -141,8 +141,8 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ReplacementMessage(
-            str(project_id), message
+        assert processor.process_message(message) == ReplacementBatch(
+            str(project_id), [message]
         )
 
     def test_v2_end_delete_groups(self):
@@ -151,8 +151,8 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ReplacementMessage(
-            str(project_id), message
+        assert processor.process_message(message) == ReplacementBatch(
+            str(project_id), [message]
         )
 
     def test_v2_start_merge(self):
@@ -161,8 +161,8 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ReplacementMessage(
-            str(project_id), message
+        assert processor.process_message(message) == ReplacementBatch(
+            str(project_id), [message]
         )
 
     def test_v2_end_merge(self):
@@ -171,8 +171,8 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ReplacementMessage(
-            str(project_id), message
+        assert processor.process_message(message) == ReplacementBatch(
+            str(project_id), [message]
         )
 
     def test_v2_start_unmerge(self):
@@ -181,8 +181,8 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ReplacementMessage(
-            str(project_id), message
+        assert processor.process_message(message) == ReplacementBatch(
+            str(project_id), [message]
         )
 
     def test_v2_end_unmerge(self):
@@ -191,8 +191,8 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ReplacementMessage(
-            str(project_id), message
+        assert processor.process_message(message) == ReplacementBatch(
+            str(project_id), [message]
         )
 
     def test_v2_start_delete_tag(self):
@@ -201,8 +201,8 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ReplacementMessage(
-            str(project_id), message
+        assert processor.process_message(message) == ReplacementBatch(
+            str(project_id), [message]
         )
 
     def test_v2_end_delete_tag(self):
@@ -211,8 +211,8 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ReplacementMessage(
-            str(project_id), message
+        assert processor.process_message(message) == ReplacementBatch(
+            str(project_id), [message]
         )
 
     def test_extract_sdk(self):

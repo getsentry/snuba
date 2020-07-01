@@ -21,12 +21,12 @@ class InsertBatch(NamedTuple):
     rows: Sequence[WriterTableRow]
 
 
-class ReplacementMessage(NamedTuple):
+class ReplacementBatch(NamedTuple):
     key: str
-    value: Any
+    values: Sequence[Any]
 
 
-ProcessedMessage = Union[InsertBatch, ReplacementMessage]
+ProcessedMessage = Union[InsertBatch, ReplacementBatch]
 
 
 class MessageProcessor(ABC):
