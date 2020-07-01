@@ -106,6 +106,10 @@ class CreateMaterializedView(SqlOperation):
 class AddColumn(SqlOperation):
     """
     Adds a column to a table.
+
+    The `after` value represents the name of the existing column after which the
+    new column will be added. If no value is passed, it will be added in the last
+    position. There is no way to add a column at the start of the table.
     """
 
     def __init__(
@@ -122,9 +126,7 @@ class AddColumn(SqlOperation):
 
     def format_sql(self) -> str:
         column = self.__column.for_schema()
-        optional_after_clause = (
-            f" AFTER {self.__after}" if self.__after is not None else ""
-        )
+        optional_after_clause = f" AFTER {self.__after}" if self.__after else ""
         return f"ALTER TABLE {self.__table_name} ADD COLUMN IF NOT EXISTS {column}{optional_after_clause};"
 
 
@@ -193,9 +195,7 @@ class AddIndex(SqlOperation):
         self.__after = after
 
     def format_sql(self) -> str:
-        optional_after_clause = (
-            f" AFTER {self.__after}" if self.__after is not None else ""
-        )
+        optional_after_clause = f" AFTER {self.__after}" if self.__after else ""
         return f"ALTER TABLE {self.__table_name} ADD INDEX {self.__index_name} {self.__index_expression} TYPE {self.__index_type} GRANULARITY {self.__granularity}{optional_after_clause};"
 
 
