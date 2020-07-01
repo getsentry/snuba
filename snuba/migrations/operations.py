@@ -39,10 +39,10 @@ class SqlOperation(Operation, ABC):
 class RunSql(SqlOperation):
     def __init__(self, storage_set: StorageSetKey, statement: str) -> None:
         super().__init__(storage_set)
-        self.statement = statement
+        self.__statement = statement
 
     def format_sql(self) -> str:
-        return self.statement
+        return self.__statement
 
 
 class DropTable(SqlOperation):
@@ -135,7 +135,7 @@ class DropColumn(SqlOperation):
     Drops a column from a table.
 
     The data from that column will be removed from the filesystem, so this command
-    shouuld only be performed once the column is no longer referenced anywhere else.
+    shouuld only be performed once the column is no longer being referenced anywhere.
 
     You cannot drop a column that is part of the the primary key or the sampling
     key in the engine expression.
