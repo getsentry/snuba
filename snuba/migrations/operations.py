@@ -5,6 +5,7 @@ from typing import Sequence
 from snuba.clickhouse.columns import Column
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.migrations.errors import InvalidStorageSet
 from snuba.migrations.table_engines import TableEngine
 
 
@@ -19,8 +20,11 @@ class Operation(ABC):
 
 
 class SqlOperation(Operation, ABC):
-    def __init__(self, storage_set: StorageSetKey):
-        self._storage_set = storage_set
+    def __init__(self, storage_set: str):
+        try:
+            self._storage_set = StorageSetKey(storage_set)
+        except ValueError:
+            raise InvalidStorageSet(f"No storage set: {storage_set}")
 
     def execute(self) -> None:
         cluster = get_cluster(self._storage_set)
@@ -37,21 +41,21 @@ class SqlOperation(Operation, ABC):
 
 
 class RunSql(SqlOperation):
-    def __init__(self, storage_set: StorageSetKey, statement: str) -> None:
-        self.statement = statement
+    def __init__(self, storage_set: str, statement: str) -> None:
         super().__init__(storage_set)
+        self.__statement = statement
 
     def format_sql(self) -> str:
-        return self.statement
+        return self.__statement
 
 
 class DropTable(SqlOperation):
-    def __init__(self, storage_set: StorageSetKey, table_name: str) -> None:
-        self.table_name = table_name
+    def __init__(self, storage_set: str, table_name: str) -> None:
         super().__init__(storage_set)
+        self.__table_name = table_name
 
     def format_sql(self) -> str:
-        return f"DROP TABLE IF EXISTS {self.table_name};"
+        return f"DROP TABLE IF EXISTS {self.__table_name};"
 
 
 class CreateTable(SqlOperation):
@@ -63,20 +67,19 @@ class CreateTable(SqlOperation):
 
     def __init__(
         self,
-        storage_set: StorageSetKey,
+        storage_set: str,
         table_name: str,
         columns: Sequence[Column],
         engine: TableEngine,
     ):
-        self.__storage_set_key = storage_set
+        super().__init__(storage_set)
         self.__table_name = table_name
         self.__columns = columns
         self.__engine = engine
-        super().__init__(storage_set)
 
     def format_sql(self) -> str:
         columns = ", ".join([col.for_schema() for col in self.__columns])
-        cluster = get_cluster(self.__storage_set_key)
+        cluster = get_cluster(self._storage_set)
         engine = self.__engine.get_sql(cluster, self.__table_name)
 
         return f"CREATE TABLE IF NOT EXISTS {self.__table_name} ({columns}) ENGINE {engine};"
@@ -85,17 +88,17 @@ class CreateTable(SqlOperation):
 class CreateMaterializedView(SqlOperation):
     def __init__(
         self,
-        storage_set: StorageSetKey,
+        storage_set: str,
         view_name: str,
         destination_table_name: str,
         columns: Sequence[Column],
         query: str,
     ) -> None:
+        super().__init__(storage_set)
         self.__view_name = view_name
         self.__destination_table_name = destination_table_name
         self.__columns = columns
         self.__query = query
-        super().__init__(storage_set)
 
     def format_sql(self) -> str:
         columns = ", ".join([col.for_schema() for col in self.__columns])

@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod, abstractproperty
 from typing import Sequence
 
 from snuba.migrations.context import Context
+from snuba.migrations.errors import InvalidStorageSet
 from snuba.migrations.operations import Operation
 from snuba.migrations.status import Status
 
@@ -36,7 +37,7 @@ class Migration(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def forwards(self, context: Context) -> None:
+    def forwards(self, context: Context) -> Status:
         raise NotImplementedError
 
 
@@ -71,11 +72,17 @@ class MultiStepMigration(Migration, ABC):
     def backwards_local(self) -> Sequence[Operation]:
         raise NotImplementedError
 
-    def forwards(self, context: Context) -> None:
+    def forwards(self, context: Context) -> Status:
         migration_id, logger, update_status = context
         logger.info(f"Running migration: {migration_id}")
         update_status(Status.IN_PROGRESS)
-        for op in self.forwards_local():
-            op.execute()
+        try:
+            for op in self.forwards_local():
+                op.execute()
+        except InvalidStorageSet:
+            logger.warning(f"Invalid storage set, skipping migration: {migration_id}")
+            update_status(Status.NOT_STARTED)
+            return Status.NOT_STARTED
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
+        return Status.COMPLETED

@@ -1,7 +1,6 @@
 from typing import Sequence
 
 from snuba.clickhouse.columns import Column, DateTime, Enum, String, UInt, WithDefault
-from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.context import Context
 from snuba.migrations.status import Status
@@ -31,7 +30,7 @@ class Migration(migration.Migration):
     def __forwards_local(self) -> Sequence[operations.Operation]:
         return [
             operations.CreateTable(
-                storage_set=StorageSetKey.MIGRATIONS,
+                storage_set="migrations",
                 table_name="migrations_local",
                 columns=columns,
                 engine=ReplacingMergeTree(
@@ -43,14 +42,14 @@ class Migration(migration.Migration):
     def __backwards_local(self) -> Sequence[operations.Operation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.MIGRATIONS, table_name="migrations_local",
+                storage_set="migrations", table_name="migrations_local",
             )
         ]
 
     def __forwards_dist(self) -> Sequence[operations.Operation]:
         return [
             operations.CreateTable(
-                storage_set=StorageSetKey.MIGRATIONS,
+                storage_set="migrations",
                 table_name="migrations_dist",
                 columns=columns,
                 engine=Distributed(
@@ -61,12 +60,10 @@ class Migration(migration.Migration):
 
     def __backwards_dist(self) -> Sequence[operations.Operation]:
         return [
-            operations.DropTable(
-                storage_set=StorageSetKey.MIGRATIONS, table_name="migrations_dist"
-            )
+            operations.DropTable(storage_set="migrations", table_name="migrations_dist")
         ]
 
-    def forwards(self, context: Context) -> None:
+    def forwards(self, context: Context) -> Status:
         migration_id, logger, update_status = context
         logger.info(f"Running migration: {migration_id}")
         for op in self.__forwards_local():
@@ -74,3 +71,4 @@ class Migration(migration.Migration):
         # TODO: Run the forwards_dist operations here when multi node clusters are supported
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
+        return Status.COMPLETED

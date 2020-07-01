@@ -13,7 +13,6 @@ from snuba.clickhouse.columns import (
     UInt,
     UUID,
 )
-from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 
 
@@ -59,7 +58,7 @@ class Migration(migration.MultiStepMigration):
 
         return [
             operations.CreateTable(
-                storage_set=StorageSetKey.QUERYLOG,
+                storage_set="querylog",
                 table_name="querylog_local",
                 columns=columns,
                 engine=table_engines.MergeTree(
@@ -72,7 +71,5 @@ class Migration(migration.MultiStepMigration):
 
     def backwards_local(self) -> Sequence[operations.Operation]:
         return [
-            operations.DropTable(
-                storage_set=StorageSetKey.QUERYLOG, table_name="querylog_local",
-            )
+            operations.DropTable(storage_set="querylog", table_name="querylog_local",)
         ]

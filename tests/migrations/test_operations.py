@@ -1,9 +1,12 @@
+import pytest
+
 from snuba.clickhouse.columns import Column, Nullable, String, UInt
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.migrations.errors import InvalidStorageSet
 from snuba.migrations.operations import (
     CreateMaterializedView,
     CreateTable,
     DropTable,
+    RunSql,
 )
 from snuba.migrations.table_engines import ReplacingMergeTree
 
@@ -17,7 +20,7 @@ def test_create_table() -> None:
 
     assert (
         CreateTable(
-            StorageSetKey.EVENTS,
+            "events",
             "test_table",
             columns,
             ReplacingMergeTree(
@@ -33,7 +36,7 @@ def test_create_table() -> None:
 def test_create_materialized_view() -> None:
     assert (
         CreateMaterializedView(
-            StorageSetKey.EVENTS,
+            "events",
             "test_table_mv",
             "test_table_dest",
             [Column("id", String())],
@@ -45,6 +48,11 @@ def test_create_materialized_view() -> None:
 
 def test_drop_table() -> None:
     assert (
-        DropTable(StorageSetKey.EVENTS, "test_table").format_sql()
+        DropTable("events", "test_table").format_sql()
         == "DROP TABLE IF EXISTS test_table;"
     )
+
+
+def test_invalid_storage_set() -> None:
+    with pytest.raises(InvalidStorageSet):
+        RunSql("invalid_storage_set", "SHOW TABLES;").format_sql()

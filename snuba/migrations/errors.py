@@ -4,3 +4,7 @@ class MigrationInProgress(Exception):
 
 class InvalidMigrationState(Exception):
     pass
+
+
+class InvalidStorageSet(Exception):
+    pass
