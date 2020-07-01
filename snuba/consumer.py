@@ -1,16 +1,18 @@
 import logging
 from datetime import datetime
-from typing import Any, Mapping, NamedTuple, Optional, Sequence
+from typing import Any, Mapping, MutableSequence, NamedTuple, Optional, Sequence
 
 import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba.datasets.storage import WritableTableStorage
-from snuba.processor import ProcessedMessage, ProcessorAction
+from snuba.processor import InsertBatch, ProcessedMessage, ReplacementMessage
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Topic
+from snuba.writer import WriterTableRow
+
 
 logger = logging.getLogger("snuba.consumer")
 
@@ -43,6 +45,9 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         )
 
         self.__pre_filter = table_writer.get_stream_loader().get_pre_filter()
+        self.__processor = (
+            self.__storage.get_table_writer().get_stream_loader().get_processor()
+        )
 
     def process_message(
         self, message: Message[KafkaPayload]
@@ -51,7 +56,7 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         if self.__pre_filter and self.__pre_filter.should_drop(message):
             return None
 
-        processed = self._process_message_impl(
+        return self._process_message_impl(
             rapidjson.loads(message.payload.value),
             KafkaMessageMetadata(
                 offset=message.offset,
@@ -60,23 +65,10 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
             ),
         )
 
-        if processed is None:
-            return None
-
-        if processed.action not in set(
-            [ProcessorAction.INSERT, ProcessorAction.REPLACE]
-        ):
-            raise InvalidActionType("Invalid action type: {}".format(processed.action))
-
-        return processed
-
     def _process_message_impl(
         self, value: Mapping[str, Any], metadata: KafkaMessageMetadata,
     ) -> Optional[ProcessedMessage]:
-        processor = (
-            self.__storage.get_table_writer().get_stream_loader().get_processor()
-        )
-        return processor.process_message(value, metadata)
+        return self.__processor.process_message(value, metadata)
 
     def delivery_callback(self, error, message):
         if error is not None:
@@ -86,14 +78,16 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
     def flush_batch(self, batch: Sequence[ProcessedMessage]):
         """First write out all new INSERTs as a single batch, then reproduce any
         event replacements such as deletions, merges and unmerges."""
-        inserts = []
-        replacements = []
+        inserts: MutableSequence[WriterTableRow] = []
+        replacements: MutableSequence[ReplacementMessage] = []
 
-        for message in batch:
-            if message.action == ProcessorAction.INSERT:
-                inserts.extend(message.data)
-            elif message.action == ProcessorAction.REPLACE:
-                replacements.extend(message.data)
+        for item in batch:
+            if isinstance(item, InsertBatch):
+                inserts.extend(item.rows)
+            elif isinstance(item, ReplacementMessage):
+                replacements.append(item)
+            else:
+                raise TypeError(f"unexpected type: {item}")
 
         if inserts:
             self.__writer.write(inserts)
@@ -101,11 +95,11 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
             self.metrics.timing("inserts", len(inserts))
 
         if replacements:
-            for key, replacement in replacements:
+            for replacement in replacements:
                 self.producer.produce(
                     self.replacements_topic.name,
-                    key=str(key).encode("utf-8"),
-                    value=rapidjson.dumps(replacement).encode("utf-8"),
+                    key=str(replacement.key).encode("utf-8"),
+                    value=rapidjson.dumps(replacement.value).encode("utf-8"),
                     on_delivery=self.delivery_callback,
                 )
 
