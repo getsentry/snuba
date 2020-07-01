@@ -1,18 +1,11 @@
 import calendar
-import pytest
 from collections import OrderedDict
 from datetime import datetime, timedelta
+from typing import Optional
 
-from tests.base import BaseEventsTest
+import pytest
 
 from snuba import settings
-from snuba.datasets.factory import enforce_table_writer
-from snuba.processor import (
-    InvalidMessageType,
-    InvalidMessageVersion,
-    ProcessedMessage,
-    ProcessorAction,
-)
 from snuba.datasets.events_format import (
     enforce_retention,
     extract_base,
@@ -20,21 +13,19 @@ from snuba.datasets.events_format import (
     extract_extra_tags,
     extract_user,
 )
+from snuba.datasets.events_processor_base import InsertEvent
+from snuba.datasets.factory import enforce_table_writer
+from snuba.processor import (
+    InvalidMessageType,
+    InvalidMessageVersion,
+    ProcessedMessage,
+    ProcessorAction,
+)
+from tests.base import BaseEventsTest
 
 
 class TestEventsProcessor(BaseEventsTest):
-    def test_simple(self):
-        processed = (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message(self.event)
-        )
-
-        for field in ("event_id", "project_id", "message", "platform"):
-            assert processed.data[0][field] == self.event[field]
-
-    def test_invalid_version(self):
+    def test_invalid_version(self) -> None:
         with pytest.raises(InvalidMessageVersion):
             enforce_table_writer(
                 self.dataset
@@ -42,7 +33,7 @@ class TestEventsProcessor(BaseEventsTest):
                 (2 ** 32 - 1, "insert", self.event)
             )
 
-    def test_invalid_format(self):
+    def test_invalid_format(self) -> None:
         with pytest.raises(InvalidMessageVersion):
             enforce_table_writer(
                 self.dataset
@@ -50,30 +41,28 @@ class TestEventsProcessor(BaseEventsTest):
                 (-1, "insert", self.event)
             )
 
-    def test_unexpected_obj(self):
-        self.event["message"] = {"what": "why is this in the message"}
-
-        processed = (
+    def __process_insert_event(self, event: InsertEvent) -> Optional[ProcessedMessage]:
+        return (
             enforce_table_writer(self.dataset)
             .get_stream_loader()
             .get_processor()
-            .process_message(self.event)
+            .process_message((2, "insert", event, {}))
         )
 
+    def test_unexpected_obj(self) -> None:
+        self.event["message"] = {"what": "why is this in the message"}
+
+        processed = self.__process_insert_event(self.event)
+        assert processed is not None
         assert processed.data[0]["message"] == '{"what": "why is this in the message"}'
 
-    def test_hash_invalid_primary_hash(self):
+    def test_hash_invalid_primary_hash(self) -> None:
         self.event[
             "primary_hash"
         ] = b"'tinymce' \u063a\u064a\u0631 \u0645\u062d".decode("unicode-escape")
 
-        processed = (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message(self.event)
-        )
-
+        processed = self.__process_insert_event(self.event)
+        assert processed is not None
         assert processed.data[0]["primary_hash"] == "a52ccc1a61c2258e918b43b5aff50db1"
 
     def test_extract_required(self):
@@ -609,7 +598,7 @@ class TestEventsProcessor(BaseEventsTest):
             "exception_stacks.mechanism_type": [u"promise"],
         }
 
-    def test_null_values_dont_throw(self):
+    def test_null_values_dont_throw(self) -> None:
         event = {
             "event_id": "bce76c2473324fa387b33564eacf34a0",
             "group_id": 1,
@@ -648,6 +637,4 @@ class TestEventsProcessor(BaseEventsTest):
             calendar.timegm((timestamp - timedelta(seconds=1)).timetuple())
         )
 
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().process_insert(event)
+        self.__process_insert_event(event)
