@@ -162,11 +162,14 @@ class EventsProcessorBase(MessageProcessor, ABC):
         type_, event = message[1:3]
         if type_ == "insert":
             try:
-                return ProcessedMessage(
-                    ProcessorAction.INSERT, [self.process_insert(event, metadata)]
-                )
+                row = self.process_insert(event, metadata)
             except EventTooOld:
                 return None
+
+            if row is None:  # the processor cannot/does not handle this input
+                return None
+
+            return ProcessedMessage(ProcessorAction.INSERT, [row])
         elif type_ in REPLACEMENT_EVENT_TYPES:
             # pass raw events along to republish
             return ProcessedMessage(
