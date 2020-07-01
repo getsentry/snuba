@@ -1,11 +1,11 @@
-import pytest
-
 from copy import deepcopy
+
+import pytest
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
-from snuba.query.logical import Query
+from snuba.query.logical import Query, SelectedExpression
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.request.request_settings import HTTPRequestSettings
 
@@ -15,30 +15,46 @@ test_data = [
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                FunctionCall("alias", "uniq", (Column(None, None, "column1"),)),
-                FunctionCall("alias2", "emptyIfNull", (Column(None, None, "column2"),)),
+                SelectedExpression(
+                    "alias",
+                    FunctionCall("alias", "uniq", (Column(None, None, "column1"),)),
+                ),
+                SelectedExpression(
+                    "alias2",
+                    FunctionCall(
+                        "alias2", "emptyIfNull", (Column(None, None, "column2"),)
+                    ),
+                ),
             ],
         ),
         Query(
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                FunctionCall(
+                SelectedExpression(
                     "alias",
-                    "ifNull",
-                    (
-                        FunctionCall(None, "uniq", (Column(None, None, "column1"),)),
-                        Literal(None, 0),
+                    FunctionCall(
+                        "alias",
+                        "ifNull",
+                        (
+                            FunctionCall(
+                                None, "uniq", (Column(None, None, "column1"),)
+                            ),
+                            Literal(None, 0),
+                        ),
                     ),
                 ),
-                FunctionCall(
+                SelectedExpression(
                     "alias2",
-                    "ifNull",
-                    (
-                        FunctionCall(
-                            None, "emptyIfNull", (Column(None, None, "column2"),)
+                    FunctionCall(
+                        "alias2",
+                        "ifNull",
+                        (
+                            FunctionCall(
+                                None, "emptyIfNull", (Column(None, None, "column2"),)
+                            ),
+                            Literal(None, ""),
                         ),
-                        Literal(None, ""),
                     ),
                 ),
             ],
@@ -49,9 +65,17 @@ test_data = [
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                Column(None, None, "column1"),
-                FunctionCall("alias", "uniq", (Column(None, None, "column1"),)),
-                FunctionCall("alias2", "emptyIfNull", (Column(None, None, "column2"),)),
+                SelectedExpression(name=None, expression=Column(None, None, "column1")),
+                SelectedExpression(
+                    "alias",
+                    FunctionCall("alias", "uniq", (Column(None, None, "column1"),)),
+                ),
+                SelectedExpression(
+                    "alias2",
+                    FunctionCall(
+                        "alias2", "emptyIfNull", (Column(None, None, "column2"),)
+                    ),
+                ),
             ],
             condition=FunctionCall(
                 None, "eq", (Column(None, None, "column1"), Literal(None, "a"))
@@ -65,23 +89,31 @@ test_data = [
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                Column(None, None, "column1"),
-                FunctionCall(
+                SelectedExpression(name=None, expression=Column(None, None, "column1")),
+                SelectedExpression(
                     "alias",
-                    "ifNull",
-                    (
-                        FunctionCall(None, "uniq", (Column(None, None, "column1"),)),
-                        Literal(None, 0),
+                    FunctionCall(
+                        "alias",
+                        "ifNull",
+                        (
+                            FunctionCall(
+                                None, "uniq", (Column(None, None, "column1"),)
+                            ),
+                            Literal(None, 0),
+                        ),
                     ),
                 ),
-                FunctionCall(
+                SelectedExpression(
                     "alias2",
-                    "ifNull",
-                    (
-                        FunctionCall(
-                            None, "emptyIfNull", (Column(None, None, "column2"),)
+                    FunctionCall(
+                        "alias2",
+                        "ifNull",
+                        (
+                            FunctionCall(
+                                None, "emptyIfNull", (Column(None, None, "column2"),)
+                            ),
+                            Literal(None, ""),
                         ),
-                        Literal(None, ""),
                     ),
                 ),
             ],
@@ -115,10 +147,13 @@ test_data = [
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                CurriedFunctionCall(
-                    None,
-                    FunctionCall(None, "top", (Literal(None, 10),)),
-                    (Column(None, None, "column1"),),
+                SelectedExpression(
+                    name=None,
+                    expression=CurriedFunctionCall(
+                        None,
+                        FunctionCall(None, "top", (Literal(None, 10),)),
+                        (Column(None, None, "column1"),),
+                    ),
                 )
             ],
         ),
@@ -126,10 +161,13 @@ test_data = [
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                CurriedFunctionCall(
-                    None,
-                    FunctionCall(None, "topK", (Literal(None, 10),)),
-                    (Column(None, None, "column1"),),
+                SelectedExpression(
+                    name=None,
+                    expression=CurriedFunctionCall(
+                        None,
+                        FunctionCall(None, "topK", (Literal(None, 10),)),
+                        (Column(None, None, "column1"),),
+                    ),
                 )
             ],
         ),

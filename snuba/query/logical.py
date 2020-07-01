@@ -49,6 +49,13 @@ class OrderBy:
     expression: Expression
 
 
+@dataclass(frozen=True)
+class SelectedExpression:
+    # The name of this column in the resultset.
+    name: Optional[str]
+    expression: Expression
+
+
 class Query:
     """
     Represents a parsed query we can edit during query processing.
@@ -91,7 +98,7 @@ class Query:
         body: MutableMapping[str, Any],  # Temporary
         data_source: Optional[RelationalSource],
         # New data model to replace the one based on the dictionary
-        selected_columns: Optional[Sequence[Expression]] = None,
+        selected_columns: Optional[Sequence[SelectedExpression]] = None,
         array_join: Optional[Expression] = None,
         condition: Optional[Expression] = None,
         prewhere: Optional[Expression] = None,
@@ -125,7 +132,9 @@ class Query:
         tree.
         """
         return chain(
-            chain.from_iterable(self.__selected_columns),
+            chain.from_iterable(
+                map(lambda selected: selected.expression, self.__selected_columns)
+            ),
             self.__array_join or [],
             self.__condition or [],
             chain.from_iterable(self.__groupby),
@@ -151,7 +160,14 @@ class Query:
         ) -> Sequence[Expression]:
             return list(map(lambda exp: exp.transform(func), expressions),)
 
-        self.__selected_columns = transform_expression_list(self.__selected_columns)
+        self.__selected_columns = list(
+            map(
+                lambda selected: replace(
+                    selected, expression=selected.expression.transform(func)
+                ),
+                self.__selected_columns,
+            )
+        )
         self.__array_join = (
             self.__array_join.transform(func) if self.__array_join else None
         )
@@ -178,9 +194,15 @@ class Query:
         have another Expression as parent.
         The transformation happens in place.
         """
-        self.__selected_columns = [
-            e.accept(visitor) for e in (self.__selected_columns or [])
-        ]
+
+        self.__selected_columns = list(
+            map(
+                lambda selected: replace(
+                    selected, expression=selected.expression.accept(visitor)
+                ),
+                self.__selected_columns,
+            )
+        )
         if self.__array_join is not None:
             self.__array_join = self.__array_join.accept(visitor)
         if self.__condition is not None:
@@ -219,13 +241,15 @@ class Query:
     def get_selected_columns(self) -> Optional[Sequence[Any]]:
         return self.__body.get("selected_columns")
 
-    def get_selected_columns_from_ast(self) -> Sequence[Expression]:
+    def get_selected_columns_from_ast(self) -> Sequence[SelectedExpression]:
         return self.__selected_columns
 
     def set_selected_columns(self, columns: Sequence[Any],) -> None:
         self.__body["selected_columns"] = columns
 
-    def set_ast_selected_columns(self, selected_columns: Sequence[Expression]) -> None:
+    def set_ast_selected_columns(
+        self, selected_columns: Sequence[SelectedExpression]
+    ) -> None:
         self.__selected_columns = selected_columns
 
     def get_aggregations(self) -> Optional[Sequence[Aggregation]]:

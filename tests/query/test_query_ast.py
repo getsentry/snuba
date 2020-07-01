@@ -7,7 +7,7 @@ from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.logical import OrderBy, OrderByDirection, Query
+from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
 from snuba.query.parser import parse_query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
@@ -31,7 +31,7 @@ def test_iterate_over_query():
     query = Query(
         {},
         TableSource("my_table", ColumnSet([])),
-        selected_columns=[function_1],
+        selected_columns=[SelectedExpression("alias", function_1)],
         array_join=None,
         condition=condition,
         groupby=[function_1],
@@ -79,7 +79,7 @@ def test_replace_expression():
     query = Query(
         {},
         TableSource("my_table", ColumnSet([])),
-        selected_columns=[function_1],
+        selected_columns=[SelectedExpression("alias", function_1)],
         array_join=None,
         condition=condition,
         groupby=[function_1],
@@ -97,7 +97,11 @@ def test_replace_expression():
     expected_query = Query(
         {},
         TableSource("my_table", ColumnSet([])),
-        selected_columns=[FunctionCall("alias", "tag", (Literal(None, "f1"),))],
+        selected_columns=[
+            SelectedExpression(
+                "alias", FunctionCall("alias", "tag", (Literal(None, "f1"),))
+            )
+        ],
         array_join=None,
         condition=binary_condition(
             None,

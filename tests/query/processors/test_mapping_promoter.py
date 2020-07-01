@@ -5,6 +5,7 @@ from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.logical import SelectedExpression
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.request.request_settings import HTTPRequestSettings
 
@@ -23,15 +24,21 @@ test_cases = [
                 {},
                 TableSource("events", columns),
                 selected_columns=[
-                    FunctionCall(
+                    SelectedExpression(
                         "tags[foo]",
-                        "arrayValue",
-                        (
-                            Column(None, None, "tags.value"),
-                            FunctionCall(
-                                None,
-                                "indexOf",
-                                (Column(None, None, "tags.key"), Literal(None, "foo")),
+                        FunctionCall(
+                            "tags[foo]",
+                            "arrayValue",
+                            (
+                                Column(None, None, "tags.value"),
+                                FunctionCall(
+                                    None,
+                                    "indexOf",
+                                    (
+                                        Column(None, None, "tags.key"),
+                                        Literal(None, "foo"),
+                                    ),
+                                ),
                             ),
                         ),
                     )
@@ -43,15 +50,21 @@ test_cases = [
                 {},
                 TableSource("events", columns),
                 selected_columns=[
-                    FunctionCall(
+                    SelectedExpression(
                         "tags[foo]",
-                        "arrayValue",
-                        (
-                            Column(None, None, "tags.value"),
-                            FunctionCall(
-                                None,
-                                "indexOf",
-                                (Column(None, None, "tags.key"), Literal(None, "foo")),
+                        FunctionCall(
+                            "tags[foo]",
+                            "arrayValue",
+                            (
+                                Column(None, None, "tags.value"),
+                                FunctionCall(
+                                    None,
+                                    "indexOf",
+                                    (
+                                        Column(None, None, "tags.key"),
+                                        Literal(None, "foo"),
+                                    ),
+                                ),
                             ),
                         ),
                     )
@@ -66,17 +79,20 @@ test_cases = [
                 {},
                 TableSource("events", columns),
                 selected_columns=[
-                    FunctionCall(
+                    SelectedExpression(
                         "tags[promoted_tag]",
-                        "arrayElement",
-                        (
-                            Column(None, "table", "tags.value"),
-                            FunctionCall(
-                                None,
-                                "indexOf",
-                                (
-                                    Column(None, "table", "tags.key"),
-                                    Literal(None, "promoted_tag"),
+                        FunctionCall(
+                            "tags[promoted_tag]",
+                            "arrayElement",
+                            (
+                                Column(None, "table", "tags.value"),
+                                FunctionCall(
+                                    None,
+                                    "indexOf",
+                                    (
+                                        Column(None, "table", "tags.key"),
+                                        Literal(None, "promoted_tag"),
+                                    ),
                                 ),
                             ),
                         ),
@@ -89,10 +105,13 @@ test_cases = [
                 {},
                 TableSource("events", columns),
                 selected_columns=[
-                    FunctionCall(
+                    SelectedExpression(
                         "tags[promoted_tag]",
-                        "toString",
-                        (Column(None, "table", "promoted"),),
+                        FunctionCall(
+                            "tags[promoted_tag]",
+                            "toString",
+                            (Column(None, "table", "promoted"),),
+                        ),
                     )
                 ],
             )
