@@ -127,6 +127,8 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         "tagstore.__get_tag_key_and_top_values": 100,
         "tagstore.__get_tag_keys_and_top_values": 100,
         "tagstore.__get_release": 100,
+        # Eventstore
+        "eventstore.get_next_or_prev_event_id": 100,
     },
     "transactions": {
         # Simple time bucketed queries
