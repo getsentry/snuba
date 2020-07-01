@@ -134,6 +134,9 @@ class DropColumn(SqlOperation):
     """
     Drops a column from a table.
 
+    The data from that column will be removed from the filesystem, so this command
+    shouuld only be performed once the column is no longer referenced anywhere else.
+
     You cannot drop a column that is part of the the primary key or the sampling
     key in the engine expression.
     """
