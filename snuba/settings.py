@@ -106,6 +106,10 @@ AST_DATASET_ROLLOUT: Mapping[str, int] = {
     "outcomes": 100,
 }  # (dataset name: percentage)
 AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
+    "discover": {
+        # Eventstore
+        "eventstore.get_next_or_prev_event_id": 100,
+    },
     "events": {
         # Simple queries without splitting or user customizations
         "Group.filter_by_event_id": 100,
@@ -129,8 +133,6 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         "tagstore.__get_release": 100,
         "tagstore.get_group_seen_values_for_environments": 100,
         "tagstore.get_groups_user_counts": 100,
-        # Eventstore
-        "eventstore.get_next_or_prev_event_id": 100,
     },
     "transactions": {
         # Simple time bucketed queries
