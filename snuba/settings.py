@@ -11,7 +11,7 @@ DEBUG = True
 PORT = 1218
 
 DEFAULT_DATASET_NAME = "events"
-DISABLED_DATASETS: Set[str] = {"querylog"}
+DISABLED_DATASETS: Set[str] = set()
 
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
@@ -118,12 +118,14 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         "api.organization-events-stats": 100,
         "incidents.get_incident_event_stats": 100,
         "incidents.get_incident_aggregates": 100,
+        "tsdb": 100,
         # Queries with tags resolution
         "tagstore.get_tag_value_paginator_for_projects": 100,
         "tagstore.get_group_tag_value_iter": 100,
         # Time/column split queries
         "api.organization-events-direct-hit": 100,
         "eventstore.get_unfetched_events": 100,
+        "eventstore.get_event_by_id_nodestore": 100,
         "api.organization-events": 100,
         "api.group-events": 100,
         "Group.get_latest": 100,
@@ -132,6 +134,8 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         "tagstore.__get_tag_keys_and_top_values": 100,
         "tagstore.__get_release": 100,
         "tagstore.get_group_seen_values_for_environments": 100,
+        "tagstore.get_groups_user_counts": 100,
+        "tagstore.__get_tag_keys": 100,
     },
     "transactions": {
         # Simple time bucketed queries
