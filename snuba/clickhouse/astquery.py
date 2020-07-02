@@ -1,9 +1,10 @@
 from typing import Mapping, Optional, Sequence, Tuple
 
-from snuba import settings
+from snuba import settings, state
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.sql import SqlQuery
+from snuba.query.conditions import get_first_level_conditions
 from snuba.query.parsing import ParsingContext
 from snuba.request.request_settings import RequestSettings
 
@@ -91,7 +92,14 @@ class AstSqlQuery(SqlQuery):
 
         where_clause = ""
         if self.__condition:
-            formatted_condition = self.__condition.accept(formatter)
+            if state.get_config("infix_where_format", 0):
+                conditions = get_first_level_conditions(self.__condition)
+                formatted_condition = " AND ".join(
+                    c.accept(formatter) for c in conditions
+                )
+            else:
+                formatted_condition = self.__condition.accept(formatter)
+
             where_clause = f"WHERE {formatted_condition}"
 
         group_clause = ""
