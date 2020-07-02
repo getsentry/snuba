@@ -136,7 +136,7 @@ class BaseEventsTest(BaseDatasetTest):
 
         processed_messages = []
         for event in events:
-            processed_message = processor.process_message(event)
+            processed_message = processor.process_message((2, "insert", event, {}))
             assert processed_message is not None
             processed_messages.append(processed_message)
 

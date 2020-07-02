@@ -1,9 +1,14 @@
 from snuba.clickhouse.columns import Column, Nullable, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.operations import (
+    AddColumn,
+    AddIndex,
     CreateMaterializedView,
     CreateTable,
+    DropColumn,
+    DropIndex,
     DropTable,
+    ModifyColumn,
 )
 from snuba.migrations.table_engines import ReplacingMergeTree
 
@@ -47,4 +52,54 @@ def test_drop_table() -> None:
     assert (
         DropTable(StorageSetKey.EVENTS, "test_table").format_sql()
         == "DROP TABLE IF EXISTS test_table;"
+    )
+
+
+def test_add_column() -> None:
+    assert (
+        AddColumn(
+            StorageSetKey.EVENTS,
+            "test_table",
+            Column("test", Nullable(String())),
+            after="id",
+        ).format_sql()
+        == "ALTER TABLE test_table ADD COLUMN IF NOT EXISTS test Nullable(String) AFTER id;"
+    )
+
+
+def test_drop_column() -> None:
+    assert (
+        DropColumn(StorageSetKey.EVENTS, "test_table", "test").format_sql()
+        == "ALTER TABLE test_table DROP COLUMN IF EXISTS test;"
+    )
+
+
+def test_modify_column() -> None:
+    assert (
+        ModifyColumn(
+            StorageSetKey.EVENTS, "test_table", Column("test", String())
+        ).format_sql()
+        == "ALTER TABLE test_table MODIFY COLUMN test String;"
+    )
+
+
+def test_add_index() -> None:
+    assert (
+        AddIndex(
+            StorageSetKey.EVENTS,
+            "test_table",
+            "index_1",
+            "timestamp",
+            "minmax",
+            3,
+            after=None,
+        ).format_sql()
+        == "ALTER TABLE test_table ADD INDEX index_1 timestamp TYPE minmax GRANULARITY 3;"
+    )
+
+
+def test_drop_index() -> None:
+    assert (
+        DropIndex(StorageSetKey.EVENTS, "test_table", "index_1").format_sql()
+        == "ALTER TABLE test_table DROP INDEX index_1;"
     )
