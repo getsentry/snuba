@@ -87,7 +87,7 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
             elif isinstance(item, ReplacementBatch):
                 replacements.append(item)
             else:
-                raise TypeError(f"unexpected type: {item}")
+                raise TypeError(f"unexpected type: {type(item)!r}")
 
         if inserts:
             self.__writer.write(inserts)
