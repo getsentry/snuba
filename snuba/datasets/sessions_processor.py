@@ -5,10 +5,10 @@ from typing import Optional
 from snuba import environment
 from snuba.processor import (
     MAX_UINT32,
-    MessageProcessor,
     NIL_UUID,
+    InsertBatch,
+    MessageProcessor,
     ProcessedMessage,
-    ProcessorAction,
     _collapse_uint16,
     _collapse_uint32,
     _ensure_valid_date,
@@ -70,4 +70,4 @@ class SessionsProcessor(MessageProcessor):
             "release": message["release"],
             "environment": message.get("environment") or "",
         }
-        return ProcessedMessage(action=ProcessorAction.INSERT, data=[processed])
+        return InsertBatch([processed])

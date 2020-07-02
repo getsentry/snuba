@@ -1,12 +1,13 @@
 from __future__ import annotations
-import re
 
+import re
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence, Type
 
-from snuba.processor import MessageProcessor, ProcessorAction, ProcessedMessage
+from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
 from snuba.writer import WriterTableRow
+
 
 POSTGRES_DATE_FORMAT_WITH_NS = "%Y-%m-%d %H:%M:%S.%f%z"
 POSTGRES_DATE_FORMAT_WITHOUT_NS = "%Y-%m-%d %H:%M:%S%z"
@@ -149,4 +150,4 @@ class CdcProcessor(MessageProcessor):
         if not messages:
             return None
 
-        return ProcessedMessage(action=ProcessorAction.INSERT, data=messages,)
+        return InsertBatch(messages)

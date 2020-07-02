@@ -1,8 +1,9 @@
-import simplejson as json
-from typing import Any, Mapping, Optional, Sequence, Union
 import uuid
+from typing import Any, Mapping, Optional, Sequence, Union
 
-from snuba.processor import MessageProcessor, ProcessedMessage, ProcessorAction
+import simplejson as json
+
+from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
 
 
 class QuerylogProcessor(MessageProcessor):
@@ -74,8 +75,6 @@ class QuerylogProcessor(MessageProcessor):
         }
 
     def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
-        action_type = ProcessorAction.INSERT
-
         projects = message["request"]["body"].get("project", [])
         if not isinstance(projects, (list, tuple)):
             projects = [projects]
@@ -95,4 +94,4 @@ class QuerylogProcessor(MessageProcessor):
             **self.__extract_query_list(message["query_list"]),
         }
 
-        return ProcessedMessage(action=action_type, data=[processed],)
+        return InsertBatch([processed])

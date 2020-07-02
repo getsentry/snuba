@@ -1,9 +1,8 @@
 import uuid
 
-from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_storage
-from snuba.processor import ProcessedMessage, ProcessorAction
+from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.processor import InsertBatch
 from snuba.query.logical import Query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
@@ -41,7 +40,7 @@ def test_simple():
 
     message = SnubaQueryMetadata(
         request=request,
-        dataset=get_dataset("events"),
+        dataset="events",
         timer=timer,
         query_list=[
             ClickhouseQueryMetadata(
@@ -54,19 +53,19 @@ def test_simple():
     ).to_dict()
 
     processor = (
-        enforce_table_writer(get_dataset("querylog"))
+        get_writable_storage(StorageKey.QUERYLOG)
+        .get_table_writer()
         .get_stream_loader()
         .get_processor()
     )
 
-    assert processor.process_message(message) == ProcessedMessage(
-        ProcessorAction.INSERT,
+    assert processor.process_message(message) == InsertBatch(
         [
             {
                 "request_id": str(uuid.UUID("a" * 32)),
                 "request_body": '{"limit": 100, "offset": 50, "orderby": "event_id", "project": 1, "sample": 0.1, "selected_columns": ["event_id"]}',
                 "referrer": "search",
-                "dataset": get_dataset("events"),
+                "dataset": "events",
                 "projects": [1],
                 "organization": None,
                 "timestamp": timer.for_json()["timestamp"],
