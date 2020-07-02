@@ -2,7 +2,7 @@ import logging
 import os
 import time
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping
+from typing import Any, Mapping, MutableMapping, MutableSequence
 from uuid import UUID
 
 import jsonschema
@@ -42,6 +42,7 @@ from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.web import QueryException
 from snuba.web.converters import DatasetConverter
 from snuba.web.query import parse_and_run_query
+from snuba.writer import WriterTableRow
 
 metrics = MetricsWrapper(environment.metrics, "api")
 
@@ -381,11 +382,11 @@ if application.debug or application.testing:
 
     @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
     def write(*, dataset: Dataset):
-        from snuba.processor import ProcessorAction
+        from snuba.processor import InsertBatch
 
         ensure_tables_migrated()
 
-        rows = []
+        rows: MutableSequence[WriterTableRow] = []
         offset_base = int(round(time.time() * 1000))
         for index, message in enumerate(json.loads(http_request.data)):
             offset = offset_base + index
@@ -401,8 +402,8 @@ if application.debug or application.testing:
                 )
             )
             if processed_message:
-                assert processed_message.action is ProcessorAction.INSERT
-                rows.extend(processed_message.data)
+                assert isinstance(processed_message, InsertBatch)
+                rows.extend(processed_message.rows)
 
         enforce_table_writer(dataset).get_writer().write(rows)
 
