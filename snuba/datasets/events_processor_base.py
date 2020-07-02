@@ -149,10 +149,8 @@ class EventsProcessorBase(MessageProcessor, ABC):
         self, message, metadata: Optional[KafkaMessageMetadata] = None
     ) -> Optional[ProcessedMessage]:
         """\
-        Process a raw message into a tuple of (action_type, processed_message):
-        * action_type: one of the sentinel values INSERT or REPLACE
-        * processed_message: dict representing the processed column -> value(s)
-        Returns `None` if the event is too old to be written.
+        Process a raw message into an insertion or replacement batch. Returns
+        `None` if the event is too old to be written.
         """
         version = message[0]
         if version != 2:
