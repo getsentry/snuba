@@ -16,7 +16,7 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
-from snuba.clickhouse.translators.snuba.allowed import ColumnMapper
+from snuba.clickhouse.translators.snuba.allowed import ColumnMapper, FunctionCallMapper
 from snuba.clickhouse.translators.snuba.mappers import ColumnToLiteral, ColumnToMapping
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.dataset import TimeSeriesDataset
@@ -31,7 +31,7 @@ from snuba.datasets.storage import (
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.transactions import transaction_translator
-from snuba.query.expressions import Column, Literal
+from snuba.query.expressions import Column, Literal, FunctionCall
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
@@ -157,6 +157,38 @@ class DefaultNoneColumnMapper(ColumnMapper):
             return None
 
 
+class FailureRateNotInNullFunctionCallMapper(FunctionCallMapper):
+    def attempt_map(
+        self,
+        expression: FunctionCall,
+        children_translator: SnubaClickhouseStrictTranslator,
+    ) -> Optional[FunctionCall]:
+        if expression.function_name == "divide":
+            count_if = expression.parameters[0]
+            if (
+                isinstance(count_if, FunctionCall)
+                and count_if.function_name == "countIf"
+            ):
+                not_in = count_if.parameters[0]
+                if isinstance(not_in, FunctionCall) and not_in.function_name == "notIn":
+                    transaction_status = not_in.parameters[0]
+                    if (
+                        isinstance(transaction_status, Literal)
+                        and transaction_status.alias == "transaction_status"
+                        and transaction_status.value is None
+                    ):
+                        # we know the result of this expression will always be
+                        # `NULL`, so we only need to preserve the aliases
+                        return FunctionCall(
+                            alias=expression.alias,
+                            function_name="countIf",
+                            parameters=(
+                                Literal(alias="transaction_status", value=None),
+                            ),
+                        )
+        return None
+
+
 class DiscoverQueryStorageSelector(QueryStorageSelector):
     def __init__(
         self,
@@ -181,7 +213,8 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
                     ColumnToMapping(None, "dist", None, "tags", "sentry:dist"),
                     ColumnToMapping(None, "user", None, "tags", "sentry:user"),
                     DefaultNoneColumnMapper(self.__abstract_transactions_columns),
-                ]
+                ],
+                functions=[FailureRateNotInNullFunctionCallMapper()],
             )
         )
 
