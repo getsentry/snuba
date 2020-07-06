@@ -27,6 +27,7 @@ class Migration(migration.Migration):
     """
 
     blocking = False
+    deprecated = False
 
     def __forwards_local(self) -> Sequence[operations.Operation]:
         return [

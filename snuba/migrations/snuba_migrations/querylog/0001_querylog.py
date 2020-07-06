@@ -55,6 +55,7 @@ columns = [
 
 class Migration(migration.MultiStepMigration):
     blocking = False
+    deprecated = False
 
     def forwards_local(self) -> Sequence[operations.Operation]:
         return [

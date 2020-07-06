@@ -32,6 +32,10 @@ class Migration(ABC):
     """
 
     @abstractproperty
+    def deprecated(self) -> bool:
+        raise NotImplementedError
+
+    @abstractproperty
     def blocking(self) -> bool:
         raise NotImplementedError
 

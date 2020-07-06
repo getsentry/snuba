@@ -3,7 +3,7 @@ import logging
 from clickhouse_driver import errors
 from datetime import datetime
 from functools import partial
-from typing import List, Mapping, MutableMapping, NamedTuple
+from typing import List, Mapping, MutableMapping, NamedTuple, Tuple
 
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster, CLUSTERS
@@ -36,12 +36,21 @@ class Runner:
     def run_all(self) -> None:
         """
         Run all pending migrations. Throws an error if any migration is in progress.
+
+        Before new migrations are run, any previously completed migrations that
+        are now marked deprecated are reversed.
         """
-        for migration in self._get_pending_migrations():
+        migrations_to_reverse, migrations_to_run = self._get_pending_migrations()
+
+        for migration in reversed(migrations_to_reverse):
+            self.run_migration(migration, reverse=True)
+
+        for migration in migrations_to_run:
             self.run_migration(migration)
 
-    def _get_pending_migrations(self) -> List[MigrationKey]:
-        migrations: List[MigrationKey] = []
+    def _get_pending_migrations(self) -> Tuple[List[MigrationKey], List[MigrationKey]]:
+        migrations_to_reverse: List[MigrationKey] = []
+        migrations_to_run: List[MigrationKey] = []
 
         migration_status = self._get_migration_status()
 
@@ -54,10 +63,13 @@ class Runner:
 
             for migration_id in group_loader.get_migrations():
                 migration_key = MigrationKey(group, migration_id)
+                migration = group_loader.load_migration(migration_id)
                 status = get_status(migration_key)
+
                 if status == Status.IN_PROGRESS:
                     raise MigrationInProgress(migration_key)
-                if status == Status.NOT_STARTED:
+
+                if status == Status.NOT_STARTED and migration.deprecated == False:
                     group_migrations.append(migration_key)
                 elif status == Status.COMPLETED and len(group_migrations):
                     # We should never have a completed migration after a pending one for that group
@@ -67,12 +79,14 @@ class Runner:
                     raise InvalidMigrationState(
                         f"Missing migrations: {missing_migrations}"
                     )
+                elif status == Status.COMPLETED and migration.deprecated == True:
+                    migrations_to_reverse.append(migration_key)
 
-            migrations.extend(group_migrations)
+            migrations_to_run.extend(group_migrations)
 
-        return migrations
+        return migrations_to_reverse, migrations_to_run
 
-    def run_migration(self, migration_key: MigrationKey) -> None:
+    def run_migration(self, migration_key: MigrationKey, reverse: bool = False) -> None:
         """
         Run a single migration given its migration key and marks the migration as complete.
         """
@@ -86,7 +100,11 @@ class Runner:
             migration_id, logger, partial(self._update_migration_status, migration_key),
         )
         migration = get_group_loader(migration_key.group).load_migration(migration_id)
-        migration.forwards(context)
+
+        if reverse:
+            migration.backwards(context)
+        else:
+            migration.forwards(context)
 
     def _update_migration_status(
         self, migration_key: MigrationKey, status: Status
