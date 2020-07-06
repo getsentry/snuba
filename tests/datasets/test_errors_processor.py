@@ -1,11 +1,11 @@
-import pytz
-
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from snuba.datasets.errors_processor import ErrorsProcessor
+import pytz
+
 from snuba.consumer import KafkaMessageMetadata
-from snuba.processor import ProcessorAction
+from snuba.datasets.errors_processor import ErrorsProcessor
+from snuba.processor import InsertBatch
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 
 
@@ -330,8 +330,5 @@ def test_error_processor() -> None:
             "level": "level",
         }
     )
-    ret = processor.process_message(error, meta)
 
-    assert ret is not None
-    assert ret.action == ProcessorAction.INSERT
-    assert ret.data == [expected_result]
+    assert processor.process_message(error, meta) == InsertBatch([expected_result])

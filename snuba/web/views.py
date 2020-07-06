@@ -2,7 +2,7 @@ import logging
 import os
 import time
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping
+from typing import Any, Mapping, MutableMapping, MutableSequence
 from uuid import UUID
 
 import jsonschema
@@ -21,7 +21,6 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
     InvalidDatasetError,
     enforce_table_writer,
-    ensure_not_internal,
     get_dataset,
     get_dataset_name,
     get_enabled_dataset_names,
@@ -43,6 +42,7 @@ from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.web import QueryException
 from snuba.web.converters import DatasetConverter
 from snuba.web.query import parse_and_run_query
+from snuba.writer import WriterTableRow
 
 metrics = MetricsWrapper(environment.metrics, "api")
 
@@ -277,7 +277,6 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     assert http_request.method == "POST"
 
     with sentry_sdk.start_span(description="ensure_dataset", op="validate"):
-        ensure_not_internal(dataset)
         ensure_tables_migrated()
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
@@ -345,7 +344,6 @@ def handle_subscription_error(exception: InvalidSubscriptionError):
 @application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
 @util.time_request("subscription")
 def create_subscription(*, dataset: Dataset, timer: Timer):
-    ensure_not_internal(dataset)
     subscription = SubscriptionDataCodec().decode(http_request.data)
     # TODO: Check for valid queries with fields that are invalid for subscriptions. For
     # example date fields and aggregates.
@@ -361,7 +359,6 @@ def create_subscription(*, dataset: Dataset, timer: Timer):
     "/<dataset:dataset>/subscriptions/<int:partition>/<key>", methods=["DELETE"]
 )
 def delete_subscription(*, dataset: Dataset, partition: int, key: str):
-    ensure_not_internal(dataset)
     SubscriptionDeleter(dataset, PartitionId(partition)).delete(UUID(key))
     return "ok", 202, {"Content-Type": "text/plain"}
 
@@ -385,11 +382,11 @@ if application.debug or application.testing:
 
     @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
     def write(*, dataset: Dataset):
-        from snuba.processor import ProcessorAction
+        from snuba.processor import InsertBatch
 
         ensure_tables_migrated()
 
-        rows = []
+        rows: MutableSequence[WriterTableRow] = []
         offset_base = int(round(time.time() * 1000))
         for index, message in enumerate(json.loads(http_request.data)):
             offset = offset_base + index
@@ -405,8 +402,8 @@ if application.debug or application.testing:
                 )
             )
             if processed_message:
-                assert processed_message.action is ProcessorAction.INSERT
-                rows.extend(processed_message.data)
+                assert isinstance(processed_message, InsertBatch)
+                rows.extend(processed_message.rows)
 
         enforce_table_writer(dataset).get_writer().write(rows)
 

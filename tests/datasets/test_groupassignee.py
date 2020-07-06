@@ -1,8 +1,8 @@
-import pytz
-import simplejson as json
 from datetime import datetime
 
-from tests.base import BaseDatasetTest
+import pytz
+import simplejson as json
+
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.consumer import KafkaMessageMetadata
@@ -12,8 +12,10 @@ from snuba.datasets.cdc.groupassignee_processor import (
 )
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
 from snuba.datasets.storages.groupassignees import POSTGRES_TABLE
+from snuba.processor import InsertBatch
 from snuba.utils.streams.kafka import Headers, KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
+from tests.base import BaseDatasetTest
 
 
 class TestGroupassignee(BaseDatasetTest):
@@ -119,7 +121,7 @@ class TestGroupassignee(BaseDatasetTest):
         )
         insert_msg = json.loads(self.INSERT_MSG)
         ret = processor.process_message(insert_msg, metadata)
-        assert ret.data == [self.PROCESSED]
+        assert ret == InsertBatch([self.PROCESSED])
         self.write_processed_messages([ret])
         ret = (
             get_cluster(StorageSetKey.EVENTS)
@@ -146,7 +148,7 @@ class TestGroupassignee(BaseDatasetTest):
         )
         update_msg = json.loads(self.UPDATE_MSG_NO_KEY_CHANGE)
         ret = processor.process_message(update_msg, metadata)
-        assert ret.data == [self.PROCESSED]
+        assert ret == InsertBatch([self.PROCESSED])
 
         # Tests an update with key change which becomes a two inserts:
         # one deletion and the insertion of the new row.
@@ -160,14 +162,14 @@ class TestGroupassignee(BaseDatasetTest):
         )
         update_msg = json.loads(self.UPDATE_MSG_WITH_KEY_CHANGE)
         ret = processor.process_message(update_msg, metadata)
-        assert ret.data == [self.DELETED, self.PROCESSED_UPDATE]
+        assert ret == InsertBatch([self.DELETED, self.PROCESSED_UPDATE])
 
         assert not message_filter.should_drop(
             self.__make_msg(0, 42, self.DELETE_MSG, [])
         )
         delete_msg = json.loads(self.DELETE_MSG)
         ret = processor.process_message(delete_msg, metadata)
-        assert ret.data == [self.DELETED]
+        assert ret == InsertBatch([self.DELETED])
 
     def test_bulk_load(self):
         row = GroupAssigneeRow.from_bulk(
