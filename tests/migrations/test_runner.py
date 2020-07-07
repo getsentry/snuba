@@ -1,7 +1,10 @@
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.schemas.tables import TableSchema
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.migrations.groups import get_group_loader, MigrationGroup
+from snuba.migrations.parse_schema import get_local_schema
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 
@@ -60,10 +63,6 @@ def test_version() -> None:
 
 
 def test_no_schema_differences() -> None:
-    from snuba.datasets.schemas.tables import TableSchema
-    from snuba.datasets.storages import StorageKey
-    from snuba.migrations.parse_schema import get_local_schema
-
     storages_to_test = [StorageKey.QUERYLOG]  # TODO: Eventually test all storages
 
     runner = Runner()
@@ -75,11 +74,13 @@ def test_no_schema_differences() -> None:
             ClickhouseClientSettings.MIGRATE
         )
 
-        for schema in storage.get_schemas()._get_unique_schemas():
+        for schema in storage.get_schemas().get_unique_schemas():
             if not isinstance(schema, TableSchema):
                 continue
 
             table_name = schema.get_local_table_name()
             local_schema = get_local_schema(conn, table_name)
 
-            assert schema.get_column_differences(local_schema) == []
+            assert (
+                schema.get_column_differences(local_schema) == []
+            ), f"Schema mismatch: {table_name} does not match schema"
