@@ -6,7 +6,6 @@ from snuba.query.conditions import (
 )
 from snuba.query.dsl import count, countIf, divide, literals_tuple
 from snuba.query.expressions import (
-    Column,
     Expression,
     FunctionCall,
     Literal,
@@ -33,7 +32,11 @@ class FailureRateProcessor(QueryProcessor):
                         binary_condition(
                             None,
                             ConditionFunctions.NOT_IN,
-                            Column(None, None, "transaction_status"),
+                            FunctionCall(
+                                "transaction_status",
+                                "toUInt32OrNull",
+                                (Literal(None, "NULL"),),
+                            ),
                             literals_tuple(
                                 None,
                                 [
