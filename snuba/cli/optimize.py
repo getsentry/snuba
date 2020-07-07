@@ -3,7 +3,6 @@ from typing import Optional
 import click
 
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.datasets.factory import DATASET_NAMES, get_dataset
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -20,12 +19,6 @@ from snuba.environment import setup_logging
 )
 @click.option("--database", default="default", help="Name of the database to target.")
 @click.option(
-    "--dataset",
-    "dataset_name",
-    type=click.Choice(DATASET_NAMES),
-    help="The dataset to target",
-)
-@click.option(
     "--storage",
     "storage_name",
     default="events",
@@ -38,7 +31,6 @@ def optimize(
     clickhouse_host: Optional[str],
     clickhouse_port: Optional[int],
     database: str,
-    dataset_name: str,
     storage_name: str,
     log_level: Optional[str] = None,
 ) -> None:
@@ -50,16 +42,10 @@ def optimize(
 
     storage: ReadableTableStorage
 
-    if dataset_name:
-        dataset = get_dataset(dataset_name)
-        writable_storage = dataset.get_writable_storage()
-        assert writable_storage is not None, "Dataset has no writable storage"
-        storage = writable_storage
-    else:
-        storage_key = StorageKey(storage_name)
-        storage = get_storage(storage_key)
+    storage_key = StorageKey(storage_name)
+    storage = get_storage(storage_key)
 
-    (clickhouse_user, clickhouse_password,) = storage.get_cluster().get_credentials()
+    (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
 
     schemas = set()
     read_schema = storage.get_schemas().get_read_schema()
