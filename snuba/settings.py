@@ -136,6 +136,8 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         "tagstore.get_group_seen_values_for_environments": 100,
         "tagstore.get_groups_user_counts": 100,
         "tagstore.__get_tag_keys": 100,
+        # Search
+        "search_sample": 100,
     },
     "transactions": {
         # Simple time bucketed queries
