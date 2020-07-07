@@ -57,8 +57,8 @@ class AbstractBatchWorker(ABC, Generic[TPayload, TResult]):
 class Offsets:
     __slots__ = ["lo", "hi"]
 
-    lo: int
-    hi: int
+    lo: int  # inclusive
+    hi: int  # exclusive
 
 
 class BatchingConsumer(Generic[TPayload]):
@@ -178,17 +178,17 @@ class BatchingConsumer(Generic[TPayload]):
         if result is not None:
             self.__batch_results.append(result)
 
-        self.consumer.stage_offsets({msg.partition: msg.get_next_offset()})
-
         duration = (time.time() - start) * 1000
         self.__batch_messages_processed_count += 1
         self.__batch_processing_time_ms += duration
         self.__metrics.timing("process_message", duration)
 
         if msg.partition in self.__batch_offsets:
-            self.__batch_offsets[msg.partition].hi = msg.offset
+            self.__batch_offsets[msg.partition].hi = msg.get_next_offset()
         else:
-            self.__batch_offsets[msg.partition] = Offsets(msg.offset, msg.offset)
+            self.__batch_offsets[msg.partition] = Offsets(
+                msg.offset, msg.get_next_offset()
+            )
 
     def _shutdown(self) -> None:
         logger.debug("Stopping")
@@ -247,14 +247,17 @@ class BatchingConsumer(Generic[TPayload]):
                 "batch.flush.normalized", flush_duration / batch_results_length
             )
 
-        logger.debug("Committing offsets")
+        logger.debug("Committing offsets for batch")
         commit_start = time.time()
-        self._commit()
+        self.consumer.stage_offsets(
+            {
+                partition: offsets.hi
+                for partition, offsets in self.__batch_offsets.items()
+            }
+        )
+        offsets = self.consumer.commit_offsets()
+        logger.debug("Committed offsets: %s", offsets)
         commit_duration = (time.time() - commit_start) * 1000
         logger.debug("Offset commit took %dms", commit_duration)
 
         self._reset_batch()
-
-    def _commit(self) -> None:
-        offsets = self.consumer.commit_offsets()
-        logger.debug("Committed offsets: %s", offsets)
