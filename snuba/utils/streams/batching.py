@@ -57,8 +57,8 @@ class AbstractBatchWorker(ABC, Generic[TPayload, TResult]):
 class Offsets:
     __slots__ = ["lo", "hi"]
 
-    lo: int
-    hi: int
+    lo: int  # inclusive
+    hi: int  # exclusive
 
 
 class BatchingConsumer(Generic[TPayload]):
@@ -184,9 +184,11 @@ class BatchingConsumer(Generic[TPayload]):
         self.__metrics.timing("process_message", duration)
 
         if msg.partition in self.__batch_offsets:
-            self.__batch_offsets[msg.partition].hi = msg.offset
+            self.__batch_offsets[msg.partition].hi = msg.get_next_offset()
         else:
-            self.__batch_offsets[msg.partition] = Offsets(msg.offset, msg.offset)
+            self.__batch_offsets[msg.partition] = Offsets(
+                msg.offset, msg.get_next_offset()
+            )
 
     def _shutdown(self) -> None:
         logger.debug("Stopping")
@@ -249,7 +251,7 @@ class BatchingConsumer(Generic[TPayload]):
         commit_start = time.time()
         self.consumer.stage_offsets(
             {
-                partition: offsets.hi + 1
+                partition: offsets.hi
                 for partition, offsets in self.__batch_offsets.items()
             }
         )
