@@ -104,6 +104,7 @@ TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 
 AST_DATASET_ROLLOUT: Mapping[str, int] = {
     "outcomes": 100,
+    "transactions": 100,
 }  # (dataset name: percentage)
 AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
     "discover": {
@@ -138,12 +139,6 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         "tagstore.__get_tag_keys": 100,
         # Search
         "search_sample": 100,
-    },
-    "transactions": {
-        # Simple time bucketed queries
-        "incidents.get_incident_event_stats": 100,
-        # Queries with tags resolution
-        "incidents.get_incident_aggregates": 100,
     },
 }  # (dataset name: (referrer: percentage))
 
