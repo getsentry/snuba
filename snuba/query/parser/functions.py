@@ -59,7 +59,7 @@ def function_expr(fn: str, args_expr: str = "") -> str:
             return "countIf(notIn(transaction_status, tuple({ok}, {cancelled}, {unknown}))) / count()".format(
                 ok=SPAN_STATUS_NAME_TO_CODE["ok"],
                 cancelled=SPAN_STATUS_NAME_TO_CODE["cancelled"],
-                unknown=SPAN_STATUS_NAME_TO_CODE["unknown"],
+                unknown=SPAN_STATUS_NAME_TO_CODE["unknown_error"],
             )
         raise ValueError("Invalid format for failure_rate()")
     # For functions with no args, (or static args) we allow them to already
