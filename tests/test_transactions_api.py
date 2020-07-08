@@ -17,6 +17,7 @@ class TestTransactionsApi(BaseApiTest):
     def setup_method(self, test_method, dataset_name="transactions"):
         super().setup_method(test_method, dataset_name)
         self.app.post = partial(self.app.post, headers={"referer": "test"})
+        state.set_config("infix_where_format", 1)
 
         # values for test data
         self.project_ids = [1, 2]  # 2 projects
