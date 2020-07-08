@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Mapping, Optional, Sequence
 
-from snuba import environment
+from snuba import environment, state
 from snuba.clickhouse.columns import (
     UUID,
     Array,
@@ -55,7 +55,7 @@ metrics = MetricsWrapper(environment.metrics, "api.discover")
 logger = logging.getLogger(__name__)
 
 
-def detect_table(
+def detect_dataset(
     query: Query,
     events_only_columns: ColumnSet,
     transactions_only_columns: ColumnSet,
@@ -161,11 +161,13 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
     def __init__(
         self,
         events_table: ReadableStorage,
+        events_ro_table: ReadableStorage,
         abstract_events_columns: ColumnSet,
         transactions_table: ReadableStorage,
         abstract_transactions_columns: ColumnSet,
     ) -> None:
         self.__events_table = events_table
+        self.__events_ro_table = events_ro_table
         # Columns from the abstract model that map to storage columns present only
         # in the Events table
         self.__abstract_events_columns = abstract_events_columns
@@ -197,19 +199,27 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
     def select_storage(
         self, query: Query, request_settings: RequestSettings
     ) -> StorageAndMappers:
-        table = detect_table(
+        dataset = detect_dataset(
             query,
             self.__abstract_events_columns,
             self.__abstract_transactions_columns,
             True,
         )
-        return (
-            StorageAndMappers(self.__events_table, self.__event_translator)
-            if table == EVENTS
-            else StorageAndMappers(
+
+        if dataset == TRANSACTIONS:
+            return StorageAndMappers(
                 self.__transactions_table, self.__transaction_translator
             )
-        )
+        else:
+            use_readonly_storage = (
+                state.get_config("enable_events_readonly_table", False)
+                and not request_settings.get_consistent()
+            )
+            return (
+                StorageAndMappers(self.__events_ro_table, self.__event_translator)
+                if use_readonly_storage
+                else StorageAndMappers(self.__events_table, self.__event_translator)
+            )
 
 
 class DiscoverDataset(TimeSeriesDataset):
@@ -316,6 +326,7 @@ class DiscoverDataset(TimeSeriesDataset):
         )
 
         events_storage = get_storage(StorageKey.EVENTS)
+        events_ro_storage = get_storage(StorageKey.EVENTS_RO)
         transactions_storage = get_storage(StorageKey.TRANSACTIONS)
 
         super().__init__(
@@ -323,6 +334,7 @@ class DiscoverDataset(TimeSeriesDataset):
             query_plan_builder=SelectedStorageQueryPlanBuilder(
                 selector=DiscoverQueryStorageSelector(
                     events_table=events_storage,
+                    events_ro_table=events_ro_storage,
                     abstract_events_columns=self.__events_columns,
                     transactions_table=transactions_storage,
                     abstract_transactions_columns=self.__transactions_columns,
@@ -372,7 +384,7 @@ class DiscoverDataset(TimeSeriesDataset):
         parsing_context: ParsingContext,
         table_alias: str = "",
     ):
-        detected_dataset = detect_table(
+        detected_dataset = detect_dataset(
             query, self.__events_columns, self.__transactions_columns, False,
         )
 

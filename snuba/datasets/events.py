@@ -6,7 +6,10 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.events import get_column_tag_map, get_promoted_columns
+from snuba.datasets.storages.events_common import (
+    get_column_tag_map,
+    get_promoted_columns,
+)
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.extensions import QueryExtension
