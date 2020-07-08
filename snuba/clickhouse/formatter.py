@@ -121,7 +121,7 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             # and work when they are passed as [1, 2, 3]
             return self.__alias(f"[{self.__visit_params(exp.parameters)}]", exp.alias)
 
-        if state.get_config("infix_where_format", 1):
+        if state.get_config("infix_where_format", 0):
             if exp.function_name == BooleanFunctions.AND:
                 formatted = (
                     c.accept(self) for c in get_first_level_and_conditions(exp)
