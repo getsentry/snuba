@@ -141,6 +141,8 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         # Search
         "search_sample": 100,
         "search": 100,
+        # deprecated Discover V1
+        "discover": 100,
     },
 }  # (dataset name: (referrer: percentage))
 
