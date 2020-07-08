@@ -94,6 +94,6 @@ def test_apdex_format_expressions() -> None:
     )
     assert ret == (
         "(divide(plus(countIf(lessOrEquals(column1, 300)), "
-        "divide(countIf(and(greater(column1, 300), "
-        "lessOrEquals(column1, multiply(300, 4)))), 2)), count()) AS perf)"
+        "divide(countIf(greater(column1, 300) AND "
+        "lessOrEquals(column1, multiply(300, 4))), 2)), count()) AS perf)"
     )

@@ -199,8 +199,8 @@ test_cases = [
             "from": "FROM my_table",
             "select": "SELECT (column3 AS al), (column4 AS al2)",
             "where": (
-                "WHERE or(equals(al, 'blabla'), equals(al2, 'blabla2')) AND "
-                "or(equals(column5, 'blabla3'), equals(column6, 'blabla4'))"
+                "WHERE (equals(al, 'blabla') OR equals(al2, 'blabla2')) AND "
+                "(equals(column5, 'blabla3') OR equals(column6, 'blabla4'))"
             ),
         },
         id="query_complex_condition",
