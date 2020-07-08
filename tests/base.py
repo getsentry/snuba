@@ -5,14 +5,14 @@ from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import md5
-from typing import Iterator, Optional, Sequence
+from typing import Iterator, MutableSequence, Optional, Sequence
 
 from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import enforce_table_writer, get_dataset
-from snuba.processor import ProcessedMessage, ProcessorAction
+from snuba.processor import InsertBatch, ProcessedMessage
 from snuba.redis import redis_client
 from snuba.writer import WriterTableRow
 from tests.fixtures import raw_event
@@ -70,10 +70,10 @@ class BaseTest(object):
 
 class BaseDatasetTest(BaseTest):
     def write_processed_messages(self, messages: Sequence[ProcessedMessage]) -> None:
-        rows = []
+        rows: MutableSequence[WriterTableRow] = []
         for message in messages:
-            assert message.action is ProcessorAction.INSERT
-            rows.extend(message.data)
+            assert isinstance(message, InsertBatch)
+            rows.extend(message.rows)
         self.write_rows(rows)
 
     def write_rows(self, rows: Sequence[WriterTableRow]) -> None:

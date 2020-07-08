@@ -11,7 +11,7 @@ DEBUG = True
 PORT = 1218
 
 DEFAULT_DATASET_NAME = "events"
-DISABLED_DATASETS: Set[str] = {"querylog"}
+DISABLED_DATASETS: Set[str] = set()
 
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
@@ -104,6 +104,7 @@ TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 
 AST_DATASET_ROLLOUT: Mapping[str, int] = {
     "outcomes": 100,
+    "transactions": 100,
 }  # (dataset name: percentage)
 AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
     "discover": {
@@ -118,6 +119,7 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         "api.organization-events-stats": 100,
         "incidents.get_incident_event_stats": 100,
         "incidents.get_incident_aggregates": 100,
+        "tsdb": 100,
         # Queries with tags resolution
         "tagstore.get_tag_value_paginator_for_projects": 100,
         "tagstore.get_group_tag_value_iter": 100,
@@ -134,12 +136,9 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         "tagstore.__get_release": 100,
         "tagstore.get_group_seen_values_for_environments": 100,
         "tagstore.get_groups_user_counts": 100,
-    },
-    "transactions": {
-        # Simple time bucketed queries
-        "incidents.get_incident_event_stats": 100,
-        # Queries with tags resolution
-        "incidents.get_incident_aggregates": 100,
+        "tagstore.__get_tag_keys": 100,
+        # Search
+        "search_sample": 100,
     },
 }  # (dataset name: (referrer: percentage))
 
