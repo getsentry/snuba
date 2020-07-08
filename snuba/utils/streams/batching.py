@@ -1,7 +1,7 @@
 import logging
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import (
     Generic,
     Mapping,
@@ -61,6 +61,18 @@ class Offsets:
     hi: int  # exclusive
 
 
+@dataclass
+class Batch(Generic[TResult]):
+    results: MutableSequence[TResult] = field(default_factory=list)
+    offsets: MutableMapping[Partition, Offsets] = field(default_factory=dict)
+    created: float = field(default_factory=lambda: time.time())
+    messages_processed_count: int = 0
+    # the total amount of time, in milliseconds, that it took to process
+    # the messages in this batch (does not included time spent waiting for
+    # new messages)
+    processing_time_ms: float = 0.0
+
+
 class BatchingConsumer(Generic[TPayload]):
     """The `BatchingConsumer` is an abstraction over the abstract Consumer's main event
     loop. For this reason it uses inversion of control: the user provides an implementation
@@ -105,14 +117,7 @@ class BatchingConsumer(Generic[TPayload]):
 
         self.shutdown = False
 
-        self.__batch_results: MutableSequence[TResult] = []
-        self.__batch_offsets: MutableMapping[Partition, Offsets] = {}
-        self.__batch_deadline: Optional[float] = None
-        self.__batch_messages_processed_count: int = 0
-        # the total amount of time, in milliseconds, that it took to process
-        # the messages in this batch (does not included time spent waiting for
-        # new messages)
-        self.__batch_processing_time_ms: float = 0.0
+        self.__batch: Optional[Batch[TResult]] = None
 
         # The types passed to the `except` clause must be a tuple, not a Sequence.
         self.__recoverable_errors = tuple(recoverable_errors or [])
@@ -170,23 +175,23 @@ class BatchingConsumer(Generic[TPayload]):
             },
         )
 
-        # set the deadline only after the first message for this batch is seen
-        if not self.__batch_deadline:
-            self.__batch_deadline = self.max_batch_time / 1000.0 + start
+        # create the batch only after the first message for is seen
+        if self.__batch is None:
+            self.__batch = Batch()
 
         result = self.worker.process_message(msg)
         if result is not None:
-            self.__batch_results.append(result)
+            self.__batch.results.append(result)
 
         duration = (time.time() - start) * 1000
-        self.__batch_messages_processed_count += 1
-        self.__batch_processing_time_ms += duration
+        self.__batch.messages_processed_count += 1
+        self.__batch.processing_time_ms += duration
         self.__metrics.timing("process_message", duration)
 
-        if msg.partition in self.__batch_offsets:
-            self.__batch_offsets[msg.partition].hi = msg.get_next_offset()
+        if msg.partition in self.__batch.offsets:
+            self.__batch.offsets[msg.partition].hi = msg.get_next_offset()
         else:
-            self.__batch_offsets[msg.partition] = Offsets(
+            self.__batch.offsets[msg.partition] = Offsets(
                 msg.offset, msg.get_next_offset()
             )
 
@@ -194,7 +199,7 @@ class BatchingConsumer(Generic[TPayload]):
         logger.debug("Stopping")
 
         # drop in-memory events, letting the next consumer take over where we left off
-        self._reset_batch()
+        self.__batch = None
 
         # close the consumer
         logger.debug("Stopping consumer")
@@ -203,28 +208,26 @@ class BatchingConsumer(Generic[TPayload]):
 
     def _reset_batch(self) -> None:
         logger.debug("Resetting in-memory batch")
-        self.__batch_results = []
-        self.__batch_offsets = {}
-        self.__batch_deadline = None
-        self.__batch_messages_processed_count = 0
-        self.__batch_processing_time_ms = 0.0
+        self.__batch = None
 
     def _flush(self, force: bool = False) -> None:
         """Decides whether the batching consumer should flush because of either
         batch size or time. If so, delegate to the worker, clear the current batch,
         and commit offsets."""
-        if not self.__batch_messages_processed_count > 0:
+        if self.__batch is None:
             return  # No messages were processed, so there's nothing to do.
 
-        batch_by_size = len(self.__batch_results) >= self.max_batch_size
-        batch_by_time = self.__batch_deadline and time.time() > self.__batch_deadline
+        batch_by_size = len(self.__batch.results) >= self.max_batch_size
+        batch_by_time = time.time() > self.__batch.created + (
+            self.max_batch_time / 1000.0
+        )
         if not (force or batch_by_size or batch_by_time):
             return
 
         logger.info(
             "Flushing %s items (from %r): forced:%s size:%s time:%s",
-            len(self.__batch_results),
-            self.__batch_offsets,
+            len(self.__batch.results),
+            self.__batch.offsets,
             force,
             batch_by_size,
             batch_by_time,
@@ -232,14 +235,14 @@ class BatchingConsumer(Generic[TPayload]):
 
         self.__metrics.timing(
             "process_message.normalized",
-            self.__batch_processing_time_ms / self.__batch_messages_processed_count,
+            self.__batch.processing_time_ms / self.__batch.messages_processed_count,
         )
 
-        batch_results_length = len(self.__batch_results)
+        batch_results_length = len(self.__batch.results)
         if batch_results_length > 0:
             logger.debug("Flushing batch via worker")
             flush_start = time.time()
-            self.worker.flush_batch(self.__batch_results)
+            self.worker.flush_batch(self.__batch.results)
             flush_duration = (time.time() - flush_start) * 1000
             logger.info("Worker flush took %dms", flush_duration)
             self.__metrics.timing("batch.flush", flush_duration)
@@ -252,7 +255,7 @@ class BatchingConsumer(Generic[TPayload]):
         self.consumer.stage_offsets(
             {
                 partition: offsets.hi
-                for partition, offsets in self.__batch_offsets.items()
+                for partition, offsets in self.__batch.offsets.items()
             }
         )
         offsets = self.consumer.commit_offsets()
