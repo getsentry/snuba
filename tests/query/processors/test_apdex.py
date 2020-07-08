@@ -1,3 +1,4 @@
+from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.datasets.schemas.tables import TableSource
@@ -14,6 +15,7 @@ from snuba.request.request_settings import HTTPRequestSettings
 
 
 def test_apdex_format_expressions() -> None:
+    state.set_config("infix_where_format", 1)
     unprocessed = Query(
         {},
         TableSource("events", ColumnSet([])),
