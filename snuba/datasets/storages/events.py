@@ -268,6 +268,7 @@ schema = ReplacingMergeTreeSchema(
         "event_id",
         "group_id",
         "tags[sentry:release]",
+        "sentry:release",
         "message",
         "title",
         "environment",
