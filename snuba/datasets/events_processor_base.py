@@ -15,11 +15,12 @@ from snuba.datasets.events_format import (
     extract_project_id,
 )
 from snuba.processor import (
+    InsertBatch,
     InvalidMessageType,
     InvalidMessageVersion,
     MessageProcessor,
     ProcessedMessage,
-    ProcessorAction,
+    ReplacementBatch,
     _as_dict_safe,
     _boolify,
     _collapse_uint32,
@@ -27,7 +28,6 @@ from snuba.processor import (
     _hashify,
     _unicodify,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -149,10 +149,8 @@ class EventsProcessorBase(MessageProcessor, ABC):
         self, message, metadata: Optional[KafkaMessageMetadata] = None
     ) -> Optional[ProcessedMessage]:
         """\
-        Process a raw message into a tuple of (action_type, processed_message):
-        * action_type: one of the sentinel values INSERT or REPLACE
-        * processed_message: dict representing the processed column -> value(s)
-        Returns `None` if the event is too old to be written.
+        Process a raw message into an insertion or replacement batch. Returns
+        `None` if the event is too old to be written.
         """
         version = message[0]
         if version != 2:
@@ -169,12 +167,10 @@ class EventsProcessorBase(MessageProcessor, ABC):
             if row is None:  # the processor cannot/does not handle this input
                 return None
 
-            return ProcessedMessage(ProcessorAction.INSERT, [row])
+            return InsertBatch([row])
         elif type_ in REPLACEMENT_EVENT_TYPES:
             # pass raw events along to republish
-            return ProcessedMessage(
-                ProcessorAction.REPLACE, [(str(event["project_id"]), message)]
-            )
+            return ReplacementBatch(str(event["project_id"]), [message])
         else:
             raise InvalidMessageType(f"Invalid message type: {type_}")
 

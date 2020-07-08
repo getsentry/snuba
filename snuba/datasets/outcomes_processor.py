@@ -1,13 +1,13 @@
+import uuid
 from datetime import datetime
 from typing import Optional
-import uuid
 
 from snuba import settings
 from snuba.processor import (
-    _ensure_valid_date,
+    InsertBatch,
     MessageProcessor,
-    ProcessorAction,
     ProcessedMessage,
+    _ensure_valid_date,
     _unicodify,
 )
 
@@ -32,4 +32,4 @@ class OutcomesProcessor(MessageProcessor):
             "event_id": str(uuid.UUID(v_uuid)) if v_uuid is not None else None,
         }
 
-        return ProcessedMessage(action=ProcessorAction.INSERT, data=[message],)
+        return InsertBatch([message])
