@@ -139,6 +139,7 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         "tagstore.__get_tag_keys": 100,
         # Search
         "search_sample": 100,
+        "search": 100,
     },
 }  # (dataset name: (referrer: percentage))
 
