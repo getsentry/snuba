@@ -157,7 +157,12 @@ schema = ReplacingMergeTreeSchema(
     dist_table_name="transactions_dist",
     storage_set_key=StorageSetKey.TRANSACTIONS,
     mandatory_conditions=[],
-    prewhere_candidates=["event_id", "project_id"],
+    prewhere_candidates=[
+        "event_id",
+        "transaction",
+        "title",
+        "project_id",
+    ],
     order_by="(project_id, toStartOfDay(finish_ts), transaction_name, cityHash64(span_id))",
     partition_by="(retention_days, toMonday(finish_ts))",
     version_column="deleted",
