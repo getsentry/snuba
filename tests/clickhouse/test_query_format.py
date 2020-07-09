@@ -1,5 +1,6 @@
 import pytest
 
+from snuba import state
 from snuba.clickhouse.astquery import AstSqlQuery
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
@@ -112,7 +113,7 @@ test_cases = [
         (
             "SELECT (doSomething(column1, table1.column2, (column3 AS al))(column1) AS my_complex_math) "
             "FROM my_table "
-            "WHERE and(eq(al, 'blabla'), neq(al, 'blabla')) "
+            "WHERE eq(al, 'blabla') AND neq(al, 'blabla') "
             "GROUP BY (my_complex_math) "
             "ORDER BY f(column1) ASC"
         ),
@@ -144,6 +145,7 @@ test_cases = [
 
 @pytest.mark.parametrize("query, formatted", test_cases)
 def test_format_expressions(query: Query, formatted: str) -> None:
+    state.set_config("infix_where_format", 1)
     request_settings = HTTPRequestSettings()
     clickhouse_query = AstSqlQuery(query, request_settings)
     assert clickhouse_query.format_sql() == formatted

@@ -26,6 +26,7 @@ from tests.base import BaseApiTest
 class TestApi(BaseApiTest):
     def setup_method(self, test_method, dataset_name="events"):
         super().setup_method(test_method, dataset_name)
+        state.set_config("infix_where_format", 1)
         self.app.post = partial(self.app.post, headers={"referer": "test"})
 
         # values for test data
@@ -736,7 +737,7 @@ class TestApi(BaseApiTest):
             in result["sql"]
         ) or (
             # ast representation
-            "PREWHERE and(notEquals(positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc'), 0), in(project_id, tuple(1)))"
+            "PREWHERE notEquals(positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc'), 0) AND in(project_id, tuple(1))"
             in result["sql"]
         )
 
