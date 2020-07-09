@@ -55,7 +55,7 @@ metrics = MetricsWrapper(environment.metrics, "api.discover")
 logger = logging.getLogger(__name__)
 
 
-def detect_dataset(
+def detect_table(
     query: Query,
     events_only_columns: ColumnSet,
     transactions_only_columns: ColumnSet,
@@ -199,14 +199,14 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
     def select_storage(
         self, query: Query, request_settings: RequestSettings
     ) -> StorageAndMappers:
-        dataset = detect_dataset(
+        table = detect_table(
             query,
             self.__abstract_events_columns,
             self.__abstract_transactions_columns,
             True,
         )
 
-        if dataset == TRANSACTIONS:
+        if table == TRANSACTIONS:
             return StorageAndMappers(
                 self.__transactions_table, self.__transaction_translator
             )
@@ -384,7 +384,7 @@ class DiscoverDataset(TimeSeriesDataset):
         parsing_context: ParsingContext,
         table_alias: str = "",
     ):
-        detected_dataset = detect_dataset(
+        detected_dataset = detect_table(
             query, self.__events_columns, self.__transactions_columns, False,
         )
 
