@@ -148,7 +148,8 @@ class Migration(migration.MultiStepMigration):
                 table_name="sentry_dist",
                 columns=columns,
                 engine=table_engines.Distributed(
-                    local_table_name="sentry_local", sharding_key=None
+                    local_table_name="sentry_local",
+                    sharding_key="cityHash64(toString(event_id)))",
                 ),
             )
             # TODO: We need to also create the events_ro table here. It
