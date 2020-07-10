@@ -15,28 +15,33 @@ from snuba.query.expressions import (
 from snuba.query.parser.functions import parse_function_to_expr
 from snuba.query.parser.strings import parse_string_to_expr
 from snuba.util import is_function
+from snuba.query.dsl import plus, multiply
+
 
 minimal_clickhouse_grammar = Grammar(
     r"""
 # This root element is needed because of the ambiguity of the aggregation
 # function field which can mean a clickhouse function expression or the simple
 # name of a clickhouse function.
-root_element    = function_call / function_name
-expression      = function_call / simple_term
-parameters_list = parameter* (expression)
-parameter       = expression space* comma space*
-function_call   = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)?
-simple_term     = quoted_literal / numeric_literal / column_name
-literal         = ~r"[a-zA-Z0-9_\.:-]+"
-quoted_literal  = "'" string_literal "'"
-string_literal  = ~r"[a-zA-Z0-9_\.:-]*"
-numeric_literal = ~r"-?[0-9]+(\.[0-9]+)?(e[\+\-][0-9]+)?"
-column_name     = ~r"[a-zA-Z_][a-zA-Z0-9_\.]*"
-function_name   = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
-open_paren      = "("
-close_paren     = ")"
-space           = " "
-comma           = ","
+root_element          = function_call / function_name
+expression            = arithmetic_expression / function_call / simple_term
+arithmetic_expression = simple_term2 (("+" arithmetic_expression) / empty)
+parameters_list       = parameter* (expression)
+parameter             = expression space* comma space*
+function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)?
+simple_term           = quoted_literal / numeric_literal / column_name
+simple_term2          = numeric_literal (("*" simple_term2) / empty)
+literal               = ~r"[a-zA-Z0-9_\.:-]+"
+quoted_literal        = "'" string_literal "'"
+string_literal        = ~r"[a-zA-Z0-9_\.:-]*"
+numeric_literal       = ~r"-?[0-9]+(\.[0-9]+)?(e[\+\-][0-9]+)?"
+column_name           = ~r"[a-zA-Z_][a-zA-Z0-9_\.]*"
+function_name         = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
+open_paren            = "("
+close_paren           = ")"
+space                 = " "
+comma                 = ","
+empty                 = ""
 """
 )
 
@@ -51,6 +56,27 @@ class ClickhouseVisitor(NodeVisitor):
 
     def visit_column_name(self, node: Node, visited_children: Iterable[Any]) -> Column:
         return Column(None, None, node.text)
+
+    def visit_empty(self, node, children):
+        return
+
+    def visit_simple_term2(self, node, children):
+        factor, term = children
+
+        if all(x is None for x in term):
+            # A check for any None child nodes
+            # that arose from empty space ''
+            return factor
+        else:
+            return multiply(factor, term[0][1])
+
+    def visit_arithmetic_expression(self, node, children):
+        term, exp = children
+
+        if all(x is None for x in exp):
+            return term
+        else:
+            return plus(term, exp[0][1])
 
     def visit_numeric_literal(
         self, node: Node, visited_children: Iterable[Any]
