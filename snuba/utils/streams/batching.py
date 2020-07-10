@@ -228,11 +228,19 @@ class BatchingConsumer(Generic[TPayload]):
         self.__recoverable_errors = tuple(recoverable_errors or [])
 
         def on_partitions_assigned(partitions: Mapping[Partition, int]) -> None:
+            assert (
+                self.__processor is None
+            ), "received unexpected assignment with existing active processor"
+
             logger.info("New partitions assigned: %r", partitions)
             self.__processor = self.__processor_factory()
 
         def on_partitions_revoked(partitions: Sequence[Partition]) -> None:
             "Reset the current in-memory batch, letting the next consumer take over where we left off."
+            assert (
+                self.__processor is not None
+            ), "received unexpected revocation without active processor"
+
             logger.info("Partitions revoked: %r", partitions)
             self.__processor.close()
             self.__processor = None
@@ -256,6 +264,7 @@ class BatchingConsumer(Generic[TPayload]):
         except self.__recoverable_errors:
             return
 
+        assert self.__processor is not None, "received message without active processor"
         self.__processor.process(msg)
 
     def signal_shutdown(self) -> None:
@@ -266,6 +275,10 @@ class BatchingConsumer(Generic[TPayload]):
         self.shutdown = True
 
     def _shutdown(self) -> None:
+        assert (
+            self.__processor is not None
+        ), "received shutdown request without active processor"
+
         logger.debug("Stopping processor")
         self.__processor.close()
 
