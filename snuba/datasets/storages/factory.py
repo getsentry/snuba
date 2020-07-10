@@ -5,6 +5,7 @@ from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors import storage as errors_storage
 from snuba.datasets.storages.events import storage as events_storage
+from snuba.datasets.storages.events_ro import storage as events_ro_storage
 from snuba.datasets.storages.groupassignees import storage as groupassignees_storage
 from snuba.datasets.storages.groupedmessages import storage as groupedmessages_storage
 from snuba.datasets.storages.outcomes import (
@@ -41,7 +42,7 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
 
 NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
     storage.get_storage_key(): storage
-    for storage in [outcomes_hourly_storage, sessions_hourly_storage]
+    for storage in [events_ro_storage, outcomes_hourly_storage, sessions_hourly_storage]
 }
 
 STORAGES: Mapping[StorageKey, ReadableTableStorage] = {

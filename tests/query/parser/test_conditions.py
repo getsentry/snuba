@@ -28,6 +28,14 @@ test_conditions = [
         ),
     ),
     (
+        [["a", "=", "'nice \n a newline\n'"]],
+        FunctionCall(
+            None,
+            ConditionFunctions.EQ,
+            (Column(None, None, "a"), Literal(None, "'nice \n a newline\n'")),
+        ),
+    ),
+    (
         [[["a", "=", 1]]],
         FunctionCall(
             None, ConditionFunctions.EQ, (Column(None, None, "a"), Literal(None, 1))

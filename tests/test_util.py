@@ -501,6 +501,16 @@ class TestUtil(BaseTest):
             **locals()
         )
 
+        # Messages can have newlines in them
+        assert complex_column_expr(
+            dataset,
+            tuplify(["positionCaseInsensitive", ["message", "'nice \n a newline\n'"]]),
+            deepcopy(query),
+            ParsingContext(),
+        ) == "positionCaseInsensitive({message_expr}, 'nice \n a newline\n')".format(
+            **locals()
+        )
+
         # dangerous characters are allowed but escaped in literals and column names
         assert (
             complex_column_expr(
