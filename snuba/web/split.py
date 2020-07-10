@@ -11,7 +11,7 @@ from snuba.datasets.plans.split_strategy import QuerySplitStrategy, SplitQueryRu
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     combine_and_conditions,
-    get_first_level_conditions,
+    get_first_level_and_conditions,
     in_condition,
 )
 from snuba.query.dsl import literals_tuple
@@ -71,7 +71,7 @@ def _get_time_range(
 
     max_lower_bound = None
     min_upper_bound = None
-    for c in get_first_level_conditions(condition_clause):
+    for c in get_first_level_and_conditions(condition_clause):
         match = FunctionCall(
             None,
             Param(
@@ -128,7 +128,10 @@ def _replace_ast_condition(
     if condition is not None:
         query.set_ast_condition(
             combine_and_conditions(
-                [replace_condition(c) for c in get_first_level_conditions(condition)]
+                [
+                    replace_condition(c)
+                    for c in get_first_level_and_conditions(condition)
+                ]
             )
         )
 

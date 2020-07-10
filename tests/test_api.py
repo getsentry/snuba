@@ -736,7 +736,7 @@ class TestApi(BaseApiTest):
             in result["sql"]
         ) or (
             # ast representation
-            "PREWHERE and(notEquals(positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc'), 0), in(project_id, tuple(1)))"
+            "PREWHERE notEquals(positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc'), 0) AND in(project_id, tuple(1))"
             in result["sql"]
         )
 

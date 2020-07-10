@@ -112,7 +112,7 @@ test_cases = [
         (
             "SELECT (doSomething(column1, table1.column2, (column3 AS al))(column1) AS my_complex_math) "
             "FROM my_table "
-            "WHERE and(eq(al, 'blabla'), neq(al, 'blabla')) "
+            "WHERE eq(al, 'blabla') AND neq(al, 'blabla') "
             "GROUP BY (my_complex_math) "
             "ORDER BY f(column1) ASC"
         ),

@@ -2,6 +2,8 @@ from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
     binary_condition,
+    get_first_level_and_conditions,
+    get_first_level_or_conditions,
     is_binary_condition,
     is_in_condition,
     is_in_condition_pattern,
@@ -163,3 +165,43 @@ def test_processing_functions() -> None:
     )
     assert is_binary_condition(eq_condition, ConditionFunctions.EQ)
     assert not is_binary_condition(eq_condition, ConditionFunctions.NEQ)
+
+
+def test_first_level_conditions() -> None:
+    c1 = binary_condition(
+        None,
+        ConditionFunctions.EQ,
+        Column(None, "table1", "column1"),
+        Literal(None, "test"),
+    )
+    c2 = binary_condition(
+        None,
+        ConditionFunctions.EQ,
+        Column(None, "table2", "column2"),
+        Literal(None, "test"),
+    )
+    c3 = binary_condition(
+        None,
+        ConditionFunctions.EQ,
+        Column(None, "table3", "column3"),
+        Literal(None, "test"),
+    )
+
+    cond = binary_condition(
+        None,
+        BooleanFunctions.AND,
+        binary_condition(None, BooleanFunctions.AND, c1, c2),
+        c3,
+    )
+    assert get_first_level_and_conditions(cond) == [c1, c2, c3]
+
+    cond = binary_condition(
+        None,
+        BooleanFunctions.OR,
+        binary_condition(None, BooleanFunctions.AND, c1, c2),
+        c3,
+    )
+    assert get_first_level_or_conditions(cond) == [
+        binary_condition(None, BooleanFunctions.AND, c1, c2),
+        c3,
+    ]
