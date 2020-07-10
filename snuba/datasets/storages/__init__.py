@@ -7,6 +7,7 @@ class StorageKey(Enum):
     """
 
     EVENTS = "events"
+    EVENTS_RO = "events_ro"
     ERRORS = "errors"
     GROUPEDMESSAGES = "groupedmessages"
     GROUPASSIGNEES = "groupassignees"
