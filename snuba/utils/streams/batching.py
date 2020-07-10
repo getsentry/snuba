@@ -90,8 +90,11 @@ class BatchProcessor:
         self.__metrics = metrics
 
         self.__batch: Optional[Batch[TResult]] = None
+        self.__closed = False
 
     def process(self, message: Optional[Message[TPayload]]) -> None:
+        assert not self.__closed
+
         if self.__batch is not None and (
             len(self.__batch.results) >= self.__max_batch_size
             or time.time() > self.__batch.created + self.__max_batch_time / 1000.0
@@ -133,9 +136,10 @@ class BatchProcessor:
             )
 
     def close(self) -> None:
-        pass  # TODO: Make this configurable to flush on close?
+        self.__closed = True
 
     def __flush(self) -> None:
+        assert not self.__closed
         assert self.__batch is not None, "cannot flush without active batch"
 
         logger.info(
