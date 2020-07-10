@@ -61,7 +61,7 @@ class EventsLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.events")
 
     def get_migrations(self) -> Sequence[str]:
-        return []
+        return ["0001_events_initial"]
 
 
 class QuerylogLoader(DirectoryLoader):

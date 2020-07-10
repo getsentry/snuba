@@ -1,6 +1,5 @@
 import pytest
 
-from snuba import state
 from snuba.clickhouse.astquery import AstSqlQuery
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
@@ -145,7 +144,6 @@ test_cases = [
 
 @pytest.mark.parametrize("query, formatted", test_cases)
 def test_format_expressions(query: Query, formatted: str) -> None:
-    state.set_config("infix_where_format", 1)
     request_settings = HTTPRequestSettings()
     clickhouse_query = AstSqlQuery(query, request_settings)
     assert clickhouse_query.format_sql() == formatted
