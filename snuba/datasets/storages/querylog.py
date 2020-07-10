@@ -15,7 +15,7 @@ from snuba.clickhouse.columns import (
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.querylog_processor import QuerylogProcessor
-from snuba.datasets.schemas.tables import MergeTreeSchema
+from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader
@@ -60,14 +60,11 @@ columns = ColumnSet(
     ]
 )
 
-schema = MergeTreeSchema(
+schema = WritableTableSchema(
     columns=columns,
     local_table_name="querylog_local",
     dist_table_name="querylog_dist",
     storage_set_key=StorageSetKey.QUERYLOG,
-    order_by="(toStartOfDay(timestamp), request_id)",
-    partition_by="(toMonday(timestamp))",
-    sample_expr="request_id",
 )
 
 storage = WritableTableStorage(
