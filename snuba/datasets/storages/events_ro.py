@@ -18,7 +18,7 @@ schema = ReplacingMergeTreeSchema(
     columns=all_columns,
     local_table_name="sentry_local",
     dist_table_name="sentry_dist_ro",
-    storage_set_key=StorageSetKey.EVENTS,
+    storage_set_key=StorageSetKey.EVENTS_RO,
     mandatory_conditions=mandatory_conditions,
     prewhere_candidates=prewhere_candidates,
     order_by="(project_id, toStartOfDay(timestamp), %s)" % sample_expr,
@@ -29,7 +29,7 @@ schema = ReplacingMergeTreeSchema(
 
 storage = ReadableTableStorage(
     storage_key=StorageKey.EVENTS_RO,
-    storage_set_key=StorageSetKey.EVENTS,
+    storage_set_key=StorageSetKey.EVENTS_RO,
     schemas=StorageSchemas(read_schema=schema, write_schema=None),
     query_processors=query_processors,
     query_splitters=query_splitters,
