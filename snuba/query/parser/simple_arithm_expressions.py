@@ -1,5 +1,6 @@
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import NodeVisitor
+
 from snuba.query.expressions import FunctionCall, Literal
 
 grammar = Grammar(
