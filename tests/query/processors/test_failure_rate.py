@@ -30,7 +30,16 @@ def test_failure_rate_format_expressions() -> None:
                             None,
                             "notIn",
                             (
-                                Column(None, None, "transaction_status"),
+                                FunctionCall(
+                                    None,
+                                    "coalesce",
+                                    (
+                                        Column(None, None, "transaction_status"),
+                                        FunctionCall(
+                                            None, "toUInt8OrNull", (Literal(None, ""),),
+                                        ),
+                                    ),
+                                ),
                                 FunctionCall(
                                     None,
                                     "tuple",
@@ -60,5 +69,5 @@ def test_failure_rate_format_expressions() -> None:
         ClickhouseExpressionFormatter()
     )
     assert ret == (
-        "(divide(countIf(notIn(transaction_status, tuple(0, 1, 2))), count()) AS perf)"
+        "(divide(countIf(notIn(coalesce(transaction_status, toUInt8OrNull('')), tuple(0, 1, 2))), count()) AS perf)"
     )
