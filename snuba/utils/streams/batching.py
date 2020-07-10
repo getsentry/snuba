@@ -75,6 +75,12 @@ class Batch(Generic[TResult]):
 
 
 class BatchProcessor:
+    """
+    The ``BatchProcessor`` is a message processor that accumulates processed
+    message values, periodically flushing them after a given duration of time
+    has passed or number of output values have been accumulated.
+    """
+
     def __init__(
         self,
         consumer: Consumer[TPayload],
@@ -93,14 +99,22 @@ class BatchProcessor:
         self.__closed = False
 
     def process(self, message: Optional[Message[TPayload]]) -> None:
+        """
+        Process a message or heartbeat.
+
+        Calling this method may trigger an in-flight batch to be flushed.
+        """
         assert not self.__closed
 
+        # If we have an active batch, check if it's ready to be flushed.
         if self.__batch is not None and (
             len(self.__batch.results) >= self.__max_batch_size
             or time.time() > self.__batch.created + self.__max_batch_time / 1000.0
         ):
             self.__flush()
 
+        # If this was just a heartbeat, there is nothing to process and we can
+        # skip the rest of the method.
         if message is None:
             return
 
@@ -115,11 +129,14 @@ class BatchProcessor:
             },
         )
 
-        # create the batch only after the first message for is seen
+        # Create the batch only after the first message is seen.
         if self.__batch is None:
             self.__batch = Batch()
 
         result = self.__worker.process_message(message)
+
+        # XXX: ``None`` is indistinguishable from a potentially valid return
+        # value of ``TResult``!
         if result is not None:
             self.__batch.results.append(result)
 
@@ -136,9 +153,17 @@ class BatchProcessor:
             )
 
     def close(self) -> None:
+        """
+        Close the processor, discarding any messages (without committing
+        offsets) that were previously consumed and processed since the last
+        batch flush.
+        """
         self.__closed = True
 
     def __flush(self) -> None:
+        """
+        Flush the active batch and reset the batch state.
+        """
         assert not self.__closed
         assert self.__batch is not None, "cannot flush without active batch"
 
@@ -214,7 +239,7 @@ class BatchingConsumer(Generic[TPayload]):
         metrics: MetricsBackend,
         recoverable_errors: Optional[Sequence[Type[ConsumerError]]] = None,
     ) -> None:
-        self.consumer = consumer
+        self.__consumer = consumer
 
         self.__processor_factory = partial(
             BatchProcessor, consumer, worker, max_batch_size, max_batch_time, metrics
@@ -222,7 +247,7 @@ class BatchingConsumer(Generic[TPayload]):
 
         self.__processor: Optional[BatchProcessor] = None
 
-        self.shutdown = False
+        self.__shutdown_requested = False
 
         # The types passed to the `except` clause must be a tuple, not a Sequence.
         self.__recoverable_errors = tuple(recoverable_errors or [])
@@ -245,7 +270,7 @@ class BatchingConsumer(Generic[TPayload]):
             self.__processor.close()
             self.__processor = None
 
-        self.consumer.subscribe(
+        self.__consumer.subscribe(
             [topic], on_assign=on_partitions_assigned, on_revoke=on_partitions_revoked
         )
 
@@ -253,14 +278,14 @@ class BatchingConsumer(Generic[TPayload]):
         "The main run loop, see class docstring for more information."
 
         logger.debug("Starting")
-        while not self.shutdown:
+        while not self.__shutdown_requested:
             self._run_once()
 
         self._shutdown()
 
     def _run_once(self) -> None:
         try:
-            msg = self.consumer.poll(timeout=1.0)
+            msg = self.__consumer.poll(timeout=1.0)
         except self.__recoverable_errors:
             return
 
@@ -272,7 +297,7 @@ class BatchingConsumer(Generic[TPayload]):
         Typically called from a signal handler."""
         logger.debug("Shutdown signalled")
 
-        self.shutdown = True
+        self.__shutdown_requested = True
 
     def _shutdown(self) -> None:
         assert (
@@ -284,5 +309,5 @@ class BatchingConsumer(Generic[TPayload]):
 
         # close the consumer
         logger.debug("Stopping consumer")
-        self.consumer.close()
+        self.__consumer.close()
         logger.debug("Stopped")
