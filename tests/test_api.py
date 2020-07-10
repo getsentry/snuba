@@ -26,7 +26,6 @@ from tests.base import BaseApiTest
 class TestApi(BaseApiTest):
     def setup_method(self, test_method, dataset_name="events"):
         super().setup_method(test_method, dataset_name)
-        state.set_config("infix_where_format", 1)
         self.app.post = partial(self.app.post, headers={"referer": "test"})
 
         # values for test data

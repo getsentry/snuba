@@ -1,6 +1,5 @@
 import pytest
 
-from snuba import state
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -167,7 +166,6 @@ test_expressions = [
 
 @pytest.mark.parametrize("expression, expected", test_expressions)
 def test_format_expressions(expression: Expression, expected: str) -> None:
-    state.set_config("infix_where_format", 1)
     visitor = ClickhouseExpressionFormatter()
     assert expression.accept(visitor) == expected
 
