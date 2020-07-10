@@ -137,7 +137,17 @@ def is_unary_condition(exp: Expression, operator: str) -> bool:
     )
 
 
-def get_first_level_conditions(condition: Expression) -> Sequence[Expression]:
+def get_first_level_and_conditions(condition: Expression) -> Sequence[Expression]:
+    return _get_first_level_conditions(condition, BooleanFunctions.AND)
+
+
+def get_first_level_or_conditions(condition: Expression) -> Sequence[Expression]:
+    return _get_first_level_conditions(condition, BooleanFunctions.OR)
+
+
+def _get_first_level_conditions(
+    condition: Expression, function: str
+) -> Sequence[Expression]:
     """
     Utility function to implement several conditions related
     functionalities that were trivial with the legacy query
@@ -146,13 +156,10 @@ def get_first_level_conditions(condition: Expression) -> Sequence[Expression]:
     In the AST, the condition is a tree, so we need some additional
     logic to extract the operands of the top level AND condition.
     """
-    if (
-        isinstance(condition, FunctionCall)
-        and condition.function_name == BooleanFunctions.AND
-    ):
+    if isinstance(condition, FunctionCall) and condition.function_name == function:
         return [
-            *get_first_level_conditions(condition.parameters[0]),
-            *get_first_level_conditions(condition.parameters[1]),
+            *_get_first_level_conditions(condition.parameters[0], function),
+            *_get_first_level_conditions(condition.parameters[1], function),
         ]
     else:
         return [condition]
@@ -170,8 +177,7 @@ def _combine_conditions(conditions: Sequence[Expression], function: str) -> Expr
     """
     Combine multiple independent conditions in a single function
     representing an AND or an OR.
-    This is the inverse of get_first_level_conditions with the
-    difference that it can actually combine both ORs and ANDs.
+    This is the inverse of get_first_level_conditions.
     """
 
     # TODO: Make BooleanFunctions an enum for stricter typing.
