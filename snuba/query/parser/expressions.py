@@ -24,7 +24,7 @@ minimal_clickhouse_grammar = Grammar(
 # function field which can mean a clickhouse function expression or the simple
 # name of a clickhouse function.
 root_element          = function_call / function_name
-expression            = arithmetic_expression / function_call / simple_term
+expression            = function_call / arithmetic_expression / simple_term
 arithmetic_expression = simple_term2 (("+" arithmetic_expression) / empty)
 parameters_list       = parameter* (expression)
 parameter             = expression space* comma space*
@@ -41,7 +41,7 @@ open_paren            = "("
 close_paren           = ")"
 space                 = " "
 comma                 = ","
-empty                 = ""
+empty                 = ''
 """
 )
 
@@ -63,20 +63,20 @@ class ClickhouseVisitor(NodeVisitor):
     def visit_simple_term2(self, node, children):
         factor, term = children
 
-        if all(x is None for x in term):
+        if term is None:
             # A check for any None child nodes
             # that arose from empty space ''
             return factor
         else:
-            return multiply(factor, term[0][1])
+            return multiply(factor, term[1])
 
     def visit_arithmetic_expression(self, node, children):
         term, exp = children
 
-        if all(x is None for x in exp):
+        if exp is None:
             return term
         else:
-            return plus(term, exp[0][1])
+            return plus(term, exp[1])
 
     def visit_numeric_literal(
         self, node: Node, visited_children: Iterable[Any]
