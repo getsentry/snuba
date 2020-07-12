@@ -124,7 +124,7 @@ def _run_query_pipeline(
             clickhouse_processor.process_query(query_plan.query, request.settings)
 
     query_runner = partial(
-        _format_storage_query_and_run,
+        run_query_applying_column_names,
         dataset,
         timer,
         query_metadata,
@@ -136,6 +136,50 @@ def _run_query_pipeline(
     return query_plan.execution_strategy.execute(
         query_plan.query, request.settings, query_runner
     )
+
+
+def run_query_applying_column_names(
+    dataset: Dataset,
+    timer: Timer,
+    query_metadata: SnubaQueryMetadata,
+    from_date: datetime,
+    to_date: datetime,
+    referrer: str,
+    clickhouse_query: Query,
+    request_settings: RequestSettings,
+    reader: Reader[SqlQuery],
+) -> QueryResult:
+    names_alias_mapping = [
+        (select.name, select.expression.alias)
+        for select in clickhouse_query.get_selected_columns_from_ast()
+    ]
+
+    result = _format_storage_query_and_run(
+        dataset,
+        timer,
+        query_metadata,
+        from_date,
+        to_date,
+        referrer,
+        clickhouse_query,
+        request_settings,
+        reader,
+    )
+
+    discrepancies = [
+        (name, alias) for name, alias in names_alias_mapping if name != alias
+    ]
+    if discrepancies:
+        logger.warning(
+            "Discrepancies between select clause names and aliases",
+            extra={"mappings": discrepancies},
+            exc_info=True,
+        )
+        return result
+
+    # TODO apply names
+
+    return result
 
 
 def _format_storage_query_and_run(
@@ -156,12 +200,6 @@ def _format_storage_query_and_run(
     TODO: When we will have the AST in production this function is probably going
     to collapse and disappear.
     """
-
-    # TODO: This function (well, it will be a wrapper of this function)
-    # where we will transform the result according to the SelectedExpression
-    # object in the query to ensure the fields in the QueryResult have
-    # the same name the user expects.
-
     source = clickhouse_query.get_data_source().format_from()
     with sentry_sdk.start_span(description="create_query", op="db") as span:
         legacy_query = DictSqlQuery(dataset, clickhouse_query, request_settings)
