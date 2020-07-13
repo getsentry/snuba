@@ -245,8 +245,6 @@ def get_promoted_tags() -> Mapping[str, Sequence[str]]:
     }
 
 
-sample_expr = "cityHash64(toString(event_id))"
-
 mandatory_conditions = [
     MandatoryCondition(
         ("deleted", "=", 0),
