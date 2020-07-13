@@ -20,6 +20,7 @@ class TestClusters:
                 "http_port": 8123,
                 "storage_sets": {
                     "events",
+                    "events_ro",
                     "migrations",
                     "outcomes",
                     "querylog",
