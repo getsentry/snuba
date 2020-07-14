@@ -371,6 +371,16 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         if not minimal_query.validate_aliases():
             return None
 
+        legacy_references = set(minimal_query.get_all_referenced_columns())
+        ast_column_names = {
+            c.column_name for c in minimal_query.get_all_ast_referenced_columns()
+        }
+        # Ensure the legacy minimal query as well (which does not expand aliases)
+        # does contain alias references we removed when creating minimal_query.
+        if legacy_references - ast_column_names:
+            metrics.increment("columns.skip_invalid_legacy_query")
+            return None
+
         result = runner(minimal_query, request_settings)
         del minimal_query
 
