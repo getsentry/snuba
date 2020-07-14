@@ -19,7 +19,6 @@ from snuba.datasets.storages.events_common import (
     query_processors,
     query_splitters,
     required_columns,
-    sample_expr,
 )
 
 from snuba.datasets.table_storage import KafkaStreamLoader
@@ -83,6 +82,8 @@ def events_migrations(
 
     return ret
 
+
+sample_expr = "cityHash64(toString(event_id))"
 
 schema = ReplacingMergeTreeSchema(
     columns=all_columns,
