@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Sequence
 
 from snuba.clickhouse.columns import (
@@ -87,11 +88,20 @@ class Migration(migration.MultiStepMigration):
         ]
 
     def forwards_dist(self) -> Sequence[operations.Operation]:
+        # We removed the materialized for the dist table DDL.
+        def strip_materialized(columns: Sequence[Column]) -> None:
+            for col in columns:
+                if isinstance(col.type, Materialized):
+                    col.type = col.type.inner_type
+
+        dist_columns = deepcopy(columns)
+        strip_materialized(dist_columns)
+
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_dist",
-                columns=columns,
+                columns=dist_columns,
                 engine=table_engines.Distributed(
                     local_table_name="transactions_local",
                     sharding_key="cityHash64(span_id)",
