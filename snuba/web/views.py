@@ -276,6 +276,9 @@ def dataset_query_view(*, dataset: Dataset, timer: Timer):
 def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     assert http_request.method == "POST"
 
+    with sentry_sdk.start_span(description="ensure_dataset", op="validate"):
+        ensure_tables_migrated()
+
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build_with_extensions(
             dataset.get_extensions(), HTTPRequestSettings
@@ -381,6 +384,8 @@ if application.debug or application.testing:
     def write(*, dataset: Dataset):
         from snuba.processor import InsertBatch
 
+        ensure_tables_migrated()
+
         rows: MutableSequence[WriterTableRow] = []
         offset_base = int(round(time.time() * 1000))
         for index, message in enumerate(json.loads(http_request.data)):
@@ -406,6 +411,7 @@ if application.debug or application.testing:
 
     @application.route("/tests/<dataset:dataset>/eventstream", methods=["POST"])
     def eventstream(*, dataset: Dataset):
+        ensure_tables_migrated()
         record = json.loads(http_request.data)
 
         version = record[0]
