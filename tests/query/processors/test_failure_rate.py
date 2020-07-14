@@ -3,7 +3,7 @@ from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.conditions import (
     binary_condition,
-    combine_or_conditions,
+    combine_and_conditions,
     ConditionFunctions,
 )
 from snuba.query.dsl import count, divide
@@ -34,7 +34,7 @@ def test_failure_rate_format_expressions() -> None:
                         None,
                         "countIf",
                         (
-                            combine_or_conditions(
+                            combine_and_conditions(
                                 [
                                     binary_condition(
                                         None,
@@ -64,5 +64,5 @@ def test_failure_rate_format_expressions() -> None:
         ClickhouseExpressionFormatter()
     )
     assert ret == (
-        "(divide(countIf(or(notEquals(transaction_status, 0), or(notEquals(transaction_status, 1), notEquals(transaction_status, 2)))), count()) AS perf)"
+        "(divide(countIf(and(notEquals(transaction_status, 0), and(notEquals(transaction_status, 1), notEquals(transaction_status, 2)))), count()) AS perf)"
     )

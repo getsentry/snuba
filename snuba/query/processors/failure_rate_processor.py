@@ -2,7 +2,7 @@ from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
 from snuba.query.conditions import (
     binary_condition,
-    combine_or_conditions,
+    combine_and_conditions,
     ConditionFunctions,
 )
 from snuba.query.dsl import count, divide
@@ -32,12 +32,12 @@ class FailureRateProcessor(QueryProcessor):
                 return divide(
                     # We use a FunctionCall directly rather than the countIf wrapper
                     # because of a type hint incompatibility where countIf expects
-                    # a FunctionCall but combine_or_conditions returns an Expression
+                    # a FunctionCall but combine_and_conditions returns an Expression
                     FunctionCall(
                         None,
                         "countIf",
                         (
-                            combine_or_conditions(
+                            combine_and_conditions(
                                 [
                                     binary_condition(
                                         None,
