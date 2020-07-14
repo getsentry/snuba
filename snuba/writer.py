@@ -1,4 +1,5 @@
 import logging
+from abc import ABC, abstractmethod
 from typing import Any, Iterable, List, Mapping
 
 logger = logging.getLogger("snuba.writer")
@@ -6,11 +7,9 @@ logger = logging.getLogger("snuba.writer")
 WriterTableRow = Mapping[str, Any]
 
 
-class BatchWriter(object):
-    def __init__(self, schema):
-        raise NotImplementedError
-
-    def write(self, rows: Iterable[WriterTableRow]):
+class BatchWriter(ABC):
+    @abstractmethod
+    def write(self, rows: Iterable[WriterTableRow]) -> None:
         raise NotImplementedError
 
 
