@@ -316,11 +316,14 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         if (
             limit is None
             or limit == 0
-            or limit > settings.COLUMN_SPLIT_MAX_LIMIT
             or query.get_groupby()
             or query.get_aggregations()
             or not query.get_selected_columns()
         ):
+            return None
+
+        if limit > settings.COLUMN_SPLIT_MAX_LIMIT:
+            metrics.increment("column_splitter.query_above_limit")
             return None
 
         total_col_count = len(query.get_all_referenced_columns())
@@ -390,6 +393,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         if len(event_ids) > settings.COLUMN_SPLIT_MAX_RESULTS:
             # We may be runing a query that is beyond clickhouse maximum query size,
             # so we cowardly abandon.
+            metrics.increment("column_splitter.intermediate_results_too_big")
             return None
 
         query.add_conditions([(self.__id_column, "IN", event_ids)])
