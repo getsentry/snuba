@@ -25,13 +25,13 @@ test_data = [
         ),
     ),  # Addition with more than 2 terms
     (
-        ["(5*4+3)", None, None],
+        ["(5  +4*3)", None, None],
         FunctionCall(
             None,
             "plus",
             (
-                FunctionCall(None, "multiply", (Literal(None, 5), Literal(None, 4))),
-                Literal(None, 3),
+                Literal(None, 5),
+                FunctionCall(None, "multiply", (Literal(None, 4), Literal(None, 3))),
             ),
         ),
     ),  # Combination of multiplication, addition
