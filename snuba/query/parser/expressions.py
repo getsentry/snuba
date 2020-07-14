@@ -23,14 +23,15 @@ minimal_clickhouse_grammar = Grammar(
 # This root element is needed because of the ambiguity of the aggregation
 # function field which can mean a clickhouse function expression or the simple
 # name of a clickhouse function.
-root_element          = function_call / function_name
-expression            = function_call / arithmetic_expression / simple_term
-arithmetic_expression = simple_term2 (("+" arithmetic_expression) / empty)
+root_element          = function_call / function_name / top_arithm_expression
+expression            = function_call / simple_term
+top_arithm_expression = open_paren low_pri_arithmetic close_paren
+low_pri_arithmetic    = space* high_pri_arithmetic space* (("+" low_pri_arithmetic) / empty)
+high_pri_arithmetic   = space* (numeric_literal / column_name) space* (("*" high_pri_arithmetic) / empty)
 parameters_list       = parameter* (expression)
 parameter             = expression space* comma space*
 function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)?
 simple_term           = quoted_literal / numeric_literal / column_name
-simple_term2          = numeric_literal (("*" simple_term2) / empty)
 literal               = ~r"[a-zA-Z0-9_\.:-]+"
 quoted_literal        = "'" string_literal "'"
 string_literal        = ~r"[a-zA-Z0-9_\.:-]*"
@@ -60,8 +61,21 @@ class ClickhouseVisitor(NodeVisitor):
     def visit_empty(self, node, children):
         return
 
-    def visit_simple_term2(self, node, children):
-        factor, term = children
+    def visit_top_arithm_expression(self, node, children):
+        _, values, _ = children
+
+        return values
+
+    def visit_low_pri_arithmetic(self, node, children):
+        _, term, _, exp = children
+
+        if exp is None:
+            return term
+        else:
+            return plus(term, exp[1])
+
+    def visit_high_pri_arithmetic(self, node, children):
+        _, factor, _, term = children
 
         if term is None:
             # A check for any None child nodes
@@ -69,14 +83,6 @@ class ClickhouseVisitor(NodeVisitor):
             return factor
         else:
             return multiply(factor, term[1])
-
-    def visit_arithmetic_expression(self, node, children):
-        term, exp = children
-
-        if exp is None:
-            return term
-        else:
-            return plus(term, exp[1])
 
     def visit_numeric_literal(
         self, node: Node, visited_children: Iterable[Any]
@@ -176,7 +182,9 @@ def parse_aggregation(
     used in production).
     """
     expression_tree = minimal_clickhouse_grammar.parse(aggregation_function)
+    print(expression_tree)
     parsed_expression = ClickhouseVisitor().visit(expression_tree)
+    print(parsed_expression)
 
     if not isinstance(column, (list, tuple)):
         columns: Iterable[Any] = (column,)
