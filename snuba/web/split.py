@@ -367,7 +367,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         if total_col_count <= minimal_count:
             return None
 
-        # Ensure the minimal query is actually runnable on its own.
+        # Ensures the AST minimal query is actually runnable on its own.
         if not minimal_query.validate_aliases():
             return None
 
@@ -375,8 +375,8 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         ast_column_names = {
             c.column_name for c in minimal_query.get_all_ast_referenced_columns()
         }
-        # Ensure the legacy minimal query as well (which does not expand aliases)
-        # does contain alias references we removed when creating minimal_query.
+        # Ensures the legacy minimal query (which does not expand alias references)
+        # does not contain alias references we removed when creating minimal_query.
         if legacy_references - ast_column_names:
             metrics.increment("columns.skip_invalid_legacy_query")
             return None
