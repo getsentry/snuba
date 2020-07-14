@@ -14,7 +14,7 @@ from snuba.request import Request
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import Subscription
 from snuba.subscriptions.scheduler import ScheduledTask, Scheduler
-from snuba.utils.codecs import Codec
+from snuba.utils.codecs import Encoder
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
@@ -137,7 +137,7 @@ class SubscriptionWorker(
             future.result()
 
 
-class SubscriptionTaskResultCodec(Codec[KafkaPayload, SubscriptionTaskResult]):
+class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult]):
     def encode(self, value: SubscriptionTaskResult) -> KafkaPayload:
         subscription_id = str(value.task.task.identifier)
         request, result = value.result
@@ -156,8 +156,5 @@ class SubscriptionTaskResultCodec(Codec[KafkaPayload, SubscriptionTaskResult]):
             ).encode("utf-8"),
         )
 
-    def decode(self, value: KafkaPayload) -> SubscriptionTaskResult:
-        raise NotImplementedError
 
-
-subscription_task_result_codec = SubscriptionTaskResultCodec()
+subscription_task_result_codec = SubscriptionTaskResultEncoder()
