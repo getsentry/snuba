@@ -393,7 +393,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         if len(event_ids) > settings.COLUMN_SPLIT_MAX_RESULTS:
             # We may be runing a query that is beyond clickhouse maximum query size,
             # so we cowardly abandon.
-            metrics.increment("column_splitter.intermediate_results_too_big")
+            metrics.increment("column_splitter.intermediate_results_beyond_limit")
             return None
 
         query.add_conditions([(self.__id_column, "IN", event_ids)])
