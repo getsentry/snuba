@@ -10,6 +10,81 @@ from snuba.query.parser.expressions import parse_aggregation
 
 test_data = [
     (
+        ["(a +b)", None, None],
+        FunctionCall(None, "plus", (Column(None, None, "a"), Column(None, None, "b"))),
+    ),  # Simple addition with Columns
+    (
+        ["(1+ 2 + 3)", None, None],
+        FunctionCall(
+            None,
+            "plus",
+            (
+                Literal(None, 1),
+                FunctionCall(None, "plus", (Literal(None, 2), Literal(None, 3))),
+            ),
+        ),
+    ),  # Addition with more than 2 terms
+    (
+        ["(5*4+3)", None, None],
+        FunctionCall(
+            None,
+            "plus",
+            (
+                FunctionCall(None, "multiply", (Literal(None, 5), Literal(None, 4))),
+                Literal(None, 3),
+            ),
+        ),
+    ),  # Combination of multiplication, addition
+    (
+        ["(3*2+4*5  )", None, None],
+        FunctionCall(
+            None,
+            "plus",
+            (
+                FunctionCall(None, "multiply", (Literal(None, 3), Literal(None, 2))),
+                FunctionCall(None, "multiply", (Literal(None, 4), Literal(None, 5))),
+            ),
+        ),
+    ),  # Symmetric Combination of multiplication, addition
+    (
+        ["(7*  5*4*3+2 *1+ 6)", None, None],
+        FunctionCall(
+            None,
+            "plus",
+            (
+                FunctionCall(
+                    None,
+                    "multiply",
+                    (
+                        Literal(None, 7),
+                        FunctionCall(
+                            None,
+                            "multiply",
+                            (
+                                Literal(None, 5),
+                                FunctionCall(
+                                    None,
+                                    "multiply",
+                                    (Literal(None, 4), Literal(None, 3)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+                FunctionCall(
+                    None,
+                    "plus",
+                    (
+                        FunctionCall(
+                            None, "multiply", (Literal(None, 2), Literal(None, 1))
+                        ),
+                        Literal(None, 6),
+                    ),
+                ),
+            ),
+        ),
+    ),  # More complicated Combination of operators
+    (
         ["count", "event_id", None],
         FunctionCall(None, "count", (Column(None, None, "event_id"),)),
     ),  # Simple aggregation
