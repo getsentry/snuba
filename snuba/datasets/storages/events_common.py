@@ -25,7 +25,6 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 )
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.processors.readonly_events import ReadOnlyTableSelector
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 metadata_columns = ColumnSet(
@@ -245,8 +244,6 @@ def get_promoted_tags() -> Mapping[str, Sequence[str]]:
     }
 
 
-sample_expr = "cityHash64(toString(event_id))"
-
 mandatory_conditions = [
     MandatoryCondition(
         ("deleted", "=", 0),
@@ -277,8 +274,6 @@ query_processors = [
         # into in redis are stored with "EVENTS" in the name, we can change this.
         replacer_state_name=None,
     ),
-    # TODO: This can be removed once storage selection is in the events dataset.
-    ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
     EventsColumnProcessor(),
     MappingColumnPromoter(
         mapping_specs={

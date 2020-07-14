@@ -1,10 +1,14 @@
 from copy import deepcopy
 
 from tests.base import BaseEventsTest
-
+from snuba import state
+from snuba.datasets.events import EventsQueryStorageSelector
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_storage
 from snuba.query.columns import column_expr
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
+from snuba.request.request_settings import HTTPRequestSettings
 from snuba.util import tuplify
 
 
@@ -268,3 +272,26 @@ class TestEventsDataset(BaseEventsTest):
             column_expr(self.dataset, "-group_id", deepcopy(query), ParsingContext())
             == "-(nullIf(group_id, 0) AS group_id)"
         )
+
+
+def test_storage_selector() -> None:
+    state.set_config("enable_events_readonly_table", True)
+
+    storage = get_storage(StorageKey.EVENTS)
+    storage_ro = get_storage(StorageKey.EVENTS_RO)
+
+    query = Query({}, storage.get_schemas().get_read_schema().get_data_source())
+
+    storage_selector = EventsQueryStorageSelector(storage, storage_ro)
+    assert (
+        storage_selector.select_storage(
+            query, HTTPRequestSettings(consistent=False)
+        ).storage
+        == storage_ro
+    )
+    assert (
+        storage_selector.select_storage(
+            query, HTTPRequestSettings(consistent=True)
+        ).storage
+        == storage
+    )

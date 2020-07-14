@@ -1,20 +1,26 @@
-from datetime import datetime, timedelta
 import logging
+from datetime import datetime, timedelta
+from typing import Optional, Sequence, Tuple
 
 from snuba import util
+from snuba.clickhouse.native import ClickhousePool
 
 
 logger = logging.getLogger("snuba.cleanup")
 
 
-def run_cleanup(clickhouse, database, table, dry_run=True):
+def run_cleanup(
+    clickhouse: ClickhousePool, database: str, table: str, dry_run: bool = True
+) -> int:
     active_parts = get_active_partitions(clickhouse, database, table)
     stale_parts = filter_stale_partitions(active_parts)
     drop_partitions(clickhouse, database, table, stale_parts, dry_run=dry_run)
     return len(stale_parts)
 
 
-def get_active_partitions(clickhouse, database, table):
+def get_active_partitions(
+    clickhouse: ClickhousePool, database: str, table: str
+) -> Sequence[util.Part]:
     response = clickhouse.execute(
         """
         SELECT DISTINCT partition
@@ -29,7 +35,9 @@ def get_active_partitions(clickhouse, database, table):
     return [util.decode_part_str(part) for part, in response]
 
 
-def filter_stale_partitions(parts, as_of=None):
+def filter_stale_partitions(
+    parts: Sequence[util.Part], as_of: Optional[datetime] = None
+) -> Sequence[Tuple[datetime, int]]:
     """Filter partitions of (datetime, retention_days) down to ones
     that are out of the retention window based on `as_of` (default: now)."""
 
@@ -46,7 +54,13 @@ def filter_stale_partitions(parts, as_of=None):
     return stale_parts
 
 
-def drop_partitions(clickhouse, database, table, parts, dry_run=True):
+def drop_partitions(
+    clickhouse: ClickhousePool,
+    database: str,
+    table: str,
+    parts: Sequence[Tuple[datetime, int]],
+    dry_run: bool = True,
+) -> None:
     query_template = """\
         ALTER TABLE %(database)s.%(table)s DROP PARTITION ('%(date_str)s', %(retention_days)s)
     """
