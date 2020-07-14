@@ -64,6 +64,7 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
         _parse_subscriptables(query)
         _apply_column_aliases(query)
         _expand_aliases(query)
+        _deescape_aliases(query)
         # WARNING: These steps above assume table resolution did not happen
         # yet. If it is put earlier than here (unlikely), we need to adapt them.
         return query
@@ -286,6 +287,39 @@ def _expand_aliases(query: Query) -> None:
 
     visitor = AliasExpanderVisitor(fully_resolved_aliases, [])
     query.transform(visitor)
+
+
+DEESCAPER_RE = re.compile(r"^`(.+)`$")
+
+
+def _deescape_aliases(query: Query) -> None:
+    """
+    The legacy query processing does not escape user declared aliases
+    thus aliases like project.name would make the query fail. So Sentry
+    started defining pre-escaped aliases like `project.name` to go
+    around the problem.
+    The AST processing properly escapes aliases thus causing double
+    escaping. We need to de-escape them in the AST query to preserve
+    backward compatibility as log as the legacy query processing is
+    around.
+    """
+
+    def deescape_alias(expr: Expression) -> Expression:
+        if expr.alias is None or not DEESCAPER_RE.match(expr.alias):
+            return expr
+        return replace(expr, alias=expr.alias[1:-1],)
+
+    query.transform_expressions(deescape_alias)
+
+    def deescape_select(expr: SelectedExpression) -> SelectedExpression:
+        if expr.name is None or not DEESCAPER_RE.match(expr.name):
+            return expr
+        else:
+            return replace(expr, name=expr.name[1:-1])
+
+    query.set_ast_selected_columns(
+        [deescape_select(s) for s in query.get_selected_columns_from_ast() or []]
+    )
 
 
 class AliasExpanderVisitor(ExpressionVisitor[Expression]):
