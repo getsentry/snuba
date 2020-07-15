@@ -63,7 +63,10 @@ def test_version() -> None:
 
 
 def test_no_schema_differences() -> None:
-    storages_to_test = [StorageKey.QUERYLOG]  # TODO: Eventually test all storages
+    storages_to_test = [
+        StorageKey.TRANSACTIONS,
+        StorageKey.QUERYLOG,
+    ]  # TODO: Eventually test all storages
 
     runner = Runner()
     runner.run_all()

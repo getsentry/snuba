@@ -106,7 +106,6 @@ TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 AST_DATASET_ROLLOUT: Mapping[str, int] = {
     "events": 100,
     "outcomes": 100,
-    "sessions": 100,
     "transactions": 100,
 }  # (dataset name: percentage)
 AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
@@ -115,6 +114,9 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         "eventstore.get_next_or_prev_event_id": 100,
     },
 }  # (dataset name: (referrer: percentage))
+
+COLUMN_SPLIT_MAX_LIMIT = 1000
+COLUMN_SPLIT_MAX_RESULTS = 5000
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

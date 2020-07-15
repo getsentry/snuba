@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any as AnyType
 from typing import List, Optional, Tuple, Union, cast
 
-from snuba import environment, state, util
+from snuba import environment, settings, state, util
 from snuba.clickhouse.query import Query
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy, SplitQueryRunner
 from snuba.query.conditions import (
@@ -312,12 +312,18 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             - Second query selects all fields for only those events.
             - Shrink the date range.
         """
+        limit = query.get_limit()
         if (
-            not query.get_limit()
+            limit is None
+            or limit == 0
             or query.get_groupby()
             or query.get_aggregations()
             or not query.get_selected_columns()
         ):
+            return None
+
+        if limit > settings.COLUMN_SPLIT_MAX_LIMIT:
+            metrics.increment("column_splitter.query_above_limit")
             return None
 
         total_col_count = len(query.get_all_referenced_columns())
@@ -394,6 +400,12 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         event_ids = list(
             set([event[self.__id_column] for event in result.result["data"]])
         )
+        if len(event_ids) > settings.COLUMN_SPLIT_MAX_RESULTS:
+            # We may be runing a query that is beyond clickhouse maximum query size,
+            # so we cowardly abandon.
+            metrics.increment("column_splitter.intermediate_results_beyond_limit")
+            return None
+
         query.add_conditions([(self.__id_column, "IN", event_ids)])
         query.add_condition_to_ast(
             in_condition(
