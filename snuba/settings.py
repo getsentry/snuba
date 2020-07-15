@@ -116,6 +116,9 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
     },
 }  # (dataset name: (referrer: percentage))
 
+COLUMN_SPLIT_MAX_LIMIT = 1000
+COLUMN_SPLIT_MAX_RESULTS = 5000
+
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment
