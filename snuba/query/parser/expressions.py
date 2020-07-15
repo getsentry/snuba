@@ -1,10 +1,10 @@
 from dataclasses import replace
-from typing import List, Tuple, Union
+from typing import Any, Iterable, List, Optional, Tuple, Union
 
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
-from typing import Any, Iterable, Optional
 
+from snuba.query.dsl import multiply, plus
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -15,8 +15,6 @@ from snuba.query.expressions import (
 from snuba.query.parser.functions import parse_function_to_expr
 from snuba.query.parser.strings import parse_string_to_expr
 from snuba.util import is_function
-from snuba.query.dsl import plus, multiply
-
 
 minimal_clickhouse_grammar = Grammar(
     r"""
@@ -24,10 +22,10 @@ minimal_clickhouse_grammar = Grammar(
 # function field which can mean a clickhouse function expression or the simple
 # name of a clickhouse function.
 root_element          = function_call / function_name / top_arithm_expression
-expression            = function_call / simple_term
+expression            = low_pri_arithmetic / function_call / simple_term
 top_arithm_expression = open_paren low_pri_arithmetic close_paren
 low_pri_arithmetic    = space* high_pri_arithmetic space* (("+" low_pri_arithmetic) / empty)
-high_pri_arithmetic   = space* (numeric_literal / column_name) space* (("*" high_pri_arithmetic) / empty)
+high_pri_arithmetic   = space* (numeric_literal / function_call / column_name) space* (("*" high_pri_arithmetic) / empty)
 parameters_list       = parameter* (expression)
 parameter             = expression space* comma space*
 function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)?
@@ -58,24 +56,30 @@ class ClickhouseVisitor(NodeVisitor):
     def visit_column_name(self, node: Node, visited_children: Iterable[Any]) -> Column:
         return Column(None, None, node.text)
 
-    def visit_empty(self, node, children):
-        return
+    def visit_empty(self, node: Node, visited_children: Iterable[Any]) -> None:
+        return None
 
-    def visit_top_arithm_expression(self, node, children):
-        _, values, _ = children
+    def visit_top_arithm_expression(
+        self, node: Node, visited_children: Tuple[Any, Expression, Any]
+    ) -> Expression:
+        _, exp, _ = visited_children
 
-        return values
+        return exp
 
-    def visit_low_pri_arithmetic(self, node, children):
-        _, term, _, exp = children
+    def visit_low_pri_arithmetic(
+        self, node: Node, visited_children: Tuple[Any, Expression, Any, Expression]
+    ) -> Expression:
+        _, term, _, exp = visited_children
 
         if exp is None:
             return term
         else:
             return plus(term, exp[1])
 
-    def visit_high_pri_arithmetic(self, node, children):
-        _, factor, _, term = children
+    def visit_high_pri_arithmetic(
+        self, node: Node, visited_children: Tuple[Any, Expression, Any, Expression]
+    ) -> Expression:
+        _, factor, _, term = visited_children
 
         if term is None:
             # A check for any None child nodes
@@ -182,9 +186,7 @@ def parse_aggregation(
     used in production).
     """
     expression_tree = minimal_clickhouse_grammar.parse(aggregation_function)
-    print(expression_tree)
     parsed_expression = ClickhouseVisitor().visit(expression_tree)
-    print(parsed_expression)
 
     if not isinstance(column, (list, tuple)):
         columns: Iterable[Any] = (column,)
