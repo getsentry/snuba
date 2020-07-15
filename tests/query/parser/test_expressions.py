@@ -10,6 +10,49 @@ from snuba.query.parser.expressions import parse_aggregation
 
 test_data = [
     (
+        ["f(a *   b, g(c * 3))", None, None],
+        FunctionCall(
+            None,
+            "f",
+            (
+                FunctionCall(
+                    None, "multiply", (Column(None, None, "a"), Column(None, None, "b"))
+                ),
+                FunctionCall(
+                    None,
+                    "g",
+                    (
+                        FunctionCall(
+                            None,
+                            "multiply",
+                            (Column(None, None, "c"), Literal(None, 3)),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    ),  # Arithmetic expressions nested inside function calls
+    (
+        ["(f(a, b) + 3 * g(c))", None, None],
+        FunctionCall(
+            None,
+            "plus",
+            (
+                FunctionCall(
+                    None, "f", (Column(None, None, "a"), Column(None, None, "b"))
+                ),
+                FunctionCall(
+                    None,
+                    "multiply",
+                    (
+                        Literal(None, 3),
+                        FunctionCall(None, "g", (Column(None, None, "c"),)),
+                    ),
+                ),
+            ),
+        ),
+    ),  # Arithmetic expressions involving function calls
+    (
         ["(a +b)", None, None],
         FunctionCall(None, "plus", (Column(None, None, "a"), Column(None, None, "b"))),
     ),  # Simple addition with Columns
@@ -36,18 +79,7 @@ test_data = [
         ),
     ),  # Combination of multiplication, addition
     (
-        ["(3*2+4*5  )", None, None],
-        FunctionCall(
-            None,
-            "plus",
-            (
-                FunctionCall(None, "multiply", (Literal(None, 3), Literal(None, 2))),
-                FunctionCall(None, "multiply", (Literal(None, 4), Literal(None, 5))),
-            ),
-        ),
-    ),  # Symmetric Combination of multiplication, addition
-    (
-        ["(7*  5*4*3+2 *1+ 6)", None, None],
+        ["(7*  5* 4*3+2 *1+ 6)", None, None],
         FunctionCall(
             None,
             "plus",
