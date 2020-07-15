@@ -459,21 +459,8 @@ if application.debug or application.testing:
                 if isinstance(schema, TableSchema):
                     tables_to_empty.add(schema.get_local_table_name())
 
-            parts = clickhouse.execute(
-                """
-                SELECT partition, table
-                FROM system.parts
-                WHERE database = %(database)s
-                AND table IN (%(tables)s)
-                AND active = 1
-                """,
-                {"database": database, "tables": ", ".join(tables_to_empty)},
-            )
-
-            for (part, table) in parts:
-                clickhouse.execute(
-                    f"ALTER TABLE {database}.{table} DROP PARTITION {part}"
-                )
+            for table in tables_to_empty:
+                clickhouse.execute(f"TRUNCATE TABLE {database}.{table}")
 
         redis_client.flushdb()
         return ("ok", 200, {"Content-Type": "text/plain"})
