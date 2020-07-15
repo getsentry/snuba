@@ -453,11 +453,11 @@ if application.debug or application.testing:
             clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
             database = cluster.get_database()
 
-            tables_to_empty = set()
-
-            for schema in storage.get_schemas().get_unique_schemas():
-                if isinstance(schema, TableSchema):
-                    tables_to_empty.add(schema.get_local_table_name())
+            tables_to_empty = {
+                schema.get_local_table_name()
+                for schema in storage.get_schemas().get_unique_schemas()
+                if isinstance(schema, TableSchema)
+            }
 
             for table in tables_to_empty:
                 clickhouse.execute(f"TRUNCATE TABLE {database}.{table}")
