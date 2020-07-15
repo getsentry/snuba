@@ -18,9 +18,8 @@ class Migration(migration.MultiStepMigration):
     This is a one-off migration to support on premise users who are upgrading from
     any older version of Snuba that used the old migration system. Since their sentry_local
     table might be previously created with slightly different columns, this migration
-    should bring them back in sync by by adding and removing the relevant columns
-    that have changed over time. It should be a no-op if the table is already up
-    to date.
+    should bring them back in sync by adding and removing the relevant columns that
+    have changed over time. It should be a no-op if the table is already up to date.
     """
 
     blocking = False
