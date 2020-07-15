@@ -89,6 +89,9 @@ class BatchProcessor:
         max_batch_time: int,
         metrics: MetricsBackend,
     ) -> None:
+        # TODO: The consumer here should be removed and replaced with a
+        # generalized interface for communicating offset commits (rather than
+        # giving the processor full control of the consumer.)
         self.__consumer = consumer
         self.__worker = worker
         self.__max_batch_size = max_batch_size
