@@ -14,6 +14,7 @@ from sentry_sdk import Client, Hub
 from snuba import settings, state
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.events_processor_base import InsertEvent
+from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.redis import redis_client
@@ -1315,23 +1316,18 @@ class TestApi(BaseApiTest):
         # make sure redis has _something_ before we go about dropping all the keys in it
         assert self.redis_db_size() > 0
 
+        assert self.app.post("/tests/events/drop").status_code == 200
+        dataset = get_dataset("events")
+        storage = dataset.get_writable_storage()
+        assert storage is not None
+        writer = storage.get_table_writer()
+        table = writer.get_schema().get_table_name()
         storage = get_storage(StorageKey.EVENTS)
         clickhouse = storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.QUERY
         )
-
-        # There is data in the events table
-        assert len(clickhouse.execute("SELECT * FROM sentry_local")) > 0
-
-        assert self.app.post("/tests/events/drop").status_code == 200
-        writer = storage.get_table_writer()
-        table = writer.get_schema().get_table_name()
-
         assert table not in clickhouse.execute("SHOW TABLES")
         assert self.redis_db_size() == 0
-
-        # No data in events table
-        assert len(clickhouse.execute("SELECT * FROM sentry_local")) == 0
 
     @pytest.mark.xfail
     def test_row_stats(self):
