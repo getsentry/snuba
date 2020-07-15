@@ -460,7 +460,7 @@ if application.debug or application.testing:
             }
 
             for table in tables_to_empty:
-                clickhouse.execute(f"TRUNCATE TABLE {database}.{table}")
+                clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
 
         redis_client.flushdb()
         return ("ok", 200, {"Content-Type": "text/plain"})
