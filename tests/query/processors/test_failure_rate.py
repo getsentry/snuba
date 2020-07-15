@@ -64,5 +64,5 @@ def test_failure_rate_format_expressions() -> None:
         ClickhouseExpressionFormatter()
     )
     assert ret == (
-        "(divide(countIf(and(notEquals(transaction_status, 0), and(notEquals(transaction_status, 1), notEquals(transaction_status, 2)))), count()) AS perf)"
+        "(divide(countIf(notEquals(transaction_status, 0) AND notEquals(transaction_status, 1) AND notEquals(transaction_status, 2)), count()) AS perf)"
     )
