@@ -19,7 +19,7 @@ from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.subscriptions.worker import (
     SubscriptionWorker,
     SubscriptionTaskResult,
-    subscription_task_result_codec,
+    subscription_task_result_encoder,
 )
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.consumer import Consumer
@@ -129,7 +129,7 @@ def test_subscription_worker(dataset: Dataset, time_shift: Optional[timedelta]) 
         assert message.partition.topic == result_topic
 
         task_result_future = result_futures[i]
-        expected_payload = subscription_task_result_codec.encode(
+        expected_payload = subscription_task_result_encoder.encode(
             SubscriptionTaskResult(
                 task_result_future.task, task_result_future.future.result()
             )

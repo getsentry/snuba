@@ -91,8 +91,7 @@ class AstSqlQuery(SqlQuery):
 
         where_clause = ""
         if self.__condition:
-            formatted_condition = self.__condition.accept(formatter)
-            where_clause = f"WHERE {formatted_condition}"
+            where_clause = f"WHERE {self.__condition.accept(formatter)}"
 
         group_clause = ""
         if self.__groupby:

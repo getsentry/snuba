@@ -5,13 +5,17 @@ import pytest
 from snuba.clickhouse.astquery import AstSqlQuery
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
-from snuba.query.conditions import binary_condition
+from snuba.query.conditions import (
+    BooleanFunctions,
+    ConditionFunctions,
+    binary_condition,
+)
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
 from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
 from snuba.request.request_settings import HTTPRequestSettings
 
 test_cases = [
-    (
+    pytest.param(
         # Simple query with aliases and multiple tables
         Query(
             {},
@@ -49,8 +53,9 @@ test_cases = [
             "select": "SELECT column1, table1.column2, (column3 AS al)",
             "where": "WHERE eq(al, 'blabla')",
         },
+        id="Query_with_aliases",
     ),
-    (
+    pytest.param(
         # Query with complex functions
         Query(
             {},
@@ -117,10 +122,11 @@ test_cases = [
             "order": "ORDER BY f(column1) ASC",
             "select": "SELECT (doSomething(column1, table1.column2, (column3 AS "
             "al))(column1) AS my_complex_math)",
-            "where": "WHERE and(eq(al, 'blabla'), neq(al, 'blabla'))",
+            "where": "WHERE eq(al, 'blabla') AND neq(al, 'blabla')",
         },
+        id="complex_functions",
     ),
-    (
+    pytest.param(
         # Query with escaping
         Query(
             {},
@@ -141,6 +147,62 @@ test_cases = [
             "order": "ORDER BY column1 ASC",
             "select": "SELECT (`field_##$$%` AS al1), (`t&^%$`.`f@!@` AS al2)",
         },
+        id="query_with_escaping",
+    ),
+    pytest.param(
+        Query(
+            {},
+            TableSource("my_table", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression("al", Column("al", None, "column3")),
+                SelectedExpression("al2", Column("al2", None, "column4")),
+            ],
+            condition=binary_condition(
+                None,
+                BooleanFunctions.AND,
+                binary_condition(
+                    None,
+                    BooleanFunctions.OR,
+                    binary_condition(
+                        None,
+                        ConditionFunctions.EQ,
+                        lhs=Column("al", None, "column3"),
+                        rhs=Literal(None, "blabla"),
+                    ),
+                    binary_condition(
+                        None,
+                        ConditionFunctions.EQ,
+                        lhs=Column("al2", None, "column4"),
+                        rhs=Literal(None, "blabla2"),
+                    ),
+                ),
+                binary_condition(
+                    None,
+                    BooleanFunctions.OR,
+                    binary_condition(
+                        None,
+                        ConditionFunctions.EQ,
+                        lhs=Column(None, None, "column5"),
+                        rhs=Literal(None, "blabla3"),
+                    ),
+                    binary_condition(
+                        None,
+                        ConditionFunctions.EQ,
+                        lhs=Column(None, None, "column6"),
+                        rhs=Literal(None, "blabla4"),
+                    ),
+                ),
+            ),
+        ),
+        {
+            "from": "FROM my_table",
+            "select": "SELECT (column3 AS al), (column4 AS al2)",
+            "where": (
+                "WHERE (equals(al, 'blabla') OR equals(al2, 'blabla2')) AND "
+                "(equals(column5, 'blabla3') OR equals(column6, 'blabla4'))"
+            ),
+        },
+        id="query_complex_condition",
     ),
 ]
 

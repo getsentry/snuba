@@ -39,6 +39,10 @@ class Migration(ABC):
     def forwards(self, context: Context) -> None:
         raise NotImplementedError
 
+    @abstractmethod
+    def backwards(self, context: Context) -> None:
+        raise NotImplementedError
+
 
 class MultiStepMigration(Migration, ABC):
     """
@@ -87,3 +91,12 @@ class MultiStepMigration(Migration, ABC):
             op.execute()
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
+
+    def backwards(self, context: Context) -> None:
+        migration_id, logger, update_status = context
+        logger.info(f"Reversing migration: {migration_id}")
+        update_status(Status.IN_PROGRESS)
+        for op in self.backwards_local():
+            op.execute()
+        logger.info(f"Finished reversing: {migration_id}")
+        update_status(Status.NOT_STARTED)

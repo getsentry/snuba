@@ -1,6 +1,12 @@
 from datetime import date, datetime
 from typing import Optional, Sequence
 
+from snuba.clickhouse.escaping import escape_alias, escape_identifier, escape_string
+from snuba.query.conditions import (
+    BooleanFunctions,
+    get_first_level_and_conditions,
+    get_first_level_or_conditions,
+)
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -13,7 +19,6 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.parsing import ParsingContext
-from snuba.clickhouse.escaping import escape_alias, escape_identifier, escape_string
 
 
 class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
@@ -114,6 +119,14 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             # Some distributed queries fail when arrays are passed as array(1,2,3)
             # and work when they are passed as [1, 2, 3]
             return self.__alias(f"[{self.__visit_params(exp.parameters)}]", exp.alias)
+
+        elif exp.function_name == BooleanFunctions.AND:
+            formatted = (c.accept(self) for c in get_first_level_and_conditions(exp))
+            return " AND ".join(formatted)
+
+        elif exp.function_name == BooleanFunctions.OR:
+            formatted = (c.accept(self) for c in get_first_level_or_conditions(exp))
+            return f"({' OR '.join(formatted)})"
 
         ret = f"{escape_identifier(exp.function_name)}({self.__visit_params(exp.parameters)})"
         return self.__alias(ret, exp.alias)

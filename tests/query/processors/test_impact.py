@@ -123,7 +123,7 @@ def test_impact_format_expressions() -> None:
     )
     assert ret == (
         "(plus(minus(1, divide(plus(countIf(lessOrEquals(column1, 300)), "
-        "divide(countIf(and(greater(column1, 300), lessOrEquals(column1, "
-        "multiply(300, 4)))), 2)), count())), "
+        "divide(countIf(greater(column1, 300) AND lessOrEquals(column1, "
+        "multiply(300, 4))), 2)), count())), "
         "multiply(minus(1, divide(1, sqrt(uniq(user)))), 3)) AS perf)"
     )

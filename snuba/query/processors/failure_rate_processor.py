@@ -20,7 +20,7 @@ from snuba.request.request_settings import RequestSettings
 class FailureRateProcessor(QueryProcessor):
     """
     A percentage of transactions with a bad status. "Bad" status is defined as anything other than "ok" and "unknown".
-    See here (https://github.com/getsentry/relay/blob/master/py/sentry_relay/consts.py) for the full list of errors.
+    See here (https://github.com/getsentry/relay/blob/master/relay-common/src/constants.rs) for the full list of errors.
     """
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
@@ -28,7 +28,7 @@ class FailureRateProcessor(QueryProcessor):
             if isinstance(exp, FunctionCall) and exp.function_name == "failure_rate":
                 assert len(exp.parameters) == 0
 
-                successful_codes = ["ok", "cancelled", "unknown_error"]
+                successful_codes = ["ok", "cancelled", "unknown"]
                 return divide(
                     # We use a FunctionCall directly rather than the countIf wrapper
                     # because of a type hint incompatibility where countIf expects

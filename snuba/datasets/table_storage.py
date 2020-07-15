@@ -19,7 +19,7 @@ from snuba.snapshots import BulkLoadSource
 from snuba.snapshots.loaders import BulkLoader
 from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
 from snuba.utils.streams.kafka import KafkaPayload
-from snuba.writer import BatchWriter
+from snuba.writer import BatchWriter, WriterTableRow
 
 
 @dataclass(frozen=True)
@@ -130,7 +130,7 @@ class TableWriter:
     def get_schema(self) -> WritableTableSchema:
         return self.__table_schema
 
-    def get_writer(self, options=None, table_name=None) -> BatchWriter:
+    def get_writer(self, options=None, table_name=None) -> BatchWriter[WriterTableRow]:
         from snuba import settings
 
         def default(value):
@@ -150,7 +150,9 @@ class TableWriter:
             chunk_size=settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
         )
 
-    def get_bulk_writer(self, options=None, table_name=None) -> BatchWriter:
+    def get_bulk_writer(
+        self, options=None, table_name=None
+    ) -> BatchWriter[WriterTableRow]:
         """
         This is a stripped down verison of the writer designed
         for better performance when loading data in bulk.

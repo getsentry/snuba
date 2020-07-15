@@ -5,7 +5,7 @@ from snuba.clickhouse.query import Query
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
-    get_first_level_conditions,
+    get_first_level_and_conditions,
     in_condition,
     is_binary_condition,
     is_in_condition_pattern,
@@ -57,7 +57,7 @@ def _get_mapping_keys_in_condition(
     """
     keys_found = set()
 
-    conditions = get_first_level_conditions(condition)
+    conditions = get_first_level_and_conditions(condition)
     for c in conditions:
         if is_binary_condition(c, BooleanFunctions.OR):
             return None
