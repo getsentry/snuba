@@ -112,7 +112,7 @@ class Cluster(ABC, Generic[TQuery, TWriterOptions]):
         encoder: Callable[[WriterTableRow], bytes],
         options: TWriterOptions,
         chunk_size: Optional[int],
-    ) -> BatchWriter:
+    ) -> BatchWriter[WriterTableRow]:
         raise NotImplementedError
 
 
@@ -220,7 +220,7 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         encoder: Callable[[WriterTableRow], bytes],
         options: ClickhouseWriterOptions,
         chunk_size: Optional[int],
-    ) -> BatchWriter:
+    ) -> BatchWriter[WriterTableRow]:
         return HTTPBatchWriter(
             table_name,
             self.__query_node.host_name,
