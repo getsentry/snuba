@@ -2,7 +2,7 @@ import logging
 import os
 import time
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, MutableSequence, Tuple
+from typing import Any, Mapping, MutableMapping, MutableSequence
 from uuid import UUID
 
 import jsonschema
@@ -369,9 +369,9 @@ if application.debug or application.testing:
 
     _ensured = False
 
-    def ensure_tables_migrated() -> None:
+    def ensure_tables_migrated(force: bool = False) -> None:
         global _ensured
-        if _ensured:
+        if not force and _ensured:
             return
 
         from snuba.migrations import migrate
@@ -447,21 +447,15 @@ if application.debug or application.testing:
         return ("ok", 200, {"Content-Type": "text/plain"})
 
     @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
-    def drop(*, dataset: Dataset) -> Tuple[str, int, Mapping[str, str]]:
+    def drop(*, dataset: Dataset):
         for storage in dataset.get_all_storages():
-            cluster = storage.get_cluster()
-            clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
-            database = cluster.get_database()
+            clickhouse = storage.get_cluster().get_query_connection(
+                ClickhouseClientSettings.MIGRATE
+            )
+            for statement in storage.get_schemas().get_drop_statements():
+                clickhouse.execute(statement.statement)
 
-            tables_to_empty = {
-                schema.get_local_table_name()
-                for schema in storage.get_schemas().get_unique_schemas()
-                if isinstance(schema, TableSchema)
-            }
-
-            for table in tables_to_empty:
-                clickhouse.execute(f"TRUNCATE TABLE {database}.{table}")
-
+        ensure_tables_migrated(force=True)
         redis_client.flushdb()
         return ("ok", 200, {"Content-Type": "text/plain"})
 
@@ -472,5 +466,5 @@ if application.debug or application.testing:
 
 else:
 
-    def ensure_tables_migrated() -> None:
+    def ensure_tables_migrated(force: bool = False) -> None:
         pass
