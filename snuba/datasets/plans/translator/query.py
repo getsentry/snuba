@@ -1,10 +1,13 @@
 import copy
 
+from snuba import state
+from snuba.clickhouse.query import Expression as ClickhouseExpression
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mapping import (
     SnubaClickhouseMappingTranslator,
     TranslationMappers,
 )
+from snuba.query.expressions import Expression as SnubaExpression
 from snuba.query.logical import Query as LogicalQuery
 
 
@@ -25,6 +28,12 @@ class QueryTranslator:
         self.__expression_translator = SnubaClickhouseMappingTranslator(mappers)
 
     def translate(self, query: LogicalQuery) -> ClickhouseQuery:
+        def translate_expression(expr: SnubaExpression) -> ClickhouseExpression:
+            return expr.accept(self.__expression_translator)
+
         translated = ClickhouseQuery(copy.deepcopy(query))
-        translated.transform(self.__expression_translator)
+        if state.get_config("ast_root_level_translator", 0):
+            translated.transform(self.__expression_translator)
+        else:
+            translated.transform_expressions(translate_expression)
         return translated
