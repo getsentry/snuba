@@ -106,6 +106,7 @@ TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 AST_DATASET_ROLLOUT: Mapping[str, int] = {
     "events": 100,
     "outcomes": 100,
+    "sessions": 100,
     "transactions": 100,
 }  # (dataset name: percentage)
 AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
