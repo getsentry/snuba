@@ -15,7 +15,7 @@ CLICKHOUSE_ERROR_RE = re.compile(
 )
 
 
-class HTTPBatchWriter(BatchWriter):
+class HTTPBatchWriter(BatchWriter[WriterTableRow]):
     def __init__(
         self,
         table_name: str,
@@ -54,7 +54,7 @@ class HTTPBatchWriter(BatchWriter):
         if chunk:
             yield b"".join(chunk)
 
-    def write(self, rows: Iterable[WriterTableRow]) -> None:
+    def write(self, values: Iterable[WriterTableRow]) -> None:
         response = self.__pool.urlopen(
             "POST",
             "/?"
@@ -70,7 +70,7 @@ class HTTPBatchWriter(BatchWriter):
                 "Connection": "keep-alive",
                 "Accept-Encoding": "gzip,deflate",
             },
-            body=self._prepare_chunks(rows),
+            body=self._prepare_chunks(values),
             chunked=True,
         )
 
