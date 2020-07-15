@@ -4,6 +4,7 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
+    ColumnToFunction,
     SubscriptableMapper,
 )
 from snuba.query.logical import SelectedExpression
@@ -140,6 +141,51 @@ test_cases = [
             )
         ),
         id="some basic rules",
+    ),
+    pytest.param(
+        TranslationMappers(
+            columns=[
+                ColumnToFunction(
+                    None,
+                    "users_crashed",
+                    "uniqIfMerge",
+                    (Column(None, None, "users_crashed"),),
+                )
+            ],
+        ),
+        SnubaQuery(
+            body={},
+            data_source=TableSource("my_table", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression(
+                    "alias",
+                    FunctionCall("alias", "f", (Column(None, None, "users_crashed"),)),
+                ),
+            ],
+        ),
+        ClickhouseQuery(
+            SnubaQuery(
+                body={},
+                data_source=TableSource("my_table", ColumnSet([])),
+                selected_columns=[
+                    SelectedExpression(
+                        "alias",
+                        FunctionCall(
+                            "alias",
+                            "f",
+                            (
+                                FunctionCall(
+                                    None,
+                                    "uniqIfMerge",
+                                    (Column(None, None, "users_crashed"),),
+                                ),
+                            ),
+                        ),
+                    ),
+                ],
+            )
+        ),
+        id="non idempotent rule",
     ),
 ]
 
