@@ -149,7 +149,7 @@ test_cases = [
                     None,
                     "users_crashed",
                     "uniqIfMerge",
-                    (Column(None, None, "users_crashed"),),
+                    (Column(alias=None, table_name=None, column_name="users_crashed"),),
                 )
             ],
         ),
@@ -159,7 +159,15 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "alias",
-                    FunctionCall("alias", "f", (Column(None, None, "users_crashed"),)),
+                    FunctionCall(
+                        "alias",
+                        "f",
+                        (
+                            Column(
+                                alias=None, table_name=None, column_name="users_crashed"
+                            ),
+                        ),
+                    ),
                 ),
             ],
         ),
@@ -177,7 +185,13 @@ test_cases = [
                                 FunctionCall(
                                     None,
                                     "uniqIfMerge",
-                                    (Column(None, None, "users_crashed"),),
+                                    (
+                                        Column(
+                                            alias=None,
+                                            table_name=None,
+                                            column_name="users_crashed",
+                                        ),
+                                    ),
                                 ),
                             ),
                         ),
