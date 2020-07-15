@@ -459,10 +459,6 @@ if application.debug or application.testing:
         redis_client.flushdb()
         return ("ok", 200, {"Content-Type": "text/plain"})
 
-    @application.route("/tests/error")
-    def error():
-        1 / 0
-
 
 else:
 

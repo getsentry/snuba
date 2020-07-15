@@ -9,7 +9,6 @@ import pytest
 import pytz
 import simplejson as json
 from dateutil.parser import parse as parse_datetime
-from sentry_sdk import Client, Hub
 
 from snuba import settings, state
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -1345,16 +1344,6 @@ class TestApi(BaseApiTest):
         response = self.app.get("/config")
         assert response.status_code == 200
         assert len(response.data) > 100
-
-    def test_exception_captured_by_sentry(self):
-        events = []
-        with Hub(Client(transport=events.append)):
-            # This endpoint should return 500 as it internally raises an exception
-            response = self.app.get("/tests/error")
-
-            assert response.status_code == 500
-            assert len(events) == 1
-            assert events[0]["exception"]["values"][0]["type"] == "ZeroDivisionError"
 
     def test_split_query(self):
         state.set_config("use_split", 1)
