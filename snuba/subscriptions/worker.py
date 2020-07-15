@@ -129,7 +129,7 @@ class SubscriptionWorker(
         for future in as_completed(
             [
                 self.__producer.produce(
-                    self.__topic, subscription_task_result_codec.encode(result)
+                    self.__topic, subscription_task_result_encoder.encode(result)
                 )
                 for result in results
             ]
@@ -157,4 +157,4 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
         )
 
 
-subscription_task_result_codec = SubscriptionTaskResultEncoder()
+subscription_task_result_encoder = SubscriptionTaskResultEncoder()
