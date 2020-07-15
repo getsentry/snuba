@@ -26,6 +26,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
         "storage_sets": {
             "events",
+            "events_ro",
             "migrations",
             "outcomes",
             "querylog",
@@ -103,6 +104,7 @@ PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 
 AST_DATASET_ROLLOUT: Mapping[str, int] = {
+    "events": 100,
     "outcomes": 100,
     "transactions": 100,
 }  # (dataset name: percentage)
@@ -111,40 +113,10 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         # Eventstore
         "eventstore.get_next_or_prev_event_id": 100,
     },
-    "events": {
-        # Simple queries without splitting or user customizations
-        "Group.filter_by_event_id": 100,
-        "api.group-hashes": 100,
-        # Simple time bucketed queries
-        "api.organization-events-stats": 100,
-        "incidents.get_incident_event_stats": 100,
-        "incidents.get_incident_aggregates": 100,
-        "tsdb": 100,
-        # Queries with tags resolution
-        "tagstore.get_tag_value_paginator_for_projects": 100,
-        "tagstore.get_group_tag_value_iter": 100,
-        # Time/column split queries
-        "api.organization-events-direct-hit": 100,
-        "eventstore.get_unfetched_events": 100,
-        "eventstore.get_event_by_id_nodestore": 100,
-        "api.organization-events": 100,
-        "api.group-events": 100,
-        "Group.get_latest": 100,
-        # Higher volume tag queries
-        "tagstore.__get_tag_key_and_top_values": 100,
-        "tagstore.__get_tag_keys_and_top_values": 100,
-        "tagstore.__get_release": 100,
-        "tagstore.get_group_seen_values_for_environments": 100,
-        "tagstore.get_groups_user_counts": 100,
-        "tagstore.__get_tag_keys": 100,
-        "tagstore.get_release_tags": 100,
-        # Search
-        "search_sample": 100,
-        "search": 100,
-        # deprecated Discover V1
-        "discover": 100,
-    },
 }  # (dataset name: (referrer: percentage))
+
+COLUMN_SPLIT_MAX_LIMIT = 1000
+COLUMN_SPLIT_MAX_RESULTS = 5000
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

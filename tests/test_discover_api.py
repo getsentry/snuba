@@ -7,7 +7,7 @@ from functools import partial
 import pytest
 import simplejson as json
 
-from snuba import settings, state
+from snuba import settings
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from tests.base import BaseApiTest, dataset_manager
 
@@ -16,7 +16,6 @@ from tests.base import BaseApiTest, dataset_manager
 class TestDiscoverApi(BaseApiTest):
     def setup_method(self, test_method):
         super().setup_method(test_method)
-        state.set_config("infix_where_format", 1)
 
         # XXX: This should use the ``discover`` dataset directly, but that will
         # require some updates to the test base classes to work correctly.
