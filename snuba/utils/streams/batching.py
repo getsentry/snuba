@@ -292,8 +292,10 @@ class BatchingConsumer(Generic[TPayload]):
         except self.__recoverable_errors:
             return
 
-        assert self.__processor is not None, "received message without active processor"
-        self.__processor.process(msg)
+        if self.__processor is not None:
+            self.__processor.process(msg)
+        else:
+            assert msg is None, "received message without active processor"
 
     def signal_shutdown(self) -> None:
         """Tells the batching consumer to shutdown on the next run loop iteration.
