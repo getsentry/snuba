@@ -56,7 +56,9 @@ class ClickhouseVisitor(NodeVisitor):
     def visit_column_name(self, node: Node, visited_children: Iterable[Any]) -> Column:
         return Column(None, None, node.text)
 
-    def visit_empty(self, node: Node, visited_children: Iterable[Any]) -> None:
+    def visit_empty(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> Optional[Expression]:
         return None
 
     def visit_top_arithm_expression(
@@ -67,7 +69,9 @@ class ClickhouseVisitor(NodeVisitor):
         return exp
 
     def visit_low_pri_arithmetic(
-        self, node: Node, visited_children: Tuple[Any, Expression, Any, Expression]
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Expression, Any, List[Expression]],
     ) -> Expression:
         _, term, _, exp = visited_children
 
@@ -77,7 +81,9 @@ class ClickhouseVisitor(NodeVisitor):
             return plus(term, exp[1])
 
     def visit_high_pri_arithmetic(
-        self, node: Node, visited_children: Tuple[Any, Expression, Any, Expression]
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Expression, Any, List[Expression]],
     ) -> Expression:
         _, factor, _, term = visited_children
 
