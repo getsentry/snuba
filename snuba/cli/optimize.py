@@ -3,7 +3,10 @@ from typing import Optional
 import click
 
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.datasets.factory import DATASET_NAMES, get_dataset
+from snuba.datasets.schemas.tables import TableSchema
+from snuba.datasets.storage import ReadableTableStorage
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import STORAGES, get_storage
 from snuba.environment import setup_logging
 
 
@@ -16,11 +19,11 @@ from snuba.environment import setup_logging
 )
 @click.option("--database", default="default", help="Name of the database to target.")
 @click.option(
-    "--dataset",
-    "dataset_name",
+    "--storage",
+    "storage_name",
     default="events",
-    type=click.Choice(DATASET_NAMES),
-    help="The dataset to target",
+    type=click.Choice([storage_key.value for storage_key in STORAGES.keys()]),
+    help="The storage to target",
 )
 @click.option("--log-level", help="Logging level to use.")
 def optimize(
@@ -28,7 +31,7 @@ def optimize(
     clickhouse_host: Optional[str],
     clickhouse_port: Optional[int],
     database: str,
-    dataset_name: str,
+    storage_name: str,
     log_level: Optional[str] = None,
 ) -> None:
     from datetime import datetime
@@ -37,14 +40,28 @@ def optimize(
 
     setup_logging(log_level)
 
-    dataset = get_dataset(dataset_name)
-    writable_storage = dataset.get_writable_storage()
-    assert writable_storage is not None, "Dataset has no writable storage"
-    (
-        clickhouse_user,
-        clickhouse_password,
-    ) = writable_storage.get_cluster().get_credentials()
-    table = writable_storage.get_table_writer().get_schema().get_local_table_name()
+    storage: ReadableTableStorage
+
+    storage_key = StorageKey(storage_name)
+    storage = get_storage(storage_key)
+
+    (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
+
+    schemas = set()
+    read_schema = storage.get_schemas().get_read_schema()
+    write_schema = storage.get_schemas().get_write_schema()
+
+    if read_schema:
+        schemas.add(read_schema)
+
+    if write_schema:
+        schemas.add(write_schema)
+
+    tables = {
+        schema.get_local_table_name()
+        for schema in schemas
+        if isinstance(schema, TableSchema)
+    }
 
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -62,12 +79,13 @@ def optimize(
             database,
             send_receive_timeout=ClickhouseClientSettings.OPTIMIZE.value.timeout,
         )
-    elif not writable_storage.get_cluster().is_single_node():
+    elif not storage.get_cluster().is_single_node():
         raise click.ClickException("Provide Clickhouse host and port for optimize")
     else:
-        connection = writable_storage.get_cluster().get_query_connection(
+        connection = storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.OPTIMIZE
         )
 
-    num_dropped = run_optimize(connection, database, table, before=today)
-    logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))
+    for table in tables:
+        num_dropped = run_optimize(connection, database, table, before=today)
+        logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))

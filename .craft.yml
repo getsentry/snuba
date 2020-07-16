@@ -1,0 +1,18 @@
+minVersion: "0.10.0"
+github:
+  owner: getsentry
+  repo: snuba
+releaseBranchPrefix: releases
+changelogPolicy: none
+artifactProvider:
+  name: none
+statusProvider:
+  name: github
+  config:
+    contexts:
+      - 'Trigger: 753987fc-383a-479a-803c-90301cfd2435'
+targets:
+  - name: github
+  - name: docker
+    source: us.gcr.io/sentryio/snuba
+    target: getsentry/snuba

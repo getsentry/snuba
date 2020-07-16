@@ -239,7 +239,7 @@ class TestReplacer(BaseEventsTest):
     def test_delete_groups_insert(self):
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
-        self.write_raw_events(self.event)
+        self.write_events([self.event])
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
@@ -275,7 +275,7 @@ class TestReplacer(BaseEventsTest):
     def test_merge_insert(self):
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
-        self.write_raw_events(self.event)
+        self.write_events([self.event])
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
@@ -313,7 +313,7 @@ class TestReplacer(BaseEventsTest):
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "a" * 32
-        self.write_raw_events(self.event)
+        self.write_events([self.event])
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
@@ -353,7 +353,7 @@ class TestReplacer(BaseEventsTest):
         self.event["group_id"] = 1
         self.event["data"]["tags"].append(["browser.name", "foo"])
         self.event["data"]["tags"].append(["notbrowser", "foo"])
-        self.write_raw_events(self.event)
+        self.write_events([self.event])
 
         project_id = self.project_id
 
@@ -415,7 +415,7 @@ class TestReplacer(BaseEventsTest):
         self.event["data"]["tags"].append(["browser|to_delete", "foo=2"])
         self.event["data"]["tags"].append(["notbrowser", "foo\\3"])
         self.event["data"]["tags"].append(["notbrowser2", "foo4"])
-        self.write_raw_events(self.event)
+        self.write_events([self.event])
 
         project_id = self.project_id
 
@@ -435,19 +435,6 @@ class TestReplacer(BaseEventsTest):
                     ),
                 ).data
             )["data"]
-
-        assert _fetch_flattened_tags() == [
-            {
-                "tags.key": [
-                    "browser|name",
-                    "browser|to_delete",
-                    "notbrowser",
-                    "notbrowser2",
-                ],
-                "tags.value": ["foo=1", "foo=2", "foo\\3", "foo4"],
-                "_tags_flattened": "|browser\\|name=foo\\=1||browser\\|to_delete=foo\\=2||notbrowser=foo\\\\3||notbrowser2=foo4|",
-            }
-        ]
 
         timestamp = datetime.now(tz=pytz.utc)
 

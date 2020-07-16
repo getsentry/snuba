@@ -23,7 +23,7 @@ from deprecation import deprecated
 from snuba.clickhouse.escaping import SAFE_COL_RE
 from snuba.datasets.schemas import RelationalSource
 from snuba.query.conditions import BooleanFunctions, binary_condition
-from snuba.query.expressions import Column, Expression
+from snuba.query.expressions import Column, Expression, ExpressionVisitor
 from snuba.query.types import Condition
 from snuba.util import columns_in_expr, is_condition, to_list
 
@@ -46,6 +46,13 @@ class OrderByDirection(Enum):
 @dataclass(frozen=True)
 class OrderBy:
     direction: OrderByDirection
+    expression: Expression
+
+
+@dataclass(frozen=True)
+class SelectedExpression:
+    # The name of this column in the resultset.
+    name: Optional[str]
     expression: Expression
 
 
@@ -91,7 +98,7 @@ class Query:
         body: MutableMapping[str, Any],  # Temporary
         data_source: Optional[RelationalSource],
         # New data model to replace the one based on the dictionary
-        selected_columns: Optional[Sequence[Expression]] = None,
+        selected_columns: Optional[Sequence[SelectedExpression]] = None,
         array_join: Optional[Expression] = None,
         condition: Optional[Expression] = None,
         prewhere: Optional[Expression] = None,
@@ -125,7 +132,9 @@ class Query:
         tree.
         """
         return chain(
-            chain.from_iterable(self.__selected_columns),
+            chain.from_iterable(
+                map(lambda selected: selected.expression, self.__selected_columns)
+            ),
             self.__array_join or [],
             self.__condition or [],
             chain.from_iterable(self.__groupby),
@@ -151,7 +160,14 @@ class Query:
         ) -> Sequence[Expression]:
             return list(map(lambda exp: exp.transform(func), expressions),)
 
-        self.__selected_columns = transform_expression_list(self.__selected_columns)
+        self.__selected_columns = list(
+            map(
+                lambda selected: replace(
+                    selected, expression=selected.expression.transform(func)
+                ),
+                self.__selected_columns,
+            )
+        )
         self.__array_join = (
             self.__array_join.transform(func) if self.__array_join else None
         )
@@ -164,6 +180,42 @@ class Query:
             map(
                 lambda clause: replace(
                     clause, expression=clause.expression.transform(func)
+                ),
+                self.__order_by,
+            )
+        )
+
+    def transform(self, visitor: ExpressionVisitor[Expression]) -> None:
+        """
+        Applies a transformation, defined through a Visitor, to the
+        entire query. Here the visitor is supposed to return a new
+        Expression and it is applied to each root Expression in this
+        query, where a root Expression is an Expression that does not
+        have another Expression as parent.
+        The transformation happens in place.
+        """
+
+        self.__selected_columns = list(
+            map(
+                lambda selected: replace(
+                    selected, expression=selected.expression.accept(visitor)
+                ),
+                self.__selected_columns,
+            )
+        )
+        if self.__array_join is not None:
+            self.__array_join = self.__array_join.accept(visitor)
+        if self.__condition is not None:
+            self.__condition = self.__condition.accept(visitor)
+        if self.__prewhere is not None:
+            self.__prewhere = self.__prewhere.accept(visitor)
+        self.__groupby = [e.accept(visitor) for e in (self.__groupby or [])]
+        if self.__having is not None:
+            self.__having = self.__having.accept(visitor)
+        self.__order_by = list(
+            map(
+                lambda clause: replace(
+                    clause, expression=clause.expression.accept(visitor)
                 ),
                 self.__order_by,
             )
@@ -189,13 +241,15 @@ class Query:
     def get_selected_columns(self) -> Optional[Sequence[Any]]:
         return self.__body.get("selected_columns")
 
-    def get_selected_columns_from_ast(self) -> Sequence[Expression]:
+    def get_selected_columns_from_ast(self) -> Sequence[SelectedExpression]:
         return self.__selected_columns
 
     def set_selected_columns(self, columns: Sequence[Any],) -> None:
         self.__body["selected_columns"] = columns
 
-    def set_ast_selected_columns(self, selected_columns: Sequence[Expression]) -> None:
+    def set_ast_selected_columns(
+        self, selected_columns: Sequence[SelectedExpression]
+    ) -> None:
         self.__selected_columns = selected_columns
 
     def get_aggregations(self) -> Optional[Sequence[Aggregation]]:
@@ -541,3 +595,38 @@ class Query:
                     to_list(self.get_conditions()), old_column, new_column,
                 )
             )
+
+    def validate_aliases(self) -> bool:
+        """
+        Returns true if all the alias reference in this query can be resolved.
+
+        Which means, they are either declared somewhere in the query itself
+        or they are referencing columns in the table.
+
+        Caution: for this to work, data_source needs to be already populated,
+        otherwise it would throw.
+        """
+        declared_symbols: Set[str] = set()
+        referenced_symbols: Set[str] = set()
+        for e in self.get_all_expressions():
+            # SELECT f(g(x)) as A -> declared_symbols = {A}
+            # SELECT a as B -> declared_symbols = {B} referenced_symbols = {a}
+            # SELECT a AS a -> referenced_symbols = {a}
+            if e.alias:
+                if isinstance(e, Column):
+                    qualified_col_name = (
+                        e.column_name
+                        if not e.table_name
+                        else f"{e.table_name}.{e.column_name}"
+                    )
+                    referenced_symbols.add(qualified_col_name)
+                    if e.alias != qualified_col_name:
+                        declared_symbols.add(e.alias)
+                else:
+                    declared_symbols.add(e.alias)
+            else:
+                if isinstance(e, Column) and not e.alias and not e.table_name:
+                    referenced_symbols.add(e.column_name)
+
+        declared_symbols |= {c.flattened for c in self.get_data_source().get_columns()}
+        return not referenced_symbols - declared_symbols

@@ -6,8 +6,7 @@ from typing import Callable, Mapping, NamedTuple, Optional, Sequence
 from snuba.clickhouse.columns import ColumnSet, ColumnType
 from snuba.clusters.cluster import get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.schemas import RelationalSource, Schema
-from snuba.query.types import Condition
+from snuba.datasets.schemas import MandatoryCondition, RelationalSource, Schema
 
 
 class TableSource(RelationalSource):
@@ -20,7 +19,7 @@ class TableSource(RelationalSource):
         self,
         table_name: str,
         columns: ColumnSet,
-        mandatory_conditions: Optional[Sequence[Condition]] = None,
+        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
     ) -> None:
         self.__table_name = table_name
@@ -34,7 +33,7 @@ class TableSource(RelationalSource):
     def get_columns(self) -> ColumnSet:
         return self.__columns
 
-    def get_mandatory_conditions(self) -> Sequence[Condition]:
+    def get_mandatory_conditions(self) -> Sequence[MandatoryCondition]:
         return self.__mandatory_conditions
 
     def get_prewhere_candidates(self) -> Sequence[str]:
@@ -46,13 +45,10 @@ class DDLStatement(NamedTuple):
     statement: str
 
 
-class TableSchema(Schema, ABC):
+class TableSchema(Schema):
     """
     Represent a table-like schema. This means it represents either
     a Clickhouse table, a Clickhouse view or a Materialized view.
-
-    Specifically a TableSchema is something we can read from through
-    a simple select and that provides DDL operations.
     """
 
     def __init__(
@@ -62,15 +58,9 @@ class TableSchema(Schema, ABC):
         local_table_name: str,
         dist_table_name: str,
         storage_set_key: StorageSetKey,
-        mandatory_conditions: Optional[Sequence[Condition]] = None,
+        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
-        migration_function: Optional[
-            Callable[[str, Mapping[str, ColumnType]], Sequence[str]]
-        ] = None,
     ):
-        self.__migration_function = (
-            migration_function if migration_function else lambda table, schema: []
-        )
         self.__local_table_name = local_table_name
         self.__table_name = (
             local_table_name
@@ -91,7 +81,7 @@ class TableSchema(Schema, ABC):
     def get_local_table_name(self) -> str:
         """
         This returns the local table name for a distributed environment.
-        It is supposed to be used in DDL commands and for maintenance.
+        It is supposed to be used in maintenance.
         """
         return self.__local_table_name
 
@@ -101,6 +91,39 @@ class TableSchema(Schema, ABC):
         In distributed mode this will be a distributed table. In local mode it is a local table.
         """
         return self.__table_name
+
+
+class TableSchemaWithDDL(TableSchema, ABC):
+    """
+    Extends TableSchema with DDL support. This is used in the old migration system.
+    Once we move to the new system, this will be removed.
+    """
+
+    def __init__(
+        self,
+        columns: ColumnSet,
+        *,
+        local_table_name: str,
+        dist_table_name: str,
+        storage_set_key: StorageSetKey,
+        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
+        prewhere_candidates: Optional[Sequence[str]] = None,
+        migration_function: Optional[
+            Callable[[str, Mapping[str, ColumnType]], Sequence[str]]
+        ] = None,
+    ):
+        super().__init__(
+            columns,
+            local_table_name=local_table_name,
+            dist_table_name=dist_table_name,
+            storage_set_key=storage_set_key,
+            mandatory_conditions=mandatory_conditions,
+            prewhere_candidates=prewhere_candidates,
+        )
+        self.__migration_function = (
+            migration_function if migration_function else lambda table, schema: []
+        )
+        self.__local_table_name = local_table_name
 
     def get_local_drop_table_statement(self) -> DDLStatement:
         return DDLStatement(
@@ -132,7 +155,7 @@ class WritableTableSchema(TableSchema):
     pass
 
 
-class MergeTreeSchema(WritableTableSchema):
+class MergeTreeSchema(WritableTableSchema, TableSchemaWithDDL):
     def __init__(
         self,
         columns: ColumnSet,
@@ -140,7 +163,7 @@ class MergeTreeSchema(WritableTableSchema):
         local_table_name: str,
         dist_table_name: str,
         storage_set_key: StorageSetKey,
-        mandatory_conditions: Optional[Sequence[Condition]] = None,
+        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
         order_by: str,
         partition_by: Optional[str],
@@ -215,7 +238,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         local_table_name: str,
         dist_table_name: str,
         storage_set_key: StorageSetKey,
-        mandatory_conditions: Optional[Sequence[Condition]] = None,
+        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
         order_by: str,
         partition_by: Optional[str],
@@ -257,7 +280,7 @@ class AggregatingMergeTreeSchema(MergeTreeSchema):
         return "AggregatingMergeTree()"
 
 
-class MaterializedViewSchema(TableSchema):
+class MaterializedViewSchema(TableSchemaWithDDL):
     def __init__(
         self,
         columns: ColumnSet,
@@ -265,7 +288,7 @@ class MaterializedViewSchema(TableSchema):
         local_materialized_view_name: str,
         dist_materialized_view_name: str,
         storage_set_key: StorageSetKey,
-        mandatory_conditions: Optional[Sequence[Condition]] = None,
+        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
         query: str,
         local_source_table_name: str,

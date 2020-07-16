@@ -2,7 +2,7 @@ import logging
 import os
 import time
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping
+from typing import Any, Mapping, MutableMapping, MutableSequence
 from uuid import UUID
 
 import jsonschema
@@ -21,8 +21,8 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
     InvalidDatasetError,
     enforce_table_writer,
-    ensure_not_internal,
     get_dataset,
+    get_dataset_name,
     get_enabled_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
@@ -39,10 +39,10 @@ from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
-from snuba.web.converters import DatasetConverter
 from snuba.web import QueryException
+from snuba.web.converters import DatasetConverter
 from snuba.web.query import parse_and_run_query
-
+from snuba.writer import WriterTableRow
 
 metrics = MetricsWrapper(environment.metrics, "api")
 
@@ -232,6 +232,13 @@ def parse_request_body(http_request):
             raise BadRequest(str(error)) from error
 
 
+def _trace_transaction(dataset: Dataset) -> None:
+    with sentry_sdk.configure_scope() as scope:
+        if scope.span:
+            scope.span.set_tag("dataset", get_dataset_name(dataset))
+            scope.span.set_tag("referrer", http_request.referrer)
+
+
 @application.route("/query", methods=["GET", "POST"])
 @util.time_request("query")
 def unqualified_query_view(*, timer: Timer):
@@ -240,6 +247,7 @@ def unqualified_query_view(*, timer: Timer):
     elif http_request.method == "POST":
         body = parse_request_body(http_request)
         dataset = get_dataset(body.pop("dataset", settings.DEFAULT_DATASET_NAME))
+        _trace_transaction(dataset)
         return dataset_query(dataset, body, timer)
     else:
         assert False, "unexpected fallthrough"
@@ -258,6 +266,7 @@ def dataset_query_view(*, dataset: Dataset, timer: Timer):
         )
     elif http_request.method == "POST":
         body = parse_request_body(http_request)
+        _trace_transaction(dataset)
         return dataset_query(dataset, body, timer)
     else:
         assert False, "unexpected fallthrough"
@@ -268,7 +277,6 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     assert http_request.method == "POST"
 
     with sentry_sdk.start_span(description="ensure_dataset", op="validate"):
-        ensure_not_internal(dataset)
         ensure_tables_migrated()
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
@@ -336,7 +344,6 @@ def handle_subscription_error(exception: InvalidSubscriptionError):
 @application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
 @util.time_request("subscription")
 def create_subscription(*, dataset: Dataset, timer: Timer):
-    ensure_not_internal(dataset)
     subscription = SubscriptionDataCodec().decode(http_request.data)
     # TODO: Check for valid queries with fields that are invalid for subscriptions. For
     # example date fields and aggregates.
@@ -352,7 +359,6 @@ def create_subscription(*, dataset: Dataset, timer: Timer):
     "/<dataset:dataset>/subscriptions/<int:partition>/<key>", methods=["DELETE"]
 )
 def delete_subscription(*, dataset: Dataset, partition: int, key: str):
-    ensure_not_internal(dataset)
     SubscriptionDeleter(dataset, PartitionId(partition)).delete(UUID(key))
     return "ok", 202, {"Content-Type": "text/plain"}
 
@@ -376,11 +382,11 @@ if application.debug or application.testing:
 
     @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
     def write(*, dataset: Dataset):
-        from snuba.processor import ProcessorAction
+        from snuba.processor import InsertBatch
 
         ensure_tables_migrated()
 
-        rows = []
+        rows: MutableSequence[WriterTableRow] = []
         offset_base = int(round(time.time() * 1000))
         for index, message in enumerate(json.loads(http_request.data)):
             offset = offset_base + index
@@ -396,8 +402,8 @@ if application.debug or application.testing:
                 )
             )
             if processed_message:
-                assert processed_message.action is ProcessorAction.INSERT
-                rows.extend(processed_message.data)
+                assert isinstance(processed_message, InsertBatch)
+                rows.extend(processed_message.rows)
 
         enforce_table_writer(dataset).get_writer().write(rows)
 

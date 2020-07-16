@@ -170,7 +170,7 @@ class TimeSeriesDataset(Dataset):
             86400: "toDate({column}, 'Universal')",
         }.get(
             granularity,
-            "toDateTime(intDiv(toUInt32({column}), {granularity}) * {granularity}, 'Universal')",
+            "toDateTime(multiply(intDiv(toUInt32({column}), {granularity}), {granularity}), 'Universal')",
         )
         return template.format(column=real_column, granularity=granularity)
 

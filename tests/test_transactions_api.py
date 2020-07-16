@@ -1,16 +1,18 @@
 import calendar
+import uuid
 from datetime import datetime, timedelta
 from functools import partial
+
+import pytest
 import pytz
 import simplejson as json
-import uuid
 
 from snuba import settings, state
 from snuba.datasets.factory import enforce_table_writer
-
 from tests.base import BaseApiTest
 
 
+@pytest.mark.usefixtures("query_type")
 class TestTransactionsApi(BaseApiTest):
     def setup_method(self, test_method, dataset_name="transactions"):
         super().setup_method(test_method, dataset_name)
@@ -137,8 +139,8 @@ class TestTransactionsApi(BaseApiTest):
                             )
                         )
                     )
-                    events.extend(processed.data)
-        self.write_processed_events(events)
+                    events.append(processed)
+        self.write_processed_messages(events)
 
     def test_read_ip(self):
         response = self.app.post(
@@ -147,11 +149,7 @@ class TestTransactionsApi(BaseApiTest):
                 {
                     "dataset": "transactions",
                     "project": 1,
-                    "selected_columns": [
-                        "transaction_name",
-                        "ip_address_v4",
-                        "ip_address_v6",
-                    ],
+                    "selected_columns": ["transaction_name", "ip_address"],
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
                     "orderby": "start_ts",
@@ -161,8 +159,7 @@ class TestTransactionsApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) > 1, data
-        assert "ip_address_v4" in data["data"][0]
-        assert "ip_address_v6" in data["data"][0]
+        assert "ip_address" in data["data"][0]
 
     def test_read_lowcard(self):
         response = self.app.post(

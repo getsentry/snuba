@@ -15,6 +15,7 @@ from snuba.query.conditions import (
 from snuba.query.dsl import arrayElement, arrayJoin
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query as SnubaQuery
+from snuba.query.logical import SelectedExpression
 from snuba.query.parser import parse_query
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
@@ -36,7 +37,10 @@ def build_query(
         SnubaQuery(
             {},
             None,
-            selected_columns=selected_columns,
+            selected_columns=[
+                SelectedExpression(name=s.alias, expression=s)
+                for s in selected_columns or []
+            ],
             condition=condition,
             having=having,
         )
@@ -175,7 +179,7 @@ test_data = [
             "conditions": [["tags_key", "IN", ["t1", "t2"]]],
         },
         build_query(
-            selected_columns=[Column(None, None, "col1")],
+            selected_columns=[Column("col1", None, "col1")],
             condition=in_condition(
                 None,
                 arrayJoin("tags_key", Column(None, None, "tags.key")),
@@ -218,7 +222,7 @@ test_data = [
             ],
             condition=in_condition(
                 None,
-                Column(None, None, "col"),
+                Column("col", None, "col"),
                 [Literal(None, "t1"), Literal(None, "t2")],
             ),
         ),
@@ -354,7 +358,7 @@ def test_formatting() -> None:
         ),
         Literal(None, 1),
     ).accept(ClickhouseExpressionFormatter()) == (
-        "(arrayElement((arrayJoin(arrayMap((x, y -> array(x, y)), "
+        "(arrayElement((arrayJoin(arrayMap((x, y -> [x, y]), "
         "tags.key, tags.value)) AS snuba_all_tags), 1) AS tags_key)"
     )
 
@@ -373,7 +377,7 @@ def test_formatting() -> None:
     ).accept(ClickhouseExpressionFormatter()) == (
         "(arrayElement((arrayJoin(arrayFilter((pair -> in("
         "arrayElement(pair, 1), tuple('t1', 't2'))), "
-        "arrayMap((x, y -> array(x, y)), tags.key, tags.value))) AS snuba_all_tags), 1) AS tags_key)"
+        "arrayMap((x, y -> [x, y]), tags.key, tags.value))) AS snuba_all_tags), 1) AS tags_key)"
     )
 
 
@@ -393,7 +397,7 @@ def test_aliasing() -> None:
     sql = AstSqlQuery(processed, HTTPRequestSettings()).format_sql()
 
     assert sql == (
-        "SELECT (arrayElement((arrayJoin(arrayMap((x, y -> array(x, y)), "
+        "SELECT (arrayElement((arrayJoin(arrayMap((x, y -> [x, y]), "
         "tags.key, tags.value)) AS snuba_all_tags), 2) AS tags_value) "
         "FROM transactions_local "
         "WHERE in((arrayElement(snuba_all_tags, 1) AS tags_key), tuple('t1', 't2'))"

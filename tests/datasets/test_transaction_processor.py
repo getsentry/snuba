@@ -1,15 +1,12 @@
-from tests.base import BaseTest
-
+import uuid
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Any, Mapping, Optional, Tuple
 
-from datetime import datetime, timedelta
-
-import uuid
-
-from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.consumer import KafkaMessageMetadata
-from snuba.processor import ProcessorAction
+from snuba.datasets.transactions_processor import TransactionsMessageProcessor
+from snuba.processor import InsertBatch
+from tests.base import BaseTest
 
 
 @dataclass
@@ -301,9 +298,6 @@ class TestTransactionsProcessor(BaseTest):
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)
         )
-
-        processor = TransactionsMessageProcessor()
-        ret = processor.process_message(message.serialize(), meta)
-
-        assert ret.action == ProcessorAction.INSERT
-        assert ret.data == [message.build_result(meta)]
+        assert TransactionsMessageProcessor().process_message(
+            message.serialize(), meta
+        ) == InsertBatch([message.build_result(meta)])

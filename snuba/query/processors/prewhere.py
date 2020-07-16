@@ -8,7 +8,7 @@ from snuba.query.accessors import get_columns_in_expression
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     combine_and_conditions,
-    get_first_level_conditions,
+    get_first_level_and_conditions,
 )
 from snuba.query.expressions import Column, Expression, FunctionCall
 from snuba.query.types import Condition
@@ -180,7 +180,7 @@ class ASTPrewhereProcessor(PrewhereProcessorDelegate[Expression, Column]):
         return (
             [
                 (get_columns_in_expression(cond), cond)
-                for cond in get_first_level_conditions(ast_condition)
+                for cond in get_first_level_and_conditions(ast_condition)
                 if isinstance(cond, FunctionCall)
                 and cond.function_name in self.allowed_ast_operators
                 and any(
@@ -204,7 +204,7 @@ class ASTPrewhereProcessor(PrewhereProcessorDelegate[Expression, Column]):
 
         new_conditions = [
             cond
-            for cond in get_first_level_conditions(ast_condition)
+            for cond in get_first_level_and_conditions(ast_condition)
             if cond not in prewhere_conditions
         ]
 

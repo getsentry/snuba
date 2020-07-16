@@ -2,16 +2,18 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
+from snuba import environment
 from snuba.processor import (
     MAX_UINT32,
-    MessageProcessor,
     NIL_UUID,
+    InsertBatch,
+    MessageProcessor,
     ProcessedMessage,
-    ProcessorAction,
     _collapse_uint16,
     _collapse_uint32,
     _ensure_valid_date,
 )
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 
 STATUS_MAPPING = {
     "ok": 0,
@@ -19,6 +21,8 @@ STATUS_MAPPING = {
     "crashed": 2,
     "abnormal": 3,
 }
+
+metrics = MetricsWrapper(environment.metrics, "sessions.processor")
 
 
 class SessionsProcessor(MessageProcessor):
@@ -43,6 +47,14 @@ class SessionsProcessor(MessageProcessor):
         if message["status"] in ("crashed", "abnormal"):
             errors = max(errors, 1)
 
+        received = _ensure_valid_date(datetime.utcfromtimestamp(message["received"]))
+        started = _ensure_valid_date(datetime.utcfromtimestamp(message["started"]))
+
+        if started is None:
+            metrics.increment("empty_started_date")
+        if received is None:
+            metrics.increment("empty_received_date")
+
         processed = {
             "session_id": str(uuid.UUID(message["session_id"])),
             "distinct_id": str(uuid.UUID(message.get("distinct_id") or NIL_UUID)),
@@ -53,13 +65,9 @@ class SessionsProcessor(MessageProcessor):
             "duration": duration,
             "status": STATUS_MAPPING[message["status"]],
             "errors": errors,
-            "received": _ensure_valid_date(
-                datetime.utcfromtimestamp(message["received"])
-            ),
-            "started": _ensure_valid_date(
-                datetime.utcfromtimestamp(message["started"])
-            ),
+            "received": received if received is not None else datetime.now(),
+            "started": started if started is not None else datetime.now(),
             "release": message["release"],
             "environment": message.get("environment") or "",
         }
-        return ProcessedMessage(action=ProcessorAction.INSERT, data=[processed])
+        return InsertBatch([processed])

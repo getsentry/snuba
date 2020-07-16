@@ -78,11 +78,9 @@ def replacer(
 ) -> None:
 
     from snuba.replacer import ReplacerWorker
-    from snuba.utils.codecs import PassthroughCodec
     from snuba.utils.streams.batching import BatchingConsumer
     from snuba.utils.streams.kafka import (
         KafkaConsumer,
-        KafkaPayload,
         TransportError,
         build_kafka_consumer_configuration,
     )
@@ -104,7 +102,6 @@ def replacer(
 
     metrics = MetricsWrapper(environment.metrics, "replacer", tags=metrics_tags,)
 
-    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
     replacer = BatchingConsumer(
         KafkaConsumer(
             build_kafka_consumer_configuration(
@@ -114,7 +111,6 @@ def replacer(
                 queued_max_messages_kbytes=queued_max_messages_kbytes,
                 queued_min_messages=queued_min_messages,
             ),
-            codec=codec,
         ),
         Topic(replacements_topic),
         worker=ReplacerWorker(storage, metrics=metrics),

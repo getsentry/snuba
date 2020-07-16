@@ -1,3 +1,4 @@
+import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Iterable, Iterator, MutableMapping, Optional, Tuple
@@ -15,10 +16,15 @@ from snuba.subscriptions.data import (
 )
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import SubscriptionDataStore
-from snuba.subscriptions.worker import SubscriptionTaskResult, SubscriptionWorker
+from snuba.subscriptions.worker import (
+    SubscriptionWorker,
+    SubscriptionTaskResult,
+    subscription_task_result_encoder,
+)
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.consumer import Consumer
 from snuba.utils.streams.dummy import DummyBroker, DummyConsumer, DummyProducer
+from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.utils.types import Interval
 from tests.base import dataset_manager
@@ -57,7 +63,7 @@ def dataset() -> Iterator[Dataset]:
 def test_subscription_worker(dataset: Dataset, time_shift: Optional[timedelta]) -> None:
     result_topic = Topic("subscription-results")
 
-    broker: DummyBroker[SubscriptionTaskResult] = DummyBroker()
+    broker: DummyBroker[KafkaPayload] = DummyBroker()
     broker.create_topic(result_topic, partitions=1)
 
     frequency = timedelta(minutes=1)
@@ -101,18 +107,18 @@ def test_subscription_worker(dataset: Dataset, time_shift: Optional[timedelta]) 
     if time_shift is not None:
         tick = tick.time_shift(time_shift * -1)
 
-    results = worker.process_message(
+    result_futures = worker.process_message(
         Message(Partition(Topic("events"), 0), 0, tick, now)
     )
 
-    assert results is not None and len(results) == evaluations
+    assert result_futures is not None and len(result_futures) == evaluations
 
     # Publish the results.
-    worker.flush_batch([results])
+    worker.flush_batch([result_futures])
 
     # Check to make sure the results were published.
     # NOTE: This does not cover the ``SubscriptionTaskResultCodec``!
-    consumer: Consumer[SubscriptionTaskResult] = DummyConsumer(broker, "group")
+    consumer: Consumer[KafkaPayload] = DummyConsumer(broker, "group")
     consumer.subscribe([result_topic])
 
     for i in range(evaluations):
@@ -121,16 +127,29 @@ def test_subscription_worker(dataset: Dataset, time_shift: Optional[timedelta]) 
         message = consumer.poll()
         assert message is not None
         assert message.partition.topic == result_topic
-        assert message.payload.task == results[i].task
-        assert message.payload.task.timestamp == timestamp
-        assert message.payload.result == results[i].future.result()
-        request, result = message.payload.result
-        assert request.extensions["timeseries"] == {
-            "from_date": (timestamp - subscription.data.time_window).isoformat(),
-            "to_date": timestamp.isoformat(),
-            "granularity": 3600,  # XXX: unused, no time grouping
-        }
-        assert result == {
+
+        task_result_future = result_futures[i]
+        expected_payload = subscription_task_result_encoder.encode(
+            SubscriptionTaskResult(
+                task_result_future.task, task_result_future.future.result()
+            )
+        )
+
+        assert message.payload == expected_payload
+
+        decoded_payload = json.loads(expected_payload.value)["payload"]
+        assert decoded_payload["timestamp"] == timestamp.isoformat()
+        assert (
+            # NOTE: The time series extension is folded back into the request
+            # body, ideally this would reference the timeseries options in
+            # isolation.
+            decoded_payload["request"].items()
+            > {
+                "from_date": (timestamp - subscription.data.time_window).isoformat(),
+                "to_date": timestamp.isoformat(),
+            }.items()
+        )
+        assert decoded_payload["result"] == {
             "meta": [{"name": "count", "type": "UInt64"}],
             "data": [{"count": 0}],
         }

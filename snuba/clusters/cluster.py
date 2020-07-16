@@ -33,7 +33,7 @@ class ClickhouseClientSettingsType(NamedTuple):
 class ClickhouseClientSettings(Enum):
     CLEANUP = ClickhouseClientSettingsType({}, None)
     INSERT = ClickhouseClientSettingsType({}, None)
-    MIGRATE = ClickhouseClientSettingsType({}, None)
+    MIGRATE = ClickhouseClientSettingsType({"load_balancing": "in_order"}, None)
     OPTIMIZE = ClickhouseClientSettingsType({}, 10000)
     QUERY = ClickhouseClientSettingsType({"readonly": True}, None)
     REPLACE = ClickhouseClientSettingsType(
@@ -88,7 +88,18 @@ class Cluster(ABC, Generic[TQuery, TWriterOptions]):
         self.__storage_sets = storage_sets
 
     def get_storage_set_keys(self) -> Set[StorageSetKey]:
-        return {StorageSetKey(storage_set) for storage_set in self.__storage_sets}
+        all_storage_sets = set(key.value for key in StorageSetKey)
+
+        storage_set_keys = set()
+
+        for storage_set in self.__storage_sets:
+            # We ignore invalid storage set keys since new storage sets will
+            # need to be registered to configuration before they can be used
+            # in Snuba.
+            if storage_set in all_storage_sets:
+                storage_set_keys.add(StorageSetKey(storage_set))
+
+        return storage_set_keys
 
     @abstractmethod
     def get_reader(self) -> Reader[TQuery]:
@@ -101,7 +112,7 @@ class Cluster(ABC, Generic[TQuery, TWriterOptions]):
         encoder: Callable[[WriterTableRow], bytes],
         options: TWriterOptions,
         chunk_size: Optional[int],
-    ) -> BatchWriter:
+    ) -> BatchWriter[WriterTableRow]:
         raise NotImplementedError
 
 
@@ -209,7 +220,7 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         encoder: Callable[[WriterTableRow], bytes],
         options: ClickhouseWriterOptions,
         chunk_size: Optional[int],
-    ) -> BatchWriter:
+    ) -> BatchWriter[WriterTableRow]:
         return HTTPBatchWriter(
             table_name,
             self.__query_node.host_name,
@@ -229,6 +240,12 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         - Differences in the query - such as whether the _local or _dist table is picked
         """
         return self.__single_node
+
+    def get_clickhouse_cluster_name(self) -> Optional[str]:
+        return self.__cluster_name
+
+    def get_database(self) -> str:
+        return self.__database
 
     def get_local_nodes(self) -> Sequence[ClickhouseNode]:
         if self.__single_node:

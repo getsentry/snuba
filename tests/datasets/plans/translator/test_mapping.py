@@ -1,9 +1,11 @@
 import pytest
 
+from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
+    ColumnToFunction,
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
@@ -16,6 +18,7 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query as SnubaQuery
+from snuba.query.logical import SelectedExpression
 
 test_cases = [
     pytest.param(
@@ -24,14 +27,20 @@ test_cases = [
             body={},
             data_source=TableSource("my_table", ColumnSet([])),
             selected_columns=[
-                Column("alias", "table", "column"),
-                FunctionCall(
+                SelectedExpression("alias", Column("alias", "table", "column")),
+                SelectedExpression(
                     "alias2",
-                    "f1",
-                    (Column(None, None, "column2"), Column(None, None, "column3")),
+                    FunctionCall(
+                        "alias2",
+                        "f1",
+                        (Column(None, None, "column2"), Column(None, None, "column3")),
+                    ),
                 ),
-                SubscriptableReference(
-                    None, Column(None, None, "tags"), Literal(None, "myTag")
+                SelectedExpression(
+                    name=None,
+                    expression=SubscriptableReference(
+                        None, Column(None, None, "tags"), Literal(None, "myTag")
+                    ),
                 ),
             ],
         ),
@@ -40,14 +49,23 @@ test_cases = [
                 body={},
                 data_source=TableSource("my_table", ColumnSet([])),
                 selected_columns=[
-                    Column("alias", "table", "column"),
-                    FunctionCall(
+                    SelectedExpression("alias", Column("alias", "table", "column")),
+                    SelectedExpression(
                         "alias2",
-                        "f1",
-                        (Column(None, None, "column2"), Column(None, None, "column3")),
+                        FunctionCall(
+                            "alias2",
+                            "f1",
+                            (
+                                Column(None, None, "column2"),
+                                Column(None, None, "column3"),
+                            ),
+                        ),
                     ),
-                    SubscriptableReference(
-                        None, Column(None, None, "tags"), Literal(None, "myTag")
+                    SelectedExpression(
+                        name=None,
+                        expression=SubscriptableReference(
+                            None, Column(None, None, "tags"), Literal(None, "myTag")
+                        ),
                     ),
                 ],
             )
@@ -63,14 +81,25 @@ test_cases = [
             body={},
             data_source=TableSource("my_table", ColumnSet([])),
             selected_columns=[
-                Column("alias", "table", "column"),
-                FunctionCall(
+                SelectedExpression("alias", Column("alias", "table", "column")),
+                SelectedExpression(
                     "alias2",
-                    "f1",
-                    (Column(None, None, "column2"), Column(None, None, "column3")),
+                    FunctionCall(
+                        "alias2",
+                        "f1",
+                        (
+                            Column("column2", None, "column2"),
+                            Column("column3", None, "column3"),
+                        ),
+                    ),
                 ),
-                SubscriptableReference(
-                    "tags[myTag]", Column(None, None, "tags"), Literal(None, "myTag")
+                SelectedExpression(
+                    "tags[myTag]",
+                    SubscriptableReference(
+                        "tags[myTag]",
+                        Column(None, None, "tags"),
+                        Literal(None, "myTag"),
+                    ),
                 ),
             ],
         ),
@@ -79,26 +108,32 @@ test_cases = [
                 body={},
                 data_source=TableSource("my_table", ColumnSet([])),
                 selected_columns=[
-                    Column("alias", "table", "column"),
-                    FunctionCall(
+                    SelectedExpression("alias", Column("alias", "table", "column")),
+                    SelectedExpression(
                         "alias2",
-                        "f1",
-                        (
-                            Column("column2", None, "not_column2"),
-                            Column(None, None, "column3"),
+                        FunctionCall(
+                            "alias2",
+                            "f1",
+                            (
+                                Column("column2", None, "not_column2"),
+                                Column("column3", None, "column3"),
+                            ),
                         ),
                     ),
-                    FunctionCall(
+                    SelectedExpression(
                         "tags[myTag]",
-                        "arrayElement",
-                        (
-                            Column(None, None, "tags.value"),
-                            FunctionCall(
-                                None,
-                                "indexOf",
-                                (
-                                    Column(None, None, "tags.key"),
-                                    Literal(None, "myTag"),
+                        FunctionCall(
+                            "tags[myTag]",
+                            "arrayElement",
+                            (
+                                Column(None, None, "tags.value"),
+                                FunctionCall(
+                                    None,
+                                    "indexOf",
+                                    (
+                                        Column(None, None, "tags.key"),
+                                        Literal(None, "myTag"),
+                                    ),
                                 ),
                             ),
                         ),
@@ -108,6 +143,65 @@ test_cases = [
         ),
         id="some basic rules",
     ),
+    pytest.param(
+        TranslationMappers(
+            columns=[
+                ColumnToFunction(
+                    None,
+                    "users_crashed",
+                    "uniqIfMerge",
+                    (Column(alias=None, table_name=None, column_name="users_crashed"),),
+                )
+            ],
+        ),
+        SnubaQuery(
+            body={},
+            data_source=TableSource("my_table", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression(
+                    "alias",
+                    FunctionCall(
+                        "alias",
+                        "f",
+                        (
+                            Column(
+                                alias=None, table_name=None, column_name="users_crashed"
+                            ),
+                        ),
+                    ),
+                ),
+            ],
+        ),
+        ClickhouseQuery(
+            SnubaQuery(
+                body={},
+                data_source=TableSource("my_table", ColumnSet([])),
+                selected_columns=[
+                    SelectedExpression(
+                        "alias",
+                        FunctionCall(
+                            "alias",
+                            "f",
+                            (
+                                FunctionCall(
+                                    None,
+                                    "uniqIfMerge",
+                                    (
+                                        Column(
+                                            alias=None,
+                                            table_name=None,
+                                            column_name="users_crashed",
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ],
+            )
+        ),
+        id="non idempotent rule",
+    ),
 ]
 
 
@@ -115,6 +209,7 @@ test_cases = [
 def test_translation(
     mappers: TranslationMappers, query: SnubaQuery, expected: ClickhouseQuery
 ) -> None:
+    state.set_config("ast_root_level_translator", 1)
     translated = QueryTranslator(mappers).translate(query)
 
     # TODO: consider providing an __eq__ method to the Query class. Or turn it into

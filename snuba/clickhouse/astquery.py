@@ -55,7 +55,9 @@ class AstSqlQuery(SqlQuery):
         parsing_context = ParsingContext()
         formatter = ClickhouseExpressionFormatter(parsing_context)
 
-        selected_cols = [e.accept(formatter) for e in self.__selected_columns]
+        selected_cols = [
+            e.expression.accept(formatter) for e in self.__selected_columns
+        ]
         select_clause = f"SELECT {', '.join(selected_cols)}"
 
         # TODO: The visitor approach will be used for the FROM clause as well.
@@ -89,8 +91,7 @@ class AstSqlQuery(SqlQuery):
 
         where_clause = ""
         if self.__condition:
-            formatted_condition = self.__condition.accept(formatter)
-            where_clause = f"WHERE {formatted_condition}"
+            where_clause = f"WHERE {self.__condition.accept(formatter)}"
 
         group_clause = ""
         if self.__groupby:

@@ -1,13 +1,23 @@
 from datetime import timedelta
 from typing import Mapping, Sequence
 
+from snuba import state
 from snuba.clickhouse.translators.snuba.mappers import SubscriptableMapper
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.dataset import TimeSeriesDataset
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+
+from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
+from snuba.datasets.storage import (
+    QueryStorageSelector,
+    ReadableStorage,
+    StorageAndMappers,
+)
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.events import get_column_tag_map, get_promoted_columns
-from snuba.datasets.storages.factory import get_writable_storage
+from snuba.datasets.storages.events_common import (
+    get_column_tag_map,
+    get_promoted_columns,
+)
+from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
@@ -18,6 +28,7 @@ from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.timeseries_extension import TimeSeriesExtension
+from snuba.request.request_settings import RequestSettings
 from snuba.util import qualified_column
 
 # TODO: This will be a property of the relationship between entity and
@@ -31,6 +42,27 @@ event_translator = TranslationMappers(
 )
 
 
+class EventsQueryStorageSelector(QueryStorageSelector):
+    def __init__(
+        self, events_table: ReadableStorage, events_ro_table: ReadableStorage,
+    ) -> None:
+        self.__events_table = events_table
+        self.__events_ro_table = events_ro_table
+
+    def select_storage(
+        self, query: Query, request_settings: RequestSettings
+    ) -> StorageAndMappers:
+        use_readonly_storage = (
+            state.get_config("enable_events_readonly_table", False)
+            and not request_settings.get_consistent()
+        )
+
+        storage = (
+            self.__events_ro_table if use_readonly_storage else self.__events_table
+        )
+        return StorageAndMappers(storage, event_translator)
+
+
 class EventsDataset(TimeSeriesDataset):
     """
     Represents the collection of classic sentry "error" type events
@@ -41,11 +73,15 @@ class EventsDataset(TimeSeriesDataset):
         storage = get_writable_storage(StorageKey.EVENTS)
         schema = storage.get_table_writer().get_schema()
         columns = schema.get_columns()
+        ro_storage = get_storage(StorageKey.EVENTS_RO)
+
         self.__time_group_columns = {"time": "timestamp", "rtime": "received"}
         super(EventsDataset, self).__init__(
             storages=[storage],
-            query_plan_builder=SingleStorageQueryPlanBuilder(
-                storage=storage, mappers=event_translator,
+            query_plan_builder=SelectedStorageQueryPlanBuilder(
+                selector=EventsQueryStorageSelector(
+                    events_table=storage, events_ro_table=ro_storage,
+                )
             ),
             abstract_column_set=columns,
             writable_storage=storage,
@@ -84,8 +120,8 @@ class EventsDataset(TimeSeriesDataset):
                 "contexts[device.charging]",
             }
             boolean_context_template = (
-                "multiIf(%(processed_column)s == '', '', "
-                "%(processed_column)s IN ('1', 'True'), 'True', 'False')"
+                "multiIf(equals(%(processed_column)s, ''), '', "
+                "in(%(processed_column)s, tuple('1', 'True')), 'True', 'False')"
             )
             if column_name in boolean_contexts:
                 return boolean_context_template % (

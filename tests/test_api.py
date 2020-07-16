@@ -1,18 +1,20 @@
 import calendar
+import time
+import uuid
 from datetime import datetime, timedelta
-from dateutil.parser import parse as parse_datetime
 from functools import partial
 from unittest.mock import patch
+
 import pytest
 import pytz
 import simplejson as json
-import time
-import uuid
+from dateutil.parser import parse as parse_datetime
+from sentry_sdk import Client, Hub
 
 from snuba import settings, state
-from sentry_sdk import Hub, Client
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.datasets.factory import enforce_table_writer, get_dataset
+from snuba.datasets.events_processor_base import InsertEvent
+from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.redis import redis_client
@@ -20,6 +22,7 @@ from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.base import BaseApiTest
 
 
+@pytest.mark.usefixtures("query_type")
 class TestApi(BaseApiTest):
     def setup_method(self, test_method, dataset_name="events"):
         super().setup_method(test_method, dataset_name)
@@ -47,7 +50,7 @@ class TestApi(BaseApiTest):
         state.delete_config("project_per_second_limit")
         state.delete_config("date_align_seconds")
 
-    def generate_fizzbuzz_events(self):
+    def generate_fizzbuzz_events(self) -> None:
         """
         Generate a deterministic set of events across a time range.
         """
@@ -59,21 +62,15 @@ class TestApi(BaseApiTest):
                 # project N sends an event every Nth minute
                 if tock % p == 0:
                     events.append(
-                        enforce_table_writer(self.dataset)
-                        .get_stream_loader()
-                        .get_processor()
-                        .process_insert(
+                        InsertEvent(
                             {
+                                "organization_id": 1,
                                 "project_id": p,
                                 "event_id": uuid.uuid4().hex,
-                                "deleted": 0,
                                 "datetime": (
                                     self.base_time + timedelta(minutes=tick)
-                                ).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                                ).strftime(settings.PAYLOAD_DATETIME_FORMAT),
                                 "message": "a message",
-                                "search_message": "a long search message"
-                                if p == 3
-                                else None,
                                 "platform": self.platforms[
                                     (tock * p) % len(self.platforms)
                                 ],
@@ -127,7 +124,7 @@ class TestApi(BaseApiTest):
                             }
                         )
                     )
-        self.write_processed_records(events)
+        self.write_events(events)
 
     def redis_db_size(self):
         # dbsize could be an integer for a single node cluster or a dictionary
@@ -676,7 +673,12 @@ class TestApi(BaseApiTest):
             ).data
         )
         assert (
+            # legacy representation
             "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc') != 0"
+            in result["sql"]
+        ) or (
+            # ast representation
+            "PREWHERE notEquals(positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc'), 0)"
             in result["sql"]
         )
 
@@ -701,7 +703,12 @@ class TestApi(BaseApiTest):
             ).data
         )
         assert (
+            # legacy representation
             "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message"
+            in result["sql"]
+        ) or (
+            # ast representation
+            "PREWHERE notEquals(positionCaseInsensitive((coalesce(search_message, message) AS message"
             in result["sql"]
         )
 
@@ -724,7 +731,12 @@ class TestApi(BaseApiTest):
             ).data
         )
         assert (
+            # legacy representation
             "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc') != 0 AND project_id IN (1)"
+            in result["sql"]
+        ) or (
+            # ast representation
+            "PREWHERE notEquals(positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc'), 0) AND in(project_id, tuple(1))"
             in result["sql"]
         )
 
@@ -746,8 +758,16 @@ class TestApi(BaseApiTest):
         )
 
         # make sure the conditions is in PREWHERE and nowhere else
-        assert "PREWHERE project_id IN (1)" in result["sql"]
-        assert result["sql"].count("project_id IN (1)") == 1
+        assert (
+            "PREWHERE project_id IN (1)" in result["sql"]  # legacy representation
+            or "PREWHERE in(project_id, tuple(1))"
+            in result["sql"]  # ast representation
+        )
+        assert (
+            result["sql"].count("project_id IN (1)") == 1  # legacy representation
+            or result["sql"].count("in(project_id, tuple(1))")
+            == 1  # ast representation
+        )
 
     def test_aggregate(self):
         result = json.loads(
@@ -996,8 +1016,14 @@ class TestApi(BaseApiTest):
             ).data
         )
         # Issue is expanded once, and alias used subsequently
-        assert "group_id = 0" in response["sql"]
-        assert "group_id = 1" in response["sql"]
+        assert (
+            "group_id = 0" in response["sql"]  # legacy representation
+            or "equals(group_id, 0)" in response["sql"]  # ast representation
+        )
+        assert (
+            "group_id = 1" in response["sql"]  # legacy representation
+            or "equals(group_id, 1)" in response["sql"]  # ast representation
+        )
 
     def test_sampling_expansion(self):
         response = json.loads(
@@ -1140,7 +1166,7 @@ class TestApi(BaseApiTest):
         }
         result1 = json.loads(self.app.post("/query", data=json.dumps(query)).data)
 
-        self.write_processed_records(
+        self.write_rows(
             [
                 {
                     "event_id": "9" * 32,
@@ -1641,39 +1667,6 @@ class TestApi(BaseApiTest):
         )
         assert response["stats"]["consistent"]
 
-    def test_message_is_search_message(self):
-        # all messages contain 'message'
-        response = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
-                    {
-                        "project": [1, 2, 3],
-                        "conditions": [["message", "LIKE", "%message%"]],
-                        "groupby": "project_id",
-                        "debug": True,
-                    }
-                ),
-            ).data
-        )
-        assert sorted(r["project_id"] for r in response["data"]) == [1, 2, 3]
-
-        # only project 3 has a search_message with 'long search' in it
-        response = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
-                    {
-                        "project": [1, 2, 3],
-                        "conditions": [["message", "LIKE", "%long search%"]],
-                        "groupby": "project_id",
-                        "debug": True,
-                    }
-                ),
-            ).data
-        )
-        assert sorted(r["project_id"] for r in response["data"]) == [3]
-
     def test_gracefully_handle_multiple_conditions_on_same_column(self):
         response = self.app.post(
             "/query",
@@ -1701,7 +1694,7 @@ class TestApi(BaseApiTest):
                 ),
             ).data
         )
-        assert "deleted = 0" in result["sql"]
+        assert "deleted = 0" in result["sql"] or "equals(deleted, 0)" in result["sql"]
 
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")

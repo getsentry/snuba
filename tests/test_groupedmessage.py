@@ -1,9 +1,8 @@
+from datetime import datetime
+
 import pytz
 import simplejson as json
 
-from datetime import datetime
-
-from tests.base import BaseDatasetTest
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.consumer import KafkaMessageMetadata
@@ -13,8 +12,10 @@ from snuba.datasets.cdc.groupedmessage_processor import (
 )
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
 from snuba.datasets.storages.groupedmessages import POSTGRES_TABLE
+from snuba.processor import InsertBatch
 from snuba.utils.streams.kafka import Headers, KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
+from tests.base import BaseDatasetTest
 
 
 class TestGroupedMessage(BaseDatasetTest):
@@ -130,8 +131,8 @@ class TestGroupedMessage(BaseDatasetTest):
         )
         insert_msg = json.loads(self.INSERT_MSG)
         ret = processor.process_message(insert_msg, metadata)
-        assert ret.data == [self.PROCESSED]
-        self.write_processed_records(ret.data)
+        assert ret == InsertBatch([self.PROCESSED])
+        self.write_processed_messages([ret])
         ret = (
             get_cluster(StorageSetKey.EVENTS)
             .get_query_connection(ClickhouseClientSettings.INSERT)
@@ -156,14 +157,14 @@ class TestGroupedMessage(BaseDatasetTest):
         )
         update_msg = json.loads(self.UPDATE_MSG)
         ret = processor.process_message(update_msg, metadata)
-        assert ret.data == [self.PROCESSED]
+        assert ret == InsertBatch([self.PROCESSED])
 
         assert not message_filter.should_drop(
             self.__make_msg(0, 42, self.DELETE_MSG, [])
         )
         delete_msg = json.loads(self.DELETE_MSG)
         ret = processor.process_message(delete_msg, metadata)
-        assert ret.data == [self.DELETED]
+        assert ret == InsertBatch([self.DELETED])
 
     def test_ignored_table(self):
         message_filter = CdcTableNameMessageFilter(postgres_table=POSTGRES_TABLE)
@@ -186,7 +187,7 @@ class TestGroupedMessage(BaseDatasetTest):
                 "first_release_id": "26",
             }
         )
-        self.write_processed_records(row.to_clickhouse())
+        self.write_rows([row.to_clickhouse()])
         ret = (
             get_cluster(StorageSetKey.EVENTS)
             .get_query_connection(ClickhouseClientSettings.QUERY)

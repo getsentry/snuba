@@ -5,19 +5,20 @@ from datetime import datetime, timedelta
 from typing import Any as AnyType
 from typing import List, Optional, Tuple, Union, cast
 
-from snuba import environment, state, util
+from snuba import environment, settings, state, util
 from snuba.clickhouse.query import Query
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy, SplitQueryRunner
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     combine_and_conditions,
-    get_first_level_conditions,
+    get_first_level_and_conditions,
     in_condition,
 )
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
 from snuba.query.expressions import Literal as LiteralExpr
+from snuba.query.logical import SelectedExpression
 from snuba.query.matchers import (
     Any,
     AnyExpression,
@@ -70,7 +71,7 @@ def _get_time_range(
 
     max_lower_bound = None
     min_upper_bound = None
-    for c in get_first_level_conditions(condition_clause):
+    for c in get_first_level_and_conditions(condition_clause):
         match = FunctionCall(
             None,
             Param(
@@ -127,7 +128,10 @@ def _replace_ast_condition(
     if condition is not None:
         query.set_ast_condition(
             combine_and_conditions(
-                [replace_condition(c) for c in get_first_level_conditions(condition)]
+                [
+                    replace_condition(c)
+                    for c in get_first_level_and_conditions(condition)
+                ]
             )
         )
 
@@ -308,16 +312,30 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             - Second query selects all fields for only those events.
             - Shrink the date range.
         """
+        limit = query.get_limit()
         if (
-            not query.get_limit()
+            limit is None
+            or limit == 0
             or query.get_groupby()
             or query.get_aggregations()
             or not query.get_selected_columns()
         ):
             return None
 
+        if limit > settings.COLUMN_SPLIT_MAX_LIMIT:
+            metrics.increment("column_splitter.query_above_limit")
+            return None
+
         total_col_count = len(query.get_all_referenced_columns())
-        total_ast_count = len(query.get_all_ast_referenced_columns())
+        total_ast_count = len(
+            # We need to count the number of table/column name pairs
+            # not the number of distinct Column objects in the query
+            # so to avoid counting aliased columns multiple times.
+            {
+                (col.table_name, col.column_name)
+                for col in query.get_all_ast_referenced_columns()
+            }
+        )
         if total_col_count != total_ast_count:
             metrics.increment("mismatch.total_referenced_columns")
 
@@ -329,18 +347,34 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         # in joins.
         minimal_query.set_ast_selected_columns(
             [
-                ColumnExpr(None, None, self.__id_column),
-                ColumnExpr(None, None, self.__project_column),
-                ColumnExpr(None, None, self.__timestamp_column),
+                SelectedExpression(
+                    self.__id_column, ColumnExpr(None, None, self.__id_column)
+                ),
+                SelectedExpression(
+                    self.__project_column, ColumnExpr(None, None, self.__project_column)
+                ),
+                SelectedExpression(
+                    self.__timestamp_column,
+                    ColumnExpr(None, None, self.__timestamp_column),
+                ),
             ]
         )
 
-        minimal_ast_count = len(minimal_query.get_all_ast_referenced_columns())
+        minimal_ast_count = len(
+            {
+                (col.table_name, col.column_name)
+                for col in minimal_query.get_all_ast_referenced_columns()
+            }
+        )
         minimal_count = len(minimal_query.get_all_referenced_columns())
         if minimal_count != minimal_ast_count:
             metrics.increment("mismatch.minimaL_query_referenced_columns")
 
         if total_col_count <= minimal_count:
+            return None
+
+        # Ensure the minimal query is actually runnable on its own.
+        if not minimal_query.validate_aliases():
             return None
 
         result = runner(minimal_query, request_settings)
@@ -356,6 +390,12 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         event_ids = list(
             set([event[self.__id_column] for event in result.result["data"]])
         )
+        if len(event_ids) > settings.COLUMN_SPLIT_MAX_RESULTS:
+            # We may be runing a query that is beyond clickhouse maximum query size,
+            # so we cowardly abandon.
+            metrics.increment("column_splitter.intermediate_results_beyond_limit")
+            return None
+
         query.add_conditions([(self.__id_column, "IN", event_ids)])
         query.add_condition_to_ast(
             in_condition(

@@ -28,7 +28,7 @@ class StorageSchemas(object):
     def get_write_schema(self) -> Optional[WritableTableSchema]:
         return self.__write_schema
 
-    def __get_unique_schemas(self) -> Sequence[Schema]:
+    def get_unique_schemas(self) -> Sequence[Schema]:
         unique_schemas: List[Schema] = []
 
         all_schemas_with_possible_duplicates = [self.__read_schema]
@@ -45,13 +45,13 @@ class StorageSchemas(object):
     def get_create_statements(self) -> Sequence[DDLStatement]:
         return [
             schema.get_local_table_definition()
-            for schema in self.__get_unique_schemas()
+            for schema in self.get_unique_schemas()
             if isinstance(schema, TableSchema)
         ]
 
     def get_drop_statements(self) -> Sequence[DDLStatement]:
         return [
             schema.get_local_drop_table_statement()
-            for schema in self.__get_unique_schemas()
+            for schema in self.get_unique_schemas()
             if isinstance(schema, TableSchema)
         ]

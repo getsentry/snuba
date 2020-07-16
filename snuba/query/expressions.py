@@ -27,6 +27,7 @@ class Expression(ABC):
     All expressions can have an optional alias.
     """
 
+    # TODO: Make it impossible to assign empty string as an alias.
     alias: Optional[str]
 
     @abstractmethod
@@ -78,31 +79,31 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
     """
 
     @abstractmethod
-    def visitLiteral(self, exp: Literal) -> TVisited:
+    def visit_literal(self, exp: Literal) -> TVisited:
         raise NotImplementedError
 
     @abstractmethod
-    def visitColumn(self, exp: Column) -> TVisited:
+    def visit_column(self, exp: Column) -> TVisited:
         raise NotImplementedError
 
     @abstractmethod
-    def visitSubscriptableReference(self, exp: SubscriptableReference) -> TVisited:
+    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> TVisited:
         raise NotImplementedError
 
     @abstractmethod
-    def visitFunctionCall(self, exp: FunctionCall) -> TVisited:
+    def visit_function_call(self, exp: FunctionCall) -> TVisited:
         raise NotImplementedError
 
     @abstractmethod
-    def visitCurriedFunctionCall(self, exp: CurriedFunctionCall) -> TVisited:
+    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> TVisited:
         raise NotImplementedError
 
     @abstractmethod
-    def visitArgument(self, exp: Argument) -> TVisited:
+    def visit_argument(self, exp: Argument) -> TVisited:
         raise NotImplementedError
 
     @abstractmethod
-    def visitLambda(self, exp: Lambda) -> TVisited:
+    def visit_lambda(self, exp: Lambda) -> TVisited:
         raise NotImplementedError
 
 
@@ -124,7 +125,7 @@ class Literal(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitLiteral(self)
+        return visitor.visit_literal(self)
 
 
 @dataclass(frozen=True)
@@ -143,7 +144,7 @@ class Column(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitColumn(self)
+        return visitor.visit_column(self)
 
 
 @dataclass(frozen=True)
@@ -162,7 +163,7 @@ class SubscriptableReference(Expression):
     key: Literal
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitSubscriptableReference(self)
+        return visitor.visit_subscriptable_reference(self)
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         transformed = replace(
@@ -229,7 +230,7 @@ class FunctionCall(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitFunctionCall(self)
+        return visitor.visit_function_call(self)
 
 
 @dataclass(frozen=True)
@@ -276,7 +277,7 @@ class CurriedFunctionCall(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitCurriedFunctionCall(self)
+        return visitor.visit_curried_function_call(self)
 
 
 @dataclass(frozen=True)
@@ -295,7 +296,7 @@ class Argument(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitArgument(self)
+        return visitor.visit_argument(self)
 
 
 @dataclass(frozen=True)
@@ -327,4 +328,4 @@ class Lambda(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitLambda(self)
+        return visitor.visit_lambda(self)
