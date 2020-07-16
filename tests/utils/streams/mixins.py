@@ -3,6 +3,7 @@ import uuid
 from abc import ABC, abstractmethod
 from contextlib import closing
 from typing import ContextManager, Generic, Iterator, Mapping, Optional, Sequence
+from unittest import mock
 
 import pytest
 
@@ -55,6 +56,8 @@ class StreamsTestMixin(ABC, Generic[TPayload]):
                 with pytest.raises(ConsumerError):
                     consumer.seek({Partition(topic, 1): 0})
 
+            assignment_callback.called = False
+
             def revocation_callback(partitions: Sequence[Partition]) -> None:
                 revocation_callback.called = True
                 assert partitions == [Partition(topic, 0)]
@@ -63,6 +66,8 @@ class StreamsTestMixin(ABC, Generic[TPayload]):
                 # Not sure why you'd want to do this, but it shouldn't error.
                 consumer.seek({Partition(topic, 0): messages[0].offset})
 
+            revocation_callback.called = False
+
             # TODO: It'd be much nicer if ``subscribe`` returned a future that we could
             # use to wait for assignment, but we'd need to be very careful to avoid
             # edge cases here. It's probably not worth the complexity for now.
@@ -70,14 +75,15 @@ class StreamsTestMixin(ABC, Generic[TPayload]):
                 [topic], on_assign=assignment_callback, on_revoke=revocation_callback
             )
 
-            message = consumer.poll(10.0)  # XXX: getting the subcription is slow
+            with assert_changes(lambda: assignment_callback.called, False, True):
+                message = consumer.poll(10.0)  # XXX: getting the subcription is slow
+
             assert isinstance(message, Message)
             assert message.partition == Partition(topic, 0)
             assert message.offset == messages[1].offset
             assert message.payload == messages[1].payload
 
             assert consumer.tell() == {Partition(topic, 0): message.get_next_offset()}
-            assert getattr(assignment_callback, "called", False)
 
             consumer.seek({Partition(topic, 0): messages[0].offset})
             assert consumer.tell() == {Partition(topic, 0): messages[0].offset}
@@ -112,14 +118,19 @@ class StreamsTestMixin(ABC, Generic[TPayload]):
 
             consumer.unsubscribe()
 
-            assert consumer.poll(1.0) is None
+            with assert_changes(lambda: revocation_callback.called, False, True):
+                assert consumer.poll(1.0) is None
 
             assert consumer.tell() == {}
 
             with pytest.raises(ConsumerError):
                 consumer.seek({Partition(topic, 0): messages[0].offset})
 
-            with assert_changes(lambda: consumer.closed, False, True):
+            revocation_callback.called = False
+
+            with assert_changes(
+                lambda: consumer.closed, False, True
+            ), assert_does_not_change(lambda: revocation_callback.called, False):
                 consumer.close()
 
             # Make sure all public methods (except ``close```) error if called
@@ -159,7 +170,9 @@ class StreamsTestMixin(ABC, Generic[TPayload]):
 
             consumer = self.get_consumer(group)
 
-            consumer.subscribe([topic])
+            revocation_callback = mock.MagicMock()
+
+            consumer.subscribe([topic], on_revoke=revocation_callback)
 
             message = consumer.poll(10.0)  # XXX: getting the subscription is slow
             assert isinstance(message, Message)
@@ -175,7 +188,8 @@ class StreamsTestMixin(ABC, Generic[TPayload]):
             else:
                 raise AssertionError("expected EndOfPartition error")
 
-            consumer.close()
+            with assert_changes(lambda: revocation_callback.called, False, True):
+                consumer.close()
 
     def test_working_offsets(self) -> None:
         payloads = self.get_payloads()
