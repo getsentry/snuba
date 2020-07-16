@@ -10,6 +10,7 @@ from typing import (
     Mapping,
     MutableMapping,
     MutableSequence,
+    NamedTuple,
     Optional,
     Sequence,
     Set,
@@ -113,6 +114,12 @@ class DummyBroker(Generic[TPayload]):
             self.__offsets[consumer.group].update(offsets)
 
 
+class Subscription(NamedTuple):
+    topics: Sequence[Topic]
+    assignment_callback: Optional[Callable[[Mapping[Partition, int]], None]]
+    revocation_callback: Optional[Callable[[Sequence[Partition]], None]]
+
+
 class DummyConsumer(Consumer[TPayload]):
     def __init__(
         self,
@@ -123,8 +130,7 @@ class DummyConsumer(Consumer[TPayload]):
         self.__broker = broker
         self.__group = group
 
-        self.__subscription: Sequence[Topic] = []
-        self.__assignment: Optional[Sequence[Partition]] = None
+        self.__subscription: Optional[Subscription] = None
 
         self.__offsets: MutableMapping[Partition, int] = {}
         self.__staged_offsets: MutableMapping[Partition, int] = {}
@@ -159,11 +165,13 @@ class DummyConsumer(Consumer[TPayload]):
             if self.__closed:
                 raise RuntimeError("consumer is closed")
 
-            self.__offsets = {**self.__broker.subscribe(self, topics)}
+            self.__subscription = Subscription(topics, on_assign, on_revoke)
 
+            self.__offsets = {**self.__broker.subscribe(self, topics)}
             self.__staged_offsets.clear()
             self.__last_eof_at.clear()
 
+            # TODO: Defer this callback until ``poll`` is called!
             if on_assign is not None:
                 on_assign(self.__offsets)
 
@@ -171,6 +179,8 @@ class DummyConsumer(Consumer[TPayload]):
         with self.__lock:
             if self.__closed:
                 raise RuntimeError("consumer is closed")
+
+            self.__subscription = None
 
             self.__broker.unsubscribe(self)
 
