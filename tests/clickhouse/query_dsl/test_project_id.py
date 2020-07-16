@@ -107,14 +107,23 @@ test_cases = [
             "selected_columns": ["column1"],
             "conditions": [
                 [
-                    ["and", [["project_id", "=", 100], ["column1", "=", "something"]]],
+                    [
+                        "and",
+                        [
+                            ["equals", ["project_id", 100]],
+                            ["equals", ["column1", "'something'"]],
+                        ],
+                    ],
                     "=",
                     1,
                 ],
                 [
                     [
                         "and",
-                        [["project_id", "=", 200], ["column3", "=", "something_else"]],
+                        [
+                            ["equals", ["project_id", 200]],
+                            ["equals", ["column3", "'something_else'"]],
+                        ],
                     ],
                     "=",
                     1,
