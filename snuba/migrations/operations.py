@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Sequence
+from typing import Callable, Optional, Sequence
 
 
 from snuba.clickhouse.columns import Column
@@ -213,3 +213,41 @@ class DropIndex(SqlOperation):
 
     def format_sql(self) -> str:
         return f"ALTER TABLE {self.__table_name} DROP INDEX {self.__index_name};"
+
+
+class InsertIntoSelect(SqlOperation):
+    """
+    Inserts the results of a select query. Source and destination tables must be
+    on the same storage set (and cluster). Data is inserted from src_columns to
+    dest_columns based on the order of the src and dest columns provided.
+
+    This operation may not be very performant if data is inserted into several partitions
+    at once. It may be better to group data by partition key and insert in batches.
+    """
+
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        dest_table_name: str,
+        dest_columns: Sequence[str],
+        src_table_name: str,
+        src_columns: Sequence[str],
+    ):
+        super().__init__(storage_set)
+        self.__dest_table_name = dest_table_name
+        self.__dest_columns = dest_columns
+        self.__src_table_name = src_table_name
+        self.__src_columns = src_columns
+
+    def format_sql(self) -> str:
+        src_columns = ", ".join(self.__src_columns)
+        dest_columns = ", ".join(self.__dest_columns)
+        return f"INSERT INTO {self.__dest_table_name} ({dest_columns}) SELECT {src_columns} FROM {self.__src_table_name};"
+
+
+class RunPython(Operation):
+    def __init__(self, func: Callable[[], None]) -> None:
+        self.__func = func
+
+    def execute(self) -> None:
+        self.__func()

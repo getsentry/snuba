@@ -1,6 +1,5 @@
 import pytest
 
-from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import (
@@ -209,7 +208,6 @@ test_cases = [
 def test_translation(
     mappers: TranslationMappers, query: SnubaQuery, expected: ClickhouseQuery
 ) -> None:
-    state.set_config("ast_root_level_translator", 1)
     translated = QueryTranslator(mappers).translate(query)
 
     # TODO: consider providing an __eq__ method to the Query class. Or turn it into
