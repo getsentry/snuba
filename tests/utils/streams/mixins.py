@@ -116,6 +116,8 @@ class StreamsTestMixin(ABC, Generic[TPayload]):
                 Partition(topic, 0): message.get_next_offset()
             }
 
+            assert consumer.tell() == {Partition(topic, 0): messages[1].offset}
+
             consumer.unsubscribe()
 
             with assert_changes(lambda: revocation_callback.called, False, True):
