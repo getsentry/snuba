@@ -2,9 +2,10 @@ from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
 from snuba.query.conditions import (
     binary_condition,
+    combine_and_conditions,
     ConditionFunctions,
 )
-from snuba.query.dsl import count, countIf, divide, literals_tuple
+from snuba.query.dsl import count, divide
 from snuba.query.expressions import (
     Column,
     Expression,
@@ -29,17 +30,23 @@ class FailureRateProcessor(QueryProcessor):
 
                 successful_codes = ["ok", "cancelled", "unknown"]
                 return divide(
-                    countIf(
-                        binary_condition(
-                            None,
-                            ConditionFunctions.NOT_IN,
-                            Column(None, None, "transaction_status"),
-                            literals_tuple(
-                                None,
+                    # We use a FunctionCall directly rather than the countIf wrapper
+                    # because of a type hint incompatibility where countIf expects
+                    # a FunctionCall but combine_and_conditions returns an Expression
+                    FunctionCall(
+                        None,
+                        "countIf",
+                        (
+                            combine_and_conditions(
                                 [
-                                    Literal(None, SPAN_STATUS_NAME_TO_CODE[code])
+                                    binary_condition(
+                                        None,
+                                        ConditionFunctions.NEQ,
+                                        Column(None, None, "transaction_status"),
+                                        Literal(None, SPAN_STATUS_NAME_TO_CODE[code]),
+                                    )
                                     for code in successful_codes
-                                ],
+                                ]
                             ),
                         ),
                     ),
