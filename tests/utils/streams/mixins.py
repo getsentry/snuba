@@ -75,7 +75,11 @@ class StreamsTestMixin(ABC, Generic[TPayload]):
                 [topic], on_assign=assignment_callback, on_revoke=revocation_callback
             )
 
-            with assert_changes(lambda: assignment_callback.called, False, True):
+            with assert_changes(
+                lambda: assignment_callback.called, False, True
+            ), assert_changes(
+                consumer.tell, {}, {Partition(topic, 0): messages[1].get_next_offset()}
+            ):
                 message = consumer.poll(10.0)  # XXX: getting the subcription is slow
 
             assert isinstance(message, Message)
@@ -83,21 +87,17 @@ class StreamsTestMixin(ABC, Generic[TPayload]):
             assert message.offset == messages[1].offset
             assert message.payload == messages[1].payload
 
-            assert consumer.tell() == {Partition(topic, 0): message.get_next_offset()}
-
             consumer.seek({Partition(topic, 0): messages[0].offset})
             assert consumer.tell() == {Partition(topic, 0): messages[0].offset}
 
             with pytest.raises(ConsumerError):
                 consumer.seek({Partition(topic, 1): 0})
 
-            consumer.pause([Partition(topic, 0)])
+            with assert_changes(consumer.paused, [], [Partition(topic, 0)]):
+                consumer.pause([Partition(topic, 0)])
 
-            assert consumer.paused() == [Partition(topic, 0)]
-
-            consumer.resume([Partition(topic, 0)])
-
-            assert consumer.paused() == []
+            with assert_changes(consumer.paused, [Partition(topic, 0)], []):
+                consumer.resume([Partition(topic, 0)])
 
             message = consumer.poll(1.0)
             assert isinstance(message, Message)
