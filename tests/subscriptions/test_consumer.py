@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from typing import Mapping
 
 import pytest
 
@@ -34,20 +35,26 @@ def test_tick_consumer() -> None:
 
     consumer = TickConsumer(inner_consumer)
 
-    consumer.subscribe([topic])
+    def assignment_callback(offsets: Mapping[Partition, int]) -> None:
+        assignment_callback.called = True
 
-    assert consumer.tell() == {
-        Partition(topic, 0): 0,
-        Partition(topic, 1): 0,
-    }
+        assert consumer.tell() == {
+            Partition(topic, 0): 0,
+            Partition(topic, 1): 0,
+        }
 
-    assert inner_consumer.tell() == {
-        Partition(topic, 0): 0,
-        Partition(topic, 1): 0,
-    }
+        assert inner_consumer.tell() == {
+            Partition(topic, 0): 0,
+            Partition(topic, 1): 0,
+        }
 
-    # consume 0, 0
-    assert consumer.poll() is None
+    assignment_callback.called = False
+
+    consumer.subscribe([topic], on_assign=assignment_callback)
+
+    with assert_changes(lambda: assignment_callback.called, False, True):
+        # consume 0, 0
+        assert consumer.poll() is None
 
     assert consumer.tell() == {
         Partition(topic, 0): 0,
@@ -182,7 +189,14 @@ def test_tick_consumer_non_monotonic() -> None:
 
     consumer = TickConsumer(inner_consumer)
 
-    consumer.subscribe([topic])
+    def assignment_callback(offsets: Mapping[Partition, int]) -> None:
+        assignment_callback.called = True
+        assert inner_consumer.tell() == {partition: 0}
+        assert consumer.tell() == {partition: 0}
+
+    assignment_callback.called = False
+
+    consumer.subscribe([topic], on_assign=assignment_callback)
 
     producer.produce(partition, 0)
 
@@ -190,10 +204,11 @@ def test_tick_consumer_non_monotonic() -> None:
 
     producer.produce(partition, 1)
 
-    with assert_changes(
-        inner_consumer.tell, {partition: 0}, {partition: 1}
-    ), assert_does_not_change(consumer.tell, {partition: 0}):
+    with assert_changes(lambda: assignment_callback.called, False, True):
         assert consumer.poll() is None
+
+    assert inner_consumer.tell() == {partition: 1}
+    assert consumer.tell() == {partition: 0}
 
     with assert_changes(
         inner_consumer.tell, {partition: 1}, {partition: 2}
