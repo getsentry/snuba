@@ -3,7 +3,7 @@ import re
 from dataclasses import replace
 from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
-from snuba import environment, state
+from snuba import environment
 from snuba.clickhouse.escaping import NEGATE_RE
 from snuba.datasets.dataset import Dataset
 from snuba.query.expressions import (
@@ -56,29 +56,16 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
       processing.
       Alias references are packaged back at the end of processing.
     """
-    try:
-        query = _parse_query_impl(body, dataset)
-        # These are the post processing phases
-        _validate_empty_table_names(query)
-        _validate_aliases(query)
-        _parse_subscriptables(query)
-        _apply_column_aliases(query)
-        _expand_aliases(query)
-        # WARNING: These steps above assume table resolution did not happen
-        # yet. If it is put earlier than here (unlikely), we need to adapt them.
-        return query
-    except Exception as e:
-        # During the development there is no need to fail Snuba queries if the parser
-        # has an issue, anyway the production query is ran based on the old query
-        # representation.
-        # Once we will be actually using the ast to build the Clickhouse query
-        # this try/except block will disappear.
-        enforce_validity = state.get_config("query_parsing_enforce_validity", 0)
-        if enforce_validity:
-            raise e
-        else:
-            logger.warning("Failed to parse query", exc_info=True)
-            return Query(body, None)
+    query = _parse_query_impl(body, dataset)
+    # These are the post processing phases
+    _validate_empty_table_names(query)
+    _validate_aliases(query)
+    _parse_subscriptables(query)
+    _apply_column_aliases(query)
+    _expand_aliases(query)
+    # WARNING: These steps above assume table resolution did not happen
+    # yet. If it is put earlier than here (unlikely), we need to adapt them.
+    return query
 
 
 def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
