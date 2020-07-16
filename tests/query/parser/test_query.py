@@ -345,7 +345,6 @@ def test_format_expressions(
 
 
 def test_shadowing() -> None:
-    state.set_config("query_parsing_enforce_validity", 1)
     with pytest.raises(ValueError):
         parse_query(
             {
@@ -362,7 +361,6 @@ def test_shadowing() -> None:
 
 
 def test_circular_aliases() -> None:
-    state.set_config("query_parsing_enforce_validity", 1)
     with pytest.raises(CyclicAliasException):
         parse_query(
             {
