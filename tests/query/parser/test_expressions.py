@@ -10,7 +10,7 @@ from snuba.query.parser.expressions import parse_aggregation
 
 test_data = [
     (
-        ["f(a *   b, g(c * 3))", None, None],
+        ["f(a * b, g(c * 3))", None, None],
         FunctionCall(
             None,
             "f",
@@ -53,11 +53,11 @@ test_data = [
         ),
     ),  # Arithmetic expressions involving function calls
     (
-        ["(a +b)", None, None],
+        ["(a+b)", None, None],
         FunctionCall(None, "plus", (Column(None, None, "a"), Column(None, None, "b"))),
     ),  # Simple addition with Columns
     (
-        ["(1+ 2 + 3)", None, None],
+        ["(1 + 2 + 3)", None, None],
         FunctionCall(
             None,
             "plus",
@@ -68,7 +68,7 @@ test_data = [
         ),
     ),  # Addition with more than 2 terms
     (
-        ["(5  +4*3)", None, None],
+        ["(5+4*3)", None, None],
         FunctionCall(
             None,
             "plus",
@@ -79,7 +79,7 @@ test_data = [
         ),
     ),  # Combination of multiplication, addition
     (
-        ["(7*  5* 4*3+2 *1+ 6)", None, None],
+        ["(7  *5*4*3+2 *1+ 6)", None, None],
         FunctionCall(
             None,
             "plus",
