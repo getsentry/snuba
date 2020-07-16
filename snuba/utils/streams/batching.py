@@ -305,12 +305,11 @@ class BatchingConsumer(Generic[TPayload]):
         self.__shutdown_requested = True
 
     def _shutdown(self) -> None:
-        if self.__processor is not None:
-            logger.debug("Stopping processor")
-            self.__processor.close()
-            self.__processor = None
-
         # close the consumer
         logger.debug("Stopping consumer")
         self.__consumer.close()
         logger.debug("Stopped")
+
+        # if there was an active processor, it should be shut down and unset
+        # when the partitions are revoked during consumer close
+        assert self.__processor is None, "processor was not closed on shutdown"
