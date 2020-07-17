@@ -287,22 +287,26 @@ def _deescape_aliases(query: Query) -> None:
     around the problem.
     The AST processing properly escapes aliases thus causing double
     escaping. We need to de-escape them in the AST query to preserve
-    backward compatibility as log as the legacy query processing is
+    backward compatibility as long as the legacy query processing is
     around.
     """
 
+    def deescape(expression: Optional[str]) -> Optional[str]:
+        if expression is not None:
+            match = DEESCAPER_RE.match(expression)
+            if match:
+                return match[1]
+        return expression
+
     def deescape_alias(expr: Expression) -> Expression:
-        if expr.alias is None or not DEESCAPER_RE.match(expr.alias):
-            return expr
-        return replace(expr, alias=expr.alias[1:-1],)
+        deescaped = deescape(expr.alias)
+        return expr if (deescaped == expr.alias) else replace(expr, alias=deescaped)
 
     query.transform_expressions(deescape_alias)
 
     def deescape_select(expr: SelectedExpression) -> SelectedExpression:
-        if expr.name is None or not DEESCAPER_RE.match(expr.name):
-            return expr
-        else:
-            return replace(expr, name=expr.name[1:-1])
+        deescaped = deescape(expr.name)
+        return expr if (deescaped == expr.name) else replace(expr, name=deescaped)
 
     query.set_ast_selected_columns(
         [deescape_select(s) for s in query.get_selected_columns_from_ast() or []]
