@@ -17,18 +17,22 @@ from snuba.query.parser.functions import parse_function_to_expr
 from snuba.query.parser.strings import parse_string_to_expr
 from snuba.util import is_function
 
+
+function_name_regex = r"[a-zA-Z_][a-zA-Z0-9_]*"
+
 minimal_clickhouse_grammar = Grammar(
-    r"""
+    fr"""
 # This root element is needed because of the ambiguity of the aggregation
 # function field which can mean a clickhouse function expression or the simple
 # name of a clickhouse function.
 
 root_element          = low_pri_arithmetic
-expression            = low_pri_arithmetic / function_call / simple_term
 low_pri_arithmetic    = space* (high_pri_arithmetic) space* (("+" low_pri_arithmetic) / empty)
-high_pri_arithmetic   = space* (function_call / numeric_literal / column_name) space* (("*" high_pri_arithmetic) / empty)
-parameters_list       = parameter* (expression)
-parameter             = expression space* comma space*
+high_pri_arithmetic   = space* arithmetic_term space* (("*" high_pri_arithmetic) / empty)
+arithmetic_term       = function_call / numeric_literal / column_name
+param_expression      = low_pri_arithmetic / quoted_literal
+parameters_list       = parameter* (param_expression)
+parameter             = param_expression space* comma space*
 function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)?
 simple_term           = quoted_literal / numeric_literal / column_name
 literal               = ~r"[a-zA-Z0-9_\.:-]+"
@@ -36,7 +40,7 @@ quoted_literal        = "'" string_literal "'"
 string_literal        = ~r"[a-zA-Z0-9_\.\+\*\/:-]*"
 numeric_literal       = ~r"-?[0-9]+(\.[0-9]+)?(e[\+\-][0-9]+)?"
 column_name           = ~r"[a-zA-Z_][a-zA-Z0-9_\.]*"
-function_name         = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
+function_name         = ~r"{function_name_regex}"
 open_paren            = "("
 close_paren           = ")"
 space                 = " "
@@ -74,8 +78,9 @@ class ClickhouseVisitor(NodeVisitor):
             # that arose from empty space ''
             return term
         else:
-            # exp[1] yields object
-            # of type Expression
+            # return exp[1] because
+            # exp[0] is a string which
+            # represents the operator
             return plus(term, exp[1])
 
     def visit_high_pri_arithmetic(
@@ -90,8 +95,9 @@ class ClickhouseVisitor(NodeVisitor):
             # that arose from empty space ''
             return factor
         else:
-            # term[1] yields object
-            # of type Expression
+            # return term[1] because
+            # term[0] is a string which
+            # represents the operator
             return multiply(factor, term[1])
 
     def visit_numeric_literal(
@@ -199,10 +205,12 @@ def parse_aggregation(
 
     columns_expr = [parse_expression(column) for column in columns if column]
 
-    matched = re.fullmatch("[a-zA-Z_][a-zA-Z0-9_]*", aggregation_function)
+    matched = re.fullmatch(function_name_regex, aggregation_function)
 
-    if not bool(matched):
+    if matched is not None:
+        return FunctionCall(alias, aggregation_function, tuple(columns_expr))
 
+    else:
         expression_tree = minimal_clickhouse_grammar.parse(aggregation_function)
         parsed_expression = ClickhouseVisitor().visit(expression_tree)
 
@@ -213,15 +221,13 @@ def parse_aggregation(
             and not columns_expr
         ):
             return replace(parsed_expression, alias=alias)
+
         elif isinstance(parsed_expression, FunctionCall) and columns_expr:
             # Mix of clickhouse syntax and snuba syntax that generates a CurriedFunction
             # ["f(a)", "b", None]
             return CurriedFunctionCall(alias, parsed_expression, tuple(columns_expr),)
+
         else:
             raise ValueError(
                 f"Invalid aggregation format {aggregation_function} {column}"
             )
-
-    else:
-
-        return FunctionCall(alias, aggregation_function, tuple(columns_expr))
