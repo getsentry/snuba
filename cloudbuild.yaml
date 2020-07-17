@@ -57,7 +57,7 @@ steps:
     docker-compose up -d
     timeout 20 bash -c 'until $(curl -Isf -o /dev/null http://nginx); do printf "."; sleep 0.5; done' || docker-compose logs web
     ./test.sh || docker-compose logs nginx web relay
-  timeout: 450s
+  timeout: 300s
 - name: 'gcr.io/cloud-builders/docker'
   secretEnv: ['DOCKER_PASSWORD']
   entrypoint: 'bash'
@@ -78,6 +78,9 @@ images: [
   'us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA',
   ]
 timeout: 3600s
+options:
+  # Bigger machines do everything quite faster (especially on-prem integration tests)
+  machineType: 'N1_HIGHCPU_8'
 secrets:
 - kmsKeyName: projects/sentryio/locations/global/keyRings/service-credentials/cryptoKeys/cloudbuild
   secretEnv:
