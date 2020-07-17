@@ -40,6 +40,7 @@ OPERATOR_TO_FUNCTION: Mapping[str, str] = {
     "NOT LIKE": ConditionFunctions.NOT_LIKE,
 }
 
+
 FUNCTION_TO_OPERATOR: Mapping[str, str] = {
     func: op for op, func in OPERATOR_TO_FUNCTION.items()
 }
@@ -53,6 +54,17 @@ class BooleanFunctions:
     NOT = "not"
     AND = "and"
     OR = "or"
+
+
+UNARY_OPERATORS = [
+    ConditionFunctions.IS_NULL,
+    ConditionFunctions.IS_NOT_NULL,
+]
+
+
+BINARY_OPERATORS = [
+    opr for opr in FUNCTION_TO_OPERATOR if opr not in (set(UNARY_OPERATORS))
+] + [BooleanFunctions.AND, BooleanFunctions.OR, BooleanFunctions.NOT]
 
 
 def __set_condition(
@@ -83,7 +95,7 @@ def __is_set_condition(exp: Expression, operator: str) -> bool:
     if is_binary_condition(exp, operator):
         if operator in set_condition_pattern:
             if set_condition_pattern[operator].match(exp) is not None:
-                # TODO(evanh) Not sure how to test this using the current matcher syntax
+                assert isinstance(exp, FunctionCall)
                 return all(isinstance(c, Literal) for c in exp.parameters[1].parameters)
 
     return False
@@ -123,16 +135,9 @@ def binary_condition(
     return FunctionCall(alias, function_name, (lhs, rhs))
 
 
-binary_operators = [opr for opr in FUNCTION_TO_OPERATOR] + [
-    BooleanFunctions.AND,
-    BooleanFunctions.OR,
-    BooleanFunctions.NOT,
-]
-
-
 binary_condition_patterns = {
     op: FunctionCallPattern(None, String(op), (AnyExpression(), AnyExpression()))
-    for op in binary_operators
+    for op in BINARY_OPERATORS
 }
 
 
@@ -151,7 +156,7 @@ def unary_condition(
 
 unary_condition_patterns = {
     op: FunctionCallPattern(None, String(op), (AnyExpression(),))
-    for op in FUNCTION_TO_OPERATOR
+    for op in UNARY_OPERATORS
 }
 
 
@@ -216,13 +221,19 @@ def _combine_conditions(conditions: Sequence[Expression], function: str) -> Expr
     )
 
 
-condition_match = FunctionCallPattern(
-    None,
-    Or([String(op) for op in FUNCTION_TO_OPERATOR]),
-    (AnyExpression(),),
-    with_optionals=True,
+CONDITION_MATCH = Or(
+    [
+        FunctionCallPattern(
+            None,
+            Or([String(op) for op in BINARY_OPERATORS]),
+            (AnyExpression(), AnyExpression()),
+        ),
+        FunctionCallPattern(
+            None, Or([String(op) for op in UNARY_OPERATORS]), (AnyExpression(),)
+        ),
+    ]
 )
 
 
 def is_condition(exp: Expression) -> bool:
-    return condition_match.match(exp) is not None
+    return CONDITION_MATCH.match(exp) is not None

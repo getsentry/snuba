@@ -1,4 +1,4 @@
-from typing import List
+from typing import Set
 import uuid
 
 from snuba.query.conditions import (
@@ -52,7 +52,7 @@ class UUIDColumnProcessor(QueryProcessor):
             "uuid_column" + suffix, ColumnMatch(None, None, self.__uuid_column_match)
         )
 
-    def __init__(self, uuid_columns: List[str]) -> None:
+    def __init__(self, uuid_columns: Set[str]) -> None:
         self.__unique_uuid_columns = set(uuid_columns)
         self.__uuid_column_match = Or(
             [String(u_col) for u_col in self.__unique_uuid_columns]
@@ -118,7 +118,9 @@ class UUIDColumnProcessor(QueryProcessor):
                 )
             )
 
-            return binary_condition(exp.alias, exp.function_name, *new_params)
+            return binary_condition(
+                exp.alias, exp.function_name, new_params[0], new_params[1]
+            )
 
         result = self.uuid_condition.match(exp)
         if result is not None:
@@ -136,24 +138,20 @@ class UUIDColumnProcessor(QueryProcessor):
                         alias = result.string("format_alias" + suffix)
                     column = result.expression("formatted_uuid_column" + suffix)
                     new_params.append(
-                        Column(alias, column.table_name, column.column_name,)
+                        Column(alias, column.table_name, column.column_name)
                     )
 
-            return binary_condition(exp.alias, exp.function_name, *new_params)
+            return binary_condition(
+                exp.alias, exp.function_name, new_params[0], new_params[1]
+            )
 
         return exp
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         condition = query.get_condition_from_ast()
         if condition:
-            query.set_ast_condition(None)
-            for cond in condition:
-                if is_condition(cond):
-                    query.add_condition_to_ast(self.process_condition(cond))
+            query.set_ast_condition(condition.transform(self.process_condition))
 
         prewhere = query.get_prewhere_ast()
         if prewhere:
-            query.set_prewhere_ast_condition(None)
-            for cond in prewhere:
-                if is_condition(cond):
-                    query.add_prewhere_condition_to_ast(self.process_condition(cond))
+            query.set_prewhere_ast_condition(prewhere.transform(self.process_condition))

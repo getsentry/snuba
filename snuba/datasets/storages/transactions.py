@@ -184,7 +184,7 @@ storage = WritableTableStorage(
             BEGINNING_OF_TIME,
         ),
         TransactionColumnProcessor(),
-        UUIDColumnProcessor(["event_id", "trace_id"]),
+        UUIDColumnProcessor(set(["event_id", "trace_id"])),
         ArrayJoinKeyValueOptimizer("tags"),
         PrewhereProcessor(),
     ],

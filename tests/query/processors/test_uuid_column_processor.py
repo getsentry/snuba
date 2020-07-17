@@ -276,7 +276,7 @@ tests = [
 def test_uuid_column_processor(
     unprocessed, expected, formatted_value, prewhere_formatted_value
 ) -> None:
-    UUIDColumnProcessor(["column1", "column2"]).process_query(
+    UUIDColumnProcessor(set(["column1", "column2"])).process_query(
         unprocessed, HTTPRequestSettings()
     )
     assert expected.get_condition_from_ast() == unprocessed.get_condition_from_ast()
