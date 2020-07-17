@@ -10,8 +10,8 @@ from snuba.query.parser.expressions import parse_aggregation
 
 test_data = [
     (
-        ["f('2020/07/16')", None, None],
-        FunctionCall(None, "f", (Literal(None, "2020/07/16"),),),
+        ["f('2020*07+16')", None, None],
+        FunctionCall(None, "f", (Literal(None, "2020*07+16"),),),
     ),  # String (that looks like arithmetic) nested in function call
     (
         ["f(a * b, g(c * 3))", None, None],
