@@ -8,6 +8,7 @@ from snuba.migrations.operations import (
     DropColumn,
     DropIndex,
     DropTable,
+    InsertIntoSelect,
     ModifyColumn,
 )
 from snuba.migrations.table_engines import ReplacingMergeTree
@@ -102,4 +103,13 @@ def test_drop_index() -> None:
     assert (
         DropIndex(StorageSetKey.EVENTS, "test_table", "index_1").format_sql()
         == "ALTER TABLE test_table DROP INDEX index_1;"
+    )
+
+
+def test_insert_into_select() -> None:
+    assert (
+        InsertIntoSelect(
+            StorageSetKey.EVENTS, "dest", ["a2", "b2"], "src", ["a1", "b1"]
+        ).format_sql()
+        == "INSERT INTO dest (a2, b2) SELECT a1, b1 FROM src;"
     )
