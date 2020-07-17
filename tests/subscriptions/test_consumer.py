@@ -1,10 +1,9 @@
 from datetime import datetime, timedelta
-from typing import Iterator
 
 import pytest
 
 from snuba.subscriptions.consumer import Tick, TickConsumer
-from snuba.utils.clock import Clock, TestingClock
+from snuba.utils.clock import Clock
 from snuba.utils.streams.consumer import ConsumerError
 from snuba.utils.streams.dummy import DummyBroker, epoch
 from snuba.utils.streams.types import Message, Partition, Topic
@@ -18,16 +17,6 @@ def test_tick_time_shift() -> None:
     assert tick.time_shift(timedelta(hours=24)) == Tick(
         offsets, Interval(datetime(1970, 1, 2), datetime(1970, 1, 3))
     )
-
-
-@pytest.fixture
-def clock() -> Iterator[Clock]:
-    yield TestingClock(epoch.timestamp())
-
-
-@pytest.fixture
-def broker(clock: TestingClock) -> Iterator[DummyBroker[int]]:
-    yield DummyBroker(clock)
 
 
 def test_tick_consumer(broker: DummyBroker[int]) -> None:
