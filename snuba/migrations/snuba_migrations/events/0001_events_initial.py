@@ -151,14 +151,24 @@ class Migration(migration.MultiStepMigration):
                     local_table_name="sentry_local",
                     sharding_key="cityHash64(toString(event_id)))",
                 ),
-            )
-            # TODO: We need to also create the events_ro table here. It
-            # needs to be split into it's own storage and storage set first.
+            ),
+            operations.CreateTable(
+                storage_set=StorageSetKey.EVENTS_RO,
+                table_name="sentry_dist_ro",
+                columns=columns,
+                engine=table_engines.Distributed(
+                    local_table_name="sentry_local",
+                    sharding_key="cityHash64(toString(event_id)))",
+                ),
+            ),
         ]
 
     def backwards_dist(self) -> Sequence[operations.Operation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.EVENTS, table_name="sentry_dist"
-            )
+            ),
+            operations.DropTable(
+                storage_set=StorageSetKey.EVENTS_RO, table_name="sentry_dist_ro"
+            ),
         ]

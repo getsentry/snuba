@@ -26,6 +26,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
         "storage_sets": {
             "events",
+            "events_ro",
             "migrations",
             "outcomes",
             "querylog",
@@ -114,6 +115,9 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         "eventstore.get_next_or_prev_event_id": 100,
     },
 }  # (dataset name: (referrer: percentage))
+
+COLUMN_SPLIT_MAX_LIMIT = 1000
+COLUMN_SPLIT_MAX_RESULTS = 5000
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

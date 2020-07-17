@@ -4,9 +4,9 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
+    ColumnToFunction,
     SubscriptableMapper,
 )
-from snuba.query.logical import SelectedExpression
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.plans.translator.query import QueryTranslator
 from snuba.datasets.schemas.tables import TableSource
@@ -17,6 +17,7 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query as SnubaQuery
+from snuba.query.logical import SelectedExpression
 
 test_cases = [
     pytest.param(
@@ -140,6 +141,65 @@ test_cases = [
             )
         ),
         id="some basic rules",
+    ),
+    pytest.param(
+        TranslationMappers(
+            columns=[
+                ColumnToFunction(
+                    None,
+                    "users_crashed",
+                    "uniqIfMerge",
+                    (Column(alias=None, table_name=None, column_name="users_crashed"),),
+                )
+            ],
+        ),
+        SnubaQuery(
+            body={},
+            data_source=TableSource("my_table", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression(
+                    "alias",
+                    FunctionCall(
+                        "alias",
+                        "f",
+                        (
+                            Column(
+                                alias=None, table_name=None, column_name="users_crashed"
+                            ),
+                        ),
+                    ),
+                ),
+            ],
+        ),
+        ClickhouseQuery(
+            SnubaQuery(
+                body={},
+                data_source=TableSource("my_table", ColumnSet([])),
+                selected_columns=[
+                    SelectedExpression(
+                        "alias",
+                        FunctionCall(
+                            "alias",
+                            "f",
+                            (
+                                FunctionCall(
+                                    None,
+                                    "uniqIfMerge",
+                                    (
+                                        Column(
+                                            alias=None,
+                                            table_name=None,
+                                            column_name="users_crashed",
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ],
+            )
+        ),
+        id="non idempotent rule",
     ),
 ]
 
