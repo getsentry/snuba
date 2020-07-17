@@ -298,18 +298,13 @@ def _deescape_aliases(query: Query) -> None:
                 return match[1]
         return expression
 
-    def deescape_alias(expr: Expression) -> Expression:
-        deescaped = deescape(expr.alias)
-        return expr if (deescaped == expr.alias) else replace(expr, alias=deescaped)
-
-    query.transform_expressions(deescape_alias)
-
-    def deescape_select(expr: SelectedExpression) -> SelectedExpression:
-        deescaped = deescape(expr.name)
-        return expr if (deescaped == expr.name) else replace(expr, name=deescaped)
+    query.transform_expressions(lambda expr: replace(expr, alias=deescape(expr.alias)))
 
     query.set_ast_selected_columns(
-        [deescape_select(s) for s in query.get_selected_columns_from_ast() or []]
+        [
+            replace(s, name=deescape(s.name))
+            for s in query.get_selected_columns_from_ast() or []
+        ]
     )
 
 
