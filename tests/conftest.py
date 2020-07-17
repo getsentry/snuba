@@ -7,7 +7,7 @@ from snuba.clickhouse.native import ClickhousePool
 from snuba.environment import setup_sentry
 from snuba.state import delete_config, set_config
 from snuba.utils.clock import Clock, TestingClock
-from snuba.utils.streams.dummy import DummyBroker, epoch
+from snuba.utils.streams.dummy import DummyBroker
 from snuba.utils.streams.types import TPayload
 from snuba.web.ast_rollout import ROLLOUT_RATE_CONFIG
 
@@ -40,7 +40,7 @@ def query_type(request) -> None:
 
 @pytest.fixture
 def clock() -> Iterator[Clock]:
-    yield TestingClock(epoch.timestamp())
+    yield TestingClock()
 
 
 @pytest.fixture

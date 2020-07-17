@@ -5,7 +5,7 @@ import pytest
 from snuba.subscriptions.consumer import Tick, TickConsumer
 from snuba.utils.clock import Clock
 from snuba.utils.streams.consumer import ConsumerError
-from snuba.utils.streams.dummy import DummyBroker, epoch
+from snuba.utils.streams.dummy import DummyBroker
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.utils.types import Interval
 from tests.assertions import assert_changes, assert_does_not_change
@@ -19,7 +19,9 @@ def test_tick_time_shift() -> None:
     )
 
 
-def test_tick_consumer(broker: DummyBroker[int]) -> None:
+def test_tick_consumer(clock: Clock, broker: DummyBroker[int]) -> None:
+    epoch = datetime.fromtimestamp(clock.time())
+
     topic = Topic("messages")
 
     broker.create_topic(topic, partitions=2)
@@ -168,6 +170,8 @@ def test_tick_consumer(broker: DummyBroker[int]) -> None:
 
 
 def test_tick_consumer_non_monotonic(clock: Clock, broker: DummyBroker[int]) -> None:
+    epoch = datetime.fromtimestamp(clock.time())
+
     topic = Topic("messages")
     partition = Partition(topic, 0)
 
