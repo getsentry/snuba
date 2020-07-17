@@ -19,6 +19,7 @@ from snuba.util import is_function
 
 
 function_name_regex = r"[a-zA-Z_][a-zA-Z0-9_]*"
+FUNCTION_NAME_RE = re.compile(function_name_regex)
 
 minimal_clickhouse_grammar = Grammar(
     fr"""
@@ -205,7 +206,7 @@ def parse_aggregation(
 
     columns_expr = [parse_expression(column) for column in columns if column]
 
-    matched = re.fullmatch(function_name_regex, aggregation_function)
+    matched = FUNCTION_NAME_RE.fullmatch(aggregation_function)
 
     if matched is not None:
         return FunctionCall(alias, aggregation_function, tuple(columns_expr))
