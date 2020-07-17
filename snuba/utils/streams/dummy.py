@@ -44,6 +44,12 @@ class DummyBroker(Generic[TPayload]):
 
         self.__lock = Lock()
 
+    def get_consumer(self, group: str) -> Consumer[TPayload]:
+        return DummyConsumer(self, group)
+
+    def get_producer(self) -> Producer[TPayload]:
+        return DummyProducer(self)
+
     def create_topic(self, topic: Topic, partitions: int) -> None:
         with self.__lock:
             if topic in self.__topics:
