@@ -320,6 +320,24 @@ test_cases = [
         ),
         id="Allowed duplicate alias (same expression)",
     ),
+    pytest.param(
+        {"selected_columns": [["f", ["column"], "`exp`"], "`exp`"]},
+        Query(
+            {},
+            TableSource("events", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression(
+                    "exp",
+                    FunctionCall("exp", "f", (Column("column", None, "column"),)),
+                ),
+                SelectedExpression(
+                    "exp",
+                    FunctionCall("exp", "f", (Column("column", None, "column"),)),
+                ),
+            ],
+        ),
+        id="De-escape aliases defined by the user",
+    ),
 ]
 
 
