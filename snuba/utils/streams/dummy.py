@@ -44,8 +44,12 @@ class DummyBroker(Generic[TPayload]):
 
         self.__lock = Lock()
 
-    def get_consumer(self, group: str) -> Consumer[TPayload]:
-        return DummyConsumer(self, group)
+    def get_consumer(
+        self, group: str, enable_end_of_partition: bool = True
+    ) -> Consumer[TPayload]:
+        return DummyConsumer(
+            self, group, enable_end_of_partition=enable_end_of_partition
+        )
 
     def get_producer(self) -> Producer[TPayload]:
         return DummyProducer(self)
