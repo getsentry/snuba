@@ -23,6 +23,18 @@ steps:
   - run
   - '--rm'
   - snuba-test
+# Clean up after tests
+- name: 'gcr.io/$PROJECT_ID/docker-compose'
+  env:
+  - 'SNUBA_IMAGE=us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA'
+  args:
+  - '-f'
+  - 'docker-compose.gcb.yml'
+  - down
+  - '--rmi'
+  - 'local'
+  - '-v'
+  - '--remove-orphans'
 # On-premise Integration tests
 - name: 'gcr.io/$PROJECT_ID/docker-compose'
   entrypoint: 'bash'
