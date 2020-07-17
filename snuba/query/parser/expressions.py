@@ -25,7 +25,6 @@ minimal_clickhouse_grammar = Grammar(
 
 root_element          = low_pri_arithmetic
 expression            = low_pri_arithmetic / function_call / simple_term
-top_arithm_expression = open_paren low_pri_arithmetic close_paren
 low_pri_arithmetic    = space* (high_pri_arithmetic) space* (("+" low_pri_arithmetic) / empty)
 high_pri_arithmetic   = space* (function_call / numeric_literal / column_name) space* (("*" high_pri_arithmetic) / empty)
 parameters_list       = parameter* (expression)
@@ -62,13 +61,6 @@ class ClickhouseVisitor(NodeVisitor):
         self, node: Node, visited_children: Iterable[Any]
     ) -> Optional[Expression]:
         return None
-
-    def visit_top_arithm_expression(
-        self, node: Node, visited_children: Tuple[Any, Expression, Any]
-    ) -> Expression:
-        _, exp, _ = visited_children
-
-        return exp
 
     def visit_low_pri_arithmetic(
         self,
