@@ -211,24 +211,21 @@ def parse_aggregation(
     if matched is not None:
         return FunctionCall(alias, aggregation_function, tuple(columns_expr))
 
+    expression_tree = minimal_clickhouse_grammar.parse(aggregation_function)
+    parsed_expression = ClickhouseVisitor().visit(expression_tree)
+
+    if (
+        # Simple Clickhouse expression with no snuba syntax
+        # ["ifNull(count(somthing), something)", None, None]
+        isinstance(parsed_expression, (FunctionCall, CurriedFunctionCall))
+        and not columns_expr
+    ):
+        return replace(parsed_expression, alias=alias)
+
+    elif isinstance(parsed_expression, FunctionCall) and columns_expr:
+        # Mix of clickhouse syntax and snuba syntax that generates a CurriedFunction
+        # ["f(a)", "b", None]
+        return CurriedFunctionCall(alias, parsed_expression, tuple(columns_expr),)
+
     else:
-        expression_tree = minimal_clickhouse_grammar.parse(aggregation_function)
-        parsed_expression = ClickhouseVisitor().visit(expression_tree)
-
-        if (
-            # Simple Clickhouse expression with no snuba syntax
-            # ["ifNull(count(somthing), something)", None, None]
-            isinstance(parsed_expression, (FunctionCall, CurriedFunctionCall))
-            and not columns_expr
-        ):
-            return replace(parsed_expression, alias=alias)
-
-        elif isinstance(parsed_expression, FunctionCall) and columns_expr:
-            # Mix of clickhouse syntax and snuba syntax that generates a CurriedFunction
-            # ["f(a)", "b", None]
-            return CurriedFunctionCall(alias, parsed_expression, tuple(columns_expr),)
-
-        else:
-            raise ValueError(
-                f"Invalid aggregation format {aggregation_function} {column}"
-            )
+        raise ValueError(f"Invalid aggregation format {aggregation_function} {column}")
