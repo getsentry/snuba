@@ -123,7 +123,7 @@ def _run_query_pipeline(
             clickhouse_processor.process_query(query_plan.query, request.settings)
 
     query_runner = partial(
-        run_query_applying_column_names,
+        _run_and_apply_column_names,
         dataset,
         timer,
         query_metadata,
@@ -137,7 +137,7 @@ def _run_query_pipeline(
     )
 
 
-def run_query_applying_column_names(
+def _run_and_apply_column_names(
     dataset: Dataset,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
@@ -148,10 +148,14 @@ def run_query_applying_column_names(
     request_settings: RequestSettings,
     reader: Reader[SqlQuery],
 ) -> QueryResult:
-    names_alias_mapping = [
-        (select.name, select.expression.alias)
-        for select in clickhouse_query.get_selected_columns_from_ast()
-    ]
+    """
+    Executes the query and, after that, replaces the column names in in
+    QueryResult with the names the user expects and that are stored in
+    the SelectedExpression objects in the Query.
+    This happens so that we can remove aliases from the Query AST since
+    those aliases now are needed to produce the names the user expects
+    in the output.
+    """
 
     result = _format_storage_query_and_run(
         dataset,
@@ -165,8 +169,12 @@ def run_query_applying_column_names(
         reader,
     )
 
+    name_alias_mappings = [
+        (select.name, select.expression.alias)
+        for select in clickhouse_query.get_selected_columns_from_ast()
+    ]
     discrepancies = [
-        (name, alias) for name, alias in names_alias_mapping if name != alias
+        (name, alias) for name, alias in name_alias_mappings if name != alias
     ]
     if discrepancies:
         logger.warning(
@@ -176,7 +184,9 @@ def run_query_applying_column_names(
         )
         return result
 
-    # TODO apply names
+    # TODO actually replace the column names in the result (data and
+    # meta) with the names the user expects from the SelectedExpression
+    # objects.
 
     return result
 
