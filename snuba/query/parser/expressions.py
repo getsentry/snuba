@@ -17,8 +17,8 @@ from snuba.query.parser.functions import parse_function_to_expr
 from snuba.query.parser.strings import parse_string_to_expr
 from snuba.util import is_function
 
-function_name_regex = r"[a-zA-Z_][a-zA-Z0-9_]*"
-FUNCTION_NAME_RE = re.compile(function_name_regex)
+FUNCTION_NAME_REGEX = r"[a-zA-Z_][a-zA-Z0-9_]*"
+FUNCTION_NAME_RE = re.compile(FUNCTION_NAME_REGEX)
 
 minimal_clickhouse_grammar = Grammar(
     fr"""
@@ -40,7 +40,7 @@ quoted_literal        = "'" string_literal "'"
 string_literal        = ~r"[a-zA-Z0-9_\.\+\*\/:-]*"
 numeric_literal       = ~r"-?[0-9]+(\.[0-9]+)?(e[\+\-][0-9]+)?"
 column_name           = ~r"[a-zA-Z_][a-zA-Z0-9_\.]*"
-function_name         = ~r"{function_name_regex}"
+function_name         = ~r"{FUNCTION_NAME_REGEX}"
 open_paren            = "("
 close_paren           = ")"
 space                 = " "
