@@ -17,7 +17,6 @@ from snuba.query.parser.functions import parse_function_to_expr
 from snuba.query.parser.strings import parse_string_to_expr
 from snuba.util import is_function
 
-
 function_name_regex = r"[a-zA-Z_][a-zA-Z0-9_]*"
 FUNCTION_NAME_RE = re.compile(function_name_regex)
 
