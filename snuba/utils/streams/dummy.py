@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from concurrent.futures import Future
 from datetime import datetime
+from functools import partial
 from threading import Lock, RLock
 from typing import (
     Callable,
+    Deque,
     Generic,
     Mapping,
     MutableMapping,
     MutableSequence,
+    NamedTuple,
     Optional,
     Sequence,
     Set,
@@ -95,9 +98,14 @@ class DummyBroker(Generic[TPayload]):
 
         return assignment
 
-    def unsubscribe(self, consumer: DummyConsumer[TPayload]) -> None:
+    def unsubscribe(self, consumer: DummyConsumer[TPayload]) -> Sequence[Partition]:
         with self.__lock:
-            del self.__subscriptions[consumer.group][consumer]
+            partitions: MutableSequence[Partition] = []
+            for topic in self.__subscriptions[consumer.group].pop(consumer):
+                partitions.extend(
+                    Partition(topic, i) for i in range(len(self.__topics[topic]))
+                )
+            return partitions
 
     def consume(self, partition: Partition, offset: int) -> Optional[Message[TPayload]]:
         with self.__lock:
@@ -121,6 +129,12 @@ class DummyBroker(Generic[TPayload]):
             self.__offsets[consumer.group].update(offsets)
 
 
+class Subscription(NamedTuple):
+    topics: Sequence[Topic]
+    assignment_callback: Optional[Callable[[Mapping[Partition, int]], None]]
+    revocation_callback: Optional[Callable[[Sequence[Partition]], None]]
+
+
 class DummyConsumer(Consumer[TPayload]):
     def __init__(
         self,
@@ -131,8 +145,8 @@ class DummyConsumer(Consumer[TPayload]):
         self.__broker = broker
         self.__group = group
 
-        self.__subscription: Sequence[Topic] = []
-        self.__assignment: Optional[Sequence[Partition]] = None
+        self.__subscription: Optional[Subscription] = None
+        self.__pending_callbacks: Deque[Callable[[], None]] = deque()
 
         self.__offsets: MutableMapping[Partition, int] = {}
         self.__staged_offsets: MutableMapping[Partition, int] = {}
@@ -157,6 +171,20 @@ class DummyConsumer(Consumer[TPayload]):
     def group(self) -> str:
         return self.__group
 
+    def __assign(
+        self, subscription: Subscription, offsets: Mapping[Partition, int]
+    ) -> None:
+        self.__offsets = {**offsets}
+        if subscription.assignment_callback is not None:
+            subscription.assignment_callback(offsets)
+
+    def __revoke(
+        self, subscription: Subscription, partitions: Sequence[Partition]
+    ) -> None:
+        if subscription.revocation_callback is not None:
+            subscription.revocation_callback(partitions)
+        self.__offsets = {}
+
     def subscribe(
         self,
         topics: Sequence[Topic],
@@ -167,22 +195,30 @@ class DummyConsumer(Consumer[TPayload]):
             if self.__closed:
                 raise RuntimeError("consumer is closed")
 
-            self.__offsets = {**self.__broker.subscribe(self, topics)}
+            self.__subscription = Subscription(topics, on_assign, on_revoke)
+            self.__pending_callbacks.append(
+                partial(
+                    self.__assign,
+                    self.__subscription,
+                    self.__broker.subscribe(self, topics),
+                )
+            )
 
             self.__staged_offsets.clear()
             self.__last_eof_at.clear()
-
-            if on_assign is not None:
-                on_assign(self.__offsets)
 
     def unsubscribe(self) -> None:
         with self.__lock:
             if self.__closed:
                 raise RuntimeError("consumer is closed")
 
-            self.__broker.unsubscribe(self)
+            self.__pending_callbacks.append(
+                partial(
+                    self.__revoke, self.__subscription, self.__broker.unsubscribe(self),
+                )
+            )
+            self.__subscription = None
 
-            self.__offsets = {}
             self.__staged_offsets.clear()
             self.__last_eof_at.clear()
 
@@ -190,6 +226,10 @@ class DummyConsumer(Consumer[TPayload]):
         with self.__lock:
             if self.__closed:
                 raise RuntimeError("consumer is closed")
+
+            while self.__pending_callbacks:
+                callback = self.__pending_callbacks.popleft()
+                callback()
 
             for partition, offset in sorted(self.__offsets.items()):
                 if partition in self.__paused:
@@ -294,6 +334,10 @@ class DummyConsumer(Consumer[TPayload]):
 
     def close(self, timeout: Optional[float] = None) -> None:
         with self.__lock:
+            if self.__subscription is not None:
+                self.__revoke(self.__subscription, self.__broker.unsubscribe(self))
+                self.__subscription = None
+
             self.__closed = True
             self.close_calls += 1
 
