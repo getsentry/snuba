@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import (
     Any,
-    Callable,
     Generic,
     Mapping,
     MutableMapping,
@@ -17,12 +16,12 @@ from typing import (
 
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
-from snuba.clickhouse.http import HTTPBatchWriter
+from snuba.clickhouse.http import HTTPBatchWriter, JSONRowEncoder
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.reader import Reader, TQuery
-from snuba.writer import BatchWriter, WriterTableRow
+from snuba.writer import BatchWriter, BatchWriterEncoderWrapper, WriterTableRow
 
 
 class ClickhouseClientSettingsType(NamedTuple):
@@ -107,11 +106,7 @@ class Cluster(ABC, Generic[TQuery, TWriterOptions]):
 
     @abstractmethod
     def get_writer(
-        self,
-        table_name: str,
-        encoder: Callable[[WriterTableRow], bytes],
-        options: TWriterOptions,
-        chunk_size: Optional[int],
+        self, table_name: str, options: TWriterOptions, chunk_size: Optional[int],
     ) -> BatchWriter[WriterTableRow]:
         raise NotImplementedError
 
@@ -217,20 +212,21 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
     def get_writer(
         self,
         table_name: str,
-        encoder: Callable[[WriterTableRow], bytes],
         options: ClickhouseWriterOptions,
         chunk_size: Optional[int],
     ) -> BatchWriter[WriterTableRow]:
-        return HTTPBatchWriter(
-            table_name,
-            self.__query_node.host_name,
-            self.__http_port,
-            self.__user,
-            self.__password,
-            self.__database,
-            encoder,
-            options,
-            chunk_size,
+        return BatchWriterEncoderWrapper(
+            HTTPBatchWriter(
+                table_name,
+                self.__query_node.host_name,
+                self.__http_port,
+                self.__user,
+                self.__password,
+                self.__database,
+                options,
+                chunk_size,
+            ),
+            JSONRowEncoder(),
         )
 
     def is_single_node(self) -> bool:

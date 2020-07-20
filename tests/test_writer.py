@@ -1,16 +1,15 @@
-import pytest
-
 from typing import Iterable
 
-from tests.base import BaseEventsTest
+import pytest
+
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.http import HTTPBatchWriter
 from snuba.datasets.factory import enforce_table_writer
-from snuba.writer import WriterTableRow
+from tests.base import BaseEventsTest
 
 
 class FakeHTTPWriter(HTTPBatchWriter):
-    def chunk(self, rows: Iterable[WriterTableRow]) -> Iterable[bytes]:
+    def chunk(self, rows: Iterable[bytes]) -> Iterable[bytes]:
         return self._prepare_chunks(rows)
 
 
@@ -52,7 +51,6 @@ class TestHTTPBatchWriter(BaseEventsTest):
             "default",
             "",
             "default",
-            lambda a: a,
             None,
             chunk_size,
         )

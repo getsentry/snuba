@@ -22,11 +22,9 @@ from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
 from snuba.utils.streams.producer import Producer
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
-epoch = datetime(2019, 12, 19)
-
 
 class DummyBroker(Generic[TPayload]):
-    def __init__(self, clock: Clock = TestingClock(epoch.timestamp())) -> None:
+    def __init__(self, clock: Clock = TestingClock()) -> None:
         self.__clock = clock
         self.__topics: MutableMapping[
             Topic, Sequence[MutableSequence[Tuple[TPayload, datetime]]]
@@ -43,6 +41,16 @@ class DummyBroker(Generic[TPayload]):
         ] = defaultdict(dict)
 
         self.__lock = Lock()
+
+    def get_consumer(
+        self, group: str, enable_end_of_partition: bool = False
+    ) -> Consumer[TPayload]:
+        return DummyConsumer(
+            self, group, enable_end_of_partition=enable_end_of_partition
+        )
+
+    def get_producer(self) -> Producer[TPayload]:
+        return DummyProducer(self)
 
     def create_topic(self, topic: Topic, partitions: int) -> None:
         with self.__lock:
