@@ -64,6 +64,10 @@ def test_version() -> None:
 
 def test_no_schema_differences() -> None:
     storages_to_test = [
+        StorageKey.EVENTS,
+        StorageKey.ERRORS,
+        StorageKey.GROUPASSIGNEES,
+        StorageKey.GROUPEDMESSAGES,
         StorageKey.TRANSACTIONS,
         StorageKey.QUERYLOG,
     ]  # TODO: Eventually test all storages
