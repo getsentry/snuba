@@ -134,7 +134,7 @@ class TableSchemaWithDDL(TableSchema, ABC):
         # This field marks the columns to skip during creation. They have to
         # be in a migration statement.
         # The new migration framework will not need this work around since
-        # the storage current schema and the CREATE statement are separate.
+        # the current schema and the CREATE statement for a storage are separate.
         self.__skipped_cols_on_creation = skipped_cols_on_creation or set()
 
     def get_local_drop_table_statement(self) -> DDLStatement:
