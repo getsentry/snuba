@@ -28,14 +28,13 @@ class DummyStreamsTestCase(StreamsTestMixin[int], TestCase):
     def get_consumer(
         self, group: Optional[str] = None, enable_end_of_partition: bool = True
     ) -> DummyConsumer[int]:
-        return DummyConsumer(
-            self.broker,
+        return self.broker.get_consumer(
             group if group is not None else uuid.uuid1().hex,
             enable_end_of_partition=enable_end_of_partition,
         )
 
     def get_producer(self) -> DummyProducer[int]:
-        return DummyProducer(self.broker)
+        return self.broker.get_producer()
 
     def get_payloads(self) -> Iterator[int]:
         return itertools.count()

@@ -1,11 +1,7 @@
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence
 
-import rapidjson
-
 from snuba import settings
-from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,
@@ -133,21 +129,12 @@ class TableWriter:
     def get_writer(self, options=None, table_name=None) -> BatchWriter[WriterTableRow]:
         from snuba import settings
 
-        def default(value):
-            if isinstance(value, datetime):
-                return value.strftime(DATETIME_FORMAT)
-            else:
-                raise TypeError
-
         table_name = table_name or self.__table_schema.get_table_name()
 
         options = self.__update_writer_options(options)
 
         return self.__cluster.get_writer(
-            table_name,
-            lambda row: rapidjson.dumps(row, default=default).encode("utf-8"),
-            options,
-            chunk_size=settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
+            table_name, options, chunk_size=settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
         )
 
     def get_bulk_writer(
@@ -157,9 +144,6 @@ class TableWriter:
         This is a stripped down verison of the writer designed
         for better performance when loading data in bulk.
         """
-        # TODO: Consider using rapidjson to encode everywhere
-        # once we will be confident it is reliable enough.
-
         from snuba import settings
 
         table_name = table_name or self.__table_schema.get_table_name()
@@ -167,10 +151,7 @@ class TableWriter:
         options = self.__update_writer_options(options)
 
         return self.__cluster.get_writer(
-            table_name,
-            lambda row: rapidjson.dumps(row).encode("utf-8"),
-            options,
-            chunk_size=settings.BULK_CLICKHOUSE_BUFFER,
+            table_name, options, chunk_size=settings.BULK_CLICKHOUSE_BUFFER,
         )
 
     def get_bulk_loader(
