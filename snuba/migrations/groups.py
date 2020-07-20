@@ -62,7 +62,11 @@ class EventsLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.events")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_events_initial"]
+        return [
+            "0001_events_initial",
+            "0002_onpremise_compatibility",
+            "0003_tags_hash_map",
+        ]
 
 
 class TransactionsLoader(DirectoryLoader):

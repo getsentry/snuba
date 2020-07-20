@@ -27,6 +27,19 @@ from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
+TAGS_HASH_MAP_COLUMN = """
+arrayMap((k, v) -> cityHash64(
+    concat(
+        replaceRegexpAll(k, '(\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1'),
+        '=',
+        v)
+    ),
+    tags.key,
+    tags.value
+)
+"""
+
+
 metadata_columns = ColumnSet(
     [
         # optional stream related data
@@ -134,6 +147,12 @@ all_columns = (
         # other tags
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
+        # Tags hashmap is a materialized column. Clickhouse does not allow
+        # us to create a materialized column that references a nested one
+        # during create statement
+        # (https://github.com/ClickHouse/ClickHouse/issues/12586), so the
+        # materialization is added with a migration.
+        ("_tags_hash_map", Array(UInt(64))),
         # other context
         ("contexts", Nested([("key", String()), ("value", String())])),
         # http interface

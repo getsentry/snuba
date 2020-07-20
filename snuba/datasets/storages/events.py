@@ -1,6 +1,6 @@
 from typing import Mapping, Sequence
 
-from snuba.clickhouse.columns import ColumnType
+from snuba.clickhouse.columns import ColumnType, Materialized
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
@@ -19,6 +19,7 @@ from snuba.datasets.storages.events_common import (
     query_processors,
     query_splitters,
     required_columns,
+    TAGS_HASH_MAP_COLUMN,
 )
 
 from snuba.datasets.table_storage import KafkaStreamLoader
@@ -78,6 +79,21 @@ def events_migrations(
     if "message_timestamp" not in current_schema:
         ret.append(
             f"ALTER TABLE {clickhouse_table} ADD COLUMN message_timestamp DateTime AFTER partition"
+        )
+
+    if "_tags_hash_map" not in current_schema:
+        ret.append(
+            (
+                f"ALTER TABLE {clickhouse_table} ADD COLUMN _tags_hash_map Array(UInt64) "
+                f"MATERIALIZED {TAGS_HASH_MAP_COLUMN} AFTER _tags_flattened"
+            )
+        )
+    elif Materialized not in current_schema["_tags_hash_map"].get_all_modifiers():
+        ret.append(
+            (
+                f"ALTER TABLE {clickhouse_table} MODIFY COLUMN _tags_hash_map Array(UInt64) "
+                f"MATERIALIZED {TAGS_HASH_MAP_COLUMN}"
+            )
         )
 
     return ret
