@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingConsumer
-from snuba.utils.streams.dummy import DummyBroker, DummyConsumer, DummyProducer
+from snuba.utils.streams.dummy import DummyBroker
 from snuba.utils.streams.types import Message, Topic
 
 
@@ -27,15 +27,14 @@ class FakeWorker(AbstractBatchWorker[int, int]):
 
 
 class TestConsumer(object):
-    def test_batch_size(self) -> None:
+    def test_batch_size(self, broker: DummyBroker[int]) -> None:
         topic = Topic("topic")
-        broker: DummyBroker[int] = DummyBroker()
         broker.create_topic(topic, partitions=1)
-        producer: DummyProducer[int] = DummyProducer(broker)
+        producer = broker.get_producer()
         for i in [1, 2, 3]:
             producer.produce(topic, i).result()
 
-        consumer: DummyConsumer[int] = DummyConsumer(broker, "group")
+        consumer = broker.get_consumer("group")
 
         worker = FakeWorker()
         batching_consumer = BatchingConsumer(
@@ -58,13 +57,11 @@ class TestConsumer(object):
         assert consumer.close_calls == 1
 
     @patch("time.time")
-    def test_batch_time(self, mock_time: Any) -> None:
+    def test_batch_time(self, mock_time: Any, broker: DummyBroker[int]) -> None:
         topic = Topic("topic")
-        broker: DummyBroker[int] = DummyBroker()
         broker.create_topic(topic, partitions=1)
-        producer: DummyProducer[int] = DummyProducer(broker)
-
-        consumer: DummyConsumer[int] = DummyConsumer(broker, " group")
+        producer = broker.get_producer()
+        consumer = broker.get_consumer("group")
 
         worker = FakeWorker()
         batching_consumer = BatchingConsumer(
