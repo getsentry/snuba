@@ -2,7 +2,6 @@ import copy
 import logging
 from datetime import datetime
 from functools import partial
-from typing import Optional
 
 import sentry_sdk
 
@@ -166,22 +165,11 @@ def _format_storage_query_and_run(
     with sentry_sdk.start_span(description="create_query", op="db") as span:
         legacy_query = DictSqlQuery(dataset, clickhouse_query, request_settings)
         span.set_data("legacy_query", legacy_query.sql_data())
-        try:
-            ast_query: Optional[AstSqlQuery] = AstSqlQuery(
-                clickhouse_query, request_settings
-            )
-            # For mypy
-            assert ast_query is not None
-            span.set_data("ast_query", ast_query.sql_data())
 
-        except Exception:
-            logger.warning("Failed to format ast query", exc_info=True)
-            ast_query = None
+        ast_query = AstSqlQuery(clickhouse_query, request_settings)
+        span.set_data("ast_query", ast_query.sql_data())
 
-        if (
-            is_ast_rolled_out(get_dataset_name(dataset), referrer)
-            and ast_query is not None
-        ):
+        if is_ast_rolled_out(get_dataset_name(dataset), referrer):
             formatted_query: SqlQuery = ast_query
             query_type = "ast"
         else:

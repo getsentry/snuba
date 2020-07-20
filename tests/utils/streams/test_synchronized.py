@@ -6,9 +6,8 @@ from typing import Optional, TypeVar
 import pytest
 
 from snuba.utils.streams.consumer import Consumer
-from snuba.utils.streams.dummy import DummyBroker, DummyConsumer, DummyProducer
+from snuba.utils.streams.dummy import DummyBroker, DummyConsumer
 from snuba.utils.streams.kafka import KafkaPayload
-from snuba.utils.streams.producer import Producer
 from snuba.utils.streams.synchronized import Commit, SynchronizedConsumer, commit_codec
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.assertions import assert_changes, assert_does_not_change
@@ -31,19 +30,16 @@ def wait_for_consumer(consumer: Consumer[T], message: Message[T], attempts: int 
     )
 
 
-def test_synchronized_consumer() -> None:
+def test_synchronized_consumer(broker: DummyBroker[KafkaPayload]) -> None:
     topic = Topic("topic")
     commit_log_topic = Topic("commit-log")
 
-    broker: DummyBroker[KafkaPayload] = DummyBroker()
     broker.create_topic(topic, partitions=1)
     broker.create_topic(commit_log_topic, partitions=1)
 
-    consumer: Consumer[KafkaPayload] = DummyConsumer(broker, "consumer")
-    producer: Producer[KafkaPayload] = DummyProducer(broker)
-    commit_log_consumer: Consumer[KafkaPayload] = DummyConsumer(
-        broker, "commit-log-consumer"
-    )
+    consumer = broker.get_consumer("consumer")
+    producer = broker.get_producer()
+    commit_log_consumer = broker.get_consumer("commit-log-consumer")
 
     messages = [
         producer.produce(topic, KafkaPayload(None, f"{i}".encode("utf8"))).result(1.0)
@@ -191,19 +187,16 @@ def test_synchronized_consumer() -> None:
             assert synchronized_consumer.poll(0.0) == messages[4]
 
 
-def test_synchronized_consumer_pause_resume() -> None:
+def test_synchronized_consumer_pause_resume(broker: DummyBroker[KafkaPayload]) -> None:
     topic = Topic("topic")
     commit_log_topic = Topic("commit-log")
 
-    broker: DummyBroker[KafkaPayload] = DummyBroker()
     broker.create_topic(topic, partitions=1)
     broker.create_topic(commit_log_topic, partitions=1)
 
-    consumer: Consumer[KafkaPayload] = DummyConsumer(broker, "consumer")
-    producer: Producer[KafkaPayload] = DummyProducer(broker)
-    commit_log_consumer: Consumer[KafkaPayload] = DummyConsumer(
-        broker, "commit-log-consumer"
-    )
+    consumer = broker.get_consumer("consumer")
+    producer = broker.get_producer()
+    commit_log_consumer = broker.get_consumer("commit-log-consumer")
 
     messages = [
         producer.produce(topic, KafkaPayload(None, f"{i}".encode("utf8"))).result(1.0)
@@ -273,21 +266,18 @@ def test_synchronized_consumer_pause_resume() -> None:
             synchronized_consumer.resume([Partition(topic, 0)])
 
 
-def test_synchronized_consumer_handles_end_of_partition() -> None:
+def test_synchronized_consumer_handles_end_of_partition(
+    broker: DummyBroker[KafkaPayload],
+) -> None:
     topic = Topic("topic")
     commit_log_topic = Topic("commit-log")
 
-    broker: DummyBroker[KafkaPayload] = DummyBroker()
     broker.create_topic(topic, partitions=1)
     broker.create_topic(commit_log_topic, partitions=1)
 
-    consumer: Consumer[KafkaPayload] = DummyConsumer(
-        broker, "consumer", enable_end_of_partition=True
-    )
-    producer: Producer[KafkaPayload] = DummyProducer(broker)
-    commit_log_consumer: Consumer[KafkaPayload] = DummyConsumer(
-        broker, "commit-log-consumer"
-    )
+    consumer = broker.get_consumer("consumer", enable_end_of_partition=True)
+    producer = broker.get_producer()
+    commit_log_consumer = broker.get_consumer("commit-log-consumer")
 
     messages = [
         producer.produce(topic, KafkaPayload(None, f"{i}".encode("utf8"))).result(1.0)
@@ -335,11 +325,10 @@ def test_synchronized_consumer_handles_end_of_partition() -> None:
         assert synchronized_consumer.poll(0) == messages[1]
 
 
-def test_synchronized_consumer_worker_crash() -> None:
+def test_synchronized_consumer_worker_crash(broker: DummyBroker[KafkaPayload]) -> None:
     topic = Topic("topic")
     commit_log_topic = Topic("commit-log")
 
-    broker: DummyBroker[KafkaPayload] = DummyBroker()
     broker.create_topic(topic, partitions=1)
     broker.create_topic(commit_log_topic, partitions=1)
 
@@ -357,7 +346,7 @@ def test_synchronized_consumer_worker_crash() -> None:
             finally:
                 poll_called.set()
 
-    consumer: Consumer[KafkaPayload] = DummyConsumer(broker, "consumer")
+    consumer = broker.get_consumer("consumer")
     commit_log_consumer: Consumer[KafkaPayload] = BrokenDummyConsumer(
         broker, "commit-log-consumer"
     )
