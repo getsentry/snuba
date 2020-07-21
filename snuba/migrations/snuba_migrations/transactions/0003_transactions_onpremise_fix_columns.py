@@ -113,6 +113,16 @@ class Migration(migration.MultiStepMigration):
                 column=Column("message_timestamp", DateTime()),
                 after="offset",
             ),
+            operations.DropColumn(
+                storage_set=StorageSetKey.TRANSACTIONS,
+                table_name="transactions_local",
+                column_name="_start_date",
+            ),
+            operations.DropColumn(
+                storage_set=StorageSetKey.TRANSACTIONS,
+                table_name="transactions_local",
+                column_name="_finish_date",
+            ),
         ]
 
     def backwards_local(self) -> Sequence[operations.Operation]:
