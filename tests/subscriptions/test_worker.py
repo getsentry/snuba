@@ -22,8 +22,7 @@ from snuba.subscriptions.worker import (
     subscription_task_result_encoder,
 )
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.consumer import Consumer
-from snuba.utils.streams.dummy import DummyBroker, DummyConsumer, DummyProducer
+from snuba.utils.streams.dummy import DummyBroker
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.utils.types import Interval
@@ -60,10 +59,11 @@ def dataset() -> Iterator[Dataset]:
         pytest.param(timedelta(minutes=-5), id="with time shift"),
     ],
 )
-def test_subscription_worker(dataset: Dataset, time_shift: Optional[timedelta]) -> None:
+def test_subscription_worker(
+    dataset: Dataset, broker: DummyBroker[KafkaPayload], time_shift: Optional[timedelta]
+) -> None:
     result_topic = Topic("subscription-results")
 
-    broker: DummyBroker[KafkaPayload] = DummyBroker()
     broker.create_topic(result_topic, partitions=1)
 
     frequency = timedelta(minutes=1)
@@ -89,7 +89,7 @@ def test_subscription_worker(dataset: Dataset, time_shift: Optional[timedelta]) 
         dataset,
         ThreadPoolExecutor(),
         {0: SubscriptionScheduler(store, PartitionId(0), timedelta(), metrics)},
-        DummyProducer(broker),
+        broker.get_producer(),
         result_topic,
         metrics,
         time_shift=time_shift,
@@ -118,7 +118,7 @@ def test_subscription_worker(dataset: Dataset, time_shift: Optional[timedelta]) 
 
     # Check to make sure the results were published.
     # NOTE: This does not cover the ``SubscriptionTaskResultCodec``!
-    consumer: Consumer[KafkaPayload] = DummyConsumer(broker, "group")
+    consumer = broker.get_consumer("group")
     consumer.subscribe([result_topic])
 
     for i in range(evaluations):
