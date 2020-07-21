@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from threading import Event
 from typing import Callable, Mapping, MutableMapping, Optional, Sequence, Set
@@ -7,6 +8,9 @@ from snuba.utils.concurrent import Synchronized, execute
 from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -86,7 +90,17 @@ class SynchronizedConsumer(Consumer[TPayload]):
         ] = Synchronized({group: {} for group in commit_log_groups})
 
         self.__commit_log_worker_stop_requested = Event()
+        self.__commit_log_worker_subscription_received = Event()
         self.__commit_log_worker = execute(self.__run_commit_log_worker)
+
+        logger.debug("Waiting for commit log consumer to receieve assignment...")
+        while not self.__commit_log_worker_subscription_received.wait(0.1):
+            # Check to make sure we're not waiting for an event that will never
+            # happen if the commit log consumer has crashed.
+            if not self.__commit_log_worker.running():
+                self.__commit_log_worker.result()
+        else:
+            logger.debug("Commit log consumer has started.")
 
         # The set of partitions that have been paused by the caller/user. This
         # takes precedence over whether or not the partition should be paused
@@ -98,7 +112,13 @@ class SynchronizedConsumer(Consumer[TPayload]):
 
         # TODO: This needs to ensure that it is subscribed to all partitions.
 
-        self.__commit_log_consumer.subscribe([self.__commit_log_topic])
+        def assignment_callback(offsets: Mapping[Partition, int]) -> None:
+            logger.debug("Commit log consumer received assignment: %r", offsets)
+            self.__commit_log_worker_subscription_received.set()
+
+        self.__commit_log_consumer.subscribe(
+            [self.__commit_log_topic], on_assign=assignment_callback
+        )
 
         while not self.__commit_log_worker_stop_requested.is_set():
             try:

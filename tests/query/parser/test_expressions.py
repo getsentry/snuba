@@ -10,6 +10,117 @@ from snuba.query.parser.expressions import parse_aggregation
 
 test_data = [
     (
+        ["f('2020*07+16')", None, None],
+        FunctionCall(None, "f", (Literal(None, "2020*07+16"),),),
+    ),  # String (that looks like arithmetic) nested in function call
+    (
+        ["f(a * b, g(c * 3))", None, None],
+        FunctionCall(
+            None,
+            "f",
+            (
+                FunctionCall(
+                    None, "multiply", (Column(None, None, "a"), Column(None, None, "b"))
+                ),
+                FunctionCall(
+                    None,
+                    "g",
+                    (
+                        FunctionCall(
+                            None,
+                            "multiply",
+                            (Column(None, None, "c"), Literal(None, 3)),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    ),  # Arithmetic expressions nested inside function calls
+    (
+        ["f(a, b) + 3 * g(c)", None, None],
+        FunctionCall(
+            None,
+            "plus",
+            (
+                FunctionCall(
+                    None, "f", (Column(None, None, "a"), Column(None, None, "b"))
+                ),
+                FunctionCall(
+                    None,
+                    "multiply",
+                    (
+                        Literal(None, 3),
+                        FunctionCall(None, "g", (Column(None, None, "c"),)),
+                    ),
+                ),
+            ),
+        ),
+    ),  # Arithmetic expressions involving function calls
+    (
+        ["a+b", None, None],
+        FunctionCall(None, "plus", (Column(None, None, "a"), Column(None, None, "b"))),
+    ),  # Simple addition with Columns
+    (
+        ["1 + 2 + 3", None, None],
+        FunctionCall(
+            None,
+            "plus",
+            (
+                Literal(None, 1),
+                FunctionCall(None, "plus", (Literal(None, 2), Literal(None, 3))),
+            ),
+        ),
+    ),  # Addition with more than 2 terms
+    (
+        ["5+4*3", None, None],
+        FunctionCall(
+            None,
+            "plus",
+            (
+                Literal(None, 5),
+                FunctionCall(None, "multiply", (Literal(None, 4), Literal(None, 3))),
+            ),
+        ),
+    ),  # Combination of multiplication, addition
+    (
+        ["7  *5*4*3+2 *1+ 6", None, None],
+        FunctionCall(
+            None,
+            "plus",
+            (
+                FunctionCall(
+                    None,
+                    "multiply",
+                    (
+                        Literal(None, 7),
+                        FunctionCall(
+                            None,
+                            "multiply",
+                            (
+                                Literal(None, 5),
+                                FunctionCall(
+                                    None,
+                                    "multiply",
+                                    (Literal(None, 4), Literal(None, 3)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+                FunctionCall(
+                    None,
+                    "plus",
+                    (
+                        FunctionCall(
+                            None, "multiply", (Literal(None, 2), Literal(None, 1))
+                        ),
+                        Literal(None, 6),
+                    ),
+                ),
+            ),
+        ),
+    ),  # More complicated Combination of operators
+    (
         ["count", "event_id", None],
         FunctionCall(None, "count", (Column(None, None, "event_id"),)),
     ),  # Simple aggregation
