@@ -19,32 +19,46 @@ def recreate_table() -> None:
     table_name = "transactions_local"
     table_name_new = "transactions_local_new"
 
-    matching_sampling_keys = clickhouse.execute(
-        f"SELECT sampling_key FROM system.tables WHERE name = '{table_name}' AND database = '{database}'"
+    new_sampling_key = "cityHash64(span_id)"
+    new_partition_key = "(retention_days, toMonday(finish_ts))"
+
+    ((curr_sampling_key, curr_partition_key),) = clickhouse.execute(
+        f"SELECT sampling_key, partition_key FROM system.tables WHERE name = '{table_name}' AND database = '{database}'"
     )
-    if matching_sampling_keys == []:
-        # Table does not exist yet
-        return
 
-    ((sampling_key,),) = matching_sampling_keys
+    sampling_key_needs_update = curr_sampling_key != new_sampling_key
+    partition_key_needs_update = curr_partition_key != new_partition_key
 
-    if sampling_key != "":
-        # The sampling clause is already present
+    if not sampling_key_needs_update and not partition_key_needs_update:
+        # Already up to date
         return
 
     # Create transactions_local_new and insert data
-    ((create_table_statement,),) = clickhouse.execute(
+    ((curr_create_table_statement,),) = clickhouse.execute(
         f"SHOW CREATE TABLE {database}.{table_name}"
     )
 
-    # Insert sample clause before TTL
-    idx = create_table_statement.find("TTL")
-
-    new_create_table_statement = (
-        create_table_statement[:idx].replace(table_name, table_name_new)
-        + f"SAMPLE BY cityHash64(span_id) "
-        + create_table_statement[idx:]
+    new_create_table_statement = curr_create_table_statement.replace(
+        table_name, table_name_new
     )
+
+    # Insert sample clause before TTL
+    if sampling_key_needs_update:
+        assert "SAMPLE BY" not in new_create_table_statement
+        idx = new_create_table_statement.find("TTL")
+
+        new_create_table_statement = (
+            new_create_table_statement[:idx]
+            + f"SAMPLE BY {new_sampling_key} "
+            + new_create_table_statement[idx:]
+        )
+
+    # Switch the partition key
+    if partition_key_needs_update:
+        assert new_create_table_statement.count(curr_partition_key) == 1
+        new_create_table_statement = new_create_table_statement.replace(
+            curr_partition_key, new_partition_key
+        )
 
     clickhouse.execute(new_create_table_statement)
 

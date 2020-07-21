@@ -77,8 +77,8 @@ class TransactionsLoader(DirectoryLoader):
     def get_migrations(self) -> Sequence[str]:
         return [
             "0001_transactions",
-            "0002_transactions_onpremise_compatibility",
-            "0003_transactions_onpremise_fix_orderby",
+            "0002_transactions_onpremise_fix_orderby_and_partitionby",
+            "0003_transactions_onpremise_fix_columns",
         ]
 
 
