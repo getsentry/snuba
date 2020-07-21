@@ -8,6 +8,7 @@ import pytz
 import simplejson as json
 
 from snuba import settings, state
+from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.factory import enforce_table_writer
 from tests.base import BaseApiTest
 
@@ -136,7 +137,8 @@ class TestTransactionsApi(BaseApiTest):
                                         ],
                                     },
                                 },
-                            )
+                            ),
+                            KafkaMessageMetadata(0, 0, self.base_time),
                         )
                     )
                     events.append(processed)
