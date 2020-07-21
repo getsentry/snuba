@@ -5,7 +5,7 @@ from typing import Any, Iterable, List, Optional, Tuple, Union
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
-from snuba.query.dsl import multiply, plus
+from snuba.query.dsl import divide, minus, multiply, plus
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -27,9 +27,11 @@ minimal_clickhouse_grammar = Grammar(
 # name of a clickhouse function.
 
 root_element          = low_pri_arithmetic
-low_pri_arithmetic    = space* (high_pri_arithmetic) space* (("+" low_pri_arithmetic) / empty)
-high_pri_arithmetic   = space* arithmetic_term space* (("*" high_pri_arithmetic) / empty)
-arithmetic_term       = function_call / numeric_literal / column_name
+low_pri_arithmetic    = space* high_pri_arithmetic space* (low_pri_op high_pri_arithmetic)*
+high_pri_arithmetic   = space* arithmetic_term space* (high_pri_op arithmetic_term)*
+arithmetic_term       = (space*) (function_call / numeric_literal / column_name) (space*)
+low_pri_op            = ("+"/"-")
+high_pri_op           = ("/"/"*")
 param_expression      = low_pri_arithmetic / quoted_literal
 parameters_list       = parameter* (param_expression)
 parameter             = param_expression space* comma space*
@@ -45,7 +47,6 @@ open_paren            = "("
 close_paren           = ")"
 space                 = " "
 comma                 = ","
-empty                 = ""
 """
 )
 
@@ -61,44 +62,70 @@ class ClickhouseVisitor(NodeVisitor):
     def visit_column_name(self, node: Node, visited_children: Iterable[Any]) -> Column:
         return Column(None, None, node.text)
 
-    def visit_empty(
-        self, node: Node, visited_children: Iterable[Any]
-    ) -> Optional[Expression]:
-        return None
+    def visit_low_pri_op(self, node: Node, visited_children: Iterable[Any]) -> Any:
+        return node.text
+
+    def visit_high_pri_op(self, node: Node, visited_children: Iterable[Any]) -> Any:
+        return node.text
+
+    def visit_arithmetic_term(
+        self, node: Node, visited_children: Tuple[Any, Expression, Any]
+    ) -> Expression:
+        _, term, _ = visited_children
+
+        return term
 
     def visit_low_pri_arithmetic(
         self,
         node: Node,
-        visited_children: Tuple[Any, Expression, Any, Tuple[str, Expression]],
+        visited_children: Tuple[
+            Any, Expression, Any, Union[Any, Tuple[str, Expression]]
+        ],
     ) -> Expression:
         _, term, _, exp = visited_children
 
-        if exp is None:
-            # A check for any None child nodes
-            # that arose from empty space ''
+        if exp == "":
             return term
-        else:
-            # return exp[1] because
-            # exp[0] is a string which
-            # represents the operator
-            return plus(term, exp[1])
+
+        for elem in exp:
+            if isinstance(elem, list):
+                if elem[0] == "+":
+                    term = plus(term, elem[1])
+                elif elem[0] == "-":
+                    term = minus(term, elem[1])
+            else:
+                if exp[0] == "+":
+                    return plus(term, exp[1])
+                elif exp[0] == "-":
+                    return minus(term, exp[1])
+
+        return term
 
     def visit_high_pri_arithmetic(
         self,
         node: Node,
-        visited_children: Tuple[Any, Expression, Any, Tuple[str, Expression]],
+        visited_children: Tuple[
+            Any, Expression, Any, Union[Any, Tuple[str, Expression]]
+        ],
     ) -> Expression:
-        _, factor, _, term = visited_children
+        _, term, _, exp = visited_children
 
-        if term is None:
-            # A check for any None child nodes
-            # that arose from empty space ''
-            return factor
-        else:
-            # return term[1] because
-            # term[0] is a string which
-            # represents the operator
-            return multiply(factor, term[1])
+        if exp == "":
+            return term
+
+        for elem in exp:
+            if isinstance(elem, list):
+                if elem[0] == "*":
+                    term = multiply(term, elem[1])
+                elif elem[0] == "/":
+                    term = divide(term, elem[1])
+            else:
+                if exp[0] == "*":
+                    return multiply(term, exp[1])
+                elif exp[0] == "/":
+                    return divide(term, exp[1])
+
+        return term
 
     def visit_numeric_literal(
         self, node: Node, visited_children: Iterable[Any]
@@ -211,7 +238,9 @@ def parse_aggregation(
         return FunctionCall(alias, aggregation_function, tuple(columns_expr))
 
     expression_tree = minimal_clickhouse_grammar.parse(aggregation_function)
+    print(expression_tree)
     parsed_expression = ClickhouseVisitor().visit(expression_tree)
+    print(parsed_expression)
 
     if (
         # Simple Clickhouse expression with no snuba syntax
