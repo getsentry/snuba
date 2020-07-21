@@ -182,7 +182,6 @@ def _run_and_apply_column_names(
             extra={"mappings": discrepancies},
             exc_info=True,
         )
-        return result
 
     # TODO actually replace the column names in the result (data and
     # meta) with the names the user expects from the SelectedExpression
