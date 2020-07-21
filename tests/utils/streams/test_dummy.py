@@ -39,8 +39,6 @@ class DummyStreamsTestCase(StreamsTestMixin[int], TestCase):
     def get_payloads(self) -> Iterator[int]:
         return itertools.count()
 
-    @pytest.mark.xfail(
-        strict=True, reason="rebalancing not implemented", raises=NotImplementedError
-    )
+    @pytest.mark.xfail(strict=True, reason="rebalancing not implemented")
     def test_pause_resume_rebalancing(self) -> None:
         return super().test_pause_resume_rebalancing()
