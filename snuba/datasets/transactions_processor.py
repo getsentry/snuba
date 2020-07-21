@@ -45,7 +45,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         milliseconds = int(timestamp.microsecond / 1000)
         return (timestamp, milliseconds)
 
-    def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
+    def process_message(self, message, metadata) -> Optional[ProcessedMessage]:
         processed = {"deleted": 0}
         if not (isinstance(message, (list, tuple)) and len(message) >= 2):
             return None
@@ -147,9 +147,8 @@ class TransactionsMessageProcessor(MessageProcessor):
             elif ip_address.version == 6:
                 processed["ip_address_v6"] = str(ip_address)
 
-        if metadata is not None:
-            processed["partition"] = metadata.partition
-            processed["offset"] = metadata.offset
+        processed["partition"] = metadata.partition
+        processed["offset"] = metadata.offset
 
         sdk = data.get("sdk", None) or {}
         processed["sdk_name"] = _unicodify(sdk.get("name") or "")

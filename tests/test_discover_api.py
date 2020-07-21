@@ -8,6 +8,7 @@ import pytest
 import simplejson as json
 
 from snuba import settings
+from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from tests.base import BaseApiTest, dataset_manager
 
@@ -115,7 +116,8 @@ class TestDiscoverApi(BaseApiTest):
                             ],
                         },
                     },
-                )
+                ),
+                KafkaMessageMetadata(0, 0, self.base_time),
             )
         )
 
