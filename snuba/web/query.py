@@ -187,6 +187,9 @@ def _run_and_apply_column_names(
     # TODO actually replace the column names in the result (data and
     # meta) with the names the user expects from the SelectedExpression
     # objects.
+    # As of now, to ensure the column names are what the user expects,
+    # we rely on the aliases assigned to the AST expressions after parsing.
+    # That's why we should not have the discrepancies logged above.
 
     return result
 
