@@ -19,7 +19,7 @@ UNKNOWN_SPAN_STATUS = 2
 
 class Migration(migration.MultiStepMigration):
     """
-    The first of two migrations that syncs the transactions_local table for onpremise
+    The second of two migrations that syncs the transactions_local table for onpremise
     users migrating from versions of Snuba prior to the migration system.
 
     This migration ensures the list of columns is up to date.

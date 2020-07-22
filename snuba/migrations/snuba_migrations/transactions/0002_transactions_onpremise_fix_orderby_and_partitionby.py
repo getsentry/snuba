@@ -8,9 +8,10 @@ from snuba.migrations import migration, operations
 
 def recreate_table() -> None:
     """
-    The sample by clause for the transactions table was added in April 2020.
-    If the user has a table without the sample by clause, we need to add it by
-    recreating the table and copying the data over then deleting the old table.
+    The sample by clause for the transactions table was added in April 2020. Partition
+    by has been changed twice. If the user has a table without the sample by clause,
+    or the old partition by we need to recreate the table correctly and copy the
+    data over before deleting the old table.
     """
     cluster = get_cluster(StorageSetKey.TRANSACTIONS)
 
@@ -89,12 +90,13 @@ def recreate_table() -> None:
 
 class Migration(migration.MultiStepMigration):
     """
-    The second of two migrations that syncs the transactions_local table for onpremise
+    The first of two migrations that syncs the transactions_local table for onpremise
     users migrating from versions of Snuba prior to the migration system.
 
-    This migration recreates the table if the sampling key is not present. Since the
-    sampling key on the transactions table was introduced later, it's possible the user
-    has a version without the sample clause set. If this is the case we must recreate
+    This migration recreates the table if the sampling key is not present or the
+    partitioning key is not up to date. Since the sampling key was introduced later and
+    the partition key was changed, it's possible the user has a version of the table
+    where one or both of these is out of date. If this is the case we must recreate
     the table and ensure data is copied over.
     """
 
