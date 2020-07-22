@@ -141,7 +141,6 @@ class ConsumerBuilder:
             consumer,
             self.raw_topic,
             BatchProcessorFactory(
-                consumer,
                 worker=worker,
                 max_batch_size=self.max_batch_size,
                 max_batch_time=self.max_batch_time_ms,

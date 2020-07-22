@@ -175,7 +175,6 @@ def subscriptions(
                 else Topic(loader.get_default_topic_spec().topic_name)
             ),
             BatchProcessorFactory(
-                consumer,
                 SubscriptionWorker(
                     dataset,
                     executor,

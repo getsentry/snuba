@@ -41,7 +41,6 @@ class TestConsumer(object):
             consumer,
             topic,
             BatchProcessorFactory(
-                consumer,
                 worker=worker,
                 max_batch_size=2,
                 max_batch_time=100,
@@ -71,7 +70,6 @@ class TestConsumer(object):
             consumer,
             topic,
             BatchProcessorFactory(
-                consumer,
                 worker=worker,
                 max_batch_size=100,
                 max_batch_time=2000,

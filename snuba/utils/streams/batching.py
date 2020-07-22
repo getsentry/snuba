@@ -5,6 +5,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import (
+    Callable,
     Generic,
     Mapping,
     MutableMapping,
@@ -77,7 +78,9 @@ class Batch(Generic[TResult]):
 
 class ProcessorFactory(ABC, Generic[TPayload]):
     @abstractmethod
-    def create(self) -> Processor[TPayload]:
+    def create(
+        self, commit: Callable[[Mapping[Partition, int]], None]
+    ) -> Processor[TPayload]:
         raise NotImplementedError
 
 
@@ -94,21 +97,21 @@ class Processor(ABC, Generic[TPayload]):
 class BatchProcessorFactory(ProcessorFactory[TPayload]):
     def __init__(
         self,
-        consumer: Consumer[TPayload],
         worker: AbstractBatchWorker[TPayload, TResult],
         max_batch_size: int,
         max_batch_time: int,
         metrics: MetricsBackend,
     ) -> None:
-        self.__consumer = consumer
         self.__worker = worker
         self.__max_batch_size = max_batch_size
         self.__max_batch_time = max_batch_time
         self.__metrics = metrics
 
-    def create(self) -> BatchProcessor[TPayload]:
+    def create(
+        self, commit: Callable[[Mapping[Partition, int]], None]
+    ) -> Processor[TPayload]:
         return BatchProcessor(
-            self.__consumer,
+            commit,
             self.__worker,
             self.__max_batch_size,
             self.__max_batch_time,
@@ -125,16 +128,13 @@ class BatchProcessor(Processor[TPayload]):
 
     def __init__(
         self,
-        consumer: Consumer[TPayload],
+        commit: Callable[[Mapping[Partition, int]], None],
         worker: AbstractBatchWorker[TPayload, TResult],
         max_batch_size: int,
         max_batch_time: int,
         metrics: MetricsBackend,
     ) -> None:
-        # TODO: The consumer here should be removed and replaced with a
-        # generalized interface for communicating offset commits (rather than
-        # giving the processor full control of the consumer.)
-        self.__consumer = consumer
+        self.__commit = commit
         self.__worker = worker
         self.__max_batch_size = max_batch_size
         self.__max_batch_time = max_batch_time
@@ -237,13 +237,10 @@ class BatchProcessor(Processor[TPayload]):
 
         logger.debug("Committing offsets for batch")
         commit_start = time.time()
-        self.__consumer.stage_offsets(
-            {
-                partition: offsets.hi
-                for partition, offsets in self.__batch.offsets.items()
-            }
-        )
-        offsets = self.__consumer.commit_offsets()
+        offsets = {
+            partition: offsets.hi for partition, offsets in self.__batch.offsets.items()
+        }
+        self.__commit(offsets)
         logger.debug("Committed offsets: %s", offsets)
         commit_duration = (time.time() - commit_start) * 1000
         logger.debug("Offset commit took %dms", commit_duration)
@@ -296,7 +293,7 @@ class BatchingConsumer(Generic[TPayload]):
             ), "received unexpected assignment with existing active processor"
 
             logger.info("New partitions assigned: %r", partitions)
-            self.__processor = self.__processor_factory.create()
+            self.__processor = self.__processor_factory.create(self.__commit)
 
         def on_partitions_revoked(partitions: Sequence[Partition]) -> None:
             "Reset the current in-memory batch, letting the next consumer take over where we left off."
@@ -311,6 +308,10 @@ class BatchingConsumer(Generic[TPayload]):
         self.__consumer.subscribe(
             [topic], on_assign=on_partitions_assigned, on_revoke=on_partitions_revoked
         )
+
+    def __commit(self, offsets: Mapping[Partition, int]) -> None:
+        self.__consumer.stage_offsets(offsets)
+        self.__consumer.commit_offsets()
 
     def run(self) -> None:
         "The main run loop, see class docstring for more information."

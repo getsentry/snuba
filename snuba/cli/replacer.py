@@ -116,7 +116,6 @@ def replacer(
         consumer,
         Topic(replacements_topic),
         BatchProcessorFactory(
-            consumer,
             worker=ReplacerWorker(storage, metrics=metrics),
             max_batch_size=max_batch_size,
             max_batch_time=max_batch_time_ms,
