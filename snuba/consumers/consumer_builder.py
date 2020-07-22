@@ -11,7 +11,7 @@ from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
-from snuba.utils.streams.batching import BatchingConsumer
+from snuba.utils.streams.batching import BatchingConsumer, BatchProcessorFactory
 from snuba.utils.streams.kafka import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
@@ -140,10 +140,13 @@ class ConsumerBuilder:
         return BatchingConsumer(
             consumer,
             self.raw_topic,
-            worker=worker,
-            max_batch_size=self.max_batch_size,
-            max_batch_time=self.max_batch_time_ms,
-            metrics=self.metrics,
+            BatchProcessorFactory(
+                consumer,
+                worker=worker,
+                max_batch_size=self.max_batch_size,
+                max_batch_time=self.max_batch_time_ms,
+                metrics=self.metrics,
+            ),
             recoverable_errors=[TransportError],
         )
 

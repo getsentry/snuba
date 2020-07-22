@@ -1,14 +1,14 @@
 import time
 from datetime import datetime
-from typing import (
-    Any,
-    MutableSequence,
-    Sequence,
-)
+from typing import Any, MutableSequence, Sequence
 from unittest.mock import patch
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.batching import AbstractBatchWorker, BatchingConsumer
+from snuba.utils.streams.batching import (
+    AbstractBatchWorker,
+    BatchingConsumer,
+    BatchProcessorFactory,
+)
 from snuba.utils.streams.dummy import DummyBroker
 from snuba.utils.streams.types import Message, Topic
 
@@ -40,10 +40,13 @@ class TestConsumer(object):
         batching_consumer = BatchingConsumer(
             consumer,
             topic,
-            worker=worker,
-            max_batch_size=2,
-            max_batch_time=100,
-            metrics=DummyMetricsBackend(strict=True),
+            BatchProcessorFactory(
+                consumer,
+                worker=worker,
+                max_batch_size=2,
+                max_batch_time=100,
+                metrics=DummyMetricsBackend(strict=True),
+            ),
         )
 
         for _ in range(3):
@@ -67,10 +70,13 @@ class TestConsumer(object):
         batching_consumer = BatchingConsumer(
             consumer,
             topic,
-            worker=worker,
-            max_batch_size=100,
-            max_batch_time=2000,
-            metrics=DummyMetricsBackend(strict=True),
+            BatchProcessorFactory(
+                consumer,
+                worker=worker,
+                max_batch_size=100,
+                max_batch_time=2000,
+                metrics=DummyMetricsBackend(strict=True),
+            ),
         )
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())

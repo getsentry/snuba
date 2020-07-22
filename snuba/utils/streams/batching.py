@@ -278,24 +278,17 @@ class BatchingConsumer(Generic[TPayload]):
         self,
         consumer: Consumer[TPayload],
         topic: Topic,
-        worker: AbstractBatchWorker[TPayload, TResult],
-        max_batch_size: int,
-        max_batch_time: int,
-        metrics: MetricsBackend,
+        processor_factory: ProcessorFactory[TPayload],
         recoverable_errors: Optional[Sequence[Type[ConsumerError]]] = None,
     ) -> None:
         self.__consumer = consumer
-
-        self.__processor_factory: ProcessorFactory[TPayload] = BatchProcessorFactory(
-            consumer, worker, max_batch_size, max_batch_time, metrics
-        )
-
-        self.__processor: Optional[Processor[TPayload]] = None
-
-        self.__shutdown_requested = False
+        self.__processor_factory = processor_factory
 
         # The types passed to the `except` clause must be a tuple, not a Sequence.
         self.__recoverable_errors = tuple(recoverable_errors or [])
+
+        self.__processor: Optional[Processor[TPayload]] = None
+        self.__shutdown_requested = False
 
         def on_partitions_assigned(partitions: Mapping[Partition, int]) -> None:
             assert (
