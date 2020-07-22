@@ -8,6 +8,10 @@ class InvalidQueryException(Exception):
     pass
 
 
+class SchemaValidationException(InvalidQueryException):
+    pass
+
+
 class ParsingException(InvalidQueryException):
     pass
 

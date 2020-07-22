@@ -3,7 +3,6 @@ from typing import Any, Mapping, MutableMapping
 
 import jsonschema
 
-
 Schema = Mapping[str, Any]  # placeholder for JSON schema
 
 
@@ -46,10 +45,14 @@ def validate_jsonschema(value, schema, set_defaults=True):
         else jsonschema.Draft6Validator
     )
 
-    validator_cls(
-        schema,
-        types={"array": (list, tuple)},
-        format_checker=jsonschema.FormatChecker(),
-    ).validate(value, schema)
+    try:
+        validator_cls(
+            schema,
+            types={"array": (list, tuple)},
+            format_checker=jsonschema.FormatChecker(),
+        ).validate(value, schema)
+    except jsonschema.ValidationError:
+        # raise SchemaValidationException(str(error)) from error
+        raise
 
     return value
