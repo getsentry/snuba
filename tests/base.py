@@ -32,8 +32,6 @@ def dataset_manager(name: str) -> Iterator[Dataset]:
             clickhouse.execute(statement.statement)
 
         run_storage(storage.get_storage_key())
-        # for statement in storage.get_schemas().get_create_statements():
-        #    clickhouse.execute(statement.statement)
 
     try:
         yield dataset
