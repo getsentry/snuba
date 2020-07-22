@@ -23,6 +23,7 @@ from snuba.query.parser.exceptions import (
     AliasShadowingException,
     CyclicAliasException,
     ParsingException,
+    ValidationException,
 )
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
 from snuba.util import is_function, to_list, tuplify
@@ -95,7 +96,10 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
 
     aggregations = []
     for aggregation in body.get("aggregations", []):
-        assert isinstance(aggregation, (list, tuple))
+        if not isinstance(aggregation, (list, tuple)):
+            raise ParsingException(
+                f"Invalid aggregation structure {aggregation}. It must be a list/tuple."
+            )
         aggregation_function = aggregation[0]
         column_expr = aggregation[1]
         column_expr = column_expr if column_expr else []
@@ -132,12 +136,14 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
     for orderby in to_list(body.get("orderby", [])):
         if isinstance(orderby, str):
             match = NEGATE_RE.match(orderby)
-            assert match is not None, f"Invalid Order By clause {orderby}"
+            if match is None:
+                raise ParsingException(f"Invalid Order By clause {orderby}")
             direction, col = match.groups()
             orderby = col
         elif is_function(orderby):
             match = NEGATE_RE.match(orderby[0])
-            assert match is not None, f"Invalid Order By clause {orderby}"
+            if match is None:
+                raise ParsingException(f"Invalid Order By clause {orderby}")
             direction, col = match.groups()
             orderby = [col] + orderby[1:]
         else:
@@ -390,9 +396,10 @@ class AliasExpanderVisitor(ExpressionVisitor[Expression]):
                 self.__expand_nested,
             )
         )
-        assert isinstance(
-            expanded_column, Column
-        ), "A subscriptable column cannot be resolved to anything other than a column"
+        if not isinstance(expanded_column, Column):
+            raise ValidationException(
+                "A subscriptable column cannot be resolved to anything other than a column"
+            )
         return replace(
             exp,
             column=expanded_column,

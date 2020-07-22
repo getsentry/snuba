@@ -5,7 +5,7 @@ import pytest
 from snuba.datasets.factory import get_dataset
 from snuba.query.parser.exceptions import (
     AliasShadowingException,
-    QueryBuildingException,
+    InvalidQueryException,
     ParsingException,
 )
 from snuba.query.parser import parse_query
@@ -45,7 +45,7 @@ test_cases = [
 @pytest.mark.parametrize("query_body, expected_exception", test_cases)
 def test_failures(
     query_body: MutableMapping[str, Any],
-    expected_exception: Type[QueryBuildingException],
+    expected_exception: Type[InvalidQueryException],
 ) -> None:
     with pytest.raises(expected_exception):
         events = get_dataset("events")

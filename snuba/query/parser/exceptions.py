@@ -1,12 +1,18 @@
-class QueryBuildingException(Exception):
+class InvalidQueryException(Exception):
+    """
+    Common parent class used for invalid queries during parsing
+    and validation.
+    This should not be used for system errors.
+    """
+
     pass
 
 
-class ParsingException(QueryBuildingException):
+class ParsingException(InvalidQueryException):
     pass
 
 
-class ValidationException(QueryBuildingException):
+class ValidationException(InvalidQueryException):
     pass
 
 
