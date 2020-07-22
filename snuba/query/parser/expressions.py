@@ -13,6 +13,7 @@ from snuba.query.expressions import (
     FunctionCall,
     Literal,
 )
+from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.functions import parse_function_to_expr
 from snuba.query.parser.strings import parse_string_to_expr
 from snuba.util import is_function
@@ -184,7 +185,9 @@ def parse_expression(val: Any) -> Expression:
         return parse_function_to_expr(val)
     if isinstance(val, str):
         return parse_string_to_expr(val)
-    raise ValueError(f"Expression to parse can only be a function or a string: {val}")
+    raise ParsingException(
+        f"Expression to parse can only be a function or a string: {val}"
+    )
 
 
 def parse_aggregation(
@@ -210,7 +213,13 @@ def parse_aggregation(
     if matched is not None:
         return FunctionCall(alias, aggregation_function, tuple(columns_expr))
 
-    expression_tree = minimal_clickhouse_grammar.parse(aggregation_function)
+    try:
+        expression_tree = minimal_clickhouse_grammar.parse(aggregation_function)
+    except Exception as cause:
+        raise ParsingException(
+            f"Cannot parse aggregation {aggregation_function}", cause
+        ) from cause
+
     parsed_expression = ClickhouseVisitor().visit(expression_tree)
 
     if (
@@ -227,4 +236,6 @@ def parse_aggregation(
         return CurriedFunctionCall(alias, parsed_expression, tuple(columns_expr),)
 
     else:
-        raise ValueError(f"Invalid aggregation format {aggregation_function} {column}")
+        raise ParsingException(
+            f"Invalid aggregation format {aggregation_function} {column}"
+        )

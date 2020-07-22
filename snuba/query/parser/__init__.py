@@ -19,7 +19,11 @@ from snuba.query.expressions import (
 )
 from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
 from snuba.query.parser.conditions import parse_conditions_to_expr
-from snuba.query.parser.exceptions import CyclicAliasException
+from snuba.query.parser.exceptions import (
+    AliasShadowingException,
+    CyclicAliasException,
+    ParsingException,
+)
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
 from snuba.util import is_function, to_list, tuplify
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
@@ -91,7 +95,13 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
 
     aggregations = []
     for aggregation in body.get("aggregations", []):
-        assert isinstance(aggregation, (list, tuple))
+        if not isinstance(aggregation, Sequence):
+            raise ParsingException(
+                (
+                    f"Invalid aggregation structure {aggregation}. "
+                    "It must be a sequence containing expression, column and alias."
+                )
+            )
         aggregation_function = aggregation[0]
         column_expr = aggregation[1]
         column_expr = column_expr if column_expr else []
@@ -128,16 +138,33 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
     for orderby in to_list(body.get("orderby", [])):
         if isinstance(orderby, str):
             match = NEGATE_RE.match(orderby)
-            assert match is not None, f"Invalid Order By clause {orderby}"
+            if match is None:
+                raise ParsingException(
+                    (
+                        f"Invalid Order By clause {orderby}. If the Order By is a string, "
+                        "it must respect the format `[-]column`"
+                    )
+                )
             direction, col = match.groups()
             orderby = col
         elif is_function(orderby):
             match = NEGATE_RE.match(orderby[0])
-            assert match is not None, f"Invalid Order By clause {orderby}"
+            if match is None:
+                raise ParsingException(
+                    (
+                        f"Invalid Order By clause {orderby}. If the Order By is an expression, "
+                        "the function name must respect the format `[-]func_name`"
+                    )
+                )
             direction, col = match.groups()
             orderby = [col] + orderby[1:]
         else:
-            raise ValueError(f"Invalid Order By clause {orderby}")
+            raise ParsingException(
+                (
+                    f"Invalid Order By clause {orderby}. The Clause was neither "
+                    "a string nor a function call."
+                )
+            )
         orderby_parsed = parse_expression(tuplify(orderby))
         orderby_exprs.append(
             OrderBy(
@@ -188,7 +215,7 @@ def _validate_aliases(query: Query) -> None:
                 exp.alias in all_declared_aliases
                 and exp != all_declared_aliases[exp.alias]
             ):
-                raise ValueError(
+                raise AliasShadowingException(
                     (
                         f"Shadowing aliases detected for alias: {exp.alias}. "
                         + f"Expressions: {all_declared_aliases[exp.alias]}"
