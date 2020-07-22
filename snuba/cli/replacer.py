@@ -102,18 +102,16 @@ def replacer(
 
     metrics = MetricsWrapper(environment.metrics, "replacer", tags=metrics_tags,)
 
-    consumer = KafkaConsumer(
-        build_kafka_consumer_configuration(
-            bootstrap_servers=bootstrap_server,
-            group_id=consumer_group,
-            auto_offset_reset=auto_offset_reset,
-            queued_max_messages_kbytes=queued_max_messages_kbytes,
-            queued_min_messages=queued_min_messages,
-        ),
-    )
-
     replacer = BatchingConsumer(
-        consumer,
+        KafkaConsumer(
+            build_kafka_consumer_configuration(
+                bootstrap_servers=bootstrap_server,
+                group_id=consumer_group,
+                auto_offset_reset=auto_offset_reset,
+                queued_max_messages_kbytes=queued_max_messages_kbytes,
+                queued_min_messages=queued_min_messages,
+            ),
+        ),
         Topic(replacements_topic),
         BatchProcessorFactory(
             worker=ReplacerWorker(storage, metrics=metrics),
