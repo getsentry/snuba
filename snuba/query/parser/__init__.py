@@ -23,7 +23,6 @@ from snuba.query.parser.exceptions import (
     AliasShadowingException,
     CyclicAliasException,
     ParsingException,
-    ValidationException,
 )
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
 from snuba.util import is_function, to_list, tuplify
@@ -96,9 +95,12 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
 
     aggregations = []
     for aggregation in body.get("aggregations", []):
-        if not isinstance(aggregation, (list, tuple)):
+        if not isinstance(aggregation, Sequence):
             raise ParsingException(
-                f"Invalid aggregation structure {aggregation}. It must be a list/tuple."
+                (
+                    f"Invalid aggregation structure {aggregation}. "
+                    "It must be a sequence containing expression, column and alias."
+                )
             )
         aggregation_function = aggregation[0]
         column_expr = aggregation[1]
@@ -137,17 +139,32 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
         if isinstance(orderby, str):
             match = NEGATE_RE.match(orderby)
             if match is None:
-                raise ParsingException(f"Invalid Order By clause {orderby}")
+                raise ParsingException(
+                    (
+                        f"Invalid Order By clause {orderby}. If the Order By is a string, "
+                        "it must respect the format `[-]column`"
+                    )
+                )
             direction, col = match.groups()
             orderby = col
         elif is_function(orderby):
             match = NEGATE_RE.match(orderby[0])
             if match is None:
-                raise ParsingException(f"Invalid Order By clause {orderby}")
+                raise ParsingException(
+                    (
+                        f"Invalid Order By clause {orderby}. If the Order By is an expression, "
+                        "the function name must respect the format `[-]func_name`"
+                    )
+                )
             direction, col = match.groups()
             orderby = [col] + orderby[1:]
         else:
-            raise ParsingException(f"Invalid Order By clause {orderby}")
+            raise ParsingException(
+                (
+                    f"Invalid Order By clause {orderby}. The Clause was neither "
+                    "a string nor a function call."
+                )
+            )
         orderby_parsed = parse_expression(tuplify(orderby))
         orderby_exprs.append(
             OrderBy(
@@ -396,10 +413,9 @@ class AliasExpanderVisitor(ExpressionVisitor[Expression]):
                 self.__expand_nested,
             )
         )
-        if not isinstance(expanded_column, Column):
-            raise ValidationException(
-                "A subscriptable column cannot be resolved to anything other than a column"
-            )
+        assert isinstance(
+            expanded_column, Column
+        ), "A subscriptable column cannot be resolved to anything other than a column"
         return replace(
             exp,
             column=expanded_column,
