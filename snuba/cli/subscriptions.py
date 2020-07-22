@@ -18,12 +18,13 @@ from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.worker import SubscriptionWorker
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
-from snuba.utils.streams.batching import BatchingConsumer, BatchProcessorFactory
+from snuba.utils.streams.batching import BatchProcessorFactory
 from snuba.utils.streams.kafka import (
     KafkaConsumer,
     KafkaProducer,
     build_kafka_consumer_configuration,
 )
+from snuba.utils.streams.processing import BatchingConsumer
 from snuba.utils.streams.synchronized import SynchronizedConsumer
 from snuba.utils.streams.types import Topic
 
