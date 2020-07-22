@@ -1,5 +1,6 @@
 import re
 from dataclasses import replace
+from enum import Enum
 from typing import Any, Iterable, List, Optional, Tuple, Union
 
 from parsimonious.grammar import Grammar
@@ -30,8 +31,8 @@ root_element          = low_pri_arithmetic
 low_pri_arithmetic    = space* high_pri_arithmetic space* (low_pri_op high_pri_arithmetic)*
 high_pri_arithmetic   = space* arithmetic_term space* (high_pri_op arithmetic_term)*
 arithmetic_term       = (space*) (function_call / numeric_literal / column_name) (space*)
-low_pri_op            = ("+"/"-")
-high_pri_op           = ("/"/"*")
+low_pri_op            = "+" / "-"
+high_pri_op           = "/" / "*"
 param_expression      = low_pri_arithmetic / quoted_literal
 parameters_list       = parameter* (param_expression)
 parameter             = param_expression space* comma space*
@@ -51,6 +52,16 @@ comma                 = ","
 )
 
 
+class LowPriOperator(Enum):
+    PLUS = "+"
+    MINUS = "-"
+
+
+class HighPriOperator(Enum):
+    MULTIPLY = "*"
+    DIVIDE = "/"
+
+
 class ClickhouseVisitor(NodeVisitor):
     """
     Builds Snuba AST expressions from the Parsimonious parse tree.
@@ -62,11 +73,21 @@ class ClickhouseVisitor(NodeVisitor):
     def visit_column_name(self, node: Node, visited_children: Iterable[Any]) -> Column:
         return Column(None, None, node.text)
 
-    def visit_low_pri_op(self, node: Node, visited_children: Iterable[Any]) -> Any:
-        return node.text
+    def visit_low_pri_op(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> LowPriOperator:
+        if node.text == "+":
+            return LowPriOperator.PLUS
+        else:
+            return LowPriOperator.MINUS
 
-    def visit_high_pri_op(self, node: Node, visited_children: Iterable[Any]) -> Any:
-        return node.text
+    def visit_high_pri_op(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> HighPriOperator:
+        if node.text == "*":
+            return HighPriOperator.MULTIPLY
+        else:
+            return HighPriOperator.DIVIDE
 
     def visit_arithmetic_term(
         self, node: Node, visited_children: Tuple[Any, Expression, Any]
@@ -79,7 +100,7 @@ class ClickhouseVisitor(NodeVisitor):
         self,
         node: Node,
         visited_children: Tuple[
-            Any, Expression, Any, Union[Any, Tuple[str, Expression]]
+            Any, Expression, Any, Union[Node, Tuple[LowPriOperator, Expression]]
         ],
     ) -> Expression:
         _, term, _, exp = visited_children
@@ -89,14 +110,21 @@ class ClickhouseVisitor(NodeVisitor):
 
         for elem in exp:
             if isinstance(elem, list):
-                if elem[0] == "+":
+                # If there remains Expressions
+                # in List form that need to be
+                # put together and bubbled up
+                if elem[0] == LowPriOperator.PLUS:
                     term = plus(term, elem[1])
-                elif elem[0] == "-":
+                elif elem[0] == LowPriOperator.MINUS:
                     term = minus(term, elem[1])
             else:
-                if exp[0] == "+":
+                # This branch is hit when
+                # there is only one operator left
+                # to perform arithmetic between two
+                # Expressions that have been bubbled up
+                if exp[0] == LowPriOperator.PLUS:
                     return plus(term, exp[1])
-                elif exp[0] == "-":
+                elif exp[0] == LowPriOperator.MINUS:
                     return minus(term, exp[1])
 
         return term
@@ -105,7 +133,7 @@ class ClickhouseVisitor(NodeVisitor):
         self,
         node: Node,
         visited_children: Tuple[
-            Any, Expression, Any, Union[Any, Tuple[str, Expression]]
+            Any, Expression, Any, Union[Node, Tuple[HighPriOperator, Expression]]
         ],
     ) -> Expression:
         _, term, _, exp = visited_children
@@ -115,14 +143,21 @@ class ClickhouseVisitor(NodeVisitor):
 
         for elem in exp:
             if isinstance(elem, list):
-                if elem[0] == "*":
+                # If there remains Expressions
+                # in List form that need to be
+                # put together and bubbled up
+                if elem[0] == HighPriOperator.MULTIPLY:
                     term = multiply(term, elem[1])
-                elif elem[0] == "/":
+                elif elem[0] == HighPriOperator.DIVIDE:
                     term = divide(term, elem[1])
             else:
-                if exp[0] == "*":
+                # This branch is hit when
+                # there is only one operator left
+                # to perform arithmetic between two
+                # Expressions that have been bubbled up
+                if exp[0] == HighPriOperator.MULTIPLY:
                     return multiply(term, exp[1])
-                elif exp[0] == "/":
+                elif exp[0] == HighPriOperator.DIVIDE:
                     return divide(term, exp[1])
 
         return term
