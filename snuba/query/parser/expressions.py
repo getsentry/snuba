@@ -5,7 +5,6 @@ from typing import Any, Iterable, List, Optional, Tuple, Union
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
-from snuba.query.parser.exceptions import ParsingException
 from snuba.query.dsl import multiply, plus
 from snuba.query.expressions import (
     Column,
@@ -14,6 +13,7 @@ from snuba.query.expressions import (
     FunctionCall,
     Literal,
 )
+from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.functions import parse_function_to_expr
 from snuba.query.parser.strings import parse_string_to_expr
 from snuba.util import is_function

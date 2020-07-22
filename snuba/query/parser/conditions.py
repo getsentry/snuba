@@ -150,7 +150,7 @@ def parse_conditions_to_expr(
             if op not in ["IN", "NOT IN"]:
                 raise ParsingException(
                     (
-                        f"Invalid opperator {op} for literal {literal}. Literal is a sequence. "
+                        f"Invalid operator {op} for literal {literal}. Literal is a sequence. "
                         "Operator must be IN/NOT IN"
                     )
                 )
@@ -160,7 +160,7 @@ def parse_conditions_to_expr(
             if op in ["IN", "NOT IN"]:
                 raise ParsingException(
                     (
-                        f"Invalid opperator {op} for literal {literal}. Literal is not a sequence. "
+                        f"Invalid operator {op} for literal {literal}. Literal is not a sequence. "
                         "Operator cannot be IN/NOT IN"
                     )
                 )
