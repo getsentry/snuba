@@ -1,5 +1,6 @@
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
@@ -224,7 +225,8 @@ def generate_transactions(count: int) -> None:
                             ],
                         },
                     },
-                )
+                ),
+                KafkaMessageMetadata(0, 0, base_time),
             )
         )
         rows.extend(processed.rows)
