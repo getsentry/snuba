@@ -148,11 +148,6 @@ all_columns = (
         # other tags
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
-        # Tags hashmap is a materialized column. Clickhouse does not allow
-        # us to create a materialized column that references a nested one
-        # during create statement
-        # (https://github.com/ClickHouse/ClickHouse/issues/12586), so the
-        # materialization is added with a migration.
         ("_tags_hash_map", Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN)),
         # other context
         ("contexts", Nested([("key", String()), ("value", String())])),

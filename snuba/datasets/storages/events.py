@@ -106,6 +106,11 @@ schema = ReplacingMergeTreeSchema(
     version_column="deleted",
     sample_expr=sample_expr,
     migration_function=events_migrations,
+    # Tags hashmap is a materialized column. Clickhouse does not allow
+    # us to create a materialized column that references a nested one
+    # during create statement
+    # (https://github.com/ClickHouse/ClickHouse/issues/12586), so the
+    # materialization is added with a migration.
     skipped_cols_on_creation={"_tags_hash_map"},
 )
 
