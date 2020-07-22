@@ -22,7 +22,7 @@ class Migration(migration.MultiStepMigration):
     add an index on this column.
     """
 
-    blocking = False
+    blocking = True
 
     def forwards_local(self) -> Sequence[operations.Operation]:
         return [
