@@ -7,6 +7,7 @@ from snuba.clickhouse.columns import (
     DateTime,
     FixedString,
     Float,
+    Materialized,
     Nested,
     Nullable,
     String,
@@ -27,17 +28,17 @@ from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
-TAGS_HASH_MAP_COLUMN = """
-arrayMap((k, v) -> cityHash64(
-    concat(
-        replaceRegexpAll(k, '(\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1'),
-        '=',
-        v)
-    ),
-    tags.key,
-    tags.value
+# This obnoxious amount backslashes is sadly required to escape the tag keys.
+# replaceRegexpAll(k, '(\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1')
+# means running this on Clickhouse:
+# replaceRegexpAll(k, '(\\=|\\\\)', '\\\\\\1')
+# The (\\=|\\\\) pattern should be actually this: (|\=|\\). The additional
+# backslashes are because of Clickhouse escaping.
+TAGS_HASH_MAP_COLUMN = (
+    "arrayMap((k, v) -> cityHash64(concat("
+    "replaceRegexpAll(k, '(\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1'), '=', v)), "
+    "tags.key, tags.value)"
 )
-"""
 
 
 metadata_columns = ColumnSet(
@@ -152,7 +153,7 @@ all_columns = (
         # during create statement
         # (https://github.com/ClickHouse/ClickHouse/issues/12586), so the
         # materialization is added with a migration.
-        ("_tags_hash_map", Array(UInt(64))),
+        ("_tags_hash_map", Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN)),
         # other context
         ("contexts", Nested([("key", String()), ("value", String())])),
         # http interface

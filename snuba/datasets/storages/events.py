@@ -1,6 +1,6 @@
 from typing import Mapping, Sequence
 
-from snuba.clickhouse.columns import ColumnType, Materialized
+from snuba.clickhouse.columns import ColumnType
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
@@ -88,13 +88,6 @@ def events_migrations(
                 f"MATERIALIZED {TAGS_HASH_MAP_COLUMN} AFTER _tags_flattened"
             )
         )
-    elif Materialized not in current_schema["_tags_hash_map"].get_all_modifiers():
-        ret.append(
-            (
-                f"ALTER TABLE {clickhouse_table} MODIFY COLUMN _tags_hash_map Array(UInt64) "
-                f"MATERIALIZED {TAGS_HASH_MAP_COLUMN}"
-            )
-        )
 
     return ret
 
@@ -113,6 +106,7 @@ schema = ReplacingMergeTreeSchema(
     version_column="deleted",
     sample_expr=sample_expr,
     migration_function=events_migrations,
+    skipped_cols_on_creation={"_tags_hash_map"},
 )
 
 
