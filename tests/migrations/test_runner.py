@@ -220,7 +220,8 @@ def generate_transactions(count: int) -> None:
                             ],
                         },
                     },
-                )
+                ),
+                None,
             )
         )
         rows.extend(processed.rows)
