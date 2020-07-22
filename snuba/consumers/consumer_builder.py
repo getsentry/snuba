@@ -25,10 +25,9 @@ from snuba.utils.streams.types import Topic
 
 class ConsumerBuilder:
     """
-    Simplifies the initialization of a batching consumer by merging
-    parameters that generally come from the command line with defaults
-    that come from the dataset class and defaults that come from the
-    settings file.
+    Simplifies the initialization of a consumer by merging parameters that
+    generally come from the command line with defaults that come from the
+    dataset class and defaults that come from the settings file.
     """
 
     def __init__(

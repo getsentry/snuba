@@ -37,28 +37,6 @@ class Processor(ABC, Generic[TPayload]):
 
 
 class StreamProcessor(Generic[TPayload]):
-    """The `BatchingConsumer` is an abstraction over the abstract Consumer's main event
-    loop. For this reason it uses inversion of control: the user provides an implementation
-    for the `AbstractBatchWorker` and then the `BatchingConsumer` handles the rest.
-
-    * Messages are processed locally (e.g. not written to an external datastore!) as they are
-      read from the consumer, then added to an in-memory batch
-    * Batches are flushed based on the batch size or time sent since the first message
-      in the batch was recieved (e.g. "500 items or 1000ms")
-    * Consumer offsets are not automatically committed! If they were, offsets might be committed
-      for messages that are still sitting in an in-memory batch, or they might *not* be committed
-      when messages are sent to an external datastore right before the consumer process dies
-    * Instead, when a batch of items is flushed they are written to the external datastore and
-      then consumer offsets are immediately committed (in the same thread/loop)
-    * Users need only provide an implementation of what it means to process a raw message
-      and flush a batch of events
-
-    NOTE: This does not eliminate the possibility of duplicates if the consumer process
-    crashes between writing to its backend and commiting offsets. This should eliminate
-    the possibility of *losing* data though. An "exactly once" consumer would need to store
-    offsets in the external datastore and reconcile them on any partition rebalance.
-    """
-
     def __init__(
         self,
         consumer: Consumer[TPayload],
@@ -122,8 +100,12 @@ class StreamProcessor(Generic[TPayload]):
             assert msg is None, "received message without active processor"
 
     def signal_shutdown(self) -> None:
-        """Tells the batching consumer to shutdown on the next run loop iteration.
-        Typically called from a signal handler."""
+        """
+        Tells the stream processor to shutdown on the next run loop
+        iteration.
+
+        Typically called from a signal handler.
+        """
         logger.debug("Shutdown signalled")
 
         self.__shutdown_requested = True
