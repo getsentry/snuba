@@ -4,11 +4,14 @@ import itertools
 import uuid
 from typing import Any, Mapping, Type
 
+import jsonschema
+
 from snuba import environment
 from snuba.datasets.dataset import Dataset
 from snuba.query.expressions import Column
 from snuba.query.extensions import QueryExtension
 from snuba.query.parser import parse_query
+from snuba.query.parser.exceptions import SchemaValidationException
 from snuba.query.schema import GENERIC_QUERY_SCHEMA
 from snuba.request import Request
 from snuba.request.request_settings import (
@@ -86,7 +89,10 @@ class RequestSchema:
         return cls(generic_schema, settings_schema, extensions_schemas, settings_class)
 
     def validate(self, value, dataset: Dataset, referrer: str) -> Request:
-        value = validate_jsonschema(value, self.__composite_schema)
+        try:
+            value = validate_jsonschema(value, self.__composite_schema)
+        except jsonschema.ValidationError as error:
+            raise SchemaValidationException(str(error)) from error
 
         query_body = {
             key: value.pop(key)

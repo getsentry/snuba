@@ -45,14 +45,10 @@ def validate_jsonschema(value, schema, set_defaults=True):
         else jsonschema.Draft6Validator
     )
 
-    try:
-        validator_cls(
-            schema,
-            types={"array": (list, tuple)},
-            format_checker=jsonschema.FormatChecker(),
-        ).validate(value, schema)
-    except jsonschema.ValidationError:
-        # raise SchemaValidationException(str(error)) from error
-        raise
+    validator_cls(
+        schema,
+        types={"array": (list, tuple)},
+        format_checker=jsonschema.FormatChecker(),
+    ).validate(value, schema)
 
     return value
