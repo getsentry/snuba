@@ -6,7 +6,7 @@ from unittest.mock import patch
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchProcessorFactory
 from snuba.utils.streams.dummy import DummyBroker
-from snuba.utils.streams.processing import BatchingConsumer
+from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.types import Message, Topic
 
 
@@ -34,7 +34,7 @@ class TestConsumer(object):
         consumer = broker.get_consumer("group")
 
         worker = FakeWorker()
-        batching_consumer = BatchingConsumer(
+        batching_consumer = StreamProcessor(
             consumer,
             topic,
             BatchProcessorFactory(
@@ -63,7 +63,7 @@ class TestConsumer(object):
         consumer = broker.get_consumer("group")
 
         worker = FakeWorker()
-        batching_consumer = BatchingConsumer(
+        batching_consumer = StreamProcessor(
             consumer,
             topic,
             BatchProcessorFactory(

@@ -24,7 +24,7 @@ from snuba.utils.streams.kafka import (
     KafkaProducer,
     build_kafka_consumer_configuration,
 )
-from snuba.utils.streams.processing import BatchingConsumer
+from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.synchronized import SynchronizedConsumer
 from snuba.utils.streams.types import Topic
 
@@ -168,7 +168,7 @@ def subscriptions(
     metrics.gauge("executor.workers", executor._max_workers)
 
     with closing(consumer), executor, closing(producer):
-        batching_consumer = BatchingConsumer(
+        batching_consumer = StreamProcessor(
             consumer,
             (
                 Topic(topic)

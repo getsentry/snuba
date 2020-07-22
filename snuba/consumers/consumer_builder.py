@@ -19,7 +19,7 @@ from snuba.utils.streams.kafka import (
     TransportError,
     build_kafka_consumer_configuration,
 )
-from snuba.utils.streams.processing import BatchingConsumer
+from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.types import Topic
 
 
@@ -115,9 +115,7 @@ class ConsumerBuilder:
 
         self.__commit_retry_policy = commit_retry_policy
 
-    def __build_consumer(
-        self, worker: ConsumerWorker
-    ) -> BatchingConsumer[KafkaPayload]:
+    def __build_consumer(self, worker: ConsumerWorker) -> StreamProcessor[KafkaPayload]:
         configuration = build_kafka_consumer_configuration(
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
@@ -138,7 +136,7 @@ class ConsumerBuilder:
                 commit_retry_policy=self.__commit_retry_policy,
             )
 
-        return BatchingConsumer(
+        return StreamProcessor(
             consumer,
             self.raw_topic,
             BatchProcessorFactory(
@@ -150,7 +148,7 @@ class ConsumerBuilder:
             recoverable_errors=[TransportError],
         )
 
-    def build_base_consumer(self) -> BatchingConsumer[KafkaPayload]:
+    def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
         """
         Builds the consumer with a ConsumerWorker.
         """
@@ -165,7 +163,7 @@ class ConsumerBuilder:
 
     def build_snapshot_aware_consumer(
         self, snapshot_id: SnapshotId, transaction_data: TransactionData,
-    ) -> BatchingConsumer[KafkaPayload]:
+    ) -> StreamProcessor[KafkaPayload]:
         """
         Builds the consumer with a ConsumerWorker able to handle snapshots.
         """

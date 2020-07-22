@@ -36,7 +36,7 @@ class Processor(ABC, Generic[TPayload]):
         raise NotImplementedError
 
 
-class BatchingConsumer(Generic[TPayload]):
+class StreamProcessor(Generic[TPayload]):
     """The `BatchingConsumer` is an abstraction over the abstract Consumer's main event
     loop. For this reason it uses inversion of control: the user provides an implementation
     for the `AbstractBatchWorker` and then the `BatchingConsumer` handles the rest.

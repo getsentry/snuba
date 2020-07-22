@@ -84,7 +84,7 @@ def replacer(
         TransportError,
         build_kafka_consumer_configuration,
     )
-    from snuba.utils.streams.processing import BatchingConsumer
+    from snuba.utils.streams.processing import StreamProcessor
     from snuba.utils.streams.types import Topic
 
     setup_logging(log_level)
@@ -103,7 +103,7 @@ def replacer(
 
     metrics = MetricsWrapper(environment.metrics, "replacer", tags=metrics_tags,)
 
-    replacer = BatchingConsumer(
+    replacer = StreamProcessor(
         KafkaConsumer(
             build_kafka_consumer_configuration(
                 bootstrap_servers=bootstrap_server,
