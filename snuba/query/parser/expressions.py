@@ -215,9 +215,12 @@ def parse_aggregation(
 
     try:
         expression_tree = minimal_clickhouse_grammar.parse(aggregation_function)
-        parsed_expression = ClickhouseVisitor().visit(expression_tree)
-    except Exception as e:
-        raise ParsingException() from e
+    except Exception as cause:
+        raise ParsingException(
+            f"Cannot parse aggregation {aggregation_function}", cause
+        ) from cause
+
+    parsed_expression = ClickhouseVisitor().visit(expression_tree)
 
     if (
         # Simple Clickhouse expression with no snuba syntax
