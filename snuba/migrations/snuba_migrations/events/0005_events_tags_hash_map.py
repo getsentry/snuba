@@ -41,7 +41,7 @@ class Migration(migration.MultiStepMigration):
         return [
             operations.DropColumn(
                 StorageSetKey.EVENTS, "sentry_local", "_tags_hash_map"
-            )
+            ),
         ]
 
     def forwards_dist(self) -> Sequence[operations.Operation]:
@@ -56,7 +56,5 @@ class Migration(migration.MultiStepMigration):
 
     def backwards_dist(self) -> Sequence[operations.Operation]:
         return [
-            operations.DropColumn(
-                StorageSetKey.EVENTS, "sentry_local", "_tags_hash_map"
-            )
+            operations.DropColumn(StorageSetKey.EVENTS, "sentry_dist", "_tags_hash_map")
         ]
