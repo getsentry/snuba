@@ -273,9 +273,7 @@ def parse_aggregation(
         return FunctionCall(alias, aggregation_function, tuple(columns_expr))
 
     expression_tree = minimal_clickhouse_grammar.parse(aggregation_function)
-    print(expression_tree)
     parsed_expression = ClickhouseVisitor().visit(expression_tree)
-    print(parsed_expression)
 
     if (
         # Simple Clickhouse expression with no snuba syntax
