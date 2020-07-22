@@ -1,5 +1,7 @@
 import uuid
+from datetime import datetime
 
+from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.processor import InsertBatch
@@ -59,7 +61,9 @@ def test_simple():
         .get_processor()
     )
 
-    assert processor.process_message(message) == InsertBatch(
+    assert processor.process_message(
+        message, KafkaMessageMetadata(0, 0, datetime.now())
+    ) == InsertBatch(
         [
             {
                 "request_id": str(uuid.UUID("a" * 32)),

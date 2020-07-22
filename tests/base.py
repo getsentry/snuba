@@ -9,6 +9,7 @@ from typing import Iterator, MutableSequence, Optional, Sequence
 
 from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import enforce_table_writer, get_dataset
@@ -135,8 +136,10 @@ class BaseEventsTest(BaseDatasetTest):
         )
 
         processed_messages = []
-        for event in events:
-            processed_message = processor.process_message((2, "insert", event, {}))
+        for i, event in enumerate(events):
+            processed_message = processor.process_message(
+                (2, "insert", event, {}), KafkaMessageMetadata(i, 0, datetime.now())
+            )
             assert processed_message is not None
             processed_messages.append(processed_message)
 

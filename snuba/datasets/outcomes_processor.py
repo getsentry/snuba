@@ -15,7 +15,7 @@ from snuba.processor import (
 
 
 class OutcomesProcessor(MessageProcessor):
-    def process_message(self, value, metadata=None) -> Optional[ProcessedMessage]:
+    def process_message(self, value, metadata) -> Optional[ProcessedMessage]:
         assert isinstance(value, dict)
 
         # Only record outcomes from traditional error tracking events, which
