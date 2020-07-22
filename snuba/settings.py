@@ -113,6 +113,11 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
     "discover": {
         # Eventstore
         "eventstore.get_next_or_prev_event_id": 100,
+        # Performance view
+        "api.performance.durationpercentilechart": 100,
+        "api.organization-event-stats.key-transactions": 100,
+        "discover.key_transactions": 100,
+        "api.performance.latencychart": 100,
     },
 }  # (dataset name: (referrer: percentage))
 
