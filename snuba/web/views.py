@@ -146,6 +146,10 @@ def handle_invalid_dataset(exception: InvalidDatasetError):
 def handle_invalid_query(
     exception: InvalidQueryException,
 ) -> Tuple[str, int, Mapping[str, str]]:
+    # TODO: Remove this logging as soon as the query validation code is
+    # mature enough that we can trust it.
+    logger.warning("Invalid query", exc_info=True)
+
     # TODO: Add special cases with more structure for specific exceptions
     # if needed.
     return (
