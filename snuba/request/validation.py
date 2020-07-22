@@ -14,5 +14,6 @@ def build_request(
         span.set_data("snuba_query", request.body)
 
         timer.mark("validate_schema")
+        # TODO: Refactor to track the invalid query metric.
 
     return request
