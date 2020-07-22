@@ -1,3 +1,4 @@
+import math
 from typing import Sequence
 
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
@@ -62,7 +63,24 @@ def recreate_table() -> None:
 
     clickhouse.execute(new_create_table_statement)
 
-    clickhouse.execute(f"INSERT INTO {table_name_new} SELECT * FROM {table_name};")
+    # Copy over data in batches of 100,000
+    [(row_count,)] = clickhouse.execute(f"SELECT count(*) FROM {table_name}")
+    batch_size = 100000
+    batch_count = math.ceil(row_count / batch_size)
+
+    orderby = "toStartOfDay(finish_ts), project_id, event_id"
+
+    for i in range(batch_count):
+        skip = batch_size * i
+        clickhouse.execute(
+            f"""
+            INSERT INTO {table_name_new}
+            SELECT * FROM {table_name}
+            ORDER BY {orderby}
+            LIMIT {batch_size}
+            OFFSET {skip};
+            """
+        )
 
     clickhouse.execute(f"DROP TABLE {table_name};")
 
