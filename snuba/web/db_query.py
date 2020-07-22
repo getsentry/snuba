@@ -28,12 +28,13 @@ from snuba.state.rate_limit import (
     RateLimitExceeded,
 )
 from snuba.util import force_bytes, with_span
-from snuba.utils.codecs import JSONCodec
+from snuba.utils.codecs import JSONCodec, JSONData
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
 from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
 
-cache: Cache[Any] = RedisCache(
+
+cache: Cache[JSONData] = RedisCache(
     redis_client, "snuba-query-cache:", JSONCodec(), ThreadPoolExecutor()
 )
 

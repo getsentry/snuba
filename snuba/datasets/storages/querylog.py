@@ -3,7 +3,6 @@ from snuba.clickhouse.columns import (
     Array,
     ColumnSet,
     DateTime,
-    Enum,
     Float,
     LowCardinality,
     Nested,
@@ -21,8 +20,6 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader
 
 
-status_type = Enum([("success", 0), ("error", 1), ("rate-limited", 2)])
-
 columns = ColumnSet(
     [
         ("request_id", UUID()),
@@ -33,13 +30,13 @@ columns = ColumnSet(
         ("organization", Nullable(UInt(64))),
         ("timestamp", DateTime()),
         ("duration_ms", UInt(32)),
-        ("status", status_type),
+        ("status", LowCardinality(String())),
         (
             "clickhouse_queries",
             Nested(
                 [
                     ("sql", String()),
-                    ("status", status_type),
+                    ("status", LowCardinality(String())),
                     ("trace_id", Nullable(UUID())),
                     ("duration_ms", UInt(32)),
                     ("stats", String()),
