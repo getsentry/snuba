@@ -1,8 +1,9 @@
+from __future__ import annotations
+
 import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from functools import partial
 from typing import (
     Generic,
     Mapping,
@@ -74,7 +75,48 @@ class Batch(Generic[TResult]):
     processing_time_ms: float = 0.0
 
 
-class BatchProcessor:
+class ProcessorFactory(ABC, Generic[TPayload]):
+    @abstractmethod
+    def create(self) -> Processor[TPayload]:
+        raise NotImplementedError
+
+
+class Processor(ABC, Generic[TPayload]):
+    @abstractmethod
+    def process(self, message: Optional[Message[TPayload]]) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def close(self) -> None:
+        raise NotImplementedError
+
+
+class BatchProcessorFactory(ProcessorFactory[TPayload]):
+    def __init__(
+        self,
+        consumer: Consumer[TPayload],
+        worker: AbstractBatchWorker[TPayload, TResult],
+        max_batch_size: int,
+        max_batch_time: int,
+        metrics: MetricsBackend,
+    ) -> None:
+        self.__consumer = consumer
+        self.__worker = worker
+        self.__max_batch_size = max_batch_size
+        self.__max_batch_time = max_batch_time
+        self.__metrics = metrics
+
+    def create(self) -> BatchProcessor[TPayload]:
+        return BatchProcessor(
+            self.__consumer,
+            self.__worker,
+            self.__max_batch_size,
+            self.__max_batch_time,
+            self.__metrics,
+        )
+
+
+class BatchProcessor(Processor[TPayload]):
     """
     The ``BatchProcessor`` is a message processor that accumulates processed
     message values, periodically flushing them after a given duration of time
@@ -244,11 +286,11 @@ class BatchingConsumer(Generic[TPayload]):
     ) -> None:
         self.__consumer = consumer
 
-        self.__processor_factory = partial(
-            BatchProcessor, consumer, worker, max_batch_size, max_batch_time, metrics
+        self.__processor_factory: ProcessorFactory[TPayload] = BatchProcessorFactory(
+            consumer, worker, max_batch_size, max_batch_time, metrics
         )
 
-        self.__processor: Optional[BatchProcessor] = None
+        self.__processor: Optional[Processor[TPayload]] = None
 
         self.__shutdown_requested = False
 
@@ -261,7 +303,7 @@ class BatchingConsumer(Generic[TPayload]):
             ), "received unexpected assignment with existing active processor"
 
             logger.info("New partitions assigned: %r", partitions)
-            self.__processor = self.__processor_factory()
+            self.__processor = self.__processor_factory.create()
 
         def on_partitions_revoked(partitions: Sequence[Partition]) -> None:
             "Reset the current in-memory batch, letting the next consumer take over where we left off."
