@@ -19,7 +19,11 @@ from snuba.query.expressions import (
 )
 from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
 from snuba.query.parser.conditions import parse_conditions_to_expr
-from snuba.query.parser.exceptions import CyclicAliasException
+from snuba.query.parser.exceptions import (
+    AliasShadowingException,
+    CyclicAliasException,
+    ParsingException,
+)
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
 from snuba.util import is_function, to_list, tuplify
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
@@ -137,7 +141,7 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
             direction, col = match.groups()
             orderby = [col] + orderby[1:]
         else:
-            raise ValueError(f"Invalid Order By clause {orderby}")
+            raise ParsingException(f"Invalid Order By clause {orderby}")
         orderby_parsed = parse_expression(tuplify(orderby))
         orderby_exprs.append(
             OrderBy(
@@ -188,7 +192,7 @@ def _validate_aliases(query: Query) -> None:
                 exp.alias in all_declared_aliases
                 and exp != all_declared_aliases[exp.alias]
             ):
-                raise ValueError(
+                raise AliasShadowingException(
                     (
                         f"Shadowing aliases detected for alias: {exp.alias}. "
                         + f"Expressions: {all_declared_aliases[exp.alias]}"

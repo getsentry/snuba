@@ -1,6 +1,18 @@
-class ParsingException(Exception):
+class QueryBuildingException(Exception):
     pass
 
 
-class CyclicAliasException(ParsingException):
+class ParsingException(QueryBuildingException):
+    pass
+
+
+class ValidationException(QueryBuildingException):
+    pass
+
+
+class CyclicAliasException(ValidationException):
+    pass
+
+
+class AliasShadowingException(ValidationException):
     pass

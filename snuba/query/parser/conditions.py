@@ -10,6 +10,7 @@ from snuba.query.conditions import (
     unary_condition,
 )
 from snuba.query.expressions import Argument, Expression, FunctionCall, Lambda, Literal
+from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.expressions import parse_expression
 from snuba.query.schema import POSITIVE_OPERATORS, UNARY_OPERATORS
 from snuba.util import is_condition
@@ -72,7 +73,10 @@ def parse_conditions(
         )
         return and_builder([s for s in sub.keys() if s])
     elif is_condition(conditions):
-        lhs, op, lit = dataset.process_condition(conditions)
+        try:
+            lhs, op, lit = dataset.process_condition(conditions)
+        except Exception as cause:
+            raise ParsingException() from cause
 
         # facilitate deduping IN conditions by sorting them.
         if op in ("IN", "NOT IN") and isinstance(lit, tuple):
@@ -141,11 +145,23 @@ def parse_conditions_to_expr(
         Replaces lists with a function call to tuple.
         """
         if isinstance(literal, (list, tuple)):
-            assert op in ["IN", "NOT IN"]
+            if op not in ["IN", "NOT IN"]:
+                raise ParsingException(
+                    (
+                        f"Invalid opperator {op} for literal {literal}. Literal is a sequence. "
+                        "Operator must be IN/NOT IN"
+                    )
+                )
             literals = tuple([Literal(None, l) for l in literal])
             return FunctionCall(None, "tuple", literals)
         else:
-            assert op not in ["IN", "NOT IN"]
+            if op in ["IN", "NOT IN"]:
+                raise ParsingException(
+                    (
+                        f"Invalid opperator {op} for literal {literal}. Literal is not a sequence. "
+                        "Operator cannot be IN/NOT IN"
+                    )
+                )
             return Literal(None, literal)
 
     def unpack_array_condition_builder(
@@ -180,15 +196,17 @@ def parse_conditions_to_expr(
 
     def simple_condition_builder(lhs: Expression, op: str, literal: Any) -> Expression:
         if op in UNARY_OPERATORS:
-            assert (
-                literal is None
-            ), f"Right hand side operand {literal} provided to unary operator {op}"
+            if literal is not None:
+                raise ParsingException(
+                    f"Right hand side operand {literal} provided to unary operator {op}"
+                )
             return unary_condition(None, OPERATOR_TO_FUNCTION[op], lhs)
 
         else:
-            assert (
-                literal is not None
-            ), f"Missing right hand side operand for binary operator {op}"
+            if literal is None:
+                raise ParsingException(
+                    f"Missing right hand side operand for binary operator {op}"
+                )
             return binary_condition(
                 None, OPERATOR_TO_FUNCTION[op], lhs, preprocess_literal(op, literal)
             )
