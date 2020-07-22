@@ -92,7 +92,7 @@ class QuerylogLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.querylog")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_querylog"]
+        return ["0001_querylog", "0002_status_type_change"]
 
 
 _REGISTERED_GROUPS = {
