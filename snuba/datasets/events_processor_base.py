@@ -79,7 +79,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         self,
         output: MutableMapping[str, Any],
         event: InsertEvent,
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         raise NotImplementedError
 
@@ -95,7 +95,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         output: MutableMapping[str, Any],
         event: InsertEvent,
         tags: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         raise NotImplementedError
 
@@ -114,7 +114,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         output: MutableMapping[str, Any],
         event: InsertEvent,
         contexts: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         raise NotImplementedError
 
@@ -146,7 +146,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         output["sdk_integrations"] = sdk_integrations
 
     def process_message(
-        self, message, metadata: Optional[KafkaMessageMetadata] = None
+        self, message, metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         """\
         Process a raw message into an insertion or replacement batch. Returns
@@ -175,7 +175,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
             raise InvalidMessageType(f"Invalid message type: {type_}")
 
     def process_insert(
-        self, event: InsertEvent, metadata: Optional[KafkaMessageMetadata] = None
+        self, event: InsertEvent, metadata: KafkaMessageMetadata
     ) -> Optional[Mapping[str, Any]]:
         if not self._should_process(event):
             return None
@@ -221,10 +221,9 @@ class EventsProcessorBase(MessageProcessor, ABC):
         stacks = exception.get("values", None) or []
         self.extract_stacktraces(processed, stacks)
 
-        if metadata is not None:
-            processed["offset"] = metadata.offset
-            processed["partition"] = metadata.partition
-            processed["message_timestamp"] = metadata.timestamp
+        processed["offset"] = metadata.offset
+        processed["partition"] = metadata.partition
+        processed["message_timestamp"] = metadata.timestamp
 
         return processed
 
@@ -232,7 +231,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         self,
         output: MutableMapping[str, Any],
         event: InsertEvent,
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         # Properties we get from the top level of the message payload
         output["platform"] = _unicodify(event["platform"])
