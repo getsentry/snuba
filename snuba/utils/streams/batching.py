@@ -16,7 +16,7 @@ from typing import (
 )
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams.processing import Processor, ProcessorFactory
+from snuba.utils.streams.processing import ProcessingStrategy, ProcessorFactory
 from snuba.utils.streams.types import Message, Partition, TPayload
 
 
@@ -95,7 +95,7 @@ class BatchProcessorFactory(ProcessorFactory[TPayload]):
 
     def create(
         self, commit: Callable[[Mapping[Partition, int]], None]
-    ) -> Processor[TPayload]:
+    ) -> ProcessingStrategy[TPayload]:
         return BatchProcessor(
             commit,
             self.__worker,
@@ -105,9 +105,9 @@ class BatchProcessorFactory(ProcessorFactory[TPayload]):
         )
 
 
-class BatchProcessor(Processor[TPayload]):
+class BatchProcessor(ProcessingStrategy[TPayload]):
     """
-    The ``BatchProcessor`` is a message processor that accumulates processed
+    The ``BatchProcessor`` is a processing strategy that accumulates processed
     message values, periodically flushing them after a given duration of time
     has passed or number of output values have been accumulated. Users need
     only provide an implementation of what it means to process a raw message

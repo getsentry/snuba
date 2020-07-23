@@ -22,11 +22,11 @@ class ProcessorFactory(ABC, Generic[TPayload]):
     @abstractmethod
     def create(
         self, commit: Callable[[Mapping[Partition, int]], None]
-    ) -> Processor[TPayload]:
+    ) -> ProcessingStrategy[TPayload]:
         raise NotImplementedError
 
 
-class Processor(ABC, Generic[TPayload]):
+class ProcessingStrategy(ABC, Generic[TPayload]):
     @abstractmethod
     def process(self, message: Optional[Message[TPayload]]) -> None:
         raise NotImplementedError
@@ -50,26 +50,26 @@ class StreamProcessor(Generic[TPayload]):
         # The types passed to the `except` clause must be a tuple, not a Sequence.
         self.__recoverable_errors = tuple(recoverable_errors or [])
 
-        self.__processor: Optional[Processor[TPayload]] = None
+        self.__processing_strategy: Optional[ProcessingStrategy[TPayload]] = None
         self.__shutdown_requested = False
 
         def on_partitions_assigned(partitions: Mapping[Partition, int]) -> None:
             assert (
-                self.__processor is None
-            ), "received unexpected assignment with existing active processor"
+                self.__processing_strategy is None
+            ), "received unexpected assignment with existing active processing strategy"
 
             logger.info("New partitions assigned: %r", partitions)
-            self.__processor = self.__processor_factory.create(self.__commit)
+            self.__processing_strategy = self.__processor_factory.create(self.__commit)
 
         def on_partitions_revoked(partitions: Sequence[Partition]) -> None:
             "Reset the current in-memory batch, letting the next consumer take over where we left off."
             assert (
-                self.__processor is not None
-            ), "received unexpected revocation without active processor"
+                self.__processing_strategy is not None
+            ), "received unexpected revocation without active processing strategy"
 
             logger.info("Partitions revoked: %r", partitions)
-            self.__processor.close()
-            self.__processor = None
+            self.__processing_strategy.close()
+            self.__processing_strategy = None
 
         self.__consumer.subscribe(
             [topic], on_assign=on_partitions_assigned, on_revoke=on_partitions_revoked
@@ -94,10 +94,10 @@ class StreamProcessor(Generic[TPayload]):
         except self.__recoverable_errors:
             return
 
-        if self.__processor is not None:
-            self.__processor.process(msg)
+        if self.__processing_strategy is not None:
+            self.__processing_strategy.process(msg)
         else:
-            assert msg is None, "received message without active processor"
+            assert msg is None, "received message without active processing strategy"
 
     def signal_shutdown(self) -> None:
         """
@@ -116,6 +116,8 @@ class StreamProcessor(Generic[TPayload]):
         self.__consumer.close()
         logger.debug("Stopped")
 
-        # if there was an active processor, it should be shut down and unset
-        # when the partitions are revoked during consumer close
-        assert self.__processor is None, "processor was not closed on shutdown"
+        # if there was an active processing strategy, it should be shut down
+        # and unset when the partitions are revoked during consumer close
+        assert (
+            self.__processing_strategy is None
+        ), "processing strategy was not closed on shutdown"
