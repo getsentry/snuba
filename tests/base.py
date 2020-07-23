@@ -15,6 +15,7 @@ from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.processor import InsertBatch, ProcessedMessage
 from snuba.redis import redis_client
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.writer import WriterTableRow
 from tests.fixtures import raw_event
 
@@ -78,7 +79,9 @@ class BaseDatasetTest(BaseTest):
         self.write_rows(rows)
 
     def write_rows(self, rows: Sequence[WriterTableRow]) -> None:
-        enforce_table_writer(self.dataset).get_writer().write(rows)
+        enforce_table_writer(self.dataset).get_writer(
+            metrics=DummyMetricsBackend(strict=True)
+        ).write(rows)
 
 
 class BaseEventsTest(BaseDatasetTest):
