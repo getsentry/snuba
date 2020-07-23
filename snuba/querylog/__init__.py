@@ -1,8 +1,10 @@
-from snuba.request import Request
-from snuba.utils.metrics.timer import Timer
+from typing import Optional
+
 from snuba import environment, settings, state
+from snuba.querylog.query_metadata import QueryStatus, SnubaQueryMetadata
+from snuba.request import Request
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
-from snuba.querylog.query_metadata import SnubaQueryMetadata
+from snuba.utils.metrics.timer import Timer
 
 metrics = MetricsWrapper(environment.metrics, "api")
 
@@ -27,4 +29,29 @@ def record_query(
                 "final": final,
             },
             mark_tags={"final": final},
+        )
+
+
+def record_invalid_request(timer: Timer, referrer: Optional[str]) -> None:
+    """
+    This is for parsing/validation errors. At this point the request has
+    not been created.
+    """
+    _record_failure_building_request(QueryStatus.INVALID_REQUEST, timer, referrer)
+
+
+def record_error_building_request(timer: Timer, referrer: Optional[str]) -> None:
+    """
+    This is for system errors during parsing/validation.
+    At this point the request has not been created.
+    """
+    _record_failure_building_request(QueryStatus.ERROR, timer, referrer)
+
+
+def _record_failure_building_request(
+    status: QueryStatus, timer: Timer, referrer: Optional[str]
+) -> None:
+    if settings.RECORD_QUERIES:
+        timer.send_metrics_to(
+            metrics, tags={"status": status.value, "referrer": referrer or "none"},
         )
