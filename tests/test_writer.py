@@ -3,6 +3,7 @@ import pytest
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.http import HTTPBatchWriter
 from snuba.datasets.factory import enforce_table_writer
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.backends.metrics import TestingMetricsBackend, Timing
 from tests.base import BaseEventsTest
 
@@ -10,18 +11,18 @@ from tests.base import BaseEventsTest
 class TestHTTPBatchWriter(BaseEventsTest):
     def test_error_handling(self):
         try:
-            enforce_table_writer(self.dataset).get_writer(table_name="invalid").write(
-                [{"x": "y"}]
-            )
+            enforce_table_writer(self.dataset).get_writer(
+                table_name="invalid", metrics=DummyMetricsBackend(strict=True)
+            ).write([{"x": "y"}])
         except ClickhouseError as error:
             assert error.code == 60
         else:
             assert False, "expected error"
 
         try:
-            enforce_table_writer(self.dataset).get_writer().write(
-                [{"timestamp": "invalid"}]
-            )
+            enforce_table_writer(self.dataset).get_writer(
+                metrics=DummyMetricsBackend(strict=True)
+            ).write([{"timestamp": "invalid"}])
         except ClickhouseError as error:
             assert error.code == 41
         else:
