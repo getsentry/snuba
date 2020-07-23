@@ -99,9 +99,7 @@ application.url_map.converters["dataset"] = DatasetConverter
 
 
 @application.errorhandler(InvalidJsonRequestException)
-def handle_invalid_json(
-    exception: InvalidJsonRequestException,
-) -> Tuple[str, int, Mapping[str, str]]:
+def handle_invalid_json(exception: InvalidJsonRequestException,) -> Response:
     cause = getattr(exception, "__cause__", None)
     if isinstance(cause, json.JSONDecodeError):
         data = {"error": {"type": "json", "message": str(cause)}}
@@ -125,7 +123,7 @@ def handle_invalid_json(
         else:
             raise TypeError()
 
-    return (
+    return Response(
         json.dumps(data, indent=4, default=default_encode),
         400,
         {"Content-Type": "application/json"},
@@ -133,9 +131,9 @@ def handle_invalid_json(
 
 
 @application.errorhandler(InvalidDatasetError)
-def handle_invalid_dataset(exception: InvalidDatasetError):
+def handle_invalid_dataset(exception: InvalidDatasetError) -> Response:
     data = {"error": {"type": "dataset", "message": str(exception)}}
-    return (
+    return Response(
         json.dumps(data, sort_keys=True, indent=4),
         404,
         {"Content-Type": "application/json"},
@@ -143,16 +141,14 @@ def handle_invalid_dataset(exception: InvalidDatasetError):
 
 
 @application.errorhandler(InvalidQueryException)
-def handle_invalid_query(
-    exception: InvalidQueryException,
-) -> Tuple[str, int, Mapping[str, str]]:
+def handle_invalid_query(exception: InvalidQueryException,) -> Response:
     # TODO: Remove this logging as soon as the query validation code is
     # mature enough that we can trust it.
     logger.warning("Invalid query", exc_info=True)
 
     # TODO: Add special cases with more structure for specific exceptions
     # if needed.
-    return (
+    return Response(
         json.dumps(
             {"error": {"type": "invalid_query", "message": str(exception)}}, indent=4
         ),
@@ -226,7 +222,7 @@ def config_changes():
 
 
 @application.route("/health")
-def health():
+def health() -> Response:
     down_file_exists = check_down_file_exists()
     thorough = http_request.args.get("thorough", False)
     clickhouse_health = check_clickhouse() if thorough else True
@@ -242,7 +238,7 @@ def health():
             body["clickhouse_ok"] = clickhouse_health
         status = 502
 
-    return (json.dumps(body), status, {"Content-Type": "application/json"})
+    return Response(json.dumps(body), status, {"Content-Type": "application/json"})
 
 
 def parse_request_body(http_request):
@@ -250,7 +246,7 @@ def parse_request_body(http_request):
         metrics.timing("http_request_body_length", len(http_request.data))
         try:
             return json.loads(http_request.data)
-        except json.errors.JSONDecodeError as error:
+        except json.JSONDecodeError as error:
             raise InvalidJsonRequestException(str(error)) from error
 
 
@@ -352,12 +348,10 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
 
 
 @application.errorhandler(InvalidSubscriptionError)
-def handle_subscription_error(exception: InvalidSubscriptionError):
+def handle_subscription_error(exception: InvalidSubscriptionError) -> Response:
     data = {"error": {"type": "subscription", "message": str(exception)}}
-    return (
-        json.dumps(data, indent=4),
-        400,
-        {"Content-Type": "application/json"},
+    return Response(
+        json.dumps(data, indent=4), 400, {"Content-Type": "application/json"},
     )
 
 

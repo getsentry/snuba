@@ -11,9 +11,9 @@ from snuba.datasets.dataset import Dataset
 from snuba.query.expressions import Column
 from snuba.query.extensions import QueryExtension
 from snuba.query.parser import parse_query
-from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.query.schema import GENERIC_QUERY_SCHEMA
 from snuba.request import Request
+from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.request_settings import (
     HTTPRequestSettings,
     RequestSettings,
