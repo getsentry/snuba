@@ -1,19 +1,22 @@
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.migrations.groups import get_group_loader, MigrationGroup
 from snuba.migrations.parse_schema import get_local_schema
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
 
 def setup_function() -> None:
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
     )
-    connection.execute("DROP TABLE IF EXISTS migrations_local;")
+    for table in ["migrations_local", "sentry_local", "transactions_local"]:
+        connection.execute(f"DROP TABLE IF EXISTS {table};")
 
 
 def test_run_migration() -> None:
@@ -91,3 +94,142 @@ def test_no_schema_differences() -> None:
             assert (
                 schema.get_column_differences(local_schema) == []
             ), f"Schema mismatch: {table_name} does not match schema"
+
+
+def test_transactions_compatibility() -> None:
+    cluster = get_cluster(StorageSetKey.TRANSACTIONS)
+    connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+
+    def get_sampling_key() -> str:
+        database = cluster.get_database()
+        ((sampling_key,),) = connection.execute(
+            f"SELECT sampling_key FROM system.tables WHERE name = 'transactions_local' AND database = '{database}'"
+        )
+        return sampling_key
+
+    # Create old style table without sampling expression and insert data
+    connection.execute(
+        """
+        CREATE TABLE transactions_local (`project_id` UInt64, `event_id` UUID,
+        `trace_id` UUID, `span_id` UInt64, `transaction_name` LowCardinality(String),
+        `transaction_hash` UInt64 MATERIALIZED CAST(cityHash64(transaction_name), 'UInt64'),
+        `transaction_op` LowCardinality(String), `transaction_status` UInt8 DEFAULT 2,
+        `start_ts` DateTime, `start_ms` UInt16, `finish_ts` DateTime, `finish_ms` UInt16,
+        `duration` UInt32, `platform` LowCardinality(String), `environment` LowCardinality(Nullable(String)),
+        `release` LowCardinality(Nullable(String)), `dist` LowCardinality(Nullable(String)),
+        `ip_address_v4` Nullable(IPv4), `ip_address_v6` Nullable(IPv6), `user` String DEFAULT '',
+        `user_hash` UInt64 MATERIALIZED cityHash64(user), `user_id` Nullable(String),
+        `user_name` Nullable(String), `user_email` Nullable(String),
+        `sdk_name` LowCardinality(String) DEFAULT CAST('', 'LowCardinality(String)'),
+        `sdk_version` LowCardinality(String) DEFAULT CAST('', 'LowCardinality(String)'),
+        `tags.key` Array(String), `tags.value` Array(String), `_tags_flattened` String,
+        `contexts.key` Array(String), `contexts.value` Array(String), `_contexts_flattened` String,
+        `partition` UInt16, `offset` UInt64, `message_timestamp` DateTime, `retention_days` UInt16,
+        `deleted` UInt8) ENGINE = ReplacingMergeTree(deleted) PARTITION BY (retention_days, toMonday(finish_ts))
+        ORDER BY (project_id, toStartOfDay(finish_ts), transaction_name, cityHash64(span_id))
+        TTL finish_ts + toIntervalDay(retention_days);
+        """
+    )
+
+    assert get_sampling_key() == ""
+    generate_transactions(5)
+
+    runner = Runner()
+    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    runner.run_migration(
+        MigrationKey(
+            MigrationGroup.TRANSACTIONS,
+            "0002_transactions_onpremise_fix_orderby_and_partitionby",
+        )
+    )
+
+    assert get_sampling_key() == "cityHash64(span_id)"
+
+    assert connection.execute("SELECT count(*) FROM transactions_local;") == [(5,)]
+
+
+def generate_transactions(count: int) -> None:
+    """
+    Generate a deterministic set of events across a time range.
+    """
+    import calendar
+    import pytz
+    import uuid
+    from datetime import datetime, timedelta
+
+    table_writer = get_writable_storage(StorageKey.TRANSACTIONS).get_table_writer()
+
+    rows = []
+
+    base_time = datetime.utcnow().replace(
+        minute=0, second=0, microsecond=0, tzinfo=pytz.utc
+    ) - timedelta(minutes=count)
+
+    for tick in range(count):
+
+        trace_id = "7400045b25c443b885914600aa83ad04"
+        span_id = "8841662216cc598b"
+        processed = (
+            table_writer.get_stream_loader()
+            .get_processor()
+            .process_message(
+                (
+                    2,
+                    "insert",
+                    {
+                        "project_id": 1,
+                        "event_id": uuid.uuid4().hex,
+                        "deleted": 0,
+                        "datetime": (base_time + timedelta(minutes=tick)).isoformat(),
+                        "platform": "javascript",
+                        "data": {
+                            # Project N sends every Nth (mod len(hashes)) hash (and platform)
+                            "received": calendar.timegm(
+                                (base_time + timedelta(minutes=tick)).timetuple()
+                            ),
+                            "type": "transaction",
+                            "transaction": f"/api/do_things/{count}",
+                            # XXX(dcramer): would be nice to document why these have to be naive
+                            "start_timestamp": datetime.timestamp(
+                                (base_time + timedelta(minutes=tick)).replace(
+                                    tzinfo=None
+                                )
+                            ),
+                            "timestamp": datetime.timestamp(
+                                (
+                                    base_time + timedelta(minutes=tick, seconds=1)
+                                ).replace(tzinfo=None)
+                            ),
+                            "contexts": {
+                                "trace": {
+                                    "trace_id": trace_id,
+                                    "span_id": span_id,
+                                    "op": "http",
+                                    "status": "0",
+                                },
+                            },
+                            "spans": [
+                                {
+                                    "op": "db",
+                                    "trace_id": trace_id,
+                                    "span_id": span_id + "1",
+                                    "parent_span_id": None,
+                                    "same_process_as_parent": True,
+                                    "description": "SELECT * FROM users",
+                                    "data": {},
+                                    "timestamp": calendar.timegm(
+                                        (
+                                            base_time + timedelta(minutes=tick)
+                                        ).timetuple()
+                                    ),
+                                }
+                            ],
+                        },
+                    },
+                ),
+                KafkaMessageMetadata(0, 0, base_time),
+            )
+        )
+        rows.extend(processed.rows)
+
+    table_writer.get_writer(metrics=DummyMetricsBackend(strict=True)).write(rows)

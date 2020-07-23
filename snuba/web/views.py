@@ -425,7 +425,7 @@ if application.debug or application.testing:
                 assert isinstance(processed_message, InsertBatch)
                 rows.extend(processed_message.rows)
 
-        enforce_table_writer(dataset).get_writer().write(rows)
+        enforce_table_writer(dataset).get_writer(metrics).write(rows)
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
