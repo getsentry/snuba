@@ -13,6 +13,7 @@ from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import enforce_table_writer, get_dataset
+from snuba.migrations.migrate import run_storage
 from snuba.processor import InsertBatch, ProcessedMessage
 from snuba.redis import redis_client
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
@@ -31,8 +32,7 @@ def dataset_manager(name: str) -> Iterator[Dataset]:
         for statement in storage.get_schemas().get_drop_statements():
             clickhouse.execute(statement.statement)
 
-        for statement in storage.get_schemas().get_create_statements():
-            clickhouse.execute(statement.statement)
+        run_storage(storage.get_storage_key())
 
     try:
         yield dataset
