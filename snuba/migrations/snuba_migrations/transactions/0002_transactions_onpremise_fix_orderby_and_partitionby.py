@@ -20,6 +20,7 @@ def recreate_table() -> None:
 
     table_name = "transactions_local"
     table_name_new = "transactions_local_new"
+    table_name_old = "transactions_local_old"
 
     new_sampling_key = "cityHash64(span_id)"
     new_partition_key = "(retention_days, toMonday(finish_ts))"
@@ -65,7 +66,7 @@ def recreate_table() -> None:
     clickhouse.execute(new_create_table_statement)
 
     # Copy over data in batches of 100,000
-    [(row_count,)] = clickhouse.execute(f"SELECT count(*) FROM {table_name}")
+    [(row_count,)] = clickhouse.execute(f"SELECT count() FROM {table_name}")
     batch_size = 100000
     batch_count = math.ceil(row_count / batch_size)
 
@@ -83,9 +84,16 @@ def recreate_table() -> None:
             """
         )
 
-    clickhouse.execute(f"DROP TABLE {table_name};")
+    clickhouse.execute(f"RENAME TABLE {table_name} TO {table_name_old};")
 
-    clickhouse.execute(f"RENAME TABLE {table_name_new} to {table_name};")
+    clickhouse.execute(f"RENAME TABLE {table_name_new} TO {table_name};")
+
+    # Ensure each table has the same number of rows before deleting the old one
+    assert clickhouse.execute(
+        f"SELECT COUNT() FROM {table_name} FINAL;"
+    ) == clickhouse.execute(f"SELECT COUNT() FROM {table_name_old} FINAL;")
+
+    clickhouse.execute(f"DROP TABLE {table_name_old};")
 
 
 class Migration(migration.MultiStepMigration):
