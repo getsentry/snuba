@@ -99,7 +99,7 @@ application.url_map.converters["dataset"] = DatasetConverter
 
 
 @application.errorhandler(InvalidJsonRequestException)
-def handle_invalid_json(exception: InvalidJsonRequestException,) -> Response:
+def handle_invalid_json(exception: InvalidJsonRequestException) -> Response:
     cause = getattr(exception, "__cause__", None)
     if isinstance(cause, json.JSONDecodeError):
         data = {"error": {"type": "json", "message": str(cause)}}
@@ -141,7 +141,7 @@ def handle_invalid_dataset(exception: InvalidDatasetError) -> Response:
 
 
 @application.errorhandler(InvalidQueryException)
-def handle_invalid_query(exception: InvalidQueryException,) -> Response:
+def handle_invalid_query(exception: InvalidQueryException) -> Response:
     # TODO: Remove this logging as soon as the query validation code is
     # mature enough that we can trust it.
     logger.warning("Invalid query", exc_info=True)
