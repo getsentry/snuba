@@ -1,12 +1,17 @@
 import math
+import time
 from typing import Sequence
 
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 
+TABLE_NAME = "transactions_local"
+TABLE_NAME_NEW = "transactions_local_new"
+TABLE_NAME_OLD = "transactions_local_old"
 
-def recreate_table() -> None:
+
+def forwards() -> None:
     """
     The sample by clause for the transactions table was added in April 2020. Partition
     by has been changed twice. If the user has a table without the sample by clause,
@@ -18,15 +23,11 @@ def recreate_table() -> None:
     clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
     database = cluster.get_database()
 
-    table_name = "transactions_local"
-    table_name_new = "transactions_local_new"
-    table_name_old = "transactions_local_old"
-
     new_sampling_key = "cityHash64(span_id)"
     new_partition_key = "(retention_days, toMonday(finish_ts))"
 
     ((curr_sampling_key, curr_partition_key),) = clickhouse.execute(
-        f"SELECT sampling_key, partition_key FROM system.tables WHERE name = '{table_name}' AND database = '{database}'"
+        f"SELECT sampling_key, partition_key FROM system.tables WHERE name = '{TABLE_NAME}' AND database = '{database}'"
     )
 
     sampling_key_needs_update = curr_sampling_key != new_sampling_key
@@ -38,11 +39,11 @@ def recreate_table() -> None:
 
     # Create transactions_local_new and insert data
     ((curr_create_table_statement,),) = clickhouse.execute(
-        f"SHOW CREATE TABLE {database}.{table_name}"
+        f"SHOW CREATE TABLE {database}.{TABLE_NAME}"
     )
 
     new_create_table_statement = curr_create_table_statement.replace(
-        table_name, table_name_new
+        TABLE_NAME, TABLE_NAME_NEW
     )
 
     # Insert sample clause before TTL
@@ -66,7 +67,7 @@ def recreate_table() -> None:
     clickhouse.execute(new_create_table_statement)
 
     # Copy over data in batches of 100,000
-    [(row_count,)] = clickhouse.execute(f"SELECT count() FROM {table_name}")
+    [(row_count,)] = clickhouse.execute(f"SELECT count() FROM {TABLE_NAME}")
     batch_size = 100000
     batch_count = math.ceil(row_count / batch_size)
 
@@ -76,24 +77,51 @@ def recreate_table() -> None:
         skip = batch_size * i
         clickhouse.execute(
             f"""
-            INSERT INTO {table_name_new}
-            SELECT * FROM {table_name}
+            INSERT INTO {TABLE_NAME_NEW}
+            SELECT * FROM {TABLE_NAME}
             ORDER BY {orderby}
             LIMIT {batch_size}
             OFFSET {skip};
             """
         )
 
-    clickhouse.execute(f"RENAME TABLE {table_name} TO {table_name_old};")
+    clickhouse.execute(f"RENAME TABLE {TABLE_NAME} TO {TABLE_NAME_OLD};")
 
-    clickhouse.execute(f"RENAME TABLE {table_name_new} TO {table_name};")
+    clickhouse.execute(f"RENAME TABLE {TABLE_NAME_NEW} TO {TABLE_NAME};")
 
     # Ensure each table has the same number of rows before deleting the old one
     assert clickhouse.execute(
-        f"SELECT COUNT() FROM {table_name} FINAL;"
-    ) == clickhouse.execute(f"SELECT COUNT() FROM {table_name_old} FINAL;")
+        f"SELECT COUNT() FROM {TABLE_NAME} FINAL;"
+    ) == clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME_OLD} FINAL;")
 
-    clickhouse.execute(f"DROP TABLE {table_name_old};")
+    clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
+
+
+def backwards() -> None:
+    """
+    This method cleans up the temporary tables used by the forwards methodsa and
+    returns us to the original state if the forwards method has failed somewhere
+    in the middle. Otherwise it's a no-op.
+    """
+    cluster = get_cluster(StorageSetKey.TRANSACTIONS)
+
+    clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+
+    def table_exists(table_name: str):
+        return clickhouse.execute(f"EXISTS TABLE {table_name};") == [(1,)]
+
+    if not table_exists(TABLE_NAME):
+        raise Exception(f"Table {TABLE_NAME} is missing")
+
+    if table_exists(TABLE_NAME_NEW):
+        print(f"Dropping table {TABLE_NAME_NEW}")
+        time.sleep(1)
+        clickhouse.execute(f"DROP TABLE {TABLE_NAME_NEW};")
+
+    if table_exists(TABLE_NAME_OLD):
+        print(f"Dropping table {TABLE_NAME_OLD}")
+        time.sleep(1)
+        clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
 
 
 class Migration(migration.MultiStepMigration):
@@ -112,11 +140,11 @@ class Migration(migration.MultiStepMigration):
 
     def forwards_local(self) -> Sequence[operations.Operation]:
         return [
-            operations.RunPython(func=recreate_table),
+            operations.RunPython(func=forwards),
         ]
 
     def backwards_local(self) -> Sequence[operations.Operation]:
-        return []
+        return [operations.RunPython(func=backwards)]
 
     def forwards_dist(self) -> Sequence[operations.Operation]:
         return []
