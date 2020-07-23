@@ -13,7 +13,7 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.parser import parse_query
 from snuba.query.schema import GENERIC_QUERY_SCHEMA
 from snuba.request import Request
-from snuba.request.exceptions import InvalidJsonRequestException
+from snuba.request.exceptions import JsonSchemaValidationException
 from snuba.request.request_settings import (
     HTTPRequestSettings,
     RequestSettings,
@@ -92,7 +92,7 @@ class RequestSchema:
         try:
             value = validate_jsonschema(value, self.__composite_schema)
         except jsonschema.ValidationError as error:
-            raise InvalidJsonRequestException(str(error)) from error
+            raise JsonSchemaValidationException(str(error)) from error
 
         query_body = {
             key: value.pop(key)

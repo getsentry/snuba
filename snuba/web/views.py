@@ -27,7 +27,7 @@ from snuba.datasets.factory import (
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.query.parser.exceptions import InvalidQueryException
 from snuba.redis import redis_client
-from snuba.request.exceptions import InvalidJsonRequestException
+from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request
@@ -247,7 +247,7 @@ def parse_request_body(http_request):
         try:
             return json.loads(http_request.data)
         except json.JSONDecodeError as error:
-            raise InvalidJsonRequestException(str(error)) from error
+            raise JsonDecodeException(str(error)) from error
 
 
 def _trace_transaction(dataset: Dataset) -> None:
