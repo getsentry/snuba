@@ -10,6 +10,8 @@ from urllib3.exceptions import HTTPError
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.utils.codecs import Encoder
+from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.writer import BatchWriter, WriterTableRow
 
 
@@ -42,6 +44,7 @@ class HTTPBatchWriter(BatchWriter[JSONRow]):
         user: str,
         password: str,
         database: str,
+        metrics: MetricsBackend,
         options: Optional[Mapping[str, Any]] = None,
         chunk_size: Optional[int] = 1,
     ):
@@ -58,17 +61,28 @@ class HTTPBatchWriter(BatchWriter[JSONRow]):
         self.__user = user
         self.__password = password
         self.__database = database
+        self.__metrics = MetricsWrapper(metrics, "writer", {"table_name": table_name})
 
     def _prepare_chunks(self, rows: Iterable[JSONRow]) -> Iterable[bytes]:
+        total_bytes_size = 0
         chunk = []
+
         for row in rows:
             chunk.append(row)
             if self.__chunk_size and len(chunk) == self.__chunk_size:
-                yield b"".join(chunk)
+                chunk_bytes = b"".join(chunk)
+                yield chunk_bytes
+                self.__metrics.timing("chunk.size", len(chunk_bytes))
+                total_bytes_size += len(chunk_bytes)
                 chunk = []
 
         if chunk:
-            yield b"".join(chunk)
+            chunk_bytes = b"".join(chunk)
+            yield chunk_bytes
+            self.__metrics.timing("chunk.size", len(chunk_bytes))
+            total_bytes_size += len(chunk_bytes)
+
+        self.__metrics.timing("total.size", total_bytes_size)
 
     def write(self, values: Iterable[JSONRow]) -> None:
         response = self.__pool.urlopen(

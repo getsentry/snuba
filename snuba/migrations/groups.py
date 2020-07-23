@@ -77,7 +77,11 @@ class TransactionsLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.transactions")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_transactions"]
+        return [
+            "0001_transactions",
+            "0002_transactions_onpremise_fix_orderby_and_partitionby",
+            "0003_transactions_onpremise_fix_columns",
+        ]
 
 
 class OutcomesLoader(DirectoryLoader):
