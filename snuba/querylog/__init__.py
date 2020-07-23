@@ -12,6 +12,9 @@ metrics = MetricsWrapper(environment.metrics, "api")
 def record_query(
     request: Request, timer: Timer, query_metadata: SnubaQueryMetadata
 ) -> None:
+    """
+    Records a request after it has been parsed and validated.
+    """
     if settings.RECORD_QUERIES:
         # Send to redis
         # We convert this to a dict before passing it to state in order to avoid a
@@ -34,16 +37,18 @@ def record_query(
 
 def record_invalid_request(timer: Timer, referrer: Optional[str]) -> None:
     """
-    This is for parsing/validation errors. At this point the request has
-    not been created.
+    Records a failed request before the request object is created, so
+    it records failures during parsing/validation.
+    This is for client errors.
     """
     _record_failure_building_request(QueryStatus.INVALID_REQUEST, timer, referrer)
 
 
 def record_error_building_request(timer: Timer, referrer: Optional[str]) -> None:
     """
+    Records a failed request before the request object is created, so
+    it records failures during parsing/validation.
     This is for system errors during parsing/validation.
-    At this point the request has not been created.
     """
     _record_failure_building_request(QueryStatus.ERROR, timer, referrer)
 

@@ -56,5 +56,5 @@ class SnubaQueryMetadata:
     @property
     def status(self) -> QueryStatus:
         # If we do not have any recorded query and we did not specifically log
-        # invalid_query, assume there was an error somewhere.
+        # invalid_query, we assume there was an error somewhere.
         return self.query_list[-1].status if self.query_list else QueryStatus.ERROR
