@@ -96,6 +96,14 @@ class SummingMergeTree(MergeTree):
             return f"ReplicatedSummingMergeTree('/clickhouse/tables/{{layer}}-{{shard}})/{table_name}', '{{replica}}')"
 
 
+class AggregatingMergeTree(MergeTree):
+    def _get_engine_type(self, cluster: ClickhouseCluster, table_name: str) -> str:
+        if cluster.is_single_node():
+            return f"AggregatingMergeTree()"
+        else:
+            return f"ReplicatedReplacingMergeTree('/clickhouse/tables/{{layer}}-{{shard}})/{table_name}', '{{replica}}')"
+
+
 class Distributed(TableEngine):
     def __init__(self, local_table_name: str, sharding_key: Optional[str]) -> None:
         self.__local_table_name = local_table_name
