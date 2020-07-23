@@ -8,6 +8,7 @@ from snuba.migrations.groups import get_group_loader, MigrationGroup
 from snuba.migrations.parse_schema import get_local_schema
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
 
 def setup_function() -> None:
@@ -231,4 +232,4 @@ def generate_transactions(count: int) -> None:
         )
         rows.extend(processed.rows)
 
-    table_writer.get_writer().write(rows)
+    table_writer.get_writer(metrics=DummyMetricsBackend(strict=True)).write(rows)
