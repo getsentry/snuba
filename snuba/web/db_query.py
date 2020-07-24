@@ -1,14 +1,8 @@
 import logging
-
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from hashlib import md5
-from typing import (
-    Any,
-    Mapping,
-    MutableMapping,
-    Optional,
-)
+from typing import Any, Mapping, MutableMapping, Optional
 
 import sentry_sdk
 from sentry_sdk.api import configure_scope
@@ -17,6 +11,11 @@ from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.sql import SqlQuery
+from snuba.querylog.query_metadata import (
+    ClickhouseQueryMetadata,
+    QueryStatus,
+    SnubaQueryMetadata,
+)
 from snuba.reader import Reader, Result
 from snuba.redis import redis_client
 from snuba.request.request_settings import RequestSettings
@@ -31,8 +30,6 @@ from snuba.util import force_bytes, with_span
 from snuba.utils.codecs import JSONCodec, JSONData
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
-from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
-
 
 cache: Cache[JSONData] = RedisCache(
     redis_client, "snuba-query-cache:", JSONCodec(), ThreadPoolExecutor()
@@ -48,7 +45,7 @@ def update_query_metadata_and_stats(
     query_metadata: SnubaQueryMetadata,
     query_settings: Mapping[str, Any],
     trace_id: Optional[str],
-    status: str,
+    status: QueryStatus,
 ) -> MutableMapping[str, Any]:
     """
     If query logging is enabled then logs details about the query and its status, as
@@ -290,14 +287,14 @@ def raw_query(
         )
     except Exception as cause:
         if isinstance(cause, RateLimitExceeded):
-            stats = update_with_status("rate-limited")
+            stats = update_with_status(QueryStatus.RATE_LIMITED)
         else:
             with configure_scope() as scope:
                 if isinstance(cause, ClickhouseError):
                     scope.fingerprint = ["{{default}}", str(cause.code)]
                 logger.exception("Error running query: %s\n%s", sql, cause)
-            stats = update_with_status("error")
+            stats = update_with_status(QueryStatus.ERROR)
         raise QueryException({"stats": stats, "sql": sql}) from cause
     else:
-        stats = update_with_status("success")
+        stats = update_with_status(QueryStatus.SUCCESS)
         return QueryResult(result, {"stats": stats, "sql": sql})
