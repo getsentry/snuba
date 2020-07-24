@@ -10,7 +10,6 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
-    Type,
     Union,
 )
 
@@ -103,13 +102,11 @@ def get_arithmetic_function(
 
 
 def get_arithmetic_expression(
-    term: Expression,
-    exp: Union[LowPriArithmetic, HighPriArithmetic],
-    node_type: Union[Type[LowPriTuple], Type[HighPriTuple]],
+    term: Expression, exp: Union[LowPriArithmetic, HighPriArithmetic],
 ) -> Expression:
     if isinstance(exp, Node):
         return term
-    if isinstance(exp, node_type):
+    if isinstance(exp, (LowPriTuple, HighPriTuple)):
         return get_arithmetic_function(exp.op)(term, exp.arithm, None)
     elif isinstance(exp, list):
         for elem in exp:
@@ -168,7 +165,7 @@ class ClickhouseVisitor(NodeVisitor):
     ) -> Expression:
         _, term, _, exp = visited_children
 
-        return get_arithmetic_expression(term, exp, LowPriTuple)
+        return get_arithmetic_expression(term, exp)
 
     def visit_high_pri_arithmetic(
         self,
@@ -177,7 +174,7 @@ class ClickhouseVisitor(NodeVisitor):
     ) -> Expression:
         _, term, _, exp = visited_children
 
-        return get_arithmetic_expression(term, exp, HighPriTuple)
+        return get_arithmetic_expression(term, exp)
 
     def visit_numeric_literal(
         self, node: Node, visited_children: Iterable[Any]
