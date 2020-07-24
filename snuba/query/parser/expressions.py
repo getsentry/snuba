@@ -1,7 +1,7 @@
 import re
 from dataclasses import replace
 from enum import Enum
-from typing import Any, Iterable, List, NamedTuple, Optional, Tuple, Union
+from typing import Any, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Union
 
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
@@ -123,7 +123,7 @@ class ClickhouseVisitor(NodeVisitor):
         self,
         node: Node,
         visited_children: Tuple[
-            Any, Expression, Any, Union[Node, LowPriTuple, List[LowPriTuple]]
+            Any, Expression, Any, Union[Node, LowPriTuple, Sequence[LowPriTuple]]
         ],
     ) -> Expression:
         _, term, _, exp = visited_children
@@ -131,17 +131,18 @@ class ClickhouseVisitor(NodeVisitor):
         if isinstance(exp, Node):
             return term
 
-        if isinstance(exp, LowPriTuple):
-            if exp.op == LowPriOperator.PLUS:
-                return plus(term, exp.arithm)
-            elif exp.op == LowPriOperator.MINUS:
-                return minus(term, exp.arithm)
+        def low_op_match(left_term, tuple):
+            if tuple.op == LowPriOperator.PLUS:
+                return plus(left_term, tuple.arithm)
+            elif tuple.op == LowPriOperator.MINUS:
+                return minus(left_term, tuple.arithm)
 
-        for elem in exp:
-            if elem.op == LowPriOperator.PLUS:
-                term = plus(term, elem.arithm)
-            elif elem.op == LowPriOperator.MINUS:
-                term = minus(term, elem.arithm)
+        if isinstance(exp, LowPriTuple):
+            term = low_op_match(term, exp)
+
+        elif isinstance(exp, list):
+            for elem in exp:
+                term = low_op_match(term, elem)
 
         return term
 
@@ -149,7 +150,7 @@ class ClickhouseVisitor(NodeVisitor):
         self,
         node: Node,
         visited_children: Tuple[
-            Any, Expression, Any, Union[Node, HighPriTuple, List[HighPriTuple]]
+            Any, Expression, Any, Union[Node, HighPriTuple, Sequence[HighPriTuple]]
         ],
     ) -> Expression:
         _, term, _, exp = visited_children
@@ -157,17 +158,18 @@ class ClickhouseVisitor(NodeVisitor):
         if isinstance(exp, Node):
             return term
 
-        if isinstance(exp, HighPriTuple):
-            if exp.op == HighPriOperator.MULTIPLY:
-                return multiply(term, exp.arithm)
-            elif exp.op == HighPriOperator.DIVIDE:
-                return divide(term, exp.arithm)
+        def high_op_match(left_term, tuple):
+            if tuple.op == HighPriOperator.MULTIPLY:
+                return multiply(left_term, tuple.arithm)
+            elif tuple.op == HighPriOperator.DIVIDE:
+                return divide(left_term, tuple.arithm)
 
-        for elem in exp:
-            if elem.op == HighPriOperator.MULTIPLY:
-                term = multiply(term, elem.arithm)
-            elif elem.op == HighPriOperator.DIVIDE:
-                term = divide(term, elem.arithm)
+        if isinstance(exp, HighPriTuple):
+            term = high_op_match(term, exp)
+
+        elif isinstance(exp, list):
+            for elem in exp:
+                term = high_op_match(term, elem)
 
         return term
 
