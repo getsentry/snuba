@@ -1,7 +1,7 @@
 import re
 from dataclasses import replace
 from enum import Enum
-from typing import Any, Iterable, List, Optional, Tuple, Union
+from typing import Any, Iterable, List, NamedTuple, Optional, Tuple, Union
 
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
@@ -28,8 +28,10 @@ minimal_clickhouse_grammar = Grammar(
 # name of a clickhouse function.
 
 root_element          = low_pri_arithmetic
-low_pri_arithmetic    = space* high_pri_arithmetic space* (low_pri_op high_pri_arithmetic)*
-high_pri_arithmetic   = space* arithmetic_term space* (high_pri_op arithmetic_term)*
+low_pri_arithmetic    = space* high_pri_arithmetic space* (low_pri_tuple)*
+high_pri_arithmetic   = space* arithmetic_term space* (high_pri_tuple)*
+low_pri_tuple         = low_pri_op high_pri_arithmetic
+high_pri_tuple        = high_pri_op arithmetic_term
 arithmetic_term       = (space*) (function_call / numeric_literal / column_name) (space*)
 low_pri_op            = "+" / "-"
 high_pri_op           = "/" / "*"
@@ -62,6 +64,16 @@ class HighPriOperator(Enum):
     DIVIDE = "/"
 
 
+class LowPriTuple(NamedTuple):
+    op: LowPriOperator
+    arithm: Expression
+
+
+class HighPriTuple(NamedTuple):
+    op: HighPriOperator
+    arithm: Expression
+
+
 class ClickhouseVisitor(NodeVisitor):
     """
     Builds Snuba AST expressions from the Parsimonious parse tree.
@@ -73,21 +85,31 @@ class ClickhouseVisitor(NodeVisitor):
     def visit_column_name(self, node: Node, visited_children: Iterable[Any]) -> Column:
         return Column(None, None, node.text)
 
+    def visit_low_pri_tuple(
+        self, node: Node, visited_children: Tuple[LowPriOperator, Expression]
+    ) -> LowPriTuple:
+        left, right = visited_children
+
+        return LowPriTuple(op=left, arithm=right)
+
+    def visit_high_pri_tuple(
+        self, node: Node, visited_children: Tuple[HighPriOperator, Expression]
+    ) -> HighPriTuple:
+        left, right = visited_children
+
+        return HighPriTuple(op=left, arithm=right)
+
     def visit_low_pri_op(
         self, node: Node, visited_children: Iterable[Any]
     ) -> LowPriOperator:
-        if node.text == "+":
-            return LowPriOperator.PLUS
-        else:
-            return LowPriOperator.MINUS
+
+        return LowPriOperator(node.text)
 
     def visit_high_pri_op(
         self, node: Node, visited_children: Iterable[Any]
     ) -> HighPriOperator:
-        if node.text == "*":
-            return HighPriOperator.MULTIPLY
-        else:
-            return HighPriOperator.DIVIDE
+
+        return HighPriOperator(node.text)
 
     def visit_arithmetic_term(
         self, node: Node, visited_children: Tuple[Any, Expression, Any]
@@ -100,32 +122,25 @@ class ClickhouseVisitor(NodeVisitor):
         self,
         node: Node,
         visited_children: Tuple[
-            Any, Expression, Any, Union[Node, Tuple[LowPriOperator, Expression]]
+            Any, Expression, Any, Union[Node, LowPriTuple, List[LowPriTuple]]
         ],
     ) -> Expression:
         _, term, _, exp = visited_children
 
-        if exp == "":
+        if isinstance(exp, Node):
             return term
 
+        if isinstance(exp, LowPriTuple):
+            if exp.op == LowPriOperator.PLUS:
+                return plus(term, exp.arithm)
+            elif exp.op == LowPriOperator.MINUS:
+                return minus(term, exp.arithm)
+
         for elem in exp:
-            if isinstance(elem, list):
-                # If there remains Expressions
-                # in List form that need to be
-                # put together and bubbled up
-                if elem[0] == LowPriOperator.PLUS:
-                    term = plus(term, elem[1])
-                elif elem[0] == LowPriOperator.MINUS:
-                    term = minus(term, elem[1])
-            else:
-                # This branch is hit when
-                # there is only one operator left
-                # to perform arithmetic between two
-                # Expressions that have been bubbled up
-                if exp[0] == LowPriOperator.PLUS:
-                    return plus(term, exp[1])
-                elif exp[0] == LowPriOperator.MINUS:
-                    return minus(term, exp[1])
+            if elem.op == LowPriOperator.PLUS:
+                term = plus(term, elem.arithm)
+            elif elem.op == LowPriOperator.MINUS:
+                term = minus(term, elem.arithm)
 
         return term
 
@@ -133,32 +148,25 @@ class ClickhouseVisitor(NodeVisitor):
         self,
         node: Node,
         visited_children: Tuple[
-            Any, Expression, Any, Union[Node, Tuple[HighPriOperator, Expression]]
+            Any, Expression, Any, Union[Node, HighPriTuple, List[HighPriTuple]]
         ],
     ) -> Expression:
         _, term, _, exp = visited_children
 
-        if exp == "":
+        if isinstance(exp, Node):
             return term
 
+        if isinstance(exp, HighPriTuple):
+            if exp.op == HighPriOperator.MULTIPLY:
+                return multiply(term, exp.arithm)
+            elif exp.op == HighPriOperator.DIVIDE:
+                return divide(term, exp.arithm)
+
         for elem in exp:
-            if isinstance(elem, list):
-                # If there remains Expressions
-                # in List form that need to be
-                # put together and bubbled up
-                if elem[0] == HighPriOperator.MULTIPLY:
-                    term = multiply(term, elem[1])
-                elif elem[0] == HighPriOperator.DIVIDE:
-                    term = divide(term, elem[1])
-            else:
-                # This branch is hit when
-                # there is only one operator left
-                # to perform arithmetic between two
-                # Expressions that have been bubbled up
-                if exp[0] == HighPriOperator.MULTIPLY:
-                    return multiply(term, exp[1])
-                elif exp[0] == HighPriOperator.DIVIDE:
-                    return divide(term, exp[1])
+            if elem.op == HighPriOperator.MULTIPLY:
+                term = multiply(term, elem.arithm)
+            elif elem.op == HighPriOperator.DIVIDE:
+                term = divide(term, elem.arithm)
 
         return term
 
