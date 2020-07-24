@@ -10,6 +10,7 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
+    Type,
     Union,
 )
 
@@ -31,6 +32,7 @@ from snuba.util import is_function
 
 FUNCTION_NAME_REGEX = r"[a-zA-Z_][a-zA-Z0-9_]*"
 FUNCTION_NAME_RE = re.compile(FUNCTION_NAME_REGEX)
+
 
 minimal_clickhouse_grammar = Grammar(
     fr"""
@@ -85,6 +87,10 @@ class HighPriTuple(NamedTuple):
     arithm: Expression
 
 
+HighPriArithmetic = Union[Node, HighPriTuple, Sequence[HighPriTuple]]
+LowPriArithmetic = Union[Node, LowPriTuple, Sequence[LowPriTuple]]
+
+
 def get_arithmetic_function(
     operator: Enum,
 ) -> Callable[[Expression, Expression, Optional[str]], FunctionCall]:
@@ -96,14 +102,18 @@ def get_arithmetic_function(
     }[operator]
 
 
-def get_arithmetic_expression(term, exp, node_type: Union[LowPriTuple, HighPriTuple]):
+def get_arithmetic_expression(
+    term: Expression,
+    exp: Union[LowPriArithmetic, HighPriArithmetic],
+    node_type: Union[Type[LowPriTuple], Type[HighPriTuple]],
+) -> Expression:
     if isinstance(exp, Node):
         return term
     if isinstance(exp, node_type):
-        return get_arithmetic_function(exp.op)(term, exp.arithm)
+        return get_arithmetic_function(exp.op)(term, exp.arithm, None)
     elif isinstance(exp, list):
         for elem in exp:
-            term = get_arithmetic_function(elem.op)(term, elem.arithm)
+            term = get_arithmetic_function(elem.op)(term, elem.arithm, None)
     return term
 
 
@@ -154,9 +164,7 @@ class ClickhouseVisitor(NodeVisitor):
     def visit_low_pri_arithmetic(
         self,
         node: Node,
-        visited_children: Tuple[
-            Any, Expression, Any, Union[Node, LowPriTuple, Sequence[LowPriTuple]]
-        ],
+        visited_children: Tuple[Any, Expression, Any, LowPriArithmetic],
     ) -> Expression:
         _, term, _, exp = visited_children
 
@@ -165,9 +173,7 @@ class ClickhouseVisitor(NodeVisitor):
     def visit_high_pri_arithmetic(
         self,
         node: Node,
-        visited_children: Tuple[
-            Any, Expression, Any, Union[Node, HighPriTuple, Sequence[HighPriTuple]]
-        ],
+        visited_children: Tuple[Any, Expression, Any, HighPriArithmetic],
     ) -> Expression:
         _, term, _, exp = visited_children
 
