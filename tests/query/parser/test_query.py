@@ -15,7 +15,7 @@ from snuba.query.expressions import (
 )
 from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
 from snuba.query.parser import parse_query
-from snuba.query.parser.exceptions import CyclicAliasException
+from snuba.query.parser.exceptions import AliasShadowingException, CyclicAliasException
 
 test_cases = [
     pytest.param(
@@ -363,7 +363,7 @@ def test_format_expressions(
 
 
 def test_shadowing() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AliasShadowingException):
         parse_query(
             {
                 "selected_columns": [
