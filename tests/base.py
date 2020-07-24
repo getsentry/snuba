@@ -8,12 +8,10 @@ from hashlib import md5
 from typing import Iterator, MutableSequence, Optional, Sequence
 
 from snuba import settings
-from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import enforce_table_writer, get_dataset
-from snuba.migrations.migrate import run_storage
 from snuba.processor import InsertBatch, ProcessedMessage
 from snuba.redis import redis_client
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
@@ -23,26 +21,17 @@ from tests.fixtures import raw_event
 
 @contextmanager
 def dataset_manager(name: str) -> Iterator[Dataset]:
+    from snuba.migrations.migrate import run
+    from snuba.web.views import drop_dataset
+
     dataset = get_dataset(name)
-
-    for storage in dataset.get_all_storages():
-        clickhouse = storage.get_cluster().get_query_connection(
-            ClickhouseClientSettings.MIGRATE
-        )
-        for statement in storage.get_schemas().get_drop_statements():
-            clickhouse.execute(statement.statement)
-
-        run_storage(storage.get_storage_key())
+    run()
+    drop_dataset(dataset)
 
     try:
         yield dataset
     finally:
-        for storage in dataset.get_all_storages():
-            clickhouse = storage.get_cluster().get_query_connection(
-                ClickhouseClientSettings.MIGRATE
-            )
-            for statement in storage.get_schemas().get_drop_statements():
-                clickhouse.execute(statement.statement)
+        drop_dataset(dataset)
 
 
 class BaseTest(object):
