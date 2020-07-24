@@ -1,4 +1,4 @@
-from typing import MutableSequence
+from typing import MutableSequence, Optional
 
 
 Offset = int
@@ -7,15 +7,19 @@ Offset = int
 class OffsetTracker:
     def __init__(self, epoch: Offset) -> None:
         self.__epoch = epoch
-        self.__completed: MutableSequence[bool] = []
+        self.__completed: MutableSequence[Optional[bool]] = []
 
     def add(self, offset: Offset) -> None:
         """
         Add an offset to the set of in-progress items.
         """
         index = offset - self.__epoch
-        assert index >= 0
-        assert len(self.__completed) == index
+        if not index >= len(self.__completed):
+            raise ValueError("offset must move monotonically")
+
+        for i in range(len(self.__completed), index):
+            self.__completed.append(None)
+
         self.__completed.append(False)
 
     def remove(self, offset: Offset) -> None:
@@ -23,8 +27,12 @@ class OffsetTracker:
         Remove an offset from the set of in-progress items.
         """
         index = offset - self.__epoch
-        assert index >= 0
-        assert self.__completed[index] is False
+        if not index >= 0 or index > len(self.__completed):
+            raise ValueError("offset out of range")
+
+        if not self.__completed[index] is False:
+            raise ValueError("offset is already untracked")
+
         self.__completed[index] = True
 
     def value(self) -> Offset:
