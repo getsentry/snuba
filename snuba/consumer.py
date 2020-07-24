@@ -41,7 +41,7 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         self.metrics = metrics
         table_writer = storage.get_table_writer()
         self.__writer = table_writer.get_writer(
-            {"load_balancing": "in_order", "insert_distributed_sync": 1},
+            metrics, {"load_balancing": "in_order", "insert_distributed_sync": 1}
         )
 
         self.__pre_filter = table_writer.get_stream_loader().get_pre_filter()
