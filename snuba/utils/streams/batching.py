@@ -16,7 +16,7 @@ from typing import (
 )
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams.processing import ProcessingStrategy, ProcessorFactory
+from snuba.utils.streams.processing import ProcessingStrategy, ProcessingStrategyFactory
 from snuba.utils.streams.types import Message, Partition, TPayload
 
 
@@ -80,7 +80,7 @@ class Batch(Generic[TResult]):
     processing_time_ms: float = 0.0
 
 
-class BatchProcessorFactory(ProcessorFactory[TPayload]):
+class BatchProcessingStrategyFactory(ProcessingStrategyFactory[TPayload]):
     def __init__(
         self,
         worker: AbstractBatchWorker[TPayload, TResult],

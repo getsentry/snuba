@@ -18,7 +18,7 @@ from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.worker import SubscriptionWorker
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
-from snuba.utils.streams.batching import BatchProcessorFactory
+from snuba.utils.streams.batching import BatchProcessingStrategyFactory
 from snuba.utils.streams.kafka import (
     KafkaConsumer,
     KafkaProducer,
@@ -175,7 +175,7 @@ def subscriptions(
                 if topic is not None
                 else Topic(loader.get_default_topic_spec().topic_name)
             ),
-            BatchProcessorFactory(
+            BatchProcessingStrategyFactory(
                 SubscriptionWorker(
                     dataset,
                     executor,

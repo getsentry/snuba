@@ -18,7 +18,7 @@ from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 logger = logging.getLogger(__name__)
 
 
-class ProcessorFactory(ABC, Generic[TPayload]):
+class ProcessingStrategyFactory(ABC, Generic[TPayload]):
     @abstractmethod
     def create(
         self, commit: Callable[[Mapping[Partition, int]], None]
@@ -41,7 +41,7 @@ class StreamProcessor(Generic[TPayload]):
         self,
         consumer: Consumer[TPayload],
         topic: Topic,
-        processor_factory: ProcessorFactory[TPayload],
+        processor_factory: ProcessingStrategyFactory[TPayload],
         recoverable_errors: Optional[Sequence[Type[ConsumerError]]] = None,
     ) -> None:
         self.__consumer = consumer

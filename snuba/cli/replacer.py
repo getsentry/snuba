@@ -78,7 +78,7 @@ def replacer(
 ) -> None:
 
     from snuba.replacer import ReplacerWorker
-    from snuba.utils.streams.batching import BatchProcessorFactory
+    from snuba.utils.streams.batching import BatchProcessingStrategyFactory
     from snuba.utils.streams.kafka import (
         KafkaConsumer,
         TransportError,
@@ -114,7 +114,7 @@ def replacer(
             ),
         ),
         Topic(replacements_topic),
-        BatchProcessorFactory(
+        BatchProcessingStrategyFactory(
             worker=ReplacerWorker(storage, metrics=metrics),
             max_batch_size=max_batch_size,
             max_batch_time=max_batch_time_ms,
