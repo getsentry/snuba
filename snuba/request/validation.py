@@ -1,6 +1,4 @@
-import jsonschema
 import sentry_sdk
-from werkzeug.exceptions import BadRequest
 
 from snuba.datasets.dataset import Dataset
 from snuba.request import Request
@@ -8,18 +6,14 @@ from snuba.request.schema import RequestSchema
 from snuba.utils.metrics.timer import Timer
 
 
-def validate_request_content(
+def build_request(
     body, schema: RequestSchema, timer: Timer, dataset: Dataset, referrer: str
 ) -> Request:
-    with sentry_sdk.start_span(
-        description="validate_request_content", op="validate"
-    ) as span:
-        try:
-            request = schema.validate(body, dataset, referrer)
-            span.set_data("snuba_query", request.body)
-        except jsonschema.ValidationError as error:
-            raise BadRequest(str(error)) from error
+    with sentry_sdk.start_span(description="build_request", op="validate") as span:
+        request = schema.validate(body, dataset, referrer)
+        span.set_data("snuba_query", request.body)
 
         timer.mark("validate_schema")
+        # TODO: Refactor to track the invalid query metric.
 
     return request
