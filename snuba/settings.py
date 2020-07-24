@@ -118,6 +118,7 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         "api.organization-event-stats.key-transactions": 100,
         "discover.key_transactions": 100,
         "api.performance.latencychart": 100,
+        "tagstore.get_tag_value_paginator_for_projects": 100,
     },
 }  # (dataset name: (referrer: percentage))
 
