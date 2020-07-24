@@ -9,6 +9,9 @@ class OffsetTracker:
         self.__epoch = epoch
         self.__completed: MutableSequence[Optional[bool]] = []
 
+    def __get_index(self, offset: Offset) -> int:
+        return offset - self.__epoch
+
     def __len__(self) -> int:
         """
         Return the total number of in-progress items.
@@ -24,7 +27,7 @@ class OffsetTracker:
         """
         Add an offset to the set of in-progress items.
         """
-        index = offset - self.__epoch
+        index = self.__get_index(offset)
         if not index >= len(self.__completed):
             raise ValueError("offset must move monotonically")
 
@@ -37,7 +40,7 @@ class OffsetTracker:
         """
         Remove an offset from the set of in-progress items.
         """
-        index = offset - self.__epoch
+        index = self.__get_index(offset)
         if not index >= 0 or index > len(self.__completed):
             raise ValueError("offset out of range")
 
