@@ -75,6 +75,15 @@ class HighPriTuple(NamedTuple):
     arithm: Expression
 
 
+def get_arithmetic_function(operator) -> FunctionCall:
+    return {
+        HighPriOperator.MULTIPLY: multiply,
+        HighPriOperator.DIVIDE: divide,
+        LowPriOperator.PLUS: plus,
+        LowPriOperator.MINUS: minus,
+    }[operator]
+
+
 class ClickhouseVisitor(NodeVisitor):
     """
     Builds Snuba AST expressions from the Parsimonious parse tree.
@@ -131,18 +140,12 @@ class ClickhouseVisitor(NodeVisitor):
         if isinstance(exp, Node):
             return term
 
-        def low_op_match(left_term, tuple):
-            if tuple.op == LowPriOperator.PLUS:
-                return plus(left_term, tuple.arithm)
-            elif tuple.op == LowPriOperator.MINUS:
-                return minus(left_term, tuple.arithm)
-
         if isinstance(exp, LowPriTuple):
-            term = low_op_match(term, exp)
+            return get_arithmetic_function(exp.op)(term, exp.arithm)
 
         elif isinstance(exp, list):
             for elem in exp:
-                term = low_op_match(term, elem)
+                term = get_arithmetic_function(elem.op)(term, elem.arithm)
 
         return term
 
@@ -158,18 +161,12 @@ class ClickhouseVisitor(NodeVisitor):
         if isinstance(exp, Node):
             return term
 
-        def high_op_match(left_term, tuple):
-            if tuple.op == HighPriOperator.MULTIPLY:
-                return multiply(left_term, tuple.arithm)
-            elif tuple.op == HighPriOperator.DIVIDE:
-                return divide(left_term, tuple.arithm)
-
         if isinstance(exp, HighPriTuple):
-            term = high_op_match(term, exp)
+            return get_arithmetic_function(exp.op)(term, exp.arithm)
 
         elif isinstance(exp, list):
             for elem in exp:
-                term = high_op_match(term, elem)
+                term = get_arithmetic_function(elem.op)(term, elem.arithm)
 
         return term
 
