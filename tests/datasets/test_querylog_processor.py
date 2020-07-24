@@ -6,11 +6,15 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.processor import InsertBatch
 from snuba.query.logical import Query
+from snuba.querylog.query_metadata import (
+    ClickhouseQueryMetadata,
+    QueryStatus,
+    SnubaQueryMetadata,
+)
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.utils.clock import TestingClock
 from snuba.utils.metrics.timer import Timer
-from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
 
 
 def test_simple():
@@ -48,7 +52,7 @@ def test_simple():
             ClickhouseQueryMetadata(
                 sql="select event_id from sentry_dist sample 0.1 prewhere project_id in (1) limit 50, 100",
                 stats={"sample": 10},
-                status="success",
+                status=QueryStatus.SUCCESS,
                 trace_id="b" * 32,
             )
         ],
