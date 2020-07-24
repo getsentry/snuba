@@ -1,4 +1,4 @@
-from typing import MutableSequence, Optional
+from typing import Iterator, MutableSequence, Optional
 
 
 Offset = int
@@ -8,6 +8,17 @@ class OffsetTracker:
     def __init__(self, epoch: Offset) -> None:
         self.__epoch = epoch
         self.__completed: MutableSequence[Optional[bool]] = []
+
+    def __len__(self) -> int:
+        """
+        Return the total number of in-progress items.
+        """
+        return self.__completed.count(False)
+
+    def __iter__(self) -> Iterator[int]:
+        for i, completed in enumerate(self.__completed):
+            if completed is False:
+                yield self.__epoch + i
 
     def add(self, offset: Offset) -> None:
         """
