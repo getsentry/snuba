@@ -1,7 +1,17 @@
 import re
 from dataclasses import replace
 from enum import Enum
-from typing import Any, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Union
+from typing import (
+    Any,
+    Callable,
+    Iterable,
+    List,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
@@ -75,13 +85,26 @@ class HighPriTuple(NamedTuple):
     arithm: Expression
 
 
-def get_arithmetic_function(operator) -> FunctionCall:
+def get_arithmetic_function(
+    operator: Enum,
+) -> Callable[[Expression, Expression, Optional[str]], FunctionCall]:
     return {
         HighPriOperator.MULTIPLY: multiply,
         HighPriOperator.DIVIDE: divide,
         LowPriOperator.PLUS: plus,
         LowPriOperator.MINUS: minus,
     }[operator]
+
+
+def get_arithmetic_expression(term, exp, node_type: Union[LowPriTuple, HighPriTuple]):
+    if isinstance(exp, Node):
+        return term
+    if isinstance(exp, node_type):
+        return get_arithmetic_function(exp.op)(term, exp.arithm)
+    elif isinstance(exp, list):
+        for elem in exp:
+            term = get_arithmetic_function(elem.op)(term, elem.arithm)
+    return term
 
 
 class ClickhouseVisitor(NodeVisitor):
@@ -137,17 +160,7 @@ class ClickhouseVisitor(NodeVisitor):
     ) -> Expression:
         _, term, _, exp = visited_children
 
-        if isinstance(exp, Node):
-            return term
-
-        if isinstance(exp, LowPriTuple):
-            return get_arithmetic_function(exp.op)(term, exp.arithm)
-
-        elif isinstance(exp, list):
-            for elem in exp:
-                term = get_arithmetic_function(elem.op)(term, elem.arithm)
-
-        return term
+        return get_arithmetic_expression(term, exp, LowPriTuple)
 
     def visit_high_pri_arithmetic(
         self,
@@ -158,17 +171,7 @@ class ClickhouseVisitor(NodeVisitor):
     ) -> Expression:
         _, term, _, exp = visited_children
 
-        if isinstance(exp, Node):
-            return term
-
-        if isinstance(exp, HighPriTuple):
-            return get_arithmetic_function(exp.op)(term, exp.arithm)
-
-        elif isinstance(exp, list):
-            for elem in exp:
-                term = get_arithmetic_function(elem.op)(term, elem.arithm)
-
-        return term
+        return get_arithmetic_expression(term, exp, HighPriTuple)
 
     def visit_numeric_literal(
         self, node: Node, visited_children: Iterable[Any]
