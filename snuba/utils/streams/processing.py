@@ -19,12 +19,38 @@ logger = logging.getLogger(__name__)
 
 
 class ProcessingStrategy(ABC, Generic[TPayload]):
+    """
+    A processing strategy defines how a stream processor processes messages
+    during the course of a single assignment. The processor is instantiated
+    when the assignment is received, and closed when the assignment is
+    revoked.
+
+    This interface is intentionally not prescriptive, and affords a
+    significant degree of flexibility for the various implementations.
+    """
+
     @abstractmethod
     def process(self, message: Optional[Message[TPayload]]) -> None:
+        """
+        Process a message, or periodic heartbeat (``None`` value.)
+        """
         raise NotImplementedError
 
     @abstractmethod
     def close(self) -> None:
+        """
+        Close this instance. No more messages will be received by the
+        instance after this method has been called. This method is called
+        synchronously by the stream processor during assignment revocation
+        and blocks the assignment from being released until this function
+        exits, making it a good place to wait for (or choose to abandon) any
+        work in progress and commit partition offsets.
+
+        This method also should be used to release any resources that will no
+        longer be used (threads, processes, sockets, files, etc.) to avoid
+        leaking resources, as well as performing any finalization tasks that
+        may prevent this instance from being garbage collected.
+        """
         raise NotImplementedError
 
 
@@ -33,10 +59,23 @@ class ProcessingStrategyFactory(ABC, Generic[TPayload]):
     def create(
         self, commit: Callable[[Mapping[Partition, int]], None]
     ) -> ProcessingStrategy[TPayload]:
+        """
+        Instantiate and return a ``ProcessingStrategy`` instance.
+
+        :param commit: A function that accepts a mapping of ``Partition``
+        instances to offset values that should be committed.
+        """
         raise NotImplementedError
 
 
 class StreamProcessor(Generic[TPayload]):
+    """
+    A stream processor manages the relationship between a ``Consumer``
+    instance and a ``ProcessingStrategy``, ensuring that processing
+    strategies are instantiated on partition assignment and closed on
+    partition revocation.
+    """
+
     def __init__(
         self,
         consumer: Consumer[TPayload],
