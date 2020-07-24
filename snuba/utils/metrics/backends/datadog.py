@@ -18,6 +18,9 @@ class DatadogMetricsBackend(MetricsBackend):
         sample_rates: Optional[Mapping[str, float]] = None,
     ) -> None:
         """
+        :param client_factory: A function that returns a new ``DogStatsd``
+        instance. (These instances are not thread safe, so a new instance
+        will be created for each independent thread.)
         :param sample_rates: An optional mapping of metric names to sample
         rates to use when recording metrics. A sample rate of ``0.0`` will
         disable a metric entirely, while a sample rate of ``1.0`` will cause
