@@ -22,16 +22,16 @@ from tests.fixtures import raw_event
 @contextmanager
 def dataset_manager(name: str) -> Iterator[Dataset]:
     from snuba.migrations.migrate import run
-    from snuba.web.views import drop_dataset
+    from snuba.web.views import truncate_dataset
 
     dataset = get_dataset(name)
     run()
-    drop_dataset(dataset)
+    truncate_dataset(dataset)
 
     try:
         yield dataset
     finally:
-        drop_dataset(dataset)
+        truncate_dataset(dataset)
 
 
 class BaseTest(object):
