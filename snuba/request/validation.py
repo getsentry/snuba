@@ -19,7 +19,6 @@ def build_request(
 
             timer.mark("validate_schema")
             return request
-
         except (InvalidJsonRequestException, InvalidQueryException) as exception:
             record_invalid_request(timer, referrer)
             raise exception

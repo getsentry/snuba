@@ -5,3 +5,11 @@ class InvalidJsonRequestException(Exception):
     """
 
     pass
+
+
+class JsonDecodeException(InvalidJsonRequestException):
+    pass
+
+
+class JsonSchemaValidationException(InvalidJsonRequestException):
+    pass

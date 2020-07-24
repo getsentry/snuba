@@ -13,7 +13,8 @@ def record_query(
     request: Request, timer: Timer, query_metadata: SnubaQueryMetadata
 ) -> None:
     """
-    Records a request after it has been parsed and validated.
+    Records a request after it has been parsed and validated, whether
+    we actually ran a query or not.
     """
     if settings.RECORD_QUERIES:
         # Send to redis
