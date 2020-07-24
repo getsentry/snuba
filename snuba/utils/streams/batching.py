@@ -28,9 +28,9 @@ TResult = TypeVar("TResult")
 
 class AbstractBatchWorker(ABC, Generic[TPayload, TResult]):
     """
-    The ``BatchProcessor`` requires an instance of this class to handle user
-    provided work such as processing raw messages and flushing processed
-    batches to a custom backend.
+    The ``BatchProcessingStrategy`` requires an instance of this class to
+    handle user provided work such as processing raw messages and flushing
+    processed batches to a custom backend.
     """
 
     @abstractmethod
@@ -38,7 +38,7 @@ class AbstractBatchWorker(ABC, Generic[TPayload, TResult]):
         """
         Called with each raw message, allowing the worker to do incremental
         (preferably local!) work on events. The object returned is put into
-        the batch maintained internally by the ``BatchProcessor``.
+        the batch maintained internally by the ``BatchProcessingStrategy``.
 
         If this method returns `None` it is not added to the batch.
 
@@ -53,7 +53,7 @@ class AbstractBatchWorker(ABC, Generic[TPayload, TResult]):
         Called with a list of processed (by ``process_message``) objects.
         The worker should write the batch of processed messages into whatever
         store(s) it is maintaining. Afterwards the offsets are committed by
-        the ``BatchProcessor``.
+        the ``BatchProcessingStrategy``.
 
         A simple example would be writing the batch to another topic.
         """
@@ -96,7 +96,7 @@ class BatchProcessorFactory(ProcessorFactory[TPayload]):
     def create(
         self, commit: Callable[[Mapping[Partition, int]], None]
     ) -> ProcessingStrategy[TPayload]:
-        return BatchProcessor(
+        return BatchProcessingStrategy(
             commit,
             self.__worker,
             self.__max_batch_size,
@@ -105,13 +105,14 @@ class BatchProcessorFactory(ProcessorFactory[TPayload]):
         )
 
 
-class BatchProcessor(ProcessingStrategy[TPayload]):
+class BatchProcessingStrategy(ProcessingStrategy[TPayload]):
     """
-    The ``BatchProcessor`` is a processing strategy that accumulates processed
-    message values, periodically flushing them after a given duration of time
-    has passed or number of output values have been accumulated. Users need
-    only provide an implementation of what it means to process a raw message
-    and flush a batch of events via an ``AbstractBatchWorker`` instance.
+    The ``BatchProcessingStrategy`` is a processing strategy that accumulates
+    processed message values, periodically flushing them after a given
+    duration of time has passed or number of output values have been
+    accumulated. Users need only provide an implementation of what it means
+    to process a raw message and flush a batch of events via an
+    ``AbstractBatchWorker`` instance.
 
     Messages are processed as they are read from the consumer, then added to
     an in-memory batch. These batches are flushed based on the batch size or
