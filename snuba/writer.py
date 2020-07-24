@@ -34,8 +34,8 @@ class BatchWriterEncoderWrapper(BatchWriter[TDecoded]):
 class BufferedWriterWrapper:
     """
     This is a wrapper that adds a buffer around a BatchWriter.
-    When consuming data from Kafka, the buffering logic is performed by the
-    batching consumer.
+    When consuming data from Kafka, the buffering logic is generally
+    performed by the batch processor.
     This is for the use cases that are not Kafka related.
 
     This is not thread safe. Don't try to do parallel flush hoping in the GIL.
