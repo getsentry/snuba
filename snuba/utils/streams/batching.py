@@ -80,31 +80,6 @@ class Batch(Generic[TResult]):
     processing_time_ms: float = 0.0
 
 
-class BatchProcessingStrategyFactory(ProcessingStrategyFactory[TPayload]):
-    def __init__(
-        self,
-        worker: AbstractBatchWorker[TPayload, TResult],
-        max_batch_size: int,
-        max_batch_time: int,
-        metrics: MetricsBackend,
-    ) -> None:
-        self.__worker = worker
-        self.__max_batch_size = max_batch_size
-        self.__max_batch_time = max_batch_time
-        self.__metrics = metrics
-
-    def create(
-        self, commit: Callable[[Mapping[Partition, int]], None]
-    ) -> ProcessingStrategy[TPayload]:
-        return BatchProcessingStrategy(
-            commit,
-            self.__worker,
-            self.__max_batch_size,
-            self.__max_batch_time,
-            self.__metrics,
-        )
-
-
 class BatchProcessingStrategy(ProcessingStrategy[TPayload]):
     """
     The ``BatchProcessingStrategy`` is a processing strategy that accumulates
@@ -241,3 +216,28 @@ class BatchProcessingStrategy(ProcessingStrategy[TPayload]):
         logger.debug("Offset commit took %dms", commit_duration)
 
         self.__batch = None
+
+
+class BatchProcessingStrategyFactory(ProcessingStrategyFactory[TPayload]):
+    def __init__(
+        self,
+        worker: AbstractBatchWorker[TPayload, TResult],
+        max_batch_size: int,
+        max_batch_time: int,
+        metrics: MetricsBackend,
+    ) -> None:
+        self.__worker = worker
+        self.__max_batch_size = max_batch_size
+        self.__max_batch_time = max_batch_time
+        self.__metrics = metrics
+
+    def create(
+        self, commit: Callable[[Mapping[Partition, int]], None]
+    ) -> ProcessingStrategy[TPayload]:
+        return BatchProcessingStrategy(
+            commit,
+            self.__worker,
+            self.__max_batch_size,
+            self.__max_batch_time,
+            self.__metrics,
+        )

@@ -18,14 +18,6 @@ from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 logger = logging.getLogger(__name__)
 
 
-class ProcessingStrategyFactory(ABC, Generic[TPayload]):
-    @abstractmethod
-    def create(
-        self, commit: Callable[[Mapping[Partition, int]], None]
-    ) -> ProcessingStrategy[TPayload]:
-        raise NotImplementedError
-
-
 class ProcessingStrategy(ABC, Generic[TPayload]):
     @abstractmethod
     def process(self, message: Optional[Message[TPayload]]) -> None:
@@ -33,6 +25,14 @@ class ProcessingStrategy(ABC, Generic[TPayload]):
 
     @abstractmethod
     def close(self) -> None:
+        raise NotImplementedError
+
+
+class ProcessingStrategyFactory(ABC, Generic[TPayload]):
+    @abstractmethod
+    def create(
+        self, commit: Callable[[Mapping[Partition, int]], None]
+    ) -> ProcessingStrategy[TPayload]:
         raise NotImplementedError
 
 
