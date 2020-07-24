@@ -68,6 +68,10 @@ class ProcessingStrategyFactory(ABC, Generic[TPayload]):
         raise NotImplementedError
 
 
+class InvalidStateError(RuntimeError):
+    pass
+
+
 class StreamProcessor(Generic[TPayload]):
     """
     A stream processor manages the relationship between a ``Consumer``
@@ -93,18 +97,20 @@ class StreamProcessor(Generic[TPayload]):
         self.__shutdown_requested = False
 
         def on_partitions_assigned(partitions: Mapping[Partition, int]) -> None:
-            assert (
-                self.__processing_strategy is None
-            ), "received unexpected assignment with existing active processing strategy"
+            if self.__processing_strategy is not None:
+                raise InvalidStateError(
+                    "received unexpected assignment with existing active processing strategy"
+                )
 
             logger.info("New partitions assigned: %r", partitions)
             self.__processing_strategy = self.__processor_factory.create(self.__commit)
 
         def on_partitions_revoked(partitions: Sequence[Partition]) -> None:
             "Reset the current in-memory batch, letting the next consumer take over where we left off."
-            assert (
-                self.__processing_strategy is not None
-            ), "received unexpected revocation without active processing strategy"
+            if self.__processing_strategy is None:
+                raise InvalidStateError(
+                    "received unexpected revocation without active processing strategy"
+                )
 
             logger.info("Partitions revoked: %r", partitions)
             self.__processing_strategy.close()
@@ -136,7 +142,10 @@ class StreamProcessor(Generic[TPayload]):
         if self.__processing_strategy is not None:
             self.__processing_strategy.process(msg)
         else:
-            assert msg is None, "received message without active processing strategy"
+            if msg is not None:
+                raise InvalidStateError(
+                    "received message without active processing strategy"
+                )
 
     def signal_shutdown(self) -> None:
         """
