@@ -4,8 +4,9 @@ from snuba.utils.streams.parallel import OffsetTracker
 
 @pytest.mark.parametrize("epoch", [0, 100])
 def test_offset_tracking(epoch: int) -> None:
-    tracker = OffsetTracker(epoch)
-    assert tracker.value() == epoch
+    tracker = OffsetTracker()
+    assert tracker.value() is None
+    assert len(tracker) == 0
     assert [*tracker] == []
 
     for i in range(3):
@@ -34,7 +35,7 @@ def test_offset_tracking(epoch: int) -> None:
     assert [*tracker] == [epoch + i for i in [2, 5]]
 
     # Ensure that offsets cannot be removed more than once.
-    with pytest.raises(ValueError):
+    with pytest.raises(KeyError):
         tracker.remove(epoch)
 
     tracker.remove(epoch + 2)
@@ -48,11 +49,11 @@ def test_offset_tracking(epoch: int) -> None:
     assert [*tracker] == []
 
     # Ensure that only offsets that have been added can be removed.
-    with pytest.raises(ValueError):
+    with pytest.raises(KeyError):
         tracker.remove(epoch + 4)  # skipped
 
-    with pytest.raises(ValueError):
+    with pytest.raises(KeyError):
         tracker.remove(epoch - 1)  # out of range (too low)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(KeyError):
         tracker.remove(epoch + 100)  # out of range (too high)
