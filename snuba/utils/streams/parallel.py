@@ -1,6 +1,8 @@
 import bisect
 from typing import Iterator, MutableSequence, NamedTuple
 
+from bitarray import bitarray
+
 Offset = int
 
 
@@ -12,7 +14,7 @@ class Epoch(NamedTuple):
 class OffsetTracker:
     def __init__(self) -> None:
         self.__index: MutableSequence[Epoch] = []
-        self.__items: MutableSequence[bool] = []
+        self.__items = bitarray()
 
     def __len__(self) -> int:
         """

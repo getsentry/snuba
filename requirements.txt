@@ -1,5 +1,6 @@
 atomicwrites==1.1.5
 attrs==18.1.0
+bitarray==1.4.2
 blinker==1.4
 black==19.10b0
 certifi==2018.4.16
