@@ -13,5 +13,7 @@ REDIS_DB = int(env("REDIS_DB", 1))
 USE_REDIS_CLUSTER = False
 
 # Dogstatsd Options
-DOGSTATSD_HOST = None
-DOGSTATSD_PORT = None
+DOGSTATSD_HOST = os.getenv("DOGSTATSD_HOST")
+DOGSTATSD_PORT = os.getenv("DOGSTATSD_PORT")
+
+SENTRY_DSN = os.getenv("SENTRY_DSN")
