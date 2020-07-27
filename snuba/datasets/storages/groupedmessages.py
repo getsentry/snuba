@@ -63,7 +63,7 @@ POSTGRES_TABLE = "sentry_groupedmessage"
 storage = CdcStorage(
     storage_key=StorageKey.GROUPEDMESSAGES,
     storage_set_key=StorageSetKey.EVENTS,
-    schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+    schemas=StorageSchemas(schema=schema),
     query_processors=[],
     stream_loader=KafkaStreamLoader(
         processor=GroupedMessageProcessor(POSTGRES_TABLE),

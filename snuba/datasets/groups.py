@@ -47,9 +47,7 @@ class JoinedStorage(ReadableStorage):
         super().__init__(storage_key, storage_set_key)
 
     def get_schemas(self) -> StorageSchemas:
-        return StorageSchemas(
-            read_schema=JoinedSchema(self.__structure), write_schema=None
-        )
+        return StorageSchemas(schema=JoinedSchema(self.__structure))
 
     def get_table_writer(self) -> Optional[TableWriter]:
         return None

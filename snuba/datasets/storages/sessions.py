@@ -133,7 +133,7 @@ materialized_view_schema = MaterializedViewSchema(
 raw_storage = WritableTableStorage(
     storage_key=StorageKey.SESSIONS_RAW,
     storage_set_key=StorageSetKey.SESSIONS,
-    schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
+    schemas=StorageSchemas(schema=raw_schema),
     query_processors=[],
     stream_loader=KafkaStreamLoader(
         processor=SessionsProcessor(), default_topic="ingest-sessions",
@@ -144,9 +144,7 @@ materialized_storage = ReadableTableStorage(
     storage_key=StorageKey.SESSIONS_HOURLY,
     storage_set_key=StorageSetKey.SESSIONS,
     schemas=StorageSchemas(
-        read_schema=read_schema,
-        write_schema=None,
-        intermediary_schemas=[materialized_view_schema],
+        schema=read_schema, intermediary_schemas=[materialized_view_schema],
     ),
     query_processors=[PrewhereProcessor()],
 )

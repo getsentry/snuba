@@ -1,7 +1,11 @@
-from typing import Optional, List, Sequence, Union
+from typing import Optional, List, Sequence
 
 from snuba.datasets.schemas import Schema
-from snuba.datasets.schemas.tables import DDLStatement, TableSchema, WritableTableSchema
+from snuba.datasets.schemas.tables import (
+    DDLStatement,
+    TableSchemaWithDDL,
+    WritableTableSchema,
+)
 
 
 class StorageSchemas(object):
@@ -10,41 +14,29 @@ class StorageSchemas(object):
     """
 
     def __init__(
-        self,
-        read_schema: Schema,
-        write_schema: Union[WritableTableSchema, None],
-        intermediary_schemas: Optional[List[Schema]] = None,
+        self, schema: Schema, intermediary_schemas: Optional[List[Schema]] = None,
     ) -> None:
         if intermediary_schemas is None:
             intermediary_schemas = []
 
-        self.__read_schema = read_schema
-        self.__write_schema = write_schema
+        self.__schema = schema
         self.__intermediary_schemas = intermediary_schemas
 
     def get_read_schema(self) -> Schema:
-        return self.__read_schema
+        return self.__schema
 
     def get_write_schema(self) -> Optional[WritableTableSchema]:
-        return self.__write_schema
+        if isinstance(self.__schema, WritableTableSchema):
+            return self.__schema
+        else:
+            return None
 
     def get_unique_schemas(self) -> Sequence[Schema]:
-        unique_schemas: List[Schema] = []
-
-        all_schemas_with_possible_duplicates = [self.__read_schema]
-        if self.__write_schema:
-            all_schemas_with_possible_duplicates.append(self.__write_schema)
-        all_schemas_with_possible_duplicates.extend(self.__intermediary_schemas)
-
-        for schema in all_schemas_with_possible_duplicates:
-            if schema not in unique_schemas:
-                unique_schemas.append(schema)
-
-        return unique_schemas
+        return [self.__schema] + self.__intermediary_schemas
 
     def get_create_statements(self) -> Sequence[DDLStatement]:
         return [
             schema.get_local_table_definition()
             for schema in self.get_unique_schemas()
-            if isinstance(schema, TableSchema)
+            if isinstance(schema, TableSchemaWithDDL)
         ]

@@ -25,7 +25,7 @@ schema = TableSchema(
 storage = ReadableTableStorage(
     storage_key=StorageKey.EVENTS_RO,
     storage_set_key=StorageSetKey.EVENTS_RO,
-    schemas=StorageSchemas(read_schema=schema, write_schema=None),
+    schemas=StorageSchemas(schema=schema),
     query_processors=query_processors,
     query_splitters=query_splitters,
 )

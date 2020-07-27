@@ -171,7 +171,7 @@ schema = ReplacingMergeTreeSchema(
 storage = WritableTableStorage(
     storage_key=StorageKey.TRANSACTIONS,
     storage_set_key=StorageSetKey.TRANSACTIONS,
-    schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+    schemas=StorageSchemas(schema=schema),
     query_processors=[
         NestedFieldConditionOptimizer(
             "tags", "_tags_flattened", {"start_ts", "finish_ts"}, BEGINNING_OF_TIME,

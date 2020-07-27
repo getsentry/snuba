@@ -43,7 +43,7 @@ POSTGRES_TABLE = "sentry_groupasignee"
 storage = CdcStorage(
     storage_key=StorageKey.GROUPASSIGNEES,
     storage_set_key=StorageSetKey.EVENTS,
-    schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+    schemas=StorageSchemas(schema=schema),
     query_processors=[PrewhereProcessor()],
     stream_loader=KafkaStreamLoader(
         processor=GroupAssigneeProcessor(POSTGRES_TABLE),

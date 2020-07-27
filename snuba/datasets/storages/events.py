@@ -118,7 +118,7 @@ schema = ReplacingMergeTreeSchema(
 storage = WritableTableStorage(
     storage_key=StorageKey.EVENTS,
     storage_set_key=StorageSetKey.EVENTS,
-    schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+    schemas=StorageSchemas(schema=schema),
     query_processors=query_processors,
     stream_loader=KafkaStreamLoader(
         processor=EventsProcessor(promoted_tag_columns),

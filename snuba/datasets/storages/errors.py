@@ -189,7 +189,7 @@ required_columns = [
 storage = WritableTableStorage(
     storage_key=StorageKey.ERRORS,
     storage_set_key=StorageSetKey.EVENTS,
-    schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+    schemas=StorageSchemas(schema=schema),
     query_processors=[
         PostReplacementConsistencyEnforcer(
             project_column="project_id", replacer_state_name=ReplacerState.ERRORS,
