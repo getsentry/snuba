@@ -80,7 +80,7 @@ def check_clickhouse() -> bool:
                     ClickhouseClientSettings.QUERY
                 )
                 clickhouse_tables = clickhouse.execute("show tables")
-                source = storage.get_schemas().get_read_schema()
+                source = storage.get_schema()
                 if isinstance(source, TableSchema):
                     table_name = source.get_table_name()
                     if (table_name,) not in clickhouse_tables:

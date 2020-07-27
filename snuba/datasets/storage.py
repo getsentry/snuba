@@ -11,6 +11,7 @@ from snuba.clusters.cluster import (
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy
+from snuba.datasets.schemas import Schema
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
 from snuba.query.logical import Query
@@ -55,6 +56,9 @@ class Storage(ABC):
         See TableWriter to get a write schema.
         """
         raise NotImplementedError
+
+    def get_schema(self) -> Schema:
+        return self.get_schemas().get_read_schema()
 
 
 class ReadableStorage(Storage):

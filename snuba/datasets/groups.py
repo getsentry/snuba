@@ -68,19 +68,11 @@ class Groups(TimeSeriesDataset):
     def __init__(self) -> None:
         self.__grouped_message = get_dataset("groupedmessage")
         groupedmessage_source = (
-            get_storage(StorageKey.GROUPEDMESSAGES)
-            .get_schemas()
-            .get_read_schema()
-            .get_data_source()
+            get_storage(StorageKey.GROUPEDMESSAGES).get_schema().get_data_source()
         )
 
         self.__events = get_dataset("events")
-        events_source = (
-            get_storage(StorageKey.EVENTS)
-            .get_schemas()
-            .get_read_schema()
-            .get_data_source()
-        )
+        events_source = get_storage(StorageKey.EVENTS).get_schema().get_data_source()
 
         join_structure = JoinClause(
             left_node=TableJoinNode(
