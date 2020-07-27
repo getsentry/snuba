@@ -102,7 +102,7 @@ class Migration(migration.MultiStepMigration):
                         uniqIfState(distinct_id, status == 3) as users_abnormal,
                         uniqIfState(distinct_id, errors > 0) as users_errored
                     FROM
-                        %(source_table_name)s
+                        sessions_raw_local
                     GROUP BY
                         org_id, project_id, started, release, environment
                 """,
