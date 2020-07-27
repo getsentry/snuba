@@ -121,6 +121,7 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         # Main view
         "api.organization-event-stats.find-topn": 100,
         "tagstore.get_tag_value_paginator_for_projects": 100,
+        "api.organization-events-facets.top-tags": 100,
     },
 }  # (dataset name: (referrer: percentage))
 
