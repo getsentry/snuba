@@ -98,14 +98,14 @@ def truncate_dataset(dataset: Dataset) -> None:
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
         database = cluster.get_database()
 
-        tables_to_empty = {
-            schema.get_local_table_name()
-            for schema in storage.get_schemas().get_unique_schemas()
-            if isinstance(schema, TableSchema)
-        }
+        schema = storage.get_schema()
 
-        for table in tables_to_empty:
-            clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
+        if not isinstance(schema, TableSchema):
+            return
+
+        table = schema.get_local_table_name()
+
+        clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
 
 
 application = Flask(__name__, static_url_path="")

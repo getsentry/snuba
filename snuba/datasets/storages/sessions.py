@@ -8,7 +8,6 @@ from snuba.clickhouse.columns import (
     UUID,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.schemas.tables import (
     MergeTreeSchema,
     MaterializedViewSchema,
@@ -133,7 +132,7 @@ materialized_view_schema = MaterializedViewSchema(
 raw_storage = WritableTableStorage(
     storage_key=StorageKey.SESSIONS_RAW,
     storage_set_key=StorageSetKey.SESSIONS,
-    schemas=StorageSchemas(schema=raw_schema),
+    schema=raw_schema,
     query_processors=[],
     stream_loader=KafkaStreamLoader(
         processor=SessionsProcessor(), default_topic="ingest-sessions",
@@ -143,8 +142,6 @@ raw_storage = WritableTableStorage(
 materialized_storage = ReadableTableStorage(
     storage_key=StorageKey.SESSIONS_HOURLY,
     storage_set_key=StorageSetKey.SESSIONS,
-    schemas=StorageSchemas(
-        schema=read_schema, intermediary_schemas=[materialized_view_schema],
-    ),
+    schema=read_schema,
     query_processors=[PrewhereProcessor()],
 )

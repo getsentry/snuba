@@ -137,9 +137,7 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             request.query, request.settings
         )
         clickhouse_query = QueryTranslator(mappers).translate(request.query)
-        clickhouse_query.set_data_source(
-            storage.get_schemas().get_read_schema().get_data_source()
-        )
+        clickhouse_query.set_data_source(storage.get_schema().get_data_source())
 
         cluster = storage.get_cluster()
 

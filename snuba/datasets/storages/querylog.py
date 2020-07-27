@@ -12,7 +12,6 @@ from snuba.clickhouse.columns import (
     UUID,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.querylog_processor import QuerylogProcessor
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
@@ -70,7 +69,7 @@ schema = WritableTableSchema(
 storage = WritableTableStorage(
     storage_key=StorageKey.QUERYLOG,
     storage_set_key=StorageSetKey.QUERYLOG,
-    schemas=StorageSchemas(schema=schema),
+    schema=schema,
     query_processors=[],
     stream_loader=KafkaStreamLoader(
         processor=QuerylogProcessor(), default_topic=settings.QUERIES_TOPIC,

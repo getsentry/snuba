@@ -47,13 +47,11 @@ def optimize(
 
     (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
 
-    schemas = storage.get_schemas().get_unique_schemas()
+    schema = storage.get_schema()
 
-    tables = {
-        schema.get_local_table_name()
-        for schema in schemas
-        if isinstance(schema, TableSchema)
-    }
+    assert isinstance(schema, TableSchema)
+
+    table_to_optimize = schema.get_local_table_name()
 
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -78,6 +76,5 @@ def optimize(
             ClickhouseClientSettings.OPTIMIZE
         )
 
-    for table in tables:
-        num_dropped = run_optimize(connection, database, table, before=today)
-        logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))
+    num_dropped = run_optimize(connection, database, table_to_optimize, before=today)
+    logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))
