@@ -1,5 +1,4 @@
 import logging
-from typing import MutableSequence
 
 from clickhouse_driver import Client
 
@@ -70,15 +69,6 @@ def run_storage(storage_key: StorageKey) -> None:
 
     # Run migrations
     logger.info("Migrating storage %s", storage_name)
-    schemas: MutableSequence[Schema] = []
 
-    read_schema = storage.get_schemas().get_read_schema()
-    write_schema = storage.get_schemas().get_write_schema()
-
-    if write_schema:
-        schemas.append(write_schema)
-
-    schemas.append(read_schema)
-
-    for schema in schemas:
+    for schema in storage.get_schemas().get_unique_schemas():
         _run_schema(conn, schema)
