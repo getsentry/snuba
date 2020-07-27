@@ -47,15 +47,7 @@ def optimize(
 
     (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
 
-    schemas = set()
-    read_schema = storage.get_schemas().get_read_schema()
-    write_schema = storage.get_schemas().get_write_schema()
-
-    if read_schema:
-        schemas.add(read_schema)
-
-    if write_schema:
-        schemas.add(write_schema)
+    schemas = storage.get_schemas().get_unique_schemas()
 
     tables = {
         schema.get_local_table_name()
