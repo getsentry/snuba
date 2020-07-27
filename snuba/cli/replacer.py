@@ -78,12 +78,13 @@ def replacer(
 ) -> None:
 
     from snuba.replacer import ReplacerWorker
-    from snuba.utils.streams.batching import BatchingConsumer
+    from snuba.utils.streams.batching import BatchProcessingStrategyFactory
     from snuba.utils.streams.kafka import (
         KafkaConsumer,
         TransportError,
         build_kafka_consumer_configuration,
     )
+    from snuba.utils.streams.processing import StreamProcessor
     from snuba.utils.streams.types import Topic
 
     setup_logging(log_level)
@@ -102,7 +103,7 @@ def replacer(
 
     metrics = MetricsWrapper(environment.metrics, "replacer", tags=metrics_tags,)
 
-    replacer = BatchingConsumer(
+    replacer = StreamProcessor(
         KafkaConsumer(
             build_kafka_consumer_configuration(
                 bootstrap_servers=bootstrap_server,
@@ -113,10 +114,12 @@ def replacer(
             ),
         ),
         Topic(replacements_topic),
-        worker=ReplacerWorker(storage, metrics=metrics),
-        max_batch_size=max_batch_size,
-        max_batch_time=max_batch_time_ms,
-        metrics=metrics,
+        BatchProcessingStrategyFactory(
+            worker=ReplacerWorker(storage, metrics=metrics),
+            max_batch_size=max_batch_size,
+            max_batch_time=max_batch_time_ms,
+            metrics=metrics,
+        ),
         recoverable_errors=[TransportError],
     )
 
