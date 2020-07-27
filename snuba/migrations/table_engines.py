@@ -101,7 +101,7 @@ class AggregatingMergeTree(MergeTree):
         if cluster.is_single_node():
             return f"AggregatingMergeTree()"
         else:
-            return f"ReplicatedReplacingMergeTree('/clickhouse/tables/{{layer}}-{{shard}})/{table_name}', '{{replica}}')"
+            return f"ReplicatedAggregatingMergeTree('/clickhouse/tables/{{layer}}-{{shard}})/{table_name}', '{{replica}}')"
 
 
 class Distributed(TableEngine):
