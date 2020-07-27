@@ -137,12 +137,6 @@ class TableSchemaWithDDL(TableSchema, ABC):
         # the current schema and the CREATE statement for a storage are separate.
         self.__skipped_cols_on_creation = skipped_cols_on_creation or set()
 
-    def get_local_drop_table_statement(self) -> DDLStatement:
-        return DDLStatement(
-            self.get_local_table_name(),
-            "DROP TABLE IF EXISTS %s" % self.get_local_table_name(),
-        )
-
     def _get_columnset_to_create(self) -> ColumnSet:
         """
         Returns the ColumnSet to be created.
