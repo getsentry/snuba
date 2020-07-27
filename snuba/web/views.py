@@ -92,6 +92,22 @@ def check_clickhouse() -> bool:
         return False
 
 
+def truncate_dataset(dataset: Dataset) -> None:
+    for storage in dataset.get_all_storages():
+        cluster = storage.get_cluster()
+        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+        database = cluster.get_database()
+
+        tables_to_empty = {
+            schema.get_local_table_name()
+            for schema in storage.get_schemas().get_unique_schemas()
+            if isinstance(schema, TableSchema)
+        }
+
+        for table in tables_to_empty:
+            clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
+
+
 application = Flask(__name__, static_url_path="")
 application.testing = settings.TESTING
 application.debug = settings.DEBUG
@@ -462,21 +478,9 @@ if application.debug or application.testing:
 
     @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
     def drop(*, dataset: Dataset) -> Tuple[str, int, Mapping[str, str]]:
-        for storage in dataset.get_all_storages():
-            cluster = storage.get_cluster()
-            clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
-            database = cluster.get_database()
-
-            tables_to_empty = {
-                schema.get_local_table_name()
-                for schema in storage.get_schemas().get_unique_schemas()
-                if isinstance(schema, TableSchema)
-            }
-
-            for table in tables_to_empty:
-                clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
-
+        truncate_dataset(dataset)
         redis_client.flushdb()
+
         return ("ok", 200, {"Content-Type": "text/plain"})
 
     @application.route("/tests/error")

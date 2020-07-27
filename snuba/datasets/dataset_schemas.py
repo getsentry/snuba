@@ -48,10 +48,3 @@ class StorageSchemas(object):
             for schema in self.get_unique_schemas()
             if isinstance(schema, TableSchema)
         ]
-
-    def get_drop_statements(self) -> Sequence[DDLStatement]:
-        return [
-            schema.get_local_drop_table_statement()
-            for schema in self.get_unique_schemas()
-            if isinstance(schema, TableSchema)
-        ]
