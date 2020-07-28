@@ -10,6 +10,10 @@ cache:
 
 stages: [pre_commit, test]
 
+env:
+  - PYTHON_VERSION=3.7
+  - PYTHON_VERSION=3.8
+
 matrix:
   fast_finish: true
   include:
@@ -32,7 +36,7 @@ matrix:
         - docker
       before_install:
         - docker pull getsentry/snuba:latest || true
-        - docker build -t getsentry/snuba . --cache-from getsentry/snuba:latest
+        - docker build --build-arg PYTHON_VERSION=$PYTHON_VERSION -t getsentry/snuba . --cache-from getsentry/snuba:latest
         - docker network create --attachable cloudbuild
       script:
         - SNUBA_IMAGE=getsentry/snuba docker-compose -f docker-compose.gcb.yml run --rm snuba-test
