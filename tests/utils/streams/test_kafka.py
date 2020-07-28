@@ -1,5 +1,6 @@
 import contextlib
 import itertools
+import logging
 import uuid
 from contextlib import closing
 from typing import Iterator, Optional
@@ -19,8 +20,8 @@ from snuba.utils.streams.kafka import (
 )
 from snuba.utils.streams.synchronized import Commit, commit_codec
 from snuba.utils.streams.types import Message, Partition, Topic
-from tests.utils.streams.mixins import StreamsTestMixin
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
+from tests.utils.streams.mixins import StreamsTestMixin
 
 
 def test_payload_equality() -> None:
@@ -36,6 +37,9 @@ def test_payload_equality() -> None:
     )
 
 
+logger = logging.getLogger(__name__)
+
+
 class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
 
     configuration = {"bootstrap.servers": ",".join(settings.DEFAULT_BROKERS)}
@@ -44,6 +48,7 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
     def get_topic(self, partitions: int = 1) -> Iterator[Topic]:
         name = f"test-{uuid.uuid1().hex}"
         client = AdminClient(self.configuration)
+        logger.debug("Creating topic: %r", name)
         [[key, future]] = client.create_topics(
             [NewTopic(name, num_partitions=partitions, replication_factor=1)]
         ).items()
@@ -52,6 +57,7 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
         try:
             yield Topic(name)
         finally:
+            logger.debug("Deleting topic: %r", name)
             [[key, future]] = client.delete_topics([name]).items()
             assert key == name
             assert future.result() is None
