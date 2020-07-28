@@ -123,8 +123,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="sessions_raw_dist",
                 columns=raw_columns,
                 engine=table_engines.Distributed(
-                    local_table_name="sessions_raw_local",
-                    sharding_key=None,  # TODO: what was the sharding key?
+                    local_table_name="sessions_raw_local", sharding_key="org_id",
                 ),
             ),
             operations.CreateTable(
@@ -132,8 +131,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="sessions_hourly_dist",
                 columns=aggregate_columns,  # TODO: needs verification
                 engine=table_engines.Distributed(
-                    local_table_name="sessions_hourly_local",
-                    sharding_key=None,  # TODO: what was the sharding key?
+                    local_table_name="sessions_hourly_local", sharding_key="org_id",
                 ),
             ),
         ]
