@@ -57,6 +57,8 @@ def record_error_building_request(timer: Timer, referrer: Optional[str]) -> None
 def _record_failure_building_request(
     status: QueryStatus, timer: Timer, referrer: Optional[str]
 ) -> None:
+    # TODO: Revisit if recording some data for these queries in the querylog
+    # table would be useful.
     if settings.RECORD_QUERIES:
         timer.send_metrics_to(
             metrics, tags={"status": status.value, "referrer": referrer or "none"},
