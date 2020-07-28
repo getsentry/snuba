@@ -112,8 +112,15 @@ class Migration(migration.MultiStepMigration):
     def backwards_local(self) -> Sequence[operations.Operation]:
         return [
             operations.DropTable(
+                storage_set=StorageSetKey.SESSIONS,
+                table_name="sessions_hourly_mv_local",
+            ),
+            operations.DropTable(
+                storage_set=StorageSetKey.SESSIONS, table_name="sessions_hourly_local",
+            ),
+            operations.DropTable(
                 storage_set=StorageSetKey.SESSIONS, table_name="sessions_raw_local",
-            )
+            ),
         ]
 
     def forwards_dist(self) -> Sequence[operations.Operation]:
@@ -139,9 +146,9 @@ class Migration(migration.MultiStepMigration):
     def backwards_dist(self) -> Sequence[operations.Operation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.SESSIONS, table_name="sessions_raw_dist",
+                storage_set=StorageSetKey.SESSIONS, table_name="sessions_hourly_dist",
             ),
             operations.DropTable(
-                storage_set=StorageSetKey.SESSIONS, table_name="sessions_hourly_dist",
+                storage_set=StorageSetKey.SESSIONS, table_name="sessions_raw_dist",
             ),
         ]
