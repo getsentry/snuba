@@ -104,6 +104,7 @@ PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 
 AST_DATASET_ROLLOUT: Mapping[str, int] = {
+    "discover": 10,
     "events": 100,
     "outcomes": 100,
     "sessions": 100,

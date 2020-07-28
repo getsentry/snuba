@@ -28,11 +28,7 @@ def test_simple():
     }
 
     query = Query(
-        request_body,
-        get_storage(StorageKey.EVENTS)
-        .get_schemas()
-        .get_read_schema()
-        .get_data_source(),
+        request_body, get_storage(StorageKey.EVENTS).get_schema().get_data_source(),
     )
 
     request = Request(
