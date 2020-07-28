@@ -147,10 +147,10 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
         )
 
         with self.get_topic() as topic, closing(consumer) as consumer:
-            consumer.subscribe([topic])
-
             with closing(self.get_producer()) as producer:
                 producer.produce(topic, next(self.get_payloads())).result(5.0)
+
+            consumer.subscribe([topic])
 
             message = consumer.poll(10.0)  # XXX: getting the subscription is slow
             assert isinstance(message, Message)
