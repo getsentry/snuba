@@ -2,7 +2,6 @@ from typing import Mapping, Sequence
 
 from snuba.clickhouse.columns import ColumnType
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
@@ -118,7 +117,7 @@ schema = ReplacingMergeTreeSchema(
 storage = WritableTableStorage(
     storage_key=StorageKey.EVENTS,
     storage_set_key=StorageSetKey.EVENTS,
-    schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+    schema=schema,
     query_processors=query_processors,
     stream_loader=KafkaStreamLoader(
         processor=EventsProcessor(promoted_tag_columns),

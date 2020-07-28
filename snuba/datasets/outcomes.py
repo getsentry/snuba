@@ -26,7 +26,7 @@ class OutcomesDataset(TimeSeriesDataset):
 
         # The materialized view we query aggregate data from.
         materialized_storage = get_storage(StorageKey.OUTCOMES_HOURLY)
-        read_schema = materialized_storage.get_schemas().get_read_schema()
+        read_schema = materialized_storage.get_schema()
         self.__time_group_columns = {"time": "timestamp"}
         super().__init__(
             storages=[writable_storage, materialized_storage],
