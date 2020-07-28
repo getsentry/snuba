@@ -104,6 +104,7 @@ PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 
 AST_DATASET_ROLLOUT: Mapping[str, int] = {
+    "discover": 10,
     "events": 100,
     "outcomes": 100,
     "sessions": 100,
@@ -118,6 +119,10 @@ AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
         "api.organization-event-stats.key-transactions": 100,
         "discover.key_transactions": 100,
         "api.performance.latencychart": 100,
+        # Main view
+        "api.organization-event-stats.find-topn": 100,
+        "tagstore.get_tag_value_paginator_for_projects": 100,
+        "api.organization-events-facets.top-tags": 100,
     },
 }  # (dataset name: (referrer: percentage))
 

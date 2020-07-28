@@ -7,7 +7,6 @@ from datetime import datetime
 from itertools import chain
 from typing import MutableSequence, Sequence
 
-from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.util import settings_override
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.kafka import KafkaPayload
@@ -43,13 +42,9 @@ def run(events_file, dataset, repeat=1, profile_process=False, profile_write=Fal
     """
 
     from snuba.consumer import ConsumerWorker
+    from snuba.migrations.migrate import run as run_migrations
 
-    for storage in dataset.get_all_storages():
-        clickhouse = storage.get_cluster().get_query_connection(
-            ClickhouseClientSettings.INSERT
-        )
-        for statement in storage.get_schemas().get_create_statements():
-            clickhouse.execute(statement.statement)
+    run_migrations()
 
     writable_storage = dataset.get_writable_storage()
 

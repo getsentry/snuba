@@ -80,7 +80,7 @@ def check_clickhouse() -> bool:
                     ClickhouseClientSettings.QUERY
                 )
                 clickhouse_tables = clickhouse.execute("show tables")
-                source = storage.get_schemas().get_read_schema()
+                source = storage.get_schema()
                 if isinstance(source, TableSchema):
                     table_name = source.get_table_name()
                     if (table_name,) not in clickhouse_tables:
@@ -90,6 +90,22 @@ def check_clickhouse() -> bool:
 
     except Exception:
         return False
+
+
+def truncate_dataset(dataset: Dataset) -> None:
+    for storage in dataset.get_all_storages():
+        cluster = storage.get_cluster()
+        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+        database = cluster.get_database()
+
+        schema = storage.get_schema()
+
+        if not isinstance(schema, TableSchema):
+            return
+
+        table = schema.get_local_table_name()
+
+        clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
 
 
 application = Flask(__name__, static_url_path="")
@@ -462,21 +478,9 @@ if application.debug or application.testing:
 
     @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
     def drop(*, dataset: Dataset) -> Tuple[str, int, Mapping[str, str]]:
-        for storage in dataset.get_all_storages():
-            cluster = storage.get_cluster()
-            clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
-            database = cluster.get_database()
-
-            tables_to_empty = {
-                schema.get_local_table_name()
-                for schema in storage.get_schemas().get_unique_schemas()
-                if isinstance(schema, TableSchema)
-            }
-
-            for table in tables_to_empty:
-                clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
-
+        truncate_dataset(dataset)
         redis_client.flushdb()
+
         return ("ok", 200, {"Content-Type": "text/plain"})
 
     @application.route("/tests/error")

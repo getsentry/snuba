@@ -10,9 +10,7 @@ from snuba.util import tuplify
 
 def test_simple_column_expr():
     dataset = get_dataset("groups")
-    source = (
-        dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
-    )
+    source = dataset.get_all_storages()[0].get_schema().get_data_source()
 
     body = {"granularity": 86400}
     query = Query(body, source)
@@ -149,9 +147,7 @@ def test_simple_column_expr():
 def test_alias_in_alias():
     state.set_config("use_escape_alias", 1)
     dataset = get_dataset("groups")
-    source = (
-        dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
-    )
+    source = dataset.get_all_storages()[0].get_schema().get_data_source()
     body = {"groupby": ["events.tags_key", "events.tags_value"]}
     query = Query(body, source)
     parsing_context = ParsingContext()
@@ -176,9 +172,7 @@ def test_alias_in_alias():
 
 def test_conditions_expr():
     dataset = get_dataset("groups")
-    source = (
-        dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
-    )
+    source = dataset.get_all_storages()[0].get_schema().get_data_source()
     state.set_config("use_escape_alias", 1)
     conditions = [["events.a", "=", 1]]
     query = Query({}, source)
@@ -255,9 +249,7 @@ def test_conditions_expr():
 
 def test_duplicate_expression_alias():
     dataset = get_dataset("groups")
-    source = (
-        dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
-    )
+    source = dataset.get_all_storages()[0].get_schema().get_data_source()
     state.set_config("use_escape_alias", 1)
 
     body = {
@@ -280,9 +272,7 @@ def test_duplicate_expression_alias():
 
 def test_order_by():
     dataset = get_dataset("groups")
-    source = (
-        dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
-    )
+    source = dataset.get_all_storages()[0].get_schema().get_data_source()
     body = {}
     query = Query(body, source)
 
