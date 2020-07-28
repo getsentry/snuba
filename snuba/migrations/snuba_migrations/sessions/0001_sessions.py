@@ -129,7 +129,7 @@ class Migration(migration.MultiStepMigration):
             operations.CreateTable(
                 storage_set=StorageSetKey.SESSIONS,
                 table_name="sessions_hourly_dist",
-                columns=aggregate_columns,  # TODO: needs verification
+                columns=aggregate_columns,
                 engine=table_engines.Distributed(
                     local_table_name="sessions_hourly_local", sharding_key="org_id",
                 ),
