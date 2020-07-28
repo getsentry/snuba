@@ -1,5 +1,3 @@
-import random
-import time
 from concurrent.futures import wait
 from threading import Barrier, Event
 from snuba.utils.concurrent import execute
@@ -36,7 +34,6 @@ def test_gauge_concurrent() -> None:
     event = Event()
 
     def waiter() -> None:
-        time.sleep(random.random() * 3)
         with gauge:
             barrier.wait()
             event.wait()
