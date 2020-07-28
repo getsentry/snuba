@@ -1,5 +1,5 @@
 from concurrent.futures import wait
-from threading import Event
+from threading import Barrier, Event
 from snuba.utils.concurrent import execute
 from snuba.utils.metrics.gauge import Gauge
 from tests.backends.metrics import TestingMetricsBackend, Gauge as GaugeCall
@@ -29,13 +29,16 @@ def test_gauge_concurrent() -> None:
     tags = {"tag": "value"}
     gauge = Gauge(backend, name, tags)
 
+    workers = 4
+    barrier = Barrier(workers)
     event = Event()
 
     def waiter() -> None:
         with gauge:
+            barrier.wait()
             event.wait()
 
-    futures = [execute(waiter) for i in range(4)]
+    futures = [execute(waiter) for i in range(workers)]
 
     event.set()
 
