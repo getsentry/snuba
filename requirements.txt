@@ -47,4 +47,4 @@ typing-extensions==3.7.4.1
 urllib3==1.25.3
 uWSGI==2.0.18
 wcwidth==0.1.7
-Werkzeug==0.15.3
+Werkzeug==0.16.1
