@@ -15,13 +15,14 @@ def build_request(
     with sentry_sdk.start_span(description="build_request", op="validate") as span:
         try:
             request = schema.validate(body, dataset, referrer)
-            span.set_data("snuba_query", request.body)
-
-            timer.mark("validate_schema")
-            return request
         except (InvalidJsonRequestException, InvalidQueryException) as exception:
             record_invalid_request(timer, referrer)
             raise exception
         except Exception as exception:
             record_error_building_request(timer, referrer)
             raise exception
+
+        span.set_data("snuba_query", request.body)
+
+        timer.mark("validate_schema")
+        return request
