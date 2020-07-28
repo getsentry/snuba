@@ -17,7 +17,6 @@ from snuba.clickhouse.columns import (
     WithDefault,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -171,7 +170,7 @@ schema = ReplacingMergeTreeSchema(
 storage = WritableTableStorage(
     storage_key=StorageKey.TRANSACTIONS,
     storage_set_key=StorageSetKey.TRANSACTIONS,
-    schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+    schema=schema,
     query_processors=[
         NestedFieldConditionOptimizer(
             "tags", "_tags_flattened", {"start_ts", "finish_ts"}, BEGINNING_OF_TIME,

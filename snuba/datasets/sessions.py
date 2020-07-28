@@ -32,7 +32,7 @@ class SessionsDataset(TimeSeriesDataset):
     def __init__(self) -> None:
         writable_storage = get_writable_storage(StorageKey.SESSIONS_RAW)
         materialized_storage = get_storage(StorageKey.SESSIONS_HOURLY)
-        read_schema = materialized_storage.get_schemas().get_read_schema()
+        read_schema = materialized_storage.get_schema()
 
         self.__time_group_columns = {"bucketed_started": "started"}
         super().__init__(
