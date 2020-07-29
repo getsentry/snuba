@@ -136,9 +136,9 @@ class Dataset(object):
 
     def get_expression_validators(self) -> Sequence[ExpressionValidator]:
         """
-        Provides the a sequence of expression validators for this dataset.
-        The typical use case is validating that calls to dataset specific
-        functions are well formed.
+        Provides a sequence of expression validators for this dataset.
+        The typical use case is the validation that calls to dataset
+        specific functions are well formed.
         """
         return []
 
