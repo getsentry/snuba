@@ -134,6 +134,30 @@ class TestApi(BaseApiTest):
         else:
             return dbsize
 
+    def test_invalid_queries(self):
+        result = self.app.post(
+            "/query",
+            data=json.dumps(
+                {"project": [], "aggregations": [["count()", "", "times_seen"]]}
+            ),
+        )
+        assert result.status_code == 400
+        payload = json.loads(result.data)
+        assert payload["error"]["type"] == "schema"
+
+        result = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "project": [2],
+                    "aggregations": [["parenth((eses(arehard)", "", "times_seen"]],
+                }
+            ),
+        )
+        assert result.status_code == 400
+        payload = json.loads(result.data)
+        assert payload["error"]["type"] == "invalid_query"
+
     def test_count(self):
         """
         Test total counts are correct in the hourly time buckets for each project

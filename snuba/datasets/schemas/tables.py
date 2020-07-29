@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Callable, Mapping, NamedTuple, Optional, Sequence
+from typing import Callable, Mapping, NamedTuple, Optional, Sequence, Set
 
 from snuba.clickhouse.columns import ColumnSet, ColumnType
 from snuba.clusters.cluster import get_cluster
@@ -111,6 +111,7 @@ class TableSchemaWithDDL(TableSchema, ABC):
         migration_function: Optional[
             Callable[[str, Mapping[str, ColumnType]], Sequence[str]]
         ] = None,
+        skipped_cols_on_creation: Optional[Set[str]] = None,
     ):
         super().__init__(
             columns,
@@ -124,11 +125,28 @@ class TableSchemaWithDDL(TableSchema, ABC):
             migration_function if migration_function else lambda table, schema: []
         )
         self.__local_table_name = local_table_name
+        # Clickhouse has some restrictions on materialized columns during
+        # table creation. For example a materialized column cannot
+        # reference a nested column
+        # (https://github.com/ClickHouse/ClickHouse/issues/12586).
+        # Those columns have to be skipped on table creation and added with
+        # an ALTER statement instead.
+        # This field marks the columns to skip during creation. They have to
+        # be in a migration statement.
+        # The new migration framework will not need this work around since
+        # the current schema and the CREATE statement for a storage are separate.
+        self.__skipped_cols_on_creation = skipped_cols_on_creation or set()
 
-    def get_local_drop_table_statement(self) -> DDLStatement:
-        return DDLStatement(
-            self.get_local_table_name(),
-            "DROP TABLE IF EXISTS %s" % self.get_local_table_name(),
+    def _get_columnset_to_create(self) -> ColumnSet:
+        """
+        Returns the ColumnSet to be created.
+        """
+        return ColumnSet(
+            [
+                c
+                for c in self.get_columns().columns
+                if c.name not in self.__skipped_cols_on_creation
+            ]
         )
 
     @abstractmethod
@@ -173,6 +191,7 @@ class MergeTreeSchema(WritableTableSchema, TableSchemaWithDDL):
         migration_function: Optional[
             Callable[[str, Mapping[str, ColumnType]], Sequence[str]]
         ] = None,
+        skipped_cols_on_creation: Optional[Set[str]] = None,
     ):
         super(MergeTreeSchema, self).__init__(
             columns=columns,
@@ -182,6 +201,7 @@ class MergeTreeSchema(WritableTableSchema, TableSchemaWithDDL):
             mandatory_conditions=mandatory_conditions,
             prewhere_candidates=prewhere_candidates,
             migration_function=migration_function,
+            skipped_cols_on_creation=skipped_cols_on_creation,
         )
         self.__order_by = order_by
         self.__partition_by = partition_by
@@ -216,7 +236,7 @@ class MergeTreeSchema(WritableTableSchema, TableSchemaWithDDL):
     def __get_table_definition(self, name: str, engine: str) -> str:
         return """
         CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
-            "columns": self.get_columns().for_schema(),
+            "columns": self._get_columnset_to_create().for_schema(),
             "engine": engine,
             "name": name,
         }
@@ -249,6 +269,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         migration_function: Optional[
             Callable[[str, Mapping[str, ColumnType]], Sequence[str]]
         ] = None,
+        skipped_cols_on_creation: Optional[Set[str]] = None,
     ) -> None:
         super(ReplacingMergeTreeSchema, self).__init__(
             columns=columns,
@@ -263,6 +284,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
             ttl_expr=ttl_expr,
             settings=settings,
             migration_function=migration_function,
+            skipped_cols_on_creation=skipped_cols_on_creation,
         )
         self.__version_column = version_column
 
@@ -333,7 +355,7 @@ class MaterializedViewSchema(TableSchemaWithDDL):
             % {
                 "name": name,
                 "destination_table_name": destination_table_name,
-                "columns": self.get_columns().for_schema(),
+                "columns": self._get_columnset_to_create().for_schema(),
                 "query": self.__query,
             }
             % {"source_table_name": source_table_name}

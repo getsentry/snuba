@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import (
     Any,
-    Callable,
     Generic,
     Mapping,
     MutableMapping,
@@ -17,12 +16,13 @@ from typing import (
 
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
-from snuba.clickhouse.http import HTTPBatchWriter
+from snuba.clickhouse.http import HTTPBatchWriter, JSONRowEncoder
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.reader import Reader, TQuery
-from snuba.writer import BatchWriter, WriterTableRow
+from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.writer import BatchWriter, BatchWriterEncoderWrapper, WriterTableRow
 
 
 class ClickhouseClientSettingsType(NamedTuple):
@@ -33,7 +33,7 @@ class ClickhouseClientSettingsType(NamedTuple):
 class ClickhouseClientSettings(Enum):
     CLEANUP = ClickhouseClientSettingsType({}, None)
     INSERT = ClickhouseClientSettingsType({}, None)
-    MIGRATE = ClickhouseClientSettingsType({"load_balancing": "in_order"}, None)
+    MIGRATE = ClickhouseClientSettingsType({"load_balancing": "in_order"}, 10000)
     OPTIMIZE = ClickhouseClientSettingsType({}, 10000)
     QUERY = ClickhouseClientSettingsType({"readonly": True}, None)
     REPLACE = ClickhouseClientSettingsType(
@@ -109,7 +109,7 @@ class Cluster(ABC, Generic[TQuery, TWriterOptions]):
     def get_writer(
         self,
         table_name: str,
-        encoder: Callable[[WriterTableRow], bytes],
+        metrics: MetricsBackend,
         options: TWriterOptions,
         chunk_size: Optional[int],
     ) -> BatchWriter[WriterTableRow]:
@@ -217,20 +217,23 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
     def get_writer(
         self,
         table_name: str,
-        encoder: Callable[[WriterTableRow], bytes],
+        metrics: MetricsBackend,
         options: ClickhouseWriterOptions,
         chunk_size: Optional[int],
     ) -> BatchWriter[WriterTableRow]:
-        return HTTPBatchWriter(
-            table_name,
-            self.__query_node.host_name,
-            self.__http_port,
-            self.__user,
-            self.__password,
-            self.__database,
-            encoder,
-            options,
-            chunk_size,
+        return BatchWriterEncoderWrapper(
+            HTTPBatchWriter(
+                table_name,
+                host=self.__query_node.host_name,
+                port=self.__http_port,
+                user=self.__user,
+                password=self.__password,
+                database=self.__database,
+                metrics=metrics,
+                options=options,
+                chunk_size=chunk_size,
+            ),
+            JSONRowEncoder(),
         )
 
     def is_single_node(self) -> bool:

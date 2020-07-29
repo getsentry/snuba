@@ -1,4 +1,4 @@
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping
 
 import logging
 import _strptime  # NOQA fixes _strptime deferred import issue
@@ -43,7 +43,7 @@ class ErrorsProcessor(EventsProcessorBase):
         self,
         output: MutableMapping[str, Any],
         event: InsertEvent,
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         data = event.get("data", {})
         user_dict = data.get("user", data.get("sentry.interfaces.User", None)) or {}
@@ -86,7 +86,7 @@ class ErrorsProcessor(EventsProcessorBase):
         output: MutableMapping[str, Any],
         event: InsertEvent,
         tags: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         output["release"] = tags.get("sentry:release")
         output["dist"] = tags.get("sentry:dist")
@@ -101,7 +101,7 @@ class ErrorsProcessor(EventsProcessorBase):
         output: MutableMapping[str, Any],
         event: InsertEvent,
         contexts: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         output["_contexts_flattened"] = ""
 

@@ -1,4 +1,4 @@
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping
 
 import logging
 import _strptime  # NOQA fixes _strptime deferred import issue
@@ -44,7 +44,7 @@ class EventsProcessor(EventsProcessorBase):
         self,
         output: MutableMapping[str, Any],
         event: InsertEvent,
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         data = event.get("data", {})
 
@@ -65,7 +65,7 @@ class EventsProcessor(EventsProcessorBase):
         output: MutableMapping[str, Any],
         event: InsertEvent,
         tags: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         pass
 
@@ -125,7 +125,7 @@ class EventsProcessor(EventsProcessorBase):
         output: MutableMapping[str, Any],
         event: InsertEvent,
         tags: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         pass
 

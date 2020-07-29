@@ -4,7 +4,7 @@ import numbers
 import re
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
-from functools import wraps
+from functools import partial, wraps
 from typing import (
     Any,
     Callable,
@@ -255,7 +255,8 @@ def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
     from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend
 
     return DatadogMetricsBackend(
-        DogStatsd(
+        partial(
+            DogStatsd,
             host=host,
             port=port,
             namespace=prefix,
