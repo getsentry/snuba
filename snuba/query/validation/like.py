@@ -1,7 +1,15 @@
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.columns import String as StringType
 from snuba.query.expressions import Expression
-from snuba.query.matchers import Any, Column, FunctionCall, Literal, Or, Param, String
+from snuba.query.matchers import (
+    Any,
+    Column,
+    FunctionCall,
+    AnyExpression,
+    Or,
+    Param,
+    String,
+)
 from snuba.query.parser.exceptions import ValidationException
 from snuba.query.validation import ExpressionValidator
 
@@ -12,7 +20,7 @@ PATTERN = FunctionCall(
         Column(
             alias=None, table_name=None, column_name=Param("column_name", Any(str)),
         ),
-        Literal(alias=None, value=None),
+        AnyExpression(),
     ),
 )
 
