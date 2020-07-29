@@ -4,7 +4,10 @@ from typing import Mapping
 
 from snuba.datasets.dataset import Dataset
 from snuba.query.expressions import Expression, FunctionCall
-from snuba.query.parser.exceptions import ValidationException
+from snuba.query.parser.exceptions import (
+    FunctionValidationException,
+    ValidationException,
+)
 from snuba.query.parser.validation import ExpressionValidator
 from snuba.query.validation import FunctionCallValidator
 from snuba.state import get_config
@@ -15,6 +18,12 @@ default_validators: Mapping[str, FunctionCallValidator] = {}
 
 
 class FunctionCallsValidator(ExpressionValidator):
+    """
+    Applies all function validators on the provided expression.
+    The individual function validators are divided in two mappings:
+    a default one applied to all queries and one a mapping per dataset.
+    """
+
     def validate(self, exp: Expression, dataset: Dataset) -> None:
         if not isinstance(exp, FunctionCall):
             return
@@ -38,6 +47,8 @@ class FunctionCallsValidator(ExpressionValidator):
                 validator.validate(exp.parameters, dataset.get_abstract_columnset())
         except ValidationException as exception:
             if get_config("enforce_expression_validation", 0):
-                raise exception
+                raise FunctionValidationException(
+                    f"Illegal call to function {exp.function_name}: {str(exception)}"
+                ) from exception
             else:
                 logger.warning("Query validation exception", exc_info=True)

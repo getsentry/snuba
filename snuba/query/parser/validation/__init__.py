@@ -31,8 +31,7 @@ validators: Sequence[ExpressionValidator] = [FunctionCallsValidator()]
 
 def validate_query(query: Query, dataset: Dataset) -> None:
     """
-    Applies all the expression validators (default and dataset specific)
-    in one pass over the AST.
+    Applies all the expression validators in one pass over the AST.
     """
 
     for exp in query.get_all_expressions():
