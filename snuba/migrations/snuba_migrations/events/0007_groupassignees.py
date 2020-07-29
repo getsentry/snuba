@@ -11,7 +11,6 @@ from snuba.migrations import migration, operations, table_engines
 
 
 columns = [
-    # columns to maintain the dataset
     # Kafka topic offset
     Column("offset", UInt(64)),
     Column("record_deleted", UInt(8)),
