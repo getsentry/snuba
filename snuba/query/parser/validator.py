@@ -1,5 +1,4 @@
 import logging
-from itertools import chain
 from typing import Sequence
 
 from snuba.datasets.dataset import Dataset
@@ -21,7 +20,7 @@ def validate_query(query: Query, dataset: Dataset) -> None:
     in one pass over the AST.
     """
 
-    validators = chain(default_validators, dataset.get_expression_validators())
+    validators = [*default_validators, *dataset.get_expression_validators()]
     schema = dataset.get_abstract_columnset()
     for exp in query.get_all_expressions():
         for v in validators:
