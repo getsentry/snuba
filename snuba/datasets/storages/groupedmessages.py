@@ -6,7 +6,6 @@ from snuba.datasets.cdc.groupedmessage_processor import (
     GroupedMessageRow,
 )
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
-from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.schemas import MandatoryCondition
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storages import StorageKey
@@ -63,7 +62,7 @@ POSTGRES_TABLE = "sentry_groupedmessage"
 storage = CdcStorage(
     storage_key=StorageKey.GROUPEDMESSAGES,
     storage_set_key=StorageSetKey.EVENTS,
-    schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+    schema=schema,
     query_processors=[],
     stream_loader=KafkaStreamLoader(
         processor=GroupedMessageProcessor(POSTGRES_TABLE),

@@ -69,9 +69,11 @@ def test_no_schema_differences() -> None:
     storages_to_test = [
         StorageKey.EVENTS,
         StorageKey.ERRORS,
+        StorageKey.TRANSACTIONS,
         StorageKey.OUTCOMES_RAW,
         StorageKey.OUTCOMES_HOURLY,
-        StorageKey.TRANSACTIONS,
+        StorageKey.SESSIONS_RAW,
+        StorageKey.SESSIONS_HOURLY,
         StorageKey.QUERYLOG,
     ]  # TODO: Eventually test all storages
 
@@ -84,16 +86,17 @@ def test_no_schema_differences() -> None:
             ClickhouseClientSettings.MIGRATE
         )
 
-        for schema in storage.get_schemas().get_unique_schemas():
-            if not isinstance(schema, TableSchema):
-                continue
+        schema = storage.get_schema()
 
-            table_name = schema.get_local_table_name()
-            local_schema = get_local_schema(conn, table_name)
+        if not isinstance(schema, TableSchema):
+            continue
 
-            assert (
-                schema.get_column_differences(local_schema) == []
-            ), f"Schema mismatch: {table_name} does not match schema"
+        table_name = schema.get_local_table_name()
+        local_schema = get_local_schema(conn, table_name)
+
+        assert (
+            schema.get_column_differences(local_schema) == []
+        ), f"Schema mismatch: {table_name} does not match schema"
 
 
 def test_transactions_compatibility() -> None:
