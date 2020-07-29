@@ -46,7 +46,7 @@ services:
       KAFKA_LOG4J_ROOT_LOGLEVEL: 'WARN'
       KAFKA_TOOLS_LOG4J_LOGLEVEL: 'WARN'
   clickhouse:
-    image: 'yandex/clickhouse-server:19.11'
+    image: 'yandex/clickhouse-server:19.17.4.11'
     ulimits:
       nofile:
         soft: 262144

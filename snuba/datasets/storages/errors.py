@@ -19,7 +19,6 @@ from snuba.clickhouse.columns import (
     WithDefault,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.schemas import MandatoryCondition
@@ -189,7 +188,7 @@ required_columns = [
 storage = WritableTableStorage(
     storage_key=StorageKey.ERRORS,
     storage_set_key=StorageSetKey.EVENTS,
-    schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+    schema=schema,
     query_processors=[
         PostReplacementConsistencyEnforcer(
             project_column="project_id", replacer_state_name=ReplacerState.ERRORS,

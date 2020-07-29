@@ -11,6 +11,7 @@ class MigrationGroup(Enum):
     EVENTS = "events"
     TRANSACTIONS = "transactions"
     OUTCOMES = "outcomes"
+    SESSIONS = "sessions"
     QUERYLOG = "querylog"
 
 
@@ -92,6 +93,14 @@ class OutcomesLoader(DirectoryLoader):
         return ["0001_outcomes"]
 
 
+class SessionsLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.migrations.snuba_migrations.sessions")
+
+    def get_migrations(self) -> Sequence[str]:
+        return ["0001_sessions"]
+
+
 class QuerylogLoader(DirectoryLoader):
     def __init__(self) -> None:
         super().__init__("snuba.migrations.snuba_migrations.querylog")
@@ -105,6 +114,7 @@ _REGISTERED_GROUPS = {
     MigrationGroup.EVENTS: EventsLoader(),
     MigrationGroup.TRANSACTIONS: TransactionsLoader(),
     MigrationGroup.OUTCOMES: OutcomesLoader(),
+    MigrationGroup.SESSIONS: SessionsLoader(),
     MigrationGroup.QUERYLOG: QuerylogLoader(),
 }
 
