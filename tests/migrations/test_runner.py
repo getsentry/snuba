@@ -66,23 +66,10 @@ def test_version() -> None:
 
 
 def test_no_schema_differences() -> None:
-    storages_to_test = [
-        StorageKey.EVENTS,
-        StorageKey.ERRORS,
-        StorageKey.GROUPASSIGNEES,
-        StorageKey.GROUPEDMESSAGES,
-        StorageKey.TRANSACTIONS,
-        StorageKey.OUTCOMES_RAW,
-        StorageKey.OUTCOMES_HOURLY,
-        StorageKey.SESSIONS_RAW,
-        StorageKey.SESSIONS_HOURLY,
-        StorageKey.QUERYLOG,
-    ]  # TODO: Eventually test all storages
-
     runner = Runner()
     runner.run_all()
 
-    for storage_key in storages_to_test:
+    for storage_key in StorageKey:
         storage = get_storage(storage_key)
         conn = storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.MIGRATE
