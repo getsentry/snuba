@@ -69,9 +69,11 @@ def test_no_schema_differences() -> None:
     storages_to_test = [
         StorageKey.EVENTS,
         StorageKey.ERRORS,
+        StorageKey.TRANSACTIONS,
         StorageKey.OUTCOMES_RAW,
         StorageKey.OUTCOMES_HOURLY,
-        StorageKey.TRANSACTIONS,
+        StorageKey.SESSIONS_RAW,
+        StorageKey.SESSIONS_HOURLY,
         StorageKey.QUERYLOG,
     ]  # TODO: Eventually test all storages
 
