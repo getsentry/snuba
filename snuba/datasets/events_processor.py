@@ -57,8 +57,17 @@ class EventsProcessor(EventsProcessorBase):
         geo = user.get("geo", None) or {}
         self.extract_geo(output, geo)
 
+        data = event.get("data", {})
         http = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
-        self.extract_http(output, http)
+        http_headers = _as_dict_safe(http.get("headers", None))
+
+        contexts = _as_dict_safe(data.get("contexts", None))
+        # Part of the request/http interface is in promoted columns
+        output["http_method"] = _unicodify(http.get("method", None))
+        output["http_referer"] = _unicodify(http_headers.get("Referer", None))
+
+        if "http" not in contexts:
+            contexts["http"] = {"url": http.get("url", None)}
 
     def extract_tags_custom(
         self,
@@ -124,7 +133,7 @@ class EventsProcessor(EventsProcessorBase):
         self,
         output: MutableMapping[str, Any],
         event: InsertEvent,
-        tags: Mapping[str, Any],
+        contexts: Mapping[str, Any],
         metadata: KafkaMessageMetadata,
     ) -> None:
         pass
@@ -133,8 +142,3 @@ class EventsProcessor(EventsProcessorBase):
         output["geo_country_code"] = _unicodify(geo.get("country_code", None))
         output["geo_region"] = _unicodify(geo.get("region", None))
         output["geo_city"] = _unicodify(geo.get("city", None))
-
-    def extract_http(self, output, http):
-        output["http_method"] = _unicodify(http.get("method", None))
-        http_headers = _as_dict_safe(http.get("headers", None))
-        output["http_referer"] = _unicodify(http_headers.get("Referer", None))

@@ -72,6 +72,11 @@ class ErrorsProcessor(EventsProcessorBase):
             http["http_method"] = _unicodify(request.get("method", None))
             http_headers = _as_dict_safe(request.get("headers", None))
             http["http_referer"] = _unicodify(http_headers.get("Referer", None))
+
+            # Add aliases that sentry is using in discover/issue search
+            http["method"] = http["http_method"]
+            http["referer"] = http["http_referer"]
+            http["url"] = _unicodify(request.get("url", None))
             contexts["request"] = http
 
         # _as_dict_safe may not return a reference to the entry in the data

@@ -448,21 +448,18 @@ class TestEventsProcessor(BaseEventsTest):
             "geo_region": "CA",
         }
 
-    def test_extract_http(self):
-        http = {
-            "method": "GET",
-            "headers": [
-                ["Referer", "https://sentry.io"],
-                ["Host", "https://google.com"],
-            ],
-        }
+    def test_extract_custom(self):
         output = {}
+        processor = (
+            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
+        )
+        processor.extract_custom(output, self.event, self.metadata)
 
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().extract_http(output, http)
-
-        assert output == {"http_method": u"GET", "http_referer": u"https://sentry.io"}
+        assert output["http_method"] == "GET"
+        assert output["http_referer"] == "/login/"
+        contexts = self.event["data"]["contexts"]
+        assert "http" in contexts
+        assert contexts["http"] == {"url": "https://example.com/app/dashboard/"}
 
     def test_extract_stacktraces(self):
         stacks = [

@@ -116,6 +116,8 @@ class TransactionsMessageProcessor(MessageProcessor):
         processed["environment"] = promoted_tags.get("environment")
 
         contexts = _as_dict_safe(data.get("contexts", None))
+        if "request" in data:
+            extract_http(contexts, data["request"])
 
         user_dict = data.get("user", data.get("sentry.interfaces.User", None)) or {}
         geo = user_dict.get("geo", None) or {}
@@ -160,3 +162,16 @@ class TransactionsMessageProcessor(MessageProcessor):
             metrics.increment("missing_sdk_version")
 
         return InsertBatch([processed])
+
+
+def extract_http(output, http):
+    http_headers = _as_dict_safe(http.get("headers", None))
+    http = {
+        "method": _unicodify(http.get("method", None)),
+        "referer": _unicodify(http_headers.get("Referer", None)),
+        "url": _unicodify(http.get("url", None)),
+    }
+    # Align with the name used in events dataset.
+    output["http"] = http
+    # Add an alias so that errors & transactions will be aligned in the future.
+    output["request"] = http

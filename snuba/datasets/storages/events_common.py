@@ -88,6 +88,7 @@ promoted_context_tag_columns = ColumnSet(
 
 promoted_context_columns = ColumnSet(
     [
+        # These are context keys that are promoted into columns
         ("os_build", Nullable(String())),
         ("os_kernel_version", Nullable(String())),
         ("device_name", Nullable(String())),
@@ -101,6 +102,9 @@ promoted_context_columns = ColumnSet(
         ("device_simulator", Nullable(UInt(8))),
         ("device_online", Nullable(UInt(8))),
         ("device_charging", Nullable(UInt(8))),
+        # http/request interface is partially available in contexts as well
+        ("http_method", Nullable(String())),
+        ("http_referer", Nullable(String())),
     ]
 )
 
@@ -151,9 +155,6 @@ all_columns = (
         ("_tags_hash_map", Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN)),
         # other context
         ("contexts", Nested([("key", String()), ("value", String())])),
-        # http interface
-        ("http_method", Nullable(String())),
-        ("http_referer", Nullable(String())),
         # exception interface
         (
             "exception_stacks",

@@ -74,6 +74,14 @@ class TestDiscoverApi(BaseApiTest):
                                 "foo.bar": "qux",
                                 "os_name": "linux",
                             },
+                            "request": {
+                                "method": "GET",
+                                "url": "https://example.com/app/dashboard/",
+                                "headers": [
+                                    ["Referer", "/login/"],
+                                    ["Host", "example.com"],
+                                ],
+                            },
                             "user": {
                                 "email": "sally@example.org",
                                 "ip_address": "8.8.8.8",
@@ -537,6 +545,56 @@ class TestDiscoverApi(BaseApiTest):
             ).data
         )
         assert result["data"] == [{"contexts[device.online]": "True"}]
+
+    def test_http_context_fields_transaction(self):
+        result = json.loads(
+            self.app.post(
+                "/query",
+                data=json.dumps(
+                    {
+                        "dataset": "discover",
+                        "project": self.project_id,
+                        "conditions": [["type", "=", "transaction"]],
+                        "selected_columns": [
+                            "contexts[http.method]",
+                            "contexts[http.referer]",
+                            "contexts[http.url]",
+                        ],
+                    }
+                ),
+            ).data
+        )
+        assert len(result["data"]) == 1
+        assert result["data"][0] == {
+            "contexts[http.method]": "GET",
+            "contexts[http.referer]": "/login/",
+            "contexts[http.url]": "https://example.com/app/dashboard/",
+        }
+
+    def test_http_context_fields_error(self):
+        result = json.loads(
+            self.app.post(
+                "/query",
+                data=json.dumps(
+                    {
+                        "dataset": "discover",
+                        "project": self.project_id,
+                        "conditions": [["type", "=", "error"]],
+                        "selected_columns": [
+                            "contexts[http.method]",
+                            "contexts[http.referer]",
+                            "contexts[http.url]",
+                        ],
+                    }
+                ),
+            ).data
+        )
+        assert len(result["data"]) == 1
+        assert result["data"][0] == {
+            "contexts[http.method]": "GET",
+            "contexts[http.referer]": "/login/",
+            "contexts[http.url]": "https://example.com/app/dashboard/",
+        }
 
     def test_ast_impossibe_queries(self):
         response = self.app.post(

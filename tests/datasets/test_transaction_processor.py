@@ -30,6 +30,7 @@ class TransactionEvent:
     sdk_name: Optional[str]
     sdk_version: Optional[str]
     geo: Mapping[str, str]
+    request: Mapping[str, str]
     status: str
 
     def serialize(self) -> Mapping[str, Any]:
@@ -109,6 +110,11 @@ class TransactionEvent:
                             "status": self.status,
                         }
                     },
+                    "request": {
+                        "url": self.request["url"],
+                        "method": self.request["method"],
+                        "headers": [["Referer", self.request["referer"]]],
+                    },
                     "tags": [
                         ["sentry:release", self.release],
                         ["sentry:user", self.user_id],
@@ -163,6 +169,12 @@ class TransactionEvent:
                 "trace.op",
                 "trace.span_id",
                 "trace.status",
+                "http.method",
+                "http.referer",
+                "http.url",
+                "request.method",
+                "request.referer",
+                "request.url",
                 "geo.country_code",
                 "geo.region",
                 "geo.city",
@@ -173,6 +185,12 @@ class TransactionEvent:
                 self.op,
                 self.span_id,
                 self.status,
+                self.request["method"],
+                self.request["referer"],
+                self.request["url"],
+                self.request["method"],
+                self.request["referer"],
+                self.request["url"],
                 self.geo["country_code"],
                 self.geo["region"],
                 self.geo["city"],
@@ -185,6 +203,8 @@ class TransactionEvent:
             "_tags_flattened": f"|environment={self.environment}||sentry:release={self.release}||sentry:user={self.user_id}||we\\|r\\=d=tag|",
             "_contexts_flattened": (
                 f"|geo.city={self.geo['city']}||geo.country_code={self.geo['country_code']}||geo.region={self.geo['region']}|"
+                f"|http.method={self.request['method']}||http.referer={self.request['referer']}||http.url={self.request['url']}|"
+                f"|request.method={self.request['method']}||request.referer={self.request['referer']}||request.url={self.request['url']}|"
                 f"|trace.op={self.op}||trace.sampled=True||trace.span_id={self.span_id}||trace.status={str(self.status)}|"
                 f"|trace.trace_id={self.trace_id}|"
             ),
@@ -198,7 +218,7 @@ class TransactionEvent:
 
 
 class TestTransactionsProcessor(BaseTest):
-    def __get_timestamps(slef) -> Tuple[float, float]:
+    def __get_timestamps(self) -> Tuple[float, float]:
         timestamp = datetime.utcnow() - timedelta(seconds=5)
         start_timestamp = timestamp - timedelta(seconds=5)
         return (start_timestamp.timestamp(), timestamp.timestamp())
@@ -226,6 +246,11 @@ class TestTransactionsProcessor(BaseTest):
             sdk_name="sentry.python",
             sdk_version="0.9.0",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
+            request={
+                "url": "/organizations/org/issues/",
+                "method": "GET",
+                "referer": "/organizations/org/",
+            },
         )
         payload = message.serialize()
         # Force an invalid event
@@ -260,6 +285,11 @@ class TestTransactionsProcessor(BaseTest):
             sdk_name="sentry.python",
             sdk_version="0.9.0",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
+            request={
+                "url": "/organizations/org/issues/",
+                "method": "GET",
+                "referer": "/organizations/org/",
+            },
         )
         payload = message.serialize()
         # Force an invalid event
@@ -294,6 +324,11 @@ class TestTransactionsProcessor(BaseTest):
             sdk_name="sentry.python",
             sdk_version="0.9.0",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
+            request={
+                "url": "/organizations/org/issues/",
+                "method": "GET",
+                "referer": "/organizations/org/",
+            },
         )
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)

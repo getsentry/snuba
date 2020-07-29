@@ -97,6 +97,11 @@ raw_event = {
         ],
     },
     "sentry.interfaces.Message": {"message": "Caught exception!"},
+    "request": {
+        "method": "GET",
+        "url": "https://example.com/app/dashboard/",
+        "headers": [["Referer", "/login/"], ["Host", "example.com"]],
+    },
     "tags": [
         ["logger", "example.Application"],
         ["server_name", "localhost.localdomain"],
