@@ -16,13 +16,12 @@ from snuba.query.timeseries_extension import TimeSeriesExtension
 class OutcomesRawDataset(TimeSeriesDataset):
     def __init__(self) -> None:
         storage = get_storage(StorageKey.OUTCOMES_RAW)
-        read_schema = storage.get_schemas().get_read_schema()
 
         self.__time_group_columns = {"time": "timestamp"}
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
-            abstract_column_set=read_schema.get_columns(),
+            abstract_column_set=storage.get_schema().get_columns(),
             writable_storage=None,
             time_group_columns=self.__time_group_columns,
             time_parse_columns=("timestamp",),

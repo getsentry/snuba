@@ -15,12 +15,7 @@ from tests.base import BaseEventsTest
 
 class TestEventsDataset(BaseEventsTest):
     def test_column_expr(self):
-        source = (
-            self.dataset.get_all_storages()[0]
-            .get_schemas()
-            .get_read_schema()
-            .get_data_source()
-        )
+        source = self.dataset.get_all_storages()[0].get_schema().get_data_source()
         query = Query({"granularity": 86400}, source,)
         # Single tag expression
         assert (
@@ -171,12 +166,7 @@ class TestEventsDataset(BaseEventsTest):
         )
 
     def test_alias_in_alias(self):
-        source = (
-            self.dataset.get_all_storages()[0]
-            .get_schemas()
-            .get_read_schema()
-            .get_data_source()
-        )
+        source = self.dataset.get_all_storages()[0].get_schema().get_data_source()
         query = Query({"groupby": ["tags_key", "tags_value"]}, source,)
         context = ParsingContext()
         assert column_expr(self.dataset, "tags_key", query, context) == (
@@ -204,12 +194,7 @@ class TestEventsDataset(BaseEventsTest):
 
         This test is supposed to cover those cases.
         """
-        source = (
-            self.dataset.get_all_storages()[0]
-            .get_schemas()
-            .get_read_schema()
-            .get_data_source()
-        )
+        source = self.dataset.get_all_storages()[0].get_schema().get_data_source()
         query = Query({}, source)
         # Columns that start with a negative sign (used in orderby to signify
         # sort order) retain the '-' sign outside the escaping backticks (if any)
@@ -311,7 +296,7 @@ def test_storage_selector() -> None:
     storage = get_storage(StorageKey.EVENTS)
     storage_ro = get_storage(StorageKey.EVENTS_RO)
 
-    query = Query({}, storage.get_schemas().get_read_schema().get_data_source())
+    query = Query({}, storage.get_schema().get_data_source())
 
     storage_selector = EventsQueryStorageSelector(storage, storage_ro)
     assert (

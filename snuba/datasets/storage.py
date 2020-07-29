@@ -9,8 +9,9 @@ from snuba.clusters.cluster import (
     get_cluster,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy
+from snuba.datasets.schemas import Schema
+from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
 from snuba.query.logical import Query
@@ -30,9 +31,12 @@ class Storage(ABC):
     for more useful abstractions.
     """
 
-    def __init__(self, storage_key: StorageKey, storage_set_key: StorageSetKey):
+    def __init__(
+        self, storage_key: StorageKey, storage_set_key: StorageSetKey, schema: Schema
+    ):
         self.__storage_key = storage_key
         self.__storage_set_key = storage_set_key
+        self.__schema = schema
 
     def get_storage_key(self) -> StorageKey:
         return self.__storage_key
@@ -43,18 +47,8 @@ class Storage(ABC):
     def get_cluster(self) -> ClickhouseCluster:
         return get_cluster(self.__storage_set_key)
 
-    # TODO: Break StorageSchemas apart. It contains a distinction between write schema and
-    # read schema that existed before this dataset model and before TableWriters (then we
-    # trusted StorageSchemas to define which schema we would write on and which one we would
-    # read from). This is not needed anymore since TableWriter is provided the correct write
-    # schema through the constructor.
-    @abstractmethod
-    def get_schemas(self) -> StorageSchemas:
-        """
-        Returns the collections of schemas for DDL operations and for query.
-        See TableWriter to get a write schema.
-        """
-        raise NotImplementedError
+    def get_schema(self) -> Schema:
+        return self.__schema
 
 
 class ReadableStorage(Storage):
@@ -112,17 +106,13 @@ class ReadableTableStorage(ReadableStorage):
         self,
         storage_key: StorageKey,
         storage_set_key: StorageSetKey,
-        schemas: StorageSchemas,
+        schema: Schema,
         query_processors: Optional[Sequence[QueryProcessor]] = None,
         query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
     ) -> None:
-        self.__schemas = schemas
         self.__query_processors = query_processors or []
         self.__query_splitters = query_splitters or []
-        super().__init__(storage_key, storage_set_key)
-
-    def get_schemas(self) -> StorageSchemas:
-        return self.__schemas
+        super().__init__(storage_key, storage_set_key, schema)
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return self.__query_processors
@@ -136,7 +126,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         self,
         storage_key: StorageKey,
         storage_set_key: StorageSetKey,
-        schemas: StorageSchemas,
+        schema: Schema,
         query_processors: Sequence[QueryProcessor],
         stream_loader: KafkaStreamLoader,
         query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
@@ -144,13 +134,12 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         writer_options: ClickhouseWriterOptions = None,
     ) -> None:
         super().__init__(
-            storage_key, storage_set_key, schemas, query_processors, query_splitters
+            storage_key, storage_set_key, schema, query_processors, query_splitters
         )
-        write_schema = schemas.get_write_schema()
-        assert write_schema is not None
+        assert isinstance(schema, WritableTableSchema)
         self.__table_writer = TableWriter(
             cluster=get_cluster(storage_set_key),
-            write_schema=write_schema,
+            write_schema=schema,
             stream_loader=stream_loader,
             replacer_processor=replacer_processor,
             writer_options=writer_options,
