@@ -62,6 +62,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="sessions_raw_local",
                 columns=raw_columns,
                 engine=table_engines.MergeTree(
+                    storage_set=StorageSetKey.SESSIONS,
                     order_by="(org_id, project_id, release, environment, started)",
                     partition_by="(toMonday(started))",
                     settings={"index_granularity": "16384"},
@@ -72,6 +73,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="sessions_hourly_local",
                 columns=aggregate_columns,
                 engine=table_engines.AggregatingMergeTree(
+                    storage_set=StorageSetKey.SESSIONS,
                     order_by="(org_id, project_id, release, environment, started)",
                     partition_by="(toMonday(started))",
                     settings={"index_granularity": "256"},

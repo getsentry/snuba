@@ -27,6 +27,7 @@ def test_create_table() -> None:
             "test_table",
             columns,
             ReplacingMergeTree(
+                storage_set=StorageSetKey.EVENTS,
                 version_column="version",
                 order_by="version",
                 settings={"index_granularity": "256"},
