@@ -10,6 +10,8 @@ class MigrationGroup(Enum):
     SYSTEM = "system"
     EVENTS = "events"
     TRANSACTIONS = "transactions"
+    OUTCOMES = "outcomes"
+    SESSIONS = "sessions"
     QUERYLOG = "querylog"
 
 
@@ -67,6 +69,7 @@ class EventsLoader(DirectoryLoader):
             "0002_events_onpremise_compatibility",
             "0003_errors",
             "0004_errors_onpremise_compatibility",
+            "0005_events_tags_hash_map",
             "0005_groupedmessages",
             "0006_groupassignees",
         ]
@@ -77,7 +80,27 @@ class TransactionsLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.transactions")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_transactions"]
+        return [
+            "0001_transactions",
+            "0002_transactions_onpremise_fix_orderby_and_partitionby",
+            "0003_transactions_onpremise_fix_columns",
+        ]
+
+
+class OutcomesLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.migrations.snuba_migrations.outcomes")
+
+    def get_migrations(self) -> Sequence[str]:
+        return ["0001_outcomes"]
+
+
+class SessionsLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.migrations.snuba_migrations.sessions")
+
+    def get_migrations(self) -> Sequence[str]:
+        return ["0001_sessions"]
 
 
 class QuerylogLoader(DirectoryLoader):
@@ -85,13 +108,15 @@ class QuerylogLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.querylog")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_querylog"]
+        return ["0001_querylog", "0002_status_type_change"]
 
 
 _REGISTERED_GROUPS = {
     MigrationGroup.SYSTEM: SystemLoader(),
     MigrationGroup.EVENTS: EventsLoader(),
     MigrationGroup.TRANSACTIONS: TransactionsLoader(),
+    MigrationGroup.OUTCOMES: OutcomesLoader(),
+    MigrationGroup.SESSIONS: SessionsLoader(),
     MigrationGroup.QUERYLOG: QuerylogLoader(),
 }
 

@@ -1,22 +1,24 @@
+from __future__ import annotations
+
 import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from functools import partial
 from typing import (
+    Callable,
     Generic,
     Mapping,
     MutableMapping,
     MutableSequence,
     Optional,
     Sequence,
-    Type,
     TypeVar,
 )
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams.consumer import Consumer, ConsumerError
-from snuba.utils.streams.types import Message, Partition, Topic, TPayload
+from snuba.utils.streams.processing import ProcessingStrategy, ProcessingStrategyFactory
+from snuba.utils.streams.types import Message, Partition, TPayload
+
 
 logger = logging.getLogger(__name__)
 
@@ -25,29 +27,33 @@ TResult = TypeVar("TResult")
 
 
 class AbstractBatchWorker(ABC, Generic[TPayload, TResult]):
-    """The `BatchingConsumer` requires an instance of this class to
+    """
+    The ``BatchProcessingStrategy`` requires an instance of this class to
     handle user provided work such as processing raw messages and flushing
-    processed batches to a custom backend."""
+    processed batches to a custom backend.
+    """
 
     @abstractmethod
     def process_message(self, message: Message[TPayload]) -> Optional[TResult]:
-        """Called with each raw message, allowing the worker to do
-        incremental (preferably local!) work on events. The object returned
-        is put into the batch maintained by the `BatchingConsumer`.
+        """
+        Called with each raw message, allowing the worker to do incremental
+        (preferably local!) work on events. The object returned is put into
+        the batch maintained internally by the ``BatchProcessingStrategy``.
 
         If this method returns `None` it is not added to the batch.
 
-        A simple example would be decoding the JSON value and extracting a few
-        fields.
+        A simple example would be decoding the message payload value and
+        extracting a few fields.
         """
         pass
 
     @abstractmethod
     def flush_batch(self, batch: Sequence[TResult]) -> None:
-        """Called with a list of pre-processed (by `process_message`) objects.
+        """
+        Called with a list of processed (by ``process_message``) objects.
         The worker should write the batch of processed messages into whatever
         store(s) it is maintaining. Afterwards the offsets are committed by
-        the consumer.
+        the ``BatchProcessingStrategy``.
 
         A simple example would be writing the batch to another topic.
         """
@@ -74,25 +80,31 @@ class Batch(Generic[TResult]):
     processing_time_ms: float = 0.0
 
 
-class BatchProcessor:
+class BatchProcessingStrategy(ProcessingStrategy[TPayload]):
     """
-    The ``BatchProcessor`` is a message processor that accumulates processed
-    message values, periodically flushing them after a given duration of time
-    has passed or number of output values have been accumulated.
+    The ``BatchProcessingStrategy`` is a processing strategy that accumulates
+    processed message values, periodically flushing them after a given
+    duration of time has passed or number of output values have been
+    accumulated. Users need only provide an implementation of what it means
+    to process a raw message and flush a batch of events via an
+    ``AbstractBatchWorker`` instance.
+
+    Messages are processed as they are read from the consumer, then added to
+    an in-memory batch. These batches are flushed based on the batch size or
+    time sent since the first message in the batch was recieved (e.g. "500
+    items or 1000ms"), whichever threshold is reached first. When a batch of
+    items is flushed, the consumer offsets are synchronously committed.
     """
 
     def __init__(
         self,
-        consumer: Consumer[TPayload],
+        commit: Callable[[Mapping[Partition, int]], None],
         worker: AbstractBatchWorker[TPayload, TResult],
         max_batch_size: int,
         max_batch_time: int,
         metrics: MetricsBackend,
     ) -> None:
-        # TODO: The consumer here should be removed and replaced with a
-        # generalized interface for communicating offset commits (rather than
-        # giving the processor full control of the consumer.)
-        self.__consumer = consumer
+        self.__commit = commit
         self.__worker = worker
         self.__max_batch_size = max_batch_size
         self.__max_batch_time = max_batch_time
@@ -195,13 +207,10 @@ class BatchProcessor:
 
         logger.debug("Committing offsets for batch")
         commit_start = time.time()
-        self.__consumer.stage_offsets(
-            {
-                partition: offsets.hi
-                for partition, offsets in self.__batch.offsets.items()
-            }
-        )
-        offsets = self.__consumer.commit_offsets()
+        offsets = {
+            partition: offsets.hi for partition, offsets in self.__batch.offsets.items()
+        }
+        self.__commit(offsets)
         logger.debug("Committed offsets: %s", offsets)
         commit_duration = (time.time() - commit_start) * 1000
         logger.debug("Offset commit took %dms", commit_duration)
@@ -209,107 +218,26 @@ class BatchProcessor:
         self.__batch = None
 
 
-class BatchingConsumer(Generic[TPayload]):
-    """The `BatchingConsumer` is an abstraction over the abstract Consumer's main event
-    loop. For this reason it uses inversion of control: the user provides an implementation
-    for the `AbstractBatchWorker` and then the `BatchingConsumer` handles the rest.
-
-    * Messages are processed locally (e.g. not written to an external datastore!) as they are
-      read from the consumer, then added to an in-memory batch
-    * Batches are flushed based on the batch size or time sent since the first message
-      in the batch was recieved (e.g. "500 items or 1000ms")
-    * Consumer offsets are not automatically committed! If they were, offsets might be committed
-      for messages that are still sitting in an in-memory batch, or they might *not* be committed
-      when messages are sent to an external datastore right before the consumer process dies
-    * Instead, when a batch of items is flushed they are written to the external datastore and
-      then consumer offsets are immediately committed (in the same thread/loop)
-    * Users need only provide an implementation of what it means to process a raw message
-      and flush a batch of events
-
-    NOTE: This does not eliminate the possibility of duplicates if the consumer process
-    crashes between writing to its backend and commiting offsets. This should eliminate
-    the possibility of *losing* data though. An "exactly once" consumer would need to store
-    offsets in the external datastore and reconcile them on any partition rebalance.
-    """
-
+class BatchProcessingStrategyFactory(ProcessingStrategyFactory[TPayload]):
     def __init__(
         self,
-        consumer: Consumer[TPayload],
-        topic: Topic,
         worker: AbstractBatchWorker[TPayload, TResult],
         max_batch_size: int,
         max_batch_time: int,
         metrics: MetricsBackend,
-        recoverable_errors: Optional[Sequence[Type[ConsumerError]]] = None,
     ) -> None:
-        self.__consumer = consumer
+        self.__worker = worker
+        self.__max_batch_size = max_batch_size
+        self.__max_batch_time = max_batch_time
+        self.__metrics = metrics
 
-        self.__processor_factory = partial(
-            BatchProcessor, consumer, worker, max_batch_size, max_batch_time, metrics
+    def create(
+        self, commit: Callable[[Mapping[Partition, int]], None]
+    ) -> ProcessingStrategy[TPayload]:
+        return BatchProcessingStrategy(
+            commit,
+            self.__worker,
+            self.__max_batch_size,
+            self.__max_batch_time,
+            self.__metrics,
         )
-
-        self.__processor: Optional[BatchProcessor] = None
-
-        self.__shutdown_requested = False
-
-        # The types passed to the `except` clause must be a tuple, not a Sequence.
-        self.__recoverable_errors = tuple(recoverable_errors or [])
-
-        def on_partitions_assigned(partitions: Mapping[Partition, int]) -> None:
-            assert (
-                self.__processor is None
-            ), "received unexpected assignment with existing active processor"
-
-            logger.info("New partitions assigned: %r", partitions)
-            self.__processor = self.__processor_factory()
-
-        def on_partitions_revoked(partitions: Sequence[Partition]) -> None:
-            "Reset the current in-memory batch, letting the next consumer take over where we left off."
-            assert (
-                self.__processor is not None
-            ), "received unexpected revocation without active processor"
-
-            logger.info("Partitions revoked: %r", partitions)
-            self.__processor.close()
-            self.__processor = None
-
-        self.__consumer.subscribe(
-            [topic], on_assign=on_partitions_assigned, on_revoke=on_partitions_revoked
-        )
-
-    def run(self) -> None:
-        "The main run loop, see class docstring for more information."
-
-        logger.debug("Starting")
-        while not self.__shutdown_requested:
-            self._run_once()
-
-        self._shutdown()
-
-    def _run_once(self) -> None:
-        try:
-            msg = self.__consumer.poll(timeout=1.0)
-        except self.__recoverable_errors:
-            return
-
-        if self.__processor is not None:
-            self.__processor.process(msg)
-        else:
-            assert msg is None, "received message without active processor"
-
-    def signal_shutdown(self) -> None:
-        """Tells the batching consumer to shutdown on the next run loop iteration.
-        Typically called from a signal handler."""
-        logger.debug("Shutdown signalled")
-
-        self.__shutdown_requested = True
-
-    def _shutdown(self) -> None:
-        # close the consumer
-        logger.debug("Stopping consumer")
-        self.__consumer.close()
-        logger.debug("Stopped")
-
-        # if there was an active processor, it should be shut down and unset
-        # when the partitions are revoked during consumer close
-        assert self.__processor is None, "processor was not closed on shutdown"

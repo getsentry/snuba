@@ -1,7 +1,7 @@
 from copy import deepcopy
 
-from tests.base import BaseEventsTest
 from snuba import state
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.events import EventsQueryStorageSelector
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
@@ -10,16 +10,12 @@ from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.util import tuplify
+from tests.base import BaseEventsTest
 
 
 class TestEventsDataset(BaseEventsTest):
     def test_column_expr(self):
-        source = (
-            self.dataset.get_all_storages()[0]
-            .get_schemas()
-            .get_read_schema()
-            .get_data_source()
-        )
+        source = self.dataset.get_all_storages()[0].get_schema().get_data_source()
         query = Query({"granularity": 86400}, source,)
         # Single tag expression
         assert (
@@ -170,12 +166,7 @@ class TestEventsDataset(BaseEventsTest):
         )
 
     def test_alias_in_alias(self):
-        source = (
-            self.dataset.get_all_storages()[0]
-            .get_schemas()
-            .get_read_schema()
-            .get_data_source()
-        )
+        source = self.dataset.get_all_storages()[0].get_schema().get_data_source()
         query = Query({"groupby": ["tags_key", "tags_value"]}, source,)
         context = ParsingContext()
         assert column_expr(self.dataset, "tags_key", query, context) == (
@@ -203,12 +194,7 @@ class TestEventsDataset(BaseEventsTest):
 
         This test is supposed to cover those cases.
         """
-        source = (
-            self.dataset.get_all_storages()[0]
-            .get_schemas()
-            .get_read_schema()
-            .get_data_source()
-        )
+        source = self.dataset.get_all_storages()[0].get_schema().get_data_source()
         query = Query({}, source)
         # Columns that start with a negative sign (used in orderby to signify
         # sort order) retain the '-' sign outside the escaping backticks (if any)
@@ -273,6 +259,36 @@ class TestEventsDataset(BaseEventsTest):
             == "-(nullIf(group_id, 0) AS group_id)"
         )
 
+    def test_tags_hash_map(self) -> None:
+        """
+        Adds an event and ensures the tags_hash_map is properly populated
+        including escaping.
+        """
+
+        self.event["data"]["tags"].append(["test_tag1", "value1"])
+        self.event["data"]["tags"].append(["test_tag=2", "value2"])  # Requires escaping
+        self.write_events([self.event])
+
+        clickhouse = (
+            get_storage(StorageKey.EVENTS)
+            .get_cluster()
+            .get_query_connection(ClickhouseClientSettings.QUERY)
+        )
+
+        hashed = clickhouse.execute(
+            "SELECT cityHash64('test_tag1=value1'), cityHash64('test_tag\\\\=2=value2')"
+        )
+        tag1, tag2 = hashed[0]
+
+        event = clickhouse.execute(
+            (
+                f"SELECT event_id FROM sentry_local WHERE has(_tags_hash_map, {tag1}) "
+                f"AND has(_tags_hash_map, {tag2})"
+            )
+        )
+        assert len(event) == 1
+        assert event[0][0] == self.event["data"]["id"]
+
 
 def test_storage_selector() -> None:
     state.set_config("enable_events_readonly_table", True)
@@ -280,7 +296,7 @@ def test_storage_selector() -> None:
     storage = get_storage(StorageKey.EVENTS)
     storage_ro = get_storage(StorageKey.EVENTS_RO)
 
-    query = Query({}, storage.get_schemas().get_read_schema().get_data_source())
+    query = Query({}, storage.get_schema().get_data_source())
 
     storage_selector = EventsQueryStorageSelector(storage, storage_ro)
     assert (

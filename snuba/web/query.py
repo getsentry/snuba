@@ -5,7 +5,7 @@ from functools import partial
 
 import sentry_sdk
 
-from snuba import environment, settings, state
+from snuba import environment
 from snuba.clickhouse.astquery import AstSqlQuery
 from snuba.clickhouse.dictquery import DictSqlQuery
 from snuba.clickhouse.query import Query
@@ -13,6 +13,8 @@ from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.timeseries_extension import TimeSeriesExtensionProcessor
+from snuba.querylog import record_query
+from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
@@ -22,7 +24,6 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
 from snuba.web.ast_rollout import is_ast_rolled_out
 from snuba.web.db_query import raw_query
-from snuba.web.query_metadata import SnubaQueryMetadata
 
 logger = logging.getLogger("snuba.query")
 
@@ -203,27 +204,4 @@ def _format_storage_query_and_run(
             query_metadata,
             stats,
             span.trace_id,
-        )
-
-
-def record_query(
-    request: Request, timer: Timer, query_metadata: SnubaQueryMetadata
-) -> None:
-    if settings.RECORD_QUERIES:
-        # Send to redis
-        # We convert this to a dict before passing it to state in order to avoid a
-        # circular dependency, where state would depend on the higher level
-        # QueryMetadata class
-        state.record_query(query_metadata.to_dict())
-
-        final = str(request.query.get_final())
-        referrer = request.referrer or "none"
-        timer.send_metrics_to(
-            metrics,
-            tags={
-                "status": query_metadata.status,
-                "referrer": referrer,
-                "final": final,
-            },
-            mark_tags={"final": final},
         )

@@ -74,7 +74,7 @@ class QuerylogProcessor(MessageProcessor):
             "clickhouse_queries.consistent": consistent,
         }
 
-    def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
+    def process_message(self, message, metadata) -> Optional[ProcessedMessage]:
         projects = message["request"]["body"].get("project", [])
         if not isinstance(projects, (list, tuple)):
             projects = [projects]

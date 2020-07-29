@@ -10,11 +10,7 @@ from snuba.request.request_settings import HTTPRequestSettings
 
 def get_dataset_source(dataset_name):
     return (
-        get_dataset(dataset_name)
-        .get_all_storages()[0]
-        .get_schemas()
-        .get_read_schema()
-        .get_data_source()
+        get_dataset(dataset_name).get_all_storages()[0].get_schema().get_data_source()
     )
 
 

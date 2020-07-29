@@ -8,39 +8,30 @@ from hashlib import md5
 from typing import Iterator, MutableSequence, Optional, Sequence
 
 from snuba import settings
-from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.processor import InsertBatch, ProcessedMessage
 from snuba.redis import redis_client
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.writer import WriterTableRow
 from tests.fixtures import raw_event
 
 
 @contextmanager
 def dataset_manager(name: str) -> Iterator[Dataset]:
+    from snuba.migrations.migrate import run
+    from snuba.web.views import truncate_dataset
+
     dataset = get_dataset(name)
-
-    for storage in dataset.get_all_storages():
-        clickhouse = storage.get_cluster().get_query_connection(
-            ClickhouseClientSettings.MIGRATE
-        )
-        for statement in storage.get_schemas().get_drop_statements():
-            clickhouse.execute(statement.statement)
-
-        for statement in storage.get_schemas().get_create_statements():
-            clickhouse.execute(statement.statement)
+    run()
+    truncate_dataset(dataset)
 
     try:
         yield dataset
     finally:
-        for storage in dataset.get_all_storages():
-            clickhouse = storage.get_cluster().get_query_connection(
-                ClickhouseClientSettings.MIGRATE
-            )
-            for statement in storage.get_schemas().get_drop_statements():
-                clickhouse.execute(statement.statement)
+        truncate_dataset(dataset)
 
 
 class BaseTest(object):
@@ -77,7 +68,9 @@ class BaseDatasetTest(BaseTest):
         self.write_rows(rows)
 
     def write_rows(self, rows: Sequence[WriterTableRow]) -> None:
-        enforce_table_writer(self.dataset).get_writer().write(rows)
+        enforce_table_writer(self.dataset).get_writer(
+            metrics=DummyMetricsBackend(strict=True)
+        ).write(rows)
 
 
 class BaseEventsTest(BaseDatasetTest):
@@ -135,8 +128,10 @@ class BaseEventsTest(BaseDatasetTest):
         )
 
         processed_messages = []
-        for event in events:
-            processed_message = processor.process_message((2, "insert", event, {}))
+        for i, event in enumerate(events):
+            processed_message = processor.process_message(
+                (2, "insert", event, {}), KafkaMessageMetadata(i, 0, datetime.now())
+            )
             assert processed_message is not None
             processed_messages.append(processed_message)
 

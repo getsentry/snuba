@@ -3,7 +3,6 @@ from snuba.clickhouse.columns import (
     Array,
     ColumnSet,
     DateTime,
-    Enum,
     Float,
     LowCardinality,
     Nested,
@@ -13,15 +12,12 @@ from snuba.clickhouse.columns import (
     UUID,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.querylog_processor import QuerylogProcessor
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader
 
-
-status_type = Enum([("success", 0), ("error", 1), ("rate-limited", 2)])
 
 columns = ColumnSet(
     [
@@ -33,13 +29,13 @@ columns = ColumnSet(
         ("organization", Nullable(UInt(64))),
         ("timestamp", DateTime()),
         ("duration_ms", UInt(32)),
-        ("status", status_type),
+        ("status", LowCardinality(String())),
         (
             "clickhouse_queries",
             Nested(
                 [
                     ("sql", String()),
-                    ("status", status_type),
+                    ("status", LowCardinality(String())),
                     ("trace_id", Nullable(UUID())),
                     ("duration_ms", UInt(32)),
                     ("stats", String()),
@@ -73,7 +69,7 @@ schema = WritableTableSchema(
 storage = WritableTableStorage(
     storage_key=StorageKey.QUERYLOG,
     storage_set_key=StorageSetKey.QUERYLOG,
-    schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+    schema=schema,
     query_processors=[],
     stream_loader=KafkaStreamLoader(
         processor=QuerylogProcessor(), default_topic=settings.QUERIES_TOPIC,

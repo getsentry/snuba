@@ -2,7 +2,6 @@ from typing import Mapping, Sequence
 
 from snuba.clickhouse.columns import ColumnType
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
@@ -19,6 +18,7 @@ from snuba.datasets.storages.events_common import (
     query_processors,
     query_splitters,
     required_columns,
+    TAGS_HASH_MAP_COLUMN,
 )
 
 from snuba.datasets.table_storage import KafkaStreamLoader
@@ -80,6 +80,14 @@ def events_migrations(
             f"ALTER TABLE {clickhouse_table} ADD COLUMN message_timestamp DateTime AFTER partition"
         )
 
+    if "_tags_hash_map" not in current_schema:
+        ret.append(
+            (
+                f"ALTER TABLE {clickhouse_table} ADD COLUMN _tags_hash_map Array(UInt64) "
+                f"MATERIALIZED {TAGS_HASH_MAP_COLUMN} AFTER _tags_flattened"
+            )
+        )
+
     return ret
 
 
@@ -97,13 +105,19 @@ schema = ReplacingMergeTreeSchema(
     version_column="deleted",
     sample_expr=sample_expr,
     migration_function=events_migrations,
+    # Tags hashmap is a materialized column. Clickhouse does not allow
+    # us to create a materialized column that references a nested one
+    # during create statement
+    # (https://github.com/ClickHouse/ClickHouse/issues/12586), so the
+    # materialization is added with a migration.
+    skipped_cols_on_creation={"_tags_hash_map"},
 )
 
 
 storage = WritableTableStorage(
     storage_key=StorageKey.EVENTS,
     storage_set_key=StorageSetKey.EVENTS,
-    schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+    schema=schema,
     query_processors=query_processors,
     stream_loader=KafkaStreamLoader(
         processor=EventsProcessor(promoted_tag_columns),

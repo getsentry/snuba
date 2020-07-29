@@ -1,11 +1,22 @@
 import re
 from dataclasses import replace
-from typing import Any, Iterable, List, Optional, Tuple, Union
+from enum import Enum
+from typing import (
+    Any,
+    Callable,
+    Iterable,
+    List,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
-from snuba.query.dsl import multiply, plus
+from snuba.query.dsl import divide, minus, multiply, plus
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -13,12 +24,14 @@ from snuba.query.expressions import (
     FunctionCall,
     Literal,
 )
+from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.functions import parse_function_to_expr
 from snuba.query.parser.strings import parse_string_to_expr
 from snuba.util import is_function
 
 FUNCTION_NAME_REGEX = r"[a-zA-Z_][a-zA-Z0-9_]*"
 FUNCTION_NAME_RE = re.compile(FUNCTION_NAME_REGEX)
+
 
 minimal_clickhouse_grammar = Grammar(
     fr"""
@@ -27,9 +40,13 @@ minimal_clickhouse_grammar = Grammar(
 # name of a clickhouse function.
 
 root_element          = low_pri_arithmetic
-low_pri_arithmetic    = space* (high_pri_arithmetic) space* (("+" low_pri_arithmetic) / empty)
-high_pri_arithmetic   = space* arithmetic_term space* (("*" high_pri_arithmetic) / empty)
-arithmetic_term       = function_call / numeric_literal / column_name
+low_pri_arithmetic    = space* high_pri_arithmetic space* (low_pri_tuple)*
+high_pri_arithmetic   = space* arithmetic_term space* (high_pri_tuple)*
+low_pri_tuple         = low_pri_op high_pri_arithmetic
+high_pri_tuple        = high_pri_op arithmetic_term
+arithmetic_term       = (space*) (function_call / numeric_literal / column_name) (space*)
+low_pri_op            = "+" / "-"
+high_pri_op           = "/" / "*"
 param_expression      = low_pri_arithmetic / quoted_literal
 parameters_list       = parameter* (param_expression)
 parameter             = param_expression space* comma space*
@@ -45,9 +62,56 @@ open_paren            = "("
 close_paren           = ")"
 space                 = " "
 comma                 = ","
-empty                 = ""
 """
 )
+
+
+class LowPriOperator(Enum):
+    PLUS = "+"
+    MINUS = "-"
+
+
+class HighPriOperator(Enum):
+    MULTIPLY = "*"
+    DIVIDE = "/"
+
+
+class LowPriTuple(NamedTuple):
+    op: LowPriOperator
+    arithm: Expression
+
+
+class HighPriTuple(NamedTuple):
+    op: HighPriOperator
+    arithm: Expression
+
+
+HighPriArithmetic = Union[Node, HighPriTuple, Sequence[HighPriTuple]]
+LowPriArithmetic = Union[Node, LowPriTuple, Sequence[LowPriTuple]]
+
+
+def get_arithmetic_function(
+    operator: Enum,
+) -> Callable[[Expression, Expression, Optional[str]], FunctionCall]:
+    return {
+        HighPriOperator.MULTIPLY: multiply,
+        HighPriOperator.DIVIDE: divide,
+        LowPriOperator.PLUS: plus,
+        LowPriOperator.MINUS: minus,
+    }[operator]
+
+
+def get_arithmetic_expression(
+    term: Expression, exp: Union[LowPriArithmetic, HighPriArithmetic],
+) -> Expression:
+    if isinstance(exp, Node):
+        return term
+    if isinstance(exp, (LowPriTuple, HighPriTuple)):
+        return get_arithmetic_function(exp.op)(term, exp.arithm, None)
+    elif isinstance(exp, list):
+        for elem in exp:
+            term = get_arithmetic_function(elem.op)(term, elem.arithm, None)
+    return term
 
 
 class ClickhouseVisitor(NodeVisitor):
@@ -61,44 +125,56 @@ class ClickhouseVisitor(NodeVisitor):
     def visit_column_name(self, node: Node, visited_children: Iterable[Any]) -> Column:
         return Column(None, None, node.text)
 
-    def visit_empty(
+    def visit_low_pri_tuple(
+        self, node: Node, visited_children: Tuple[LowPriOperator, Expression]
+    ) -> LowPriTuple:
+        left, right = visited_children
+
+        return LowPriTuple(op=left, arithm=right)
+
+    def visit_high_pri_tuple(
+        self, node: Node, visited_children: Tuple[HighPriOperator, Expression]
+    ) -> HighPriTuple:
+        left, right = visited_children
+
+        return HighPriTuple(op=left, arithm=right)
+
+    def visit_low_pri_op(
         self, node: Node, visited_children: Iterable[Any]
-    ) -> Optional[Expression]:
-        return None
+    ) -> LowPriOperator:
+
+        return LowPriOperator(node.text)
+
+    def visit_high_pri_op(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> HighPriOperator:
+
+        return HighPriOperator(node.text)
+
+    def visit_arithmetic_term(
+        self, node: Node, visited_children: Tuple[Any, Expression, Any]
+    ) -> Expression:
+        _, term, _ = visited_children
+
+        return term
 
     def visit_low_pri_arithmetic(
         self,
         node: Node,
-        visited_children: Tuple[Any, Expression, Any, Tuple[str, Expression]],
+        visited_children: Tuple[Any, Expression, Any, LowPriArithmetic],
     ) -> Expression:
         _, term, _, exp = visited_children
 
-        if exp is None:
-            # A check for any None child nodes
-            # that arose from empty space ''
-            return term
-        else:
-            # return exp[1] because
-            # exp[0] is a string which
-            # represents the operator
-            return plus(term, exp[1])
+        return get_arithmetic_expression(term, exp)
 
     def visit_high_pri_arithmetic(
         self,
         node: Node,
-        visited_children: Tuple[Any, Expression, Any, Tuple[str, Expression]],
+        visited_children: Tuple[Any, Expression, Any, HighPriArithmetic],
     ) -> Expression:
-        _, factor, _, term = visited_children
+        _, term, _, exp = visited_children
 
-        if term is None:
-            # A check for any None child nodes
-            # that arose from empty space ''
-            return factor
-        else:
-            # return term[1] because
-            # term[0] is a string which
-            # represents the operator
-            return multiply(factor, term[1])
+        return get_arithmetic_expression(term, exp)
 
     def visit_numeric_literal(
         self, node: Node, visited_children: Iterable[Any]
@@ -184,7 +260,9 @@ def parse_expression(val: Any) -> Expression:
         return parse_function_to_expr(val)
     if isinstance(val, str):
         return parse_string_to_expr(val)
-    raise ValueError(f"Expression to parse can only be a function or a string: {val}")
+    raise ParsingException(
+        f"Expression to parse can only be a function or a string: {val}"
+    )
 
 
 def parse_aggregation(
@@ -210,7 +288,13 @@ def parse_aggregation(
     if matched is not None:
         return FunctionCall(alias, aggregation_function, tuple(columns_expr))
 
-    expression_tree = minimal_clickhouse_grammar.parse(aggregation_function)
+    try:
+        expression_tree = minimal_clickhouse_grammar.parse(aggregation_function)
+    except Exception as cause:
+        raise ParsingException(
+            f"Cannot parse aggregation {aggregation_function}", cause
+        ) from cause
+
     parsed_expression = ClickhouseVisitor().visit(expression_tree)
 
     if (
@@ -227,4 +311,6 @@ def parse_aggregation(
         return CurriedFunctionCall(alias, parsed_expression, tuple(columns_expr),)
 
     else:
-        raise ValueError(f"Invalid aggregation format {aggregation_function} {column}")
+        raise ParsingException(
+            f"Invalid aggregation format {aggregation_function} {column}"
+        )
