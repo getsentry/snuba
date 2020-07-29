@@ -8,6 +8,7 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
+from snuba.query.validation import ExpressionValidator
 from snuba.util import parse_datetime, qualified_column
 
 
@@ -132,6 +133,14 @@ class Dataset(object):
         a condition before it is added to the query.
         """
         return condition
+
+    def get_expression_validators(self) -> Sequence[ExpressionValidator]:
+        """
+        Provides the a sequence of expression validators for this dataset.
+        The typical use case is validating that calls to dataset specific
+        functions are well formed.
+        """
+        return []
 
 
 class TimeSeriesDataset(Dataset):

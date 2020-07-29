@@ -25,6 +25,7 @@ from snuba.query.parser.exceptions import (
     ParsingException,
 )
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
+from snuba.query.parser.validator import validate_query
 from snuba.util import is_function, to_list, tuplify
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 
@@ -70,6 +71,7 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     # WARNING: These steps above assume table resolution did not happen
     # yet. If it is put earlier than here (unlikely), we need to adapt them.
     _deescape_aliases(query)
+    validate_query(query, dataset)
     return query
 
 
