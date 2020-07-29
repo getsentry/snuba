@@ -70,8 +70,8 @@ class EventsLoader(DirectoryLoader):
             "0003_errors",
             "0004_errors_onpremise_compatibility",
             "0005_events_tags_hash_map",
-            "0005_groupedmessages",
-            "0006_groupassignees",
+            "0006_groupedmessages",
+            "0007_groupassignees",
         ]
 
 
