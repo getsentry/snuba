@@ -7,7 +7,6 @@ from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-
 from snuba.datasets.storages.events_common import (
     all_columns,
     get_promoted_tags,
@@ -18,9 +17,8 @@ from snuba.datasets.storages.events_common import (
     query_processors,
     query_splitters,
     required_columns,
-    TAGS_HASH_MAP_COLUMN,
 )
-
+from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.datasets.table_storage import KafkaStreamLoader
 
 

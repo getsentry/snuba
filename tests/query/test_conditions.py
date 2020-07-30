@@ -5,8 +5,13 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
     get_first_level_or_conditions,
     is_binary_condition,
+    is_condition,
     is_in_condition,
     is_in_condition_pattern,
+    is_not_in_condition,
+    is_not_in_condition_pattern,
+    is_unary_condition,
+    unary_condition,
 )
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
@@ -142,7 +147,7 @@ def test_nested_simple_condition() -> None:
     assert ret == expected
 
 
-def test_processing_functions() -> None:
+def test_in_condition() -> None:
     in_condition = binary_condition(
         None,
         ConditionFunctions.IN,
@@ -160,11 +165,44 @@ def test_processing_functions() -> None:
     )
     assert match.expression("lhs") == Column(None, None, "tags_key")
 
+
+def test_not_in_condition() -> None:
+    not_in_condition = binary_condition(
+        None,
+        ConditionFunctions.NOT_IN,
+        Column(None, None, "tags_key"),
+        literals_tuple(None, [Literal(None, "t1"), Literal(None, "t2")]),
+    )
+    assert is_not_in_condition(not_in_condition)
+
+    match = is_not_in_condition_pattern(
+        ColumnPattern(None, None, String("tags_key"))
+    ).match(not_in_condition)
+    assert match is not None
+    assert match.expression("tuple") == literals_tuple(
+        None, [Literal(None, "t1"), Literal(None, "t2")]
+    )
+    assert match.expression("lhs") == Column(None, None, "tags_key")
+
+
+def test_is_x_condition_functions() -> None:
     eq_condition = binary_condition(
         None, ConditionFunctions.EQ, Column(None, None, "test"), Literal(None, "1")
     )
     assert is_binary_condition(eq_condition, ConditionFunctions.EQ)
     assert not is_binary_condition(eq_condition, ConditionFunctions.NEQ)
+
+    un_condition = unary_condition(
+        None, ConditionFunctions.IS_NOT_NULL, Column(None, None, "test")
+    )
+    assert is_unary_condition(un_condition, ConditionFunctions.IS_NOT_NULL)
+    assert not is_unary_condition(un_condition, ConditionFunctions.IS_NULL)
+    assert not is_unary_condition(eq_condition, ConditionFunctions.IS_NOT_NULL)
+
+    almost_condition = FunctionCall(None, "isNotNullish", (Column(None, None, "test"),))
+    assert is_condition(eq_condition)
+    assert is_condition(un_condition)
+    assert not is_condition(almost_condition)
 
 
 def test_first_level_conditions() -> None:
