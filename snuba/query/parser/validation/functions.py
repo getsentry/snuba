@@ -5,12 +5,9 @@ from typing import Mapping
 from snuba.clickhouse.columns import String
 from snuba.datasets.dataset import Dataset
 from snuba.query.expressions import Expression, FunctionCall
-from snuba.query.parser.exceptions import (
-    FunctionValidationException,
-    ValidationException,
-)
+from snuba.query.parser.exceptions import InvalidExpressionException
 from snuba.query.parser.validation import ExpressionValidator
-from snuba.query.validation import FunctionCallValidator
+from snuba.query.validation import FunctionCallValidator, InvalidFunctionCallException
 from snuba.query.validation.signature import AnyType, ColumnType, SignatureValidator
 from snuba.state import get_config
 
@@ -51,10 +48,11 @@ class FunctionCallsValidator(ExpressionValidator):
             validator = validators.get(exp.function_name)
             if validator is not None:
                 validator.validate(exp.parameters, dataset.get_abstract_columnset())
-        except ValidationException as exception:
+        except InvalidFunctionCallException as exception:
             if get_config("enforce_expression_validation", 0):
-                raise FunctionValidationException(
-                    f"Illegal call to function {exp.function_name}: {str(exception)}"
+                raise InvalidExpressionException(
+                    exp,
+                    f"Illegal call to function {exp.function_name}: {str(exception)}",
                 ) from exception
             else:
                 logger.warning("Query validation exception", exc_info=True)

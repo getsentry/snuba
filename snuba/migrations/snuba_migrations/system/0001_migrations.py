@@ -35,7 +35,9 @@ class Migration(migration.Migration):
                 table_name="migrations_local",
                 columns=columns,
                 engine=ReplacingMergeTree(
-                    version_column="version", order_by="(group, migration_id)"
+                    storage_set=StorageSetKey.MIGRATIONS,
+                    version_column="version",
+                    order_by="(group, migration_id)",
                 ),
             ),
         ]

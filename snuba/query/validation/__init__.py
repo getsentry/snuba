@@ -5,11 +5,15 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.query.expressions import Expression
 
 
+class InvalidFunctionCallException(Exception):
+    pass
+
+
 class FunctionCallValidator(ABC):
     """
     Validates the signature of a function call given the parameters
     and the schema of the function call.
-    Raise FunctionValidationException to signal an invalid call.
+    Raise InvalidFunctionCall to signal an invalid call.
     """
 
     @abstractmethod

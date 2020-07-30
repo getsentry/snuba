@@ -6,11 +6,7 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.columns import ColumnType as ClickhouseType
 from snuba.query.expressions import Expression
 from snuba.query.matchers import Any, Column, Param
-from snuba.query.parser.exceptions import (
-    FunctionValidationException,
-    ValidationException,
-)
-from snuba.query.validation import FunctionCallValidator
+from snuba.query.validation import FunctionCallValidator, InvalidFunctionCallException
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +43,7 @@ class ColumnType(ParamType):
         match = COLUMN_PATTERN.match(expression)
         if match is None:
             if self.__column_required:
-                raise FunctionValidationException(
+                raise InvalidFunctionCallException(
                     f"Illegal expression: {expression}. Column required."
                 )
             else:
@@ -64,7 +60,7 @@ class ColumnType(ParamType):
 
         column_type = column.type.get_raw()
         if not isinstance(column_type, tuple(self.__valid_types)):
-            raise FunctionValidationException(
+            raise InvalidFunctionCallException(
                 (
                     f"Illegal type {type(column_type)} of argument "
                     f"{column_name}. Required types {self.__valid_types}"
@@ -92,7 +88,7 @@ class SignatureValidator(FunctionCallValidator):
     def validate(self, parameters: Sequence[Expression], schema: ColumnSet) -> None:
         try:
             self.__validate_impl(parameters, schema)
-        except ValidationException as exception:
+        except InvalidFunctionCallException as exception:
             if self.__enforce:
                 raise exception
             else:
@@ -104,12 +100,12 @@ class SignatureValidator(FunctionCallValidator):
         self, parameters: Sequence[Expression], schema: ColumnSet
     ) -> None:
         if len(parameters) < len(self.__param_types):
-            raise FunctionValidationException(
+            raise InvalidFunctionCallException(
                 f"Too few arguments for function call. Required {self.__param_types}"
             )
 
         if not self.__allow_optionals and len(parameters) > len(self.__param_types):
-            raise FunctionValidationException(
+            raise InvalidFunctionCallException(
                 f"Too many arguments for function call. Required {self.__param_types}"
             )
 

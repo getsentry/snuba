@@ -4,7 +4,7 @@ import pytest
 
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, String
 from snuba.query.expressions import Column, Expression, Literal
-from snuba.query.parser.exceptions import ValidationException
+from snuba.query.validation import InvalidFunctionCallException
 from snuba.query.validation.signature import (
     AnyType,
     ColumnType,
@@ -77,7 +77,7 @@ def test_like_validator(
     validator = SignatureValidator(expected_types, mandatory)
 
     if should_rise:
-        with pytest.raises(ValidationException):
+        with pytest.raises(InvalidFunctionCallException):
             validator.validate(expressions, schema)
     else:
         validator.validate(expressions, schema)

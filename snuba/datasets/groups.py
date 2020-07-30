@@ -37,13 +37,10 @@ from snuba.util import qualified_column
 
 class JoinedStorage(ReadableStorage):
     def __init__(
-        self,
-        storage_key: StorageKey,
-        storage_set_key: StorageSetKey,
-        join_structure: JoinClause,
+        self, storage_set_key: StorageSetKey, join_structure: JoinClause,
     ) -> None:
         self.__structure = join_structure
-        super().__init__(storage_key, storage_set_key, JoinedSchema(self.__structure))
+        super().__init__(storage_set_key, JoinedSchema(self.__structure))
 
     def get_table_writer(self) -> Optional[TableWriter]:
         return None
@@ -133,7 +130,7 @@ class Groups(TimeSeriesDataset):
         )
 
         schema = JoinedSchema(join_structure)
-        storage = JoinedStorage(StorageKey.GROUPS, StorageSetKey.EVENTS, join_structure)
+        storage = JoinedStorage(StorageSetKey.EVENTS, join_structure)
         self.__time_group_columns = {"events.time": "events.timestamp"}
         super().__init__(
             storages=[storage],
