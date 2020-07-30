@@ -30,24 +30,21 @@ class ColumnType(ParamType):
     """
     Validates the that the type of a Column expression is in a set
     of allowed types.
+
+    If the expression provided is not a Column, it accepts it.
+    We may consider later whether we want to enforce only column
+    expressions can be passed as arguments in certain functions.
     """
 
     def __init__(
         self, types: Set[Type[ClickhouseType]], column_required: bool = False,
     ) -> None:
         self.__valid_types = types
-        # If true, this will fail if the expression is not a simple column.
-        self.__column_required = column_required
 
     def validate(self, expression: Expression, schema: ColumnSet) -> None:
         match = COLUMN_PATTERN.match(expression)
         if match is None:
-            if self.__column_required:
-                raise InvalidFunctionCallException(
-                    f"Illegal expression: {expression}. Column required."
-                )
-            else:
-                return
+            return
 
         column_name = match.string("column_name")
         column = schema.get(column_name)
@@ -80,6 +77,11 @@ class SignatureValidator(FunctionCallValidator):
         enforce: bool = True,
     ):
         self.__param_types = param_types
+        # Allow optionals, if True, lets the validator accept functions with
+        # an arbitrary number of extra parameters after those it validates.
+        # It would validate the function call against the sequence of parameters
+        # the validator is instantiated with and accept anything else beyond
+        # such sequence.
         self.__allow_optionals = allow_optionals
         # If False it would simply log invalid functions instead of raising
         # exceptions.

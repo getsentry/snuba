@@ -57,13 +57,13 @@ test_cases = [
 
 
 @pytest.mark.parametrize(
-    "expressions, expected_types, mandatory, should_rise", test_cases
+    "expressions, expected_types, mandatory, should_raise", test_cases
 )
 def test_like_validator(
     expressions: Sequence[Expression],
     expected_types: Sequence[ParamType],
     mandatory: bool,
-    should_rise: bool,
+    should_raise: bool,
 ) -> None:
     schema = ColumnSet(
         [
@@ -76,7 +76,7 @@ def test_like_validator(
 
     validator = SignatureValidator(expected_types, mandatory)
 
-    if should_rise:
+    if should_raise:
         with pytest.raises(InvalidFunctionCallException):
             validator.validate(expressions, schema)
     else:
