@@ -36,6 +36,7 @@ class Migration(migration.MultiStepMigration):
                     storage_set=StorageSetKey.EVENTS,
                     version_column="offset",
                     order_by="(project_id, group_id)",
+                    unsharded=True,
                 ),
             )
         ]

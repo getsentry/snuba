@@ -43,6 +43,7 @@ class Migration(migration.MultiStepMigration):
                     version_column="offset",
                     order_by="(project_id, id)",
                     sample_by="id",
+                    unsharded=True,
                 ),
             )
         ]
