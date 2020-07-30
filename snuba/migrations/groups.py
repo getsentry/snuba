@@ -70,6 +70,7 @@ class EventsLoader(DirectoryLoader):
             "0003_errors",
             "0004_errors_onpremise_compatibility",
             "0005_events_tags_hash_map",
+            "0006_errors_tags_hash_map",
             "0006_groupedmessages",
             "0007_groupassignees",
         ]
@@ -84,6 +85,7 @@ class TransactionsLoader(DirectoryLoader):
             "0001_transactions",
             "0002_transactions_onpremise_fix_orderby_and_partitionby",
             "0003_transactions_onpremise_fix_columns",
+            "0004_transactions_add_tags_hash_map",
         ]
 
 
