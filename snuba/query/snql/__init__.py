@@ -1,6 +1,6 @@
+from parsimonious.grammar import Grammar
 from snuba.datasets.dataset import Dataset
 from snuba.query.logical import Query
-from parsimonious.grammar import Grammar
 
 
 grammar = Grammar(
