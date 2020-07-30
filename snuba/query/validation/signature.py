@@ -1,3 +1,4 @@
+import logging
 from abc import ABC
 from typing import Sequence, Set, Type
 
@@ -5,8 +6,13 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.columns import ColumnType as ClickhouseType
 from snuba.query.expressions import Expression
 from snuba.query.matchers import Any, Column, Param
-from snuba.query.parser.exceptions import FunctionValidationException
+from snuba.query.parser.exceptions import (
+    FunctionValidationException,
+    ValidationException,
+)
 from snuba.query.validation import FunctionCallValidator
+
+logger = logging.getLogger(__name__)
 
 
 class ParamType(ABC):
@@ -31,7 +37,7 @@ class ColumnType(ParamType):
     """
 
     def __init__(
-        self, types: Set[Type[ClickhouseType]], column_required: bool = False
+        self, types: Set[Type[ClickhouseType]], column_required: bool = False,
     ) -> None:
         self.__valid_types = types
         # If true, this will fail if the expression is not a simple column.
@@ -71,11 +77,32 @@ class SignatureValidator(FunctionCallValidator):
     Validates the signature of the function call.
     """
 
-    def __init__(self, param_types: Sequence[ParamType], allow_optionals: bool = False):
+    def __init__(
+        self,
+        param_types: Sequence[ParamType],
+        allow_optionals: bool = False,
+        enforce: bool = True,
+    ):
         self.__param_types = param_types
         self.__allow_optionals = allow_optionals
+        # If False it would simply log invalid functions instead of raising
+        # exceptions.
+        self.__enforce = enforce
 
     def validate(self, parameters: Sequence[Expression], schema: ColumnSet) -> None:
+        try:
+            self.__validate_impl(parameters, schema)
+        except ValidationException as exception:
+            if self.__enforce:
+                raise exception
+            else:
+                logger.warning(
+                    f"Query validation exception. Validator: {self}", exc_info=True
+                )
+
+    def __validate_impl(
+        self, parameters: Sequence[Expression], schema: ColumnSet
+    ) -> None:
         if len(parameters) < len(self.__param_types):
             raise FunctionValidationException(
                 f"Too few arguments for function call. Required {self.__param_types}"
