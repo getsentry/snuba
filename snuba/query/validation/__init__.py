@@ -1,19 +1,17 @@
 from abc import ABC, abstractmethod
+from typing import Sequence
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.query.expressions import Expression
 
 
-class ExpressionValidator(ABC):
+class FunctionCallValidator(ABC):
     """
-    Validates an individual expression in a Snuba logical query.
+    Validates the signature of a function call given the parameters
+    and the schema of the function call.
+    Raise FunctionValidationException to signal an invalid call.
     """
 
     @abstractmethod
-    def validate(self, exp: Expression, schema: ColumnSet) -> None:
-        """
-        If the expression is valid according to this validator it
-        returns, otherwise it raises a subclass of
-        snuba.query.parser.ValidationException
-        """
+    def validate(self, parameters: Sequence[Expression], schema: ColumnSet) -> None:
         raise NotImplementedError

@@ -25,7 +25,7 @@ from snuba.query.parser.exceptions import (
     ParsingException,
 )
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
-from snuba.query.parser.validator import validate_query
+from snuba.query.parser.validation import validate_query
 from snuba.util import is_function, to_list, tuplify
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 

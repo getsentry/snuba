@@ -22,3 +22,7 @@ class CyclicAliasException(ValidationException):
 
 class AliasShadowingException(ValidationException):
     pass
+
+
+class FunctionValidationException(ValidationException):
+    pass
