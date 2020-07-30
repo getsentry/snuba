@@ -23,7 +23,7 @@ class Migration(migration.MultiStepMigration):
         return [
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
-                table_name="sentry_local",
+                table_name="errors_local",
                 column=Column(
                     "_tags_hash_map",
                     Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN),
@@ -35,7 +35,7 @@ class Migration(migration.MultiStepMigration):
     def backwards_local(self) -> Sequence[operations.Operation]:
         return [
             operations.DropColumn(
-                StorageSetKey.EVENTS, "sentry_local", "_tags_hash_map"
+                StorageSetKey.EVENTS, "errors_local", "_tags_hash_map"
             ),
         ]
 
@@ -43,7 +43,7 @@ class Migration(migration.MultiStepMigration):
         return [
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
-                table_name="sentry_dist",
+                table_name="errors_dist",
                 column=Column("_tags_hash_map", Array(UInt(64)),),
                 after="_tags_flattened",
             ),
@@ -51,5 +51,5 @@ class Migration(migration.MultiStepMigration):
 
     def backwards_dist(self) -> Sequence[operations.Operation]:
         return [
-            operations.DropColumn(StorageSetKey.EVENTS, "sentry_dist", "_tags_hash_map")
+            operations.DropColumn(StorageSetKey.EVENTS, "errors_dist", "_tags_hash_map")
         ]
