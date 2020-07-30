@@ -8,12 +8,9 @@ import pytest
 import snuba.query.parser.validation.functions as functions
 from snuba.clickhouse.columns import ColumnSet
 from snuba.query.expressions import Column, Expression, FunctionCall
-from snuba.query.parser.exceptions import (
-    FunctionValidationException,
-    ValidationException,
-)
+from snuba.query.parser.exceptions import InvalidExpressionException
 from snuba.query.parser.validation.functions import FunctionCallsValidator
-from snuba.query.validation import FunctionCallValidator
+from snuba.query.validation import FunctionCallValidator, InvalidFunctionCallException
 from snuba.state import set_config
 
 
@@ -23,7 +20,7 @@ class FakeValidator(FunctionCallValidator):
 
     def validate(self, parameters: Sequence[Expression], schema: ColumnSet) -> None:
         if self.__fails:
-            raise FunctionValidationException()
+            raise InvalidFunctionCallException()
 
         return
 
@@ -33,13 +30,13 @@ test_cases = [
     pytest.param(
         {"f": FakeValidator(True)},
         {},
-        FunctionValidationException,
+        InvalidExpressionException,
         id="Default validator failure",
     ),
     pytest.param(
         {},
         {"f": FakeValidator(True)},
-        FunctionValidationException,
+        InvalidExpressionException,
         id="Dataset validator failure",
     ),
     pytest.param(
@@ -57,7 +54,7 @@ test_cases = [
 def test_functions(
     default_validators: Mapping[str, FunctionCallValidator],
     dataset_validators: Mapping[str, FunctionCallValidator],
-    exception: Optional[Type[ValidationException]],
+    exception: Optional[Type[InvalidExpressionException]],
 ) -> None:
     set_config("enforce_expression_validation", 1)
     functions.default_validators = default_validators
