@@ -2,6 +2,7 @@ import logging
 from collections import ChainMap
 from typing import Mapping
 
+from snuba.clickhouse.columns import String
 from snuba.datasets.dataset import Dataset
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.parser.exceptions import (
@@ -10,11 +11,16 @@ from snuba.query.parser.exceptions import (
 )
 from snuba.query.parser.validation import ExpressionValidator
 from snuba.query.validation import FunctionCallValidator
+from snuba.query.validation.like import AnyType, ColumnType, SignatureValidator
 from snuba.state import get_config
 
 logger = logging.getLogger(__name__)
 
-default_validators: Mapping[str, FunctionCallValidator] = {}
+
+default_validators: Mapping[str, FunctionCallValidator] = {
+    "like": SignatureValidator([ColumnType({String}), AnyType()]),
+    "notLike": SignatureValidator([ColumnType({String}), AnyType()]),
+}
 
 
 class FunctionCallsValidator(ExpressionValidator):
