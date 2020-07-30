@@ -5,10 +5,7 @@ from parsimonious.grammar import Grammar
 
 grammar = Grammar(
     r"""
-    query_exp = "MATCH" overall_clause
-
-    overall_clause = match_clause where_clause? collect_clause? having_clause? order_by_clause?
-
+    query_exp = "MATCH" match_clause where_clause? collect_clause? having_clause? order_by_clause?
     match_clause = space* "(" clause ")" space*
     where_clause = space* "WHERE" clause space*
     collect_clause = space* "COLLECT" clause "BY" clause space*
@@ -19,11 +16,6 @@ grammar = Grammar(
     space = " "
 """
 )
-
-exp_tree = grammar.parse(
-    "MATCH (cake) WHERE icing=chocolate COLLECT soon BY thursday HAVING candles ORDER BY names ASC"
-)
-print(exp_tree)
 
 
 def parse_snql_query(body: str, dataset: Dataset) -> Query:
