@@ -1,6 +1,7 @@
 import pytest
 
 from snuba.clusters.cluster import ClickhouseCluster
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import table_engines
 
 
@@ -30,19 +31,24 @@ multi_node_cluster = ClickhouseCluster(
 
 merge_test_cases = [
     pytest.param(
-        table_engines.MergeTree(order_by="timestamp"),
+        table_engines.MergeTree(storage_set=StorageSetKey.EVENTS, order_by="timestamp"),
         "MergeTree() ORDER BY timestamp",
-        "ReplicatedMergeTree('/clickhouse/tables/{layer}-{shard})/test_table', '{replica}') ORDER BY timestamp",
+        "ReplicatedMergeTree('/clickhouse/tables/events/{shard}/test_table', '{replica}') ORDER BY timestamp",
         id="Merge tree",
     ),
     pytest.param(
-        table_engines.MergeTree(order_by="date", settings={"index_granularity": "256"}),
+        table_engines.MergeTree(
+            storage_set=StorageSetKey.TRANSACTIONS,
+            order_by="date",
+            settings={"index_granularity": "256"},
+        ),
         "MergeTree() ORDER BY date SETTINGS index_granularity=256",
-        "ReplicatedMergeTree('/clickhouse/tables/{layer}-{shard})/test_table', '{replica}') ORDER BY date SETTINGS index_granularity=256",
+        "ReplicatedMergeTree('/clickhouse/tables/transactions/{shard}/test_table', '{replica}') ORDER BY date SETTINGS index_granularity=256",
         id="Merge tree with settings",
     ),
     pytest.param(
         table_engines.ReplacingMergeTree(
+            storage_set=StorageSetKey.EVENTS,
             version_column="timestamp",
             order_by="timestamp",
             partition_by="(toMonday(timestamp))",
@@ -50,8 +56,16 @@ merge_test_cases = [
             ttl="timestamp + INTERVAL 1 MONTH",
         ),
         "ReplacingMergeTree(timestamp) ORDER BY timestamp PARTITION BY (toMonday(timestamp)) SAMPLE BY id TTL timestamp + INTERVAL 1 MONTH",
-        "ReplicatedReplacingMergeTree('/clickhouse/tables/{layer}-{shard})/test_table', '{replica}', timestamp) ORDER BY timestamp PARTITION BY (toMonday(timestamp)) SAMPLE BY id TTL timestamp + INTERVAL 1 MONTH",
+        "ReplicatedReplacingMergeTree('/clickhouse/tables/events/{shard}/test_table', '{replica}', timestamp) ORDER BY timestamp PARTITION BY (toMonday(timestamp)) SAMPLE BY id TTL timestamp + INTERVAL 1 MONTH",
         id="Replicated merge tree with partition, sample, ttl clauses",
+    ),
+    pytest.param(
+        table_engines.MergeTree(
+            storage_set=StorageSetKey.EVENTS, order_by="timestamp", unsharded=True
+        ),
+        "MergeTree() ORDER BY timestamp",
+        "ReplicatedMergeTree('/clickhouse/tables/events/all/test_table', '{replica}') ORDER BY timestamp",
+        id="Unsharded merge tree",
     ),
 ]
 
