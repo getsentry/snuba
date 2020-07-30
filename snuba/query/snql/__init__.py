@@ -5,8 +5,8 @@ from parsimonious.grammar import Grammar
 
 grammar = Grammar(
     r"""
-    query_exp = "MATCH" match_clause where_clause? collect_clause? having_clause? order_by_clause?
-    match_clause = space* "(" clause ")" space*
+    query_exp = match_clause where_clause? collect_clause? having_clause? order_by_clause?
+    match_clause = space* "MATCH" "(" clause ")" space*
     where_clause = space* "WHERE" clause space*
     collect_clause = space* "COLLECT" clause "BY" clause space*
     having_clause = space* "HAVING" clause space*
