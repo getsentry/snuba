@@ -70,6 +70,7 @@ class EventsLoader(DirectoryLoader):
             "0003_errors",
             "0004_errors_onpremise_compatibility",
             "0005_events_tags_hash_map",
+            "0006_errors_tags_hash_map",
         ]
 
 
