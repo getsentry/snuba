@@ -31,15 +31,9 @@ class Storage(ABC):
     for more useful abstractions.
     """
 
-    def __init__(
-        self, storage_key: StorageKey, storage_set_key: StorageSetKey, schema: Schema
-    ):
-        self.__storage_key = storage_key
+    def __init__(self, storage_set_key: StorageSetKey, schema: Schema):
         self.__storage_set_key = storage_set_key
         self.__schema = schema
-
-    def get_storage_key(self) -> StorageKey:
-        return self.__storage_key
 
     def get_storage_set_key(self) -> StorageSetKey:
         return self.__storage_set_key
@@ -110,9 +104,13 @@ class ReadableTableStorage(ReadableStorage):
         query_processors: Optional[Sequence[QueryProcessor]] = None,
         query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
     ) -> None:
+        self.__storage_key = storage_key
         self.__query_processors = query_processors or []
         self.__query_splitters = query_splitters or []
-        super().__init__(storage_key, storage_set_key, schema)
+        super().__init__(storage_set_key, schema)
+
+    def get_storage_key(self) -> StorageKey:
+        return self.__storage_key
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return self.__query_processors
