@@ -19,6 +19,7 @@ from snuba.datasets.storages.events_column_processor import EventsColumnProcesso
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
+from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
@@ -27,7 +28,6 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
-from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 
 metadata_columns = ColumnSet(
     [
