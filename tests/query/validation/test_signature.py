@@ -5,7 +5,7 @@ import pytest
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, String
 from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.parser.exceptions import ValidationException
-from snuba.query.validation.like import (
+from snuba.query.validation.signature import (
     AnyType,
     ColumnType,
     ParamType,

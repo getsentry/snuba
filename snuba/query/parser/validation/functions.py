@@ -11,7 +11,7 @@ from snuba.query.parser.exceptions import (
 )
 from snuba.query.parser.validation import ExpressionValidator
 from snuba.query.validation import FunctionCallValidator
-from snuba.query.validation.like import AnyType, ColumnType, SignatureValidator
+from snuba.query.validation.signature import AnyType, ColumnType, SignatureValidator
 from snuba.state import get_config
 
 logger = logging.getLogger(__name__)

@@ -25,6 +25,11 @@ COLUMN_PATTERN = Column(
 
 
 class ColumnType(ParamType):
+    """
+    Validates the that the type of a Column expression is in a set
+    of allowed types.
+    """
+
     def __init__(
         self, types: Set[Type[ClickhouseType]], column_required: bool = False
     ) -> None:
@@ -63,7 +68,7 @@ class ColumnType(ParamType):
 
 class SignatureValidator(FunctionCallValidator):
     """
-    Validates function calls `like(column, 'literal')`.
+    Validates the signature of the function call.
     """
 
     def __init__(self, param_types: Sequence[ParamType], allow_optionals: bool = False):
