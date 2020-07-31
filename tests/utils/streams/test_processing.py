@@ -5,7 +5,7 @@ import pytest
 
 from snuba.utils.streams.processing import InvalidStateError, StreamProcessor
 from snuba.utils.streams.types import Message, Partition, Topic
-from tests.assertions import assert_changes
+from tests.assertions import assert_changes, assert_does_not_change
 
 
 def test_stream_processor_lifecycle() -> None:
@@ -41,15 +41,22 @@ def test_stream_processor_lifecycle() -> None:
     # Assignment should succeed if no assignment already exxists.
     assignment_callback({Partition(topic, 0): 0})
 
-    with assert_changes(lambda: strategy.process.call_count, 0, 1):
-        consumer.poll.return_value = None
+    # If ``Consumer.poll`` doesn't return a message, we should poll the
+    # processing strategy, but not submit anything for processing.
+    consumer.poll.return_value = None
+    with assert_changes(lambda: strategy.poll.call_count, 0, 1), assert_does_not_change(
+        lambda: strategy.submit.call_count, 0
+    ):
         processor._run_once()
-        assert strategy.process.call_args_list[-1] == mock.call(None)
 
-    with assert_changes(lambda: strategy.process.call_count, 1, 2):
-        consumer.poll.return_value = message
+    # If ``Consumer.poll`` **does** return a message, we should poll the
+    # processing strategy and submit the message for processing.
+    consumer.poll.return_value = message
+    with assert_changes(lambda: strategy.poll.call_count, 1, 2), assert_changes(
+        lambda: strategy.submit.call_count, 0, 1
+    ):
         processor._run_once()
-        assert strategy.process.call_args_list[-1] == mock.call(message)
+        assert strategy.submit.call_args_list[-1] == mock.call(message)
 
     # Assignment should fail if one already exists.
     with pytest.raises(InvalidStateError):

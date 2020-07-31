@@ -30,9 +30,16 @@ class ProcessingStrategy(ABC, Generic[TPayload]):
     """
 
     @abstractmethod
-    def process(self, message: Optional[Message[TPayload]]) -> None:
+    def poll(self) -> None:
         """
-        Process a message, or periodic heartbeat (``None`` value.)
+        Poll the processor.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def submit(self, message: Message[TPayload]) -> None:
+        """
+        Submit a message for processing.
         """
         raise NotImplementedError
 
@@ -140,7 +147,9 @@ class StreamProcessor(Generic[TPayload]):
             return
 
         if self.__processing_strategy is not None:
-            self.__processing_strategy.process(msg)
+            self.__processing_strategy.poll()
+            if msg is not None:
+                self.__processing_strategy.submit(msg)
         else:
             if msg is not None:
                 raise InvalidStateError(
