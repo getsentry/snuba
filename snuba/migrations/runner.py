@@ -72,7 +72,7 @@ class Runner:
 
         return migrations
 
-    def run_migration(self, migration_key: MigrationKey) -> None:
+    def run_migration(self, migration_key: MigrationKey, reverse: bool = False) -> None:
         """
         Run a single migration given its migration key and marks the migration as complete.
         """
@@ -86,7 +86,11 @@ class Runner:
             migration_id, logger, partial(self._update_migration_status, migration_key),
         )
         migration = get_group_loader(migration_key.group).load_migration(migration_id)
-        migration.forwards(context)
+
+        if reverse:
+            migration.backwards(context)
+        else:
+            migration.forwards(context)
 
     def _update_migration_status(
         self, migration_key: MigrationKey, status: Status

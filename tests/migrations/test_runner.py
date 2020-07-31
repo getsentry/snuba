@@ -47,6 +47,19 @@ def test_run_all() -> None:
     assert runner._get_pending_migrations() == []
 
 
+def test_reverse_all() -> None:
+    runner = Runner()
+    all_migrations = runner._get_pending_migrations()
+    runner.run_all()
+    for migration in reversed(all_migrations):
+        runner.run_migration(migration, reverse=True)
+
+    connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
+        ClickhouseClientSettings.MIGRATE
+    )
+    assert connection.execute("SHOW TABLES") == [], "All tables should be deleted"
+
+
 def get_total_migration_count() -> int:
     count = 0
     for group in MigrationGroup:

@@ -84,4 +84,3 @@ class Migration(migration.Migration):
             op.execute()
         # TODO: Run the backwards_dist operations here when multi node clusters are supported
         logger.info(f"Finished reversing: {migration_id}")
-        update_status(Status.NOT_STARTED)
