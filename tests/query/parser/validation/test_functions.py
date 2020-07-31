@@ -10,7 +10,7 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.query.expressions import Column, Expression, FunctionCall
 from snuba.query.parser.exceptions import InvalidExpressionException
 from snuba.query.parser.validation.functions import FunctionCallsValidator
-from snuba.query.validation import FunctionCallValidator, InvalidFunctionCallException
+from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
 from snuba.state import set_config
 
 
@@ -20,7 +20,7 @@ class FakeValidator(FunctionCallValidator):
 
     def validate(self, parameters: Sequence[Expression], schema: ColumnSet) -> None:
         if self.__fails:
-            raise InvalidFunctionCallException()
+            raise InvalidFunctionCall()
 
         return
 
