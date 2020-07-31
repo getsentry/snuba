@@ -7,12 +7,8 @@ from snuba.datasets.dataset import Dataset
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.parser.exceptions import InvalidExpressionException
 from snuba.query.parser.validation import ExpressionValidator
-from snuba.query.validation import FunctionCallValidator, InvalidFunctionCallException
-from snuba.query.validation.signature import (
-    Any,
-    SignatureValidator,
-    Column,
-)
+from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
+from snuba.query.validation.signature import Any, Column, SignatureValidator
 from snuba.state import get_config
 
 logger = logging.getLogger(__name__)
@@ -52,7 +48,7 @@ class FunctionCallsValidator(ExpressionValidator):
             validator = validators.get(exp.function_name)
             if validator is not None:
                 validator.validate(exp.parameters, dataset.get_abstract_columnset())
-        except InvalidFunctionCallException as exception:
+        except InvalidFunctionCall as exception:
             if get_config("enforce_expression_validation", 0):
                 raise InvalidExpressionException(
                     exp,

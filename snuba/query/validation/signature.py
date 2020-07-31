@@ -1,15 +1,26 @@
 import logging
 from abc import ABC
-from typing import Sequence, Set, Type
+from typing import Sequence, Set, Type, Union
 
-from snuba.clickhouse.columns import ColumnSet
-from snuba.clickhouse.columns import ColumnType as ClickhouseColumnType
-from snuba.clickhouse.columns import Nullable
+from snuba.clickhouse.columns import (
+    UUID,
+    Array,
+    ColumnSet,
+    Date,
+    DateTime,
+    FixedString,
+    Float,
+    IPv4,
+    IPv6,
+    Nullable,
+    String,
+    UInt,
+)
 from snuba.query.expressions import Expression
 from snuba.query.matchers import Any as AnyMatcher
 from snuba.query.matchers import Column as ColumnMatcher
 from snuba.query.matchers import Param
-from snuba.query.validation import FunctionCallValidator, InvalidFunctionCallException
+from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
 
 logger = logging.getLogger(__name__)
 
@@ -23,27 +34,48 @@ class Any(ParamType):
     def validate(self, expression: Expression, schema: ColumnSet) -> None:
         return
 
+    def __str__(self) -> str:
+        return "Any"
+
 
 COLUMN_PATTERN = ColumnMatcher(
     alias=None, table_name=None, column_name=Param("column_name", AnyMatcher(str)),
 )
 
+AllowedTypes = Union[
+    Type[Array],
+    Type[String],
+    Type[UUID],
+    Type[IPv4],
+    Type[IPv6],
+    Type[FixedString],
+    Type[UInt],
+    Type[Float],
+    Type[Date],
+    Type[DateTime],
+]
+
 
 class Column(ParamType):
     """
-    Validates the that the type of a Column expression is in a set
-    of allowed types.
+    Validates that the type of a Column expression is in a set of
+    allowed types.
 
     If the expression provided is not a Column, it accepts it.
     We may consider later whether we want to enforce only column
     expressions can be passed as arguments in certain functions.
+
+    This class discriminates between Nullable columns and non Nullable.
+    If the allow_nullable field, is True this will accept both, if it
+    is False it will require non nullable columns.
     """
 
-    def __init__(
-        self, types: Set[Type[ClickhouseColumnType]], nullable: bool = True
-    ) -> None:
+    def __init__(self, types: Set[AllowedTypes], allow_nullable: bool = True) -> None:
         self.__valid_types = types
-        self.__allow_nullable = nullable
+        self.__allow_nullable = allow_nullable
+
+    def __str__(self) -> str:
+        return f"{'Nullable ' if self.__allow_nullable else ''}{self.__valid_types}"
 
     def validate(self, expression: Expression, schema: ColumnSet) -> None:
         match = COLUMN_PATTERN.match(expression)
@@ -64,10 +96,10 @@ class Column(ParamType):
         if not isinstance(column_type, tuple(self.__valid_types)) or (
             nullable and not self.__allow_nullable
         ):
-            raise InvalidFunctionCallException(
+            raise InvalidFunctionCall(
                 (
-                    f"Illegal type {'Nullable' if nullable else ''} {type(column_type)} "
-                    f"of argument {column_name}. Required types {self.__valid_types}"
+                    f"Illegal type {'Nullable ' if nullable else ''}{str(column_type)} "
+                    f"of argument `{column_name}`. Required types {self.__valid_types}"
                 )
             )
 
@@ -75,21 +107,20 @@ class Column(ParamType):
 class SignatureValidator(FunctionCallValidator):
     """
     Validates the signature of the function call.
+    The signature is defined as a sequence of ParamType objects.
     """
 
     def __init__(
         self,
         param_types: Sequence[ParamType],
-        allow_optionals: bool = False,
+        allow_extra_params: bool = False,
         enforce: bool = True,
     ):
         self.__param_types = param_types
-        # Allow optionals, if True, lets the validator accept functions with
-        # an arbitrary number of extra parameters after those it validates.
-        # It would validate the function call against the sequence of parameters
-        # the validator is instantiated with and accept anything else beyond
-        # such sequence.
-        self.__allow_optionals = allow_optionals
+        # If True, this signature allows extra parameters after those
+        # specified by param_types. The extra parameters are not
+        # validated.
+        self.__allow_extra_params = allow_extra_params
         # If False it would simply log invalid functions instead of raising
         # exceptions.
         self.__enforce = enforce
@@ -97,7 +128,7 @@ class SignatureValidator(FunctionCallValidator):
     def validate(self, parameters: Sequence[Expression], schema: ColumnSet) -> None:
         try:
             self.__validate_impl(parameters, schema)
-        except InvalidFunctionCallException as exception:
+        except InvalidFunctionCall as exception:
             if self.__enforce:
                 raise exception
             else:
@@ -109,13 +140,13 @@ class SignatureValidator(FunctionCallValidator):
         self, parameters: Sequence[Expression], schema: ColumnSet
     ) -> None:
         if len(parameters) < len(self.__param_types):
-            raise InvalidFunctionCallException(
-                f"Too few arguments for function call. Required {self.__param_types}"
+            raise InvalidFunctionCall(
+                f"Too few arguments. Required {[str(t) for t in self.__param_types]}"
             )
 
-        if not self.__allow_optionals and len(parameters) > len(self.__param_types):
-            raise InvalidFunctionCallException(
-                f"Too many arguments for function call. Required {self.__param_types}"
+        if not self.__allow_extra_params and len(parameters) > len(self.__param_types):
+            raise InvalidFunctionCall(
+                f"Too many arguments. Required {[str(t) for t in self.__param_types]}"
             )
 
         for validator, param in zip(self.__param_types, parameters):
