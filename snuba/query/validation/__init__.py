@@ -5,7 +5,7 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.query.expressions import Expression
 
 
-class InvalidFunctionCallException(Exception):
+class InvalidFunctionCall(Exception):
     pass
 
 
