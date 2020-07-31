@@ -18,8 +18,6 @@ class MigrationGroup(Enum):
 
 # Migration groups are mandatory by default, unless they are on this list
 OPTIONAL_GROUPS = {
-    MigrationGroup.TRANSACTIONS,
-    MigrationGroup.OUTCOMES,
     MigrationGroup.SESSIONS,
     MigrationGroup.QUERYLOG,
 }
