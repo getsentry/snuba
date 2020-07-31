@@ -19,13 +19,14 @@ honcho==1.0.1
 idna==2.7
 itsdangerous==0.24
 Jinja2==2.10.1
-jsonschema==3.0.1
+jsonschema==3.2.0
 lz4==2.0.0
 Markdown==2.6.11
 MarkupSafe==1.1.1
 mywsgi==1.0.3
 more-itertools==4.2.0
 mypy>=0.761
+git+https://github.com/untitaker/jsonschema-typed@df4a6a39c787c549cc361fb84730f6f643f15e8c
 packaging==17.1
 parsimonious==0.8.1
 py==1.5.3

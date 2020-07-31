@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, TypedDict
 
 from snuba import settings
 from snuba.consumer import KafkaMessageMetadata
@@ -27,6 +27,16 @@ from snuba.processor import (
     _unicodify,
 )
 
+from jsonschema_typed import JSONSchema
+
+EventData = JSONSchema['/Users/untitaker/projects/snuba/event.schema.json']
+
+class Event(TypedDict):
+    data: EventData
+    search_message: Any
+    message: Any
+    event_id: Any
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,12 +46,12 @@ class EventsProcessorBase(MessageProcessor, ABC):
     """
 
     @abstractmethod
-    def _should_process(self, event: Mapping[str, Any]) -> bool:
+    def _should_process(self, event: Event) -> bool:
         raise NotImplementedError
 
     @abstractmethod
     def _extract_event_id(
-        self, output: MutableMapping[str, Any], event: Mapping[str, Any],
+        self, output: MutableMapping[str, Any], event: Event,
     ) -> None:
         raise NotImplementedError
 
@@ -49,7 +59,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
     def extract_custom(
         self,
         output: MutableMapping[str, Any],
-        event: Mapping[str, Any],
+        event: Event,
         metadata: Optional[KafkaMessageMetadata] = None,
     ) -> None:
         raise NotImplementedError
@@ -64,7 +74,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
     def extract_tags_custom(
         self,
         output: MutableMapping[str, Any],
-        event: Mapping[str, Any],
+        event: Event,
         tags: Mapping[str, Any],
         metadata: Optional[KafkaMessageMetadata] = None,
     ) -> None:
@@ -83,14 +93,15 @@ class EventsProcessorBase(MessageProcessor, ABC):
     def extract_contexts_custom(
         self,
         output: MutableMapping[str, Any],
-        event: Mapping[str, Any],
+        event: Event,
         contexts: Mapping[str, Any],
         metadata: Optional[KafkaMessageMetadata] = None,
     ) -> None:
         raise NotImplementedError
 
     def extract_required(
-        self, output: MutableMapping[str, Any], event: Mapping[str, Any]
+        self, output: MutableMapping[str, Any], 
+        event: Event,
     ) -> None:
         output["group_id"] = event["group_id"] or 0
 
@@ -194,12 +205,12 @@ class EventsProcessorBase(MessageProcessor, ABC):
         return ProcessedMessage(action=action_type, data=[processed])
 
     def process_insert(
-        self, event: Mapping[str, Any], metadata: Optional[KafkaMessageMetadata] = None
+        self, event: Event, metadata: Optional[KafkaMessageMetadata] = None
     ) -> Optional[Mapping[str, Any]]:
         if not self._should_process(event):
             return None
 
-        processed = {"deleted": 0}
+        processed= {"deleted": 0}
         extract_project_id(processed, event)
         self._extract_event_id(processed, event)
         processed["retention_days"] = enforce_retention(
@@ -252,7 +263,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
     def extract_common(
         self,
         output: MutableMapping[str, Any],
-        event: Mapping[str, Any],
+        event: Event,
         metadata: Optional[KafkaMessageMetadata] = None,
     ) -> None:
         # Properties we get from the top level of the message payload
