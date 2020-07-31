@@ -8,15 +8,19 @@ from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.parser.exceptions import InvalidExpressionException
 from snuba.query.parser.validation import ExpressionValidator
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCallException
-from snuba.query.validation.signature import AnyType, ColumnType, SignatureValidator
+from snuba.query.validation.signature import (
+    Any,
+    SignatureValidator,
+    Column,
+)
 from snuba.state import get_config
 
 logger = logging.getLogger(__name__)
 
 
 default_validators: Mapping[str, FunctionCallValidator] = {
-    "like": SignatureValidator([ColumnType({String}), AnyType()]),
-    "notLike": SignatureValidator([ColumnType({String}), AnyType()]),
+    "like": SignatureValidator([Column({String}), Any()]),
+    "notLike": SignatureValidator([Column({String}), Any()]),
 }
 
 

@@ -3,9 +3,12 @@ from abc import ABC
 from typing import Sequence, Set, Type
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.clickhouse.columns import ColumnType as ClickhouseType
+from snuba.clickhouse.columns import ColumnType as ClickhouseColumnType
+from snuba.clickhouse.columns import Nullable
 from snuba.query.expressions import Expression
-from snuba.query.matchers import Any, Column, Param
+from snuba.query.matchers import Any as AnyMatcher
+from snuba.query.matchers import Column as ColumnMatcher
+from snuba.query.matchers import Param
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCallException
 
 logger = logging.getLogger(__name__)
@@ -16,17 +19,17 @@ class ParamType(ABC):
         raise NotImplementedError
 
 
-class AnyType(ParamType):
+class Any(ParamType):
     def validate(self, expression: Expression, schema: ColumnSet) -> None:
         return
 
 
-COLUMN_PATTERN = Column(
-    alias=None, table_name=None, column_name=Param("column_name", Any(str)),
+COLUMN_PATTERN = ColumnMatcher(
+    alias=None, table_name=None, column_name=Param("column_name", AnyMatcher(str)),
 )
 
 
-class ColumnType(ParamType):
+class Column(ParamType):
     """
     Validates the that the type of a Column expression is in a set
     of allowed types.
@@ -37,9 +40,10 @@ class ColumnType(ParamType):
     """
 
     def __init__(
-        self, types: Set[Type[ClickhouseType]], column_required: bool = False,
+        self, types: Set[Type[ClickhouseColumnType]], nullable: bool = True
     ) -> None:
         self.__valid_types = types
+        self.__allow_nullable = nullable
 
     def validate(self, expression: Expression, schema: ColumnSet) -> None:
         match = COLUMN_PATTERN.match(expression)
@@ -56,11 +60,14 @@ class ColumnType(ParamType):
             return
 
         column_type = column.type.get_raw()
-        if not isinstance(column_type, tuple(self.__valid_types)):
+        nullable = Nullable in column.type.get_all_modifiers()
+        if not isinstance(column_type, tuple(self.__valid_types)) or (
+            nullable and not self.__allow_nullable
+        ):
             raise InvalidFunctionCallException(
                 (
-                    f"Illegal type {type(column_type)} of argument "
-                    f"{column_name}. Required types {self.__valid_types}"
+                    f"Illegal type {'Nullable' if nullable else ''} {type(column_type)} "
+                    f"of argument {column_name}. Required types {self.__valid_types}"
                 )
             )
 
