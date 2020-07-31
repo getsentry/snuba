@@ -126,6 +126,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="sentry_local",
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
+                    storage_set=StorageSetKey.EVENTS,
                     version_column="deleted",
                     order_by="(project_id, toStartOfDay(timestamp), %s)" % sample_expr,
                     partition_by="(toMonday(timestamp), if(equals(retention_days, 30), 30, 90))",

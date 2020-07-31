@@ -70,6 +70,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="transactions_local",
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
+                    storage_set=StorageSetKey.TRANSACTIONS,
                     version_column="deleted",
                     order_by="(project_id, toStartOfDay(finish_ts), transaction_name, cityHash64(span_id))",
                     partition_by="(retention_days, toMonday(finish_ts))",

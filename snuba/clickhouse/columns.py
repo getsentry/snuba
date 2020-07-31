@@ -89,6 +89,9 @@ class ColumnType:
         """
         return []
 
+    def get_raw(self) -> ColumnType:
+        return self
+
 
 class ColumnTypeWithModifier(ABC, ColumnType):
     def __init__(self, inner_type: ColumnType) -> None:
@@ -106,6 +109,9 @@ class ColumnTypeWithModifier(ABC, ColumnType):
                 return nested_modifiers
 
         return get_nested_modifiers(self)
+
+    def get_raw(self) -> ColumnType:
+        return self.inner_type.get_raw()
 
 
 class Nullable(ColumnTypeWithModifier):

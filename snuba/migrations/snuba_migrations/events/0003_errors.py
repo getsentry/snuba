@@ -112,6 +112,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="errors_local",
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
+                    storage_set=StorageSetKey.EVENTS,
                     version_column="deleted",
                     order_by="(org_id, project_id, toStartOfDay(timestamp), primary_hash_hex, event_hash)",
                     partition_by="(toMonday(timestamp), if(retention_days = 30, 30, 90))",
