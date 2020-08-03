@@ -70,15 +70,15 @@ def get_arithmetic_expression(
     return term
 
 
-def visit_function_name(left, node: Node, visited_children: Iterable[Any]) -> str:
+def exp_visit_function_name(left, node: Node, visited_children: Iterable[Any]) -> str:
     return str(node.text)
 
 
-def visit_column_name(left, node: Node, visited_children: Iterable[Any]) -> Column:
+def exp_visit_column_name(left, node: Node, visited_children: Iterable[Any]) -> Column:
     return Column(None, None, node.text)
 
 
-def visit_low_pri_tuple(
+def exp_visit_low_pri_tuple(
     left, node: Node, visited_children: Tuple[LowPriOperator, Expression]
 ) -> LowPriTuple:
     left, right = visited_children
@@ -86,7 +86,7 @@ def visit_low_pri_tuple(
     return LowPriTuple(op=left, arithm=right)
 
 
-def visit_high_pri_tuple(
+def exp_visit_high_pri_tuple(
     left, node: Node, visited_children: Tuple[HighPriOperator, Expression]
 ) -> HighPriTuple:
     left, right = visited_children
@@ -94,21 +94,21 @@ def visit_high_pri_tuple(
     return HighPriTuple(op=left, arithm=right)
 
 
-def visit_low_pri_op(
+def exp_visit_low_pri_op(
     left, node: Node, visited_children: Iterable[Any]
 ) -> LowPriOperator:
 
     return LowPriOperator(node.text)
 
 
-def visit_high_pri_op(
+def exp_visit_high_pri_op(
     left, node: Node, visited_children: Iterable[Any]
 ) -> HighPriOperator:
 
     return HighPriOperator(node.text)
 
 
-def visit_arithmetic_term(
+def exp_visit_arithmetic_term(
     left, node: Node, visited_children: Tuple[Any, Expression, Any]
 ) -> Expression:
     _, term, _ = visited_children
@@ -116,7 +116,7 @@ def visit_arithmetic_term(
     return term
 
 
-def visit_low_pri_arithmetic(
+def exp_visit_low_pri_arithmetic(
     left, node: Node, visited_children: Tuple[Any, Expression, Any, LowPriArithmetic],
 ) -> Expression:
     _, term, _, exp = visited_children
@@ -124,7 +124,7 @@ def visit_low_pri_arithmetic(
     return get_arithmetic_expression(term, exp)
 
 
-def visit_high_pri_arithmetic(
+def exp_visit_high_pri_arithmetic(
     left, node: Node, visited_children: Tuple[Any, Expression, Any, HighPriArithmetic],
 ) -> Expression:
     _, term, _, exp = visited_children
@@ -132,28 +132,30 @@ def visit_high_pri_arithmetic(
     return get_arithmetic_expression(term, exp)
 
 
-def visit_numeric_literal(left, node: Node, visited_children: Iterable[Any]) -> Literal:
+def exp_visit_numeric_literal(
+    left, node: Node, visited_children: Iterable[Any]
+) -> Literal:
     try:
         return Literal(None, int(node.text))
     except Exception:
         return Literal(None, float(node.text))
 
 
-def visit_quoted_literal(
+def exp_visit_quoted_literal(
     left, node: Node, visited_children: Tuple[Any, Node, Any]
 ) -> Literal:
     _, val, _ = visited_children
     return Literal(None, val.text)
 
 
-def visit_parameter(
+def exp_visit_parameter(
     left, node: Node, visited_children: Tuple[Expression, Any, Any, Any]
 ) -> Expression:
     param, _, _, _, = visited_children
     return param
 
 
-def visit_parameters_list(
+def exp_visit_parameters_list(
     self,
     node: Node,
     visited_children: Tuple[Union[Expression, List[Expression]], Expression],
@@ -173,7 +175,7 @@ def visit_parameters_list(
     return ret
 
 
-def visit_function_call(
+def exp_visit_function_call(
     left,
     node: Node,
     visited_children: Tuple[
@@ -197,7 +199,7 @@ def visit_function_call(
     return CurriedFunctionCall(None, internal_f, param_list2)
 
 
-def generic_visit(left, node: Node, visited_children: Any) -> Any:
+def exp_generic_visit(left, node: Node, visited_children: Any) -> Any:
     if isinstance(visited_children, list) and len(visited_children) == 1:
         return visited_children[0]
     return visited_children or node
