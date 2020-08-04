@@ -8,7 +8,6 @@ import click
 from snuba import settings
 from snuba.datasets.events_generator import generate_insertion_event
 from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
-from snuba.utils.codecs import PassthroughCodec
 from snuba.utils.streams.kafka import KafkaProducer
 from snuba.utils.streams.types import Topic
 
@@ -40,8 +39,10 @@ def generator(
     dataset = get_dataset(dataset_name)
 
     if not bootstrap_servers:
-        bootstrap_servers = settings.DEFAULT_DATASET_BROKERS.get(
-            dataset_name, settings.DEFAULT_BROKERS
+        storage = dataset.get_writable_storage()
+        storage_key = storage.get_storage_key().value
+        bootstrap_servers = settings.DEFAULT_STORAGE_BROKERS.get(
+            storage_key, settings.DEFAULT_BROKERS
         )
 
     generator = generators[dataset_name]
@@ -64,7 +65,6 @@ def generator(
             "partitioner": "consistent",
             "message.max.bytes": 50000000,  # 50MB, default is 1MB
         },
-        PassthroughCodec(),
     )
 
     with closing(producer):
