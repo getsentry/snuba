@@ -155,7 +155,6 @@ class EventsProcessorBase(MessageProcessor, ABC):
             # deprecated unwrapped event message == insert
             action_type = ProcessorAction.INSERT
             try:
-
                 processed = self.process_insert(message, metadata)
             except EventTooOld:
                 return None
