@@ -1,7 +1,8 @@
 import logging
+import sys
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, TypedDict
+from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
 from jsonschema_typed import JSONSchema
 from snuba import settings
@@ -28,10 +29,25 @@ from snuba.processor import (
     _unicodify,
 )
 
-EventData = JSONSchema["/Users/untitaker/projects/snuba/event.schema.json"]
-
+# Required until we are 100% on Py 3.8
+if sys.version_info >= (3, 8):
+    from typing import TypedDict  # pylint: disable=no-name-in-module
+else:
+    from typing_extensions import TypedDict
 
 logger = logging.getLogger(__name__)
+
+EventData = JSONSchema["schema/event.schema.json"]
+
+
+class Event(TypedDict):
+    data: EventData
+    search_message: Any
+    message: Any
+    event_id: Any
+    datetime: str
+    group_id: str
+    primary_hash: str
 
 
 REPLACEMENT_EVENT_TYPES = frozenset(
@@ -149,7 +165,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         output["sdk_integrations"] = sdk_integrations
 
     def process_message(
-        self, message, metadata: KafkaMessageMetadata
+        self, message: Event, metadata: Optional[KafkaMessageMetadata]
     ) -> Optional[ProcessedMessage]:
         """\
         Process a raw message into an insertion or replacement batch. Returns
@@ -180,10 +196,12 @@ class EventsProcessorBase(MessageProcessor, ABC):
     def process_insert(
         self, event: InsertEvent, metadata: KafkaMessageMetadata
     ) -> Optional[Mapping[str, Any]]:
+
         if not self._should_process(event):
             return None
 
-        processed = {"deleted": 0}
+        processed: MutableMapping[str, Any] = {"deleted": 0}
+
         extract_project_id(processed, event)
         self._extract_event_id(processed, event)
         processed["retention_days"] = enforce_retention(
@@ -201,7 +219,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         self.extract_common(processed, event, metadata)
         self.extract_custom(processed, event, metadata)
 
-        sdk = data.get("sdk", None) or {}
+        sdk = data.get("sdk", None) or {}  # type: ignore
         self.extract_sdk(processed, sdk)
 
         tags = _as_dict_safe(data.get("tags", None))
@@ -219,9 +237,13 @@ class EventsProcessorBase(MessageProcessor, ABC):
         processed["_tags_flattened"] = ""
 
         exception = (
-            data.get("exception", data.get("sentry.interfaces.Exception", None)) or {}
+            data.get(
+                "exception",
+                data.get("sentry.interfaces.Exception", None),  # type: ignore
+            )
+            or {}
         )
-        stacks = exception.get("values", None) or []
+        stacks: Sequence[Any] = exception.get("values", None) or []
         self.extract_stacktraces(processed, stacks)
 
         processed["offset"] = metadata.offset
@@ -243,15 +265,15 @@ class EventsProcessorBase(MessageProcessor, ABC):
 
         # Properties we get from the "data" dict, which is the actual event body.
 
-        received = _collapse_uint32(int(data["received"]))
+        received = _collapse_uint32(data["received"])
         output["received"] = (
             datetime.utcfromtimestamp(received) if received is not None else None
         )
         output["culprit"] = _unicodify(data.get("culprit", None))
         output["type"] = _unicodify(data.get("type", None))
         output["version"] = _unicodify(data.get("version", None))
-        output["title"] = _unicodify(data.get("title", None))
-        output["location"] = _unicodify(data.get("location", None))
+        output["title"] = _unicodify(data.get("title", None))  # type: ignore
+        output["location"] = _unicodify(data.get("location", None))  # type: ignore
 
         module_names = []
         module_versions = []

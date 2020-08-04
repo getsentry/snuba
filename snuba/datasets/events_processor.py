@@ -40,17 +40,26 @@ class EventsProcessor(EventsProcessorBase):
         metadata: KafkaMessageMetadata,
     ) -> None:
         data = event.get("data", {})
-
         output["message"] = _unicodify(event["message"])
 
         # USER REQUEST GEO
-        user = data.get("user", data.get("sentry.interfaces.User", None)) or {}
+        user = (
+            data.get(
+                "user", data.get("sentry.interfaces.User", None)  # type: ignore
+            )
+            or {}
+        )
         extract_user(output, user)
 
         geo = user.get("geo", None) or {}
         self.extract_geo(output, geo)
 
-        http = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
+        http = (
+            data.get(
+                "request", data.get("sentry.interfaces.Http", None)  # type: ignore
+            )
+            or {}
+        )  # types: ignore
         self.extract_http(output, http)
 
     def extract_tags_custom(
