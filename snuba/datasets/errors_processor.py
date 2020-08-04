@@ -1,16 +1,12 @@
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping
 
 import logging
 import _strptime  # NOQA fixes _strptime deferred import issue
 import uuid
 
 from snuba.consumer import KafkaMessageMetadata
-from snuba.datasets.events_format import (
-    extract_extra_contexts,
-    extract_user,
-    flatten_nested_field,
-)
-from snuba.datasets.events_processor_base import EventsProcessorBase
+from snuba.datasets.events_format import extract_user
+from snuba.datasets.events_processor_base import EventsProcessorBase, InsertEvent
 from snuba.processor import (
     _as_dict_safe,
     _ensure_valid_ip,
@@ -34,13 +30,11 @@ class ErrorsProcessor(EventsProcessorBase):
             }
         )
 
-    def _should_process(self, event: Mapping[str, Any]) -> bool:
-        # This is to convince mypy that we actually return a bool
-        data: Mapping[str, Any] = event["data"]
-        return data.get("type") != "transaction"
+    def _should_process(self, event: InsertEvent) -> bool:
+        return event["data"].get("type") != "transaction"
 
     def _extract_event_id(
-        self, output: MutableMapping[str, Any], event: Mapping[str, Any],
+        self, output: MutableMapping[str, Any], event: InsertEvent,
     ) -> None:
         output["event_id"] = str(uuid.UUID(event["event_id"]))
         output["event_string"] = event["event_id"]
@@ -48,8 +42,8 @@ class ErrorsProcessor(EventsProcessorBase):
     def extract_custom(
         self,
         output: MutableMapping[str, Any],
-        event: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
+        event: InsertEvent,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         data = event.get("data", {})
         user_dict = data.get("user", data.get("sentry.interfaces.User", None)) or {}
@@ -90,9 +84,9 @@ class ErrorsProcessor(EventsProcessorBase):
     def extract_tags_custom(
         self,
         output: MutableMapping[str, Any],
-        event: Mapping[str, Any],
+        event: InsertEvent,
         tags: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         output["release"] = tags.get("sentry:release")
         output["dist"] = tags.get("sentry:dist")
@@ -105,12 +99,11 @@ class ErrorsProcessor(EventsProcessorBase):
     def extract_contexts_custom(
         self,
         output: MutableMapping[str, Any],
-        event: Mapping[str, Any],
+        event: InsertEvent,
         contexts: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
-        key, value = extract_extra_contexts(contexts)
-        output["_contexts_flattened"] = flatten_nested_field(key, value)
+        output["_contexts_flattened"] = ""
 
     def extract_promoted_contexts(
         self,

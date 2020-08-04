@@ -1,4 +1,5 @@
 import contextlib
+import itertools
 import uuid
 from contextlib import closing
 from typing import Iterator, Optional
@@ -8,34 +9,36 @@ import pytest
 from confluent_kafka.admin import AdminClient, NewTopic
 
 from snuba import settings
-from snuba.utils.codecs import Codec
 from snuba.utils.streams.consumer import ConsumerError, EndOfPartition
 from snuba.utils.streams.kafka import (
-    CommitCodec,
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
     KafkaPayload,
     KafkaProducer,
     as_kafka_configuration_bool,
 )
-from snuba.utils.streams.synchronized import Commit
+from snuba.utils.streams.synchronized import Commit, commit_codec
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.utils.streams.mixins import StreamsTestMixin
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
 
-class TestCodec(Codec[KafkaPayload, int]):
-    def encode(self, value: int) -> KafkaPayload:
-        return KafkaPayload(None, f"{value}".encode("utf-8"))
+def test_payload_equality() -> None:
+    assert KafkaPayload(None, b"") == KafkaPayload(None, b"")
+    assert KafkaPayload(b"key", b"value") == KafkaPayload(b"key", b"value")
+    assert KafkaPayload(None, b"", [("key", b"value")]) == KafkaPayload(
+        None, b"", [("key", b"value")]
+    )
+    assert not KafkaPayload(None, b"a") == KafkaPayload(None, b"b")
+    assert not KafkaPayload(b"this", b"") == KafkaPayload(b"that", b"")
+    assert not KafkaPayload(None, b"", [("key", b"this")]) == KafkaPayload(
+        None, b"", [("key", b"that")]
+    )
 
-    def decode(self, value: KafkaPayload) -> int:
-        return int(value.value.decode("utf-8"))
 
-
-class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
+class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
 
     configuration = {"bootstrap.servers": ",".join(settings.DEFAULT_BROKERS)}
-    codec = TestCodec()
 
     @contextlib.contextmanager
     def get_topic(self, partitions: int = 1) -> Iterator[Topic]:
@@ -58,7 +61,7 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
         group: Optional[str] = None,
         enable_end_of_partition: bool = True,
         auto_offset_reset: str = "earliest",
-    ) -> KafkaConsumer[int]:
+    ) -> KafkaConsumer:
         return KafkaConsumer(
             {
                 **self.configuration,
@@ -69,16 +72,19 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
                 "group.id": group if group is not None else uuid.uuid1().hex,
                 "session.timeout.ms": 10000,
             },
-            self.codec,
         )
 
-    def get_producer(self) -> KafkaProducer[int]:
-        return KafkaProducer(self.configuration, self.codec)
+    def get_producer(self) -> KafkaProducer:
+        return KafkaProducer(self.configuration)
+
+    def get_payloads(self) -> Iterator[KafkaPayload]:
+        for i in itertools.count():
+            yield KafkaPayload(None, f"{i}".encode("utf8"))
 
     def test_auto_offset_reset_earliest(self) -> None:
         with self.get_topic() as topic:
             with closing(self.get_producer()) as producer:
-                producer.produce(topic, 0).result(5.0)
+                producer.produce(topic, next(self.get_payloads())).result(5.0)
 
             with closing(self.get_consumer(auto_offset_reset="earliest")) as consumer:
                 consumer.subscribe([topic])
@@ -90,7 +96,7 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
     def test_auto_offset_reset_latest(self) -> None:
         with self.get_topic() as topic:
             with closing(self.get_producer()) as producer:
-                producer.produce(topic, 0).result(5.0)
+                producer.produce(topic, next(self.get_payloads())).result(5.0)
 
             with closing(self.get_consumer(auto_offset_reset="latest")) as consumer:
                 consumer.subscribe([topic])
@@ -106,7 +112,7 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
     def test_auto_offset_reset_error(self) -> None:
         with self.get_topic() as topic:
             with closing(self.get_producer()) as producer:
-                producer.produce(topic, 0).result(5.0)
+                producer.produce(topic, next(self.get_payloads())).result(5.0)
 
             with closing(self.get_consumer(auto_offset_reset="error")) as consumer:
                 consumer.subscribe([topic])
@@ -120,7 +126,7 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
         # a mock.
         commit_log_producer = FakeConfluentKafkaProducer()
 
-        consumer: KafkaConsumer[int] = KafkaConsumerWithCommitLog(
+        consumer: KafkaConsumer = KafkaConsumerWithCommitLog(
             {
                 **self.configuration,
                 "auto.offset.reset": "earliest",
@@ -130,16 +136,15 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
                 "group.id": "test",
                 "session.timeout.ms": 10000,
             },
-            codec=self.codec,
             producer=commit_log_producer,
             commit_log_topic=Topic("commit-log"),
         )
 
         with self.get_topic() as topic, closing(consumer) as consumer:
-            consumer.subscribe([topic])
-
             with closing(self.get_producer()) as producer:
-                producer.produce(topic, 0).result(5.0)
+                producer.produce(topic, next(self.get_payloads())).result(5.0)
+
+            consumer.subscribe([topic])
 
             message = consumer.poll(10.0)  # XXX: getting the subscription is slow
             assert isinstance(message, Message)
@@ -154,15 +159,14 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
             commit_message = commit_log_producer.messages[0]
             assert commit_message.topic() == "commit-log"
 
-            assert CommitCodec().decode(
+            assert commit_codec.decode(
                 KafkaPayload(commit_message.key(), commit_message.value())
             ) == Commit("test", Partition(topic, 0), message.get_next_offset())
 
 
 def test_commit_codec() -> None:
-    codec = CommitCodec()
     commit = Commit("group", Partition(Topic("topic"), 0), 0)
-    assert codec.decode(codec.encode(commit)) == commit
+    assert commit_codec.decode(commit_codec.encode(commit)) == commit
 
 
 def test_as_kafka_configuration_bool() -> None:

@@ -1,25 +1,36 @@
 import pytest
 
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
+from snuba.query.conditions import (
+    BooleanFunctions,
+    ConditionFunctions,
+    binary_condition,
+)
 from snuba.query.expressions import (
+    Argument,
     Column,
     CurriedFunctionCall,
     Expression,
     FunctionCall,
     Lambda,
     Literal,
-    Argument,
 )
 from snuba.query.parsing import ParsingContext
 
 test_expressions = [
     (Literal(None, "test"), "'test'"),  # String literal
     (Literal(None, 123), "123",),  # INT literal
+    (Literal("something", 123), "(123 AS something)",),  # INT literal with alias
     (Literal(None, 123.321), "123.321",),  # FLOAT literal
     (Literal(None, None), "NULL",),  # NULL
+    (Literal("not_null", None), "(NULL AS not_null)",),  # NULL with alias
     (Literal(None, True), "true",),  # True
     (Literal(None, False), "false",),  # False
     (Column(None, "table1", "column1"), "table1.column1"),  # Basic Column no alias
+    (
+        Column("table1.column1", "table1", "column1"),
+        "table1.column1",
+    ),  # Declutter aliases - column name is the same as the alias. Do not alias
     (Column(None, None, "column1"), "column1"),  # Basic Column with no table
     (
         Column("alias", "table1", "column1"),
@@ -100,6 +111,56 @@ test_expressions = [
         ),
         "arrayExists((x, y -> testFunc(x, y)), test)",
     ),  # Lambda expression
+    (
+        FunctionCall("alias", "array", (Literal(None, 1), Literal(None, 2))),
+        "([1, 2] AS alias)",
+    ),  # Formatting an array as [...]
+    (
+        binary_condition(
+            None,
+            BooleanFunctions.AND,
+            binary_condition(
+                None,
+                BooleanFunctions.OR,
+                binary_condition(
+                    None,
+                    BooleanFunctions.OR,
+                    binary_condition(
+                        None,
+                        BooleanFunctions.AND,
+                        binary_condition(
+                            None,
+                            ConditionFunctions.EQ,
+                            Column(None, None, "c1"),
+                            Literal(None, 1),
+                        ),
+                        binary_condition(
+                            None,
+                            ConditionFunctions.EQ,
+                            Column(None, None, "c2"),
+                            Literal(None, 2),
+                        ),
+                    ),
+                    binary_condition(
+                        None,
+                        ConditionFunctions.EQ,
+                        Column(None, None, "c3"),
+                        Literal(None, 3),
+                    ),
+                ),
+                binary_condition(
+                    None,
+                    ConditionFunctions.EQ,
+                    Column(None, None, "c4"),
+                    Literal(None, 4),
+                ),
+            ),
+            binary_condition(
+                None, ConditionFunctions.EQ, Column(None, None, "c5"), Literal(None, 5)
+            ),
+        ),
+        "(equals(c1, 1) AND equals(c2, 2) OR equals(c3, 3) OR equals(c4, 4)) AND equals(c5, 5)",
+    ),  # Formatting infix expressions
 ]
 
 
@@ -122,7 +183,7 @@ def test_aliases() -> None:
     assert col1.accept(ClickhouseExpressionFormatter(pc)) == "(table1.column1 AS al1)"
     assert col2.accept(ClickhouseExpressionFormatter(pc)) == "al1"
 
-    # Hierarchical expression inherits parsing context and applies alaises
+    # Hierarchical expression inherits parsing context and applies aliases
     f = FunctionCall(
         None,
         "f1",

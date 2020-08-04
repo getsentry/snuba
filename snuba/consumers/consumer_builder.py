@@ -9,10 +9,9 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
-from snuba.utils.codecs import PassthroughCodec
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
-from snuba.utils.streams.batching import BatchingConsumer
+from snuba.utils.streams.batching import BatchProcessingStrategyFactory
 from snuba.utils.streams.kafka import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
@@ -20,15 +19,15 @@ from snuba.utils.streams.kafka import (
     TransportError,
     build_kafka_consumer_configuration,
 )
+from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.types import Topic
 
 
 class ConsumerBuilder:
     """
-    Simplifies the initialization of a batching consumer by merging
-    parameters that generally come from the command line with defaults
-    that come from the dataset class and defaults that come from the
-    settings file.
+    Simplifies the initialization of a consumer by merging parameters that
+    generally come from the command line with defaults that come from the
+    dataset class and defaults that come from the settings file.
     """
 
     def __init__(
@@ -44,8 +43,6 @@ class ConsumerBuilder:
         auto_offset_reset: str,
         queued_max_messages_kbytes: int,
         queued_min_messages: int,
-        rapidjson_deserialize: bool,
-        rapidjson_serialize: bool,
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
@@ -116,12 +113,8 @@ class ConsumerBuilder:
             )
 
         self.__commit_retry_policy = commit_retry_policy
-        self.__rapidjson_deserialize = rapidjson_deserialize
-        self.__rapidjson_serialize = rapidjson_serialize
 
-    def __build_consumer(
-        self, worker: ConsumerWorker
-    ) -> BatchingConsumer[KafkaPayload]:
+    def __build_consumer(self, worker: ConsumerWorker) -> StreamProcessor[KafkaPayload]:
         configuration = build_kafka_consumer_configuration(
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
@@ -130,33 +123,31 @@ class ConsumerBuilder:
             queued_min_messages=self.queued_min_messages,
         )
 
-        codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
         if self.commit_log_topic is None:
             consumer = KafkaConsumer(
-                configuration,
-                codec=codec,
-                commit_retry_policy=self.__commit_retry_policy,
+                configuration, commit_retry_policy=self.__commit_retry_policy,
             )
         else:
             consumer = KafkaConsumerWithCommitLog(
                 configuration,
-                codec=codec,
                 producer=self.producer,
                 commit_log_topic=self.commit_log_topic,
                 commit_retry_policy=self.__commit_retry_policy,
             )
 
-        return BatchingConsumer(
+        return StreamProcessor(
             consumer,
             self.raw_topic,
-            worker=worker,
-            max_batch_size=self.max_batch_size,
-            max_batch_time=self.max_batch_time_ms,
-            metrics=self.metrics,
+            BatchProcessingStrategyFactory(
+                worker=worker,
+                max_batch_size=self.max_batch_size,
+                max_batch_time=self.max_batch_time_ms,
+                metrics=self.metrics,
+            ),
             recoverable_errors=[TransportError],
         )
 
-    def build_base_consumer(self) -> BatchingConsumer[KafkaPayload]:
+    def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
         """
         Builds the consumer with a ConsumerWorker.
         """
@@ -166,14 +157,12 @@ class ConsumerBuilder:
                 producer=self.producer,
                 replacements_topic=self.replacements_topic,
                 metrics=self.metrics,
-                rapidjson_deserialize=self.__rapidjson_deserialize,
-                rapidjson_serialize=self.__rapidjson_serialize,
             )
         )
 
     def build_snapshot_aware_consumer(
         self, snapshot_id: SnapshotId, transaction_data: TransactionData,
-    ) -> BatchingConsumer[KafkaPayload]:
+    ) -> StreamProcessor[KafkaPayload]:
         """
         Builds the consumer with a ConsumerWorker able to handle snapshots.
         """

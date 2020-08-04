@@ -130,5 +130,5 @@ def test_complex_conditions_expr() -> None:
     ) == FunctionCall(
         None,
         "positionCaseInsensitive",
-        (Column(None, None, "message"), Literal(None, "lol 'single' quotes")),
+        (Column(None, None, "message"), Literal(None, "lol 'single' quotes"),),
     )

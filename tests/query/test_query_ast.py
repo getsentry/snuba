@@ -1,15 +1,16 @@
+from typing import Any, MutableMapping
+
+import pytest
+
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.tables import TableSource
-from snuba.query.conditions import binary_condition, ConditionFunctions
-from snuba.query.expressions import (
-    Column,
-    Expression,
-    FunctionCall,
-    Literal,
-)
-from snuba.query.logical import OrderBy, OrderByDirection, Query
+from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
 from snuba.query.parser import parse_query
+from snuba.request import Request
+from snuba.request.request_settings import HTTPRequestSettings
 
 
 def test_iterate_over_query():
@@ -30,7 +31,7 @@ def test_iterate_over_query():
     query = Query(
         {},
         TableSource("my_table", ColumnSet([])),
-        selected_columns=[function_1],
+        selected_columns=[SelectedExpression("alias", function_1)],
         array_join=None,
         condition=condition,
         groupby=[function_1],
@@ -78,7 +79,7 @@ def test_replace_expression():
     query = Query(
         {},
         TableSource("my_table", ColumnSet([])),
-        selected_columns=[function_1],
+        selected_columns=[SelectedExpression("alias", function_1)],
         array_join=None,
         condition=condition,
         groupby=[function_1],
@@ -96,7 +97,11 @@ def test_replace_expression():
     expected_query = Query(
         {},
         TableSource("my_table", ColumnSet([])),
-        selected_columns=[FunctionCall("alias", "tag", (Literal(None, "f1"),))],
+        selected_columns=[
+            SelectedExpression(
+                "alias", FunctionCall("alias", "tag", (Literal(None, "f1"),))
+            )
+        ],
         array_join=None,
         condition=binary_condition(
             None,
@@ -143,12 +148,61 @@ def test_get_all_columns() -> None:
     query = parse_query(query_body, events)
 
     assert query.get_all_ast_referenced_columns() == {
-        Column(None, None, "column1"),
-        Column(None, None, "column2"),
-        Column(None, None, "platform"),
-        Column(None, None, "field2"),
-        Column(None, None, "tags"),
-        Column(None, None, "times_seen"),
-        Column(None, None, "event_id"),
-        Column(None, None, "timestamp"),
+        Column("column1", None, "column1"),
+        Column("column2", None, "column2"),
+        Column("platform", None, "platform"),
+        Column("field2", None, "field2"),
+        Column("tags", None, "tags"),
+        Column("times_seen", None, "times_seen"),
+        Column("event_id", None, "event_id"),
+        Column("timestamp", None, "timestamp"),
     }
+
+
+VALIDATION_TESTS = [
+    pytest.param(
+        {
+            "selected_columns": ["project_id", "event_id"],
+            "conditions": [["event_id", "IN", ["a", "b"]]],
+        },
+        True,
+        id="No alias references",
+    ),
+    pytest.param(
+        {
+            "selected_columns": ["project_id", ["f", ["event_id"], "not_event"]],
+            "conditions": [["not_event", "IN", ["a", "b"]]],
+        },
+        True,
+        id="Alias declared and referenced",
+    ),
+    pytest.param(
+        {
+            "selected_columns": ["project_id", ["f", ["event_id"], "event_id"]],
+            "conditions": [["event_id", "IN", ["a", "b"]]],
+        },
+        True,
+        id="Alias redefines col and referenced",
+    ),
+    pytest.param(
+        {
+            "selected_columns": ["project_id", ["f", ["event_id"], "event_id"]],
+            "conditions": [["whatsthis", "IN", ["a", "b"]]],
+        },
+        False,
+        id="Alias referenced and not defined",
+    ),
+]
+
+
+@pytest.mark.parametrize("query_body, expected_result", VALIDATION_TESTS)
+def test_alias_validation(
+    query_body: MutableMapping[str, Any], expected_result: bool
+) -> None:
+    events = get_dataset("events")
+    query = parse_query(query_body, events)
+    query_plan = events.get_query_plan_builder().build_plan(
+        Request("", query, HTTPRequestSettings(), {}, "")
+    )
+
+    assert query_plan.query.validate_aliases() == expected_result

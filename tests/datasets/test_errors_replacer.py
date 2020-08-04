@@ -238,7 +238,7 @@ class TestReplacer(BaseEventsTest):
     def test_delete_groups_insert(self):
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
-        self.write_raw_events(self.event)
+        self.write_events([self.event])
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
@@ -274,7 +274,7 @@ class TestReplacer(BaseEventsTest):
     def test_merge_insert(self):
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
-        self.write_raw_events(self.event)
+        self.write_events([self.event])
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
@@ -312,7 +312,7 @@ class TestReplacer(BaseEventsTest):
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "a" * 32
-        self.write_raw_events(self.event)
+        self.write_events([self.event])
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 

@@ -1,19 +1,12 @@
-from typing import Any, Mapping, MutableMapping, Optional, TypedDict
-
 import logging
-import _strptime  # NOQA fixes _strptime deferred import issue
+from typing import Any, Mapping, MutableMapping
 
+import _strptime  # NOQA fixes _strptime deferred import issue
 from snuba.clickhouse.columns import ColumnSet
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.events_format import extract_user
-from snuba.datasets.events_processor_base import EventsProcessorBase, Event
-from snuba.processor import (
-    _as_dict_safe,
-    _boolify,
-    _floatify,
-    _unicodify,
-)
-
+from snuba.datasets.events_processor_base import EventsProcessorBase, InsertEvent
+from snuba.processor import _as_dict_safe, _boolify, _floatify, _unicodify
 
 logger = logging.getLogger("snuba.processor")
 
@@ -32,45 +25,23 @@ class EventsProcessor(EventsProcessorBase):
             }
         )
 
-    def _should_process(self, event: Event) -> bool:
+    def _should_process(self, event: InsertEvent) -> bool:
         return True
 
     def _extract_event_id(
-        self, output: MutableMapping[str, Any], event: Event,
+        self, output: MutableMapping[str, Any], event: InsertEvent,
     ) -> None:
         output["event_id"] = event["event_id"]
 
     def extract_custom(
         self,
         output: MutableMapping[str, Any],
-        event: Event,
-        metadata: Optional[KafkaMessageMetadata] = None,
+        event: InsertEvent,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         data = event.get("data", {})
-        # The following concerns the change to message/search_message
-        # There are 2 Scenarios:
-        #   Pre-rename:
-        #        - Payload contains:
-        #             "message": "a long search message"
-        #        - Does NOT contain a `search_message` property
-        #        - "message" value saved in `message` column
-        #        - `search_message` column nonexistent or Null
-        #   Post-rename:
-        #        - Payload contains:
-        #             "search_message": "a long search message"
-        #        - Optionally the payload's "data" dict (event body) contains:
-        #             "message": "short message"
-        #        - "search_message" value stored in `search_message` column
-        #        - "message" value stored in `message` column
-        #
-        output["search_message"] = _unicodify(event.get("search_message", None))
-        if output["search_message"] is None:
-            # Pre-rename scenario, we expect to find "message" at the top level
-            output["message"] = _unicodify(event["message"])
-        else:
-            # Post-rename scenario, we check in case we have the optional
-            # "message" in the event body.
-            output["message"] = _unicodify(data.get("message", None))
+
+        output["message"] = _unicodify(event["message"])
 
         # USER REQUEST GEO
         user = data.get("user", data.get("sentry.interfaces.User", None)) or {}
@@ -85,9 +56,9 @@ class EventsProcessor(EventsProcessorBase):
     def extract_tags_custom(
         self,
         output: MutableMapping[str, Any],
-        event: Event,
+        event: InsertEvent,
         tags: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         pass
 
@@ -145,9 +116,9 @@ class EventsProcessor(EventsProcessorBase):
     def extract_contexts_custom(
         self,
         output: MutableMapping[str, Any],
-        event: Event,
+        event: InsertEvent,
         tags: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         pass
 

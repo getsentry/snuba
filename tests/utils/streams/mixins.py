@@ -2,17 +2,18 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from contextlib import closing
-from typing import ContextManager, Mapping, Optional, Sequence
+from typing import ContextManager, Generic, Iterator, Mapping, Optional, Sequence
+from unittest import mock
 
 import pytest
 
 from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
 from snuba.utils.streams.producer import Producer
-from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 from tests.assertions import assert_changes, assert_does_not_change
 
 
-class StreamsTestMixin(ABC):
+class StreamsTestMixin(ABC, Generic[TPayload]):
     @abstractmethod
     def get_topic(self, partitions: int = 1) -> ContextManager[Topic]:
         raise NotImplementedError
@@ -20,21 +21,28 @@ class StreamsTestMixin(ABC):
     @abstractmethod
     def get_consumer(
         self, group: Optional[str] = None, enable_end_of_partition: bool = True
-    ) -> Consumer[int]:
+    ) -> Consumer[TPayload]:
         raise NotImplementedError
 
     @abstractmethod
-    def get_producer(self) -> Producer[int]:
+    def get_producer(self) -> Producer[TPayload]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_payloads(self) -> Iterator[TPayload]:
         raise NotImplementedError
 
     def test_consumer(self) -> None:
         group = uuid.uuid1().hex
+        payloads = self.get_payloads()
 
         with self.get_topic() as topic:
             with closing(self.get_producer()) as producer:
-                messages: Sequence[Message[int]] = [
+                messages = [
                     future.result(timeout=5.0)
-                    for future in [producer.produce(topic, i) for i in range(2)]
+                    for future in [
+                        producer.produce(topic, next(payloads)) for i in range(2)
+                    ]
                 ]
 
             consumer = self.get_consumer(group)
@@ -48,6 +56,8 @@ class StreamsTestMixin(ABC):
                 with pytest.raises(ConsumerError):
                     consumer.seek({Partition(topic, 1): 0})
 
+            assignment_callback.called = False
+
             def revocation_callback(partitions: Sequence[Partition]) -> None:
                 revocation_callback.called = True
                 assert partitions == [Partition(topic, 0)]
@@ -56,6 +66,8 @@ class StreamsTestMixin(ABC):
                 # Not sure why you'd want to do this, but it shouldn't error.
                 consumer.seek({Partition(topic, 0): messages[0].offset})
 
+            revocation_callback.called = False
+
             # TODO: It'd be much nicer if ``subscribe`` returned a future that we could
             # use to wait for assignment, but we'd need to be very careful to avoid
             # edge cases here. It's probably not worth the complexity for now.
@@ -63,14 +75,17 @@ class StreamsTestMixin(ABC):
                 [topic], on_assign=assignment_callback, on_revoke=revocation_callback
             )
 
-            message = consumer.poll(10.0)  # XXX: getting the subcription is slow
+            with assert_changes(
+                lambda: assignment_callback.called, False, True
+            ), assert_changes(
+                consumer.tell, {}, {Partition(topic, 0): messages[1].get_next_offset()}
+            ):
+                message = consumer.poll(10.0)  # XXX: getting the subcription is slow
+
             assert isinstance(message, Message)
             assert message.partition == Partition(topic, 0)
             assert message.offset == messages[1].offset
-            assert message.payload == 1
-
-            assert consumer.tell() == {Partition(topic, 0): message.get_next_offset()}
-            assert getattr(assignment_callback, "called", False)
+            assert message.payload == messages[1].payload
 
             consumer.seek({Partition(topic, 0): messages[0].offset})
             assert consumer.tell() == {Partition(topic, 0): messages[0].offset}
@@ -78,19 +93,17 @@ class StreamsTestMixin(ABC):
             with pytest.raises(ConsumerError):
                 consumer.seek({Partition(topic, 1): 0})
 
-            consumer.pause([Partition(topic, 0)])
+            with assert_changes(consumer.paused, [], [Partition(topic, 0)]):
+                consumer.pause([Partition(topic, 0)])
 
-            assert consumer.paused() == [Partition(topic, 0)]
-
-            consumer.resume([Partition(topic, 0)])
-
-            assert consumer.paused() == []
+            with assert_changes(consumer.paused, [Partition(topic, 0)], []):
+                consumer.resume([Partition(topic, 0)])
 
             message = consumer.poll(1.0)
             assert isinstance(message, Message)
             assert message.partition == Partition(topic, 0)
             assert message.offset == messages[0].offset
-            assert message.payload == 0
+            assert message.payload == messages[0].payload
 
             assert consumer.commit_offsets() == {}
 
@@ -103,16 +116,23 @@ class StreamsTestMixin(ABC):
                 Partition(topic, 0): message.get_next_offset()
             }
 
+            assert consumer.tell() == {Partition(topic, 0): messages[1].offset}
+
             consumer.unsubscribe()
 
-            assert consumer.poll(1.0) is None
+            with assert_changes(lambda: revocation_callback.called, False, True):
+                assert consumer.poll(1.0) is None
 
             assert consumer.tell() == {}
 
             with pytest.raises(ConsumerError):
                 consumer.seek({Partition(topic, 0): messages[0].offset})
 
-            with assert_changes(lambda: consumer.closed, False, True):
+            revocation_callback.called = False
+
+            with assert_changes(
+                lambda: consumer.closed, False, True
+            ), assert_does_not_change(lambda: revocation_callback.called, False):
                 consumer.close()
 
             # Make sure all public methods (except ``close```) error if called
@@ -152,13 +172,15 @@ class StreamsTestMixin(ABC):
 
             consumer = self.get_consumer(group)
 
-            consumer.subscribe([topic])
+            revocation_callback = mock.MagicMock()
+
+            consumer.subscribe([topic], on_revoke=revocation_callback)
 
             message = consumer.poll(10.0)  # XXX: getting the subscription is slow
             assert isinstance(message, Message)
             assert message.partition == Partition(topic, 0)
             assert message.offset == messages[1].offset
-            assert message.payload == 1
+            assert message.payload == messages[1].payload
 
             try:
                 assert consumer.poll(1.0) is None
@@ -168,12 +190,15 @@ class StreamsTestMixin(ABC):
             else:
                 raise AssertionError("expected EndOfPartition error")
 
-            consumer.close()
+            with assert_changes(lambda: revocation_callback.called, False, True):
+                consumer.close()
 
     def test_working_offsets(self) -> None:
+        payloads = self.get_payloads()
+
         with self.get_topic() as topic:
             with closing(self.get_producer()) as producer:
-                messages = [producer.produce(topic, 0).result(5.0)]
+                messages = [producer.produce(topic, next(payloads)).result(5.0)]
 
             def on_assign(partitions: Mapping[Partition, int]) -> None:
                 # NOTE: This will eventually need to be controlled by a generalized
@@ -188,7 +213,7 @@ class StreamsTestMixin(ABC):
             consumer.subscribe([topic], on_assign=on_assign)
 
             for i in range(5):
-                message: Optional[Message[int]] = consumer.poll(1.0)
+                message = consumer.poll(1.0)
                 if message is not None:
                     break
                 else:
@@ -256,11 +281,14 @@ class StreamsTestMixin(ABC):
                 consumer.seek({message.partition: -1})
 
     def test_pause_resume(self) -> None:
+        payloads = self.get_payloads()
+
         with self.get_topic() as topic, closing(
             self.get_consumer()
         ) as consumer, closing(self.get_producer()) as producer:
-            messages: Sequence[Message[int]] = [
-                producer.produce(topic, i).result(timeout=5.0) for i in range(5)
+            messages = [
+                producer.produce(topic, next(payloads)).result(timeout=5.0)
+                for i in range(5)
             ]
 
             consumer.subscribe([topic])
@@ -324,6 +352,8 @@ class StreamsTestMixin(ABC):
                 consumer.resume([Partition(topic, 0), Partition(topic, 1)])
 
     def test_pause_resume_rebalancing(self) -> None:
+        payloads = self.get_payloads()
+
         with self.get_topic(2) as topic, closing(
             self.get_producer()
         ) as producer, closing(
@@ -331,8 +361,10 @@ class StreamsTestMixin(ABC):
         ) as consumer_a, closing(
             self.get_consumer("group", enable_end_of_partition=False)
         ) as consumer_b:
-            messages: Sequence[Message[int]] = [
-                producer.produce(Partition(topic, i), i).result(timeout=5.0)
+            messages = [
+                producer.produce(Partition(topic, i), next(payloads)).result(
+                    timeout=5.0
+                )
                 for i in range(2)
             ]
 

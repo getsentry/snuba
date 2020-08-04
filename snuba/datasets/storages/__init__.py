@@ -7,6 +7,7 @@ class StorageKey(Enum):
     """
 
     EVENTS = "events"
+    EVENTS_RO = "events_ro"
     ERRORS = "errors"
     GROUPEDMESSAGES = "groupedmessages"
     GROUPASSIGNEES = "groupassignees"
@@ -16,5 +17,3 @@ class StorageKey(Enum):
     SESSIONS_RAW = "sessions_raw"
     SESSIONS_HOURLY = "sessions_hourly"
     TRANSACTIONS = "transactions"
-    # TODO: Remove once joins are no longer storages
-    GROUPS = "group"

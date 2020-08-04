@@ -1,16 +1,17 @@
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.cdc.groupedmessage_processor import (
     GroupedMessageProcessor,
     GroupedMessageRow,
 )
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
-from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.datasets.schemas import MandatoryCondition
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.table_storage import KafkaStreamLoader
-
+from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.expressions import Column, Literal
 
 columns = ColumnSet(
     [
@@ -38,7 +39,17 @@ schema = ReplacingMergeTreeSchema(
     local_table_name="groupedmessage_local",
     dist_table_name="groupedmessage_dist",
     storage_set_key=StorageSetKey.EVENTS,
-    mandatory_conditions=[("record_deleted", "=", 0)],
+    mandatory_conditions=[
+        MandatoryCondition(
+            ("record_deleted", "=", 0),
+            binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                Column(None, None, "record_deleted"),
+                Literal(None, 0),
+            ),
+        )
+    ],
     prewhere_candidates=["project_id", "id"],
     order_by="(project_id, id)",
     partition_by=None,
@@ -51,7 +62,7 @@ POSTGRES_TABLE = "sentry_groupedmessage"
 storage = CdcStorage(
     storage_key=StorageKey.GROUPEDMESSAGES,
     storage_set_key=StorageSetKey.EVENTS,
-    schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+    schema=schema,
     query_processors=[],
     stream_loader=KafkaStreamLoader(
         processor=GroupedMessageProcessor(POSTGRES_TABLE),

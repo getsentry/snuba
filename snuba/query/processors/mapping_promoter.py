@@ -103,7 +103,6 @@ class MappingColumnPromoter(QueryProcessor):
                     )
                     col_type_name = str(col_type) if col_type else None
 
-                    ret_col = Column(exp.alias, subscript.table_name, promoted_col_name)
                     # We need to pass the content of the promoted column to a toString
                     # function when the promoted column is not a string since the
                     # supported values of mapping columns are strings and the clients
@@ -113,9 +112,15 @@ class MappingColumnPromoter(QueryProcessor):
                         and "String" in col_type_name
                         and "FixedString" not in col_type_name
                     ):
-                        return ret_col
+                        return Column(
+                            exp.alias, subscript.table_name, promoted_col_name
+                        )
                     else:
-                        return FunctionCall(exp.alias, "toString", (ret_col,))
+                        return FunctionCall(
+                            exp.alias,
+                            "toString",
+                            (Column(None, subscript.table_name, promoted_col_name),),
+                        )
 
             return exp
 

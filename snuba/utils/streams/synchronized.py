@@ -1,10 +1,16 @@
+import logging
 from dataclasses import dataclass
 from threading import Event
 from typing import Callable, Mapping, MutableMapping, Optional, Sequence, Set
 
+from snuba.utils.codecs import Codec
 from snuba.utils.concurrent import Synchronized, execute
 from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
+from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -14,6 +20,32 @@ class Commit:
     group: str
     partition: Partition
     offset: int
+
+
+class CommitCodec(Codec[KafkaPayload, Commit]):
+    def encode(self, value: Commit) -> KafkaPayload:
+        return KafkaPayload(
+            f"{value.partition.topic.name}:{value.partition.index}:{value.group}".encode(
+                "utf-8"
+            ),
+            f"{value.offset}".encode("utf-8"),
+        )
+
+    def decode(self, value: KafkaPayload) -> Commit:
+        key = value.key
+        if not isinstance(key, bytes):
+            raise TypeError("payload key must be a bytes object")
+
+        val = value.value
+        if not isinstance(val, bytes):
+            raise TypeError("payload value must be a bytes object")
+
+        topic_name, partition_index, group = key.decode("utf-8").split(":", 3)
+        offset = int(val.decode("utf-8"))
+        return Commit(group, Partition(Topic(topic_name), int(partition_index)), offset)
+
+
+commit_codec = CommitCodec()
 
 
 class SynchronizedConsumer(Consumer[TPayload]):
@@ -43,7 +75,7 @@ class SynchronizedConsumer(Consumer[TPayload]):
     def __init__(
         self,
         consumer: Consumer[TPayload],
-        commit_log_consumer: Consumer[Commit],
+        commit_log_consumer: Consumer[KafkaPayload],
         commit_log_topic: Topic,
         commit_log_groups: Set[str],
     ) -> None:
@@ -58,7 +90,17 @@ class SynchronizedConsumer(Consumer[TPayload]):
         ] = Synchronized({group: {} for group in commit_log_groups})
 
         self.__commit_log_worker_stop_requested = Event()
+        self.__commit_log_worker_subscription_received = Event()
         self.__commit_log_worker = execute(self.__run_commit_log_worker)
+
+        logger.debug("Waiting for commit log consumer to receieve assignment...")
+        while not self.__commit_log_worker_subscription_received.wait(0.1):
+            # Check to make sure we're not waiting for an event that will never
+            # happen if the commit log consumer has crashed.
+            if not self.__commit_log_worker.running():
+                self.__commit_log_worker.result()
+        else:
+            logger.debug("Commit log consumer has started.")
 
         # The set of partitions that have been paused by the caller/user. This
         # takes precedence over whether or not the partition should be paused
@@ -70,7 +112,13 @@ class SynchronizedConsumer(Consumer[TPayload]):
 
         # TODO: This needs to ensure that it is subscribed to all partitions.
 
-        self.__commit_log_consumer.subscribe([self.__commit_log_topic])
+        def assignment_callback(offsets: Mapping[Partition, int]) -> None:
+            logger.debug("Commit log consumer received assignment: %r", offsets)
+            self.__commit_log_worker_subscription_received.set()
+
+        self.__commit_log_consumer.subscribe(
+            [self.__commit_log_topic], on_assign=assignment_callback
+        )
 
         while not self.__commit_log_worker_stop_requested.is_set():
             try:
@@ -81,7 +129,7 @@ class SynchronizedConsumer(Consumer[TPayload]):
             if message is None:
                 continue
 
-            commit = message.payload
+            commit = commit_codec.decode(message.payload)
             if commit.group not in self.__commit_log_groups:
                 continue
 

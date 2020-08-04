@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Callable, Mapping, NamedTuple, Optional, Sequence
+from typing import Callable, Mapping, NamedTuple, Optional, Sequence, Set
 
 from snuba.clickhouse.columns import ColumnSet, ColumnType
 from snuba.clusters.cluster import get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.schemas import RelationalSource, Schema
-from snuba.query.types import Condition
+from snuba.datasets.schemas import MandatoryCondition, RelationalSource, Schema
 
 
 class TableSource(RelationalSource):
@@ -20,7 +19,7 @@ class TableSource(RelationalSource):
         self,
         table_name: str,
         columns: ColumnSet,
-        mandatory_conditions: Optional[Sequence[Condition]] = None,
+        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
     ) -> None:
         self.__table_name = table_name
@@ -34,7 +33,7 @@ class TableSource(RelationalSource):
     def get_columns(self) -> ColumnSet:
         return self.__columns
 
-    def get_mandatory_conditions(self) -> Sequence[Condition]:
+    def get_mandatory_conditions(self) -> Sequence[MandatoryCondition]:
         return self.__mandatory_conditions
 
     def get_prewhere_candidates(self) -> Sequence[str]:
@@ -46,13 +45,10 @@ class DDLStatement(NamedTuple):
     statement: str
 
 
-class TableSchema(Schema, ABC):
+class TableSchema(Schema):
     """
     Represent a table-like schema. This means it represents either
     a Clickhouse table, a Clickhouse view or a Materialized view.
-
-    Specifically a TableSchema is something we can read from through
-    a simple select and that provides DDL operations.
     """
 
     def __init__(
@@ -62,15 +58,9 @@ class TableSchema(Schema, ABC):
         local_table_name: str,
         dist_table_name: str,
         storage_set_key: StorageSetKey,
-        mandatory_conditions: Optional[Sequence[Condition]] = None,
+        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
-        migration_function: Optional[
-            Callable[[str, Mapping[str, ColumnType]], Sequence[str]]
-        ] = None,
     ):
-        self.__migration_function = (
-            migration_function if migration_function else lambda table, schema: []
-        )
         self.__local_table_name = local_table_name
         self.__table_name = (
             local_table_name
@@ -91,7 +81,7 @@ class TableSchema(Schema, ABC):
     def get_local_table_name(self) -> str:
         """
         This returns the local table name for a distributed environment.
-        It is supposed to be used in DDL commands and for maintenance.
+        It is supposed to be used in maintenance.
         """
         return self.__local_table_name
 
@@ -102,10 +92,61 @@ class TableSchema(Schema, ABC):
         """
         return self.__table_name
 
-    def get_local_drop_table_statement(self) -> DDLStatement:
-        return DDLStatement(
-            self.get_local_table_name(),
-            "DROP TABLE IF EXISTS %s" % self.get_local_table_name(),
+
+class TableSchemaWithDDL(TableSchema, ABC):
+    """
+    Extends TableSchema with DDL support. This is used in the old migration system.
+    Once we move to the new system, this will be removed.
+    """
+
+    def __init__(
+        self,
+        columns: ColumnSet,
+        *,
+        local_table_name: str,
+        dist_table_name: str,
+        storage_set_key: StorageSetKey,
+        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
+        prewhere_candidates: Optional[Sequence[str]] = None,
+        migration_function: Optional[
+            Callable[[str, Mapping[str, ColumnType]], Sequence[str]]
+        ] = None,
+        skipped_cols_on_creation: Optional[Set[str]] = None,
+    ):
+        super().__init__(
+            columns,
+            local_table_name=local_table_name,
+            dist_table_name=dist_table_name,
+            storage_set_key=storage_set_key,
+            mandatory_conditions=mandatory_conditions,
+            prewhere_candidates=prewhere_candidates,
+        )
+        self.__migration_function = (
+            migration_function if migration_function else lambda table, schema: []
+        )
+        self.__local_table_name = local_table_name
+        # Clickhouse has some restrictions on materialized columns during
+        # table creation. For example a materialized column cannot
+        # reference a nested column
+        # (https://github.com/ClickHouse/ClickHouse/issues/12586).
+        # Those columns have to be skipped on table creation and added with
+        # an ALTER statement instead.
+        # This field marks the columns to skip during creation. They have to
+        # be in a migration statement.
+        # The new migration framework will not need this work around since
+        # the current schema and the CREATE statement for a storage are separate.
+        self.__skipped_cols_on_creation = skipped_cols_on_creation or set()
+
+    def _get_columnset_to_create(self) -> ColumnSet:
+        """
+        Returns the ColumnSet to be created.
+        """
+        return ColumnSet(
+            [
+                c
+                for c in self.get_columns().columns
+                if c.name not in self.__skipped_cols_on_creation
+            ]
         )
 
     @abstractmethod
@@ -132,7 +173,7 @@ class WritableTableSchema(TableSchema):
     pass
 
 
-class MergeTreeSchema(WritableTableSchema):
+class MergeTreeSchema(WritableTableSchema, TableSchemaWithDDL):
     def __init__(
         self,
         columns: ColumnSet,
@@ -140,7 +181,7 @@ class MergeTreeSchema(WritableTableSchema):
         local_table_name: str,
         dist_table_name: str,
         storage_set_key: StorageSetKey,
-        mandatory_conditions: Optional[Sequence[Condition]] = None,
+        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
         order_by: str,
         partition_by: Optional[str],
@@ -150,6 +191,7 @@ class MergeTreeSchema(WritableTableSchema):
         migration_function: Optional[
             Callable[[str, Mapping[str, ColumnType]], Sequence[str]]
         ] = None,
+        skipped_cols_on_creation: Optional[Set[str]] = None,
     ):
         super(MergeTreeSchema, self).__init__(
             columns=columns,
@@ -159,6 +201,7 @@ class MergeTreeSchema(WritableTableSchema):
             mandatory_conditions=mandatory_conditions,
             prewhere_candidates=prewhere_candidates,
             migration_function=migration_function,
+            skipped_cols_on_creation=skipped_cols_on_creation,
         )
         self.__order_by = order_by
         self.__partition_by = partition_by
@@ -193,7 +236,7 @@ class MergeTreeSchema(WritableTableSchema):
     def __get_table_definition(self, name: str, engine: str) -> str:
         return """
         CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
-            "columns": self.get_columns().for_schema(),
+            "columns": self._get_columnset_to_create().for_schema(),
             "engine": engine,
             "name": name,
         }
@@ -215,7 +258,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         local_table_name: str,
         dist_table_name: str,
         storage_set_key: StorageSetKey,
-        mandatory_conditions: Optional[Sequence[Condition]] = None,
+        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
         order_by: str,
         partition_by: Optional[str],
@@ -226,6 +269,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         migration_function: Optional[
             Callable[[str, Mapping[str, ColumnType]], Sequence[str]]
         ] = None,
+        skipped_cols_on_creation: Optional[Set[str]] = None,
     ) -> None:
         super(ReplacingMergeTreeSchema, self).__init__(
             columns=columns,
@@ -240,6 +284,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
             ttl_expr=ttl_expr,
             settings=settings,
             migration_function=migration_function,
+            skipped_cols_on_creation=skipped_cols_on_creation,
         )
         self.__version_column = version_column
 
@@ -257,7 +302,7 @@ class AggregatingMergeTreeSchema(MergeTreeSchema):
         return "AggregatingMergeTree()"
 
 
-class MaterializedViewSchema(TableSchema):
+class MaterializedViewSchema(TableSchemaWithDDL):
     def __init__(
         self,
         columns: ColumnSet,
@@ -265,7 +310,7 @@ class MaterializedViewSchema(TableSchema):
         local_materialized_view_name: str,
         dist_materialized_view_name: str,
         storage_set_key: StorageSetKey,
-        mandatory_conditions: Optional[Sequence[Condition]] = None,
+        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
         query: str,
         local_source_table_name: str,
@@ -310,7 +355,7 @@ class MaterializedViewSchema(TableSchema):
             % {
                 "name": name,
                 "destination_table_name": destination_table_name,
-                "columns": self.get_columns().for_schema(),
+                "columns": self._get_columnset_to_create().for_schema(),
                 "query": self.__query,
             }
             % {"source_table_name": source_table_name}

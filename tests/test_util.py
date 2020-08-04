@@ -62,12 +62,7 @@ class TestUtil(BaseTest):
     def test_conditions_expr(self, dataset):
         state.set_config("use_escape_alias", 1)
         conditions = [["a", "=", 1]]
-        source = (
-            dataset.get_all_storages()[0]
-            .get_schemas()
-            .get_read_schema()
-            .get_data_source()
-        )
+        source = dataset.get_all_storages()[0].get_schema().get_data_source()
         assert (
             conditions_expr(dataset, conditions, Query({}, source), ParsingContext())
             == "a = 1"
@@ -189,7 +184,7 @@ class TestUtil(BaseTest):
         )
         assert (
             conditions_expr(dataset, conditions, Query({}, source), ParsingContext())
-            == """(notEmpty((tags.value[indexOf(tags.key, 'sentry:environment')] AS `tags[sentry:environment]`)) = 'dev' OR notEmpty(`tags[sentry:environment]`) = 'prod') AND (notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 'joe' OR notEmpty(`tags[sentry:user]`) = 'bob')"""
+            == """(notEmpty((arrayElement(tags.value, indexOf(tags.key, 'sentry:environment')) AS `tags[sentry:environment]`)) = 'dev' OR notEmpty(`tags[sentry:environment]`) = 'prod') AND (notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 'joe' OR notEmpty(`tags[sentry:user]`) = 'bob')"""
         )
 
         # Test scalar condition on array column is expanded as an iterator.
@@ -225,12 +220,7 @@ class TestUtil(BaseTest):
             ]
         }
         parsing_context = ParsingContext()
-        source = (
-            dataset.get_all_storages()[0]
-            .get_schemas()
-            .get_read_schema()
-            .get_data_source()
-        )
+        source = dataset.get_all_storages()[0].get_schema().get_data_source()
         # In the case where 2 different expressions are aliased
         # to the same thing, one ends up overwriting the other.
         # This may not be ideal as it may mask bugs in query conditions
@@ -242,12 +232,7 @@ class TestUtil(BaseTest):
 
     @pytest.mark.parametrize("dataset", DATASETS)
     def test_nested_aggregate_legacy_format(self, dataset):
-        source = (
-            dataset.get_all_storages()[0]
-            .get_schemas()
-            .get_read_schema()
-            .get_data_source()
-        )
+        source = dataset.get_all_storages()[0].get_schema().get_data_source()
         priority = [
             "toUInt64(plus(multiply(log(times_seen), 600), last_seen))",
             "",
@@ -280,12 +265,7 @@ class TestUtil(BaseTest):
 
     @pytest.mark.parametrize("dataset", DATASETS)
     def test_complex_conditions_expr(self, dataset):
-        source = (
-            dataset.get_all_storages()[0]
-            .get_schemas()
-            .get_read_schema()
-            .get_data_source()
-        )
+        source = dataset.get_all_storages()[0].get_schema().get_data_source()
         query = Query({}, source)
 
         assert (
@@ -326,6 +306,16 @@ class TestUtil(BaseTest):
                 dataset, tuplify(["foo", [], "a"]), deepcopy(query), ParsingContext()
             )
             == "(foo() AS a)"
+        )
+        state.set_config("format_clickhouse_arrays", 1)
+        assert (
+            complex_column_expr(
+                dataset,
+                tuplify(["array", [1, 2, 3], "a"]),
+                deepcopy(query),
+                ParsingContext(),
+            )
+            == "([1, 2, 3] AS a)"
         )
         assert (
             complex_column_expr(
@@ -491,6 +481,16 @@ class TestUtil(BaseTest):
             **locals()
         )
 
+        # Messages can have newlines in them
+        assert complex_column_expr(
+            dataset,
+            tuplify(["positionCaseInsensitive", ["message", "'nice \n a newline\n'"]]),
+            deepcopy(query),
+            ParsingContext(),
+        ) == "positionCaseInsensitive({message_expr}, 'nice \n a newline\n')".format(
+            **locals()
+        )
+
         # dangerous characters are allowed but escaped in literals and column names
         assert (
             complex_column_expr(
@@ -524,12 +524,7 @@ class TestUtil(BaseTest):
     def test_apdex_expression(self, dataset):
         body = {"aggregations": [["apdex(duration, 300)", "", "apdex_score"]]}
         parsing_context = ParsingContext()
-        source = (
-            dataset.get_all_storages()[0]
-            .get_schemas()
-            .get_read_schema()
-            .get_data_source()
-        )
+        source = dataset.get_all_storages()[0].get_schema().get_data_source()
         exprs = [
             column_expr(dataset, col, Query(body, source), parsing_context, alias, agg)
             for (agg, col, alias) in body["aggregations"]
@@ -542,12 +537,7 @@ class TestUtil(BaseTest):
     def test_impact_expression(self, dataset):
         body = {"aggregations": [["impact(duration, 300, user)", "", "impact_score"]]}
         parsing_context = ParsingContext()
-        source = (
-            dataset.get_all_storages()[0]
-            .get_schemas()
-            .get_read_schema()
-            .get_data_source()
-        )
+        source = dataset.get_all_storages()[0].get_schema().get_data_source()
         exprs = [
             column_expr(dataset, col, Query(body, source), parsing_context, alias, agg)
             for (agg, col, alias) in body["aggregations"]
@@ -560,16 +550,11 @@ class TestUtil(BaseTest):
     def test_failure_rate_expression(self, dataset):
         body = {"aggregations": [["failure_rate()", "", "error_percentage"]]}
         parsing_context = ParsingContext()
-        source = (
-            dataset.get_all_storages()[0]
-            .get_schemas()
-            .get_read_schema()
-            .get_data_source()
-        )
+        source = dataset.get_all_storages()[0].get_schema().get_data_source()
         exprs = [
             column_expr(dataset, col, Query(body, source), parsing_context, alias, agg)
             for (agg, col, alias) in body["aggregations"]
         ]
         assert exprs == [
-            "(countIf((transaction_status != 0 AND transaction_status != 2)) / count() AS error_percentage)"
+            "(countIf(notIn(transaction_status, tuple(0, 1, 2))) / count() AS error_percentage)"
         ]

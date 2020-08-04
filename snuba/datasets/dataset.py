@@ -8,6 +8,7 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
+from snuba.query.validation import FunctionCallValidator
 from snuba.util import parse_datetime, qualified_column
 
 
@@ -133,6 +134,14 @@ class Dataset(object):
         """
         return condition
 
+    def get_function_call_validators(self) -> Mapping[str, FunctionCallValidator]:
+        """
+        Provides a sequence of function expression validators for
+        this dataset. The typical use case is the validation that
+        calls to dataset specific functions are well formed.
+        """
+        return {}
+
 
 class TimeSeriesDataset(Dataset):
     def __init__(
@@ -170,7 +179,7 @@ class TimeSeriesDataset(Dataset):
             86400: "toDate({column}, 'Universal')",
         }.get(
             granularity,
-            "toDateTime(intDiv(toUInt32({column}), {granularity}) * {granularity}, 'Universal')",
+            "toDateTime(multiply(intDiv(toUInt32({column}), {granularity}), {granularity}), 'Universal')",
         )
         return template.format(column=real_column, granularity=granularity)
 

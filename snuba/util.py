@@ -1,12 +1,13 @@
+import inspect
+import logging
+import numbers
+import re
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
-from dateutil.parser import parse as dateutil_parse
-from functools import wraps
-from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
+from functools import partial, wraps
 from typing import (
     Any,
     Callable,
-    cast,
     Iterator,
     List,
     Mapping,
@@ -16,18 +17,15 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
+    cast,
 )
 
-import inspect
-import logging
-import numbers
-import re
-import _strptime  # NOQA fixes _strptime deferred import issue
-
 import sentry_sdk
+from dateutil.parser import parse as dateutil_parse
 
+import _strptime  # NOQA fixes _strptime deferred import issue
 from snuba import settings
-from snuba.clickhouse.escaping import escape_identifier, escape_string
+from snuba.clickhouse.escaping import escape_string
 from snuba.query.parsing import ParsingContext
 from snuba.query.schema import CONDITION_OPERATORS
 from snuba.utils.metrics.backends.abstract import MetricsBackend
@@ -42,14 +40,8 @@ T = TypeVar("T")
 
 # example partition name: "('2018-03-13 00:00:00', 90)"
 PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})',\s*(\d+)\)")
-QUOTED_LITERAL_RE = re.compile(r"^'.*'$")
+QUOTED_LITERAL_RE = re.compile(r"^'[\s\S]*'$")
 SAFE_FUNCTION_RE = re.compile(r"-?[a-zA-Z_][a-zA-Z0-9_]*$")
-TOPK_FUNCTION_RE = re.compile(r"^top([1-9]\d*)$")
-APDEX_FUNCTION_RE = re.compile(r"^apdex\(\s*([^,]+)+\s*,\s*([\d]+)+\s*\)$")
-IMPACT_FUNCTION_RE = re.compile(
-    r"^impact\(\s*([^,]+)+\s*,\s*([\d]+)+\s*,\s*([^,]+)+\s*\)$"
-)
-FAILURE_RATE_FUNCTION_RE = re.compile(r"^failure_rate\(\)$")
 
 
 def to_list(value: Union[T, List[T]]) -> List[T]:
@@ -67,71 +59,6 @@ def qualified_column(column_name: str, alias: str = "") -> str:
 def parse_datetime(value: str, alignment: int = 1) -> datetime:
     dt = dateutil_parse(value, ignoretz=True).replace(microsecond=0)
     return dt - timedelta(seconds=(dt - dt.min).seconds % alignment)
-
-
-def function_expr(fn: str, args_expr: str = "") -> str:
-    """
-    DEPRECATED. Please do not add anything else here. In order to manipulate the
-    query, create a QueryProcessor and register it into your dataset.
-
-    Generate an expression for a given function name and an already-evaluated
-    args expression. This is a place to define convenience functions that evaluate
-    to more complex expressions.
-
-    """
-    if fn.startswith("apdex("):
-        match = APDEX_FUNCTION_RE.match(fn)
-        if match:
-            return "(countIf({col} <= {satisfied}) + (countIf(({col} > {satisfied}) AND ({col} <= {tolerated})) / 2)) / count()".format(
-                col=escape_identifier(match.group(1)),
-                satisfied=match.group(2),
-                tolerated=int(match.group(2)) * 4,
-            )
-        raise ValueError("Invalid format for apdex()")
-    elif fn.startswith("impact("):
-        match = IMPACT_FUNCTION_RE.match(fn)
-        if match:
-            apdex = "(countIf({col} <= {satisfied}) + (countIf(({col} > {satisfied}) AND ({col} <= {tolerated})) / 2)) / count()".format(
-                col=escape_identifier(match.group(1)),
-                satisfied=match.group(2),
-                tolerated=int(match.group(2)) * 4,
-            )
-
-            return "(1 - {apdex}) + ((1 - (1 / sqrt(uniq({user_col})))) * 3)".format(
-                apdex=apdex, user_col=escape_identifier(match.group(3)),
-            )
-        raise ValueError("Invalid format for impact()")
-    elif fn.startswith("failure_rate("):
-        match = FAILURE_RATE_FUNCTION_RE.match(fn)
-        if match:
-            return "countIf((transaction_status != {ok} AND transaction_status != {unknown})) / count()".format(
-                ok=SPAN_STATUS_NAME_TO_CODE["ok"],
-                unknown=SPAN_STATUS_NAME_TO_CODE["unknown_error"],
-            )
-        raise ValueError("Invalid format for failure_rate()")
-    # For functions with no args, (or static args) we allow them to already
-    # include them as part of the function name, eg, "count()" or "sleep(1)"
-    if not args_expr and fn.endswith(")"):
-        return fn
-
-    # Convenience topK function eg "top10", "top3" etc.
-    topk = TOPK_FUNCTION_RE.match(fn)
-    if topk:
-        return "topK({})({})".format(topk.group(1), args_expr)
-
-    # turn uniq() into ifNull(uniq(), 0) so it doesn't return null where
-    # a number was expected.
-    if fn == "uniq":
-        return "ifNull({}({}), 0)".format(fn, args_expr)
-
-    # emptyIfNull(col) is a simple pseudo function supported by Snuba that expands
-    # to the actual clickhouse function ifNull(col, '') Until we figure out the best
-    # way to disambiguate column names from string literals in complex functions.
-    if fn == "emptyIfNull" and args_expr:
-        return "ifNull({}, '')".format(args_expr)
-
-    # default: just return fn(args_expr)
-    return "{}({})".format(fn, args_expr)
 
 
 # TODO: Fix the type of Tuple concatenation when mypy supports it.
@@ -328,7 +255,8 @@ def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
     from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend
 
     return DatadogMetricsBackend(
-        DogStatsd(
+        partial(
+            DogStatsd,
             host=host,
             port=port,
             namespace=prefix,

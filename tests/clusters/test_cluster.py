@@ -18,7 +18,14 @@ class TestClusters:
                 "password": "",
                 "database": "default",
                 "http_port": 8123,
-                "storage_sets": {"events", "outcomes", "querylog", "sessions"},
+                "storage_sets": {
+                    "events",
+                    "events_ro",
+                    "migrations",
+                    "outcomes",
+                    "querylog",
+                    "sessions",
+                },
                 "single_node": True,
             },
             {

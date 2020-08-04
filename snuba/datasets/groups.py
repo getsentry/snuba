@@ -4,9 +4,9 @@ from typing import Mapping, Optional, Sequence
 from snuba.clickhouse.processors import QueryProcessor as ClickhouseProcessor
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset import TimeSeriesDataset
-from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.schemas import MandatoryCondition
 from snuba.datasets.schemas.join import (
     JoinClause,
     JoinCondition,
@@ -20,6 +20,8 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
+from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
@@ -35,18 +37,10 @@ from snuba.util import qualified_column
 
 class JoinedStorage(ReadableStorage):
     def __init__(
-        self,
-        storage_key: StorageKey,
-        storage_set_key: StorageSetKey,
-        join_structure: JoinClause,
+        self, storage_set_key: StorageSetKey, join_structure: JoinClause,
     ) -> None:
         self.__structure = join_structure
-        super().__init__(storage_key, storage_set_key)
-
-    def get_schemas(self) -> StorageSchemas:
-        return StorageSchemas(
-            read_schema=JoinedSchema(self.__structure), write_schema=None
-        )
+        super().__init__(storage_set_key, JoinedSchema(self.__structure))
 
     def get_table_writer(self) -> Optional[TableWriter]:
         return None
@@ -67,29 +61,26 @@ class Groups(TimeSeriesDataset):
     def __init__(self) -> None:
         self.__grouped_message = get_dataset("groupedmessage")
         groupedmessage_source = (
-            get_storage(StorageKey.GROUPEDMESSAGES)
-            .get_schemas()
-            .get_read_schema()
-            .get_data_source()
+            get_storage(StorageKey.GROUPEDMESSAGES).get_schema().get_data_source()
         )
 
         self.__events = get_dataset("events")
-        events_source = (
-            get_storage(StorageKey.EVENTS)
-            .get_schemas()
-            .get_read_schema()
-            .get_data_source()
-        )
+        events_source = get_storage(StorageKey.EVENTS).get_schema().get_data_source()
 
         join_structure = JoinClause(
             left_node=TableJoinNode(
                 table_name=groupedmessage_source.format_from(),
                 columns=groupedmessage_source.get_columns(),
                 mandatory_conditions=[
-                    # TODO: This will be replaced as soon as expressions won't be strings
-                    # thus we will be able to easily add an alias to a column in an
-                    # expression.
-                    (qualified_column("record_deleted", self.GROUPS_ALIAS), "=", 0)
+                    MandatoryCondition(
+                        (qualified_column("record_deleted", self.GROUPS_ALIAS), "=", 0),
+                        binary_condition(
+                            None,
+                            ConditionFunctions.EQ,
+                            Column(None, self.GROUPS_ALIAS, "record_deleted"),
+                            Literal(None, 0),
+                        ),
+                    )
                 ],
                 prewhere_candidates=[
                     qualified_column(col, self.GROUPS_ALIAS)
@@ -101,7 +92,15 @@ class Groups(TimeSeriesDataset):
                 table_name=events_source.format_from(),
                 columns=events_source.get_columns(),
                 mandatory_conditions=[
-                    (qualified_column("deleted", self.EVENTS_ALIAS), "=", 0)
+                    MandatoryCondition(
+                        (qualified_column("deleted", self.EVENTS_ALIAS), "=", 0),
+                        binary_condition(
+                            None,
+                            ConditionFunctions.EQ,
+                            Column(None, self.EVENTS_ALIAS, "deleted"),
+                            Literal(None, 0),
+                        ),
+                    )
                 ],
                 prewhere_candidates=[
                     qualified_column(col, self.EVENTS_ALIAS)
@@ -131,7 +130,7 @@ class Groups(TimeSeriesDataset):
         )
 
         schema = JoinedSchema(join_structure)
-        storage = JoinedStorage(StorageKey.GROUPS, StorageSetKey.EVENTS, join_structure)
+        storage = JoinedStorage(StorageSetKey.EVENTS, join_structure)
         self.__time_group_columns = {"events.time": "events.timestamp"}
         super().__init__(
             storages=[storage],

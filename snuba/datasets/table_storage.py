@@ -1,12 +1,7 @@
 from dataclasses import dataclass
-import json
-import rapidjson
-
-from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence
 
 from snuba import settings
-from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,
@@ -19,8 +14,9 @@ from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.snapshots import BulkLoadSource
 from snuba.snapshots.loaders import BulkLoader
 from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
+from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.streams.kafka import KafkaPayload
-from snuba.writer import BatchWriter
+from snuba.writer import BatchWriter, WriterTableRow
 
 
 @dataclass(frozen=True)
@@ -132,15 +128,9 @@ class TableWriter:
         return self.__table_schema
 
     def get_writer(
-        self, options=None, table_name=None, rapidjson_serialize=False
-    ) -> BatchWriter:
+        self, metrics: MetricsBackend, options=None, table_name=None
+    ) -> BatchWriter[WriterTableRow]:
         from snuba import settings
-
-        def default(value):
-            if isinstance(value, datetime):
-                return value.strftime(DATETIME_FORMAT)
-            else:
-                raise TypeError
 
         table_name = table_name or self.__table_schema.get_table_name()
 
@@ -148,23 +138,18 @@ class TableWriter:
 
         return self.__cluster.get_writer(
             table_name,
-            lambda row: (
-                rapidjson.dumps(row, default=default)
-                if rapidjson_serialize
-                else json.dumps(row, default=default)
-            ).encode("utf-8"),
+            metrics,
             options,
             chunk_size=settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
         )
 
-    def get_bulk_writer(self, options=None, table_name=None) -> BatchWriter:
+    def get_bulk_writer(
+        self, metrics: MetricsBackend, options=None, table_name=None
+    ) -> BatchWriter[WriterTableRow]:
         """
         This is a stripped down verison of the writer designed
         for better performance when loading data in bulk.
         """
-        # TODO: Consider using rapidjson to encode everywhere
-        # once we will be confident it is reliable enough.
-
         from snuba import settings
 
         table_name = table_name or self.__table_schema.get_table_name()
@@ -172,10 +157,7 @@ class TableWriter:
         options = self.__update_writer_options(options)
 
         return self.__cluster.get_writer(
-            table_name,
-            lambda row: rapidjson.dumps(row).encode("utf-8"),
-            options,
-            chunk_size=settings.BULK_CLICKHOUSE_BUFFER,
+            table_name, metrics, options, chunk_size=settings.BULK_CLICKHOUSE_BUFFER,
         )
 
     def get_bulk_loader(

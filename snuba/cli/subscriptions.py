@@ -16,19 +16,15 @@ from snuba.subscriptions.consumer import TickConsumer
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
-from snuba.subscriptions.worker import (
-    SubscriptionTaskResultCodec,
-    SubscriptionWorker,
-)
-from snuba.utils.codecs import PassthroughCodec
+from snuba.subscriptions.worker import SubscriptionWorker
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
-from snuba.utils.streams.batching import BatchingConsumer
+from snuba.utils.streams.batching import BatchProcessingStrategyFactory
 from snuba.utils.streams.kafka import (
-    CommitCodec,
     KafkaConsumer,
     KafkaProducer,
     build_kafka_consumer_configuration,
 )
+from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.synchronized import SynchronizedConsumer
 from snuba.utils.streams.types import Topic
 
@@ -142,7 +138,6 @@ def subscriptions(
                     consumer_group,
                     auto_offset_reset=auto_offset_reset,
                 ),
-                PassthroughCodec(),
             ),
             KafkaConsumer(
                 build_kafka_consumer_configuration(
@@ -150,7 +145,6 @@ def subscriptions(
                     f"subscriptions-commit-log-{uuid.uuid1().hex}",
                     auto_offset_reset="earliest",
                 ),
-                CommitCodec(),
             ),
             (
                 Topic(commit_log_topic)
@@ -166,8 +160,7 @@ def subscriptions(
             "bootstrap.servers": ",".join(bootstrap_servers),
             "partitioner": "consistent",
             "message.max.bytes": 50000000,  # 50MB, default is 1MB
-        },
-        SubscriptionTaskResultCodec(),
+        }
     )
 
     executor = ThreadPoolExecutor(max_workers=max_query_workers)
@@ -175,43 +168,45 @@ def subscriptions(
     metrics.gauge("executor.workers", executor._max_workers)
 
     with closing(consumer), executor, closing(producer):
-        batching_consumer = BatchingConsumer(
+        batching_consumer = StreamProcessor(
             consumer,
             (
                 Topic(topic)
                 if topic is not None
                 else Topic(loader.get_default_topic_spec().topic_name)
             ),
-            SubscriptionWorker(
-                dataset,
-                executor,
-                {
-                    index: SubscriptionScheduler(
-                        RedisSubscriptionDataStore(
-                            redis_client, dataset, PartitionId(index)
-                        ),
-                        PartitionId(index),
-                        cache_ttl=timedelta(seconds=schedule_ttl),
-                        metrics=metrics,
-                    )
-                    for index in range(
-                        partitions
-                        if partitions is not None
-                        else loader.get_default_topic_spec().partitions_number
-                    )
-                },
-                producer,
-                Topic(result_topic),
-                metrics,
-                time_shift=(
-                    timedelta(seconds=delay_seconds * -1)
-                    if delay_seconds is not None
-                    else None
+            BatchProcessingStrategyFactory(
+                SubscriptionWorker(
+                    dataset,
+                    executor,
+                    {
+                        index: SubscriptionScheduler(
+                            RedisSubscriptionDataStore(
+                                redis_client, dataset, PartitionId(index)
+                            ),
+                            PartitionId(index),
+                            cache_ttl=timedelta(seconds=schedule_ttl),
+                            metrics=metrics,
+                        )
+                        for index in range(
+                            partitions
+                            if partitions is not None
+                            else loader.get_default_topic_spec().partitions_number
+                        )
+                    },
+                    producer,
+                    Topic(result_topic),
+                    metrics,
+                    time_shift=(
+                        timedelta(seconds=delay_seconds * -1)
+                        if delay_seconds is not None
+                        else None
+                    ),
                 ),
+                max_batch_size,
+                max_batch_time_ms,
+                metrics,
             ),
-            max_batch_size,
-            max_batch_time_ms,
-            metrics,
         )
 
         def handler(signum, frame) -> None:
