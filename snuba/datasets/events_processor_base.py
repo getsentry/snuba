@@ -37,19 +37,6 @@ else:
 
 logger = logging.getLogger(__name__)
 
-EventData = JSONSchema["schema/event.schema.json"]
-
-
-class Event(TypedDict):
-    data: EventData
-    search_message: Any
-    message: Any
-    event_id: Any
-    datetime: str
-    group_id: str
-    primary_hash: str
-
-
 REPLACEMENT_EVENT_TYPES = frozenset(
     [
         "start_delete_groups",
@@ -63,6 +50,8 @@ REPLACEMENT_EVENT_TYPES = frozenset(
     ]
 )
 
+EventData = JSONSchema["schema/event.schema.json"]
+
 
 class InsertEvent(TypedDict):
     group_id: Optional[int]
@@ -75,6 +64,7 @@ class InsertEvent(TypedDict):
     data: EventData
     primary_hash: str  # empty string represents None
     retention_days: int
+    search_message: Any
 
 
 class EventsProcessorBase(MessageProcessor, ABC):
@@ -165,7 +155,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         output["sdk_integrations"] = sdk_integrations
 
     def process_message(
-        self, message: Event, metadata: Optional[KafkaMessageMetadata]
+        self, message, metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         """\
         Process a raw message into an insertion or replacement batch. Returns
@@ -176,6 +166,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
             raise InvalidMessageVersion(f"Unsupported message version: {version}")
 
         # version 2: (2, type, data, [state])
+        event: InsertEvent
         type_, event = message[1:3]
         if type_ == "insert":
             try:
