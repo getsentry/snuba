@@ -1,4 +1,5 @@
 import logging
+import sys
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import (
@@ -8,7 +9,6 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
-    TypedDict,
     Union,
 )
 
@@ -38,6 +38,12 @@ from snuba.processor import (
 
 from jsonschema_typed import JSONSchema
 
+# Required until we are 100% on Py 3.8
+
+if sys.version_info >= (3, 8):
+    from typing import TypedDict  # pylint: disable=no-name-in-module
+else:
+    from typing_extensions import TypedDict
 EventData = JSONSchema["schema/event.schema.json"]
 
 
