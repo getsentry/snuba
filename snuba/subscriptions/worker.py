@@ -14,7 +14,7 @@ from snuba.request import Request
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import Subscription
 from snuba.subscriptions.scheduler import ScheduledTask, Scheduler
-from snuba.utils.codecs import Codec
+from snuba.utils.codecs import Encoder
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
@@ -43,7 +43,7 @@ class SubscriptionWorker(
         dataset: Dataset,
         executor: ThreadPoolExecutor,
         schedulers: Mapping[int, Scheduler[Subscription]],
-        producer: Producer[SubscriptionTaskResult],
+        producer: Producer[KafkaPayload],
         topic: Topic,
         metrics: MetricsBackend,
         time_shift: Optional[timedelta] = None,
@@ -127,12 +127,17 @@ class SubscriptionWorker(
         # them to complete. Again, either the entire batch succeeds, or the
         # entire batch fails.
         for future in as_completed(
-            [self.__producer.produce(self.__topic, result) for result in results]
+            [
+                self.__producer.produce(
+                    self.__topic, subscription_task_result_encoder.encode(result)
+                )
+                for result in results
+            ]
         ):
             future.result()
 
 
-class SubscriptionTaskResultCodec(Codec[KafkaPayload, SubscriptionTaskResult]):
+class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult]):
     def encode(self, value: SubscriptionTaskResult) -> KafkaPayload:
         subscription_id = str(value.task.task.identifier)
         request, result = value.result
@@ -151,5 +156,5 @@ class SubscriptionTaskResultCodec(Codec[KafkaPayload, SubscriptionTaskResult]):
             ).encode("utf-8"),
         )
 
-    def decode(self, value: KafkaPayload) -> SubscriptionTaskResult:
-        raise NotImplementedError
+
+subscription_task_result_encoder = SubscriptionTaskResultEncoder()

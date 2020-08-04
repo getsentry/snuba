@@ -2,10 +2,10 @@ from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
 from snuba.query.conditions import (
     binary_condition,
-    BooleanFunctions,
+    combine_and_conditions,
     ConditionFunctions,
 )
-from snuba.query.dsl import count, countIf, divide
+from snuba.query.dsl import count, divide
 from snuba.query.expressions import (
     Column,
     Expression,
@@ -20,7 +20,7 @@ from snuba.request.request_settings import RequestSettings
 class FailureRateProcessor(QueryProcessor):
     """
     A percentage of transactions with a bad status. "Bad" status is defined as anything other than "ok" and "unknown".
-    See here (https://github.com/getsentry/relay/blob/master/py/sentry_relay/consts.py) for the full list of errors.
+    See here (https://github.com/getsentry/relay/blob/master/relay-common/src/constants.rs) for the full list of errors.
     """
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
@@ -28,26 +28,27 @@ class FailureRateProcessor(QueryProcessor):
             if isinstance(exp, FunctionCall) and exp.function_name == "failure_rate":
                 assert len(exp.parameters) == 0
 
+                successful_codes = ["ok", "cancelled", "unknown"]
                 return divide(
-                    countIf(
-                        binary_condition(
-                            None,
-                            BooleanFunctions.AND,
-                            binary_condition(
-                                None,
-                                ConditionFunctions.NEQ,
-                                Column(None, None, "transaction_status"),
-                                Literal(None, SPAN_STATUS_NAME_TO_CODE["ok"]),
+                    # We use a FunctionCall directly rather than the countIf wrapper
+                    # because of a type hint incompatibility where countIf expects
+                    # a FunctionCall but combine_and_conditions returns an Expression
+                    FunctionCall(
+                        None,
+                        "countIf",
+                        (
+                            combine_and_conditions(
+                                [
+                                    binary_condition(
+                                        None,
+                                        ConditionFunctions.NEQ,
+                                        Column(None, None, "transaction_status"),
+                                        Literal(None, SPAN_STATUS_NAME_TO_CODE[code]),
+                                    )
+                                    for code in successful_codes
+                                ]
                             ),
-                            binary_condition(
-                                None,
-                                ConditionFunctions.NEQ,
-                                Column(None, None, "transaction_status"),
-                                Literal(
-                                    None, SPAN_STATUS_NAME_TO_CODE["unknown_error"]
-                                ),
-                            ),
-                        )
+                        ),
                     ),
                     count(),
                     exp.alias,

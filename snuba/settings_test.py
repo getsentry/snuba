@@ -1,5 +1,5 @@
-from typing import Set
 import os
+from typing import Set
 
 TESTING = True
 
@@ -9,6 +9,7 @@ CONFIG_MEMOIZE_TIMEOUT = 0
 
 RECORD_QUERIES = True
 USE_RESULT_CACHE = True
-DISABLED_DATASETS: Set[str] = set()
 
 SENTRY_DSN = os.getenv("SENTRY_DSN")
+
+SKIPPED_MIGRATION_GROUPS: Set[str] = set()

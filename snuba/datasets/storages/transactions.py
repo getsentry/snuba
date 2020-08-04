@@ -3,6 +3,7 @@ from typing import Mapping, Sequence
 
 from snuba.clickhouse.columns import (
     UUID,
+    Array,
     ColumnSet,
     ColumnType,
     DateTime,
@@ -17,10 +18,10 @@ from snuba.clickhouse.columns import (
     WithDefault,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.datasets.storages.transaction_column_processor import (
     TransactionColumnProcessor,
 )
@@ -108,6 +109,14 @@ def transactions_migrations(
             f"ALTER TABLE {clickhouse_table} ADD COLUMN message_timestamp DateTime AFTER offset"
         )
 
+    if "_tags_hash_map" not in current_schema:
+        ret.append(
+            (
+                f"ALTER TABLE {clickhouse_table} ADD COLUMN _tags_hash_map Array(UInt64) "
+                f"MATERIALIZED {TAGS_HASH_MAP_COLUMN} AFTER _tags_flattened"
+            )
+        )
+
     return ret
 
 
@@ -141,6 +150,7 @@ columns = ColumnSet(
         ("sdk_version", WithDefault(LowCardinality(String()), "''")),
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
+        ("_tags_hash_map", Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN)),
         ("contexts", Nested([("key", String()), ("value", String())])),
         ("_contexts_flattened", String()),
         ("partition", UInt(16)),
@@ -157,7 +167,7 @@ schema = ReplacingMergeTreeSchema(
     dist_table_name="transactions_dist",
     storage_set_key=StorageSetKey.TRANSACTIONS,
     mandatory_conditions=[],
-    prewhere_candidates=["event_id", "project_id"],
+    prewhere_candidates=["event_id", "transaction_name", "transaction", "title"],
     order_by="(project_id, toStartOfDay(finish_ts), transaction_name, cityHash64(span_id))",
     partition_by="(retention_days, toMonday(finish_ts))",
     version_column="deleted",
@@ -165,13 +175,19 @@ schema = ReplacingMergeTreeSchema(
     ttl_expr="finish_ts + toIntervalDay(retention_days)",
     settings={"index_granularity": "8192"},
     migration_function=transactions_migrations,
+    # Tags hashmap is a materialized column. Clickhouse does not allow
+    # us to create a materialized column that references a nested one
+    # during create statement
+    # (https://github.com/ClickHouse/ClickHouse/issues/12586), so the
+    # materialization is added with a migration.
+    skipped_cols_on_creation={"_tags_hash_map"},
 )
 
 
 storage = WritableTableStorage(
     storage_key=StorageKey.TRANSACTIONS,
     storage_set_key=StorageSetKey.TRANSACTIONS,
-    schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+    schema=schema,
     query_processors=[
         NestedFieldConditionOptimizer(
             "tags", "_tags_flattened", {"start_ts", "finish_ts"}, BEGINNING_OF_TIME,

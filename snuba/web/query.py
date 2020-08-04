@@ -1,13 +1,11 @@
 import copy
 import logging
-
 from datetime import datetime
+from functools import partial
 
 import sentry_sdk
 
-from functools import partial
-
-from snuba import environment, settings, state
+from snuba import environment
 from snuba.clickhouse.astquery import AstSqlQuery
 from snuba.clickhouse.dictquery import DictSqlQuery
 from snuba.clickhouse.query import Query
@@ -15,6 +13,8 @@ from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.timeseries_extension import TimeSeriesExtensionProcessor
+from snuba.querylog import record_query
+from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
@@ -22,8 +22,8 @@ from snuba.util import with_span
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
+from snuba.web.ast_rollout import is_ast_rolled_out
 from snuba.web.db_query import raw_query
-from snuba.web.query_metadata import SnubaQueryMetadata
 
 logger = logging.getLogger("snuba.query")
 
@@ -44,11 +44,6 @@ def parse_and_run_query(
         timer=timer,
         query_list=[],
     )
-
-    with sentry_sdk.configure_scope() as scope:
-        if scope.span:
-            scope.span.set_tag("dataset", get_dataset_name(dataset))
-            scope.span.set_tag("referrer", request.referrer)
 
     try:
         result = _run_query_pipeline(
@@ -121,9 +116,6 @@ def _run_query_pipeline(
     # between plan specific processors and DB query specific processors and with
     # the soon to come ClickhouseCluster, there is more coupling between the
     # components of the query plan.
-    # TODO: This below should be a storage specific query processor.
-    relational_source = query_plan.query.get_data_source()
-    query_plan.query.add_conditions(relational_source.get_mandatory_conditions())
 
     for clickhouse_processor in query_plan.plan_processors:
         with sentry_sdk.start_span(
@@ -165,9 +157,29 @@ def _format_storage_query_and_run(
     to collapse and disappear.
     """
 
+    # TODO: This function (well, it will be a wrapper of this function)
+    # where we will transform the result according to the SelectedExpression
+    # object in the query to ensure the fields in the QueryResult have
+    # the same name the user expects.
+
     source = clickhouse_query.get_data_source().format_from()
-    with sentry_sdk.start_span(description="create_query", op="db"):
-        formatted_query = DictSqlQuery(dataset, clickhouse_query, request_settings)
+    with sentry_sdk.start_span(description="create_query", op="db") as span:
+        legacy_query = DictSqlQuery(dataset, clickhouse_query, request_settings)
+        span.set_data("legacy_query", legacy_query.sql_data())
+
+        ast_query = AstSqlQuery(clickhouse_query, request_settings)
+        span.set_data("ast_query", ast_query.sql_data())
+
+        if is_ast_rolled_out(get_dataset_name(dataset), referrer):
+            formatted_query: SqlQuery = ast_query
+            query_type = "ast"
+        else:
+            formatted_query = legacy_query
+            query_type = "legacy"
+
+        metrics.increment("execute", tags={"query_type": query_type})
+        span.set_tag("query_type", query_type)
+
     timer.mark("prepare_query")
 
     stats = {
@@ -182,16 +194,6 @@ def _format_storage_query_and_run(
         description=formatted_query.format_sql(), op="db"
     ) as span:
         span.set_tag("table", source)
-        try:
-            span.set_data(
-                "ast_query", AstSqlQuery(clickhouse_query, request_settings).sql_data()
-            )
-            span.set_tag("query_type", "ast")
-        except Exception:
-            logger.warning("Failed to format ast query", exc_info=True)
-            span.set_tag("query_type", "dict")
-
-        span.set_data("dict_query", formatted_query.sql_data())
 
         return raw_query(
             clickhouse_query,
@@ -202,27 +204,4 @@ def _format_storage_query_and_run(
             query_metadata,
             stats,
             span.trace_id,
-        )
-
-
-def record_query(
-    request: Request, timer: Timer, query_metadata: SnubaQueryMetadata
-) -> None:
-    if settings.RECORD_QUERIES:
-        # Send to redis
-        # We convert this to a dict before passing it to state in order to avoid a
-        # circular dependency, where state would depend on the higher level
-        # QueryMetadata class
-        state.record_query(query_metadata.to_dict())
-
-        final = str(request.query.get_final())
-        referrer = request.referrer or "none"
-        timer.send_metrics_to(
-            metrics,
-            tags={
-                "status": query_metadata.status,
-                "referrer": referrer,
-                "final": final,
-            },
-            mark_tags={"final": final},
         )

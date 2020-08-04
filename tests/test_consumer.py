@@ -1,5 +1,6 @@
 import calendar
 from datetime import datetime, timedelta
+
 import simplejson as json
 
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -7,12 +8,12 @@ from snuba.consumer import ConsumerWorker
 from snuba.datasets.factory import enforce_table_writer
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.processor import ProcessedMessage, ProcessorAction
+from snuba.processor import ReplacementBatch
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
-from tests.base import BaseEventsTest
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
+from tests.base import BaseEventsTest
 
 
 class TestConsumer(BaseEventsTest):
@@ -26,7 +27,7 @@ class TestConsumer(BaseEventsTest):
             Partition(Topic("events"), 456),
             123,
             KafkaPayload(
-                None, json.dumps((0, "insert", event)).encode("utf-8")
+                None, json.dumps((2, "insert", event)).encode("utf-8")
             ),  # event doesn't really matter
             datetime.now(),
         )
@@ -78,7 +79,7 @@ class TestConsumer(BaseEventsTest):
         message: Message[KafkaPayload] = Message(
             Partition(Topic("events"), 1),
             42,
-            KafkaPayload(None, json.dumps((0, "insert", event)).encode("utf-8")),
+            KafkaPayload(None, json.dumps((2, "insert", event)).encode("utf-8")),
             datetime.now(),
         )
 
@@ -100,16 +101,12 @@ class TestConsumer(BaseEventsTest):
 
         test_worker.flush_batch(
             [
-                ProcessedMessage(
-                    action=ProcessorAction.REPLACE, data=[("1", {"project_id": 1})],
-                ),
-                ProcessedMessage(
-                    action=ProcessorAction.REPLACE, data=[("2", {"project_id": 2})],
-                ),
+                ReplacementBatch("1", [{"project_id": 1}]),
+                ReplacementBatch("2", [{"project_id": 2}]),
             ]
         )
 
         assert [(m._topic, m._key, m._value) for m in producer.messages] == [
-            ("event-replacements", b"1", b'{"project_id": 1}'),
-            ("event-replacements", b"2", b'{"project_id": 2}'),
+            ("event-replacements", b"1", b'{"project_id":1}'),
+            ("event-replacements", b"2", b'{"project_id":2}'),
         ]

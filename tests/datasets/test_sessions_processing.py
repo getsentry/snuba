@@ -2,6 +2,7 @@ from snuba.clickhouse.query import Query
 from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.factory import get_dataset
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
+from snuba.query.logical import SelectedExpression
 from snuba.query.parser import parse_query
 from snuba.reader import Reader
 from snuba.request import Request
@@ -24,15 +25,28 @@ def test_sessions_processing() -> None:
         query: Query, settings: RequestSettings, reader: Reader[SqlQuery]
     ) -> QueryResult:
         assert query.get_selected_columns_from_ast() == [
-            CurriedFunctionCall(
+            SelectedExpression(
                 "duration_quantiles",
-                FunctionCall(
-                    None, "quantilesIfMerge", (Literal(None, 0.5), Literal(None, 0.9))
+                CurriedFunctionCall(
+                    "duration_quantiles",
+                    FunctionCall(
+                        None,
+                        "quantilesIfMerge",
+                        (Literal(None, 0.5), Literal(None, 0.9)),
+                    ),
+                    (Column(None, None, "duration_quantiles"),),
                 ),
-                (Column(None, None, "duration_quantiles"),),
             ),
-            FunctionCall("sessions", "countIfMerge", (Column(None, None, "sessions"),)),
-            FunctionCall("users", "uniqIfMerge", (Column(None, None, "users"),)),
+            SelectedExpression(
+                "sessions",
+                FunctionCall(
+                    "sessions", "countIfMerge", (Column(None, None, "sessions"),)
+                ),
+            ),
+            SelectedExpression(
+                "users",
+                FunctionCall("users", "uniqIfMerge", (Column(None, None, "users"),)),
+            ),
         ]
         return QueryResult({}, {})
 

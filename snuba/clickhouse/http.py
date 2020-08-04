@@ -1,11 +1,17 @@
 import re
+from datetime import datetime
+from typing import Any, Iterable, Mapping, Optional
 from urllib.parse import urlencode
-from typing import Any, Callable, Iterable, Mapping, Optional
 
+import rapidjson
 from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
 
+from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.utils.codecs import Encoder
+from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.writer import BatchWriter, WriterTableRow
 
 
@@ -15,7 +21,21 @@ CLICKHOUSE_ERROR_RE = re.compile(
 )
 
 
-class HTTPBatchWriter(BatchWriter):
+JSONRow = bytes  # a single row in JSONEachRow format
+
+
+class JSONRowEncoder(Encoder[JSONRow, WriterTableRow]):
+    def __default(self, value: Any) -> Any:
+        if isinstance(value, datetime):
+            return value.strftime(DATETIME_FORMAT)
+        else:
+            raise TypeError
+
+    def encode(self, value: WriterTableRow) -> JSONRow:
+        return rapidjson.dumps(value, default=self.__default).encode("utf-8")
+
+
+class HTTPBatchWriter(BatchWriter[JSONRow]):
     def __init__(
         self,
         table_name: str,
@@ -24,7 +44,7 @@ class HTTPBatchWriter(BatchWriter):
         user: str,
         password: str,
         database: str,
-        encoder: Callable[[WriterTableRow], bytes],
+        metrics: MetricsBackend,
         options: Optional[Mapping[str, Any]] = None,
         chunk_size: Optional[int] = 1,
     ):
@@ -38,23 +58,33 @@ class HTTPBatchWriter(BatchWriter):
         self.__options = options if options is not None else {}
         self.__table_name = table_name
         self.__chunk_size = chunk_size
-        self.__encoder = encoder
         self.__user = user
         self.__password = password
         self.__database = database
+        self.__metrics = MetricsWrapper(metrics, "writer", {"table_name": table_name})
 
-    def _prepare_chunks(self, rows: Iterable[WriterTableRow]) -> Iterable[bytes]:
+    def _prepare_chunks(self, rows: Iterable[JSONRow]) -> Iterable[bytes]:
+        total_bytes_size = 0
         chunk = []
+
         for row in rows:
-            chunk.append(self.__encoder(row))
+            chunk.append(row)
             if self.__chunk_size and len(chunk) == self.__chunk_size:
-                yield b"".join(chunk)
+                chunk_bytes = b"".join(chunk)
+                yield chunk_bytes
+                self.__metrics.timing("chunk.size", len(chunk_bytes))
+                total_bytes_size += len(chunk_bytes)
                 chunk = []
 
         if chunk:
-            yield b"".join(chunk)
+            chunk_bytes = b"".join(chunk)
+            yield chunk_bytes
+            self.__metrics.timing("chunk.size", len(chunk_bytes))
+            total_bytes_size += len(chunk_bytes)
 
-    def write(self, rows: Iterable[WriterTableRow]) -> None:
+        self.__metrics.timing("total.size", total_bytes_size)
+
+    def write(self, values: Iterable[JSONRow]) -> None:
         response = self.__pool.urlopen(
             "POST",
             "/?"
@@ -70,7 +100,7 @@ class HTTPBatchWriter(BatchWriter):
                 "Connection": "keep-alive",
                 "Accept-Encoding": "gzip,deflate",
             },
-            body=self._prepare_chunks(rows),
+            body=self._prepare_chunks(values),
             chunked=True,
         )
 

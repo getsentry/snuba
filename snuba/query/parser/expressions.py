@@ -1,10 +1,22 @@
+import re
 from dataclasses import replace
-from typing import List, Tuple, Union
+from enum import Enum
+from typing import (
+    Any,
+    Callable,
+    Iterable,
+    List,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
-from typing import Any, Iterable, Optional
 
+from snuba.query.dsl import divide, minus, multiply, plus
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -12,33 +24,94 @@ from snuba.query.expressions import (
     FunctionCall,
     Literal,
 )
+from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.functions import parse_function_to_expr
 from snuba.query.parser.strings import parse_string_to_expr
 from snuba.util import is_function
 
+FUNCTION_NAME_REGEX = r"[a-zA-Z_][a-zA-Z0-9_]*"
+FUNCTION_NAME_RE = re.compile(FUNCTION_NAME_REGEX)
+
+
 minimal_clickhouse_grammar = Grammar(
-    r"""
+    fr"""
 # This root element is needed because of the ambiguity of the aggregation
 # function field which can mean a clickhouse function expression or the simple
 # name of a clickhouse function.
-root_element    = function_call / function_name
-expression      = function_call / simple_term
-parameters_list = parameter* (expression)
-parameter       = expression space* comma space*
-function_call   = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)?
-simple_term     = quoted_literal / numeric_literal / column_name
-literal         = ~r"[a-zA-Z0-9_\.:-]+"
-quoted_literal  = "'" string_literal "'"
-string_literal  = ~r"[a-zA-Z0-9_\.:-]*"
-numeric_literal = ~r"-?[0-9]+(\.[0-9]+)?"
-column_name     = ~r"[a-zA-Z_][a-zA-Z0-9_\.]*"
-function_name   = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
-open_paren      = "("
-close_paren     = ")"
-space           = " "
-comma           = ","
+
+root_element          = low_pri_arithmetic
+low_pri_arithmetic    = space* high_pri_arithmetic space* (low_pri_tuple)*
+high_pri_arithmetic   = space* arithmetic_term space* (high_pri_tuple)*
+low_pri_tuple         = low_pri_op high_pri_arithmetic
+high_pri_tuple        = high_pri_op arithmetic_term
+arithmetic_term       = (space*) (function_call / numeric_literal / column_name) (space*)
+low_pri_op            = "+" / "-"
+high_pri_op           = "/" / "*"
+param_expression      = low_pri_arithmetic / quoted_literal
+parameters_list       = parameter* (param_expression)
+parameter             = param_expression space* comma space*
+function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)?
+simple_term           = quoted_literal / numeric_literal / column_name
+literal               = ~r"[a-zA-Z0-9_\.:-]+"
+quoted_literal        = "'" string_literal "'"
+string_literal        = ~r"[a-zA-Z0-9_\.\+\*\/:-]*"
+numeric_literal       = ~r"-?[0-9]+(\.[0-9]+)?(e[\+\-][0-9]+)?"
+column_name           = ~r"[a-zA-Z_][a-zA-Z0-9_\.]*"
+function_name         = ~r"{FUNCTION_NAME_REGEX}"
+open_paren            = "("
+close_paren           = ")"
+space                 = " "
+comma                 = ","
 """
 )
+
+
+class LowPriOperator(Enum):
+    PLUS = "+"
+    MINUS = "-"
+
+
+class HighPriOperator(Enum):
+    MULTIPLY = "*"
+    DIVIDE = "/"
+
+
+class LowPriTuple(NamedTuple):
+    op: LowPriOperator
+    arithm: Expression
+
+
+class HighPriTuple(NamedTuple):
+    op: HighPriOperator
+    arithm: Expression
+
+
+HighPriArithmetic = Union[Node, HighPriTuple, Sequence[HighPriTuple]]
+LowPriArithmetic = Union[Node, LowPriTuple, Sequence[LowPriTuple]]
+
+
+def get_arithmetic_function(
+    operator: Enum,
+) -> Callable[[Expression, Expression, Optional[str]], FunctionCall]:
+    return {
+        HighPriOperator.MULTIPLY: multiply,
+        HighPriOperator.DIVIDE: divide,
+        LowPriOperator.PLUS: plus,
+        LowPriOperator.MINUS: minus,
+    }[operator]
+
+
+def get_arithmetic_expression(
+    term: Expression, exp: Union[LowPriArithmetic, HighPriArithmetic],
+) -> Expression:
+    if isinstance(exp, Node):
+        return term
+    if isinstance(exp, (LowPriTuple, HighPriTuple)):
+        return get_arithmetic_function(exp.op)(term, exp.arithm, None)
+    elif isinstance(exp, list):
+        for elem in exp:
+            term = get_arithmetic_function(elem.op)(term, elem.arithm, None)
+    return term
 
 
 class ClickhouseVisitor(NodeVisitor):
@@ -51,6 +124,57 @@ class ClickhouseVisitor(NodeVisitor):
 
     def visit_column_name(self, node: Node, visited_children: Iterable[Any]) -> Column:
         return Column(None, None, node.text)
+
+    def visit_low_pri_tuple(
+        self, node: Node, visited_children: Tuple[LowPriOperator, Expression]
+    ) -> LowPriTuple:
+        left, right = visited_children
+
+        return LowPriTuple(op=left, arithm=right)
+
+    def visit_high_pri_tuple(
+        self, node: Node, visited_children: Tuple[HighPriOperator, Expression]
+    ) -> HighPriTuple:
+        left, right = visited_children
+
+        return HighPriTuple(op=left, arithm=right)
+
+    def visit_low_pri_op(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> LowPriOperator:
+
+        return LowPriOperator(node.text)
+
+    def visit_high_pri_op(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> HighPriOperator:
+
+        return HighPriOperator(node.text)
+
+    def visit_arithmetic_term(
+        self, node: Node, visited_children: Tuple[Any, Expression, Any]
+    ) -> Expression:
+        _, term, _ = visited_children
+
+        return term
+
+    def visit_low_pri_arithmetic(
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Expression, Any, LowPriArithmetic],
+    ) -> Expression:
+        _, term, _, exp = visited_children
+
+        return get_arithmetic_expression(term, exp)
+
+    def visit_high_pri_arithmetic(
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Expression, Any, HighPriArithmetic],
+    ) -> Expression:
+        _, term, _, exp = visited_children
+
+        return get_arithmetic_expression(term, exp)
 
     def visit_numeric_literal(
         self, node: Node, visited_children: Iterable[Any]
@@ -136,7 +260,9 @@ def parse_expression(val: Any) -> Expression:
         return parse_function_to_expr(val)
     if isinstance(val, str):
         return parse_string_to_expr(val)
-    raise ValueError(f"Expression to parse can only be a function or a string: {val}")
+    raise ParsingException(
+        f"Expression to parse can only be a function or a string: {val}"
+    )
 
 
 def parse_aggregation(
@@ -149,8 +275,6 @@ def parse_aggregation(
     the clickhouse expression. (not that we should support this, but it is
     used in production).
     """
-    expression_tree = minimal_clickhouse_grammar.parse(aggregation_function)
-    parsed_expression = ClickhouseVisitor().visit(expression_tree)
 
     if not isinstance(column, (list, tuple)):
         columns: Iterable[Any] = (column,)
@@ -159,19 +283,34 @@ def parse_aggregation(
 
     columns_expr = [parse_expression(column) for column in columns if column]
 
-    if isinstance(parsed_expression, str):
-        # Simple aggregation with snuba syntax ["count", ["c1", "c2"]]
-        return FunctionCall(alias, parsed_expression, tuple(columns_expr))
-    elif (
+    matched = FUNCTION_NAME_RE.fullmatch(aggregation_function)
+
+    if matched is not None:
+        return FunctionCall(alias, aggregation_function, tuple(columns_expr))
+
+    try:
+        expression_tree = minimal_clickhouse_grammar.parse(aggregation_function)
+    except Exception as cause:
+        raise ParsingException(
+            f"Cannot parse aggregation {aggregation_function}", cause
+        ) from cause
+
+    parsed_expression = ClickhouseVisitor().visit(expression_tree)
+
+    if (
         # Simple Clickhouse expression with no snuba syntax
         # ["ifNull(count(somthing), something)", None, None]
         isinstance(parsed_expression, (FunctionCall, CurriedFunctionCall))
         and not columns_expr
     ):
         return replace(parsed_expression, alias=alias)
+
     elif isinstance(parsed_expression, FunctionCall) and columns_expr:
         # Mix of clickhouse syntax and snuba syntax that generates a CurriedFunction
         # ["f(a)", "b", None]
         return CurriedFunctionCall(alias, parsed_expression, tuple(columns_expr),)
+
     else:
-        raise ValueError(f"Invalid aggregation format {aggregation_function} {column}")
+        raise ParsingException(
+            f"Invalid aggregation format {aggregation_function} {column}"
+        )

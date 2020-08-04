@@ -2,20 +2,26 @@ from __future__ import annotations
 
 import itertools
 import uuid
-
 from typing import Any, Mapping, Type
 
+import jsonschema
+
+from snuba import environment
 from snuba.datasets.dataset import Dataset
 from snuba.query.extensions import QueryExtension
 from snuba.query.parser import parse_query
 from snuba.query.schema import GENERIC_QUERY_SCHEMA
 from snuba.request import Request
+from snuba.request.exceptions import JsonSchemaValidationException
 from snuba.request.request_settings import (
     HTTPRequestSettings,
     RequestSettings,
     SubscriptionRequestSettings,
 )
 from snuba.schemas import Schema, validate_jsonschema
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+
+metrics = MetricsWrapper(environment.metrics, "parser")
 
 
 class RequestSchema:
@@ -82,7 +88,10 @@ class RequestSchema:
         return cls(generic_schema, settings_schema, extensions_schemas, settings_class)
 
     def validate(self, value, dataset: Dataset, referrer: str) -> Request:
-        value = validate_jsonschema(value, self.__composite_schema)
+        try:
+            value = validate_jsonschema(value, self.__composite_schema)
+        except jsonschema.ValidationError as error:
+            raise JsonSchemaValidationException(str(error)) from error
 
         query_body = {
             key: value.pop(key)
@@ -104,6 +113,7 @@ class RequestSchema:
             }
 
         query = parse_query(query_body, dataset)
+
         request_id = uuid.uuid4().hex
         return Request(
             request_id, query, self.__setting_class(**settings), extensions, referrer

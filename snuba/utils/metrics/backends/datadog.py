@@ -1,4 +1,5 @@
-from typing import Optional, Mapping, Sequence, Union
+import threading
+from typing import Callable, Optional, Mapping, Sequence, Union
 
 from datadog import DogStatsd
 
@@ -12,16 +13,30 @@ class DatadogMetricsBackend(MetricsBackend):
     """
 
     def __init__(
-        self, client: DogStatsd, sample_rates: Optional[Mapping[str, float]] = None
+        self,
+        client_factory: Callable[[], DogStatsd],
+        sample_rates: Optional[Mapping[str, float]] = None,
     ) -> None:
         """
+        :param client_factory: A function that returns a new ``DogStatsd``
+        instance. (These instances are not thread safe, so a new instance
+        will be created for each independent thread.)
         :param sample_rates: An optional mapping of metric names to sample
         rates to use when recording metrics. A sample rate of ``0.0`` will
         disable a metric entirely, while a sample rate of ``1.0`` will cause
         all values for that metric to be recorded.
         """
-        self.__client = client
+        self.__client_factory = client_factory
         self.__sample_rates = sample_rates if sample_rates is not None else {}
+        self.__thread_state = threading.local()
+
+    @property
+    def __client(self) -> DogStatsd:
+        try:
+            client = self.__thread_state.client
+        except AttributeError:
+            client = self.__thread_state.client = self.__client_factory()
+        return client
 
     def __normalize_tags(self, tags: Optional[Tags]) -> Optional[Sequence[str]]:
         if tags is None:

@@ -1,19 +1,12 @@
 import calendar
-import copy
-import pytest
 from collections import OrderedDict
 from datetime import datetime, timedelta
+from typing import Optional
 
-from tests.base import BaseEventsTest
+import pytest
 
 from snuba import settings
-from snuba.datasets.factory import enforce_table_writer
-from snuba.processor import (
-    InvalidMessageType,
-    InvalidMessageVersion,
-    ProcessedMessage,
-    ProcessorAction,
-)
+from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.events_format import (
     enforce_retention,
     extract_base,
@@ -21,88 +14,61 @@ from snuba.datasets.events_format import (
     extract_extra_tags,
     extract_user,
 )
+from snuba.datasets.events_processor_base import InsertEvent
+from snuba.datasets.factory import enforce_table_writer
+from snuba.processor import (
+    InsertBatch,
+    InvalidMessageType,
+    InvalidMessageVersion,
+    ProcessedMessage,
+    ReplacementBatch,
+)
+from tests.base import BaseEventsTest
 
 
 class TestEventsProcessor(BaseEventsTest):
-    def test_simple(self):
-        processed = (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message(self.event)
-        )
 
-        for field in ("event_id", "project_id", "message", "platform"):
-            assert processed.data[0][field] == self.event[field]
+    metadata = KafkaMessageMetadata(0, 0, datetime.now())
 
-    def test_simple_version_0(self):
-        processed = (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message((0, "insert", self.event))
-        )
-
-        for field in ("event_id", "project_id", "message", "platform"):
-            assert processed.data[0][field] == self.event[field]
-
-    def test_simple_version_1(self):
-        processor = (
-            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
-        )
-        assert processor.process_message(
-            (0, "insert", copy.deepcopy(self.event))
-        ) == processor.process_message((1, "insert", copy.deepcopy(self.event), {}))
-
-    def test_invalid_type_version_0(self):
-        with pytest.raises(InvalidMessageType):
-            enforce_table_writer(
-                self.dataset
-            ).get_stream_loader().get_processor().process_message(
-                (0, "invalid", self.event)
-            )
-
-    def test_invalid_version(self):
+    def test_invalid_version(self) -> None:
         with pytest.raises(InvalidMessageVersion):
             enforce_table_writer(
                 self.dataset
             ).get_stream_loader().get_processor().process_message(
-                (2 ** 32 - 1, "insert", self.event)
+                (2 ** 32 - 1, "insert", self.event), self.metadata,
             )
 
-    def test_invalid_format(self):
+    def test_invalid_format(self) -> None:
         with pytest.raises(InvalidMessageVersion):
             enforce_table_writer(
                 self.dataset
             ).get_stream_loader().get_processor().process_message(
-                (-1, "insert", self.event)
+                (-1, "insert", self.event), self.metadata,
             )
 
-    def test_unexpected_obj(self):
+    def __process_insert_event(self, event: InsertEvent) -> Optional[ProcessedMessage]:
+        return (
+            enforce_table_writer(self.dataset)
+            .get_stream_loader()
+            .get_processor()
+            .process_message((2, "insert", event, {}), self.metadata)
+        )
+
+    def test_unexpected_obj(self) -> None:
         self.event["message"] = {"what": "why is this in the message"}
 
-        processed = (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message(self.event)
-        )
+        processed = self.__process_insert_event(self.event)
+        assert isinstance(processed, InsertBatch)
+        assert processed.rows[0]["message"] == '{"what": "why is this in the message"}'
 
-        assert processed.data[0]["message"] == '{"what": "why is this in the message"}'
-
-    def test_hash_invalid_primary_hash(self):
+    def test_hash_invalid_primary_hash(self) -> None:
         self.event[
             "primary_hash"
         ] = b"'tinymce' \u063a\u064a\u0631 \u0645\u062d".decode("unicode-escape")
 
-        processed = (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message(self.event)
-        )
-
-        assert processed.data[0]["primary_hash"] == "a52ccc1a61c2258e918b43b5aff50db1"
+        processed = self.__process_insert_event(self.event)
+        assert isinstance(processed, InsertBatch)
+        assert processed.rows[0]["primary_hash"] == "a52ccc1a61c2258e918b43b5aff50db1"
 
     def test_extract_required(self):
         now = datetime.utcnow()
@@ -149,7 +115,9 @@ class TestEventsProcessor(BaseEventsTest):
 
         enforce_table_writer(
             self.dataset
-        ).get_stream_loader().get_processor().extract_common(output, event)
+        ).get_stream_loader().get_processor().extract_common(
+            output, event, self.metadata
+        )
         assert output == {
             "platform": u"the_platform",
             "primary_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -163,79 +131,13 @@ class TestEventsProcessor(BaseEventsTest):
             "location": "bar.py",
         }
 
-    def test_extract_common_search_message(self):
-        now = datetime.utcnow().replace(microsecond=0)
-        event = {
-            "primary_hash": "a" * 32,
-            "message": "the message",
-            "platform": "the_platform",
-            "search_message": "the search message",
-            "data": {"received": int(calendar.timegm(now.timetuple()))},
-        }
-        output = {}
-        processor = (
-            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
-        )
-        processor.extract_common(output, event)
-        processor.extract_custom(output, event)
-
-        assert output["search_message"] == "the search message"
-
-        # with optional short message
-        now = datetime.utcnow().replace(microsecond=0)
-        event = {
-            "primary_hash": "a" * 32,
-            "message": "the message",
-            "platform": "the_platform",
-            "search_message": "the search message",
-            "data": {
-                "received": int(calendar.timegm(now.timetuple())),
-                "message": "the short message",
-            },
-        }
-        output = {}
-        processor = (
-            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
-        )
-        processor.extract_common(output, event)
-        processor.extract_custom(output, event)
-        assert output["search_message"] == "the search message"
-        assert output["message"] == "the short message"
-
-    def test_v1_delete_groups_skipped(self):
-        assert (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message((1, "delete_groups", {}))
-            is None
-        )
-
-    def test_v1_merge_skipped(self):
-        assert (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message((1, "merge", {}))
-            is None
-        )
-
-    def test_v1_unmerge_skipped(self):
-        assert (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message((1, "unmerge", {}))
-            is None
-        )
-
     def test_v2_invalid_type(self):
         with pytest.raises(InvalidMessageType):
             assert (
                 enforce_table_writer(self.dataset)
                 .get_stream_loader()
                 .get_processor()
-                .process_message((2, "__invalid__", {}))
+                .process_message((2, "__invalid__", {}), self.metadata)
                 == 1
             )
 
@@ -245,8 +147,8 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
+        assert processor.process_message(message, self.metadata) == ReplacementBatch(
+            str(project_id), [message]
         )
 
     def test_v2_end_delete_groups(self):
@@ -255,8 +157,8 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
+        assert processor.process_message(message, self.metadata) == ReplacementBatch(
+            str(project_id), [message]
         )
 
     def test_v2_start_merge(self):
@@ -265,8 +167,8 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)]
+        assert processor.process_message(message, self.metadata) == ReplacementBatch(
+            str(project_id), [message]
         )
 
     def test_v2_end_merge(self):
@@ -275,8 +177,8 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
+        assert processor.process_message(message, self.metadata) == ReplacementBatch(
+            str(project_id), [message]
         )
 
     def test_v2_start_unmerge(self):
@@ -285,8 +187,8 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
+        assert processor.process_message(message, self.metadata) == ReplacementBatch(
+            str(project_id), [message]
         )
 
     def test_v2_end_unmerge(self):
@@ -295,8 +197,8 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
+        assert processor.process_message(message, self.metadata) == ReplacementBatch(
+            str(project_id), [message]
         )
 
     def test_v2_start_delete_tag(self):
@@ -305,8 +207,8 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
+        assert processor.process_message(message, self.metadata) == ReplacementBatch(
+            str(project_id), [message]
         )
 
     def test_v2_end_delete_tag(self):
@@ -315,8 +217,8 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
+        assert processor.process_message(message, self.metadata) == ReplacementBatch(
+            str(project_id), [message]
         )
 
     def test_extract_sdk(self):
@@ -703,7 +605,7 @@ class TestEventsProcessor(BaseEventsTest):
             "exception_stacks.mechanism_type": [u"promise"],
         }
 
-    def test_null_values_dont_throw(self):
+    def test_null_values_dont_throw(self) -> None:
         event = {
             "event_id": "bce76c2473324fa387b33564eacf34a0",
             "group_id": 1,
@@ -742,6 +644,4 @@ class TestEventsProcessor(BaseEventsTest):
             calendar.timegm((timestamp - timedelta(seconds=1)).timetuple())
         )
 
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().process_insert(event)
+        self.__process_insert_event(event)

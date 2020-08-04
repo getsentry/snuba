@@ -1,8 +1,8 @@
+import uuid
 from datetime import datetime
-from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 from typing import Optional
 
-import uuid
+from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
 from snuba import environment
 from snuba.datasets.events_format import (
@@ -13,18 +13,16 @@ from snuba.datasets.events_format import (
     extract_user,
     flatten_nested_field,
 )
-
 from snuba.processor import (
-    _as_dict_safe,
+    InsertBatch,
     MessageProcessor,
-    ProcessorAction,
     ProcessedMessage,
+    _as_dict_safe,
     _ensure_valid_date,
     _ensure_valid_ip,
     _unicodify,
 )
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
-
 
 metrics = MetricsWrapper(environment.metrics, "transactions.processor")
 
@@ -47,8 +45,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         milliseconds = int(timestamp.microsecond / 1000)
         return (timestamp, milliseconds)
 
-    def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
-        action_type = ProcessorAction.INSERT
+    def process_message(self, message, metadata) -> Optional[ProcessedMessage]:
         processed = {"deleted": 0}
         if not (isinstance(message, (list, tuple)) and len(message) >= 2):
             return None
@@ -150,9 +147,8 @@ class TransactionsMessageProcessor(MessageProcessor):
             elif ip_address.version == 6:
                 processed["ip_address_v6"] = str(ip_address)
 
-        if metadata is not None:
-            processed["partition"] = metadata.partition
-            processed["offset"] = metadata.offset
+        processed["partition"] = metadata.partition
+        processed["offset"] = metadata.offset
 
         sdk = data.get("sdk", None) or {}
         processed["sdk_name"] = _unicodify(sdk.get("name") or "")
@@ -163,4 +159,4 @@ class TransactionsMessageProcessor(MessageProcessor):
         if processed["sdk_version"] == "":
             metrics.increment("missing_sdk_version")
 
-        return ProcessedMessage(action=action_type, data=[processed],)
+        return InsertBatch([processed])

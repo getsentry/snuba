@@ -10,9 +10,7 @@ from snuba.util import tuplify
 
 def test_simple_column_expr():
     dataset = get_dataset("groups")
-    source = (
-        dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
-    )
+    source = dataset.get_all_storages()[0].get_schema().get_data_source()
 
     body = {"granularity": 86400}
     query = Query(body, source)
@@ -40,7 +38,7 @@ def test_simple_column_expr():
     # Single tag expression
     assert (
         column_expr(dataset, "events.tags[foo]", deepcopy(query), ParsingContext())
-        == "(events.tags.value[indexOf(events.tags.key, 'foo')] AS `events.tags[foo]`)"
+        == "(arrayElement(events.tags.value, indexOf(events.tags.key, 'foo')) AS `events.tags[foo]`)"
     )
 
     # Promoted tag expression / no translation
@@ -63,8 +61,8 @@ def test_simple_column_expr():
     assert column_expr(
         dataset, "events.tags_key", Query(tag_group_body, source), parsing_context
     ) == (
-        "(((arrayJoin(arrayMap((x,y) -> [x,y], events.tags.key, events.tags.value)) "
-        "AS all_tags))[1] AS `events.tags_key`)"
+        "(arrayElement((arrayJoin(arrayMap((x,y) -> [x,y], events.tags.key, events.tags.value)) "
+        "AS all_tags), 1) AS `events.tags_key`)"
     )
 
     assert (
@@ -149,15 +147,13 @@ def test_simple_column_expr():
 def test_alias_in_alias():
     state.set_config("use_escape_alias", 1)
     dataset = get_dataset("groups")
-    source = (
-        dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
-    )
+    source = dataset.get_all_storages()[0].get_schema().get_data_source()
     body = {"groupby": ["events.tags_key", "events.tags_value"]}
     query = Query(body, source)
     parsing_context = ParsingContext()
     assert column_expr(dataset, "events.tags_key", query, parsing_context) == (
-        "(((arrayJoin(arrayMap((x,y) -> [x,y], events.tags.key, events.tags.value)) "
-        "AS all_tags))[1] AS `events.tags_key`)"
+        "(arrayElement((arrayJoin(arrayMap((x,y) -> [x,y], events.tags.key, events.tags.value)) "
+        "AS all_tags), 1) AS `events.tags_key`)"
     )
 
     # If we want to use `tags_key` again, make sure we use the
@@ -170,15 +166,13 @@ def test_alias_in_alias():
     # the `all_tags` alias instead of re-expanding the tags arrayJoin
     assert (
         column_expr(dataset, "events.tags_value", query, parsing_context)
-        == "((all_tags)[2] AS `events.tags_value`)"
+        == "(arrayElement(all_tags, 2) AS `events.tags_value`)"
     )
 
 
 def test_conditions_expr():
     dataset = get_dataset("groups")
-    source = (
-        dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
-    )
+    source = dataset.get_all_storages()[0].get_schema().get_data_source()
     state.set_config("use_escape_alias", 1)
     conditions = [["events.a", "=", 1]]
     query = Query({}, source)
@@ -255,9 +249,7 @@ def test_conditions_expr():
 
 def test_duplicate_expression_alias():
     dataset = get_dataset("groups")
-    source = (
-        dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
-    )
+    source = dataset.get_all_storages()[0].get_schema().get_data_source()
     state.set_config("use_escape_alias", 1)
 
     body = {
@@ -280,9 +272,7 @@ def test_duplicate_expression_alias():
 
 def test_order_by():
     dataset = get_dataset("groups")
-    source = (
-        dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
-    )
+    source = dataset.get_all_storages()[0].get_schema().get_data_source()
     body = {}
     query = Query(body, source)
 

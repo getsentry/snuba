@@ -1,15 +1,15 @@
 import time
 from datetime import datetime
-from typing import (
-    Any,
-    MutableSequence,
-    Sequence,
-)
+from typing import Any, MutableSequence, Sequence
 from unittest.mock import patch
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.batching import AbstractBatchWorker, BatchingConsumer
-from snuba.utils.streams.dummy import DummyBroker, DummyConsumer, DummyProducer
+from snuba.utils.streams.batching import (
+    AbstractBatchWorker,
+    BatchProcessingStrategyFactory,
+)
+from snuba.utils.streams.dummy import DummyBroker
+from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.types import Message, Topic
 
 
@@ -27,24 +27,25 @@ class FakeWorker(AbstractBatchWorker[int, int]):
 
 
 class TestConsumer(object):
-    def test_batch_size(self) -> None:
+    def test_batch_size(self, broker: DummyBroker[int]) -> None:
         topic = Topic("topic")
-        broker: DummyBroker[int] = DummyBroker()
         broker.create_topic(topic, partitions=1)
-        producer: DummyProducer[int] = DummyProducer(broker)
+        producer = broker.get_producer()
         for i in [1, 2, 3]:
             producer.produce(topic, i).result()
 
-        consumer: DummyConsumer[int] = DummyConsumer(broker, "group")
+        consumer = broker.get_consumer("group")
 
         worker = FakeWorker()
-        batching_consumer = BatchingConsumer(
+        batching_consumer = StreamProcessor(
             consumer,
             topic,
-            worker=worker,
-            max_batch_size=2,
-            max_batch_time=100,
-            metrics=DummyMetricsBackend(strict=True),
+            BatchProcessingStrategyFactory(
+                worker=worker,
+                max_batch_size=2,
+                max_batch_time=100,
+                metrics=DummyMetricsBackend(strict=True),
+            ),
         )
 
         for _ in range(3):
@@ -58,22 +59,22 @@ class TestConsumer(object):
         assert consumer.close_calls == 1
 
     @patch("time.time")
-    def test_batch_time(self, mock_time: Any) -> None:
+    def test_batch_time(self, mock_time: Any, broker: DummyBroker[int]) -> None:
         topic = Topic("topic")
-        broker: DummyBroker[int] = DummyBroker()
         broker.create_topic(topic, partitions=1)
-        producer: DummyProducer[int] = DummyProducer(broker)
-
-        consumer: DummyConsumer[int] = DummyConsumer(broker, " group")
+        producer = broker.get_producer()
+        consumer = broker.get_consumer("group")
 
         worker = FakeWorker()
-        batching_consumer = BatchingConsumer(
+        batching_consumer = StreamProcessor(
             consumer,
             topic,
-            worker=worker,
-            max_batch_size=100,
-            max_batch_time=2000,
-            metrics=DummyMetricsBackend(strict=True),
+            BatchProcessingStrategyFactory(
+                worker=worker,
+                max_batch_size=100,
+                max_batch_time=2000,
+                metrics=DummyMetricsBackend(strict=True),
+            ),
         )
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())

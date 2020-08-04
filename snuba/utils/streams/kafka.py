@@ -32,13 +32,11 @@ from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
-from snuba.utils.codecs import Codec
 from snuba.utils.concurrent import execute
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
 from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
 from snuba.utils.streams.producer import Producer
-from snuba.utils.streams.synchronized import Commit
-from snuba.utils.streams.types import Message, Partition, Topic, TPayload
+from snuba.utils.streams.types import Message, Partition, Topic
 
 
 logger = logging.getLogger(__name__)
@@ -62,6 +60,11 @@ Headers = Sequence[Tuple[str, bytes]]
 
 
 class KafkaPayload:
+    # XXX: This is not a dataclass since dataclasses do not support classes
+    # with __slots__ *and* default values. Since we create a lot of these
+    # objects, it's probably more important to preserve their performance and
+    # memory impact than it is their developer friendliness (unfortunately.)
+
     __slots__ = ["__key", "__value", "__headers"]
 
     def __init__(
@@ -82,6 +85,16 @@ class KafkaPayload:
     @property
     def headers(self) -> Headers:
         return self.__headers
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, KafkaPayload):
+            return False
+        else:
+            return (
+                self.key == other.key
+                and self.value == other.value
+                and self.headers == other.headers
+            )
 
 
 def as_kafka_configuration_bool(value: Any) -> bool:
@@ -111,7 +124,7 @@ def as_kafka_configuration_bool(value: Any) -> bool:
     raise TypeError(f"cannot interpret {value!r} as boolean")
 
 
-class KafkaConsumer(Consumer[TPayload]):
+class KafkaConsumer(Consumer[KafkaPayload]):
     """
     The behavior of this consumer differs slightly from the Confluent
     consumer during rebalancing operations. Whenever a partition is assigned
@@ -151,7 +164,6 @@ class KafkaConsumer(Consumer[TPayload]):
     def __init__(
         self,
         configuration: Mapping[str, Any],
-        codec: Codec[KafkaPayload, TPayload],
         *,
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
@@ -195,8 +207,6 @@ class KafkaConsumer(Consumer[TPayload]):
         self.__consumer = ConfluentConsumer(
             {**configuration, "auto.offset.reset": "error"}
         )
-
-        self.__codec = codec
 
         self.__offsets: MutableMapping[Partition, int] = {}
         self.__staged_offsets: MutableMapping[Partition, int] = {}
@@ -351,7 +361,7 @@ class KafkaConsumer(Consumer[TPayload]):
 
         self.__consumer.unsubscribe()
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message[KafkaPayload]]:
         """
         Return the next message available to be consumed, if one is
         available. If no message is available, this method will block up to
@@ -405,12 +415,8 @@ class KafkaConsumer(Consumer[TPayload]):
         result = Message(
             Partition(Topic(message.topic()), message.partition()),
             message.offset(),
-            self.__codec.decode(
-                KafkaPayload(
-                    message.key(),
-                    message.value(),
-                    headers if headers is not None else [],
-                )
+            KafkaPayload(
+                message.key(), message.value(), headers if headers is not None else [],
             ),
             datetime.utcfromtimestamp(message.timestamp()[1] / 1000.0),
         )
@@ -645,45 +651,25 @@ def build_kafka_consumer_configuration(
     }
 
 
-class CommitCodec(Codec[KafkaPayload, Commit]):
-    def encode(self, value: Commit) -> KafkaPayload:
-        return KafkaPayload(
-            f"{value.partition.topic.name}:{value.partition.index}:{value.group}".encode(
-                "utf-8"
-            ),
-            f"{value.offset}".encode("utf-8"),
-        )
-
-    def decode(self, value: KafkaPayload) -> Commit:
-        key = value.key
-        if not isinstance(key, bytes):
-            raise TypeError("payload key must be a bytes object")
-
-        val = value.value
-        if not isinstance(val, bytes):
-            raise TypeError("payload value must be a bytes object")
-
-        topic_name, partition_index, group = key.decode("utf-8").split(":", 3)
-        offset = int(val.decode("utf-8"))
-        return Commit(group, Partition(Topic(topic_name), int(partition_index)), offset)
+# XXX: This must be imported after `KafkaPayload` to avoid a circular import.
+from snuba.utils.streams.synchronized import Commit, commit_codec
 
 
-class KafkaConsumerWithCommitLog(KafkaConsumer[TPayload]):
+class KafkaConsumerWithCommitLog(KafkaConsumer):
     def __init__(
         self,
         configuration: Mapping[str, Any],
-        codec: Codec[KafkaPayload, TPayload],
         *,
         producer: ConfluentProducer,
         commit_log_topic: Topic,
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
-        super().__init__(configuration, codec, commit_retry_policy=commit_retry_policy)
+        super().__init__(configuration, commit_retry_policy=commit_retry_policy)
         self.__producer = producer
         self.__commit_log_topic = commit_log_topic
         self.__group_id = configuration["group.id"]
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message[KafkaPayload]]:
         self.__producer.poll(0.0)
         return super().poll(timeout)
 
@@ -696,9 +682,9 @@ class KafkaConsumerWithCommitLog(KafkaConsumer[TPayload]):
     def commit_offsets(self) -> Mapping[Partition, int]:
         offsets = super().commit_offsets()
 
-        codec = CommitCodec()
         for partition, offset in offsets.items():
-            payload = codec.encode(Commit(self.__group_id, partition, offset))
+            commit = Commit(self.__group_id, partition, offset)
+            payload = commit_codec.encode(commit)
             self.__producer.produce(
                 self.__commit_log_topic.name,
                 key=payload.key,
@@ -715,12 +701,9 @@ class KafkaConsumerWithCommitLog(KafkaConsumer[TPayload]):
             raise TimeoutError(f"{messages} commit log messages pending delivery")
 
 
-class KafkaProducer(Producer[TPayload]):
-    def __init__(
-        self, configuration: Mapping[str, Any], codec: Codec[KafkaPayload, TPayload]
-    ) -> None:
+class KafkaProducer(Producer[KafkaPayload]):
+    def __init__(self, configuration: Mapping[str, Any]) -> None:
         self.__configuration = configuration
-        self.__codec = codec
 
         self.__producer = ConfluentProducer(configuration)
         self.__shutdown_requested = Event()
@@ -744,8 +727,8 @@ class KafkaProducer(Producer[TPayload]):
 
     def __delivery_callback(
         self,
-        future: Future[Message[TPayload]],
-        payload: TPayload,
+        future: Future[Message[KafkaPayload]],
+        payload: KafkaPayload,
         error: KafkaError,
         message: ConfluentMessage,
     ) -> None:
@@ -769,8 +752,8 @@ class KafkaProducer(Producer[TPayload]):
                 future.set_exception(error)
 
     def produce(
-        self, destination: Union[Topic, Partition], payload: TPayload
-    ) -> Future[Message[TPayload]]:
+        self, destination: Union[Topic, Partition], payload: KafkaPayload,
+    ) -> Future[Message[KafkaPayload]]:
         if self.__shutdown_requested.is_set():
             raise RuntimeError("producer has been closed")
 
@@ -785,14 +768,12 @@ class KafkaProducer(Producer[TPayload]):
         else:
             raise TypeError("invalid destination type")
 
-        encoded = self.__codec.encode(payload)
-
-        future: Future[Message[TPayload]] = Future()
+        future: Future[Message[KafkaPayload]] = Future()
         future.set_running_or_notify_cancel()
         produce(
-            value=encoded.value,
-            key=encoded.key,
-            headers=encoded.headers,
+            value=payload.value,
+            key=payload.key,
+            headers=payload.headers,
             on_delivery=partial(self.__delivery_callback, future, payload),
         )
         return future

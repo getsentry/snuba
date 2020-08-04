@@ -1,20 +1,19 @@
-import pytest
-import pytz
-
 from datetime import datetime
 from typing import Optional
 from uuid import uuid1
 
+import pytest
+import pytz
+
 from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.processor import ProcessorAction, ProcessedMessage
+from snuba.processor import InsertBatch, ProcessedMessage
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
-
 
 INSERT_MSG = (
     '{"event":"change","xid": %(xid)s,"kind":"insert","schema":"public",'
@@ -50,17 +49,11 @@ PROCESSED = {
 class TestSnapshotWorker:
 
     test_data = [
-        (INSERT_MSG % {"xid": 90}, None,),
-        (INSERT_MSG % {"xid": 100}, None,),
-        (INSERT_MSG % {"xid": 110}, None,),
-        (
-            INSERT_MSG % {"xid": 120},
-            ProcessedMessage(action=ProcessorAction.INSERT, data=[PROCESSED],),
-        ),
-        (
-            INSERT_MSG % {"xid": 210},
-            ProcessedMessage(action=ProcessorAction.INSERT, data=[PROCESSED],),
-        ),
+        (INSERT_MSG % {"xid": 90}, None),
+        (INSERT_MSG % {"xid": 100}, None),
+        (INSERT_MSG % {"xid": 110}, None),
+        (INSERT_MSG % {"xid": 120}, InsertBatch([PROCESSED])),
+        (INSERT_MSG % {"xid": 210}, InsertBatch([PROCESSED])),
     ]
 
     @pytest.mark.parametrize("value, expected", test_data)

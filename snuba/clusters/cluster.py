@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import (
     Any,
-    Callable,
     Generic,
     Mapping,
     MutableMapping,
@@ -17,12 +16,13 @@ from typing import (
 
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
-from snuba.clickhouse.http import HTTPBatchWriter
+from snuba.clickhouse.http import HTTPBatchWriter, JSONRowEncoder
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.reader import Reader, TQuery
-from snuba.writer import BatchWriter, WriterTableRow
+from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.writer import BatchWriter, BatchWriterEncoderWrapper, WriterTableRow
 
 
 class ClickhouseClientSettingsType(NamedTuple):
@@ -33,7 +33,7 @@ class ClickhouseClientSettingsType(NamedTuple):
 class ClickhouseClientSettings(Enum):
     CLEANUP = ClickhouseClientSettingsType({}, None)
     INSERT = ClickhouseClientSettingsType({}, None)
-    MIGRATE = ClickhouseClientSettingsType({}, None)
+    MIGRATE = ClickhouseClientSettingsType({"load_balancing": "in_order"}, 10000)
     OPTIMIZE = ClickhouseClientSettingsType({}, 10000)
     QUERY = ClickhouseClientSettingsType({"readonly": True}, None)
     REPLACE = ClickhouseClientSettingsType(
@@ -88,7 +88,18 @@ class Cluster(ABC, Generic[TQuery, TWriterOptions]):
         self.__storage_sets = storage_sets
 
     def get_storage_set_keys(self) -> Set[StorageSetKey]:
-        return {StorageSetKey(storage_set) for storage_set in self.__storage_sets}
+        all_storage_sets = set(key.value for key in StorageSetKey)
+
+        storage_set_keys = set()
+
+        for storage_set in self.__storage_sets:
+            # We ignore invalid storage set keys since new storage sets will
+            # need to be registered to configuration before they can be used
+            # in Snuba.
+            if storage_set in all_storage_sets:
+                storage_set_keys.add(StorageSetKey(storage_set))
+
+        return storage_set_keys
 
     @abstractmethod
     def get_reader(self) -> Reader[TQuery]:
@@ -98,10 +109,10 @@ class Cluster(ABC, Generic[TQuery, TWriterOptions]):
     def get_writer(
         self,
         table_name: str,
-        encoder: Callable[[WriterTableRow], bytes],
+        metrics: MetricsBackend,
         options: TWriterOptions,
         chunk_size: Optional[int],
-    ) -> BatchWriter:
+    ) -> BatchWriter[WriterTableRow]:
         raise NotImplementedError
 
 
@@ -206,20 +217,23 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
     def get_writer(
         self,
         table_name: str,
-        encoder: Callable[[WriterTableRow], bytes],
+        metrics: MetricsBackend,
         options: ClickhouseWriterOptions,
         chunk_size: Optional[int],
-    ) -> BatchWriter:
-        return HTTPBatchWriter(
-            table_name,
-            self.__query_node.host_name,
-            self.__http_port,
-            self.__user,
-            self.__password,
-            self.__database,
-            encoder,
-            options,
-            chunk_size,
+    ) -> BatchWriter[WriterTableRow]:
+        return BatchWriterEncoderWrapper(
+            HTTPBatchWriter(
+                table_name,
+                host=self.__query_node.host_name,
+                port=self.__http_port,
+                user=self.__user,
+                password=self.__password,
+                database=self.__database,
+                metrics=metrics,
+                options=options,
+                chunk_size=chunk_size,
+            ),
+            JSONRowEncoder(),
         )
 
     def is_single_node(self) -> bool:
@@ -229,6 +243,12 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         - Differences in the query - such as whether the _local or _dist table is picked
         """
         return self.__single_node
+
+    def get_clickhouse_cluster_name(self) -> Optional[str]:
+        return self.__cluster_name
+
+    def get_database(self) -> str:
+        return self.__database
 
     def get_local_nodes(self) -> Sequence[ClickhouseNode]:
         if self.__single_node:

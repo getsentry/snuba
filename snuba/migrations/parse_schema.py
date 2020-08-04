@@ -1,8 +1,9 @@
 import logging
 import re
 
-from parsimonious.grammar import Grammar  # type: ignore
-from parsimonious.nodes import Node, NodeVisitor  # type: ignore
+from clickhouse_driver import Client
+from parsimonious.grammar import Grammar
+from parsimonious.nodes import Node, NodeVisitor
 from typing import Any, Iterable, Mapping, Sequence, Tuple
 
 from snuba.clickhouse.columns import (
@@ -169,7 +170,7 @@ def _strip_cast(default_expr: str) -> str:
 def _get_column(
     column_type: str, default_type: str, default_expr: str, codec_expr: str
 ) -> ColumnType:
-    column = Visitor().visit(grammar.parse(column_type))
+    column: ColumnType = Visitor().visit(grammar.parse(column_type))
 
     if default_type == "MATERIALIZED":
         column = Materialized(column, _strip_cast(default_expr))
@@ -182,7 +183,7 @@ def _get_column(
     return column
 
 
-def get_local_schema(conn, table_name) -> Mapping[str, ColumnType]:
+def get_local_schema(conn: Client, table_name: str) -> Mapping[str, ColumnType]:
     return {
         column_name: _get_column(column_type, default_type, default_expr, codec_expr)
         for column_name, column_type, default_type, default_expr, _comment, codec_expr in [

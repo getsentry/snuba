@@ -1,6 +1,7 @@
 from snuba.datasets.factory import get_dataset
 from snuba.query.conditions import OPERATOR_TO_FUNCTION, binary_condition, in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.logical import SelectedExpression
 from snuba.query.parser import parse_query
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.request.request_settings import HTTPRequestSettings
@@ -28,28 +29,37 @@ def test_tags_expander() -> None:
     processor.process_query(query, request_settings)
 
     assert query.get_selected_columns_from_ast() == [
-        FunctionCall("platforms", "count", (Column(None, None, "platform"),)),
-        FunctionCall(
+        SelectedExpression(
+            "platforms",
+            FunctionCall("platforms", "count", (Column("platform", None, "platform"),)),
+        ),
+        SelectedExpression(
             "top_platforms",
-            "testF",
-            (
-                Column(None, None, "platform"),
-                FunctionCall(
-                    "tags_value", "arrayJoin", (Column(None, None, "tags.value"),)
+            FunctionCall(
+                "top_platforms",
+                "testF",
+                (
+                    Column("platform", None, "platform"),
+                    FunctionCall(
+                        "tags_value", "arrayJoin", (Column(None, None, "tags.value"),)
+                    ),
                 ),
             ),
         ),
-        FunctionCall(
+        SelectedExpression(
             "f1_alias",
-            "f1",
-            (
-                FunctionCall(
-                    "tags_key", "arrayJoin", (Column(None, None, "tags.key"),)
+            FunctionCall(
+                "f1_alias",
+                "f1",
+                (
+                    FunctionCall(
+                        "tags_key", "arrayJoin", (Column(None, None, "tags.key"),)
+                    ),
+                    Column("column2", None, "column2"),
                 ),
-                Column(None, None, "column2"),
             ),
         ),
-        FunctionCall("f2_alias", "f2", tuple()),
+        SelectedExpression("f2_alias", FunctionCall("f2_alias", "f2", tuple())),
     ]
 
     assert query.get_condition_from_ast() == binary_condition(
