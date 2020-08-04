@@ -31,7 +31,7 @@ class EventsProcessor(EventsProcessorBase):
     def _extract_event_id(
         self, output: MutableMapping[str, Any], event: InsertEvent,
     ) -> None:
-        output["event_id"] = event["event_id"]
+        output["event_id"] = event["data"]["event_id"]
 
     def extract_custom(
         self,

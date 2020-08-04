@@ -28,7 +28,11 @@ from snuba.processor import (
     _unicodify,
 )
 
+from jsonschema_typed import JSONSchema
+
 EventData = JSONSchema["/Users/untitaker/projects/snuba/event.schema.json"]
+
+
 
 
 logger = logging.getLogger(__name__)
@@ -127,6 +131,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
 
         # This is not ideal but it should never happen anyways
         timestamp = _ensure_valid_date(
+            # TODO: Switch to using event["data"]["timestamp"]
             datetime.strptime(event["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
         )
         if timestamp is None:
@@ -236,16 +241,16 @@ class EventsProcessorBase(MessageProcessor, ABC):
         metadata: KafkaMessageMetadata,
     ) -> None:
         # Properties we get from the top level of the message payload
-        output["platform"] = _unicodify(event["platform"])
+        data = event.get("data", {})
+        output["platform"] = _unicodify(data["platform"])
         output["primary_hash"] = _hashify(event["primary_hash"])
 
         # Properties we get from the "data" dict, which is the actual event body.
-        data = event.get("data", {})
+
         received = _collapse_uint32(int(data["received"]))
         output["received"] = (
             datetime.utcfromtimestamp(received) if received is not None else None
         )
-
         output["culprit"] = _unicodify(data.get("culprit", None))
         output["type"] = _unicodify(data.get("type", None))
         output["version"] = _unicodify(data.get("version", None))
