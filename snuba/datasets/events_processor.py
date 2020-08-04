@@ -1,4 +1,4 @@
-from typing import Any, Mapping, MutableMapping, Optional, TypedDict
+from typing import Any, Mapping, MutableMapping, Optional
 
 import logging
 import _strptime  # NOQA fixes _strptime deferred import issue
@@ -38,7 +38,7 @@ class EventsProcessor(EventsProcessorBase):
     def _extract_event_id(
         self, output: MutableMapping[str, Any], event: Event,
     ) -> None:
-        output["event_id"] = event["event_id"]
+        output["event_id"] = event["data"]["event_id"]
 
     def extract_custom(
         self,

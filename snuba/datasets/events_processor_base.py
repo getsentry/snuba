@@ -29,13 +29,15 @@ from snuba.processor import (
 
 from jsonschema_typed import JSONSchema
 
-EventData = JSONSchema['/Users/untitaker/projects/snuba/event.schema.json']
+EventData = JSONSchema["/Users/untitaker/projects/snuba/event.schema.json"]
+
 
 class Event(TypedDict):
     data: EventData
     search_message: Any
     message: Any
     event_id: Any
+
 
 logger = logging.getLogger(__name__)
 
@@ -99,14 +101,12 @@ class EventsProcessorBase(MessageProcessor, ABC):
     ) -> None:
         raise NotImplementedError
 
-    def extract_required(
-        self, output: MutableMapping[str, Any], 
-        event: Event,
-    ) -> None:
+    def extract_required(self, output: MutableMapping[str, Any], event: Event,) -> None:
         output["group_id"] = event["group_id"] or 0
 
         # This is not ideal but it should never happen anyways
         timestamp = _ensure_valid_date(
+            # TODO: Switch to using event["data"]["timestamp"]
             datetime.strptime(event["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
         )
         if timestamp is None:
@@ -210,7 +210,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         if not self._should_process(event):
             return None
 
-        processed= {"deleted": 0}
+        processed = {"deleted": 0}
         extract_project_id(processed, event)
         self._extract_event_id(processed, event)
         processed["retention_days"] = enforce_retention(
@@ -267,16 +267,16 @@ class EventsProcessorBase(MessageProcessor, ABC):
         metadata: Optional[KafkaMessageMetadata] = None,
     ) -> None:
         # Properties we get from the top level of the message payload
-        output["platform"] = _unicodify(event["platform"])
+        data = event.get("data", {})
+        output["platform"] = _unicodify(data["platform"])
         output["primary_hash"] = _hashify(event["primary_hash"])
 
         # Properties we get from the "data" dict, which is the actual event body.
-        data = event.get("data", {})
+
         received = _collapse_uint32(int(data["received"]))
         output["received"] = (
             datetime.utcfromtimestamp(received) if received is not None else None
         )
-
         output["culprit"] = _unicodify(data.get("culprit", None))
         output["type"] = _unicodify(data.get("type", None))
         output["version"] = _unicodify(data.get("version", None))
