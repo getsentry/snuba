@@ -29,7 +29,7 @@ from snuba.processor import (
 
 from jsonschema_typed import JSONSchema
 
-EventData = JSONSchema["/Users/untitaker/projects/snuba/event.schema.json"]
+EventData = JSONSchema["schema/event.schema.json"]
 
 
 class Event(TypedDict):
@@ -37,6 +37,9 @@ class Event(TypedDict):
     search_message: Any
     message: Any
     event_id: Any
+    datetime: str
+    group_id: str
+    primary_hash: str
 
 
 logger = logging.getLogger(__name__)
@@ -128,7 +131,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         output["sdk_integrations"] = sdk_integrations
 
     def process_message(
-        self, message, metadata: Optional[KafkaMessageMetadata] = None
+        self, message: Event, metadata: Optional[KafkaMessageMetadata] = None
     ) -> Optional[ProcessedMessage]:
         """\
         Process a raw message into a tuple of (action_type, processed_message):
@@ -137,11 +140,13 @@ class EventsProcessorBase(MessageProcessor, ABC):
         Returns `None` if the event is too old to be written.
         """
         action_type = None
+        processed: Optional[MutableMapping[str, Any]] = None
 
         if isinstance(message, dict):
             # deprecated unwrapped event message == insert
             action_type = ProcessorAction.INSERT
             try:
+
                 processed = self.process_insert(message, metadata)
             except EventTooOld:
                 return None
@@ -206,11 +211,12 @@ class EventsProcessorBase(MessageProcessor, ABC):
 
     def process_insert(
         self, event: Event, metadata: Optional[KafkaMessageMetadata] = None
-    ) -> Optional[Mapping[str, Any]]:
+    ) -> Optional[MutableMapping[str, Any]]:
         if not self._should_process(event):
             return None
 
-        processed = {"deleted": 0}
+        processed: MutableMapping[str, Any] = {"deleted": 0}
+
         extract_project_id(processed, event)
         self._extract_event_id(processed, event)
         processed["retention_days"] = enforce_retention(
@@ -228,7 +234,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         self.extract_common(processed, event, metadata)
         self.extract_custom(processed, event, metadata)
 
-        sdk = data.get("sdk", None) or {}
+        sdk = data.get("sdk", None) or {}  # type: ignore
         self.extract_sdk(processed, sdk)
 
         tags = _as_dict_safe(data.get("tags", None))
@@ -248,9 +254,13 @@ class EventsProcessorBase(MessageProcessor, ABC):
         )
 
         exception = (
-            data.get("exception", data.get("sentry.interfaces.Exception", None)) or {}
+            data.get(
+                "exception",
+                data.get("sentry.interfaces.Exception", None),  # type: ignore
+            )
+            or {}
         )
-        stacks = exception.get("values", None) or []
+        stacks: Sequence[Any] = exception.get("values", None) or []
         self.extract_stacktraces(processed, stacks)
 
         if metadata is not None:
@@ -273,15 +283,15 @@ class EventsProcessorBase(MessageProcessor, ABC):
 
         # Properties we get from the "data" dict, which is the actual event body.
 
-        received = _collapse_uint32(int(data["received"]))
+        received = _collapse_uint32(data["received"])
         output["received"] = (
             datetime.utcfromtimestamp(received) if received is not None else None
         )
         output["culprit"] = _unicodify(data.get("culprit", None))
         output["type"] = _unicodify(data.get("type", None))
         output["version"] = _unicodify(data.get("version", None))
-        output["title"] = _unicodify(data.get("title", None))
-        output["location"] = _unicodify(data.get("location", None))
+        output["title"] = _unicodify(data.get("title", None))  # type: ignore
+        output["location"] = _unicodify(data.get("location", None))  # type: ignore
 
         module_names = []
         module_versions = []
