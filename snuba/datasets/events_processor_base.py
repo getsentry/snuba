@@ -28,11 +28,7 @@ from snuba.processor import (
     _unicodify,
 )
 
-from jsonschema_typed import JSONSchema
-
 EventData = JSONSchema["/Users/untitaker/projects/snuba/event.schema.json"]
-
-
 
 
 logger = logging.getLogger(__name__)
@@ -242,7 +238,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
     ) -> None:
         # Properties we get from the top level of the message payload
         data = event.get("data", {})
-        output["platform"] = _unicodify(data["platform"])
+        output["platform"] = _unicodify(event["platform"])
         output["primary_hash"] = _hashify(event["primary_hash"])
 
         # Properties we get from the "data" dict, which is the actual event body.
