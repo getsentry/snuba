@@ -1,7 +1,16 @@
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, TypedDict
+from typing import (
+    Any,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Tuple,
+    TypedDict,
+    Union,
+)
 
 from snuba import settings
 from snuba.consumer import KafkaMessageMetadata
@@ -140,7 +149,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         Returns `None` if the event is too old to be written.
         """
         action_type = None
-        processed: Optional[MutableMapping[str, Any]] = None
+        processed: Union[MutableMapping[str, Any], None, Tuple[str, Sequence]] = None
 
         if isinstance(message, dict):
             # deprecated unwrapped event message == insert

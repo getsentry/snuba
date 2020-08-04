@@ -70,16 +70,26 @@ class EventsProcessor(EventsProcessorBase):
         else:
             # Post-rename scenario, we check in case we have the optional
             # "message" in the event body.
-            output["message"] = _unicodify(data.get("message", None))
+            output["message"] = _unicodify(data.get("message", None))  # type: ignore
 
         # USER REQUEST GEO
-        user = data.get("user", data.get("sentry.interfaces.User", None)) or {}
+        user = (
+            data.get(
+                "user", data.get("sentry.interfaces.User", None)  # type: ignore
+            )
+            or {}
+        )
         extract_user(output, user)
 
         geo = user.get("geo", None) or {}
         self.extract_geo(output, geo)
 
-        http = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
+        http = (
+            data.get(
+                "request", data.get("sentry.interfaces.Http", None)  # type: ignore
+            )
+            or {}
+        )  # types: ignore
         self.extract_http(output, http)
 
     def extract_tags_custom(
