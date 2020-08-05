@@ -65,15 +65,20 @@ EVENT_CONDITION = FunctionCallMatch(
     None,
     Param("function", Or([StringMatch(op) for op in BINARY_OPERATORS])),
     (
-        ColumnMatch(None, None, StringMatch("type")),
-        Param("event_type", AnyExpression()),
+        Or(
+            [
+                ColumnMatch(None, None, StringMatch("type")),
+                LiteralMatch(StringMatch("type"), None),
+            ]
+        ),
+        Param("event_type", Or([ColumnMatch(), LiteralMatch()])),
     ),
 )
 
 
 def match_query_to_table(
     query: Query, events_only_columns: ColumnSet, transactions_only_columns: ColumnSet
-) -> (str, bool, bool):
+) -> str:
     condition = query.get_condition_from_ast()
     condition_columns = set()
     event_types = []
@@ -89,9 +94,9 @@ def match_query_to_table(
             event_type_param = result.expression("event_type")
             event_type = None
             if isinstance(event_type_param, Column):
-                event_type = result.expression("event_type").column_name
+                event_type = event_type_param.column_name
             else:
-                event_type = result.expression("event_type").value
+                event_type = event_type_param.value
             if result:
                 if result.string("function") == ConditionFunctions.EQ:
                     event_types.append(event_type)
