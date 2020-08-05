@@ -39,7 +39,7 @@ from snuba.query.matchers import Column as ColumnMatch
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import String as StringMatch
-from snuba.query.matchers import Any, AnyExpression, Or, Param
+from snuba.query.matchers import Any, Or, Param
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
