@@ -47,7 +47,6 @@ class ErrorsProcessor(EventsProcessorBase):
     ) -> None:
         data = event.get("data", {})
         user_dict = data.get("user", data.get("sentry.interfaces.User", None)) or {}
-
         user_data: MutableMapping[str, Any] = {}
         extract_user(user_data, user_dict)
         output["user_name"] = user_data["username"]
