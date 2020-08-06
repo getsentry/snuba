@@ -14,6 +14,6 @@ install-python-dependencies:
 
 fetchschemas:
 	mkdir -p schema
-	curl https://getsentry.github.io/relay/event-schema/event.schema.json -o schema/event.schema.json
+	curl https://raw.githubusercontent.com/getsentry/sentry-data-schemas/main/relay/event.schema.json -o schema/event.schema.json
 	mypy snuba > /dev/null || (if [ "$$?" -gt 1 ]; then exit 1; fi)
 .PHONY: fetchschemas
