@@ -39,7 +39,7 @@ from snuba.query.matchers import Column as ColumnMatch
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import String as StringMatch
-from snuba.query.matchers import Any, Or, Param
+from snuba.query.matchers import Or, Param
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
@@ -79,14 +79,26 @@ EVENT_CONDITION = FunctionCallMatch(
 def match_query_to_table(
     query: Query, events_only_columns: ColumnSet, transactions_only_columns: ColumnSet
 ) -> str:
+    has_event_columns = False
+    has_transaction_columns = False
+    for col in query.get_all_ast_referenced_columns():
+        if events_only_columns.get(col.column_name):
+            has_event_columns = True
+        elif transactions_only_columns.get(col.column_name):
+            has_transaction_columns = True
+
+    # Unless we have an impossible query, we only need to check which columns are referenced.
+    # If all columns are common, use the events table by default.
+    if not (has_event_columns and has_transaction_columns):
+        return TRANSACTIONS if has_transaction_columns else EVENTS
+
+    # In the case of an impossible query, check to see if the user has specified which type of event
+    # they want to see, and use that to inform the table selection. If there is no specification,
+    # default to events.
     condition = query.get_condition_from_ast()
-    condition_columns = set()
     event_types = []
     if condition:
         for cond in condition:
-            if Any(Column).match(cond):
-                condition_columns.add(cond)
-
             result = EVENT_CONDITION.match(cond)
             if not result:
                 continue
@@ -105,23 +117,6 @@ def match_query_to_table(
                         return EVENTS
 
     if len(event_types) == 1 and event_types[0] == "transaction":
-        return TRANSACTIONS
-    elif len(event_types) >= 1:
-        return EVENTS
-
-    if any(events_only_columns.get(col.column_name) for col in condition_columns):
-        return EVENTS
-    if any(transactions_only_columns.get(col.column_name) for col in condition_columns):
-        return TRANSACTIONS
-
-    has_transaction_columns = False
-    for col in query.get_all_ast_referenced_columns():
-        if events_only_columns.get(col.column_name):
-            return EVENTS
-        elif transactions_only_columns.get(col.column_name):
-            has_transaction_columns = True
-
-    if has_transaction_columns:
         return TRANSACTIONS
 
     return EVENTS

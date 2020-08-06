@@ -16,7 +16,11 @@ def get_dataset_source(dataset_name):
 
 
 test_data = [
-    ({"conditions": [["type", "=", "transaction"]]}, "transactions_local"),
+    ({"conditions": [["type", "=", "transaction"]]}, "sentry_local"),
+    (
+        {"conditions": [["type", "=", "transaction"], ["duration", ">", 1000]]},
+        "transactions_local",
+    ),
     ({"conditions": [["type", "=", "error"]]}, "sentry_local"),
     (
         {"conditions": [[["type", "=", "error"], ["type", "=", "transaction"]]]},
@@ -47,7 +51,7 @@ test_data = [
                     [
                         "and",
                         [
-                            ["equals", ["type", "transaction"]],
+                            ["equals", ["duration", 10]],
                             ["notEquals", ["type", "error"]],
                         ],
                     ],
@@ -104,7 +108,7 @@ test_data = [
                 ["duration", "=", 0],
             ]
         },
-        "sentry_local",
+        "transactions_local",
     ),
     (
         {
