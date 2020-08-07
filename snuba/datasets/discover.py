@@ -96,7 +96,7 @@ def match_query_to_table(
     # they want to see, and use that to inform the table selection. If there is no specification,
     # default to events.
     condition = query.get_condition_from_ast()
-    event_types = []
+    event_types = set()
     if condition:
         for cond in condition:
             result = EVENT_CONDITION.match(cond)
@@ -111,12 +111,12 @@ def match_query_to_table(
                 event_type = event_type_param.value
             if result:
                 if result.string("function") == ConditionFunctions.EQ:
-                    event_types.append(event_type)
+                    event_types.add(event_type)
                 elif result.string("function") == ConditionFunctions.NEQ:
                     if event_type == "transaction":
                         return EVENTS
 
-    if len(event_types) == 1 and event_types[0] == "transaction":
+    if len(event_types) == 1 and event_types.pop() == "transaction":
         return TRANSACTIONS
 
     return EVENTS
