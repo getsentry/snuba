@@ -35,7 +35,7 @@ def is_ast_rolled_out(dataset_name: str, referrer: Optional[str]) -> bool:
     if dataset_rollout_percentage is not None:
         return current_percentage < dataset_rollout_percentage
 
-    rollout_rate = get_config(ROLLOUT_RATE_CONFIG, 0)
+    rollout_rate = get_config(ROLLOUT_RATE_CONFIG, 100)
     if rollout_rate is None:
         # This is for mypy since it does not believe
         # (rightfully) that rollout_rate is an int.
