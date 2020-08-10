@@ -9,7 +9,11 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster, CLUSTERS
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.context import Context
-from snuba.migrations.errors import InvalidMigrationState, MigrationInProgress
+from snuba.migrations.errors import (
+    InvalidMigrationState,
+    MigrationError,
+    MigrationInProgress,
+)
 from snuba.migrations.groups import (
     ACTIVE_MIGRATION_GROUPS,
     get_group_loader,
@@ -37,12 +41,14 @@ class Runner:
             ClickhouseClientSettings.MIGRATE
         )
 
-    def run_all(self) -> None:
+    def run_all(self, force: bool = False) -> None:
         """
         Run all pending migrations. Throws an error if any migration is in progress.
+
+        Requires force to run blocking migrations.
         """
         for migration in self._get_pending_migrations():
-            self.run_migration(migration)
+            self.run_migration(migration, force=force)
 
     def _get_pending_migrations(self) -> List[MigrationKey]:
         migrations: List[MigrationKey] = []
@@ -76,9 +82,11 @@ class Runner:
 
         return migrations
 
-    def run_migration(self, migration_key: MigrationKey) -> None:
+    def run_migration(self, migration_key: MigrationKey, force: bool = False) -> None:
         """
         Run a single migration given its migration key and marks the migration as complete.
+
+        Blocking migrations must be run with force.
         """
         migration_id = migration_key.migration_id
 
@@ -90,6 +98,10 @@ class Runner:
             migration_id, logger, partial(self._update_migration_status, migration_key),
         )
         migration = get_group_loader(migration_key.group).load_migration(migration_id)
+
+        if migration.blocking and not force:
+            raise MigrationError("Blocking migrations must be run with force")
+
         migration.forwards(context)
 
     def _update_migration_status(
