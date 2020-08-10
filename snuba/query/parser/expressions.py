@@ -1,22 +1,10 @@
 import re
 from dataclasses import replace
-from enum import Enum
-from typing import (
-    Any,
-    Callable,
-    Iterable,
-    List,
-    NamedTuple,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-)
+from typing import Any, Iterable, List, Optional, Tuple, Union
 
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
-from snuba.query.dsl import divide, minus, multiply, plus
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -27,8 +15,30 @@ from snuba.query.expressions import (
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.functions import parse_function_to_expr
 from snuba.query.parser.strings import parse_string_to_expr
+from snuba.query.snql.expression_visitor import (
+    HighPriArithmetic,
+    HighPriOperator,
+    HighPriTuple,
+    LowPriArithmetic,
+    LowPriOperator,
+    LowPriTuple,
+    generic_visit,
+    visit_arithmetic_term,
+    visit_column_name,
+    visit_function_call,
+    visit_function_name,
+    visit_high_pri_arithmetic,
+    visit_high_pri_op,
+    visit_high_pri_tuple,
+    visit_low_pri_arithmetic,
+    visit_low_pri_op,
+    visit_low_pri_tuple,
+    visit_numeric_literal,
+    visit_parameter,
+    visit_parameters_list,
+    visit_quoted_literal,
+)
 from snuba.util import is_function
-
 
 FUNCTION_NAME_REGEX = r"[a-zA-Z_][a-zA-Z0-9_]*"
 FUNCTION_NAME_RE = re.compile(FUNCTION_NAME_REGEX)
@@ -67,154 +77,77 @@ comma                 = ","
 )
 
 
-class LowPriOperator(Enum):
-    PLUS = "+"
-    MINUS = "-"
-
-
-class HighPriOperator(Enum):
-    MULTIPLY = "*"
-    DIVIDE = "/"
-
-
-class LowPriTuple(NamedTuple):
-    op: LowPriOperator
-    arithm: Expression
-
-
-class HighPriTuple(NamedTuple):
-    op: HighPriOperator
-    arithm: Expression
-
-
-HighPriArithmetic = Union[Node, HighPriTuple, Sequence[HighPriTuple]]
-LowPriArithmetic = Union[Node, LowPriTuple, Sequence[LowPriTuple]]
-
-
-def get_arithmetic_function(
-    operator: Enum,
-) -> Callable[[Expression, Expression, Optional[str]], FunctionCall]:
-    return {
-        HighPriOperator.MULTIPLY: multiply,
-        HighPriOperator.DIVIDE: divide,
-        LowPriOperator.PLUS: plus,
-        LowPriOperator.MINUS: minus,
-    }[operator]
-
-
-def get_arithmetic_expression(
-    term: Expression, exp: Union[LowPriArithmetic, HighPriArithmetic],
-) -> Expression:
-    if isinstance(exp, Node):
-        return term
-    if isinstance(exp, (LowPriTuple, HighPriTuple)):
-        return get_arithmetic_function(exp.op)(term, exp.arithm, None)
-    elif isinstance(exp, list):
-        for elem in exp:
-            term = get_arithmetic_function(elem.op)(term, elem.arithm, None)
-    return term
-
-
 class ClickhouseVisitor(NodeVisitor):
     """
     Builds Snuba AST expressions from the Parsimonious parse tree.
     """
 
     def visit_function_name(self, node: Node, visited_children: Iterable[Any]) -> str:
-        return str(node.text)
+        return visit_function_name(node, visited_children)
 
     def visit_column_name(self, node: Node, visited_children: Iterable[Any]) -> Column:
-        return Column(None, None, node.text)
+        return visit_column_name(node, visited_children)
 
     def visit_low_pri_tuple(
         self, node: Node, visited_children: Tuple[LowPriOperator, Expression]
     ) -> LowPriTuple:
-        left, right = visited_children
-
-        return LowPriTuple(op=left, arithm=right)
+        return visit_low_pri_tuple(node, visited_children)
 
     def visit_high_pri_tuple(
         self, node: Node, visited_children: Tuple[HighPriOperator, Expression]
     ) -> HighPriTuple:
-        left, right = visited_children
-
-        return HighPriTuple(op=left, arithm=right)
+        return visit_high_pri_tuple(node, visited_children)
 
     def visit_low_pri_op(
         self, node: Node, visited_children: Iterable[Any]
     ) -> LowPriOperator:
-
-        return LowPriOperator(node.text)
+        return visit_low_pri_op(node, visited_children)
 
     def visit_high_pri_op(
         self, node: Node, visited_children: Iterable[Any]
     ) -> HighPriOperator:
-
-        return HighPriOperator(node.text)
+        return visit_high_pri_op(node, visited_children)
 
     def visit_arithmetic_term(
         self, node: Node, visited_children: Tuple[Any, Expression, Any]
     ) -> Expression:
-        _, term, _ = visited_children
-
-        return term
+        return visit_arithmetic_term(node, visited_children)
 
     def visit_low_pri_arithmetic(
         self,
         node: Node,
         visited_children: Tuple[Any, Expression, Any, LowPriArithmetic],
     ) -> Expression:
-        _, term, _, exp = visited_children
-
-        return get_arithmetic_expression(term, exp)
+        return visit_low_pri_arithmetic(node, visited_children)
 
     def visit_high_pri_arithmetic(
         self,
         node: Node,
         visited_children: Tuple[Any, Expression, Any, HighPriArithmetic],
     ) -> Expression:
-        _, term, _, exp = visited_children
-
-        return get_arithmetic_expression(term, exp)
+        return visit_high_pri_arithmetic(node, visited_children)
 
     def visit_numeric_literal(
         self, node: Node, visited_children: Iterable[Any]
     ) -> Literal:
-        try:
-            return Literal(None, int(node.text))
-        except Exception:
-            return Literal(None, float(node.text))
+        return visit_numeric_literal(node, visited_children)
 
     def visit_quoted_literal(
         self, node: Node, visited_children: Tuple[Any, Node, Any]
     ) -> Literal:
-        _, val, _ = visited_children
-        return Literal(None, val.text)
+        return visit_quoted_literal(node, visited_children)
 
     def visit_parameter(
         self, node: Node, visited_children: Tuple[Expression, Any, Any, Any]
     ) -> Expression:
-        param, _, _, _, = visited_children
-        return param
+        return visit_parameter(node, visited_children)
 
     def visit_parameters_list(
         self,
         node: Node,
         visited_children: Tuple[Union[Expression, List[Expression]], Expression],
     ) -> List[Expression]:
-        left_section, right_section = visited_children
-        ret: List[Expression] = []
-        if not isinstance(left_section, Node):
-            # We get a Node when the parameter rule is empty. Thus
-            # no parameters
-            if not isinstance(left_section, (list, tuple)):
-                # This can happen when there is one parameter only
-                # thus the generic visitor method removes the list.
-                ret = [left_section]
-            else:
-                ret = [p for p in left_section]
-        ret.append(right_section)
-        return ret
+        return visit_parameters_list(node, visited_children)
 
     def visit_function_call(
         self,
@@ -223,33 +156,10 @@ class ClickhouseVisitor(NodeVisitor):
             str, Any, List[Expression], Any, Union[Node, List[Expression]]
         ],
     ) -> Expression:
-        name, _, params1, _, params2 = visited_children
-        param_list1 = tuple(params1)
-        internal_f = FunctionCall(None, name, param_list1)
-        if isinstance(params2, Node) and params2.text == "":
-            # params2.text == "" means empty node.
-            return internal_f
-
-        _, param_list2, _ = params2
-        if isinstance(param_list2, (list, tuple)) and len(param_list2) > 0:
-            param_list2 = tuple(param_list2)
-        else:
-            # This happens when the second parameter list is empty. Somehow
-            # it does not turn into an empty list.
-            param_list2 = ()
-        return CurriedFunctionCall(None, internal_f, param_list2)
+        return visit_function_call(node, visited_children)
 
     def generic_visit(self, node: Node, visited_children: Any) -> Any:
-        if isinstance(visited_children, list) and len(visited_children) == 1:
-            # This is to remove the dependency of the visitor correctness on the
-            # structure of the grammar. Every rule that does not have a visitor method
-            # (not all are needed) wraps the children into a list before returning
-            # to the parent. The result is that the function call rule needs to unpack
-            # a very nested list to get to columns. Which makes the visitor very fragile.
-            # This way the nesting simply does not happen  and the visitor works
-            # even if we add nesting levels.
-            return visited_children[0]
-        return visited_children or node
+        return generic_visit(node, visited_children)
 
 
 def parse_expression(val: Any) -> Expression:
