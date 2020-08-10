@@ -70,93 +70,86 @@ def get_arithmetic_expression(
     return term
 
 
-def exp_visit_function_name(left, node: Node, visited_children: Iterable[Any]) -> str:
+def visit_function_name(node: Node, visited_children: Iterable[Any]) -> str:
     return str(node.text)
 
 
-def exp_visit_column_name(left, node: Node, visited_children: Iterable[Any]) -> Column:
+def visit_column_name(node: Node, visited_children: Iterable[Any]) -> Column:
     return Column(None, None, node.text)
 
 
-def exp_visit_low_pri_tuple(
-    left, node: Node, visited_children: Tuple[LowPriOperator, Expression]
+def visit_low_pri_tuple(
+    node: Node, visited_children: Tuple[LowPriOperator, Expression]
 ) -> LowPriTuple:
     left, right = visited_children
 
     return LowPriTuple(op=left, arithm=right)
 
 
-def exp_visit_high_pri_tuple(
-    left, node: Node, visited_children: Tuple[HighPriOperator, Expression]
+def visit_high_pri_tuple(
+    node: Node, visited_children: Tuple[HighPriOperator, Expression]
 ) -> HighPriTuple:
     left, right = visited_children
 
     return HighPriTuple(op=left, arithm=right)
 
 
-def exp_visit_low_pri_op(
-    left, node: Node, visited_children: Iterable[Any]
-) -> LowPriOperator:
+def visit_low_pri_op(node: Node, visited_children: Iterable[Any]) -> LowPriOperator:
 
     return LowPriOperator(node.text)
 
 
-def exp_visit_high_pri_op(
-    left, node: Node, visited_children: Iterable[Any]
-) -> HighPriOperator:
+def visit_high_pri_op(node: Node, visited_children: Iterable[Any]) -> HighPriOperator:
 
     return HighPriOperator(node.text)
 
 
-def exp_visit_arithmetic_term(
-    left, node: Node, visited_children: Tuple[Any, Expression, Any]
+def visit_arithmetic_term(
+    node: Node, visited_children: Tuple[Any, Expression, Any]
 ) -> Expression:
     _, term, _ = visited_children
 
     return term
 
 
-def exp_visit_low_pri_arithmetic(
-    left, node: Node, visited_children: Tuple[Any, Expression, Any, LowPriArithmetic],
+def visit_low_pri_arithmetic(
+    node: Node, visited_children: Tuple[Any, Expression, Any, LowPriArithmetic],
 ) -> Expression:
     _, term, _, exp = visited_children
 
     return get_arithmetic_expression(term, exp)
 
 
-def exp_visit_high_pri_arithmetic(
-    left, node: Node, visited_children: Tuple[Any, Expression, Any, HighPriArithmetic],
+def visit_high_pri_arithmetic(
+    node: Node, visited_children: Tuple[Any, Expression, Any, HighPriArithmetic],
 ) -> Expression:
     _, term, _, exp = visited_children
 
     return get_arithmetic_expression(term, exp)
 
 
-def exp_visit_numeric_literal(
-    left, node: Node, visited_children: Iterable[Any]
-) -> Literal:
+def visit_numeric_literal(node: Node, visited_children: Iterable[Any]) -> Literal:
     try:
         return Literal(None, int(node.text))
     except Exception:
         return Literal(None, float(node.text))
 
 
-def exp_visit_quoted_literal(
-    left, node: Node, visited_children: Tuple[Any, Node, Any]
+def visit_quoted_literal(
+    node: Node, visited_children: Tuple[Any, Node, Any]
 ) -> Literal:
     _, val, _ = visited_children
     return Literal(None, val.text)
 
 
-def exp_visit_parameter(
-    left, node: Node, visited_children: Tuple[Expression, Any, Any, Any]
+def visit_parameter(
+    node: Node, visited_children: Tuple[Expression, Any, Any, Any]
 ) -> Expression:
     param, _, _, _, = visited_children
     return param
 
 
-def exp_visit_parameters_list(
-    self,
+def visit_parameters_list(
     node: Node,
     visited_children: Tuple[Union[Expression, List[Expression]], Expression],
 ) -> List[Expression]:
@@ -175,8 +168,7 @@ def exp_visit_parameters_list(
     return ret
 
 
-def exp_visit_function_call(
-    left,
+def visit_function_call(
     node: Node,
     visited_children: Tuple[
         str, Any, List[Expression], Any, Union[Node, List[Expression]]
@@ -199,7 +191,7 @@ def exp_visit_function_call(
     return CurriedFunctionCall(None, internal_f, param_list2)
 
 
-def exp_generic_visit(left, node: Node, visited_children: Any) -> Any:
+def generic_visit(node: Node, visited_children: Any) -> Any:
     if isinstance(visited_children, list) and len(visited_children) == 1:
         return visited_children[0]
     return visited_children or node
