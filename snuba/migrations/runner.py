@@ -9,7 +9,11 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster, CLUSTERS
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.context import Context
-from snuba.migrations.errors import InvalidMigrationState, MigrationInProgress
+from snuba.migrations.errors import (
+    InvalidMigrationState,
+    MigrationError,
+    MigrationInProgress,
+)
 from snuba.migrations.groups import get_group_loader, MigrationGroup
 from snuba.migrations.status import Status
 
@@ -72,9 +76,13 @@ class Runner:
 
         return migrations
 
-    def run_migration(self, migration_key: MigrationKey, reverse: bool = False) -> None:
+    def run_migration(
+        self, migration_key: MigrationKey, reverse: bool = False, force: bool = False
+    ) -> None:
         """
         Run a single migration given its migration key and marks the migration as complete.
+
+        TODO: Ensure that blocking migrations are run with force.
         """
         migration_id = migration_key.migration_id
 
@@ -88,6 +96,8 @@ class Runner:
         migration = get_group_loader(migration_key.group).load_migration(migration_id)
 
         if reverse:
+            if not force:
+                raise MigrationError("Reverse migration must be run with 'force'")
             migration.backwards(context)
         else:
             migration.forwards(context)
