@@ -14,7 +14,11 @@ from snuba.migrations.errors import (
     MigrationError,
     MigrationInProgress,
 )
-from snuba.migrations.groups import get_group_loader, MigrationGroup
+from snuba.migrations.groups import (
+    ACTIVE_MIGRATION_GROUPS,
+    get_group_loader,
+    MigrationGroup,
+)
 from snuba.migrations.status import Status
 
 logger = logging.getLogger("snuba.migrations")
@@ -52,7 +56,7 @@ class Runner:
         def get_status(migration_key: MigrationKey) -> Status:
             return migration_status.get(migration_key, Status.NOT_STARTED)
 
-        for group in MigrationGroup:
+        for group in ACTIVE_MIGRATION_GROUPS:
             group_loader = get_group_loader(group)
             group_migrations: List[MigrationKey] = []
 

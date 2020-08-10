@@ -1,3 +1,6 @@
+import importlib
+from unittest.mock import patch
+
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.consumer import KafkaMessageMetadata
@@ -11,11 +14,16 @@ from snuba.migrations.status import Status
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
 
-def setup_function() -> None:
+def teardown_function() -> None:
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
     )
-    for table in ["migrations_local", "sentry_local", "transactions_local"]:
+    for table in [
+        "migrations_local",
+        "sentry_local",
+        "transactions_local",
+        "querylog_local",
+    ]:
         connection.execute(f"DROP TABLE IF EXISTS {table};")
 
 
@@ -238,3 +246,17 @@ def generate_transactions(count: int) -> None:
         rows.extend(processed.rows)
 
     table_writer.get_writer(metrics=DummyMetricsBackend(strict=True)).write(rows)
+
+
+def test_settings_skipped_group() -> None:
+    from snuba.migrations import groups, runner
+
+    with patch("snuba.settings.SKIPPED_MIGRATION_GROUPS", {"querylog"}):
+        importlib.reload(groups)
+        importlib.reload(runner)
+        runner.Runner().run_all()
+
+    connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
+        ClickhouseClientSettings.MIGRATE
+    )
+    assert connection.execute("SHOW TABLES LIKE 'querylog_local'") == []
