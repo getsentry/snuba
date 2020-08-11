@@ -41,7 +41,11 @@ class Runner:
             ClickhouseClientSettings.MIGRATE
         )
 
-    def run_all(self, force: bool = False) -> None:
+        assert all(
+            cluster.is_single_node() for cluster in CLUSTERS
+        ), "Cannot run migrations for multi node clusters"
+
+    def run_all(self, *, force: bool = False) -> None:
         """
         Run all pending migrations. Throws an error if any migration is in progress.
 
@@ -83,7 +87,7 @@ class Runner:
         return migrations
 
     def run_migration(
-        self, migration_key: MigrationKey, reverse: bool = False, force: bool = False
+        self, migration_key: MigrationKey, *, force: bool = False
     ) -> None:
         """
         Run a single migration given its migration key and marks the migration as complete.
@@ -92,24 +96,30 @@ class Runner:
         """
         migration_id = migration_key.migration_id
 
-        assert all(
-            cluster.is_single_node() for cluster in CLUSTERS
-        ), "Cannot run migrations for multi node clusters"
+        context = Context(
+            migration_id, logger, partial(self._update_migration_status, migration_key),
+        )
+        migration = get_group_loader(migration_key.group).load_migration(migration_id)
+
+        if migration.blocking and not force:
+            raise MigrationError("Blocking migrations must be run with force")
+
+        migration.forwards(context)
+
+    def reverse_migration(
+        self, migration_key: MigrationKey, *, force: bool = False
+    ) -> None:
+        migration_id = migration_key.migration_id
 
         context = Context(
             migration_id, logger, partial(self._update_migration_status, migration_key),
         )
         migration = get_group_loader(migration_key.group).load_migration(migration_id)
 
-        if reverse:
-            if not force:
-                raise MigrationError("Reverse migration must be run with 'force'")
-            migration.backwards(context)
-        else:
-            if migration.blocking and not force:
-                raise MigrationError("Blocking migrations must be run with force")
+        if not force:
+            raise MigrationError("Reverse migration must be run with force")
 
-            migration.forwards(context)
+        migration.backwards(context)
 
     def _update_migration_status(
         self, migration_key: MigrationKey, status: Status
