@@ -8,13 +8,13 @@ from snuba.query.snql import parse_snql_query
 
 test_cases = [
     pytest.param(
-        "COLLECT 4-5, 3*g(c), c",
+        "MATCH (blah) COLLECT 4-5, 3*g(c), c BY d, 2+7",
         Query(
             {},
             None,
             selected_columns=[
                 SelectedExpression(
-                    name=None,
+                    name="4-5",
                     expression=FunctionCall(
                         alias=None,
                         function_name="minus",
@@ -25,7 +25,7 @@ test_cases = [
                     ),
                 ),
                 SelectedExpression(
-                    name=None,
+                    name="3*g(c)",
                     expression=FunctionCall(
                         alias=None,
                         function_name="multiply",
@@ -44,8 +44,19 @@ test_cases = [
                     ),
                 ),
                 SelectedExpression(
-                    name=None,
+                    name="c",
                     expression=Column(alias=None, table_name=None, column_name="c"),
+                ),
+            ],
+            groupby=[
+                Column(alias=None, table_name=None, column_name="d"),
+                FunctionCall(
+                    alias=None,
+                    function_name="plus",
+                    parameters=(
+                        Literal(alias=None, value=2),
+                        Literal(alias=None, value=7),
+                    ),
                 ),
             ],
         ),
