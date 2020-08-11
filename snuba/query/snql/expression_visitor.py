@@ -193,5 +193,12 @@ def visit_function_call(
 
 def generic_visit(node: Node, visited_children: Any) -> Any:
     if isinstance(visited_children, list) and len(visited_children) == 1:
+        # This is to remove the dependency of the visitor correctness on the
+        # structure of the grammar. Every rule that does not have a visitor method
+        # (not all are needed) wraps the children into a list before returning
+        # to the parent. The result is that the function call rule needs to unpack
+        # a very nested list to get to columns. Which makes the visitor very fragile.
+        # This way the nesting simply does not happen  and the visitor works
+        # even if we add nesting levels.
         return visited_children[0]
     return visited_children or node
