@@ -1,6 +1,10 @@
-class MigrationInProgress(Exception):
+class InvalidMigrationState(Exception):
     pass
 
 
-class InvalidMigrationState(Exception):
+class MigrationError(Exception):
+    pass
+
+
+class MigrationInProgress(Exception):
     pass
