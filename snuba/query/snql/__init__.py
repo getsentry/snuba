@@ -30,16 +30,20 @@ from snuba.query.snql.expression_visitor import (
     visit_quoted_literal,
 )
 
+
 snql_grammar = Grammar(
     fr"""
-    query_exp             = match_clause? where_clause? collect_clause? having_clause? order_by_clause?
-    match_clause          = space* "MATCH" space* "(" clause ")" space*
+    query_exp             = match_clause where_clause? collect_clause? group_by_clause? having_clause? order_by_clause?
+
+    match_clause          = space* "MATCH" space* open_paren clause close_paren space*
     where_clause          = space* "WHERE" clause space*
     collect_clause        = space* "COLLECT" collect_list space*
+    group_by_clause       = space* "BY" group_list space*
     order_by_clause       = space* "ORDER BY" collect_list ("ASC"/"DESC") space*
 
     collect_list          = collect_columns* (low_pri_arithmetic)
     collect_columns       = low_pri_arithmetic space* comma space*
+    group_list            = collect_columns* (low_pri_arithmetic)
 
     having_clause         = space* "HAVING" clause space*
     clause                = space* ~r"[-=><\w]+" space*
@@ -77,9 +81,8 @@ class SnQLVisitor(NodeVisitor):
     """
 
     def visit_query_exp(self, node, visited_children):
-        _, _, collect, _, _ = visited_children
-
-        return Query({}, None, collect, None,)
+        _, _, collect, groupby, _, _ = visited_children
+        return Query({}, None, collect, None, None, None, groupby, None,)
 
     def visit_function_name(self, node: Node, visited_children: Iterable[Any]) -> str:
         return visit_function_name(node, visited_children)
@@ -136,6 +139,23 @@ class SnQLVisitor(NodeVisitor):
     ) -> Literal:
         return visit_quoted_literal(node, visited_children)
 
+    def visit_group_by_clause(self, node, visited_children):
+        _, _, group_columns, _ = visited_children
+        return group_columns
+
+    def visit_group_list(self, node, visited_children):
+        left_group_list, right_group = visited_children
+        ret: List[Expression] = []
+        if not isinstance(left_group_list, Node):
+            if not isinstance(left_group_list, (list, tuple)):
+                ret.append(left_group_list)
+            else:
+                for p in left_group_list:
+                    ret.append(p)
+
+        ret.append(right_group)
+        return ret
+
     def visit_collect_clause(self, node, visited_children):
         _, _, selected_columns, _ = visited_children
         return selected_columns
@@ -145,16 +165,21 @@ class SnQLVisitor(NodeVisitor):
         return columns
 
     def visit_collect_list(self, node, visited_children):
+        raw_list = node.text.split(",")
+        i = 0
         column_list, right_column = visited_children
         ret: List[SelectedExpression] = []
         if not isinstance(column_list, Node):
             if not isinstance(column_list, (list, tuple)):
-                ret.append(SelectedExpression(None, column_list))
+                if column_list.alias is None:
+                    ret.append(SelectedExpression(node.text, column_list))
             else:
                 for p in column_list:
-                    ret.append(SelectedExpression(None, p))
+                    if p.alias is None:
+                        ret.append(SelectedExpression(raw_list[i].strip(), p))
+                        i += 1
 
-        ret.append(SelectedExpression(None, right_column))
+        ret.append(SelectedExpression(raw_list[i].strip(), right_column))
         return ret
 
     def visit_parameter(
@@ -190,5 +215,4 @@ def parse_snql_query(body: str, dataset: Dataset) -> Query:
     """
     exp_tree = snql_grammar.parse(body)
     parsed_exp = SnQLVisitor().visit(exp_tree)
-    selected_columns = parsed_exp.get_selected_columns_from_ast()
-    return Query({}, None, selected_columns,)
+    return parsed_exp
