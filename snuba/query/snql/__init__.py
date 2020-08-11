@@ -43,11 +43,12 @@ snql_grammar = Grammar(
 
     collect_list          = collect_columns* (low_pri_arithmetic)
     collect_columns       = low_pri_arithmetic space* comma space*
-    group_list            = collect_columns* (low_pri_arithmetic)
+
+    group_list            = group_columns* (low_pri_arithmetic)
+    group_columns         = low_pri_arithmetic space* comma space*
 
     order_list            = order_columns* low_pri_arithmetic ("ASC"/"DESC")
     order_columns         = low_pri_arithmetic ("ASC"/"DESC") space* comma space*
-
 
     having_clause         = space* "HAVING" clause space*
     clause                = space* ~r"[-=><\w]+" space*
@@ -147,7 +148,6 @@ class SnQLVisitor(NodeVisitor):
         _, _, order_columns, _ = visited_children
         return order_columns
 
-    # order_columns* (low_pri_arithmetic (("ASC"/"DESC"))
     def visit_order_list(self, node, visited_children):
         left_order_list, right_order, order = visited_children
 
@@ -180,6 +180,10 @@ class SnQLVisitor(NodeVisitor):
         _, _, group_columns, _ = visited_children
         return group_columns
 
+    def visit_group_columns(self, node, visited_children):
+        columns, _, _, _ = visited_children
+        return columns
+
     def visit_group_list(self, node, visited_children):
         left_group_list, right_group = visited_children
         ret: List[Expression] = []
@@ -199,24 +203,25 @@ class SnQLVisitor(NodeVisitor):
 
     def visit_collect_columns(self, node, visited_children):
         columns, _, _, _, = visited_children
-        return columns
+
+        if columns.alias is None:
+            text = node.text.split(",")[0].strip()
+            return SelectedExpression(text, columns)
+        else:
+            return SelectedExpression(columns.alias, columns)
 
     def visit_collect_list(self, node, visited_children):
-        raw_list = node.text.split(",")
-        i = 0
         column_list, right_column = visited_children
         ret: List[SelectedExpression] = []
         if not isinstance(column_list, Node):
             if not isinstance(column_list, (list, tuple)):
-                if column_list.alias is None:
-                    ret.append(SelectedExpression(node.text, column_list))
+                ret.append(column_list)
             else:
                 for p in column_list:
-                    if p.alias is None:
-                        ret.append(SelectedExpression(raw_list[i].strip(), p))
-                        i += 1
+                    ret.append(p)
 
-        ret.append(SelectedExpression(raw_list[i].strip(), right_column))
+        right_text = node.text.split(",")[-1].strip()
+        ret.append(SelectedExpression(right_text, right_column))
         return ret
 
     def visit_parameter(
@@ -251,5 +256,4 @@ def parse_snql_query(body: str, dataset: Dataset) -> Query:
     processors and are supposed to update the AST.
     """
     exp_tree = snql_grammar.parse(body)
-    parsed_exp = SnQLVisitor().visit(exp_tree)
-    return parsed_exp
+    return SnQLVisitor().visit(exp_tree)
