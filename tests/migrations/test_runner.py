@@ -1,3 +1,6 @@
+import importlib
+from unittest.mock import patch
+
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.consumer import KafkaMessageMetadata
@@ -11,11 +14,16 @@ from snuba.migrations.status import Status
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
 
-def setup_function() -> None:
+def teardown_function() -> None:
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
     )
-    for table in ["migrations_local", "sentry_local", "transactions_local"]:
+    for table in [
+        "migrations_local",
+        "sentry_local",
+        "transactions_local",
+        "querylog_local",
+    ]:
         connection.execute(f"DROP TABLE IF EXISTS {table};")
 
 
@@ -47,6 +55,19 @@ def test_run_all() -> None:
     assert runner._get_pending_migrations() == []
 
 
+def test_reverse_all() -> None:
+    runner = Runner()
+    all_migrations = runner._get_pending_migrations()
+    runner.run_all()
+    for migration in reversed(all_migrations):
+        runner.run_migration(migration, reverse=True, force=True)
+
+    connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
+        ClickhouseClientSettings.MIGRATE
+    )
+    assert connection.execute("SHOW TABLES") == [], "All tables should be deleted"
+
+
 def get_total_migration_count() -> int:
     count = 0
     for group in MigrationGroup:
@@ -66,21 +87,10 @@ def test_version() -> None:
 
 
 def test_no_schema_differences() -> None:
-    storages_to_test = [
-        StorageKey.EVENTS,
-        StorageKey.ERRORS,
-        StorageKey.TRANSACTIONS,
-        StorageKey.OUTCOMES_RAW,
-        StorageKey.OUTCOMES_HOURLY,
-        StorageKey.SESSIONS_RAW,
-        StorageKey.SESSIONS_HOURLY,
-        StorageKey.QUERYLOG,
-    ]  # TODO: Eventually test all storages
-
     runner = Runner()
     runner.run_all()
 
-    for storage_key in storages_to_test:
+    for storage_key in StorageKey:
         storage = get_storage(storage_key)
         conn = storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.MIGRATE
@@ -236,3 +246,17 @@ def generate_transactions(count: int) -> None:
         rows.extend(processed.rows)
 
     table_writer.get_writer(metrics=DummyMetricsBackend(strict=True)).write(rows)
+
+
+def test_settings_skipped_group() -> None:
+    from snuba.migrations import groups, runner
+
+    with patch("snuba.settings.SKIPPED_MIGRATION_GROUPS", {"querylog"}):
+        importlib.reload(groups)
+        importlib.reload(runner)
+        runner.Runner().run_all()
+
+    connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
+        ClickhouseClientSettings.MIGRATE
+    )
+    assert connection.execute("SHOW TABLES LIKE 'querylog_local'") == []

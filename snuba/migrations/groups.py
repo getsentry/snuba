@@ -3,6 +3,7 @@ from enum import Enum
 from importlib import import_module
 from typing import Sequence
 
+from snuba import settings
 from snuba.migrations.migration import Migration
 
 
@@ -13,6 +14,21 @@ class MigrationGroup(Enum):
     OUTCOMES = "outcomes"
     SESSIONS = "sessions"
     QUERYLOG = "querylog"
+
+
+# Migration groups are mandatory by default, unless they are on this list
+OPTIONAL_GROUPS = {
+    MigrationGroup.SESSIONS,
+    MigrationGroup.QUERYLOG,
+}
+
+ACTIVE_MIGRATION_GROUPS = [
+    group
+    for group in MigrationGroup
+    if not (
+        group in OPTIONAL_GROUPS and group.value in settings.SKIPPED_MIGRATION_GROUPS
+    )
+]
 
 
 class GroupLoader(ABC):
@@ -71,6 +87,8 @@ class EventsLoader(DirectoryLoader):
             "0004_errors_onpremise_compatibility",
             "0005_events_tags_hash_map",
             "0006_errors_tags_hash_map",
+            "0007_groupedmessages",
+            "0008_groupassignees",
         ]
 
 
