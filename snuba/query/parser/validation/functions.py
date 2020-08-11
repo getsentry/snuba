@@ -2,7 +2,7 @@ import logging
 from collections import ChainMap
 from typing import Mapping
 
-from snuba.clickhouse.columns import String
+from snuba.clickhouse.columns import Array, String
 from snuba.datasets.dataset import Dataset
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.parser.exceptions import InvalidExpressionException
@@ -15,8 +15,12 @@ logger = logging.getLogger(__name__)
 
 
 default_validators: Mapping[str, FunctionCallValidator] = {
-    "like": SignatureValidator([Column({String}), Any()]),
-    "notLike": SignatureValidator([Column({String}), Any()]),
+    # like and notLike need to take care of Arrays as well since
+    # Arrays are exploded into strings if they are part of the arrayjoin
+    # clause.
+    # TODO: provide a more restrictive support for arrayjoin.
+    "like": SignatureValidator([Column({Array, String}), Any()]),
+    "notLike": SignatureValidator([Column({Array, String}), Any()]),
 }
 
 
