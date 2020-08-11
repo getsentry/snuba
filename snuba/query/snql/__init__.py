@@ -5,7 +5,7 @@ from parsimonious.nodes import Node, NodeVisitor
 
 from snuba.datasets.dataset import Dataset
 from snuba.query.expressions import Column, Expression, Literal
-from snuba.query.logical import Query, SelectedExpression
+from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
     HighPriOperator,
@@ -39,11 +39,15 @@ snql_grammar = Grammar(
     where_clause          = space* "WHERE" clause space*
     collect_clause        = space* "COLLECT" collect_list space*
     group_by_clause       = space* "BY" group_list space*
-    order_by_clause       = space* "ORDER BY" collect_list ("ASC"/"DESC") space*
+    order_by_clause       = space* "ORDER BY" order_list space*
 
     collect_list          = collect_columns* (low_pri_arithmetic)
     collect_columns       = low_pri_arithmetic space* comma space*
     group_list            = collect_columns* (low_pri_arithmetic)
+
+    order_list            = order_columns* low_pri_arithmetic ("ASC"/"DESC")
+    order_columns         = low_pri_arithmetic ("ASC"/"DESC") space* comma space*
+
 
     having_clause         = space* "HAVING" clause space*
     clause                = space* ~r"[-=><\w]+" space*
@@ -81,8 +85,8 @@ class SnQLVisitor(NodeVisitor):
     """
 
     def visit_query_exp(self, node, visited_children):
-        _, _, collect, groupby, _, _ = visited_children
-        return Query({}, None, collect, None, None, None, groupby, None,)
+        _, _, collect, groupby, _, orderby = visited_children
+        return Query({}, None, collect, None, None, None, groupby, None, orderby)
 
     def visit_function_name(self, node: Node, visited_children: Iterable[Any]) -> str:
         return visit_function_name(node, visited_children)
@@ -138,6 +142,39 @@ class SnQLVisitor(NodeVisitor):
         self, node: Node, visited_children: Tuple[Any, Node, Any]
     ) -> Literal:
         return visit_quoted_literal(node, visited_children)
+
+    def visit_order_by_clause(self, node, visited_children):
+        _, _, order_columns, _ = visited_children
+        return order_columns
+
+    # order_columns* (low_pri_arithmetic (("ASC"/"DESC"))
+    def visit_order_list(self, node, visited_children):
+        left_order_list, right_order, order = visited_children
+
+        ret: List[OrderBy] = []
+        if not isinstance(left_order_list, Node):
+            if not isinstance(left_order_list, (list, tuple)):
+                ret.append(left_order_list)
+            else:
+                for p in left_order_list:
+                    ret.append(p)
+
+        if order.text == "ASC":
+            ret.append(OrderBy(OrderByDirection.ASC, right_order))
+        elif order.text == "DESC":
+            ret.append(OrderBy(OrderByDirection.DESC, right_order))
+
+        return ret
+
+    def visit_order_columns(self, node, visited_children):
+        column, order, _, _, _ = visited_children
+
+        if order.text == "ASC":
+            order_object = OrderBy(OrderByDirection.ASC, column)
+        elif order.text == "DESC":
+            order_object = OrderBy(OrderByDirection.DESC, column)
+
+        return order_object
 
     def visit_group_by_clause(self, node, visited_children):
         _, _, group_columns, _ = visited_children
