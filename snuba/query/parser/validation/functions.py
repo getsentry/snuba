@@ -15,6 +15,10 @@ logger = logging.getLogger(__name__)
 
 
 default_validators: Mapping[str, FunctionCallValidator] = {
+    # like and notLike need to take care of Arrays as well since
+    # Arrays are exploded into strings if they are part of the arrayjoin
+    # clause.
+    # TODO: provide a more restrictive support for arrayjoin.
     "like": SignatureValidator([Column({Array, String}), Any()]),
     "notLike": SignatureValidator([Column({Array, String}), Any()]),
 }
