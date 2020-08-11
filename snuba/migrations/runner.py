@@ -26,9 +26,6 @@ logger = logging.getLogger("snuba.migrations")
 LOCAL_TABLE_NAME = "migrations_local"
 DIST_TABLE_NAME = "migrations_dist"
 
-# Currently only local migrations are supported
-TABLE_NAME = LOCAL_TABLE_NAME
-
 
 class MigrationKey(NamedTuple):
     group: MigrationGroup
@@ -37,7 +34,16 @@ class MigrationKey(NamedTuple):
 
 class Runner:
     def __init__(self) -> None:
-        self.__connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
+        assert all(
+            cluster.is_single_node() for cluster in CLUSTERS
+        ), "Cannot run migrations for multi node clusters"
+
+        migrations_cluster = get_cluster(StorageSetKey.MIGRATIONS)
+        self.__table_name = (
+            LOCAL_TABLE_NAME if migrations_cluster.is_single_node() else DIST_TABLE_NAME
+        )
+
+        self.__connection = migrations_cluster.get_query_connection(
             ClickhouseClientSettings.MIGRATE
         )
 
@@ -90,10 +96,6 @@ class Runner:
         """
         migration_id = migration_key.migration_id
 
-        assert all(
-            cluster.is_single_node() for cluster in CLUSTERS
-        ), "Cannot run migrations for multi node clusters"
-
         context = Context(
             migration_id, logger, partial(self._update_migration_status, migration_key),
         )
@@ -111,7 +113,7 @@ class Runner:
     ) -> None:
         next_version = self._get_next_version(migration_key)
 
-        statement = f"INSERT INTO {TABLE_NAME} FORMAT JSONEachRow"
+        statement = f"INSERT INTO {self.__table_name} FORMAT JSONEachRow"
         data = [
             {
                 "group": migration_key.group.value,
@@ -125,7 +127,7 @@ class Runner:
 
     def _get_next_version(self, migration_key: MigrationKey) -> int:
         result = self.__connection.execute(
-            f"SELECT version FROM {TABLE_NAME} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s;",
+            f"SELECT version FROM {self.__table_name} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s;",
             {
                 "group": migration_key.group.value,
                 "migration_id": migration_key.migration_id,
@@ -142,7 +144,7 @@ class Runner:
 
         try:
             for row in self.__connection.execute(
-                f"SELECT group, migration_id, status FROM {TABLE_NAME} FINAL"
+                f"SELECT group, migration_id, status FROM {self.__table_name} FINAL"
             ):
                 group_name, migration_id, status_name = row
                 data[MigrationKey(MigrationGroup(group_name), migration_id)] = Status(
