@@ -82,7 +82,9 @@ class Runner:
 
         return migrations
 
-    def run_migration(self, migration_key: MigrationKey, force: bool = False) -> None:
+    def run_migration(
+        self, migration_key: MigrationKey, reverse: bool = False, force: bool = False
+    ) -> None:
         """
         Run a single migration given its migration key and marks the migration as complete.
 
@@ -99,10 +101,15 @@ class Runner:
         )
         migration = get_group_loader(migration_key.group).load_migration(migration_id)
 
-        if migration.blocking and not force:
-            raise MigrationError("Blocking migrations must be run with force")
+        if reverse:
+            if not force:
+                raise MigrationError("Reverse migration must be run with 'force'")
+            migration.backwards(context)
+        else:
+            if migration.blocking and not force:
+                raise MigrationError("Blocking migrations must be run with force")
 
-        migration.forwards(context)
+            migration.forwards(context)
 
     def _update_migration_status(
         self, migration_key: MigrationKey, status: Status
