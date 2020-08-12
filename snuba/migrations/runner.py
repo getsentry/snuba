@@ -47,10 +47,6 @@ class Runner:
             ClickhouseClientSettings.MIGRATE
         )
 
-        assert all(
-            cluster.is_single_node() for cluster in CLUSTERS
-        ), "Cannot run migrations for multi node clusters"
-
     def run_all(self, *, force: bool = False) -> None:
         """
         Run all pending migrations. Throws an error if any migration is in progress.
