@@ -29,6 +29,7 @@ from snuba.query.snql.expression_visitor import (
     visit_parameters_list,
     visit_quoted_literal,
 )
+from typing import Sequence
 
 
 snql_grammar = Grammar(
@@ -41,8 +42,9 @@ snql_grammar = Grammar(
     group_by_clause       = space* "BY" group_list space*
     order_by_clause       = space* "ORDER BY" order_list space*
 
-    collect_list          = collect_columns* (low_pri_arithmetic)
-    collect_columns       = low_pri_arithmetic space* comma space*
+    collect_list          = collect_columns* (selected_expression)
+    collect_columns       = selected_expression space* comma space*
+    selected_expression   = low_pri_arithmetic space*
 
     group_list            = group_columns* (low_pri_arithmetic)
     group_columns         = low_pri_arithmetic space* comma space*
@@ -85,8 +87,13 @@ class SnQLVisitor(NodeVisitor):
     Builds Snuba AST expressions from the Parsimonious parse tree.
     """
 
-    def visit_query_exp(self, node, visited_children):
+    def visit_query_exp(self, node: Node, visited_children: Iterable[Any]) -> Query:
         _, _, collect, groupby, _, orderby = visited_children
+        # check for empty clauses
+        if isinstance(groupby, Node):
+            groupby = None
+        if isinstance(orderby, Node):
+            orderby = None
         return Query({}, None, collect, None, None, None, groupby, None, orderby)
 
     def visit_function_name(self, node: Node, visited_children: Iterable[Any]) -> str:
@@ -144,14 +151,20 @@ class SnQLVisitor(NodeVisitor):
     ) -> Literal:
         return visit_quoted_literal(node, visited_children)
 
-    def visit_order_by_clause(self, node, visited_children):
+    def visit_order_by_clause(
+        self, node: Node, visited_children: Tuple[Any, Any, Sequence[OrderBy], Any]
+    ) -> Sequence[OrderBy]:
         _, _, order_columns, _ = visited_children
         return order_columns
 
-    def visit_order_list(self, node, visited_children):
+    def visit_order_list(
+        self, node: Node, visited_children: Tuple[OrderBy, Expression, Node]
+    ) -> Sequence[OrderBy]:
         left_order_list, right_order, order = visited_children
-
         ret: List[OrderBy] = []
+
+        # in the case of one OrderBy
+        # left_order_list will be an empty node
         if not isinstance(left_order_list, Node):
             if not isinstance(left_order_list, (list, tuple)):
                 ret.append(left_order_list)
@@ -166,7 +179,9 @@ class SnQLVisitor(NodeVisitor):
 
         return ret
 
-    def visit_order_columns(self, node, visited_children):
+    def visit_order_columns(
+        self, node: Node, visited_children: Tuple[Expression, Node, Any, Any, Any]
+    ) -> OrderBy:
         column, order, _, _, _ = visited_children
 
         if order.text == "ASC":
@@ -176,17 +191,26 @@ class SnQLVisitor(NodeVisitor):
 
         return order_object
 
-    def visit_group_by_clause(self, node, visited_children):
+    def visit_group_by_clause(
+        self, node: Node, visited_children: Tuple[Any, Any, Sequence[Expression], Any]
+    ) -> Sequence[Expression]:
         _, _, group_columns, _ = visited_children
         return group_columns
 
-    def visit_group_columns(self, node, visited_children):
+    def visit_group_columns(
+        self, node: Node, visited_children: Tuple[Expression, Any, Any, Any]
+    ) -> Expression:
         columns, _, _, _ = visited_children
         return columns
 
-    def visit_group_list(self, node, visited_children):
+    def visit_group_list(
+        self, node: Node, visited_children: Tuple[Expression, Expression]
+    ) -> Sequence[Expression]:
         left_group_list, right_group = visited_children
         ret: List[Expression] = []
+
+        # in the case of one GroupBy / By
+        # left_group_list will be an empty node
         if not isinstance(left_group_list, Node):
             if not isinstance(left_group_list, (list, tuple)):
                 ret.append(left_group_list)
@@ -197,22 +221,36 @@ class SnQLVisitor(NodeVisitor):
         ret.append(right_group)
         return ret
 
-    def visit_collect_clause(self, node, visited_children):
+    def visit_collect_clause(
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Any, Sequence[SelectedExpression], Any],
+    ) -> Sequence[SelectedExpression]:
         _, _, selected_columns, _ = visited_children
         return selected_columns
 
-    def visit_collect_columns(self, node, visited_children):
+    def visit_selected_expression(
+        self, node: Node, visited_children: Tuple[Expression, Any]
+    ) -> SelectedExpression:
+        exp, _ = visited_children
+        return SelectedExpression(node.text.strip(), exp)
+
+    def visit_collect_columns(
+        self, node: Node, visited_children: Tuple[SelectedExpression, Any, Any, Any]
+    ) -> SelectedExpression:
         columns, _, _, _, = visited_children
+        return columns
 
-        if columns.alias is None:
-            text = node.text.split(",")[0].strip()
-            return SelectedExpression(text, columns)
-        else:
-            return SelectedExpression(columns.alias, columns)
-
-    def visit_collect_list(self, node, visited_children):
+    def visit_collect_list(
+        self,
+        node: Node,
+        visited_children: Tuple[SelectedExpression, SelectedExpression],
+    ) -> Sequence[SelectedExpression]:
         column_list, right_column = visited_children
         ret: List[SelectedExpression] = []
+
+        # in the case of one Collect
+        # column_list will be an empty node
         if not isinstance(column_list, Node):
             if not isinstance(column_list, (list, tuple)):
                 ret.append(column_list)
@@ -220,8 +258,7 @@ class SnQLVisitor(NodeVisitor):
                 for p in column_list:
                     ret.append(p)
 
-        right_text = node.text.split(",")[-1].strip()
-        ret.append(SelectedExpression(right_text, right_column))
+        ret.append(right_column)
         return ret
 
     def visit_parameter(
