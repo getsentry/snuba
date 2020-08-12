@@ -1,6 +1,17 @@
 on:
-  repository_dispatch:
-    types: [release]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release
+        required: false
+      skip_prepare:
+        description: Skip preparation step (assume a release branch is ready)
+        required: false
+        default: false
+      dry_run:
+        description: Do not actually cut the release
+        required: false
+        default: false
   schedule:
     # We want the release to be at 9-10am Pacific Time
     # We also want it to be 1 hour before the on-prem release
@@ -11,18 +22,18 @@ jobs:
     name: "Release a new version"
     steps:
         - id: calver
-          if: ${{ !github.event.client_payload.version }}
+          if: ${{ !github.event.inputs.version }}
           run: echo "::set-output name=version::$(date +'%y.%-m.0')"
         - uses: actions/checkout@v2
           with:
             token: ${{ secrets.GH_SENTRY_BOT_PAT }}
         - uses: getsentry/craft@master
-          if: ${{ !github.event.client_payload.skip_prepare }}
+          if: ${{ !github.event.inputs.skip_prepare }}
           with:
             action: prepare
-            version: ${{ github.event.client_payload.version || steps.calver.outputs.version }}
+            version: ${{ github.event.inputs.version || steps.calver.outputs.version }}
           env:
-            DRY_RUN: ${{ github.event.client_payload.dry_run }}
+            DRY_RUN: ${{ github.event.inputs.dry_run }}
             GIT_COMMITTER_NAME: getsentry-bot
             GIT_AUTHOR_NAME: getsentry-bot
             EMAIL: bot@getsentry.com
@@ -33,9 +44,9 @@ jobs:
         - uses: getsentry/craft@master
           with:
             action: publish
-            version: ${{ github.event.client_payload.version || steps.calver.outputs.version }}
+            version: ${{ github.event.inputs.version || steps.calver.outputs.version }}
           env:
-            DRY_RUN: ${{ github.event.client_payload.dry_run }}
+            DRY_RUN: ${{ github.event.inputs.dry_run }}
             GIT_COMMITTER_NAME: getsentry-bot
             GIT_AUTHOR_NAME: getsentry-bot
             EMAIL: bot@getsentry.com
