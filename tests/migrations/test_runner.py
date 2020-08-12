@@ -1,4 +1,5 @@
 import importlib
+import pytest
 from unittest.mock import patch
 
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
@@ -7,6 +8,7 @@ from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import get_group_loader, MigrationGroup
 from snuba.migrations.parse_schema import get_local_schema
 from snuba.migrations.runner import MigrationKey, Runner
@@ -51,16 +53,19 @@ def test_run_all() -> None:
     runner = Runner()
     assert len(runner._get_pending_migrations()) == get_total_migration_count()
 
-    runner.run_all()
+    with pytest.raises(MigrationError):
+        runner.run_all(force=False)
+
+    runner.run_all(force=True)
     assert runner._get_pending_migrations() == []
 
 
 def test_reverse_all() -> None:
     runner = Runner()
     all_migrations = runner._get_pending_migrations()
-    runner.run_all()
+    runner.run_all(force=True)
     for migration in reversed(all_migrations):
-        runner.run_migration(migration, reverse=True, force=True)
+        runner.reverse_migration(migration)
 
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
@@ -88,7 +93,7 @@ def test_version() -> None:
 
 def test_no_schema_differences() -> None:
     runner = Runner()
-    runner.run_all()
+    runner.run_all(force=True)
 
     for storage_key in StorageKey:
         storage = get_storage(storage_key)
@@ -153,7 +158,8 @@ def test_transactions_compatibility() -> None:
         MigrationKey(
             MigrationGroup.TRANSACTIONS,
             "0002_transactions_onpremise_fix_orderby_and_partitionby",
-        )
+        ),
+        force=True,
     )
 
     assert get_sampling_key() == "cityHash64(span_id)"
@@ -254,7 +260,7 @@ def test_settings_skipped_group() -> None:
     with patch("snuba.settings.SKIPPED_MIGRATION_GROUPS", {"querylog"}):
         importlib.reload(groups)
         importlib.reload(runner)
-        runner.Runner().run_all()
+        runner.Runner().run_all(force=True)
 
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
