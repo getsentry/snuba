@@ -106,18 +106,13 @@ class Runner:
 
         migration.forwards(context)
 
-    def reverse_migration(
-        self, migration_key: MigrationKey, *, force: bool = False
-    ) -> None:
+    def reverse_migration(self, migration_key: MigrationKey) -> None:
         migration_id = migration_key.migration_id
 
         context = Context(
             migration_id, logger, partial(self._update_migration_status, migration_key),
         )
         migration = get_group_loader(migration_key.group).load_migration(migration_id)
-
-        if not force:
-            raise MigrationError("Reverse migration must be run with force")
 
         migration.backwards(context)
 
