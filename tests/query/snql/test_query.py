@@ -6,6 +6,7 @@ from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
 from snuba.query.snql import parse_snql_query
 
+
 test_cases = [
     pytest.param(
         "MATCH (blah) COLLECT 4-5, 3*g(c), c BY d, 2+7 ORDER BY f DESC, m ASC",
