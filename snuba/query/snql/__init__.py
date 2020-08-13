@@ -1,9 +1,15 @@
-from typing import Any, Iterable, List, Tuple, Union
+from typing import Any, Iterable, List, Sequence, Tuple, Union
 
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
 from snuba.datasets.dataset import Dataset
+from snuba.query.conditions import (
+    OPERATOR_TO_FUNCTION,
+    binary_condition,
+    combine_and_conditions,
+    combine_or_conditions,
+)
 from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
 from snuba.query.snql.expression_visitor import (
@@ -29,18 +35,23 @@ from snuba.query.snql.expression_visitor import (
     visit_parameters_list,
     visit_quoted_literal,
 )
-from typing import Sequence
-
 
 snql_grammar = Grammar(
     fr"""
-    query_exp             = match_clause where_clause? collect_clause? group_by_clause? having_clause? order_by_clause?
+    query_exp             = match_clause where_clause? collect_clause group_by_clause? having_clause? order_by_clause?
 
     match_clause          = space* "MATCH" space* open_paren clause close_paren space*
     where_clause          = space* "WHERE" clause space*
     collect_clause        = space* "COLLECT" collect_list space*
     group_by_clause       = space* "BY" group_list space*
     order_by_clause       = space* "ORDER BY" order_list space*
+    having_clause         = space* "HAVING" or_expression space*
+
+    condition             = low_pri_arithmetic condition_op (column_name / numeric_literal)
+    condition_op          = "=" / "!=" / ">" / ">=" / "<" / "<="
+
+    and_expression        = space* condition space* ("AND" condition)*
+    or_expression         = space* and_expression space* ("OR" and_expression)*
 
     collect_list          = collect_columns* (selected_expression)
     collect_columns       = selected_expression space* comma space*
@@ -52,7 +63,6 @@ snql_grammar = Grammar(
     order_list            = order_columns* low_pri_arithmetic ("ASC"/"DESC")
     order_columns         = low_pri_arithmetic ("ASC"/"DESC") space* comma space*
 
-    having_clause         = space* "HAVING" clause space*
     clause                = space* ~r"[-=><\w]+" space*
 
     low_pri_arithmetic    = space* high_pri_arithmetic space* (low_pri_tuple)*
@@ -88,13 +98,15 @@ class SnQLVisitor(NodeVisitor):
     """
 
     def visit_query_exp(self, node: Node, visited_children: Iterable[Any]) -> Query:
-        _, _, collect, groupby, _, orderby = visited_children
+        _, _, collect, groupby, having, orderby = visited_children
         # check for empty clauses
         if isinstance(groupby, Node):
             groupby = None
         if isinstance(orderby, Node):
             orderby = None
-        return Query({}, None, collect, None, None, None, groupby, None, orderby)
+        if isinstance(having, Node):
+            having = None
+        return Query({}, None, collect, None, None, None, groupby, having, orderby)
 
     def visit_function_name(self, node: Node, visited_children: Iterable[Any]) -> str:
         return visit_function_name(node, visited_children)
@@ -151,6 +163,41 @@ class SnQLVisitor(NodeVisitor):
     ) -> Literal:
         return visit_quoted_literal(node, visited_children)
 
+    def visit_having_clause(
+        self, node: Node, visited_children: Tuple[Any, Any, Sequence[OrderBy], Any]
+    ) -> Sequence[OrderBy]:
+        _, _, conditions, _ = visited_children
+        return conditions
+
+    def visit_and_expression(self, node, visited_children):
+        _, left_condition, _, and_condition = visited_children
+        # in the case of one Condition
+        # and_condition will be an empty Node
+        if not isinstance(and_condition, Node):
+            _, right_condition = and_condition
+            return combine_and_conditions([left_condition, right_condition])
+        return left_condition
+
+    def visit_or_expression(self, node, visited_children):
+        _, left_condition, _, or_condition = visited_children
+        # in the case of one Condition
+        # or_condition will be an empty Node
+        if not isinstance(or_condition, Node):
+            _, right_condition = or_condition
+            return combine_or_conditions([left_condition, right_condition])
+        return left_condition
+
+    def visit_condition_comma(self, node, visited_children):
+        bin_condition, _, _, _ = visited_children
+        return bin_condition
+
+    def visit_condition(self, node, visited_children):
+        exp, op, literal = visited_children
+        return binary_condition(None, op, exp, literal)
+
+    def visit_condition_op(self, node, visited_children):
+        return OPERATOR_TO_FUNCTION[node.text]
+
     def visit_order_by_clause(
         self, node: Node, visited_children: Tuple[Any, Any, Sequence[OrderBy], Any]
     ) -> Sequence[OrderBy]:
@@ -172,10 +219,10 @@ class SnQLVisitor(NodeVisitor):
                 for p in left_order_list:
                     ret.append(p)
 
-        if order.text == "ASC":
-            ret.append(OrderBy(OrderByDirection.ASC, right_order))
-        elif order.text == "DESC":
-            ret.append(OrderBy(OrderByDirection.DESC, right_order))
+        direction = (
+            OrderByDirection.ASC if order.text == "ASC" else OrderByDirection.DESC
+        )
+        ret.append(OrderBy(direction, right_order))
 
         return ret
 
@@ -184,12 +231,10 @@ class SnQLVisitor(NodeVisitor):
     ) -> OrderBy:
         column, order, _, _, _ = visited_children
 
-        if order.text == "ASC":
-            order_object = OrderBy(OrderByDirection.ASC, column)
-        elif order.text == "DESC":
-            order_object = OrderBy(OrderByDirection.DESC, column)
-
-        return order_object
+        direction = (
+            OrderByDirection.ASC if order.text == "ASC" else OrderByDirection.DESC
+        )
+        return OrderBy(direction, column)
 
     def visit_group_by_clause(
         self, node: Node, visited_children: Tuple[Any, Any, Sequence[Expression], Any]
