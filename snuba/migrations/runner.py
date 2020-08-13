@@ -3,7 +3,7 @@ import logging
 from clickhouse_driver import errors
 from datetime import datetime
 from functools import partial
-from typing import List, Mapping, MutableMapping, NamedTuple
+from typing import List, Mapping, MutableMapping, NamedTuple, Tuple
 
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster, CLUSTERS
@@ -32,6 +32,12 @@ class MigrationKey(NamedTuple):
     migration_id: str
 
 
+class MigrationStatus(NamedTuple):
+    migration_id: str
+    status: Status
+    blocking: bool
+
+
 class Runner:
     def __init__(self) -> None:
         assert all(
@@ -46,6 +52,34 @@ class Runner:
         self.__connection = migrations_cluster.get_query_connection(
             ClickhouseClientSettings.MIGRATE
         )
+
+    def show_all(self) -> List[Tuple[MigrationGroup, List[MigrationStatus]]]:
+        """
+        Returns the list of migrations and their statuses for each group.
+        """
+        migrations: List[Tuple[MigrationGroup, List[MigrationStatus]]] = []
+
+        migration_status = self._get_migration_status()
+
+        def get_status(migration_key: MigrationKey) -> Status:
+            return migration_status.get(migration_key, Status.NOT_STARTED)
+
+        for group in ACTIVE_MIGRATION_GROUPS:
+            group_migrations: List[MigrationStatus] = []
+            group_loader = get_group_loader(group)
+
+            for migration_id in group_loader.get_migrations():
+                migration_key = MigrationKey(group, migration_id)
+                migration = group_loader.load_migration(migration_id)
+                group_migrations.append(
+                    MigrationStatus(
+                        migration_id, get_status(migration_key), migration.blocking
+                    )
+                )
+
+            migrations.append((group, group_migrations))
+
+        return migrations
 
     def run_all(self, *, force: bool = False) -> None:
         """
@@ -154,7 +188,7 @@ class Runner:
 
         try:
             for row in self.__connection.execute(
-                f"SELECT group, migration_id, status FROM {self.__table_name} FINAL"
+                f"SELECT group, migration_id, status FROM {self.__table_name} FINAL WHERE status != '{Status.NOT_STARTED.value}'"
             ):
                 group_name, migration_id, status_name = row
                 data[MigrationKey(MigrationGroup(group_name), migration_id)] = Status(
