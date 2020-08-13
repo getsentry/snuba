@@ -329,6 +329,9 @@ class Query:
     def get_having_from_ast(self) -> Optional[Expression]:
         return self.__having
 
+    def set_ast_having(self, condition: Optional[Expression]) -> None:
+        self.__having = condition
+
     def get_orderby(self) -> Optional[Sequence[Any]]:
         return self.__body.get("orderby")
 
