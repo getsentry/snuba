@@ -188,7 +188,7 @@ class Runner:
 
         try:
             for row in self.__connection.execute(
-                f"SELECT group, migration_id, status FROM {self.__table_name} FINAL WHERE status != '{Status.NOT_STARTED.value}'"
+                f"SELECT group, migration_id, status FROM {self.__table_name} FINAL"
             ):
                 group_name, migration_id, status_name = row
                 data[MigrationKey(MigrationGroup(group_name), migration_id)] = Status(
