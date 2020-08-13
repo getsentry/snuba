@@ -38,14 +38,14 @@ from snuba.query.snql.expression_visitor import (
 
 snql_grammar = Grammar(
     fr"""
-    query_exp             = match_clause where_clause? collect_clause group_by_clause? having_clause? order_by_clause?
+    query_exp             = match_clause where_clause collect_clause group_by_clause? having_clause? order_by_clause?
 
     match_clause          = space* "MATCH" space* open_paren clause close_paren space*
-    where_clause          = space* "WHERE" clause space*
+    where_clause          = space* "WHERE" or_expression space*
     collect_clause        = space* "COLLECT" collect_list space*
     group_by_clause       = space* "BY" group_list space*
-    order_by_clause       = space* "ORDER BY" order_list space*
     having_clause         = space* "HAVING" or_expression space*
+    order_by_clause       = space* "ORDER BY" order_list space*
 
     condition             = low_pri_arithmetic condition_op (column_name / numeric_literal)
     condition_op          = "=" / "!=" / ">" / ">=" / "<" / "<="
@@ -98,7 +98,7 @@ class SnQLVisitor(NodeVisitor):
     """
 
     def visit_query_exp(self, node: Node, visited_children: Iterable[Any]) -> Query:
-        _, _, collect, groupby, having, orderby = visited_children
+        _, where, collect, groupby, having, orderby = visited_children
         # check for empty clauses
         if isinstance(groupby, Node):
             groupby = None
@@ -106,7 +106,7 @@ class SnQLVisitor(NodeVisitor):
             orderby = None
         if isinstance(having, Node):
             having = None
-        return Query({}, None, collect, None, None, None, groupby, having, orderby)
+        return Query({}, None, collect, None, where, None, groupby, having, orderby)
 
     def visit_function_name(self, node: Node, visited_children: Iterable[Any]) -> str:
         return visit_function_name(node, visited_children)
@@ -163,9 +163,15 @@ class SnQLVisitor(NodeVisitor):
     ) -> Literal:
         return visit_quoted_literal(node, visited_children)
 
+    def visit_where_clause(
+        self, node: Node, visited_children: Tuple[Any, Any, Sequence[Expression], Any]
+    ) -> Sequence[Expression]:
+        _, _, conditions, _ = visited_children
+        return conditions
+
     def visit_having_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Sequence[OrderBy], Any]
-    ) -> Sequence[OrderBy]:
+        self, node: Node, visited_children: Tuple[Any, Any, Sequence[Expression], Any]
+    ) -> Sequence[Expression]:
         _, _, conditions, _ = visited_children
         return conditions
 
