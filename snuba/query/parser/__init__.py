@@ -81,7 +81,7 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
     ) -> List[SelectedExpression]:
         output = []
         for raw_expression in raw_expressions:
-            exp = parse_expression(tuplify(raw_expression))
+            exp = parse_expression(tuplify(raw_expression), dataset)
             output.append(
                 SelectedExpression(
                     # An expression in the query can be a string or a
@@ -113,7 +113,9 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
         aggregations.append(
             SelectedExpression(
                 name=alias,
-                expression=parse_aggregation(aggregation_function, column_expr, alias),
+                expression=parse_aggregation(
+                    aggregation_function, column_expr, alias, dataset
+                ),
             )
         )
 
@@ -127,7 +129,9 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
 
     arrayjoin = body.get("arrayjoin")
     if arrayjoin:
-        array_join_expr: Optional[Expression] = parse_expression(body["arrayjoin"])
+        array_join_expr: Optional[Expression] = parse_expression(
+            body["arrayjoin"], dataset
+        )
     else:
         array_join_expr = None
 
@@ -167,7 +171,7 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
                     "a string nor a function call."
                 )
             )
-        orderby_parsed = parse_expression(tuplify(orderby))
+        orderby_parsed = parse_expression(tuplify(orderby), dataset)
         orderby_exprs.append(
             OrderBy(
                 OrderByDirection.DESC if direction == "-" else OrderByDirection.ASC,

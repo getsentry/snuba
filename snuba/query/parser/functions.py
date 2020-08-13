@@ -6,9 +6,12 @@ from typing import Any, Callable, List, Optional, Tuple, TypeVar, Union
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
 from snuba.clickhouse.escaping import escape_identifier
-from snuba.query.expressions import Expression, FunctionCall, Literal
+from snuba.datasets.dataset import Dataset
+from snuba.query.conditions import ConditionFunctions, FUNCTION_TO_OPERATOR
+from snuba.query.expressions import Argument, Expression, FunctionCall, Lambda, Literal
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.strings import parse_string_to_expr
+from snuba.query.schema import POSITIVE_OPERATORS
 from snuba.state import get_config
 from snuba.util import is_function
 
@@ -101,6 +104,11 @@ def parse_function(
         [Optional[Union[str, datetime, date, List[Any], Tuple[Any], numbers.Number]]],
         TExpression,
     ],
+    unpack_array_condition_builder: Callable[
+        [TExpression, str, Any, Optional[str]], TExpression
+    ],
+    dataset: Dataset,
+    arrayjoin: Optional[str],
     expr: Any,
     depth: int = 0,
 ) -> TExpression:
@@ -116,6 +124,8 @@ def parse_function(
     The goal of having these three functions is to preserve the parsing algorithm
     but being able to either produce an AST or the old Clickhouse syntax.
     """
+    from snuba.clickhouse.columns import Array
+
     function_tuple = is_function(expr, depth)
     if function_tuple is None:
         raise ParsingException(
@@ -124,6 +134,26 @@ def parse_function(
         )
 
     name, args, alias = function_tuple
+
+    # If the first argument is a simple column name that refers to an array column
+    # (and we are not arrayJoining on that column, which would make it scalar again)
+    # we assume that the user actually means to check if any (or all) items in the
+    # array match the predicate, so we return an `any(x == value for x in array_column)`
+    # type expression. We assume that operators looking for a specific value (IN, =, LIKE)
+    # are looking for rows where any array value matches, and exclusionary operators
+    # (NOT IN, NOT LIKE, !=) are looking for rows where all elements match (eg. all NOT LIKE 'foo').
+    if name in FUNCTION_TO_OPERATOR:
+        columns = dataset.get_abstract_columnset()
+        if (
+            len(args) == 2
+            and args[0] in columns
+            and isinstance(columns[args[0]].type, Array)
+            and columns[args[0]].base_name != arrayjoin
+        ):
+            return unpack_array_condition_builder(
+                simple_expression_builder(args[0]), name, args[1], alias,
+            )
+
     out: List[TExpression] = []
     i = 0
     while i < len(args):
@@ -134,6 +164,9 @@ def parse_function(
                     output_builder,
                     simple_expression_builder,
                     literal_builder,
+                    unpack_array_condition_builder,
+                    dataset,
+                    arrayjoin,
                     next_2,
                     depth + 1,
                 )
@@ -147,6 +180,9 @@ def parse_function(
                         output_builder,
                         simple_expression_builder,
                         literal_builder,
+                        unpack_array_condition_builder,
+                        dataset,
+                        arrayjoin,
                         nxt,
                         depth + 1,
                     )
@@ -160,7 +196,9 @@ def parse_function(
     return output_builder(alias, name, out)
 
 
-def parse_function_to_expr(expr: Any) -> Expression:
+def parse_function_to_expr(
+    expr: Any, dataset: Dataset, arrayjoin: Optional[str]
+) -> Expression:
     """
     Parses a function expression in the Snuba syntax and produces an AST Expression.
     """
@@ -176,6 +214,76 @@ def parse_function_to_expr(expr: Any) -> Expression:
     ) -> Expression:
         return FunctionCall(alias, name, tuple(params))
 
+    def preprocess_condition_function_literal(func: str, literal: Any) -> Expression:
+        """
+        Replaces lists with a function call to tuple.
+        """
+        if isinstance(literal, (list, tuple)):
+            if func not in [ConditionFunctions.IN, ConditionFunctions.NOT_IN]:
+                raise ParsingException(
+                    (
+                        f"Invalid function {func} for literal {literal}. Literal is a sequence. "
+                        "Function must be in()/notIn()"
+                    )
+                )
+            literals = tuple([Literal(None, lit) for lit in literal])
+            return FunctionCall(None, "tuple", literals)
+        else:
+            if func in [ConditionFunctions.IN, ConditionFunctions.NOT_IN]:
+                raise ParsingException(
+                    (
+                        f"Invalid function {func} for literal {literal}. Literal is not a sequence. "
+                        "Function cannot be in()/notIn()"
+                    )
+                )
+            return Literal(None, literal)
+
+    def unpack_array_condition_builder(
+        lhs: Expression, func: str, literal: Any, alias: Optional[str]
+    ) -> Expression:
+        function_name = (
+            "arrayExists"
+            if FUNCTION_TO_OPERATOR[func] in POSITIVE_OPERATORS
+            else "arrayAll"
+        )
+
+        # This is an expression like:
+        # arrayExists(x -> assumeNotNull(notLike(x, rhs)), lhs)
+        return FunctionCall(
+            alias,
+            function_name,
+            (
+                Lambda(
+                    None,
+                    ("x",),
+                    FunctionCall(
+                        None,
+                        "assumeNotNull",
+                        (
+                            FunctionCall(
+                                None,
+                                func,
+                                (
+                                    Argument(None, "x"),
+                                    preprocess_condition_function_literal(
+                                        func, literal
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+                lhs,
+            ),
+        )
+
     return parse_function(
-        output_builder, parse_string_to_expr, literal_builder, expr, 0,
+        output_builder,
+        parse_string_to_expr,
+        literal_builder,
+        unpack_array_condition_builder,
+        dataset,
+        arrayjoin,
+        expr,
+        0,
     )

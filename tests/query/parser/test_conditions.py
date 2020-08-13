@@ -321,6 +321,148 @@ test_conditions = [
         ),
     ),  # Test negative scalar condition on array column is expanded as an all() type iterator.
     (
+        [[["equals", ["exception_frames.filename", "foo"]], "=", 1]],
+        FunctionCall(
+            None,
+            ConditionFunctions.EQ,
+            (
+                FunctionCall(
+                    None,
+                    "arrayExists",
+                    (
+                        Lambda(
+                            None,
+                            ("x",),
+                            FunctionCall(
+                                None,
+                                "assumeNotNull",
+                                (
+                                    FunctionCall(
+                                        None,
+                                        ConditionFunctions.EQ,
+                                        (Argument(None, "x"), Literal(None, "foo")),
+                                    ),
+                                ),
+                            ),
+                        ),
+                        Column(None, None, "exception_frames.filename"),
+                    ),
+                ),
+                Literal(None, 1),
+            ),
+        ),
+    ),  # Test function condition on array column is expanded as an iterator.
+    (
+        [[["notEquals", ["exception_frames.filename", "foo"]], "=", 1]],
+        FunctionCall(
+            None,
+            ConditionFunctions.EQ,
+            (
+                FunctionCall(
+                    None,
+                    "arrayAll",
+                    (
+                        Lambda(
+                            None,
+                            ("x",),
+                            FunctionCall(
+                                None,
+                                "assumeNotNull",
+                                (
+                                    FunctionCall(
+                                        None,
+                                        ConditionFunctions.NEQ,
+                                        (Argument(None, "x"), Literal(None, "foo")),
+                                    ),
+                                ),
+                            ),
+                        ),
+                        Column(None, None, "exception_frames.filename"),
+                    ),
+                ),
+                Literal(None, 1),
+            ),
+        ),
+    ),  # Test negative function condition on array column is expanded as an all() type iterator.
+    (
+        [
+            [
+                [
+                    "or",
+                    [
+                        ["equals", ["exception_frames.filename", "foo"]],
+                        ["equals", ["exception_frames.filename", "bar"]],
+                    ],
+                ],
+                "=",
+                1,
+            ]
+        ],
+        FunctionCall(
+            None,
+            ConditionFunctions.EQ,
+            (
+                FunctionCall(
+                    None,
+                    "or",
+                    (
+                        FunctionCall(
+                            None,
+                            "arrayExists",
+                            (
+                                Lambda(
+                                    None,
+                                    ("x",),
+                                    FunctionCall(
+                                        None,
+                                        "assumeNotNull",
+                                        (
+                                            FunctionCall(
+                                                None,
+                                                ConditionFunctions.EQ,
+                                                (
+                                                    Argument(None, "x"),
+                                                    Literal(None, "foo"),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                                Column(None, None, "exception_frames.filename"),
+                            ),
+                        ),
+                        FunctionCall(
+                            None,
+                            "arrayExists",
+                            (
+                                Lambda(
+                                    None,
+                                    ("x",),
+                                    FunctionCall(
+                                        None,
+                                        "assumeNotNull",
+                                        (
+                                            FunctionCall(
+                                                None,
+                                                ConditionFunctions.EQ,
+                                                (
+                                                    Argument(None, "x"),
+                                                    Literal(None, "bar"),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                                Column(None, None, "exception_frames.filename"),
+                            ),
+                        ),
+                    ),
+                ),
+                Literal(None, 1),
+            ),
+        ),
+    ),  # Test array columns in boolean functions are expanded as an iterator.
+    (
         tuplify(
             [["platform", "IN", ["a", "b", "c"]], ["platform", "IN", ["c", "b", "a"]]]
         ),

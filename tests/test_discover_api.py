@@ -344,6 +344,45 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["data"] == [{"count": 1}]
 
+    def test_exception_stack_column_boolean_condition(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [["count", None, "count"]],
+                    "debug": True,
+                    "conditions": [
+                        [
+                            [
+                                "or",
+                                [
+                                    [
+                                        "equals",
+                                        [
+                                            "exception_stacks.type",
+                                            "ArithmeticException",
+                                        ],
+                                    ],
+                                    [
+                                        "equals",
+                                        ["exception_stacks.type", "RuntimeException"],
+                                    ],
+                                ],
+                            ],
+                            "=",
+                            1,
+                        ],
+                    ],
+                    "limit": 1000,
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [{"count": 1}]
+
     def test_os_fields_condition(self):
         response = self.app.post(
             "/query",

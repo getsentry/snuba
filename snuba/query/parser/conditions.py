@@ -23,7 +23,7 @@ class InvalidConditionException(Exception):
 
 
 def parse_conditions(
-    operand_builder: Callable[[Any], TExpression],
+    operand_builder: Callable[[Any, Optional[Any], Optional[str]], TExpression],
     and_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     or_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     unpack_array_condition_builder: Callable[[TExpression, str, Any], TExpression],
@@ -101,9 +101,13 @@ def parse_conditions(
             and columns[lhs].base_name != array_join
             and not isinstance(lit, (list, tuple))
         ):
-            return unpack_array_condition_builder(operand_builder(lhs), op, lit)
+            return unpack_array_condition_builder(
+                operand_builder(lhs, dataset, array_join), op, lit
+            )
         else:
-            return simple_condition_builder(operand_builder(lhs), op, lit)
+            return simple_condition_builder(
+                operand_builder(lhs, dataset, array_join), op, lit
+            )
 
     elif depth == 1:
         sub_expression = (

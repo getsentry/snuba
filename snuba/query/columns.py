@@ -7,6 +7,7 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 
 from snuba import state
 from snuba.clickhouse.escaping import escape_alias, NEGATE_RE
+from snuba.query.conditions import FUNCTION_TO_OPERATOR
 from snuba.query.logical import Query
 from snuba.query.parser.conditions import parse_conditions
 from snuba.query.parser.functions import parse_function
@@ -121,13 +122,35 @@ def complex_column_expr(
             ret = alias_expr(ret, alias, parsing_context)
         return ret
 
-    return parse_function(output_builder, column_builder, literal_builder, expr, depth,)
+    def unpack_array_condition_builder(
+        lhs: str, func: str, literal: Any, alias: Optional[str]
+    ) -> Any:
+        op = FUNCTION_TO_OPERATOR[func]
+        any_or_all = "arrayExists" if op in POSITIVE_OPERATORS else "arrayAll"
+        ret = "{}(x -> assumeNotNull(x {} {}), {})".format(
+            any_or_all, op, escape_literal(literal), lhs,
+        )
+        if alias:
+            ret = alias_expr(ret, alias, parsing_context)
+        return ret
+
+    return parse_function(
+        output_builder,
+        column_builder,
+        literal_builder,
+        unpack_array_condition_builder,
+        dataset,
+        query.get_arrayjoin(),
+        expr,
+        depth,
+    )
 
 
 def conditions_expr(
     dataset, conditions, query: Query, parsing_context: ParsingContext, depth=0
 ) -> str:
-    def operand_builder(val: Any) -> str:
+    # The third argument is to keep the signature in sync with the snuba parser.
+    def operand_builder(val, dataset, _="") -> str:
         return str(column_expr(dataset, val, query, parsing_context))
 
     def and_builder(expressions: Sequence[str]) -> str:
