@@ -49,7 +49,6 @@ snql_grammar = Grammar(
 
     condition             = low_pri_arithmetic condition_op (column_name / numeric_literal)
     condition_op          = "=" / "!=" / ">" / ">=" / "<" / "<="
-
     and_expression        = space* condition space* ("AND" condition)*
     or_expression         = space* and_expression space* ("OR" and_expression)*
 
@@ -175,7 +174,9 @@ class SnQLVisitor(NodeVisitor):
         _, _, conditions, _ = visited_children
         return conditions
 
-    def visit_and_expression(self, node, visited_children):
+    def visit_and_expression(
+        self, node: Node, visited_children: Tuple[Any, Expression, Any, Expression]
+    ) -> Expression:
         _, left_condition, _, and_condition = visited_children
         # in the case of one Condition
         # and_condition will be an empty Node
@@ -184,7 +185,9 @@ class SnQLVisitor(NodeVisitor):
             return combine_and_conditions([left_condition, right_condition])
         return left_condition
 
-    def visit_or_expression(self, node, visited_children):
+    def visit_or_expression(
+        self, node: Node, visited_children: Tuple[Any, Expression, Any, Expression]
+    ) -> Expression:
         _, left_condition, _, or_condition = visited_children
         # in the case of one Condition
         # or_condition will be an empty Node
@@ -193,15 +196,19 @@ class SnQLVisitor(NodeVisitor):
             return combine_or_conditions([left_condition, right_condition])
         return left_condition
 
-    def visit_condition_comma(self, node, visited_children):
+    def visit_condition_comma(
+        self, node: Node, visited_children: Tuple[Expression, Any, Any, Any]
+    ) -> Expression:
         bin_condition, _, _, _ = visited_children
         return bin_condition
 
-    def visit_condition(self, node, visited_children):
+    def visit_condition(
+        self, node: Node, visited_children: Tuple[Expression, str, Expression]
+    ) -> Expression:
         exp, op, literal = visited_children
         return binary_condition(None, op, exp, literal)
 
-    def visit_condition_op(self, node, visited_children):
+    def visit_condition_op(self, node: Node, visited_children: Iterable[Any]) -> str:
         return OPERATOR_TO_FUNCTION[node.text]
 
     def visit_order_by_clause(
