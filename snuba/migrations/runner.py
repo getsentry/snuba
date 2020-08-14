@@ -5,6 +5,7 @@ from datetime import datetime
 from functools import partial
 from typing import List, Mapping, MutableMapping, NamedTuple, Tuple
 
+from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster, CLUSTERS
 from snuba.clusters.storage_sets import StorageSetKey
@@ -185,10 +186,19 @@ class Runner:
 
     def _get_migration_status(self) -> Mapping[MigrationKey, Status]:
         data: MutableMapping[MigrationKey, Status] = {}
+        migration_groups = (
+            "("
+            + (
+                ", ".join(
+                    [escape_string(group.value) for group in ACTIVE_MIGRATION_GROUPS]
+                )
+            )
+            + ")"
+        )
 
         try:
             for row in self.__connection.execute(
-                f"SELECT group, migration_id, status FROM {self.__table_name} FINAL"
+                f"SELECT group, migration_id, status FROM {self.__table_name} FINAL WHERE group IN {migration_groups}"
             ):
                 group_name, migration_id, status_name = row
                 data[MigrationKey(MigrationGroup(group_name), migration_id)] = Status(
