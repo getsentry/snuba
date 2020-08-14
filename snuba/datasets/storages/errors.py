@@ -19,7 +19,6 @@ from snuba.clickhouse.columns import (
     WithDefault,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.schemas import MandatoryCondition
@@ -29,6 +28,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
+from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
@@ -47,6 +47,14 @@ def errors_migrations(
     if "message_timestamp" not in current_schema:
         ret.append(
             f"ALTER TABLE {clickhouse_table} ADD COLUMN message_timestamp DateTime AFTER offset"
+        )
+
+    if "_tags_hash_map" not in current_schema:
+        ret.append(
+            (
+                f"ALTER TABLE {clickhouse_table} ADD COLUMN _tags_hash_map Array(UInt64) "
+                f"MATERIALIZED {TAGS_HASH_MAP_COLUMN} AFTER _tags_flattened"
+            )
         )
 
     return ret
@@ -79,6 +87,7 @@ all_columns = ColumnSet(
         ("sdk_version", LowCardinality(Nullable(String()))),
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
+        ("_tags_hash_map", Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN)),
         ("contexts", Nested([("key", String()), ("value", String())])),
         ("_contexts_flattened", String()),
         ("transaction_name", WithDefault(LowCardinality(String()), "''")),
@@ -174,6 +183,12 @@ schema = ReplacingMergeTreeSchema(
     ttl_expr="timestamp + toIntervalDay(retention_days)",
     settings={"index_granularity": "8192"},
     migration_function=errors_migrations,
+    # Tags hashmap is a materialized column. Clickhouse does not allow
+    # us to create a materialized column that references a nested one
+    # during create statement
+    # (https://github.com/ClickHouse/ClickHouse/issues/12586), so the
+    # materialization is added with a migration.
+    skipped_cols_on_creation={"_tags_hash_map"},
 )
 
 required_columns = [
@@ -189,7 +204,7 @@ required_columns = [
 storage = WritableTableStorage(
     storage_key=StorageKey.ERRORS,
     storage_set_key=StorageSetKey.EVENTS,
-    schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+    schema=schema,
     query_processors=[
         PostReplacementConsistencyEnforcer(
             project_column="project_id", replacer_state_name=ReplacerState.ERRORS,

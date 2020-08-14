@@ -5,21 +5,27 @@ from datetime import datetime
 from functools import partial
 from typing import List, Mapping, MutableMapping, NamedTuple
 
+from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster, CLUSTERS
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.context import Context
-from snuba.migrations.errors import InvalidMigrationState, MigrationInProgress
-from snuba.migrations.groups import get_group_loader, MigrationGroup
+from snuba.migrations.errors import (
+    InvalidMigrationState,
+    MigrationError,
+    MigrationInProgress,
+)
+from snuba.migrations.groups import (
+    ACTIVE_MIGRATION_GROUPS,
+    get_group_loader,
+    MigrationGroup,
+)
 from snuba.migrations.status import Status
 
 logger = logging.getLogger("snuba.migrations")
 
 LOCAL_TABLE_NAME = "migrations_local"
 DIST_TABLE_NAME = "migrations_dist"
-
-# Currently only local migrations are supported
-TABLE_NAME = LOCAL_TABLE_NAME
 
 
 class MigrationKey(NamedTuple):
@@ -29,16 +35,27 @@ class MigrationKey(NamedTuple):
 
 class Runner:
     def __init__(self) -> None:
-        self.__connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
+        assert all(
+            cluster.is_single_node() for cluster in CLUSTERS
+        ), "Cannot run migrations for multi node clusters"
+
+        migrations_cluster = get_cluster(StorageSetKey.MIGRATIONS)
+        self.__table_name = (
+            LOCAL_TABLE_NAME if migrations_cluster.is_single_node() else DIST_TABLE_NAME
+        )
+
+        self.__connection = migrations_cluster.get_query_connection(
             ClickhouseClientSettings.MIGRATE
         )
 
-    def run_all(self) -> None:
+    def run_all(self, *, force: bool = False) -> None:
         """
         Run all pending migrations. Throws an error if any migration is in progress.
+
+        Requires force to run blocking migrations.
         """
         for migration in self._get_pending_migrations():
-            self.run_migration(migration)
+            self.run_migration(migration, force=force)
 
     def _get_pending_migrations(self) -> List[MigrationKey]:
         migrations: List[MigrationKey] = []
@@ -48,7 +65,7 @@ class Runner:
         def get_status(migration_key: MigrationKey) -> Status:
             return migration_status.get(migration_key, Status.NOT_STARTED)
 
-        for group in MigrationGroup:
+        for group in ACTIVE_MIGRATION_GROUPS:
             group_loader = get_group_loader(group)
             group_migrations: List[MigrationKey] = []
 
@@ -72,28 +89,42 @@ class Runner:
 
         return migrations
 
-    def run_migration(self, migration_key: MigrationKey) -> None:
+    def run_migration(
+        self, migration_key: MigrationKey, *, force: bool = False
+    ) -> None:
         """
         Run a single migration given its migration key and marks the migration as complete.
+
+        Blocking migrations must be run with force.
         """
         migration_id = migration_key.migration_id
-
-        assert all(
-            cluster.is_single_node() for cluster in CLUSTERS
-        ), "Cannot run migrations for multi node clusters"
 
         context = Context(
             migration_id, logger, partial(self._update_migration_status, migration_key),
         )
         migration = get_group_loader(migration_key.group).load_migration(migration_id)
+
+        if migration.blocking and not force:
+            raise MigrationError("Blocking migrations must be run with force")
+
         migration.forwards(context)
+
+    def reverse_migration(self, migration_key: MigrationKey) -> None:
+        migration_id = migration_key.migration_id
+
+        context = Context(
+            migration_id, logger, partial(self._update_migration_status, migration_key),
+        )
+        migration = get_group_loader(migration_key.group).load_migration(migration_id)
+
+        migration.backwards(context)
 
     def _update_migration_status(
         self, migration_key: MigrationKey, status: Status
     ) -> None:
         next_version = self._get_next_version(migration_key)
 
-        statement = f"INSERT INTO {TABLE_NAME} FORMAT JSONEachRow"
+        statement = f"INSERT INTO {self.__table_name} FORMAT JSONEachRow"
         data = [
             {
                 "group": migration_key.group.value,
@@ -107,7 +138,7 @@ class Runner:
 
     def _get_next_version(self, migration_key: MigrationKey) -> int:
         result = self.__connection.execute(
-            f"SELECT version FROM {TABLE_NAME} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s;",
+            f"SELECT version FROM {self.__table_name} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s;",
             {
                 "group": migration_key.group.value,
                 "migration_id": migration_key.migration_id,
@@ -121,10 +152,19 @@ class Runner:
 
     def _get_migration_status(self) -> Mapping[MigrationKey, Status]:
         data: MutableMapping[MigrationKey, Status] = {}
+        migration_groups = (
+            "("
+            + (
+                ", ".join(
+                    [escape_string(group.value) for group in ACTIVE_MIGRATION_GROUPS]
+                )
+            )
+            + ")"
+        )
 
         try:
             for row in self.__connection.execute(
-                f"SELECT group, migration_id, status FROM {TABLE_NAME} FINAL"
+                f"SELECT group, migration_id, status FROM {self.__table_name} FINAL WHERE group IN {migration_groups}"
             ):
                 group_name, migration_id, status_name = row
                 data[MigrationKey(MigrationGroup(group_name), migration_id)] = Status(

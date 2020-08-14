@@ -35,7 +35,9 @@ class Migration(migration.Migration):
                 table_name="migrations_local",
                 columns=columns,
                 engine=ReplacingMergeTree(
-                    version_column="version", order_by="(group, migration_id)"
+                    storage_set=StorageSetKey.MIGRATIONS,
+                    version_column="version",
+                    order_by="(group, migration_id)",
                 ),
             ),
         ]
@@ -78,8 +80,8 @@ class Migration(migration.Migration):
     def backwards(self, context: Context) -> None:
         migration_id, logger, update_status = context
         logger.info(f"Reversing migration: {migration_id}")
+        update_status(Status.IN_PROGRESS)
         for op in self.__backwards_local():
             op.execute()
         # TODO: Run the backwards_dist operations here when multi node clusters are supported
         logger.info(f"Finished reversing: {migration_id}")
-        update_status(Status.NOT_STARTED)

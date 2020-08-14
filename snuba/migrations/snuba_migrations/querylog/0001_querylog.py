@@ -63,6 +63,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="querylog_local",
                 columns=columns,
                 engine=table_engines.MergeTree(
+                    storage_set=StorageSetKey.QUERYLOG,
                     order_by="(toStartOfDay(timestamp), request_id)",
                     partition_by="(toMonday(timestamp))",
                     sample_by="request_id",

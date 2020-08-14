@@ -1,5 +1,4 @@
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import StorageKey
@@ -25,7 +24,7 @@ schema = TableSchema(
 storage = ReadableTableStorage(
     storage_key=StorageKey.EVENTS_RO,
     storage_set_key=StorageSetKey.EVENTS_RO,
-    schemas=StorageSchemas(read_schema=schema, write_schema=None),
+    schema=schema,
     query_processors=query_processors,
     query_splitters=query_splitters,
 )
