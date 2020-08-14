@@ -22,15 +22,17 @@ def list() -> None:
         click.echo(group.value)
         for migration_id, status, blocking in group_migrations:
             symbol = {
-                Status.COMPLETED: "x",
+                Status.COMPLETED: "X",
                 Status.NOT_STARTED: " ",
-                Status.IN_PROGRESS: "?",
+                Status.IN_PROGRESS: "-",
             }[status]
+
+            in_progress_text = " (IN PROGRESS)" if status == Status.IN_PROGRESS else ""
 
             blocking_text = ""
             if status != Status.COMPLETED and blocking:
                 blocking_text = " (blocking)"
 
-            click.echo(f"[{symbol}]  " f"{migration_id}" f"{blocking_text}")
+            click.echo(f"[{symbol}]  {migration_id}{in_progress_text}{blocking_text}")
 
         click.echo()
