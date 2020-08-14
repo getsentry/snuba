@@ -222,10 +222,103 @@ test_data = [
             ),
         ),
     ),
+    (
+        tuplify(
+            [
+                "or",
+                [
+                    ["equals", ["_tags_hash_map", "b"]],
+                    ["equals", ["_tags_hash_map", "c"]],
+                ],
+            ]
+        ),
+        binary_condition(
+            None,
+            BooleanFunctions.OR,
+            FunctionCall(
+                alias=None,
+                function_name="arrayExists",
+                parameters=(
+                    Lambda(
+                        alias=None,
+                        parameters=("x",),
+                        transformation=FunctionCall(
+                            alias=None,
+                            function_name="assumeNotNull",
+                            parameters=(
+                                binary_condition(
+                                    None,
+                                    ConditionFunctions.EQ,
+                                    Argument(alias=None, name="x"),
+                                    Literal(alias=None, value="b"),
+                                ),
+                            ),
+                        ),
+                    ),
+                    Column(alias=None, table_name=None, column_name="_tags_hash_map"),
+                ),
+            ),
+            FunctionCall(
+                alias=None,
+                function_name="arrayExists",
+                parameters=(
+                    Lambda(
+                        alias=None,
+                        parameters=("x",),
+                        transformation=FunctionCall(
+                            alias=None,
+                            function_name="assumeNotNull",
+                            parameters=(
+                                binary_condition(
+                                    None,
+                                    ConditionFunctions.EQ,
+                                    Argument(alias=None, name="x"),
+                                    Literal(alias=None, value="c"),
+                                ),
+                            ),
+                        ),
+                    ),
+                    Column(alias=None, table_name=None, column_name="_tags_hash_map"),
+                ),
+            ),
+        ),
+    ),
+    (
+        tuplify(
+            [
+                "or",
+                [
+                    ["equals", ["sdk_integrations", "b"]],
+                    ["equals", ["sdk_integrations", "c"]],
+                ],
+            ]
+        ),
+        binary_condition(
+            None,
+            BooleanFunctions.OR,
+            binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                Column(alias=None, table_name=None, column_name="sdk_integrations"),
+                Column(alias=None, table_name=None, column_name="b"),
+            ),
+            binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                Column(alias=None, table_name=None, column_name="sdk_integrations"),
+                Column(alias=None, table_name=None, column_name="c"),
+            ),
+        ),
+    ),
 ]
 
 
 @pytest.mark.parametrize("actual, expected", test_data)
 def test_complex_conditions_expr(actual, expected) -> None:
     dataset = get_dataset("events")
-    assert parse_function_to_expr(actual, dataset, "") == expected, actual
+    assert (
+        parse_function_to_expr(
+            actual, dataset.get_abstract_columnset(), "sdk_integrations"
+        )
+        == expected
+    ), actual

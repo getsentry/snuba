@@ -5,8 +5,8 @@ from typing import Any, Callable, List, Optional, Tuple, TypeVar, Union
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
+from snuba.clickhouse.columns import Array, ColumnSet, Materialized
 from snuba.clickhouse.escaping import escape_identifier
-from snuba.datasets.dataset import Dataset
 from snuba.query.conditions import ConditionFunctions, FUNCTION_TO_OPERATOR
 from snuba.query.expressions import Argument, Expression, FunctionCall, Lambda, Literal
 from snuba.query.parser.exceptions import ParsingException
@@ -107,7 +107,7 @@ def parse_function(
     unpack_array_condition_builder: Callable[
         [TExpression, str, Any, Optional[str]], TExpression
     ],
-    dataset: Dataset,
+    dataset_columns: ColumnSet,
     arrayjoin: Optional[str],
     expr: Any,
     depth: int = 0,
@@ -124,8 +124,6 @@ def parse_function(
     The goal of having these three functions is to preserve the parsing algorithm
     but being able to either produce an AST or the old Clickhouse syntax.
     """
-    from snuba.clickhouse.columns import Array
-
     function_tuple = is_function(expr, depth)
     if function_tuple is None:
         raise ParsingException(
@@ -143,16 +141,16 @@ def parse_function(
     # are looking for rows where any array value matches, and exclusionary operators
     # (NOT IN, NOT LIKE, !=) are looking for rows where all elements match (eg. all NOT LIKE 'foo').
     if name in FUNCTION_TO_OPERATOR:
-        columns = dataset.get_abstract_columnset()
-        if (
-            len(args) == 2
-            and args[0] in columns
-            and isinstance(columns[args[0]].type, Array)
-            and columns[args[0]].base_name != arrayjoin
-        ):
-            return unpack_array_condition_builder(
-                simple_expression_builder(args[0]), name, args[1], alias,
-            )
+        if len(args) == 2 and args[0] in dataset_columns:
+            column = dataset_columns[args[0]]
+            if isinstance(column.type, Array) or (
+                isinstance(column.type, Materialized)
+                and isinstance(column.type.get_raw(), Array)
+            ):
+                if column.base_name != arrayjoin and column.name != arrayjoin:
+                    return unpack_array_condition_builder(
+                        simple_expression_builder(args[0]), name, args[1], alias,
+                    )
 
     out: List[TExpression] = []
     i = 0
@@ -165,7 +163,7 @@ def parse_function(
                     simple_expression_builder,
                     literal_builder,
                     unpack_array_condition_builder,
-                    dataset,
+                    dataset_columns,
                     arrayjoin,
                     next_2,
                     depth + 1,
@@ -181,7 +179,7 @@ def parse_function(
                         simple_expression_builder,
                         literal_builder,
                         unpack_array_condition_builder,
-                        dataset,
+                        dataset_columns,
                         arrayjoin,
                         nxt,
                         depth + 1,
@@ -197,7 +195,7 @@ def parse_function(
 
 
 def parse_function_to_expr(
-    expr: Any, dataset: Dataset, arrayjoin: Optional[str]
+    expr: Any, dataset_columns: ColumnSet, arrayjoin: Optional[str]
 ) -> Expression:
     """
     Parses a function expression in the Snuba syntax and produces an AST Expression.
@@ -282,7 +280,7 @@ def parse_function_to_expr(
         parse_string_to_expr,
         literal_builder,
         unpack_array_condition_builder,
-        dataset,
+        dataset_columns,
         arrayjoin,
         expr,
         0,

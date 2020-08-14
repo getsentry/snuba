@@ -102,11 +102,15 @@ def parse_conditions(
             and not isinstance(lit, (list, tuple))
         ):
             return unpack_array_condition_builder(
-                operand_builder(lhs, dataset, array_join), op, lit
+                operand_builder(lhs, dataset.get_abstract_columnset(), array_join),
+                op,
+                lit,
             )
         else:
             return simple_condition_builder(
-                operand_builder(lhs, dataset, array_join), op, lit
+                operand_builder(lhs, dataset.get_abstract_columnset(), array_join),
+                op,
+                lit,
             )
 
     elif depth == 1:

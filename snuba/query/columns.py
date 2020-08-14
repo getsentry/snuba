@@ -139,7 +139,7 @@ def complex_column_expr(
         column_builder,
         literal_builder,
         unpack_array_condition_builder,
-        dataset,
+        dataset.get_abstract_columnset(),
         query.get_arrayjoin(),
         expr,
         depth,
@@ -149,8 +149,8 @@ def complex_column_expr(
 def conditions_expr(
     dataset, conditions, query: Query, parsing_context: ParsingContext, depth=0
 ) -> str:
-    # The third argument is to keep the signature in sync with the snuba parser.
-    def operand_builder(val, dataset, _="") -> str:
+    # The other argument is to keep the signature in sync with the ast parser.
+    def operand_builder(val, *_) -> str:
         return str(column_expr(dataset, val, query, parsing_context))
 
     def and_builder(expressions: Sequence[str]) -> str:
