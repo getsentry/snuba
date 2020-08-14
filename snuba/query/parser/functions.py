@@ -147,7 +147,7 @@ def parse_function(
                 isinstance(column.type, Materialized)
                 and isinstance(column.type.get_raw(), Array)
             ):
-                if column.base_name != arrayjoin and column.name != arrayjoin:
+                if column.flattened != arrayjoin:
                     return unpack_array_condition_builder(
                         simple_expression_builder(args[0]), name, args[1], alias,
                     )
@@ -224,7 +224,7 @@ def parse_function_to_expr(
                         "Function must be in()/notIn()"
                     )
                 )
-            literals = tuple([Literal(None, lit) for lit in literal])
+            literals = tuple([parse_string_to_expr(lit) for lit in literal])
             return FunctionCall(None, "tuple", literals)
         else:
             if func in [ConditionFunctions.IN, ConditionFunctions.NOT_IN]:
@@ -234,10 +234,10 @@ def parse_function_to_expr(
                         "Function cannot be in()/notIn()"
                     )
                 )
-            return Literal(None, literal)
+            return parse_string_to_expr(literal)
 
     def unpack_array_condition_builder(
-        lhs: Expression, func: str, literal: Any, alias: Optional[str]
+        lhs: Expression, func: str, literal: Any, alias: Optional[str],
     ) -> Expression:
         function_name = (
             "arrayExists"

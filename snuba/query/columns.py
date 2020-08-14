@@ -6,6 +6,7 @@ from typing import Any, List, Optional, Sequence, Tuple, Union
 import _strptime  # NOQA fixes _strptime deferred import issue
 
 from snuba import state
+from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_alias, NEGATE_RE
 from snuba.query.conditions import FUNCTION_TO_OPERATOR
 from snuba.query.logical import Query

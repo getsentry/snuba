@@ -321,7 +321,7 @@ test_conditions = [
         ),
     ),  # Test negative scalar condition on array column is expanded as an all() type iterator.
     (
-        [[["equals", ["exception_frames.filename", "foo"]], "=", 1]],
+        [[["equals", ["exception_frames.filename", "'foo'"]], "=", 1]],
         FunctionCall(
             None,
             ConditionFunctions.EQ,
@@ -353,7 +353,7 @@ test_conditions = [
         ),
     ),  # Test function condition on array column is expanded as an iterator.
     (
-        [[["notEquals", ["exception_frames.filename", "foo"]], "=", 1]],
+        [[["notEquals", ["exception_frames.filename", "'foo'"]], "=", 1]],
         FunctionCall(
             None,
             ConditionFunctions.EQ,
@@ -390,8 +390,8 @@ test_conditions = [
                 [
                     "or",
                     [
-                        ["equals", ["exception_frames.filename", "foo"]],
-                        ["equals", ["exception_frames.filename", "bar"]],
+                        ["equals", ["exception_frames.filename", "'foo'"]],
+                        ["equals", ["exception_frames.filename", "'bar'"]],
                     ],
                 ],
                 "=",
@@ -491,7 +491,9 @@ test_conditions = [
 @pytest.mark.parametrize("conditions, expected", test_conditions)
 def test_conditions_expr(conditions: Sequence[Any], expected: Expression) -> None:
     dataset = get_dataset("events")
-    assert parse_conditions_to_expr(conditions, dataset, None) == expected
+    assert parse_conditions_to_expr(conditions, dataset, None) == expected, str(
+        conditions
+    )
 
 
 def test_invalid_conditions() -> None:

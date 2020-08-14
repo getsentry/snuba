@@ -162,8 +162,8 @@ test_data = [
             [
                 "or",
                 [
-                    ["equals", ["exception_stacks.type", "b"]],
-                    ["equals", ["exception_stacks.type", "c"]],
+                    ["equals", ["exception_stacks.type", "'b'"]],
+                    ["equals", ["exception_stacks.type", "'c'"]],
                 ],
             ]
         ),
@@ -227,8 +227,8 @@ test_data = [
             [
                 "or",
                 [
-                    ["equals", ["_tags_hash_map", "b"]],
-                    ["equals", ["_tags_hash_map", "c"]],
+                    ["equals", ["_tags_hash_map", "'b'"]],
+                    ["equals", ["_tags_hash_map", "'c'"]],
                 ],
             ]
         ),
@@ -288,8 +288,8 @@ test_data = [
             [
                 "or",
                 [
-                    ["equals", ["sdk_integrations", "b"]],
-                    ["equals", ["sdk_integrations", "c"]],
+                    ["equals", ["sdk_integrations", "'b'"]],
+                    ["equals", ["sdk_integrations", "'c'"]],
                 ],
             ]
         ),
@@ -300,13 +300,13 @@ test_data = [
                 None,
                 ConditionFunctions.EQ,
                 Column(alias=None, table_name=None, column_name="sdk_integrations"),
-                Column(alias=None, table_name=None, column_name="b"),
+                Literal(None, "b"),
             ),
             binary_condition(
                 None,
                 ConditionFunctions.EQ,
                 Column(alias=None, table_name=None, column_name="sdk_integrations"),
-                Column(alias=None, table_name=None, column_name="c"),
+                Literal(None, "c"),
             ),
         ),
     ),
