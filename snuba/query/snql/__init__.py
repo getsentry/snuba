@@ -61,7 +61,6 @@ snql_grammar = Grammar(
 
     group_list            = group_columns* (low_pri_arithmetic)
     group_columns         = low_pri_arithmetic space* comma space*
-
     order_list            = order_columns* low_pri_arithmetic ("ASC"/"DESC")
     order_columns         = low_pri_arithmetic ("ASC"/"DESC") space* comma space*
 
@@ -69,13 +68,11 @@ snql_grammar = Grammar(
 
     low_pri_arithmetic    = space* high_pri_arithmetic space* (low_pri_tuple)*
     high_pri_arithmetic   = (space* arithmetic_term space* (high_pri_tuple)*)
-
     low_pri_tuple         = low_pri_op high_pri_arithmetic
     high_pri_tuple        = high_pri_op arithmetic_term
 
     arithmetic_term       = (space*) (function_call / numeric_literal / column_name / interm_arithm) (space*)
     interm_arithm         = open_paren low_pri_arithmetic close_paren
-
 
     low_pri_op            = "+" / "-"
     high_pri_op           = "/" / "*"
