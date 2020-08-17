@@ -29,6 +29,25 @@ def teardown_function() -> None:
         connection.execute(f"DROP TABLE IF EXISTS {table};")
 
 
+def test_show_all() -> None:
+    runner = Runner()
+    assert all(
+        [
+            migration.status == Status.NOT_STARTED
+            for (_, group_migrations) in runner.show_all()
+            for migration in group_migrations
+        ]
+    )
+    runner.run_all(force=True)
+    assert all(
+        [
+            migration.status == Status.COMPLETED
+            for (_, group_migrations) in runner.show_all()
+            for migration in group_migrations
+        ]
+    )
+
+
 def test_run_migration() -> None:
     runner = Runner()
     runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
