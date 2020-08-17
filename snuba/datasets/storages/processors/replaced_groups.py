@@ -5,10 +5,7 @@ from typing import Optional
 from snuba import environment, settings
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.query_dsl.accessors import (
-    get_project_ids_in_query,
-    get_project_ids_in_query_ast,
-)
+from snuba.clickhouse.query_dsl.accessors import get_project_ids_in_query_ast
 from snuba.datasets.errors_replacer import ReplacerState, get_projects_query_flags
 from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -47,14 +44,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
 
         activated = get_config(CONSISTENCY_ENFORCER_PROCESSOR_ENABLED, 0)
         try:
-            project_ids = get_project_ids_in_query(query, self.__project_column)
-            project_ids_ast = get_project_ids_in_query_ast(query, self.__project_column)
-            if project_ids != project_ids_ast:
-                logger.warning(
-                    "Discrepancy between AST project ids and legacy project ids",
-                    exc_info=True,
-                    extra={"legacy": project_ids, "ast": project_ids_ast},
-                )
+            project_ids = get_project_ids_in_query_ast(query, self.__project_column)
         except Exception as e:
             if activated:
                 raise e
