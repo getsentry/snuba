@@ -328,6 +328,10 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             metrics.increment("column_splitter.query_above_limit")
             return None
 
+        # Do not split if there is already a condition on an ID column
+        if self.__id_column in query.get_columns_referenced_in_conditions():
+            return None
+
         total_col_count = len(query.get_all_referenced_columns())
         total_ast_count = len(
             # We need to count the number of table/column name pairs
