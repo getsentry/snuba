@@ -41,7 +41,7 @@ test_cases = [
             ],
             order_by=[OrderBy(OrderByDirection.DESC, Column(None, None, "f"))],
         ),
-        id="Example 1",
+        id="Basic query with simple clauses",
     ),
     pytest.param(
         "MATCH (blah) WHERE time_seen<3 AND last_seen=2 AND c=2 AND d=3 COLLECT a",
@@ -115,7 +115,7 @@ test_cases = [
                 ),
             ),
         ),
-        id="Example 2",
+        id="Query with multiple conditions joined by AND",
     ),
     pytest.param(
         "MATCH (blah) WHERE time_seen<3 OR last_seen=afternoon OR name=bob COLLECT a",
@@ -177,7 +177,7 @@ test_cases = [
                 ),
             ),
         ),
-        id="Example 3",
+        id="Query with multiple conditions joined by OR",
     ),
     pytest.param(
         "MATCH (blah) WHERE name!=bob OR last_seen<afternoon AND location=gps(x,y,z) OR times_seen>0 COLLECT a",
@@ -279,7 +279,7 @@ test_cases = [
                 ),
             ),
         ),
-        id="Example 4",
+        id="Query with multiple / complex conditions joined by AND / OR",
     ),
 ]
 
