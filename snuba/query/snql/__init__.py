@@ -403,6 +403,14 @@ class SnQLVisitor(NodeVisitor):
         return generic_visit(node, visited_children)
 
 
+thing = SnQLVisitor().visit(
+    snql_grammar.parse(
+        "MATCH (blah) WHERE (name!=bob OR last_seen<afternoon) AND location=gps(x,y,z) OR times_seen>0 COLLECT a"
+    )
+)
+print(thing.get_condition_from_ast())
+
+
 def parse_snql_query(body: str, dataset: Dataset) -> Query:
     """
     Parses the query body generating the AST. This only takes into
