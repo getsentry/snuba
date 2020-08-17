@@ -4,10 +4,10 @@ from typing import Optional, Sequence
 import click
 
 from snuba import settings
-from snuba.clusters.cluster import ClickhouseClientSettings, CLUSTERS
 from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging
 from snuba.migrations import migrate
+from snuba.migrations.connect import check_clickhouse_connections
 
 
 @click.command()
@@ -94,31 +94,6 @@ def bootstrap(
             except Exception as e:
                 logger.error("Failed to create topic %s", topic, exc_info=e)
 
-    attempts = 0
-
-    # Attempt to connect with every cluster
-    for cluster in CLUSTERS:
-        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
-
-        while True:
-            try:
-                logger.debug(
-                    "Attempting to connect to Clickhouse cluster %s (attempt %d)",
-                    cluster,
-                    attempts,
-                )
-                clickhouse.execute("SELECT 1")
-                break
-            except Exception as e:
-                logger.error(
-                    "Connection to Clickhouse cluster %s failed (attempt %d)",
-                    cluster,
-                    attempts,
-                    exc_info=e,
-                )
-                attempts += 1
-                if attempts == 60:
-                    raise
-                time.sleep(1)
+    check_clickhouse_connections()
 
     migrate.run()
