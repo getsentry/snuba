@@ -4,7 +4,6 @@ from contextlib import ExitStack
 from datetime import datetime
 from functools import partial
 
-import pytest
 import simplejson as json
 
 from snuba import settings
