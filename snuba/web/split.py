@@ -1,4 +1,5 @@
 import copy
+import logging
 import math
 from dataclasses import replace
 from datetime import datetime, timedelta
@@ -34,6 +35,7 @@ from snuba.util import is_condition
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.web import QueryResult
 
+logger = logging.getLogger("snuba.query.split")
 metrics = MetricsWrapper(environment.metrics, "query.splitter")
 
 # Every time we find zero results for a given step, expand the search window by
@@ -359,6 +361,18 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
                 ),
             ]
         )
+
+        for exp in minimal_query.get_all_expressions():
+            if exp.alias in (
+                self.__id_column,
+                self.__project_column,
+                self.__timestamp_column,
+            ) and not (isinstance(exp, ColumnExpr) and exp.column_name == exp.alias):
+                logger.warning(
+                    "Potential alias shadowing due to column splitter",
+                    extra={"expression": exp},
+                    exc_info=True,
+                )
 
         minimal_ast_count = len(
             {
