@@ -37,7 +37,7 @@ from snuba.query.snql.expression_visitor import (
 
 snql_grammar = Grammar(
     fr"""
-    query_exp             = match_clause where_clause collect_clause group_by_clause? having_clause? order_by_clause?
+    query_exp             = match_clause where_clause? collect_clause? group_by_clause? having_clause? order_by_clause?
 
     match_clause          = space* "MATCH" space* open_paren clause close_paren space*
     where_clause          = space* "WHERE" or_expression space*
