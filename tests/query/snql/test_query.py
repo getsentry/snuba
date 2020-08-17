@@ -10,7 +10,36 @@ from snuba.query.snql import parse_snql_query
 
 test_cases = [
     pytest.param(
-        "MATCH (blah) WHERE a<3 COLLECT 4-5, 3*g(c), c BY d, 2+7 ORDER BY f DESC",
+        "MATCH(blah)WHEREa<3COLLECT4-5,3*g(c),c",
+        Query(
+            {},
+            None,
+            selected_columns=[
+                SelectedExpression(
+                    "4-5",
+                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5),),),
+                ),
+                SelectedExpression(
+                    "3*g(c)",
+                    FunctionCall(
+                        None,
+                        "multiply",
+                        (
+                            Literal(None, 3),
+                            FunctionCall(None, "g", (Column(None, None, "c"),),),
+                        ),
+                    ),
+                ),
+                SelectedExpression("c", Column(None, None, "c"),),
+            ],
+            condition=binary_condition(
+                None, "less", Column(None, None, "a"), Literal(None, 3)
+            ),
+        ),
+        id="Basic query with no spaces and no ambiguous clause content",
+    ),
+    pytest.param(
+        "MATCH  (blah) WHERE a<3 COLLECT4-5,3*g(c),c BY d,2+7 ORDER BYf DESC",
         Query(
             {},
             None,
