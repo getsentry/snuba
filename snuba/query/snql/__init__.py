@@ -70,8 +70,8 @@ snql_grammar = Grammar(
     low_pri_tuple         = low_pri_op high_pri_arithmetic
     high_pri_tuple        = high_pri_op arithmetic_term
 
-    arithmetic_term       = space* (function_call / numeric_literal / column_name / interm_arithm) space*
-    interm_arithm         = open_paren low_pri_arithmetic close_paren
+    arithmetic_term       = space* (function_call / numeric_literal / column_name / parenthesized_arithm) space*
+    parenthesized_arithm  = open_paren low_pri_arithmetic close_paren
 
     low_pri_op            = "+" / "-"
     high_pri_op           = "/" / "*"
@@ -149,7 +149,7 @@ class SnQLVisitor(NodeVisitor):
         or_string, exp = visited_children
         return OrTuple(or_string.text, exp)
 
-    def visit_interm_arithm(
+    def visit_parenthesized_arithm(
         self, node: Node, visited_children: Tuple[Any, Expression, Any]
     ) -> Expression:
         _, arithm, _ = visited_children
@@ -192,7 +192,6 @@ class SnQLVisitor(NodeVisitor):
         node: Node,
         visited_children: Tuple[Any, Expression, Any, HighPriArithmetic],
     ) -> Expression:
-
         return visit_high_pri_arithmetic(node, visited_children)
 
     def visit_numeric_literal(
