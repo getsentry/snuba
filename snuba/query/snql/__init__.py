@@ -46,11 +46,10 @@ snql_grammar = Grammar(
     having_clause         = space* "HAVING" or_expression space*
     order_by_clause       = space* "ORDER BY" order_list space*
 
-    condition             = low_pri_arithmetic condition_op (function_call / column_name / numeric_literal) space*
+    condition             = low_pri_arithmetic condition_op (function_call / column_name / numeric_literal / string_literal) space*
     condition_op          = "=" / "!=" / ">" / ">=" / "<" / "<="
-    interm_condition      = open_paren or_expression close_paren
 
-    and_expression        = space* (condition / interm_condition) space* (and_tuple)*
+    and_expression        = space* condition space* (and_tuple)*
     or_expression         = space* and_expression space* (or_tuple)*
     and_tuple             = "AND" condition
     or_tuple              = "OR" and_expression
@@ -67,11 +66,11 @@ snql_grammar = Grammar(
     clause                = space* ~r"[-=><\w]+" space*
 
     low_pri_arithmetic    = space* high_pri_arithmetic space* (low_pri_tuple)*
-    high_pri_arithmetic   = (space* arithmetic_term space* (high_pri_tuple)*)
+    high_pri_arithmetic   = space* arithmetic_term space* (high_pri_tuple)*
     low_pri_tuple         = low_pri_op high_pri_arithmetic
     high_pri_tuple        = high_pri_op arithmetic_term
 
-    arithmetic_term       = (space*) (function_call / numeric_literal / column_name / interm_arithm) (space*)
+    arithmetic_term       = space* (function_call / numeric_literal / column_name / interm_arithm) space*
     interm_arithm         = open_paren low_pri_arithmetic close_paren
 
     low_pri_op            = "+" / "-"
@@ -149,12 +148,6 @@ class SnQLVisitor(NodeVisitor):
     ) -> OrTuple:
         or_string, exp = visited_children
         return OrTuple(or_string.text, exp)
-
-    def visit_interm_condition(
-        self, node: Node, visited_children: Tuple[Any, Expression, Any]
-    ) -> Expression:
-        _, condition, _ = visited_children
-        return condition
 
     def visit_interm_arithm(
         self, node: Node, visited_children: Tuple[Any, Expression, Any]
