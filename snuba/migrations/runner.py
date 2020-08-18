@@ -60,7 +60,7 @@ class Runner:
         """
         migrations: List[Tuple[MigrationGroup, List[MigrationStatus]]] = []
 
-        migration_status = self._get_migration_status()
+        migration_status = self._get_all_migration_status()
 
         def get_status(migration_key: MigrationKey) -> Status:
             return migration_status.get(migration_key, Status.NOT_STARTED)
@@ -94,7 +94,7 @@ class Runner:
     def _get_pending_migrations(self) -> List[MigrationKey]:
         migrations: List[MigrationKey] = []
 
-        migration_status = self._get_migration_status()
+        migration_status = self._get_all_migration_status()
 
         def get_status(migration_key: MigrationKey) -> Status:
             return migration_status.get(migration_key, Status.NOT_STARTED)
@@ -153,6 +153,21 @@ class Runner:
 
         migration.backwards(context)
 
+    def get_migration_status(self, migration_key: MigrationKey) -> Status:
+        result = self.__connection.execute(
+            f"SELECT status FROM {self.__table_name} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s;",
+            {
+                "group": migration_key.group.value,
+                "migration_id": migration_key.migration_id,
+            },
+        )
+
+        if result:
+            (status,) = result[0]
+            return Status(status)
+        else:
+            return Status.NOT_STARTED
+
     def _update_migration_status(
         self, migration_key: MigrationKey, status: Status
     ) -> None:
@@ -184,7 +199,7 @@ class Runner:
 
         return 1
 
-    def _get_migration_status(self) -> Mapping[MigrationKey, Status]:
+    def _get_all_migration_status(self) -> Mapping[MigrationKey, Status]:
         data: MutableMapping[MigrationKey, Status] = {}
         migration_groups = (
             "("
