@@ -11,7 +11,7 @@ from snuba.query.snql.parser import parse_snql_query
 
 test_cases = [
     pytest.param(
-        "MATCH(blah)WHEREa<3COLLECT4-5,3*g(c),c",
+        "MATCH(e: Events)WHEREa<3COLLECT4-5,3*g(c),c",
         Query(
             {},
             None,
@@ -27,20 +27,20 @@ test_cases = [
                         "multiply",
                         (
                             Literal(None, 3),
-                            FunctionCall(None, "g", (Column(None, None, "c"),),),
+                            FunctionCall(None, "g", (Column("c", None, "c"),),),
                         ),
                     ),
                 ),
-                SelectedExpression("c", Column(None, None, "c"),),
+                SelectedExpression("c", Column("c", None, "c"),),
             ],
             condition=binary_condition(
-                None, "less", Column(None, None, "a"), Literal(None, 3)
+                None, "less", Column("a", None, "a"), Literal(None, 3)
             ),
         ),
         id="Basic query with no spaces and no ambiguous clause content",
     ),
     pytest.param(
-        "MATCH (blah) WHERE a<3 COLLECT (2*(4-5)+3), g(c), c BY d, 2+7 ORDER BY f DESC",
+        "MATCH (e: Events) WHERE a<3 COLLECT (2*(4-5)+3), g(c), c BY d, 2+7 ORDER BY f DESC",
         Query(
             {},
             None,
@@ -76,35 +76,35 @@ test_cases = [
                         alias=None,
                         function_name="g",
                         parameters=(
-                            Column(alias=None, table_name=None, column_name="c"),
+                            Column(alias="c", table_name=None, column_name="c"),
                         ),
                     ),
                 ),
                 SelectedExpression(
                     name="c",
-                    expression=Column(alias=None, table_name=None, column_name="c"),
+                    expression=Column(alias="c", table_name=None, column_name="c"),
                 ),
             ],
             condition=binary_condition(
-                None, "less", Column(None, None, "a"), Literal(None, 3)
+                None, "less", Column("a", None, "a"), Literal(None, 3)
             ),
             groupby=[
-                Column(None, None, "d"),
+                Column("d", None, "d"),
                 FunctionCall(None, "plus", (Literal(None, 2), Literal(None, 7),),),
             ],
-            order_by=[OrderBy(OrderByDirection.DESC, Column(None, None, "f"))],
+            order_by=[OrderBy(OrderByDirection.DESC, Column("f", None, "f"))],
         ),
         id="Simple complete query with example of parenthesized arithmetic expression in COLLECT",
     ),
     pytest.param(
-        "MATCH (blah) WHERE time_seen<3 AND last_seen=2 AND c=2 AND d=3 COLLECT a",
+        "MATCH (e: Events) WHERE time_seen<3 AND last_seen=2 AND c=2 AND d=3 COLLECT a",
         Query(
             {},
             None,
             selected_columns=[
                 SelectedExpression(
                     name="a",
-                    expression=Column(alias=None, table_name=None, column_name="a"),
+                    expression=Column(alias="a", table_name=None, column_name="a"),
                 )
             ],
             condition=FunctionCall(
@@ -116,7 +116,9 @@ test_cases = [
                         function_name="less",
                         parameters=(
                             Column(
-                                alias=None, table_name=None, column_name="time_seen"
+                                alias="time_seen",
+                                table_name=None,
+                                column_name="time_seen",
                             ),
                             Literal(alias=None, value=3),
                         ),
@@ -130,7 +132,7 @@ test_cases = [
                                 function_name="equals",
                                 parameters=(
                                     Column(
-                                        alias=None,
+                                        alias="last_seen",
                                         table_name=None,
                                         column_name="last_seen",
                                     ),
@@ -146,7 +148,7 @@ test_cases = [
                                         function_name="equals",
                                         parameters=(
                                             Column(
-                                                alias=None,
+                                                alias="c",
                                                 table_name=None,
                                                 column_name="c",
                                             ),
@@ -158,7 +160,7 @@ test_cases = [
                                         function_name="equals",
                                         parameters=(
                                             Column(
-                                                alias=None,
+                                                alias="d",
                                                 table_name=None,
                                                 column_name="d",
                                             ),
@@ -175,14 +177,14 @@ test_cases = [
         id="Query with multiple conditions joined by AND",
     ),
     pytest.param(
-        "MATCH (blah) WHERE (time_seen<3 OR last_seen=afternoon) OR name=bob COLLECT a",
+        "MATCH (e: Events) WHERE (time_seen<3 OR last_seen=afternoon) OR name=bob COLLECT a",
         Query(
             {},
             None,
             selected_columns=[
                 SelectedExpression(
                     name="a",
-                    expression=Column(alias=None, table_name=None, column_name="a"),
+                    expression=Column(alias="a", table_name=None, column_name="a"),
                 )
             ],
             condition=FunctionCall(
@@ -198,7 +200,7 @@ test_cases = [
                                 function_name="less",
                                 parameters=(
                                     Column(
-                                        alias=None,
+                                        alias="time_seen",
                                         table_name=None,
                                         column_name="time_seen",
                                     ),
@@ -210,12 +212,12 @@ test_cases = [
                                 function_name="equals",
                                 parameters=(
                                     Column(
-                                        alias=None,
+                                        alias="last_seen",
                                         table_name=None,
                                         column_name="last_seen",
                                     ),
                                     Column(
-                                        alias=None,
+                                        alias="afternoon",
                                         table_name=None,
                                         column_name="afternoon",
                                     ),
@@ -227,8 +229,8 @@ test_cases = [
                         alias=None,
                         function_name="equals",
                         parameters=(
-                            Column(alias=None, table_name=None, column_name="name"),
-                            Column(alias=None, table_name=None, column_name="bob"),
+                            Column(alias="name", table_name=None, column_name="name"),
+                            Column(alias="bob", table_name=None, column_name="bob"),
                         ),
                     ),
                 ),
@@ -237,14 +239,14 @@ test_cases = [
         id="Query with multiple conditions joined by OR / parenthesized OR",
     ),
     pytest.param(
-        "MATCH (blah) WHERE name!=bob OR last_seen<afternoon AND (location=gps(x,y,z) OR times_seen>0) COLLECT a",
+        "MATCH (e: Events) WHERE name!=bob OR last_seen<afternoon AND (location=gps(x,y,z) OR times_seen>0) COLLECT a",
         Query(
             {},
             None,
             selected_columns=[
                 SelectedExpression(
                     name="a",
-                    expression=Column(alias=None, table_name=None, column_name="a"),
+                    expression=Column(alias="a", table_name=None, column_name="a"),
                 )
             ],
             condition=FunctionCall(
@@ -255,8 +257,8 @@ test_cases = [
                         alias=None,
                         function_name="notEquals",
                         parameters=(
-                            Column(alias=None, table_name=None, column_name="name"),
-                            Column(alias=None, table_name=None, column_name="bob"),
+                            Column(alias="name", table_name=None, column_name="name"),
+                            Column(alias="bob", table_name=None, column_name="bob"),
                         ),
                     ),
                     FunctionCall(
@@ -268,12 +270,12 @@ test_cases = [
                                 function_name="less",
                                 parameters=(
                                     Column(
-                                        alias=None,
+                                        alias="last_seen",
                                         table_name=None,
                                         column_name="last_seen",
                                     ),
                                     Column(
-                                        alias=None,
+                                        alias="afternoon",
                                         table_name=None,
                                         column_name="afternoon",
                                     ),
@@ -288,7 +290,7 @@ test_cases = [
                                         function_name="equals",
                                         parameters=(
                                             Column(
-                                                alias=None,
+                                                alias="location",
                                                 table_name=None,
                                                 column_name="location",
                                             ),
@@ -297,17 +299,17 @@ test_cases = [
                                                 function_name="gps",
                                                 parameters=(
                                                     Column(
-                                                        alias=None,
+                                                        alias="x",
                                                         table_name=None,
                                                         column_name="x",
                                                     ),
                                                     Column(
-                                                        alias=None,
+                                                        alias="y",
                                                         table_name=None,
                                                         column_name="y",
                                                     ),
                                                     Column(
-                                                        alias=None,
+                                                        alias="z",
                                                         table_name=None,
                                                         column_name="z",
                                                     ),
@@ -320,7 +322,7 @@ test_cases = [
                                         function_name="greater",
                                         parameters=(
                                             Column(
-                                                alias=None,
+                                                alias="times_seen",
                                                 table_name=None,
                                                 column_name="times_seen",
                                             ),

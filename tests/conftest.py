@@ -1,5 +1,6 @@
-from typing import Iterator
+from typing import Any, Callable, Iterator, List, Union
 
+import json
 import pytest
 
 from snuba import settings
@@ -66,3 +67,116 @@ def run_migrations() -> Iterator[None]:
             connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
 
     redis_client.flushdb()
+
+
+@pytest.fixture
+def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
+    def convert(data: str, entity: str) -> str:
+        legacy = json.loads(data)
+
+        def func(value: Union[str, List[Any]]) -> str:
+            if not isinstance(value, list):
+                return value
+
+            children = ",".join(map(func, value[1]))
+            alias = f" AS {value[2]}" if len(value) > 2 else ""
+            return f"{value[0]}({children}){alias}"
+
+        def literal(value: str) -> str:
+            try:
+                float(value)
+                return value
+            except ValueError:
+                return f"'{value}'"
+
+        match_clause = f"MATCH ({entity[0].lower()}: {entity.capitalize()})"
+
+        selected = ", ".join(map(func, legacy.get("selected_columns", [])))
+        select_clause = f"COLLECT {selected}" if selected else ""
+
+        aggregations = []
+        for a in legacy.get("aggregations", []):
+            if a[0].endswith(")"):
+                aggregations.append(f"{a[0]} AS {a[2]}")
+            else:
+                func_name = a[0]
+                params: List[str] = []
+                if isinstance(a[1], list):
+                    for p in params:
+                        params.append(p)
+                elif isinstance(a[1], str) and a[1] != "":
+                    params.append(a[1])
+                params_str = ", ".join(params)
+                aggregations.append(f"{func_name}({params_str}) AS {a[2]}")
+
+        aggregations_str = ", ".join(aggregations)
+        joined = ", " if select_clause else ""
+        aggregation_clause = f"{joined}{aggregations_str}" if aggregations_str else ""
+
+        groupby = legacy.get("groupby", [])
+        if groupby and not isinstance(groupby, list):
+            groupby = [groupby]
+        groupby = ", ".join(map(func, groupby))
+        groupby_clause = f"BY {groupby}" if groupby else ""
+
+        conditions = []
+        for cond in legacy.get("conditions", []):
+            if len(cond) != 3 or not isinstance(cond[1], str):
+                or_condition = []
+                for or_cond in cond:
+                    or_condition.append(
+                        f"{func(or_cond[0])}{or_cond[1]}{literal(or_cond[2])}".join(
+                            or_cond
+                        )
+                    )
+                or_condition_str = " OR ".join(or_condition)
+                conditions.append(f"({or_condition_str})")
+            else:
+                conditions.append(f"({func(cond[0])}{cond[1]}{literal(cond[2])})")
+
+        project = legacy.get("project")
+        if isinstance(project, int):
+            conditions.append(f"project_id={project}")
+        elif isinstance(project, list):
+            project = ",".join(project)
+            conditions.append(f"project_id IN {project}")
+
+        conditions_str = " AND ".join(conditions)
+        where_clause = f"WHERE {conditions_str}" if conditions_str else ""
+
+        order_by = legacy.get("orderby")
+        order_by_str = ""
+        if order_by:
+            if isinstance(order_by, list):
+                parts: List[str] = []
+                for part in order_by:
+                    sort = "ASC"
+                    if part.startswith("-"):
+                        part = part[1:]
+                        sort = "DESC"
+
+                    parts.append(f"{part} {sort}")
+                order_by_str = ",".join(parts)
+            else:
+                sort = "ASC"
+                if order_by.startswith("-"):
+                    order_by = order_by[1:]
+                    sort = "DESC"
+                order_by_str = f"{order_by} {sort}"
+        order_by_clause = f"ORDER BY {order_by_str}" if order_by else ""
+
+        limit_clause = ""
+        if "limit" in legacy:
+            limit_clause = f"LIMIT {legacy.get('limit')}"
+
+        query = f"{match_clause} {where_clause} {select_clause} {aggregation_clause} {groupby_clause} {order_by_clause} {limit_clause}"
+
+        body = {"query": query}
+        extensions = ["project", "from_date", "to_date"]
+        for ext in extensions:
+            if ext in legacy:
+                body[ext] = legacy.get(ext)
+
+        return json.dumps(body)
+
+    yield convert

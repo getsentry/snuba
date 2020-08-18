@@ -1,4 +1,5 @@
 import uuid
+import pytest
 from functools import partial
 
 import simplejson as json
@@ -11,6 +12,25 @@ from tests.helpers import write_unprocessed_events
 
 
 class TestDiscoverApi(BaseApiTest):
+    @pytest.fixture(
+        autouse=True, params=["/query", "/discover/snql"], ids=["legacy", "snql"]
+    )
+    def _set_endpoint(self, request, convert_legacy_to_snql):
+        self.endpoint = request.param
+        old_post = self.app.post
+        if request.param == "/discover/snql":
+
+            def new_post(endpoint, entity, data=None):
+                return old_post(endpoint, data=convert_legacy_to_snql(data, entity))
+
+            self.app.post = new_post
+        else:
+
+            def new_post(endpoint, entity, data=None):
+                return old_post(endpoint, data=data)
+
+            self.app.post = new_post
+
     def setup_method(self, test_method):
         super().setup_method(test_method)
         self.app.post = partial(self.app.post, headers={"referer": "test"})
@@ -24,7 +44,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_raw_data(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "events",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -47,7 +68,8 @@ class TestDiscoverApi(BaseApiTest):
         }
 
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "transactions",
             data=json.dumps(
                 {
                     "dataset": "discover",

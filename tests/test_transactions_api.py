@@ -1,4 +1,5 @@
 import calendar
+import pytest
 import uuid
 from datetime import datetime, timedelta
 from functools import partial
@@ -15,6 +16,21 @@ from tests.helpers import write_processed_messages
 
 
 class TestTransactionsApi(BaseApiTest):
+    @pytest.fixture(
+        autouse=True, params=["/query", "/transactions/snql"], ids=["legacy", "snql"]
+    )
+    def _set_endpoint(self, request, convert_legacy_to_snql):
+        self.endpoint = request.param
+        if request.param == "/transactions/snql":
+            old_post = self.app.post
+
+            def new_post(endpoint, data=None):
+                return old_post(
+                    endpoint, data=convert_legacy_to_snql(data, "transactions")
+                )
+
+            self.app.post = new_post
+
     def setup_method(self, test_method):
         super().setup_method(test_method)
         self.app.post = partial(self.app.post, headers={"referer": "test"})
@@ -148,7 +164,7 @@ class TestTransactionsApi(BaseApiTest):
 
     def test_read_ip(self):
         response = self.app.post(
-            "/query",
+            self.endpoint,
             data=json.dumps(
                 {
                     "dataset": "transactions",
@@ -167,7 +183,7 @@ class TestTransactionsApi(BaseApiTest):
 
     def test_read_lowcard(self):
         response = self.app.post(
-            "/query",
+            self.endpoint,
             data=json.dumps(
                 {
                     "dataset": "transactions",
@@ -187,7 +203,7 @@ class TestTransactionsApi(BaseApiTest):
 
     def test_start_ts_microsecond_truncation(self):
         response = self.app.post(
-            "/query",
+            self.endpoint,
             data=json.dumps(
                 {
                     "dataset": "transactions",
@@ -224,7 +240,7 @@ class TestTransactionsApi(BaseApiTest):
 
     def test_split_query(self):
         response = self.app.post(
-            "/query",
+            self.endpoint,
             data=json.dumps(
                 {
                     "dataset": "transactions",
@@ -247,7 +263,7 @@ class TestTransactionsApi(BaseApiTest):
 
     def test_column_formatting(self):
         response = self.app.post(
-            "/query",
+            self.endpoint,
             data=json.dumps(
                 {
                     "dataset": "transactions",
@@ -268,7 +284,7 @@ class TestTransactionsApi(BaseApiTest):
         assert data["data"][0]["ip_address"] == "8.8.8.8"
 
         response = self.app.post(
-            "/query",
+            self.endpoint,
             data=json.dumps(
                 {
                     "dataset": "transactions",
@@ -288,7 +304,7 @@ class TestTransactionsApi(BaseApiTest):
 
     def test_apdex_function(self):
         response = self.app.post(
-            "/query",
+            self.endpoint,
             data=json.dumps(
                 {
                     "dataset": "transactions",
@@ -300,6 +316,7 @@ class TestTransactionsApi(BaseApiTest):
                 }
             ),
         )
+        # print("RESPONSE", response.data)
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 1, data
@@ -313,7 +330,7 @@ class TestTransactionsApi(BaseApiTest):
 
     def test_failure_rate_function(self):
         response = self.app.post(
-            "/query",
+            self.endpoint,
             data=json.dumps(
                 {
                     "dataset": "transactions",
@@ -338,7 +355,7 @@ class TestTransactionsApi(BaseApiTest):
 
     def test_individual_measurement(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
             data=json.dumps(
                 {
                     "dataset": "transactions",
@@ -361,7 +378,7 @@ class TestTransactionsApi(BaseApiTest):
 
     def test_arrayjoin_measurements(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
             data=json.dumps(
                 {
                     "dataset": "transactions",

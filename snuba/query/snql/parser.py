@@ -1,17 +1,41 @@
-from typing import Any, Iterable, NamedTuple, List, Sequence, Tuple, Union
+from typing import (
+    Any,
+    Iterable,
+    NamedTuple,
+    List,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     binary_condition,
     combine_and_conditions,
     combine_or_conditions,
 )
-from snuba.query.expressions import Column, Expression, Literal
+from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.expressions import (
+    Column,
+    CurriedFunctionCall,
+    Expression,
+    FunctionCall,
+    Literal,
+)
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.logical import Query
+from snuba.query.parser import (
+    _validate_aliases,
+    _parse_subscriptables,
+    _apply_column_aliases,
+    _expand_aliases,
+    _deescape_aliases,
+)
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
     HighPriOperator,
@@ -22,7 +46,6 @@ from snuba.query.snql.expression_visitor import (
     generic_visit,
     visit_arithmetic_term,
     visit_column_name,
-    visit_function_call,
     visit_function_name,
     visit_high_pri_arithmetic,
     visit_high_pri_op,
@@ -38,14 +61,17 @@ from snuba.query.snql.expression_visitor import (
 
 snql_grammar = Grammar(
     r"""
-    query_exp             = match_clause where_clause? collect_clause? group_by_clause? having_clause? order_by_clause?
+    query_exp             = match_clause where_clause? collect_clause? group_by_clause? having_clause? order_by_clause? limit_clause?
 
-    match_clause          = space* "MATCH" space* open_paren clause close_paren space*
+    match_clause          = space* "MATCH" space* entity_match space*
     where_clause          = space* "WHERE" or_expression space*
     collect_clause        = space* "COLLECT" collect_list space*
     group_by_clause       = space* "BY" group_list space*
     having_clause         = space* "HAVING" or_expression space*
     order_by_clause       = space* "ORDER BY" order_list space*
+    limit_clause          = space* "LIMIT" space* integer_literal space*
+
+    entity_match          = open_paren entity_alias colon space* entity_name close_paren
 
     main_condition        = low_pri_arithmetic condition_op (function_call / column_name / quoted_literal / numeric_literal) space*
     condition             = main_condition / parenthesized_cdn
@@ -73,7 +99,7 @@ snql_grammar = Grammar(
     low_pri_tuple         = low_pri_op high_pri_arithmetic
     high_pri_tuple        = high_pri_op arithmetic_term
 
-    arithmetic_term       = space* (function_call / numeric_literal / column_name / parenthesized_arithm) space*
+    arithmetic_term       = space* (function_call / numeric_literal / subscriptable / column_name / parenthesized_arithm) space*
     parenthesized_arithm  = open_paren low_pri_arithmetic close_paren
 
     low_pri_op            = "+" / "-"
@@ -81,18 +107,25 @@ snql_grammar = Grammar(
     param_expression      = low_pri_arithmetic / quoted_literal
     parameters_list       = parameter* (param_expression)
     parameter             = param_expression space* comma space*
-    function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)?
+    function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)? (space* "AS" space* string_literal)?
     simple_term           = quoted_literal / numeric_literal / column_name
     literal               = ~r"[a-zA-Z0-9_\.:-]+"
     quoted_literal        = "'" string_literal "'"
     string_literal        = ~r"[a-zA-Z0-9_\.\+\*\/:-]*"
     numeric_literal       = ~r"-?[0-9]+(\.[0-9]+)?(e[\+\-][0-9]+)?"
+    integer_literal       = ~r"-?[0-9]+"
+    subscriptable         = column_name open_square column_name close_square
     column_name           = ~r"[a-zA-Z_][a-zA-Z0-9_\.]*"
     function_name         = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
+    entity_alias          = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
+    entity_name           = ~r"[A-Z][a-zA-Z]*"
     open_paren            = "("
     close_paren           = ")"
+    open_square           = "["
+    close_square          = "]"
     space                 = " "
     comma                 = ","
+    colon                 = ":"
 
 """
 )
@@ -108,13 +141,18 @@ class OrTuple(NamedTuple):
     exp: Expression
 
 
+class EntityTuple(NamedTuple):
+    alias: str
+    name: str
+
+
 class SnQLVisitor(NodeVisitor):
     """
     Builds Snuba AST expressions from the Parsimonious parse tree.
     """
 
     def visit_query_exp(self, node: Node, visited_children: Iterable[Any]) -> Query:
-        _, where, collect, groupby, having, orderby = visited_children
+        match, where, collect, groupby, having, orderby, limit = visited_children
         # check for empty clauses
         if isinstance(groupby, Node):
             groupby = None
@@ -122,9 +160,12 @@ class SnQLVisitor(NodeVisitor):
             orderby = None
         if isinstance(having, Node):
             having = None
+        if isinstance(limit, Node):
+            limit = None
+
         return Query(
             body={},
-            from_clause=None,
+            from_clause=match,
             selected_columns=collect,
             array_join=None,
             condition=where,
@@ -132,12 +173,38 @@ class SnQLVisitor(NodeVisitor):
             groupby=groupby,
             having=having,
             order_by=orderby,
+            limit=limit,
         )
+
+    def visit_match_clause(
+        self, node: Node, visited_children: Tuple[Any, Any, Any, EntityTuple, Any],
+    ) -> QueryEntity:
+        _, _, _, match, _ = visited_children
+        key = EntityKey(match.name)
+        query_entity = QueryEntity(key, get_entity(key).get_data_model())
+        return query_entity
+
+    def visit_entity_match(
+        self, node: Node, visited_children: Tuple[Any, str, Any, Any, str, Any],
+    ) -> EntityTuple:
+        _, alias, _, _, name, _ = visited_children
+        return EntityTuple(alias, name.lower())
+
+    def visit_entity_alias(self, node: Node, visited_children: Tuple[Any]) -> str:
+        return str(node.text)
+
+    def visit_entity_name(self, node: Node, visited_children: Tuple[Any]) -> str:
+        return str(node.text)
 
     def visit_function_name(self, node: Node, visited_children: Iterable[Any]) -> str:
         return visit_function_name(node, visited_children)
 
     def visit_column_name(self, node: Node, visited_children: Iterable[Any]) -> Column:
+        return visit_column_name(node, visited_children)
+
+    def visit_subscriptable(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> Column:
         return visit_column_name(node, visited_children)
 
     def visit_and_tuple(
@@ -204,6 +271,11 @@ class SnQLVisitor(NodeVisitor):
         return visit_high_pri_arithmetic(node, visited_children)
 
     def visit_numeric_literal(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> Literal:
+        return visit_numeric_literal(node, visited_children)
+
+    def visit_integer_literal(
         self, node: Node, visited_children: Iterable[Any]
     ) -> Literal:
         return visit_numeric_literal(node, visited_children)
@@ -308,6 +380,13 @@ class SnQLVisitor(NodeVisitor):
         )
         return OrderBy(direction, column)
 
+    def visit_limit_clause(
+        self, node: Node, visited_children: Tuple[Any, Any, Any, Literal, Any]
+    ) -> int:
+        _, _, _, limit, _ = visited_children
+        assert isinstance(limit.value, int)  # mypy
+        return limit.value
+
     def visit_group_by_clause(
         self, node: Node, visited_children: Tuple[Any, Any, Sequence[Expression], Any]
     ) -> Sequence[Expression]:
@@ -350,7 +429,8 @@ class SnQLVisitor(NodeVisitor):
         self, node: Node, visited_children: Tuple[Expression, Any]
     ) -> SelectedExpression:
         exp, _ = visited_children
-        return SelectedExpression(node.text.strip(), exp)
+        alias = exp.alias or node.text.strip()
+        return SelectedExpression(alias, exp)
 
     def visit_collect_columns(
         self, node: Node, visited_children: Tuple[SelectedExpression, Any, Any, Any]
@@ -394,20 +474,57 @@ class SnQLVisitor(NodeVisitor):
         self,
         node: Node,
         visited_children: Tuple[
-            str, Any, List[Expression], Any, Union[Node, List[Expression]]
+            str,
+            Any,
+            List[Expression],
+            Any,
+            Union[Node, List[Expression]],
+            Union[Node, List[Any]],
         ],
     ) -> Expression:
-        return visit_function_call(node, visited_children)
+        name, _, params1, _, params2, alias = visited_children
+        if isinstance(alias, Node) or len(alias) == 0:
+            alias = None
+        else:
+            _, _, _, alias = alias
+            alias = alias.text
+
+        param_list1 = tuple(params1)
+        if isinstance(params2, Node) and params2.text == "":
+            # params2.text == "" means empty node.
+            return FunctionCall(alias, name, param_list1)
+
+        internal_f = FunctionCall(None, name, param_list1)
+        _, param_list2, _ = params2
+        if isinstance(param_list2, (list, tuple)) and len(param_list2) > 0:
+            param_list2 = tuple(param_list2)
+        else:
+            # This happens when the second parameter list is empty. Somehow
+            # it does not turn into an empty list.
+            param_list2 = ()
+        return CurriedFunctionCall(alias, internal_f, param_list2)
 
     def generic_visit(self, node: Node, visited_children: Any) -> Any:
         return generic_visit(node, visited_children)
 
 
-def parse_snql_query(body: str, dataset: Dataset) -> Query:
+def parse_snql_query_initial(body: str) -> Query:
     """
     Parses the query body generating the AST. This only takes into
     account the initial query body. Extensions are parsed by extension
     processors and are supposed to update the AST.
     """
     exp_tree = snql_grammar.parse(body)
-    return SnQLVisitor().visit(exp_tree)
+    parsed = SnQLVisitor().visit(exp_tree)
+    assert isinstance(parsed, Query)  # mypy
+    return parsed
+
+
+def parse_snql_query(body: str, dataset: Dataset) -> Query:
+    query = parse_snql_query_initial(body)
+    _validate_aliases(query)
+    _parse_subscriptables(query)
+    _apply_column_aliases(query)
+    _expand_aliases(query)
+    _deescape_aliases(query)
+    return query
