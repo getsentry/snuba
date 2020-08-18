@@ -127,8 +127,8 @@ def complex_column_expr(
     ) -> Any:
         op = FUNCTION_TO_OPERATOR[func]
         any_or_all = "arrayExists" if op in POSITIVE_OPERATORS else "arrayAll"
-        ret = "{}(x -> assumeNotNull(x {} {}), {})".format(
-            any_or_all, op, escape_literal(literal), lhs,
+        ret = (
+            f"{any_or_all}(x -> assumeNotNull(x {op} {escape_literal(literal)}), {lhs})"
         )
         if alias:
             ret = alias_expr(ret, alias, parsing_context)

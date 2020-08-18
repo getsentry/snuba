@@ -139,10 +139,19 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
         )
     else:
         array_join_expr = None
-
         for select_expr in select_clause:
             if isinstance(select_expr.expression, FunctionCall):
                 if select_expr.expression.function_name == "arrayJoin":
+                    if arrayjoin:
+                        raise ParsingException(
+                            "Only one arrayJoin(...) call is allowed in a query."
+                        )
+
+                    parameters = select_expr.expression.parameters
+                    if len(parameters) != 1 or not isinstance(parameters[0], Column):
+                        raise ParsingException(
+                            "arrayJoin(...) only accepts a single column as a parameter."
+                        )
                     arrayjoin = select_expr.expression.parameters[0].column_name
 
     where_expr = parse_conditions_to_expr(

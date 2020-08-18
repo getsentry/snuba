@@ -5,7 +5,7 @@ from typing import Any, Callable, List, Optional, Tuple, TypeVar, Union
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
-from snuba.clickhouse.columns import Array, ColumnSet, Materialized
+from snuba.clickhouse.columns import Array, ColumnSet, ColumnTypeWithModifier
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.query.conditions import ConditionFunctions, FUNCTION_TO_OPERATOR
 from snuba.query.expressions import Argument, Expression, FunctionCall, Lambda, Literal
@@ -140,11 +140,13 @@ def parse_function(
     # type expression. We assume that operators looking for a specific value (IN, =, LIKE)
     # are looking for rows where any array value matches, and exclusionary operators
     # (NOT IN, NOT LIKE, !=) are looking for rows where all elements match (eg. all NOT LIKE 'foo').
+    # This check will only work if the array column is a bare column in the condition. If the array
+    # column is itself nested in further functions, this transform will not work.
     if name in FUNCTION_TO_OPERATOR:
         if len(args) == 2 and args[0] in dataset_columns:
             column = dataset_columns[args[0]]
             if isinstance(column.type, Array) or (
-                isinstance(column.type, Materialized)
+                isinstance(column.type, ColumnTypeWithModifier)
                 and isinstance(column.type.get_raw(), Array)
             ):
                 if column.flattened != arrayjoin:
