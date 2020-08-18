@@ -1,5 +1,6 @@
 from typing import Sequence
 
+from dataclasses import replace
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column, Expression, FunctionCall
 from snuba.query.logical import Query
@@ -35,17 +36,18 @@ class CustomFunction(QueryProcessor):
                     )
 
                 resolved_params = {
-                    f"param:{name}": expression
+                    name: expression
                     for (name, expression) in zip(
                         self.__param_names, expression.parameters
                     )
                 }
 
-                return self.__expression.transform(
+                ret = self.__expression.transform(
                     lambda exp: resolved_params[exp.column_name]
                     if isinstance(exp, Column) and exp.column_name in resolved_params
                     else exp
                 )
+                return replace(ret, alias=expression.alias)
             else:
                 return expression
 
