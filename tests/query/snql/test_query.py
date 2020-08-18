@@ -83,22 +83,44 @@ test_cases = [
                 parameters=(
                     FunctionCall(
                         alias=None,
+                        function_name="less",
+                        parameters=(
+                            Column(
+                                alias=None, table_name=None, column_name="time_seen"
+                            ),
+                            Literal(alias=None, value=3),
+                        ),
+                    ),
+                    FunctionCall(
+                        alias=None,
                         function_name="and",
                         parameters=(
+                            FunctionCall(
+                                alias=None,
+                                function_name="equals",
+                                parameters=(
+                                    Column(
+                                        alias=None,
+                                        table_name=None,
+                                        column_name="last_seen",
+                                    ),
+                                    Literal(alias=None, value=2),
+                                ),
+                            ),
                             FunctionCall(
                                 alias=None,
                                 function_name="and",
                                 parameters=(
                                     FunctionCall(
                                         alias=None,
-                                        function_name="less",
+                                        function_name="equals",
                                         parameters=(
                                             Column(
                                                 alias=None,
                                                 table_name=None,
-                                                column_name="time_seen",
+                                                column_name="c",
                                             ),
-                                            Literal(alias=None, value=3),
+                                            Literal(alias=None, value=2),
                                         ),
                                     ),
                                     FunctionCall(
@@ -108,31 +130,13 @@ test_cases = [
                                             Column(
                                                 alias=None,
                                                 table_name=None,
-                                                column_name="last_seen",
+                                                column_name="d",
                                             ),
-                                            Literal(alias=None, value=2),
+                                            Literal(alias=None, value=3),
                                         ),
                                     ),
                                 ),
                             ),
-                            FunctionCall(
-                                alias=None,
-                                function_name="equals",
-                                parameters=(
-                                    Column(
-                                        alias=None, table_name=None, column_name="c"
-                                    ),
-                                    Literal(alias=None, value=2),
-                                ),
-                            ),
-                        ),
-                    ),
-                    FunctionCall(
-                        alias=None,
-                        function_name="equals",
-                        parameters=(
-                            Column(alias=None, table_name=None, column_name="d"),
-                            Literal(alias=None, value=3),
                         ),
                     ),
                 ),
