@@ -229,7 +229,7 @@ class SnQLVisitor(NodeVisitor):
         self, node: Node, visited_children: Tuple[Any, Expression, Any, Expression]
     ) -> Expression:
         _, left_condition, _, and_condition = visited_children
-        argu = [left_condition]
+        args = [left_condition]
         # in the case of one Condition
         # and_condition will be an empty Node
         if isinstance(and_condition, Node):
@@ -240,14 +240,14 @@ class SnQLVisitor(NodeVisitor):
         elif isinstance(and_condition, list):
             for elem in and_condition:
                 _, exp = elem
-                argu.append(exp)
-        return combine_and_conditions(argu)
+                args.append(exp)
+        return combine_and_conditions(args)
 
     def visit_or_expression(
         self, node: Node, visited_children: Tuple[Any, Expression, Any, Expression]
     ) -> Expression:
         _, left_condition, _, or_condition = visited_children
-        argu = [left_condition]
+        args = [left_condition]
         # in the case of one Condition
         # or_condition will be an empty Node
         if isinstance(or_condition, Node):
@@ -258,8 +258,8 @@ class SnQLVisitor(NodeVisitor):
         elif isinstance(or_condition, list):
             for elem in or_condition:
                 _, exp = elem
-                argu.append(exp)
-        return combine_or_conditions(argu)
+                args.append(exp)
+        return combine_or_conditions(args)
 
     def visit_main_condition(
         self, node: Node, visited_children: Tuple[Expression, str, Expression, Any]
