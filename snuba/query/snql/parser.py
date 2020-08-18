@@ -10,8 +10,16 @@ from snuba.query.conditions import (
     combine_or_conditions,
 )
 from snuba.query.expressions import Column, Expression, Literal
-from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.logical import Query
+from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
+from snuba.query.parser import (
+    _validate_empty_table_names,
+    _validate_aliases,
+    _parse_subscriptables,
+    _apply_column_aliases,
+    _expand_aliases,
+    _deescape_aliases,
+    validate_query,
+)
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
     HighPriOperator,
@@ -410,4 +418,15 @@ def parse_snql_query(body: str, dataset: Dataset) -> Query:
     processors and are supposed to update the AST.
     """
     exp_tree = snql_grammar.parse(body)
-    return SnQLVisitor().visit(exp_tree)
+    query = SnQLVisitor().visit(exp_tree)
+    _validate_empty_table_names(query)
+    _validate_aliases(query)
+    _parse_subscriptables(query)
+    _apply_column_aliases(query)
+    _expand_aliases(query)
+    # WARNING: These steps above assume table resolution did not happen
+    # yet. If it is put earlier than here (unlikely), we need to adapt them.
+    _deescape_aliases(query)
+    validate_query(query, dataset)
+
+    return query
