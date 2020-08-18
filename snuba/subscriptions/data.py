@@ -78,7 +78,7 @@ class SubscriptionData:
         :param offset: Maximum offset we should query for
         """
         schema = RequestSchema.build_with_extensions(
-            dataset.get_default_entity().get_extensions(), SubscriptionRequestSettings,
+            dataset.get_default_entity().get_extensions(), SubscriptionRequestSettings
         )
         extra_conditions: Sequence[Condition] = []
         if offset is not None:

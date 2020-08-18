@@ -135,6 +135,17 @@ def visit_numeric_literal(node: Node, visited_children: Iterable[Any]) -> Litera
         return Literal(None, float(node.text))
 
 
+def visit_integer_literal(node: Node, visited_children: Iterable[Any]) -> Literal:
+    return Literal(None, int(node.text))
+
+
+def visit_boolean_literal(node: Node, visited_children: Iterable[Any]) -> Literal:
+    if node.text.lower() == "true":
+        return Literal(None, True)
+
+    return Literal(None, False)
+
+
 def visit_quoted_literal(
     node: Node, visited_children: Tuple[Any, Node, Any]
 ) -> Literal:
@@ -171,7 +182,7 @@ def visit_parameters_list(
 def visit_function_call(
     node: Node,
     visited_children: Tuple[
-        str, Any, List[Expression], Any, Union[Node, List[Expression]]
+        str, Any, List[Expression], Any, Union[Node, List[Expression]],
     ],
 ) -> Expression:
     name, _, params1, _, params2 = visited_children

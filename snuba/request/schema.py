@@ -11,6 +11,7 @@ from snuba.datasets.dataset import Dataset
 from snuba.query.extensions import QueryExtension
 from snuba.query.parser import parse_query
 from snuba.query.schema import GENERIC_QUERY_SCHEMA
+from snuba.query.snql.parser import parse_snql_query
 from snuba.request import Request
 from snuba.request.exceptions import JsonSchemaValidationException
 from snuba.request.request_settings import (
@@ -79,13 +80,14 @@ class RequestSchema:
         extensions: Mapping[str, QueryExtension],
         settings_class: Type[RequestSettings],
     ) -> RequestSchema:
-        generic_schema = GENERIC_QUERY_SCHEMA
         settings_schema = SETTINGS_SCHEMAS[settings_class]
         extensions_schemas = {
             extension_key: extension.get_schema()
             for extension_key, extension in extensions.items()
         }
-        return cls(generic_schema, settings_schema, extensions_schemas, settings_class)
+        return cls(
+            GENERIC_QUERY_SCHEMA, settings_schema, extensions_schemas, settings_class
+        )
 
     def validate(self, value, dataset: Dataset, referrer: str) -> Request:
         try:
@@ -112,7 +114,10 @@ class RequestSchema:
                 if key in value
             }
 
-        query = parse_query(query_body, dataset)
+        if "query" in query_body:
+            query = parse_snql_query(query_body["query"], dataset)
+        else:
+            query = parse_query(query_body, dataset)
 
         request_id = uuid.uuid4().hex
         return Request(
