@@ -156,7 +156,7 @@ def test_format_expressions(query: Query, expected_query: Query) -> None:
     assert query.get_orderby_from_ast() == expected_query.get_orderby_from_ast()
 
 
-def test_circular_aliases() -> None:
+def test_invalid_call() -> None:
     query = Query(
         {},
         TableSource("events", ColumnSet([])),
