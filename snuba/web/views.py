@@ -310,9 +310,6 @@ def dataset_query_view(*, dataset: Dataset, timer: Timer):
 def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     assert http_request.method == "POST"
 
-    with sentry_sdk.start_span(description="ensure_dataset", op="validate"):
-        ensure_tables_migrated()
-
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build_with_extensions(
             dataset.get_extensions(), HTTPRequestSettings
