@@ -33,6 +33,10 @@ class ProcessingStrategy(ABC, Generic[TPayload]):
     def poll(self) -> None:
         """
         Poll the processor.
+
+        This method is called on each consumer loop iteration. It can be used
+        to check on the status of asynchronous tasks or perform other
+        scheduled tasks.
         """
         raise NotImplementedError
 
@@ -40,6 +44,11 @@ class ProcessingStrategy(ABC, Generic[TPayload]):
     def submit(self, message: Message[TPayload]) -> None:
         """
         Submit a message for processing.
+
+        Messages may be processed synchronously or asynchronously, depending
+        on the implementation of the processing strategy. Callers of this
+        method should not assume that this method returning successfully
+        implies that the message was successfully processed.
         """
         raise NotImplementedError
 
