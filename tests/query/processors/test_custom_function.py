@@ -1,17 +1,15 @@
 import pytest
 
-from snuba.request.request_settings import HTTPRequestSettings
-from snuba.query.processors.custom_function import CustomFunction
-from snuba.query.conditions import binary_condition
-from snuba.query.logical import Query, SelectedExpression
-from snuba.datasets.schemas.tables import TableSource
 from snuba.clickhouse.columns import ColumnSet
-from snuba.query.expressions import (
-    Column,
-    FunctionCall,
-    Literal,
+from snuba.datasets.schemas.tables import TableSource
+from snuba.query.conditions import binary_condition
+from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.logical import Query, SelectedExpression
+from snuba.query.processors.custom_function import (
+    CustomFunction,
+    InvalidCustomFunctionCall,
 )
-
+from snuba.request.request_settings import HTTPRequestSettings
 
 TEST_CASES = [
     pytest.param(
@@ -156,3 +154,21 @@ def test_format_expressions(query: Query, expected_query: Query) -> None:
     assert query.get_arrayjoin_from_ast() == expected_query.get_arrayjoin_from_ast()
     assert query.get_having_from_ast() == expected_query.get_having_from_ast()
     assert query.get_orderby_from_ast() == expected_query.get_orderby_from_ast()
+
+
+def test_circular_aliases() -> None:
+    query = Query(
+        {},
+        TableSource("events", ColumnSet([])),
+        selected_columns=[
+            SelectedExpression(
+                "my_func",
+                FunctionCall("my_func", "f_call", (Column("param2", None, "param2"),),),
+            ),
+        ],
+    )
+    processor = CustomFunction(
+        "f_call", ["param1", "param2"], "f_call_impl(param1, inner_call(param2))",
+    )
+    with pytest.raises(InvalidCustomFunctionCall):
+        processor.process_query(query, HTTPRequestSettings())
