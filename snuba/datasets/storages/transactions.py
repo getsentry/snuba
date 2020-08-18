@@ -119,7 +119,7 @@ def transactions_migrations(
 
     if "http_method" not in current_schema:
         ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_method Nullable(String)"
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_method LowCardinality(Nullable(String()))"
         )
 
     if "http_referer" not in current_schema:
@@ -162,7 +162,7 @@ columns = ColumnSet(
         ("sdk_name", WithDefault(LowCardinality(String()), "''")),
         ("sdk_version", WithDefault(LowCardinality(String()), "''")),
         ("url", Nullable(String())),
-        ("http_method", Nullable(String())),
+        ("http_method", LowCardinality(Nullable(String()))),
         ("http_referer", Nullable(String())),
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
