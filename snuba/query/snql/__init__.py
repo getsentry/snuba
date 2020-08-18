@@ -47,9 +47,9 @@ snql_grammar = Grammar(
     order_by_clause       = space* "ORDER BY" order_list space*
 
     main_condition        = low_pri_arithmetic condition_op (function_call / column_name / numeric_literal) space*
-    condition             = main_condition / interm_condition
+    condition             = main_condition / parenthesized_cdn
     condition_op          = "=" / "!=" / ">" / ">=" / "<" / "<="
-    interm_condition      = space* open_paren or_expression close_paren space*
+    parenthesized_cdn     = space* open_paren or_expression close_paren space*
 
     and_expression        = space* condition space* (and_tuple)*
     or_expression         = space* and_expression space* (or_tuple)*
@@ -151,7 +151,7 @@ class SnQLVisitor(NodeVisitor):
         or_string, exp = visited_children
         return OrTuple(or_string.text, exp)
 
-    def visit_interm_condition(
+    def visit_parenthesized_cdn(
         self, node: Node, visited_children: Tuple[Any, Any, Expression, Any, Any]
     ) -> Expression:
         _, _, condition, _, _ = visited_children
@@ -229,7 +229,7 @@ class SnQLVisitor(NodeVisitor):
         self, node: Node, visited_children: Tuple[Any, Expression, Any, Expression]
     ) -> Expression:
         _, left_condition, _, and_condition = visited_children
-
+        argu = [left_condition]
         # in the case of one Condition
         # and_condition will be an empty Node
         if isinstance(and_condition, Node):
@@ -240,14 +240,14 @@ class SnQLVisitor(NodeVisitor):
         elif isinstance(and_condition, list):
             for elem in and_condition:
                 _, exp = elem
-                left_condition = combine_and_conditions([left_condition, exp])
-        return left_condition
+                argu.append(exp)
+        return combine_and_conditions(argu)
 
     def visit_or_expression(
         self, node: Node, visited_children: Tuple[Any, Expression, Any, Expression]
     ) -> Expression:
         _, left_condition, _, or_condition = visited_children
-
+        argu = [left_condition]
         # in the case of one Condition
         # or_condition will be an empty Node
         if isinstance(or_condition, Node):
@@ -258,8 +258,8 @@ class SnQLVisitor(NodeVisitor):
         elif isinstance(or_condition, list):
             for elem in or_condition:
                 _, exp = elem
-                left_condition = combine_or_conditions([left_condition, exp])
-        return left_condition
+                argu.append(exp)
+        return combine_or_conditions(argu)
 
     def visit_main_condition(
         self, node: Node, visited_children: Tuple[Expression, str, Expression, Any]
@@ -405,7 +405,7 @@ class SnQLVisitor(NodeVisitor):
 
 thing = SnQLVisitor().visit(
     snql_grammar.parse(
-        "MATCH (blah) WHERE (name!=bob OR last_seen<afternoon) AND location=gps(x,y,z) OR times_seen>0 COLLECT a"
+        "MATCH (blah) WHERE (time_seen<3 OR last_seen=afternoon) OR name=bob COLLECT a"
     )
 )
 print(thing.get_condition_from_ast())
