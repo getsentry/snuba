@@ -39,27 +39,50 @@ test_cases = [
         id="Basic query with no spaces and no ambiguous clause content",
     ),
     pytest.param(
-        "MATCH  (blah) WHERE a<3 COLLECT4-5,3*g(c),c BY d,2+7 ORDER BYf DESC",
+        "MATCH (blah) WHERE a<3 COLLECT (2*(4-5)+3), g(c), c BY d, 2+7 ORDER BY f DESC",
         Query(
             {},
             None,
             selected_columns=[
                 SelectedExpression(
-                    "4-5",
-                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5),),),
-                ),
-                SelectedExpression(
-                    "3*g(c)",
-                    FunctionCall(
-                        None,
-                        "multiply",
-                        (
-                            Literal(None, 3),
-                            FunctionCall(None, "g", (Column(None, None, "c"),),),
+                    name="(2*(4-5)+3)",
+                    expression=FunctionCall(
+                        alias=None,
+                        function_name="plus",
+                        parameters=(
+                            FunctionCall(
+                                alias=None,
+                                function_name="multiply",
+                                parameters=(
+                                    Literal(alias=None, value=2),
+                                    FunctionCall(
+                                        alias=None,
+                                        function_name="minus",
+                                        parameters=(
+                                            Literal(alias=None, value=4),
+                                            Literal(alias=None, value=5),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                            Literal(alias=None, value=3),
                         ),
                     ),
                 ),
-                SelectedExpression("c", Column(None, None, "c"),),
+                SelectedExpression(
+                    name="g(c)",
+                    expression=FunctionCall(
+                        alias=None,
+                        function_name="g",
+                        parameters=(
+                            Column(alias=None, table_name=None, column_name="c"),
+                        ),
+                    ),
+                ),
+                SelectedExpression(
+                    name="c",
+                    expression=Column(alias=None, table_name=None, column_name="c"),
+                ),
             ],
             condition=binary_condition(
                 None, "less", Column(None, None, "a"), Literal(None, 3)
@@ -70,7 +93,7 @@ test_cases = [
             ],
             order_by=[OrderBy(OrderByDirection.DESC, Column(None, None, "f"))],
         ),
-        id="Basic query with simple clauses",
+        id="Simple complete query with example of parenthesized arithmetic expression in COLLECT",
     ),
     pytest.param(
         "MATCH (blah) WHERE time_seen<3 AND last_seen=2 AND c=2 AND d=3 COLLECT a",
@@ -89,22 +112,44 @@ test_cases = [
                 parameters=(
                     FunctionCall(
                         alias=None,
+                        function_name="less",
+                        parameters=(
+                            Column(
+                                alias=None, table_name=None, column_name="time_seen"
+                            ),
+                            Literal(alias=None, value=3),
+                        ),
+                    ),
+                    FunctionCall(
+                        alias=None,
                         function_name="and",
                         parameters=(
+                            FunctionCall(
+                                alias=None,
+                                function_name="equals",
+                                parameters=(
+                                    Column(
+                                        alias=None,
+                                        table_name=None,
+                                        column_name="last_seen",
+                                    ),
+                                    Literal(alias=None, value=2),
+                                ),
+                            ),
                             FunctionCall(
                                 alias=None,
                                 function_name="and",
                                 parameters=(
                                     FunctionCall(
                                         alias=None,
-                                        function_name="less",
+                                        function_name="equals",
                                         parameters=(
                                             Column(
                                                 alias=None,
                                                 table_name=None,
-                                                column_name="time_seen",
+                                                column_name="c",
                                             ),
-                                            Literal(alias=None, value=3),
+                                            Literal(alias=None, value=2),
                                         ),
                                     ),
                                     FunctionCall(
@@ -114,31 +159,13 @@ test_cases = [
                                             Column(
                                                 alias=None,
                                                 table_name=None,
-                                                column_name="last_seen",
+                                                column_name="d",
                                             ),
-                                            Literal(alias=None, value=2),
+                                            Literal(alias=None, value=3),
                                         ),
                                     ),
                                 ),
                             ),
-                            FunctionCall(
-                                alias=None,
-                                function_name="equals",
-                                parameters=(
-                                    Column(
-                                        alias=None, table_name=None, column_name="c"
-                                    ),
-                                    Literal(alias=None, value=2),
-                                ),
-                            ),
-                        ),
-                    ),
-                    FunctionCall(
-                        alias=None,
-                        function_name="equals",
-                        parameters=(
-                            Column(alias=None, table_name=None, column_name="d"),
-                            Literal(alias=None, value=3),
                         ),
                     ),
                 ),
@@ -147,7 +174,7 @@ test_cases = [
         id="Query with multiple conditions joined by AND",
     ),
     pytest.param(
-        "MATCH (blah) WHERE time_seen<3 OR last_seen=afternoon OR name=bob COLLECT a",
+        "MATCH (blah) WHERE (time_seen<3 OR last_seen=afternoon) OR name=bob COLLECT a",
         Query(
             {},
             None,
@@ -206,10 +233,10 @@ test_cases = [
                 ),
             ),
         ),
-        id="Query with multiple conditions joined by OR",
+        id="Query with multiple conditions joined by OR / parenthesized OR",
     ),
     pytest.param(
-        "MATCH (blah) WHERE name!=bob OR last_seen<afternoon AND location=gps(x,y,z) OR times_seen>0 COLLECT a",
+        "MATCH (blah) WHERE name!=bob OR last_seen<afternoon AND (location=gps(x,y,z) OR times_seen>0) COLLECT a",
         Query(
             {},
             None,
@@ -225,40 +252,36 @@ test_cases = [
                 parameters=(
                     FunctionCall(
                         alias=None,
-                        function_name="or",
+                        function_name="notEquals",
+                        parameters=(
+                            Column(alias=None, table_name=None, column_name="name"),
+                            Column(alias=None, table_name=None, column_name="bob"),
+                        ),
+                    ),
+                    FunctionCall(
+                        alias=None,
+                        function_name="and",
                         parameters=(
                             FunctionCall(
                                 alias=None,
-                                function_name="notEquals",
+                                function_name="less",
                                 parameters=(
                                     Column(
-                                        alias=None, table_name=None, column_name="name"
+                                        alias=None,
+                                        table_name=None,
+                                        column_name="last_seen",
                                     ),
                                     Column(
-                                        alias=None, table_name=None, column_name="bob"
+                                        alias=None,
+                                        table_name=None,
+                                        column_name="afternoon",
                                     ),
                                 ),
                             ),
                             FunctionCall(
                                 alias=None,
-                                function_name="and",
+                                function_name="or",
                                 parameters=(
-                                    FunctionCall(
-                                        alias=None,
-                                        function_name="less",
-                                        parameters=(
-                                            Column(
-                                                alias=None,
-                                                table_name=None,
-                                                column_name="last_seen",
-                                            ),
-                                            Column(
-                                                alias=None,
-                                                table_name=None,
-                                                column_name="afternoon",
-                                            ),
-                                        ),
-                                    ),
                                     FunctionCall(
                                         alias=None,
                                         function_name="equals",
@@ -291,24 +314,26 @@ test_cases = [
                                             ),
                                         ),
                                     ),
+                                    FunctionCall(
+                                        alias=None,
+                                        function_name="greater",
+                                        parameters=(
+                                            Column(
+                                                alias=None,
+                                                table_name=None,
+                                                column_name="times_seen",
+                                            ),
+                                            Literal(alias=None, value=0),
+                                        ),
+                                    ),
                                 ),
                             ),
-                        ),
-                    ),
-                    FunctionCall(
-                        alias=None,
-                        function_name="greater",
-                        parameters=(
-                            Column(
-                                alias=None, table_name=None, column_name="times_seen"
-                            ),
-                            Literal(alias=None, value=0),
                         ),
                     ),
                 ),
             ),
         ),
-        id="Query with multiple / complex conditions joined by AND / OR",
+        id="Query with multiple / complex conditions joined by parenthesized / regular AND / OR",
     ),
 ]
 
