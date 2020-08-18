@@ -428,6 +428,14 @@ class Query:
             ret |= {c for c in expression if isinstance(c, Column)}
         return ret
 
+    def get_columns_referenced_in_conditions_ast(self) -> Set[Column]:
+        ret: Set[Column] = set()
+
+        for expression in self.__condition or []:
+            ret |= {c for c in expression if isinstance(c, Column)}
+
+        return ret
+
     def get_columns_referenced_in_conditions(self) -> Sequence[Any]:
         col_exprs: MutableSequence[Any] = []
         self.__add_flat_conditions(col_exprs, self.get_conditions())

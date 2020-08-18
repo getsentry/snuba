@@ -329,7 +329,9 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             return None
 
         # Do not split if there is already a condition on an ID column
-        if self.__id_column in query.get_columns_referenced_in_conditions():
+        if self.__id_column in [
+            col.column_name for col in query.get_columns_referenced_in_conditions_ast()
+        ]:
             return None
 
         total_col_count = len(query.get_all_referenced_columns())
