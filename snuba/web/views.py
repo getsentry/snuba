@@ -285,7 +285,7 @@ def unqualified_query_view(*, timer: Timer):
         dataset = get_dataset(body.pop("dataset", settings.DEFAULT_DATASET_NAME))
         _trace_transaction(dataset)
         # Not sure what language to pass into dataset_query here
-        return dataset_query(dataset, body, timer, "snql")
+        return dataset_query(dataset, body, timer, "legacy")
     else:
         assert False, "unexpected fallthrough"
 

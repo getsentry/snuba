@@ -154,7 +154,7 @@ class ClickhouseVisitor(NodeVisitor):
         self,
         node: Node,
         visited_children: Tuple[
-            str, Any, List[Expression], Any, Union[Node, List[Expression]]
+            str, Any, List[Expression], Any, Union[Node, List[Expression]], Any
         ],
     ) -> Expression:
         return visit_function_call(node, visited_children)
