@@ -46,7 +46,7 @@ snql_grammar = Grammar(
     having_clause         = space* "HAVING" or_expression space*
     order_by_clause       = space* "ORDER BY" order_list space*
 
-    main_condition        = low_pri_arithmetic condition_op (function_call / column_name / numeric_literal) space*
+    main_condition        = low_pri_arithmetic condition_op (function_call / column_name / quoted_literal / numeric_literal) space*
     condition             = main_condition / parenthesized_cdn
     condition_op          = "=" / "!=" / ">" / ">=" / "<" / "<="
     parenthesized_cdn     = space* open_paren or_expression close_paren space*
@@ -68,7 +68,7 @@ snql_grammar = Grammar(
     clause                = space* ~r"[-=><\w]+" space*
 
     low_pri_arithmetic    = space* high_pri_arithmetic space* (low_pri_tuple)*
-    high_pri_arithmetic   = (space* arithmetic_term space* (high_pri_tuple)*)
+    high_pri_arithmetic   = space* arithmetic_term space* (high_pri_tuple)*
     low_pri_tuple         = low_pri_op high_pri_arithmetic
     high_pri_tuple        = high_pri_op arithmetic_term
 
@@ -200,7 +200,6 @@ class SnQLVisitor(NodeVisitor):
         node: Node,
         visited_children: Tuple[Any, Expression, Any, HighPriArithmetic],
     ) -> Expression:
-
         return visit_high_pri_arithmetic(node, visited_children)
 
     def visit_numeric_literal(
@@ -401,14 +400,6 @@ class SnQLVisitor(NodeVisitor):
 
     def generic_visit(self, node: Node, visited_children: Any) -> Any:
         return generic_visit(node, visited_children)
-
-
-thing = SnQLVisitor().visit(
-    snql_grammar.parse(
-        "MATCH (blah) WHERE (time_seen<3 OR last_seen=afternoon) OR name=bob COLLECT a"
-    )
-)
-print(thing.get_condition_from_ast())
 
 
 def parse_snql_query(body: str, dataset: Dataset) -> Query:
