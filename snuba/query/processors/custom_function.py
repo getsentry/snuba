@@ -1,11 +1,13 @@
 from dataclasses import replace
-from typing import Sequence
+from typing import Sequence, Tuple
 
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column, Expression, FunctionCall
 from snuba.query.logical import Query
 from snuba.query.parser.expressions import parse_clickhouse_function
 from snuba.query.processors import QueryProcessor
+from snuba.query.validation import InvalidFunctionCall
+from snuba.query.validation.signature import ParamType, SignatureValidator
 from snuba.request.request_settings import RequestSettings
 
 
@@ -35,25 +37,29 @@ class CustomFunction(QueryProcessor):
     the wrong number of parameters.
     """
 
-    def __init__(self, name: str, param_names: Sequence[str], body: str) -> None:
+    def __init__(
+        self, name: str, param_signature: Sequence[Tuple[str, ParamType]], body: str
+    ) -> None:
         self.__function_name = name
-        self.__param_names = param_names
+        self.__param_names, param_types = zip(*param_signature)
         self.__body = parse_clickhouse_function(body)
+        self.__validator = SignatureValidator(param_types)
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+        schema = query.get_data_source().get_columns()
+
         def apply_function(expression: Expression) -> Expression:
             if (
                 isinstance(expression, FunctionCall)
                 and expression.function_name == self.__function_name
             ):
-                if len(expression.parameters) != len(self.__param_names):
+                try:
+                    self.__validator.validate(expression.parameters, schema)
+                except InvalidFunctionCall as exception:
                     raise InvalidCustomFunctionCall(
                         expression,
-                        (
-                            f"Invalid number of parameters for function {self.__function_name}. "
-                            f"Required {self.__param_names}"
-                        ),
-                    )
+                        f"Illegal call to function {expression.function_name}: {str(exception)}",
+                    ) from exception
 
                 resolved_params = {
                     name: expression
