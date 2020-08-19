@@ -57,6 +57,24 @@ def errors_migrations(
             )
         )
 
+    if "url" not in current_schema:
+        ret.append(
+            (
+                f"ALTER TABLE {clickhouse_table} ADD COLUMN url Nullable(String) "
+                f"MATERIALIZED tags.value[indexOf(tags.key, 'url')] AFTER sdk_version"
+            )
+        )
+
+    if "http_method" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_method LowCardinality(Nullable(String)) AFTER url"
+        )
+
+    if "http_referer" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_referer Nullable(String) AFTER http_method"
+        )
+
     return ret
 
 
@@ -85,6 +103,12 @@ all_columns = ColumnSet(
         ("user_email", Nullable(String())),
         ("sdk_name", LowCardinality(Nullable(String()))),
         ("sdk_version", LowCardinality(Nullable(String()))),
+        (
+            "url",
+            Materialized(Nullable(String()), "tags.value[indexOf(tags.key, 'url')]"),
+        ),
+        ("http_method", LowCardinality(Nullable(String()))),
+        ("http_referer", Nullable(String())),
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
         ("_tags_hash_map", Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN)),
@@ -188,7 +212,7 @@ schema = ReplacingMergeTreeSchema(
     # during create statement
     # (https://github.com/ClickHouse/ClickHouse/issues/12586), so the
     # materialization is added with a migration.
-    skipped_cols_on_creation={"_tags_hash_map"},
+    skipped_cols_on_creation={"_tags_hash_map", "url"},
 )
 
 required_columns = [
