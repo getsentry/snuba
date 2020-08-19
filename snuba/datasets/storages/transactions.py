@@ -7,6 +7,7 @@ from snuba.clickhouse.columns import (
     ColumnSet,
     ColumnType,
     DateTime,
+    Float,
     IPv4,
     IPv6,
     LowCardinality,
@@ -117,6 +118,12 @@ def transactions_migrations(
             )
         )
 
+    if "measurements" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN measurements Nested("
+            f"key LowCardinality(String), value Float64) AFTER _contexts_flattened"
+        )
+
     return ret
 
 
@@ -153,6 +160,10 @@ columns = ColumnSet(
         ("_tags_hash_map", Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN)),
         ("contexts", Nested([("key", String()), ("value", String())])),
         ("_contexts_flattened", String()),
+        (
+            "measurements",
+            Nested([("key", LowCardinality(String())), ("value", Float(64))]),
+        ),
         ("partition", UInt(16)),
         ("offset", UInt(64)),
         ("message_timestamp", DateTime()),
