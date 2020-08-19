@@ -1,7 +1,6 @@
 import pytest
 
 from snuba.clickhouse.columns import ColumnSet, String, UInt
-from snuba.datasets.schemas.tables import TableSource
 from snuba.query.conditions import binary_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query, SelectedExpression
@@ -12,13 +11,12 @@ from snuba.query.processors.custom_function import (
 from snuba.query.validation.signature import Column as ColType
 from snuba.request.request_settings import HTTPRequestSettings
 
-schema = ColumnSet([("param1", String()), ("param2", UInt(8)), ("other_col", String())])
 
 TEST_CASES = [
     pytest.param(
         Query(
             {},
-            TableSource("events", schema),
+            None,
             selected_columns=[
                 SelectedExpression("column1", Column("column1", None, "column1")),
             ],
@@ -34,7 +32,7 @@ TEST_CASES = [
         ),
         Query(
             {},
-            TableSource("events", schema),
+            None,
             selected_columns=[
                 SelectedExpression("column1", Column("column1", None, "column1")),
             ],
@@ -53,7 +51,7 @@ TEST_CASES = [
     pytest.param(
         Query(
             {},
-            TableSource("events", schema),
+            None,
             selected_columns=[
                 SelectedExpression(
                     "my_func",
@@ -67,7 +65,7 @@ TEST_CASES = [
         ),
         Query(
             {},
-            TableSource("events", schema),
+            None,
             selected_columns=[
                 SelectedExpression(
                     "my_func",
@@ -89,7 +87,7 @@ TEST_CASES = [
     pytest.param(
         Query(
             {},
-            TableSource("events", schema),
+            None,
             selected_columns=[
                 SelectedExpression(
                     "my_func",
@@ -110,7 +108,7 @@ TEST_CASES = [
         ),
         Query(
             {},
-            TableSource("events", schema),
+            None,
             selected_columns=[
                 SelectedExpression(
                     "my_func",
@@ -146,6 +144,7 @@ def test_format_expressions(query: Query, expected_query: Query) -> None:
         "f_call",
         [("param1", ColType({String})), ("param2", ColType({UInt}))],
         "f_call_impl(param1, inner_call(param2))",
+        ColumnSet([("param1", String()), ("param2", UInt(8)), ("other_col", String())]),
     )
     # We cannot just run == on the query objects. The content of the two
     # objects is different, being one the AST and the ont the AST + raw body
@@ -165,7 +164,7 @@ INVALID_QUERIES = [
     pytest.param(
         Query(
             {},
-            TableSource("events", schema),
+            None,
             selected_columns=[
                 SelectedExpression(
                     "my_func",
@@ -180,7 +179,7 @@ INVALID_QUERIES = [
     pytest.param(
         Query(
             {},
-            TableSource("events", schema),
+            None,
             selected_columns=[
                 SelectedExpression(
                     "my_func",
@@ -206,6 +205,7 @@ def test_invalid_call(query: Query) -> None:
         "f_call",
         [("param1", ColType({String})), ("param2", ColType({UInt}))],
         "f_call_impl(param1, inner_call(param2))",
+        ColumnSet([("param1", String()), ("param2", UInt(8)), ("other_col", String())]),
     )
     with pytest.raises(InvalidCustomFunctionCall):
         processor.process_query(query, HTTPRequestSettings())
