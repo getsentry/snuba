@@ -16,13 +16,13 @@ from typing import (
 
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
-from snuba.clickhouse.http import HTTPBatchWriter, JSONRowEncoder
+from snuba.clickhouse.http import HTTPBatchWriter, JSONRow
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.reader import Reader, TQuery
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.writer import BatchWriter, BatchWriterEncoderWrapper, WriterTableRow
+from snuba.writer import BatchWriter
 
 
 class ClickhouseClientSettingsType(NamedTuple):
@@ -112,7 +112,7 @@ class Cluster(ABC, Generic[TQuery, TWriterOptions]):
         metrics: MetricsBackend,
         options: TWriterOptions,
         chunk_size: Optional[int],
-    ) -> BatchWriter[WriterTableRow]:
+    ) -> BatchWriter[JSONRow]:
         raise NotImplementedError
 
 
@@ -220,20 +220,17 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         metrics: MetricsBackend,
         options: ClickhouseWriterOptions,
         chunk_size: Optional[int],
-    ) -> BatchWriter[WriterTableRow]:
-        return BatchWriterEncoderWrapper(
-            HTTPBatchWriter(
-                table_name,
-                host=self.__query_node.host_name,
-                port=self.__http_port,
-                user=self.__user,
-                password=self.__password,
-                database=self.__database,
-                metrics=metrics,
-                options=options,
-                chunk_size=chunk_size,
-            ),
-            JSONRowEncoder(),
+    ) -> BatchWriter[JSONRow]:
+        return HTTPBatchWriter(
+            table_name,
+            host=self.__query_node.host_name,
+            port=self.__http_port,
+            user=self.__user,
+            password=self.__password,
+            database=self.__database,
+            metrics=metrics,
+            options=options,
+            chunk_size=chunk_size,
         )
 
     def is_single_node(self) -> bool:
