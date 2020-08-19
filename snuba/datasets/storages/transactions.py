@@ -118,10 +118,19 @@ def transactions_migrations(
             )
         )
 
-    if "measurements" not in current_schema:
+    # `Nested` is only syntactic sugar for table creation. Nested columns are actually arrays.
+    # So current_schema does not contain any single `measurements` column. It includes
+    # two separate arrays instead.
+    if "measurements.key" not in current_schema:
         ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN measurements Nested("
-            f"key LowCardinality(String), value Float64) AFTER _contexts_flattened"
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN measurements.key Array(LowCardinality(String)) "
+            f"AFTER _contexts_flattened"
+        )
+
+    if "measurements.value" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN measurements.value Array(Float64) "
+            f"AFTER measurements.key"
         )
 
     return ret
