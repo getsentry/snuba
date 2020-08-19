@@ -1,12 +1,12 @@
 import contextlib
 import itertools
+import pickle
 import sys
 import uuid
 from contextlib import closing
 from typing import Iterator, MutableSequence, Optional
 from unittest import TestCase
 
-import pickle
 import pytest
 from confluent_kafka.admin import AdminClient, NewTopic
 
@@ -19,10 +19,10 @@ from snuba.utils.streams.kafka import (
     KafkaProducer,
     as_kafka_configuration_bool,
 )
+from snuba.utils.streams.synchronized import Commit, commit_codec
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 from tests.utils.streams.mixins import StreamsTestMixin
-from snuba.utils.streams.synchronized import Commit, commit_codec
 
 
 def test_payload_equality() -> None:
