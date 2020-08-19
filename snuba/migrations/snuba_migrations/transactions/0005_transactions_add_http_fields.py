@@ -1,6 +1,12 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import Column, LowCardinality, Nullable, String
+from snuba.clickhouse.columns import (
+    Column,
+    LowCardinality,
+    Materialized,
+    Nullable,
+    String,
+)
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 
@@ -10,14 +16,19 @@ class Migration(migration.MultiStepMigration):
     Adds the http columns populated from the Request interface that is missing from transactions.
     """
 
-    blocking = True
+    blocking = False
 
     def forwards_local(self) -> Sequence[operations.Operation]:
         return [
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column("url", Nullable(String())),
+                column=Column(
+                    "url",
+                    Materialized(
+                        Nullable(String()), "tags.value[indexOf(tags.key, 'url')]",
+                    ),
+                ),
                 after="sdk_version",
             ),
             operations.AddColumn(
@@ -52,7 +63,12 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_dist",
-                column=Column("url", Nullable(String())),
+                column=Column(
+                    "url",
+                    Materialized(
+                        Nullable(String()), "tags.value[indexOf(tags.key, 'url')]",
+                    ),
+                ),
                 after="sdk_version",
             ),
             operations.AddColumn(
