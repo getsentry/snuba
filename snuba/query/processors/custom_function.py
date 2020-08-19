@@ -21,13 +21,13 @@ class CustomFunction(QueryProcessor):
     """
     Defines a custom snuba function.
     The custom function has a name, a signature in the form of a list of
-    parameter names and an expanded expression which is the body of the
-    custom function.
+    parameter names and types, an expanded expression which is the body
+    of the custom function and the dataset abstract schema for validation.
 
     The custom function is invoked in a query as a standard snuba function.
 
     Example:
-    CustomFunction(name="power_two", param_names=[value], body="value * value")
+    CustomFunction(name="power_two", param_names=[value], body="value * value", schema)
 
     would transform
     `["power_two", ["f", ["something"]], "alias"]`
@@ -35,21 +35,30 @@ class CustomFunction(QueryProcessor):
     `f(something) * f(something) AS alias`
 
     Would raise InvalidCustomFunctionCall if a custom function is invoked with
-    the wrong number of parameters.
+    the wrong number of parameters or if the parameters are of the wrong type
+    according to the SignatureValidator.
+
+    The validation has the same limitations of SignatureValidation in that it only deals
+    with columns: no literals or complex functions validation.
+
+    We need to pass the dataset abstract schema to the processor constructor
+    because the schema is not populated in the query object when dataset processors
+    are executed.
+    TODO: Assign the abstract dataset schema to the query object right after parsing.
     """
 
     def __init__(
         self,
-        name: str,
-        param_signature: Sequence[Tuple[str, ParamType]],
-        body: str,
         dataset_schema: ColumnSet,
+        name: str,
+        signature: Sequence[Tuple[str, ParamType]],
+        body: str,
     ) -> None:
+        self.__dataset_schema = dataset_schema
         self.__function_name = name
-        self.__param_names, param_types = zip(*param_signature)
+        self.__param_names, param_types = zip(*signature)
         self.__body = parse_clickhouse_function(body)
         self.__validator = SignatureValidator(param_types)
-        self.__dataset_schema = dataset_schema
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         def apply_function(expression: Expression) -> Expression:

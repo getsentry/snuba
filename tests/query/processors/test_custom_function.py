@@ -11,7 +11,6 @@ from snuba.query.processors.custom_function import (
 from snuba.query.validation.signature import Column as ColType
 from snuba.request.request_settings import HTTPRequestSettings
 
-
 TEST_CASES = [
     pytest.param(
         Query(
@@ -141,10 +140,10 @@ TEST_CASES = [
 @pytest.mark.parametrize("query, expected_query", TEST_CASES)
 def test_format_expressions(query: Query, expected_query: Query) -> None:
     processor = CustomFunction(
+        ColumnSet([("param1", String()), ("param2", UInt(8)), ("other_col", String())]),
         "f_call",
         [("param1", ColType({String})), ("param2", ColType({UInt}))],
         "f_call_impl(param1, inner_call(param2))",
-        ColumnSet([("param1", String()), ("param2", UInt(8)), ("other_col", String())]),
     )
     # We cannot just run == on the query objects. The content of the two
     # objects is different, being one the AST and the ont the AST + raw body
@@ -202,10 +201,10 @@ INVALID_QUERIES = [
 @pytest.mark.parametrize("query", INVALID_QUERIES)
 def test_invalid_call(query: Query) -> None:
     processor = CustomFunction(
+        ColumnSet([("param1", String()), ("param2", UInt(8)), ("other_col", String())]),
         "f_call",
         [("param1", ColType({String})), ("param2", ColType({UInt}))],
         "f_call_impl(param1, inner_call(param2))",
-        ColumnSet([("param1", String()), ("param2", UInt(8)), ("other_col", String())]),
     )
     with pytest.raises(InvalidCustomFunctionCall):
         processor.process_query(query, HTTPRequestSettings())
