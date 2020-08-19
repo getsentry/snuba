@@ -3,7 +3,7 @@ from typing import Optional
 
 import click
 
-from snuba import settings
+from snuba import environment, settings
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_cdc_storage, CDC_STORAGES
 from snuba.environment import setup_logging, setup_sentry
@@ -51,7 +51,7 @@ def bulk_load(
     )
     # TODO: see whether we need to pass options to the writer
     writer = BufferedWriterWrapper(
-        table_writer.get_bulk_writer(table_name=dest_table),
+        table_writer.get_bulk_writer(environment.metrics, table_name=dest_table),
         settings.BULK_CLICKHOUSE_BUFFER,
     )
 
