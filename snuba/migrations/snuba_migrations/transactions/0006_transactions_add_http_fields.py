@@ -63,12 +63,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_dist",
-                column=Column(
-                    "url",
-                    Materialized(
-                        Nullable(String()), "tags.value[indexOf(tags.key, 'url')]",
-                    ),
-                ),
+                column=Column("url", Nullable(String())),
                 after="sdk_version",
             ),
             operations.AddColumn(
