@@ -1,5 +1,6 @@
 import click
 
+from snuba.migrations.connect import check_clickhouse_connections
 from snuba.migrations.runner import Runner
 from snuba.migrations.status import Status
 
@@ -10,6 +11,8 @@ def migrations() -> None:
     Currently only for development use
     """
     click.echo("Warning: The migrations tool is currently only for development use\n")
+
+    check_clickhouse_connections()
 
 
 @migrations.command()
