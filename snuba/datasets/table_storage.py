@@ -128,36 +128,18 @@ class TableWriter:
         return self.__table_schema
 
     def get_writer(
-        self, metrics: MetricsBackend, options=None, table_name=None
+        self,
+        metrics: MetricsBackend,
+        options=None,
+        table_name=None,
+        chunk_size: int = settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
     ) -> BatchWriter[WriterTableRow]:
-        from snuba import settings
-
         table_name = table_name or self.__table_schema.get_table_name()
 
         options = self.__update_writer_options(options)
 
         return self.__cluster.get_writer(
-            table_name,
-            metrics,
-            options,
-            chunk_size=settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
-        )
-
-    def get_bulk_writer(
-        self, metrics: MetricsBackend, options=None, table_name=None
-    ) -> BatchWriter[WriterTableRow]:
-        """
-        This is a stripped down verison of the writer designed
-        for better performance when loading data in bulk.
-        """
-        from snuba import settings
-
-        table_name = table_name or self.__table_schema.get_table_name()
-
-        options = self.__update_writer_options(options)
-
-        return self.__cluster.get_writer(
-            table_name, metrics, options, chunk_size=settings.BULK_CLICKHOUSE_BUFFER,
+            table_name, metrics, options, chunk_size=chunk_size,
         )
 
     def get_bulk_loader(
