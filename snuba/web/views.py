@@ -310,9 +310,6 @@ def dataset_query_view(*, dataset: Dataset, timer: Timer):
 def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     assert http_request.method == "POST"
 
-    with sentry_sdk.start_span(description="ensure_dataset", op="validate"):
-        ensure_tables_migrated()
-
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build_with_extensions(
             dataset.get_extensions(), HTTPRequestSettings
@@ -397,24 +394,9 @@ if application.debug or application.testing:
     # These should only be used for testing/debugging. Note that the database name
     # is checked to avoid scary production mishaps.
 
-    _ensured = False
-
-    def ensure_tables_migrated() -> None:
-        global _ensured
-        if _ensured:
-            return
-
-        from snuba.migrations import migrate
-
-        migrate.run()
-
-        _ensured = True
-
     @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
     def write(*, dataset: Dataset):
         from snuba.processor import InsertBatch
-
-        ensure_tables_migrated()
 
         rows: MutableSequence[WriterTableRow] = []
         offset_base = int(round(time.time() * 1000))
@@ -441,7 +423,6 @@ if application.debug or application.testing:
 
     @application.route("/tests/<dataset:dataset>/eventstream", methods=["POST"])
     def eventstream(*, dataset: Dataset):
-        ensure_tables_migrated()
         record = json.loads(http_request.data)
 
         version = record[0]
@@ -486,9 +467,3 @@ if application.debug or application.testing:
     @application.route("/tests/error")
     def error():
         1 / 0
-
-
-else:
-
-    def ensure_tables_migrated() -> None:
-        pass
