@@ -5,7 +5,7 @@ from typing import Any, Callable, List, Optional, Tuple, TypeVar, Union
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
-from snuba.clickhouse.columns import Array, ColumnSet, ColumnTypeWithModifier
+from snuba.clickhouse.columns import Array, ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.query.conditions import ConditionFunctions, FUNCTION_TO_OPERATOR
 from snuba.query.expressions import Argument, Expression, FunctionCall, Lambda, Literal
@@ -145,10 +145,7 @@ def parse_function(
     if name in FUNCTION_TO_OPERATOR:
         if len(args) == 2 and args[0] in dataset_columns:
             column = dataset_columns[args[0]]
-            if isinstance(column.type, Array) or (
-                isinstance(column.type, ColumnTypeWithModifier)
-                and isinstance(column.type.get_raw(), Array)
-            ):
+            if isinstance(column.type.get_raw(), Array):
                 if column.flattened != arrayjoin:
                     return unpack_array_condition_builder(
                         simple_expression_builder(args[0]), name, args[1], alias,
