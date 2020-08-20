@@ -408,54 +408,6 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["data"][0]["count"] == 1
 
-    def test_timestamp_in_boolean_conditions(self):
-        response = self.app.post(
-            "/query",
-            data=json.dumps(
-                {
-                    "dataset": "discover",
-                    "orderby": ["title"],
-                    "consistent": False,
-                    "project": self.project_id,
-                    "selected_columns": ["title", "message"],
-                    "limit": 50,
-                    "conditions": [
-                        [
-                            [
-                                "or",
-                                [
-                                    [
-                                        "less",
-                                        [
-                                            "timestamp",
-                                            (self.base_time).strftime(
-                                                "%Y-%m-%dT%H:%M:%S.%fZ"
-                                            ),
-                                        ],
-                                    ],
-                                    [
-                                        "greater",
-                                        [
-                                            "timestamp",
-                                            (self.base_time).strftime(
-                                                "%Y-%m-%dT%H:%M:%S.%fZ"
-                                            ),
-                                        ],
-                                    ],
-                                ],
-                            ],
-                            "=",
-                            1,
-                        ]
-                    ],
-                }
-            ),
-        )
-
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert len(data["data"]) == 1
-
     def test_device_boolean_fields_context_vs_promoted_column(self):
         response = self.app.post(
             "/query",

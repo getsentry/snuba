@@ -16,7 +16,6 @@ from snuba.query.parser.functions import function_expr
 from snuba.util import (
     alias_expr,
     escape_literal,
-    is_datetime,
     is_function,
     QUOTED_LITERAL_RE,
 )
@@ -55,8 +54,6 @@ def column_expr(
         return complex_column_expr(
             dataset, [aggregate, column_name, alias], query, parsing_context
         )
-    elif isinstance(column_name, str) and is_datetime(column_name):
-        return escape_literal(is_datetime(column_name))
     elif isinstance(column_name, str) and QUOTED_LITERAL_RE.match(column_name):
         return escape_literal(column_name[1:-1])
     else:
