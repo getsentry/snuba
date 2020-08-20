@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence
 
 from snuba import settings
+from snuba.clickhouse.http import JSONRow
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,
@@ -16,7 +17,7 @@ from snuba.snapshots.loaders import BulkLoader
 from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.streams.kafka import KafkaPayload
-from snuba.writer import BatchWriter, WriterTableRow
+from snuba.writer import BatchWriter
 
 
 @dataclass(frozen=True)
@@ -133,7 +134,7 @@ class TableWriter:
         options=None,
         table_name=None,
         chunk_size: int = settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
-    ) -> BatchWriter[WriterTableRow]:
+    ) -> BatchWriter[JSONRow]:
         table_name = table_name or self.__table_schema.get_table_name()
 
         options = self.__update_writer_options(options)

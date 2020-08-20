@@ -1,4 +1,5 @@
 import pytest
+import rapidjson
 
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.http import HTTPBatchWriter
@@ -13,7 +14,7 @@ class TestHTTPBatchWriter(BaseEventsTest):
         try:
             enforce_table_writer(self.dataset).get_writer(
                 table_name="invalid", metrics=DummyMetricsBackend(strict=True)
-            ).write([{"x": "y"}])
+            ).write([rapidjson.dumps({"x": "y"}).encode("utf-8")])
         except ClickhouseError as error:
             assert error.code == 60
         else:
@@ -22,7 +23,7 @@ class TestHTTPBatchWriter(BaseEventsTest):
         try:
             enforce_table_writer(self.dataset).get_writer(
                 metrics=DummyMetricsBackend(strict=True)
-            ).write([{"timestamp": "invalid"}])
+            ).write([rapidjson.dumps({"timestamp": "invalid"}).encode("utf-8")])
         except ClickhouseError as error:
             assert error.code == 41
         else:
