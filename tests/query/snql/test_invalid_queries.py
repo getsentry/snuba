@@ -2,7 +2,7 @@ import pytest
 from parsimonious.exceptions import IncompleteParseError
 
 from snuba.datasets.factory import get_dataset
-from snuba.query.snql import parse_snql_query
+from snuba.query.snql.parser import parse_snql_query
 
 test_cases = [
     # below are all cases that are not parsed completely
