@@ -63,25 +63,25 @@ def test_run_migration() -> None:
 def test_get_pending_migrations() -> None:
     runner = Runner()
     total_migrations = get_total_migration_count()
-    assert len(runner._get_pending_migrations()) == total_migrations
+    assert len(runner.get_pending_migrations()) == total_migrations
     runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
-    assert len(runner._get_pending_migrations()) == total_migrations - 1
+    assert len(runner.get_pending_migrations()) == total_migrations - 1
 
 
 def test_run_all() -> None:
     runner = Runner()
-    assert len(runner._get_pending_migrations()) == get_total_migration_count()
+    assert len(runner.get_pending_migrations()) == get_total_migration_count()
 
     with pytest.raises(MigrationError):
         runner.run_all(force=False)
 
     runner.run_all(force=True)
-    assert runner._get_pending_migrations() == []
+    assert runner.get_pending_migrations() == []
 
 
 def test_reverse_all() -> None:
     runner = Runner()
-    all_migrations = runner._get_pending_migrations()
+    all_migrations = runner.get_pending_migrations()
     runner.run_all(force=True)
     for migration in reversed(all_migrations):
         runner.reverse_migration(migration)

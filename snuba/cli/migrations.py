@@ -1,7 +1,8 @@
 import click
 
 from snuba.migrations.connect import check_clickhouse_connections
-from snuba.migrations.groups import MigrationGroup
+from snuba.migrations.errors import MigrationDoesNotExist
+from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 
@@ -54,14 +55,25 @@ def run(group: str, migration_id: str, force: bool) -> None:
     Migrations that are already in an in-progress or completed status will not be run.
     """
     runner = Runner()
-    migration_key = MigrationKey(MigrationGroup(group), migration_id)
+    migration_group = MigrationGroup(group)
+    migration_key = MigrationKey(migration_group, migration_id)
 
-    # If the migration is already completed or underway, do not rerun it
-    status = runner.get_migration_status(migration_key)
-    if status != Status.NOT_STARTED:
-        status_text = status.value
-        click.echo(f"The migration is already {status_text}")
-        return
+    pending_migrations = runner.get_pending_migrations(migration_group)
+
+    if migration_id not in [m.migration_id for m in pending_migrations]:
+        try:
+            get_group_loader(migration_group).load_migration(migration_id)
+        except MigrationDoesNotExist as e:
+            raise click.ClickException(str(e))
+
+        raise click.ClickException(
+            f"{migration_group.value}: {migration_id} is already completed"
+        )
+
+    next_migration_id = pending_migrations[0].migration_id
+
+    if next_migration_id != migration_id:
+        raise click.ClickException(f"Earlier migrations need to be completed first")
 
     runner.run_migration(migration_key, force=force)
     click.echo(

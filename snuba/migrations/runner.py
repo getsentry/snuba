@@ -3,7 +3,7 @@ import logging
 from clickhouse_driver import errors
 from datetime import datetime
 from functools import partial
-from typing import List, Mapping, MutableMapping, NamedTuple, Tuple
+from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Tuple
 
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.errors import ClickhouseError
@@ -60,7 +60,7 @@ class Runner:
         """
         migrations: List[Tuple[MigrationGroup, List[MigrationStatus]]] = []
 
-        migration_status = self._get_all_migration_status()
+        migration_status = self._get_migration_status()
 
         def get_status(migration_key: MigrationKey) -> Status:
             return migration_status.get(migration_key, Status.NOT_STARTED)
@@ -88,18 +88,25 @@ class Runner:
 
         Requires force to run blocking migrations.
         """
-        for migration in self._get_pending_migrations():
+        for migration in self.get_pending_migrations():
             self.run_migration(migration, force=force)
 
-    def _get_pending_migrations(self) -> List[MigrationKey]:
+    def get_pending_migrations(
+        self, group: Optional[MigrationGroup] = None
+    ) -> List[MigrationKey]:
+        """
+        Runs pending migration for either a single group, or all groups.
+        """
         migrations: List[MigrationKey] = []
 
-        migration_status = self._get_all_migration_status()
+        migration_status = self._get_migration_status()
 
         def get_status(migration_key: MigrationKey) -> Status:
             return migration_status.get(migration_key, Status.NOT_STARTED)
 
-        for group in ACTIVE_MIGRATION_GROUPS:
+        groups = [group] if group else ACTIVE_MIGRATION_GROUPS
+
+        for group in groups:
             group_loader = get_group_loader(group)
             group_migrations: List[MigrationKey] = []
 
@@ -153,21 +160,6 @@ class Runner:
 
         migration.backwards(context)
 
-    def get_migration_status(self, migration_key: MigrationKey) -> Status:
-        result = self.__connection.execute(
-            f"SELECT status FROM {self.__table_name} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s;",
-            {
-                "group": migration_key.group.value,
-                "migration_id": migration_key.migration_id,
-            },
-        )
-
-        if result:
-            (status,) = result[0]
-            return Status(status)
-        else:
-            return Status.NOT_STARTED
-
     def _update_migration_status(
         self, migration_key: MigrationKey, status: Status
     ) -> None:
@@ -199,7 +191,7 @@ class Runner:
 
         return 1
 
-    def _get_all_migration_status(self) -> Mapping[MigrationKey, Status]:
+    def _get_migration_status(self) -> Mapping[MigrationKey, Status]:
         data: MutableMapping[MigrationKey, Status] = {}
         migration_groups = (
             "("
