@@ -38,6 +38,13 @@ from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
 from snuba.utils.streams.producer import Producer
 from snuba.utils.streams.types import Message, Partition, Topic
 
+try:
+    # PickleBuffer is only available in Python 3.8 and above and when using the
+    # pickle protocol version 5 and greater.
+    from pickle import PickleBuffer
+except ImportError:
+    pass
+
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +102,15 @@ class KafkaPayload:
                 and self.value == other.value
                 and self.headers == other.headers
             )
+
+    def __reduce_ex__(self, protocol: int):
+        if protocol >= 5:
+            return (
+                type(self),
+                (self.key, PickleBuffer(self.value), self.headers),
+            )
+        else:
+            return type(self), (self.key, self.value, self.headers)
 
 
 def as_kafka_configuration_bool(value: Any) -> bool:
