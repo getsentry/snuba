@@ -610,7 +610,7 @@ class TestEventsProcessor(BaseEventsTest):
             "event_id": "bce76c2473324fa387b33564eacf34a0",
             "group_id": 1,
             "primary_hash": "a" * 32,
-            "project_id": 70156,
+            "project_id": 156,
             "message": None,
             "platform": None,
             "data": {
@@ -623,7 +623,7 @@ class TestEventsProcessor(BaseEventsTest):
                 "message": None,
                 "metadata": None,
                 "platform": None,
-                "project": 70156,
+                "project": 156,
                 "release": None,
                 "dist": None,
                 "sdk": None,

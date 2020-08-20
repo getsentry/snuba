@@ -56,8 +56,15 @@ def qualified_column(column_name: str, alias: str = "") -> str:
     return column_name if not alias else f"{alias}.{column_name}"
 
 
+def is_datetime(value: str, alignment: int = 1) -> Optional[datetime]:
+    try:
+        return parse_datetime(value, alignment)
+    except (ValueError, OverflowError):
+        return None
+
+
 def parse_datetime(value: str, alignment: int = 1) -> datetime:
-    dt = dateutil_parse(value, ignoretz=True).replace(microsecond=0)
+    dt = dateutil_parse(value, ignoretz=True, fuzzy=False).replace(microsecond=0)
     return dt - timedelta(seconds=(dt - dt.min).seconds % alignment)
 
 

@@ -1,7 +1,7 @@
 import calendar
 import uuid
 from contextlib import ExitStack
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 
 import pytest
@@ -66,7 +66,7 @@ class TestDiscoverApi(BaseApiTest):
                             "timestamp": datetime.timestamp(self.base_time),
                             "tags": {
                                 # Sentry
-                                "environment": u"prød",
+                                "environment": "prød",
                                 "sentry:release": "1",
                                 "sentry:dist": "dist1",
                                 # User
@@ -407,6 +407,213 @@ class TestDiscoverApi(BaseApiTest):
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["data"][0]["count"] == 1
+
+    def test_timestamp_in_boolean_conditions(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "orderby": ["title"],
+                    "consistent": False,
+                    "project": self.project_id,
+                    "selected_columns": ["title", "message"],
+                    "limit": 50,
+                    "conditions": [
+                        [
+                            [
+                                "or",
+                                [
+                                    [
+                                        "less",
+                                        [
+                                            "timestamp",
+                                            (self.base_time).strftime(
+                                                "%Y-%m-%dT%H:%M:%S.%fZ"
+                                            ),
+                                        ],
+                                    ],
+                                    [
+                                        "greater",
+                                        [
+                                            "timestamp",
+                                            (self.base_time).strftime(
+                                                "%Y-%m-%dT%H:%M:%S.%fZ"
+                                            ),
+                                        ],
+                                    ],
+                                ],
+                            ],
+                            "=",
+                            1,
+                        ]
+                    ],
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert len(data["data"]) == 1
+
+    def test_project_transform(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "orderby": ["-timestamp", "-event_id"],
+                    "consistent": False,
+                    "having": [],
+                    "aggregations": [],
+                    "dataset": "discover",
+                    "project": [self.project_id],
+                    "from_date": (self.base_time - timedelta(hours=1)).strftime(
+                        "%Y-%m-%dT%H:%M:%S.%fZ"
+                    ),
+                    "selected_columns": [
+                        "event_id",
+                        "timestamp",
+                        "project_id",
+                        [
+                            "transform",
+                            [
+                                ["toString", ["project_id"]],
+                                ["array", [f"'{self.project_id}'"]],
+                                ["array", ["'tight-mule'"]],
+                                "''",
+                            ],
+                            "`project.name`",
+                        ],
+                    ],
+                    "limit": 101,
+                    "to_date": (self.base_time + timedelta(hours=1)).strftime(
+                        "%Y-%m-%dT%H:%M:%S.%fZ"
+                    ),
+                    "offset": 0,
+                    "debug": True,
+                    "conditions": [["project_id", "IN", [self.project_id]]],
+                    "groupby": [],
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert len(data["data"]) == 1
+
+    def test_release_tag_in_tuples(self):
+        # This is test is here to replicate an issue, which is why it has weird values.
+        # https://sentry.io/organizations/sentry/issues/1850648547/events/d3b75fc0bc6e4baebc427d03f7ca8411/?project=300688
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "orderby": ["-time"],
+                    "aggregations": [["count()", None, "Events"]],
+                    "having": [],
+                    "project": [self.project_id],
+                    "from_date": (self.base_time - timedelta(hours=1)).strftime(
+                        "%Y-%m-%dT%H:%M:%S.%fZ"
+                    ),
+                    "selected_columns": [
+                        [
+                            "if",
+                            [
+                                [
+                                    "in",
+                                    [
+                                        "tags[sentry:release]",
+                                        "tuple",
+                                        [
+                                            "'1'",
+                                            "'portreporter-frontend@1.6.0'",
+                                            "'3aa4fc0'",
+                                            "'1.5.5'",
+                                            "'1.1.2-r.TXq5gstdA'",
+                                        ],
+                                    ],
+                                ],
+                                "tags[sentry:release]",
+                                "'other'",
+                            ],
+                            "release",
+                        ],
+                    ],
+                    "limit": 5000,
+                    "to_date": (self.base_time + timedelta(hours=1)).strftime(
+                        "%Y-%m-%dT%H:%M:%S.%fZ"
+                    ),
+                    "granularity": 900,
+                    "totals": False,
+                    "debug": True,
+                    "conditions": [
+                        ["project_id", "IN", [self.project_id]],
+                        ["project_id", "IN", [self.project_id]],
+                        [
+                            "timestamp",
+                            ">=",
+                            (self.base_time - timedelta(hours=1)).strftime(
+                                "%Y-%m-%dT%H:%M:%S.%fZ"
+                            ),
+                        ],
+                        [
+                            "timestamp",
+                            "<",
+                            (self.base_time + timedelta(hours=1)).strftime(
+                                "%Y-%m-%dT%H:%M:%S.%fZ"
+                            ),
+                        ],
+                        ["duration", ">=", 0],
+                    ],
+                    "groupby": ["time", "release"],
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert len(data["data"]) == 1
+        assert data["data"][0]["release"] == "1"
+
+    def test_giant_integers_as_literals(self):
+        # This is test is here to replicate an issue, which is why it has weird values.
+        # https://sentry.io/organizations/sentry/issues/1850654586/events/30e43d0565e449f6b4d952eb6d429301/
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "orderby": [],
+                    "aggregations": [["count()", None, "count"]],
+                    "having": [],
+                    "project": [self.project_id],
+                    "from_date": (self.base_time - timedelta(hours=1)).strftime(
+                        "%Y-%m-%dT%H:%M:%S.%fZ"
+                    ),
+                    "selected_columns": ["message"],
+                    "limit": 5000,
+                    "to_date": (self.base_time + timedelta(hours=1)).strftime(
+                        "%Y-%m-%dT%H:%M:%S.%fZ"
+                    ),
+                    "debug": True,
+                    "conditions": [
+                        [
+                            [
+                                "positionCaseInsensitive",
+                                ["message", "'2970738277633170015'"],
+                            ],
+                            "!=",
+                            0,
+                        ],
+                        ["project_id", "IN", [self.project_id]],
+                    ],
+                    "groupby": ["message"],
+                }
+            ),
+        )
+
+        assert response.status_code == 200
 
     def test_device_boolean_fields_context_vs_promoted_column(self):
         response = self.app.post(

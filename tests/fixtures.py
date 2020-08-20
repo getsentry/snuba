@@ -10,7 +10,7 @@ raw_event = {
     "message": "Caught exception!",
     "metadata": {"type": "ArithmeticException", "value": "/ by zero"},
     "platform": "java",
-    "project": 70156,
+    "project": 156,
     "release": "1.0",
     "dist": None,
     "sdk": {
