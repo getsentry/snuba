@@ -166,12 +166,13 @@ class BatchProcessingStrategy(ProcessingStrategy[TPayload]):
             )
 
     def close(self) -> None:
-        """
-        Close the processor, discarding any messages (without committing
-        offsets) that were previously consumed and processed since the last
-        batch flush.
-        """
         self.__closed = True
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        # The active batch is discarded when exiting without attempting to
+        # write or commit, so this method can exit immediately without
+        # blocking.
+        pass
 
     def __flush(self) -> None:
         """

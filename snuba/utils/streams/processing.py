@@ -32,11 +32,16 @@ class ProcessingStrategy(ABC, Generic[TPayload]):
     @abstractmethod
     def poll(self) -> None:
         """
-        Poll the processor.
+        Poll the processor to check on the status of asynchronous tasks or
+        perform other scheduled work.
 
-        This method is called on each consumer loop iteration. It can be used
-        to check on the status of asynchronous tasks or perform other
-        scheduled tasks.
+        This method is called on each consumer loop iteration, so this method
+        should not be used to perform work that may block for a significant
+        amount of time and block the progress of the consumer or exceed the
+        consumer poll interval timeout.
+
+        This method may raise exceptions that were thrown by asynchronous
+        tasks since the previous call to ``poll``.
         """
         raise NotImplementedError
 
@@ -55,17 +60,29 @@ class ProcessingStrategy(ABC, Generic[TPayload]):
     @abstractmethod
     def close(self) -> None:
         """
-        Close this instance. No more messages will be received by the
-        instance after this method has been called. This method is called
-        synchronously by the stream processor during assignment revocation
-        and blocks the assignment from being released until this function
-        exits, making it a good place to wait for (or choose to abandon) any
-        work in progress and commit partition offsets.
+        Close this instance. No more messages should be accepted by the
+        instance after this method has been called.
 
-        This method also should be used to release any resources that will no
-        longer be used (threads, processes, sockets, files, etc.) to avoid
-        leaking resources, as well as performing any finalization tasks that
-        may prevent this instance from being garbage collected.
+        This method should not block. Once this strategy instance has
+        finished processing (or discarded) all messages that were submitted
+        prior to this method being called, the strategy should commit its
+        partition offsets and release any resources that will no longer be
+        used (threads, processes, sockets, files, etc.)
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def join(self, timeout: Optional[float] = None) -> None:
+        """
+        Block until the processing strategy has completed all previously
+        submitted work, or the provided timeout has been reached. This method
+        should be called after ``close`` to provide a graceful shutdown.
+
+        This method is called synchronously by the stream processor during
+        assignment revocation, and blocks the assignment from being released
+        until this function exits, allowing any work in progress to be
+        completed and committed before the continuing the rebalancing
+        process.
         """
         raise NotImplementedError
 
@@ -129,7 +146,17 @@ class StreamProcessor(Generic[TPayload]):
                 )
 
             logger.info("Partitions revoked: %r", partitions)
+
+            logger.debug("Closing %r...", self.__processing_strategy)
             self.__processing_strategy.close()
+
+            logger.debug("Waiting for %r to exit...", self.__processing_strategy)
+            self.__processing_strategy.join()
+
+            logger.debug(
+                "%r exited successfully, releasing assignment.",
+                self.__processing_strategy,
+            )
             self.__processing_strategy = None
 
         self.__consumer.subscribe(
