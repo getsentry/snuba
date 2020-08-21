@@ -99,6 +99,7 @@ def parse_conditions(
             and lhs in columns
             and isinstance(columns[lhs].type, Array)
             and columns[lhs].base_name != array_join
+            and columns[lhs].flattened != array_join
             and not isinstance(lit, (list, tuple))
         ):
             return unpack_array_condition_builder(
@@ -179,7 +180,7 @@ def parse_conditions_to_expr(
     ) -> Expression:
         function_name = "arrayExists" if op in POSITIVE_OPERATORS else "arrayAll"
 
-        # This is an expresison like:
+        # This is an expression like:
         # arrayExists(x -> assumeNotNull(notLike(x, rhs)), lhs)
         return FunctionCall(
             None,

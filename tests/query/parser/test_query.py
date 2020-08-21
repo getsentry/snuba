@@ -6,10 +6,12 @@ from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.tables import TableSource
-from snuba.query.conditions import binary_condition
+from snuba.query.conditions import binary_condition, ConditionFunctions
 from snuba.query.expressions import (
+    Argument,
     Column,
     FunctionCall,
+    Lambda,
     Literal,
     SubscriptableReference,
 )
@@ -337,6 +339,407 @@ test_cases = [
             ],
         ),
         id="De-escape aliases defined by the user",
+    ),
+    pytest.param(
+        {
+            "selected_columns": ["exception_stacks.type"],
+            "aggregations": [["count", None, "count"]],
+            "conditions": [],
+            "having": [],
+            "groupby": [],
+            "arrayjoin": "exception_stacks.type",
+        },
+        Query(
+            {},
+            TableSource("events", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression("count", FunctionCall("count", "count", ())),
+                SelectedExpression(
+                    "exception_stacks.type",
+                    Column("exception_stacks.type", None, "exception_stacks.type"),
+                ),
+            ],
+            array_join=Column("exception_stacks.type", None, "exception_stacks.type"),
+        ),
+        id="Format a query with array join",
+    ),
+    pytest.param(
+        {
+            "selected_columns": ["exception_stacks.type"],
+            "aggregations": [["count", None, "count"]],
+            "conditions": [["exception_stacks.type", "LIKE", "Arithmetic%"]],
+            "having": [],
+            "groupby": [],
+        },
+        Query(
+            {},
+            TableSource("events", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression("count", FunctionCall("count", "count", ())),
+                SelectedExpression(
+                    "exception_stacks.type",
+                    Column("exception_stacks.type", None, "exception_stacks.type"),
+                ),
+            ],
+            condition=FunctionCall(
+                None,
+                "arrayExists",
+                (
+                    Lambda(
+                        None,
+                        ("x",),
+                        FunctionCall(
+                            None,
+                            "assumeNotNull",
+                            (
+                                FunctionCall(
+                                    None,
+                                    "like",
+                                    (
+                                        Argument(None, "x"),
+                                        Literal(None, "Arithmetic%"),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                    Column("exception_stacks.type", None, "exception_stacks.type"),
+                ),
+            ),
+        ),
+        id="Format a query with array field in a condition",
+    ),
+    pytest.param(
+        {
+            "selected_columns": ["exception_stacks.type"],
+            "aggregations": [["count", None, "count"]],
+            "conditions": [["exception_stacks.type", "LIKE", "Arithmetic%"]],
+            "having": [],
+            "groupby": [],
+            "arrayjoin": "exception_stacks.type",
+        },
+        Query(
+            {},
+            TableSource("events", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression("count", FunctionCall("count", "count", ())),
+                SelectedExpression(
+                    "exception_stacks.type",
+                    Column("exception_stacks.type", None, "exception_stacks.type"),
+                ),
+            ],
+            array_join=Column("exception_stacks.type", None, "exception_stacks.type"),
+            condition=FunctionCall(
+                None,
+                "like",
+                (
+                    Column("exception_stacks.type", None, "exception_stacks.type"),
+                    Literal(None, "Arithmetic%"),
+                ),
+            ),
+        ),
+        id="Format a query with array join field in a condition",
+    ),
+    pytest.param(
+        {
+            "selected_columns": [["arrayJoin", ["exception_stacks"]]],
+            "aggregations": [["count", None, "count"]],
+            "conditions": [["exception_stacks.type", "LIKE", "Arithmetic%"]],
+            "having": [],
+            "groupby": [],
+        },
+        Query(
+            {},
+            TableSource("events", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression("count", FunctionCall("count", "count", ())),
+                SelectedExpression(
+                    None,
+                    FunctionCall(
+                        None,
+                        "arrayJoin",
+                        (Column("exception_stacks", None, "exception_stacks"),),
+                    ),
+                ),
+            ],
+            condition=FunctionCall(
+                None,
+                "like",
+                (
+                    Column("exception_stacks.type", None, "exception_stacks.type"),
+                    Literal(None, "Arithmetic%"),
+                ),
+            ),
+        ),
+        id="Format a query with array join field in a condition and array join in a function",
+    ),
+    pytest.param(
+        {
+            "selected_columns": ["exception_stacks.type"],
+            "aggregations": [["count", None, "count"]],
+            "conditions": [
+                [
+                    [
+                        "or",
+                        [
+                            [
+                                "equals",
+                                ["exception_stacks.type", "'ArithmeticException'"],
+                            ],
+                            [
+                                "equals",
+                                ["exception_stacks.type", "'RuntimeException'"],
+                            ],
+                        ],
+                    ],
+                    "=",
+                    1,
+                ],
+            ],
+            "having": [],
+            "groupby": [],
+        },
+        Query(
+            {},
+            TableSource("events", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression("count", FunctionCall("count", "count", ())),
+                SelectedExpression(
+                    "exception_stacks.type",
+                    Column("exception_stacks.type", None, "exception_stacks.type"),
+                ),
+            ],
+            condition=binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                FunctionCall(
+                    None,
+                    "or",
+                    (
+                        FunctionCall(
+                            None,
+                            "arrayExists",
+                            (
+                                Lambda(
+                                    None,
+                                    ("x",),
+                                    FunctionCall(
+                                        None,
+                                        "assumeNotNull",
+                                        (
+                                            FunctionCall(
+                                                None,
+                                                "equals",
+                                                (
+                                                    Argument(None, "x"),
+                                                    Literal(
+                                                        None, "ArithmeticException",
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                                Column(
+                                    "exception_stacks.type",
+                                    None,
+                                    "exception_stacks.type",
+                                ),
+                            ),
+                        ),
+                        FunctionCall(
+                            None,
+                            "arrayExists",
+                            (
+                                Lambda(
+                                    None,
+                                    ("x",),
+                                    FunctionCall(
+                                        None,
+                                        "assumeNotNull",
+                                        (
+                                            FunctionCall(
+                                                None,
+                                                "equals",
+                                                (
+                                                    Argument(None, "x"),
+                                                    Literal(None, "RuntimeException",),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                                Column(
+                                    "exception_stacks.type",
+                                    None,
+                                    "exception_stacks.type",
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+                Literal(None, 1),
+            ),
+        ),
+        id="Format a query with array field in a boolean condition",
+    ),
+    pytest.param(
+        {
+            "selected_columns": ["exception_stacks.type"],
+            "aggregations": [["count", None, "count"]],
+            "conditions": [
+                [
+                    [
+                        "or",
+                        [
+                            [
+                                "equals",
+                                ["exception_stacks.type", "'ArithmeticException'"],
+                            ],
+                            [
+                                "equals",
+                                ["exception_stacks.type", "'RuntimeException'"],
+                            ],
+                        ],
+                    ],
+                    "=",
+                    1,
+                ],
+            ],
+            "having": [],
+            "groupby": [],
+            "arrayjoin": "exception_stacks",
+        },
+        Query(
+            {},
+            TableSource("events", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression("count", FunctionCall("count", "count", ())),
+                SelectedExpression(
+                    "exception_stacks.type",
+                    Column("exception_stacks.type", None, "exception_stacks.type"),
+                ),
+            ],
+            condition=binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                FunctionCall(
+                    None,
+                    "or",
+                    (
+                        FunctionCall(
+                            None,
+                            "equals",
+                            (
+                                Column(
+                                    "exception_stacks.type",
+                                    None,
+                                    "exception_stacks.type",
+                                ),
+                                Literal(None, "ArithmeticException"),
+                            ),
+                        ),
+                        FunctionCall(
+                            None,
+                            "equals",
+                            (
+                                Column(
+                                    "exception_stacks.type",
+                                    None,
+                                    "exception_stacks.type",
+                                ),
+                                Literal(None, "RuntimeException"),
+                            ),
+                        ),
+                    ),
+                ),
+                Literal(None, 1),
+            ),
+            array_join=Column("exception_stacks", None, "exception_stacks"),
+        ),
+        id="Format a query with array join field in a boolean condition",
+    ),
+    pytest.param(
+        {
+            "selected_columns": [["arrayJoin", ["exception_stacks.type"]]],
+            "aggregations": [["count", None, "count"]],
+            "conditions": [
+                [
+                    [
+                        "or",
+                        [
+                            [
+                                "equals",
+                                ["exception_stacks.type", "'ArithmeticException'"],
+                            ],
+                            [
+                                "equals",
+                                ["exception_stacks.type", "'RuntimeException'"],
+                            ],
+                        ],
+                    ],
+                    "=",
+                    1,
+                ],
+            ],
+            "having": [],
+            "groupby": [],
+        },
+        Query(
+            {},
+            TableSource("events", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression("count", FunctionCall("count", "count", ())),
+                SelectedExpression(
+                    None,
+                    FunctionCall(
+                        None,
+                        "arrayJoin",
+                        (
+                            Column(
+                                "exception_stacks.type", None, "exception_stacks.type"
+                            ),
+                        ),
+                    ),
+                ),
+            ],
+            condition=binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                FunctionCall(
+                    None,
+                    "or",
+                    (
+                        FunctionCall(
+                            None,
+                            "equals",
+                            (
+                                Column(
+                                    "exception_stacks.type",
+                                    None,
+                                    "exception_stacks.type",
+                                ),
+                                Literal(None, "ArithmeticException"),
+                            ),
+                        ),
+                        FunctionCall(
+                            None,
+                            "equals",
+                            (
+                                Column(
+                                    "exception_stacks.type",
+                                    None,
+                                    "exception_stacks.type",
+                                ),
+                                Literal(None, "RuntimeException"),
+                            ),
+                        ),
+                    ),
+                ),
+                Literal(None, 1),
+            ),
+        ),
+        id="Format a query with array join field in a boolean condition and array join in a function",
     ),
 ]
 
