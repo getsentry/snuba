@@ -8,6 +8,7 @@ from snuba.query.logical import SelectedExpression
 from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
 from snuba.query.conditions import (
     ConditionFunctions,
+    BooleanFunctions,
     binary_condition,
 )
 from snuba.query.processors.tags_hash_map import TagsHashMapOptimizer
@@ -89,20 +90,118 @@ TEST_CASES = [
                 Literal(None, "bla"),
             ),
         ),
-        binary_condition(
+        FunctionCall(
             None,
-            ConditionFunctions.EQ,
-            FunctionCall(
-                None,
-                "has",
-                (
-                    column("_tags_hash_map", True),
-                    FunctionCall(None, "cityHash64", (Literal(None, "my_tag=bla"),)),
-                ),
+            "has",
+            (
+                column("_tags_hash_map", True),
+                FunctionCall(None, "cityHash64", (Literal(None, "my_tag=bla"),)),
             ),
-            Literal(None, 1),
         ),
         id="Optimizable simple condition",
+    ),
+    pytest.param(
+        build_query(
+            selected_columns=[column("event_id")],
+            condition=binary_condition(
+                None,
+                ConditionFunctions.IN,
+                nested_expression("tags", "my_tag"),
+                FunctionCall(
+                    None, "tuple", (Literal(None, "test1"), Literal(None, "test2"),)
+                ),
+            ),
+        ),
+        FunctionCall(
+            None,
+            "hasAny",
+            (
+                column("_tags_hash_map", True),
+                FunctionCall(None, "cityHash64", (Literal(None, "my_tag=test1"),)),
+                FunctionCall(None, "cityHash64", (Literal(None, "my_tag=test2"),)),
+            ),
+        ),
+        id="Optimizable IN condition",
+    ),
+    pytest.param(
+        build_query(
+            selected_columns=[column("event_id")],
+            condition=binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                FunctionCall(
+                    None,
+                    "ifNull",
+                    (nested_expression("tags", "my_tag"), Literal(None, "")),
+                ),
+                Literal(None, "bla"),
+            ),
+        ),
+        FunctionCall(
+            None,
+            "has",
+            (
+                column("_tags_hash_map", True),
+                FunctionCall(None, "cityHash64", (Literal(None, "my_tag=bla"),)),
+            ),
+        ),
+        id="Condition in a ifNull function",
+    ),
+    pytest.param(
+        build_query(
+            selected_columns=[column("event_id")],
+            condition=binary_condition(
+                None,
+                ConditionFunctions.LIKE,
+                nested_expression("tags", "my_context"),
+                Literal(None, "123123"),
+            ),
+        ),
+        binary_condition(
+            None,
+            ConditionFunctions.LIKE,
+            nested_expression("tags", "my_context"),
+            Literal(None, "123123"),
+        ),
+        id="Unsupported condition",
+    ),
+    pytest.param(
+        build_query(
+            selected_columns=[column("event_id")],
+            condition=binary_condition(
+                None,
+                BooleanFunctions.OR,
+                binary_condition(
+                    None,
+                    ConditionFunctions.EQ,
+                    nested_expression("tags", "my_tag"),
+                    Literal(None, "123123"),
+                ),
+                binary_condition(
+                    None,
+                    ConditionFunctions.LIKE,
+                    nested_expression("tags", "my_tag2"),
+                    Literal(None, "123123"),
+                ),
+            ),
+        ),
+        binary_condition(
+            None,
+            BooleanFunctions.OR,
+            binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                nested_expression("tags", "my_tag"),
+                Literal(None, "123123"),
+            ),
+            binary_condition(
+                None,
+                ConditionFunctions.LIKE,
+                nested_expression("tags", "my_tag2"),
+                Literal(None, "123123"),
+            ),
+        ),
+        id="Unsupported and supported conditions",
     ),
 ]
 

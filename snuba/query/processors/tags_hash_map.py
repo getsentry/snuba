@@ -11,7 +11,6 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.query.conditions import (
     BooleanFunctions,
-    ConditionFunctions,
     get_first_level_and_conditions,
     get_first_level_or_conditions,
 )
@@ -75,11 +74,27 @@ class TagsHashMapOptimizer(QueryProcessor):
         if not isinstance(condition, FunctionExpr):
             return ConditionClass.IRRELEVANT
         if condition.function_name == BooleanFunctions.AND:
-            for c in get_first_level_and_conditions(condition):
-                return self.__classify_combined_conditions(c)
+            classified = {
+                self.__classify_combined_conditions(c)
+                for c in get_first_level_and_conditions(condition)
+            }
+            if ConditionClass.NOT_OPTIMIZABLE in classified:
+                return ConditionClass.NOT_OPTIMIZABLE
+            elif ConditionClass.OPTIMIZABLE in classified:
+                return ConditionClass.OPTIMIZABLE
+            else:
+                return ConditionClass.IRRELEVANT
         elif condition.function_name == BooleanFunctions.OR:
-            for c in get_first_level_or_conditions(condition):
-                return self.__classify_combined_conditions(c)
+            classified = {
+                self.__classify_combined_conditions(c)
+                for c in get_first_level_or_conditions(condition)
+            }
+            if ConditionClass.NOT_OPTIMIZABLE in classified:
+                return ConditionClass.NOT_OPTIMIZABLE
+            elif ConditionClass.OPTIMIZABLE in classified:
+                return ConditionClass.OPTIMIZABLE
+            else:
+                return ConditionClass.IRRELEVANT
         else:
             return self.__classify_condition(condition)
 
@@ -96,7 +111,7 @@ class TagsHashMapOptimizer(QueryProcessor):
                     return ConditionClass.NOT_OPTIMIZABLE
             elif isinstance(rhs, FunctionExpr):
                 for p in rhs.parameters:
-                    if not isinstance(rhs, LiteralExpr) or rhs.value == "":
+                    if not isinstance(p, LiteralExpr) or p.value == "":
                         return ConditionClass.NOT_OPTIMIZABLE
             return ConditionClass.OPTIMIZABLE
         elif match is None:
@@ -128,14 +143,7 @@ class TagsHashMapOptimizer(QueryProcessor):
             ],
         ]
         return FunctionExpr(
-            alias=alias,
-            function_name=ConditionFunctions.EQ,
-            parameters=(
-                FunctionExpr(
-                    alias=None, function_name=function, parameters=tuple(literals),
-                ),
-                LiteralExpr(None, 1),
-            ),
+            alias=None, function_name=function, parameters=tuple(literals),
         )
 
     def __replace_with_hash_map(self, condition: Expression) -> Expression:
