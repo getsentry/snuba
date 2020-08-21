@@ -14,6 +14,7 @@ from markdown import markdown
 
 from snuba import environment, settings, state, util
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
@@ -43,7 +44,7 @@ from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.web import QueryException
 from snuba.web.converters import DatasetConverter
 from snuba.web.query import parse_and_run_query
-from snuba.writer import WriterTableRow
+from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 metrics = MetricsWrapper(environment.metrics, "api")
 
@@ -417,7 +418,9 @@ if application.debug or application.testing:
                 assert isinstance(processed_message, InsertBatch)
                 rows.extend(processed_message.rows)
 
-        enforce_table_writer(dataset).get_writer(metrics).write(rows)
+        BatchWriterEncoderWrapper(
+            enforce_table_writer(dataset).get_writer(metrics), JSONRowEncoder(),
+        ).write(rows)
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
