@@ -2,6 +2,7 @@ import importlib
 import pytest
 from unittest.mock import patch
 
+from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.consumer import KafkaMessageMetadata
@@ -14,6 +15,7 @@ from snuba.migrations.parse_schema import get_local_schema
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+from snuba.writer import BatchWriterEncoderWrapper
 
 
 def teardown_function() -> None:
@@ -27,6 +29,25 @@ def teardown_function() -> None:
         "querylog_local",
     ]:
         connection.execute(f"DROP TABLE IF EXISTS {table};")
+
+
+def test_show_all() -> None:
+    runner = Runner()
+    assert all(
+        [
+            migration.status == Status.NOT_STARTED
+            for (_, group_migrations) in runner.show_all()
+            for migration in group_migrations
+        ]
+    )
+    runner.run_all(force=True)
+    assert all(
+        [
+            migration.status == Status.COMPLETED
+            for (_, group_migrations) in runner.show_all()
+            for migration in group_migrations
+        ]
+    )
 
 
 def test_run_migration() -> None:
@@ -251,7 +272,10 @@ def generate_transactions(count: int) -> None:
         )
         rows.extend(processed.rows)
 
-    table_writer.get_writer(metrics=DummyMetricsBackend(strict=True)).write(rows)
+    BatchWriterEncoderWrapper(
+        table_writer.get_writer(metrics=DummyMetricsBackend(strict=True)),
+        JSONRowEncoder(),
+    ).write(rows)
 
 
 def test_settings_skipped_group() -> None:

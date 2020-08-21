@@ -4,10 +4,10 @@ from typing import Optional, Sequence
 import click
 
 from snuba import settings
-from snuba.clusters.cluster import ClickhouseClientSettings, CLUSTERS
 from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging
-from snuba.migrations import migrate
+from snuba.migrations.migrate import run as run_migrate
+from snuba.migrations.connect import check_clickhouse_connections
 
 
 @click.command()
@@ -18,12 +18,14 @@ from snuba.migrations import migrate
     help="Kafka bootstrap server to use.",
 )
 @click.option("--kafka/--no-kafka", default=True)
+@click.option("--migrate/--no-migrate", default=True)
 @click.option("--force", is_flag=True)
 @click.option("--log-level", help="Logging level to use.")
 def bootstrap(
     *,
     bootstrap_server: Sequence[str],
     kafka: bool,
+    migrate: bool,
     force: bool,
     log_level: Optional[str] = None,
 ) -> None:
@@ -94,31 +96,6 @@ def bootstrap(
             except Exception as e:
                 logger.error("Failed to create topic %s", topic, exc_info=e)
 
-    attempts = 0
-
-    # Attempt to connect with every cluster
-    for cluster in CLUSTERS:
-        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
-
-        while True:
-            try:
-                logger.debug(
-                    "Attempting to connect to Clickhouse cluster %s (attempt %d)",
-                    cluster,
-                    attempts,
-                )
-                clickhouse.execute("SELECT 1")
-                break
-            except Exception as e:
-                logger.error(
-                    "Connection to Clickhouse cluster %s failed (attempt %d)",
-                    cluster,
-                    attempts,
-                    exc_info=e,
-                )
-                attempts += 1
-                if attempts == 60:
-                    raise
-                time.sleep(1)
-
-    migrate.run()
+    if migrate:
+        check_clickhouse_connections()
+        run_migrate()
