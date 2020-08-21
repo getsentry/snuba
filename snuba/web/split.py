@@ -330,12 +330,14 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             return None
 
         # Do not split if there is already a = or IN condition on an ID column
+        id_column_matcher = FunctionCall(
+            None,
+            Or([String(ConditionFunctions.EQ), String(ConditionFunctions.IN)]),
+            (Column(None, None, String(self.__id_column)), AnyExpression(),),
+        )
+
         for expr in query.get_condition_from_ast() or []:
-            match = FunctionCall(
-                None,
-                Or([String(ConditionFunctions.EQ), String(ConditionFunctions.IN)]),
-                (Column(None, None, String(self.__id_column)), AnyExpression(),),
-            ).match(expr)
+            match = id_column_matcher.match(expr)
 
             if match:
                 return None
