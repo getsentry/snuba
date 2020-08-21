@@ -5,6 +5,7 @@ from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mappers import (
     KEY_COL_MAPPING_PARAM,
+    KEY_MAPPING_PARAM,
     TABLE_MAPPING_PARAM,
     mapping_pattern,
 )
@@ -24,7 +25,7 @@ from snuba.request.request_settings import RequestSettings
 class ConditionClass(Enum):
     IRRELEVANT = 1
     OPTIMIZABLE = 2
-    NOT_OPTIMIZABLE = 2
+    NOT_OPTIMIZABLE = 3
 
 
 class TagsHashMapOptimizer(QueryProcessor):
@@ -71,7 +72,7 @@ class TagsHashMapOptimizer(QueryProcessor):
         )
 
     def __classify_combined_conditions(self, condition: Expression) -> ConditionClass:
-        if not isinstance(condition, FunctionCall):
+        if not isinstance(condition, FunctionExpr):
             return ConditionClass.IRRELEVANT
         if condition.function_name == BooleanFunctions.AND:
             for c in get_first_level_and_conditions(condition):
@@ -87,7 +88,7 @@ class TagsHashMapOptimizer(QueryProcessor):
         match = self.__optimizable_pattern.match(condition)
         if (
             match is not None
-            and match.string(KEY_COL_MAPPING_PARAM) == self.__column_name
+            and match.string(KEY_COL_MAPPING_PARAM) == f"{self.__column_name}.key"
         ):
             rhs = match.expression("right_hand_side")
             if isinstance(rhs, LiteralExpr):
@@ -139,21 +140,32 @@ class TagsHashMapOptimizer(QueryProcessor):
 
     def __replace_with_hash_map(self, condition: Expression) -> Expression:
         match = self.__optimizable_pattern.match(condition)
-        if match is None or match.string(KEY_COL_MAPPING_PARAM) != self.__column_name:
+        if (
+            match is None
+            or match.string(KEY_COL_MAPPING_PARAM) != f"{self.__column_name}.key"
+        ):
             return condition
         rhs = match.expression("right_hand_side")
         if isinstance(rhs, LiteralExpr):
             return self.__build_replaced(
-                condition.alias, match.string(TABLE_MAPPING_PARAM), "has", [rhs]
+                condition.alias,
+                match.optional_string(TABLE_MAPPING_PARAM),
+                "has",
+                [LiteralExpr(None, f"{match.string(KEY_MAPPING_PARAM)}={rhs.value}")],
             )
         else:
             assert isinstance(rhs, FunctionExpr)
             params = []
             for e in rhs.parameters:
                 assert isinstance(e, LiteralExpr)
-                params.append(e)
+                params.append(
+                    LiteralExpr(None, f"{match.string(KEY_MAPPING_PARAM)}={e.value}")
+                )
             return self.__build_replaced(
-                condition.alias, match.string(TABLE_MAPPING_PARAM), "hasAny", params
+                condition.alias,
+                match.optional_string(TABLE_MAPPING_PARAM),
+                "hasAny",
+                params,
             )
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
