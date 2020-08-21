@@ -334,7 +334,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             match = FunctionCall(
                 None,
                 Or([String(ConditionFunctions.EQ), String(ConditionFunctions.IN)]),
-                (Column(String(self.__id_column)), AnyExpression(),),
+                (Column(None, None, String(self.__id_column)), AnyExpression(),),
             ).match(expr)
 
             if match:
