@@ -57,17 +57,9 @@ def errors_migrations(
             )
         )
 
-    if "url" not in current_schema:
-        ret.append(
-            (
-                f"ALTER TABLE {clickhouse_table} ADD COLUMN url Nullable(String) "
-                f"MATERIALIZED tags.value[indexOf(tags.key, 'url')] AFTER sdk_version"
-            )
-        )
-
     if "http_method" not in current_schema:
         ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_method LowCardinality(Nullable(String)) AFTER url"
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_method LowCardinality(Nullable(String)) AFTER sdk_version"
         )
 
     if "http_referer" not in current_schema:
@@ -103,10 +95,6 @@ all_columns = ColumnSet(
         ("user_email", Nullable(String())),
         ("sdk_name", LowCardinality(Nullable(String()))),
         ("sdk_version", LowCardinality(Nullable(String()))),
-        (
-            "url",
-            Materialized(Nullable(String()), "tags.value[indexOf(tags.key, 'url')]"),
-        ),
         ("http_method", LowCardinality(Nullable(String()))),
         ("http_referer", Nullable(String())),
         ("tags", Nested([("key", String()), ("value", String())])),
