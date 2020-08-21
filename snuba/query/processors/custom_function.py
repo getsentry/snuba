@@ -30,7 +30,7 @@ class CustomFunction(QueryProcessor):
     CustomFunction(name="power_two", param_names=[value], body="value * value", schema)
 
     would transform
-    `["power_two", ["f", ["something"]], "alias"]`
+    `["power_two", [["f", ["something"]]], "alias"]`
     into
     `f(something) * f(something) AS alias`
 
