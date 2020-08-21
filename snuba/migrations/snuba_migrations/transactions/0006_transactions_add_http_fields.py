@@ -3,7 +3,6 @@ from typing import Sequence
 from snuba.clickhouse.columns import (
     Column,
     LowCardinality,
-    Materialized,
     Nullable,
     String,
 )
@@ -23,19 +22,8 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column(
-                    "url",
-                    Materialized(
-                        Nullable(String()), "tags.value[indexOf(tags.key, 'url')]",
-                    ),
-                ),
-                after="sdk_version",
-            ),
-            operations.AddColumn(
-                storage_set=StorageSetKey.TRANSACTIONS,
-                table_name="transactions_local",
                 column=Column("http_method", LowCardinality(Nullable(String()))),
-                after="url",
+                after="sdk_version",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
@@ -47,9 +35,6 @@ class Migration(migration.MultiStepMigration):
 
     def backwards_local(self) -> Sequence[operations.Operation]:
         return [
-            operations.DropColumn(
-                StorageSetKey.TRANSACTIONS, "transactions_local", "url"
-            ),
             operations.DropColumn(
                 StorageSetKey.TRANSACTIONS, "transactions_local", "http_method"
             ),
@@ -63,14 +48,8 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_dist",
-                column=Column("url", Nullable(String())),
-                after="sdk_version",
-            ),
-            operations.AddColumn(
-                storage_set=StorageSetKey.TRANSACTIONS,
-                table_name="transactions_dist",
                 column=Column("http_method", LowCardinality(Nullable(String()))),
-                after="url",
+                after="sdk_version",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
@@ -82,9 +61,6 @@ class Migration(migration.MultiStepMigration):
 
     def backwards_dist(self) -> Sequence[operations.Operation]:
         return [
-            operations.DropColumn(
-                StorageSetKey.TRANSACTIONS, "transactions_dist", "url"
-            ),
             operations.DropColumn(
                 StorageSetKey.TRANSACTIONS, "transactions_dist", "http_method"
             ),

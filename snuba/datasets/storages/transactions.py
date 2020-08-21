@@ -133,17 +133,9 @@ def transactions_migrations(
             f"AFTER measurements.key"
         )
 
-    if "url" not in current_schema:
-        ret.append(
-            (
-                f"ALTER TABLE {clickhouse_table} ADD COLUMN url Nullable(String) "
-                f"MATERIALIZED tags.value[indexOf(tags.key, 'url')] AFTER sdk_version"
-            )
-        )
-
     if "http_method" not in current_schema:
         ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_method LowCardinality(Nullable(String)) AFTER url"
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_method LowCardinality(Nullable(String)) AFTER sdk_version"
         )
 
     if "http_referer" not in current_schema:
@@ -182,10 +174,6 @@ columns = ColumnSet(
         ("user_email", Nullable(String())),
         ("sdk_name", WithDefault(LowCardinality(String()), "''")),
         ("sdk_version", WithDefault(LowCardinality(String()), "''")),
-        (
-            "url",
-            Materialized(Nullable(String()), "tags.value[indexOf(tags.key, 'url')]"),
-        ),
         ("http_method", LowCardinality(Nullable(String()))),
         ("http_referer", Nullable(String())),
         ("tags", Nested([("key", String()), ("value", String())])),
