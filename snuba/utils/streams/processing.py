@@ -18,6 +18,10 @@ from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 logger = logging.getLogger(__name__)
 
 
+class MessageRejected(Exception):
+    pass
+
+
 class ProcessingStrategy(ABC, Generic[TPayload]):
     """
     A processing strategy defines how a stream processor processes messages
@@ -54,6 +58,10 @@ class ProcessingStrategy(ABC, Generic[TPayload]):
         on the implementation of the processing strategy. Callers of this
         method should not assume that this method returning successfully
         implies that the message was successfully processed.
+
+        If the processing strategy is unable to accept a message (due to it
+        being at or over capacity, for example), this method will raise a
+        ``MessageRejected`` exception.
         """
         raise NotImplementedError
 
@@ -127,6 +135,9 @@ class StreamProcessor(Generic[TPayload]):
         self.__recoverable_errors = tuple(recoverable_errors or [])
 
         self.__processing_strategy: Optional[ProcessingStrategy[TPayload]] = None
+
+        self.__message: Optional[Message[TPayload]] = None
+
         self.__shutdown_requested = False
 
         def on_partitions_assigned(partitions: Mapping[Partition, int]) -> None:
@@ -139,7 +150,6 @@ class StreamProcessor(Generic[TPayload]):
             self.__processing_strategy = self.__processor_factory.create(self.__commit)
 
         def on_partitions_revoked(partitions: Sequence[Partition]) -> None:
-            "Reset the current in-memory batch, letting the next consumer take over where we left off."
             if self.__processing_strategy is None:
                 raise InvalidStateError(
                     "received unexpected revocation without active processing strategy"
@@ -158,6 +168,7 @@ class StreamProcessor(Generic[TPayload]):
                 self.__processing_strategy,
             )
             self.__processing_strategy = None
+            self.__message = None  # avoid leaking buffered messages across assignments
 
         self.__consumer.subscribe(
             [topic], on_assign=on_partitions_assigned, on_revoke=on_partitions_revoked
@@ -177,17 +188,51 @@ class StreamProcessor(Generic[TPayload]):
         self._shutdown()
 
     def _run_once(self) -> None:
-        try:
-            msg = self.__consumer.poll(timeout=1.0)
-        except self.__recoverable_errors:
-            return
+        message_carried_over = self.__message is not None
+
+        if message_carried_over:
+            # If a message was carried over from the previous run, the consumer
+            # should be paused and not returning any messages on ``poll``.
+            if self.__consumer.poll(timeout=0) is not None:
+                raise InvalidStateError(
+                    "received message when consumer was expected to be pause"
+                )
+        else:
+            # Otherwise, we need to try fetch a new message from the consumer,
+            # even if there is no active assignment and/or processing strategy.
+            try:
+                self.__message = self.__consumer.poll(timeout=1.0)
+            except self.__recoverable_errors:
+                return
 
         if self.__processing_strategy is not None:
             self.__processing_strategy.poll()
-            if msg is not None:
-                self.__processing_strategy.submit(msg)
+            if self.__message is not None:
+                try:
+                    self.__processing_strategy.submit(self.__message)
+                except MessageRejected as e:
+                    # If the processing strategy rejected our message, we need
+                    # to pause the consumer and hold the message until it is
+                    # accepted, at which point we can resume consuming.
+                    logger.debug(
+                        "Caught %r while submitting %r, pausing consumer...",
+                        e,
+                        self.__message,
+                    )
+                    self.__consumer.pause([*self.__consumer.tell().keys()])
+                else:
+                    # If we were trying to submit a message that failed to be
+                    # submitted on a previous run, we can resume accepting new
+                    # messages.
+                    if message_carried_over:
+                        logger.debug(
+                            "Successfully submitted %r, resuming consumer...",
+                            self.__message,
+                        )
+                        self.__consumer.resume([*self.__consumer.tell().keys()])
+                    self.__message = None
         else:
-            if msg is not None:
+            if self.__message is not None:
                 raise InvalidStateError(
                     "received message without active processing strategy"
                 )

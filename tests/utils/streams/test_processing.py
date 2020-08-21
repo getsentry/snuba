@@ -24,12 +24,7 @@ def test_stream_processor_lifecycle() -> None:
     consumer.poll.return_value = None
     processor._run_once()
 
-    # The processor should not accept non-heartbeat messages without an
-    # assignment or active processor.
     message = Message(Partition(topic, 0), 0, 0, datetime.now())
-    consumer.poll.return_value = message
-    with pytest.raises(InvalidStateError):
-        processor._run_once()
 
     # XXX: ``call().args``, ``call().kwargs`` are not available until 3.8
     subscribe_args, subscribe_kwargs = consumer.subscribe.call_args
@@ -70,6 +65,12 @@ def test_stream_processor_lifecycle() -> None:
     # Revocation should fail without an active assignment.
     with pytest.raises(InvalidStateError):
         revocation_callback([Partition(topic, 0)])
+
+    # The processor should not accept non-heartbeat messages without an
+    # assignment or active processor.
+    consumer.poll.return_value = message
+    with pytest.raises(InvalidStateError):
+        processor._run_once()
 
     with assert_changes(lambda: consumer.close.call_count, 0, 1):
         processor._shutdown()
