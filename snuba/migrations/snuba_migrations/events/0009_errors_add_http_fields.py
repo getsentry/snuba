@@ -3,7 +3,6 @@ from typing import Sequence
 from snuba.clickhouse.columns import (
     Column,
     LowCardinality,
-    Materialized,
     Nullable,
     String,
 )
@@ -24,19 +23,8 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_local",
-                column=Column(
-                    "url",
-                    Materialized(
-                        Nullable(String()), "tags.value[indexOf(tags.key, 'url')]",
-                    ),
-                ),
-                after="sdk_version",
-            ),
-            operations.AddColumn(
-                storage_set=StorageSetKey.EVENTS,
-                table_name="errors_local",
                 column=Column("http_method", LowCardinality(Nullable(String()))),
-                after="url",
+                after="sdk_version",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
@@ -48,7 +36,6 @@ class Migration(migration.MultiStepMigration):
 
     def backwards_local(self) -> Sequence[operations.Operation]:
         return [
-            operations.DropColumn(StorageSetKey.EVENTS, "errors_local", "url"),
             operations.DropColumn(StorageSetKey.EVENTS, "errors_local", "http_method"),
             operations.DropColumn(StorageSetKey.EVENTS, "errors_local", "http_referer"),
         ]
@@ -58,14 +45,8 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_dist",
-                column=Column("url", Nullable(String())),
-                after="sdk_version",
-            ),
-            operations.AddColumn(
-                storage_set=StorageSetKey.EVENTS,
-                table_name="errors_dist",
                 column=Column("http_method", LowCardinality(Nullable(String()))),
-                after="url",
+                after="sdk_version",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
@@ -77,7 +58,6 @@ class Migration(migration.MultiStepMigration):
 
     def backwards_dist(self) -> Sequence[operations.Operation]:
         return [
-            operations.DropColumn(StorageSetKey.EVENTS, "errors_dist", "url"),
             operations.DropColumn(StorageSetKey.EVENTS, "errors_dist", "http_method"),
             operations.DropColumn(StorageSetKey.EVENTS, "errors_dist", "http_referer"),
         ]
