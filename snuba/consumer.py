@@ -5,13 +5,14 @@ from typing import Any, Mapping, MutableSequence, NamedTuple, Optional, Sequence
 import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
+from snuba.clickhouse.http import JSONRowEncoder
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InsertBatch, ProcessedMessage, ReplacementBatch
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Topic
-from snuba.writer import WriterTableRow
+from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 
 logger = logging.getLogger("snuba.consumer")
@@ -40,8 +41,11 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         self.replacements_topic = replacements_topic
         self.metrics = metrics
         table_writer = storage.get_table_writer()
-        self.__writer = table_writer.get_writer(
-            metrics, {"load_balancing": "in_order", "insert_distributed_sync": 1}
+        self.__writer = BatchWriterEncoderWrapper(
+            table_writer.get_writer(
+                metrics, {"load_balancing": "in_order", "insert_distributed_sync": 1}
+            ),
+            JSONRowEncoder(),
         )
 
         self.__pre_filter = table_writer.get_stream_loader().get_pre_filter()

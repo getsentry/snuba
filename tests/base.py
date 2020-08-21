@@ -8,6 +8,7 @@ from hashlib import md5
 from typing import Iterator, MutableSequence, Optional, Sequence
 
 from snuba import settings
+from snuba.clickhouse.http import JSONRowEncoder
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.events_processor_base import InsertEvent
@@ -15,7 +16,7 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.processor import InsertBatch, ProcessedMessage
 from snuba.redis import redis_client
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.writer import WriterTableRow
+from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 from tests.fixtures import raw_event
 
 
@@ -68,8 +69,11 @@ class BaseDatasetTest(BaseTest):
         self.write_rows(rows)
 
     def write_rows(self, rows: Sequence[WriterTableRow]) -> None:
-        enforce_table_writer(self.dataset).get_writer(
-            metrics=DummyMetricsBackend(strict=True)
+        BatchWriterEncoderWrapper(
+            enforce_table_writer(self.dataset).get_writer(
+                metrics=DummyMetricsBackend(strict=True)
+            ),
+            JSONRowEncoder(),
         ).write(rows)
 
 
