@@ -1,6 +1,7 @@
 import click
 
 from snuba.migrations.connect import check_clickhouse_connections
+from snuba.migrations.errors import MigrationError
 from snuba.migrations.runner import Runner
 from snuba.migrations.status import Status
 
@@ -39,3 +40,19 @@ def list() -> None:
             click.echo(f"[{symbol}]  {migration_id}{in_progress_text}{blocking_text}")
 
         click.echo()
+
+
+@migrations.command()
+@click.option("--force", is_flag=True)
+def migrate(force: bool) -> None:
+    """
+    Runs all migrations. Blocking migrations will not be run unless --force is passed.
+    """
+    runner = Runner()
+
+    try:
+        runner.run_all(force=force)
+    except MigrationError as e:
+        raise click.ClickException(str(e))
+
+    click.echo("Finished running migrations")
