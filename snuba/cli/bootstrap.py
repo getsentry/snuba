@@ -6,7 +6,7 @@ import click
 from snuba import settings
 from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging
-from snuba.migrations import migrate
+from snuba.migrations.migrate import run as run_migrate
 from snuba.migrations.connect import check_clickhouse_connections
 
 
@@ -18,12 +18,14 @@ from snuba.migrations.connect import check_clickhouse_connections
     help="Kafka bootstrap server to use.",
 )
 @click.option("--kafka/--no-kafka", default=True)
+@click.option("--migrate/--no-migrate", default=True)
 @click.option("--force", is_flag=True)
 @click.option("--log-level", help="Logging level to use.")
 def bootstrap(
     *,
     bootstrap_server: Sequence[str],
     kafka: bool,
+    migrate: bool,
     force: bool,
     log_level: Optional[str] = None,
 ) -> None:
@@ -94,6 +96,6 @@ def bootstrap(
             except Exception as e:
                 logger.error("Failed to create topic %s", topic, exc_info=e)
 
-    check_clickhouse_connections()
-
-    migrate.run()
+    if migrate:
+        check_clickhouse_connections()
+        run_migrate()

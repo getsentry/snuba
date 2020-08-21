@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Generic, TypeVar
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(order=True, unsafe_hash=True)
 class Topic:
     __slots__ = ["name"]
 
@@ -15,7 +15,7 @@ class Topic:
         return partition.topic == self
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(order=True, unsafe_hash=True)
 class Partition:
     __slots__ = ["topic", "index"]
 
@@ -26,7 +26,7 @@ class Partition:
 TPayload = TypeVar("TPayload")
 
 
-@dataclass(frozen=True)
+@dataclass(unsafe_hash=True)
 class Message(Generic[TPayload]):
     """
     Represents a single message within a partition.
@@ -40,9 +40,11 @@ class Message(Generic[TPayload]):
     timestamp: datetime
 
     def __repr__(self) -> str:
-        return (
-            f"{type(self).__name__}(partition={self.partition}, offset={self.offset})"
-        )
+        # XXX: Field values can't be excluded from ``__repr__`` with
+        # ``dataclasses.field(repr=False)`` as this class is defined with
+        # ``__slots__`` for performance reasons. The class variable names
+        # would conflict with the instance slot names, causing an error.
+        return f"{type(self).__name__}(partition={self.partition!r}, offset={self.offset!r})"
 
     def get_next_offset(self) -> int:
         return self.offset + 1
