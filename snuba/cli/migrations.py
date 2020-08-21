@@ -1,8 +1,8 @@
 import click
 
 from snuba.migrations.connect import check_clickhouse_connections
-from snuba.migrations.errors import MigrationDoesNotExist
-from snuba.migrations.groups import MigrationGroup, get_group_loader
+from snuba.migrations.errors import MigrationError
+from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 
@@ -58,24 +58,11 @@ def run(group: str, migration_id: str, force: bool) -> None:
     migration_group = MigrationGroup(group)
     migration_key = MigrationKey(migration_group, migration_id)
 
-    pending_migrations = runner.get_pending_migrations(migration_group)
+    try:
+        runner.run_migration(migration_key, force=force)
+    except MigrationError as e:
+        raise click.ClickException(str(e))
 
-    if migration_id not in [m.migration_id for m in pending_migrations]:
-        try:
-            get_group_loader(migration_group).load_migration(migration_id)
-        except MigrationDoesNotExist as e:
-            raise click.ClickException(str(e))
-
-        raise click.ClickException(
-            f"{migration_group.value}: {migration_id} is already completed"
-        )
-
-    next_migration_id = pending_migrations[0].migration_id
-
-    if next_migration_id != migration_id:
-        raise click.ClickException(f"Earlier migrations need to be completed first")
-
-    runner.run_migration(migration_key, force=force)
     click.echo(
         f"Finished running migration {migration_key.group.value}: {migration_key.migration_id}"
     )

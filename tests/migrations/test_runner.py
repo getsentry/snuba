@@ -59,29 +59,37 @@ def test_run_migration() -> None:
         "SELECT group, migration_id, status, version FROM migrations_local;"
     ) == [("system", "0001_migrations", "completed", 1)]
 
+    # Invalid migration ID
+    with pytest.raises(MigrationError):
+        runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "xxx"))
+
+    # Run out of order
+    with pytest.raises(MigrationError):
+        runner.run_migration(MigrationKey(MigrationGroup.EVENTS, "0003_errors"))
+
 
 def test_get_pending_migrations() -> None:
     runner = Runner()
     total_migrations = get_total_migration_count()
-    assert len(runner.get_pending_migrations()) == total_migrations
+    assert len(runner._get_pending_migrations()) == total_migrations
     runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
-    assert len(runner.get_pending_migrations()) == total_migrations - 1
+    assert len(runner._get_pending_migrations()) == total_migrations - 1
 
 
 def test_run_all() -> None:
     runner = Runner()
-    assert len(runner.get_pending_migrations()) == get_total_migration_count()
+    assert len(runner._get_pending_migrations()) == get_total_migration_count()
 
     with pytest.raises(MigrationError):
         runner.run_all(force=False)
 
     runner.run_all(force=True)
-    assert runner.get_pending_migrations() == []
+    assert runner._get_pending_migrations() == []
 
 
 def test_reverse_all() -> None:
     runner = Runner()
-    all_migrations = runner.get_pending_migrations()
+    all_migrations = runner._get_pending_migrations()
     runner.run_all(force=True)
     for migration in reversed(all_migrations):
         runner.reverse_migration(migration)
@@ -173,6 +181,9 @@ def test_transactions_compatibility() -> None:
 
     runner = Runner()
     runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    runner._update_migration_status(
+        MigrationKey(MigrationGroup.TRANSACTIONS, "0001_transactions"), Status.COMPLETED
+    )
     runner.run_migration(
         MigrationKey(
             MigrationGroup.TRANSACTIONS,

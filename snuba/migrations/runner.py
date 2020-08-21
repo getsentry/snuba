@@ -12,6 +12,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.context import Context
 from snuba.migrations.errors import (
     InvalidMigrationState,
+    MigrationDoesNotExist,
     MigrationError,
     MigrationInProgress,
 )
@@ -88,10 +89,67 @@ class Runner:
 
         Requires force to run blocking migrations.
         """
-        for migration in self.get_pending_migrations():
-            self.run_migration(migration, force=force)
+        for migration in self._get_pending_migrations():
+            self._run_migration_impl(migration, force=force)
 
-    def get_pending_migrations(
+    def run_migration(
+        self, migration_key: MigrationKey, *, force: bool = False
+    ) -> None:
+        """
+        Run a single migration given its migration key and marks the migration as complete.
+
+        Blocking migrations must be run with force.
+        """
+        migration_group, migration_id = migration_key
+
+        pending_migrations = self._get_pending_migrations(migration_key.group)
+
+        if migration_key.migration_id not in [
+            m.migration_id for m in pending_migrations
+        ]:
+            # Ensure migration exists
+            try:
+                get_group_loader(migration_group).load_migration(migration_id)
+            except MigrationDoesNotExist as e:
+                raise MigrationError(e)
+
+            raise MigrationError(
+                f"{migration_group.value}: {migration_id} is already completed"
+            )
+
+        next_migration_id = pending_migrations[0].migration_id
+
+        if next_migration_id != migration_id:
+            raise MigrationError("Earlier migrations need to be completed first")
+
+        return self._run_migration_impl(migration_key, force=force)
+
+    def _run_migration_impl(
+        self, migration_key: MigrationKey, *, force: bool = False
+    ) -> None:
+        migration_id = migration_key.migration_id
+
+        context = Context(
+            migration_id, logger, partial(self._update_migration_status, migration_key),
+        )
+        migration = get_group_loader(migration_key.group).load_migration(migration_id)
+
+        if migration.blocking and not force:
+            raise MigrationError("Blocking migrations must be run with force")
+
+        migration.forwards(context)
+
+    def reverse_migration(self, migration_key: MigrationKey) -> None:
+        migration_id = migration_key.migration_id
+
+        context = Context(
+            migration_id, logger, partial(self._update_migration_status, migration_key),
+        )
+        migration = get_group_loader(migration_key.group).load_migration(migration_id)
+
+        migration.backwards(context)
+
+    def _get_pending_migrations(
         self, group: Optional[MigrationGroup] = None
     ) -> List[MigrationKey]:
         """
@@ -129,36 +187,6 @@ class Runner:
             migrations.extend(group_migrations)
 
         return migrations
-
-    def run_migration(
-        self, migration_key: MigrationKey, *, force: bool = False
-    ) -> None:
-        """
-        Run a single migration given its migration key and marks the migration as complete.
-
-        Blocking migrations must be run with force.
-        """
-        migration_id = migration_key.migration_id
-
-        context = Context(
-            migration_id, logger, partial(self._update_migration_status, migration_key),
-        )
-        migration = get_group_loader(migration_key.group).load_migration(migration_id)
-
-        if migration.blocking and not force:
-            raise MigrationError("Blocking migrations must be run with force")
-
-        migration.forwards(context)
-
-    def reverse_migration(self, migration_key: MigrationKey) -> None:
-        migration_id = migration_key.migration_id
-
-        context = Context(
-            migration_id, logger, partial(self._update_migration_status, migration_key),
-        )
-        migration = get_group_loader(migration_key.group).load_migration(migration_id)
-
-        migration.backwards(context)
 
     def _update_migration_status(
         self, migration_key: MigrationKey, status: Status
