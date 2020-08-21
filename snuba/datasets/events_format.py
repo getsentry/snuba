@@ -1,12 +1,8 @@
 from datetime import datetime, timedelta
-from typing import Any, Mapping, MutableMapping, Sequence, Tuple
+from typing import Any, Callable, Mapping, MutableMapping, Sequence, Tuple, TypeVar
 
 from snuba import settings
-from snuba.processor import (
-    _ensure_valid_date,
-    _ensure_valid_ip,
-    _unicodify,
-)
+from snuba.processor import _ensure_valid_date, _ensure_valid_ip, _unicodify
 
 
 def extract_project_id(
@@ -29,16 +25,27 @@ def extract_user(output: MutableMapping[str, Any], user: Mapping[str, Any]) -> N
     output["ip_address"] = str(ip_addr) if ip_addr is not None else None
 
 
-def extract_extra_tags(tags) -> Tuple[Sequence[str], Sequence[str]]:
-    tag_keys = []
-    tag_values = []
-    for tag_key, tag_value in sorted(tags.items()):
-        value = _unicodify(tag_value)
-        if value:
-            tag_keys.append(_unicodify(tag_key))
-            tag_values.append(value)
+TVal = TypeVar("TVal")
 
-    return (tag_keys, tag_values)
+
+def extract_extra_tags(
+    nested_col: Mapping[str, Any],
+) -> Tuple[Sequence[str], Sequence[str]]:
+    return extract_nested(nested_col, lambda s: _unicodify(s))
+
+
+def extract_nested(
+    nested_col: Mapping[str, Any], val_processor: Callable[[Any], TVal]
+) -> Tuple[Sequence[str], Sequence[TVal]]:
+    keys = []
+    values = []
+    for key, value in sorted(nested_col.items()):
+        value = val_processor(value)
+        if value:
+            keys.append(_unicodify(key))
+            values.append(value)
+
+    return (keys, values)
 
 
 def extract_extra_contexts(contexts) -> Tuple[Sequence[str], Sequence[str]]:
