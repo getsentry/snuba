@@ -212,7 +212,7 @@ schema = ReplacingMergeTreeSchema(
     # during create statement
     # (https://github.com/ClickHouse/ClickHouse/issues/12586), so the
     # materialization is added with a migration.
-    skipped_cols_on_creation={"_tags_hash_map", "url"},
+    skipped_cols_on_creation={"_tags_hash_map"},
 )
 
 
