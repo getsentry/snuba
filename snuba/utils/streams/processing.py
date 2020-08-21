@@ -195,7 +195,7 @@ class StreamProcessor(Generic[TPayload]):
             # should be paused and not returning any messages on ``poll``.
             if self.__consumer.poll(timeout=0) is not None:
                 raise InvalidStateError(
-                    "received message when consumer was expected to be pause"
+                    "received message when consumer was expected to be paused"
                 )
         else:
             # Otherwise, we need to try fetch a new message from the consumer,
