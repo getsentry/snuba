@@ -54,6 +54,7 @@ from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
+from snuba.query.subscripts import subscript_key_column_name
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import qualified_column
@@ -90,6 +91,13 @@ def match_query_to_table(
         if events_only_columns.get(col.column_name):
             has_event_columns = True
         elif transactions_only_columns.get(col.column_name):
+            has_transaction_columns = True
+
+    for subscript in query.get_all_ast_referenced_subscripts():
+        schema_col_name = subscript_key_column_name(subscript)
+        if events_only_columns.get(schema_col_name):
+            has_event_columns = True
+        if transactions_only_columns.get(schema_col_name):
             has_transaction_columns = True
 
     # Unless we have an impossible query, we only need to check which columns are referenced.

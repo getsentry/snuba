@@ -4,7 +4,6 @@ from contextlib import ExitStack
 from datetime import datetime
 from functools import partial
 
-import pytest
 import simplejson as json
 
 from snuba import settings
@@ -13,7 +12,6 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
 from tests.base import BaseApiTest, dataset_manager
 
 
-@pytest.mark.usefixtures("query_type")
 class TestDiscoverApi(BaseApiTest):
     def setup_method(self, test_method):
         super().setup_method(test_method)
@@ -93,6 +91,12 @@ class TestDiscoverApi(BaseApiTest):
                                     "online": True,
                                     "charging": True,
                                     "model_id": "Galaxy",
+                                },
+                                "measures": {
+                                    "measurements": {
+                                        "lcp": 32.129,
+                                        "lcp.elementSize": 4242,
+                                    }
                                 },
                             },
                             "sdk": {
@@ -591,3 +595,21 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"] == [
             {"apdex_duration_300": 1, "tags[foo]": "baz", "project_id": self.project_id}
         ]
+
+    def test_individual_measurement(self) -> None:
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["event_id", "measurements[lcp]"],
+                    "limit": 1,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert "measurements[lcp]" in data["data"][0]
+        assert data["data"][0]["measurements[lcp]"] == 32.129
