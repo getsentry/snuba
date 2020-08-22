@@ -10,13 +10,18 @@ from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
     FixedString,
+    Float,
+    LowCardinality,
     Nested,
     Nullable,
     String,
     UInt,
 )
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
-from snuba.clickhouse.translators.snuba.allowed import ColumnMapper
+from snuba.clickhouse.translators.snuba.allowed import (
+    ColumnMapper,
+    SubscriptableReferenceMapper,
+)
 from snuba.clickhouse.translators.snuba.mappers import ColumnToLiteral, ColumnToMapping
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.dataset import TimeSeriesDataset
@@ -32,14 +37,14 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.transactions import transaction_translator
 from snuba.query.conditions import BINARY_OPERATORS, ConditionFunctions
-from snuba.query.expressions import Column, Literal
+from snuba.query.expressions import Column, Literal, SubscriptableReference
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.matchers import Column as ColumnMatch
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
-from snuba.query.matchers import String as StringMatch
 from snuba.query.matchers import Or, Param
+from snuba.query.matchers import String as StringMatch
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
@@ -191,6 +196,28 @@ class DefaultNoneColumnMapper(ColumnMapper):
             return None
 
 
+@dataclass(frozen=True)
+class DefaultNoneSubscriptableMapper(SubscriptableReferenceMapper):
+    """
+    This maps a list of column names to None (NULL in SQL) as it is done
+    in the discover column_expr method today. It should not be used for
+    any other reason or use case, thus it should not be moved out of
+    the discover dataset file.
+    """
+
+    columns: ColumnSet
+
+    def attempt_map(
+        self,
+        expression: SubscriptableReference,
+        children_translator: SnubaClickhouseStrictTranslator,
+    ) -> Optional[Literal]:
+        if expression.column.column_name in self.columns:
+            return Literal(alias=expression.alias, value=None)
+        else:
+            return None
+
+
 class DiscoverQueryStorageSelector(QueryStorageSelector):
     def __init__(
         self,
@@ -217,7 +244,10 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
                     ColumnToMapping(None, "dist", None, "tags", "sentry:dist"),
                     ColumnToMapping(None, "user", None, "tags", "sentry:user"),
                     DefaultNoneColumnMapper(self.__abstract_transactions_columns),
-                ]
+                ],
+                subscriptables=[
+                    DefaultNoneSubscriptableMapper(self.__abstract_transactions_columns)
+                ],
             )
         )
 
@@ -356,6 +386,10 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("transaction_op", Nullable(String())),
                 ("transaction_status", Nullable(UInt(8))),
                 ("duration", Nullable(UInt(32))),
+                (
+                    "measurements",
+                    Nested([("key", LowCardinality(String())), ("value", Float(64))]),
+                ),
             ]
         )
 

@@ -3,7 +3,6 @@ import uuid
 from datetime import datetime, timedelta
 from functools import partial
 
-import pytest
 import pytz
 import simplejson as json
 
@@ -13,7 +12,6 @@ from snuba.datasets.factory import enforce_table_writer
 from tests.base import BaseApiTest
 
 
-@pytest.mark.usefixtures("query_type")
 class TestTransactionsApi(BaseApiTest):
     def setup_method(self, test_method, dataset_name="transactions"):
         super().setup_method(test_method, dataset_name)
@@ -116,6 +114,12 @@ class TestTransactionsApi(BaseApiTest):
                                                 "span_id": span_id,
                                                 "op": "http",
                                                 "status": "0",
+                                            },
+                                            "measures": {
+                                                "measurements": {
+                                                    "lcp": 32.129,
+                                                    "lcp.elementSize": 4242,
+                                                }
                                             },
                                         },
                                         "spans": [
@@ -333,3 +337,21 @@ class TestTransactionsApi(BaseApiTest):
             # we select duration to make debugging easier on failure
             "duration": 1000,
         }
+
+    def test_individual_measurement(self) -> None:
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["event_id", "measurements[lcp]"],
+                    "limit": 1,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert "measurements[lcp]" in data["data"][0]
+        assert data["data"][0]["measurements[lcp]"] == 32.129
