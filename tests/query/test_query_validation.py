@@ -4,8 +4,8 @@ import pytest
 
 from snuba import state
 from snuba.datasets.factory import get_dataset
+from snuba.query.exceptions import ValidationException
 from snuba.query.parser import parse_query
-from snuba.query.parser.exceptions import ValidationException
 from snuba.state import set_config
 
 test_cases = [
