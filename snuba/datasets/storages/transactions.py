@@ -220,6 +220,7 @@ storage = WritableTableStorage(
         ),
         TransactionColumnProcessor(),
         ArrayJoinKeyValueOptimizer("tags"),
+        ArrayJoinKeyValueOptimizer("measurements"),
         PrewhereProcessor(),
     ],
     stream_loader=KafkaStreamLoader(
