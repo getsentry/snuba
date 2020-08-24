@@ -2,6 +2,7 @@ import importlib
 import pytest
 from unittest.mock import patch
 
+from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.consumer import KafkaMessageMetadata
@@ -14,6 +15,7 @@ from snuba.migrations.parse_schema import get_local_schema
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+from snuba.writer import BatchWriterEncoderWrapper
 
 
 def teardown_function() -> None:
@@ -58,6 +60,14 @@ def test_run_migration() -> None:
     assert connection.execute(
         "SELECT group, migration_id, status, version FROM migrations_local;"
     ) == [("system", "0001_migrations", "completed", 1)]
+
+    # Invalid migration ID
+    with pytest.raises(MigrationError):
+        runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "xxx"))
+
+    # Run out of order
+    with pytest.raises(MigrationError):
+        runner.run_migration(MigrationKey(MigrationGroup.EVENTS, "0003_errors"))
 
 
 def test_get_pending_migrations() -> None:
@@ -173,6 +183,9 @@ def test_transactions_compatibility() -> None:
 
     runner = Runner()
     runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    runner._update_migration_status(
+        MigrationKey(MigrationGroup.TRANSACTIONS, "0001_transactions"), Status.COMPLETED
+    )
     runner.run_migration(
         MigrationKey(
             MigrationGroup.TRANSACTIONS,
@@ -270,7 +283,10 @@ def generate_transactions(count: int) -> None:
         )
         rows.extend(processed.rows)
 
-    table_writer.get_writer(metrics=DummyMetricsBackend(strict=True)).write(rows)
+    BatchWriterEncoderWrapper(
+        table_writer.get_writer(metrics=DummyMetricsBackend(strict=True)),
+        JSONRowEncoder(),
+    ).write(rows)
 
 
 def test_settings_skipped_group() -> None:

@@ -4,8 +4,8 @@ from typing import Mapping
 
 from snuba.clickhouse.columns import Array, String
 from snuba.datasets.dataset import Dataset
+from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Expression, FunctionCall
-from snuba.query.parser.exceptions import InvalidExpressionException
 from snuba.query.parser.validation import ExpressionValidator
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
 from snuba.query.validation.signature import Any, Column, SignatureValidator

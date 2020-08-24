@@ -14,6 +14,7 @@ from markdown import markdown
 
 from snuba import environment, settings, state, util
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
@@ -25,7 +26,7 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.query.parser.exceptions import InvalidQueryException
+from snuba.query.exceptions import InvalidQueryException
 from snuba.redis import redis_client
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.request_settings import HTTPRequestSettings
@@ -43,7 +44,7 @@ from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.web import QueryException
 from snuba.web.converters import DatasetConverter
 from snuba.web.query import parse_and_run_query
-from snuba.writer import WriterTableRow
+from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 metrics = MetricsWrapper(environment.metrics, "api")
 
@@ -310,9 +311,6 @@ def dataset_query_view(*, dataset: Dataset, timer: Timer):
 def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     assert http_request.method == "POST"
 
-    with sentry_sdk.start_span(description="ensure_dataset", op="validate"):
-        ensure_tables_migrated()
-
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build_with_extensions(
             dataset.get_extensions(), HTTPRequestSettings
@@ -397,24 +395,9 @@ if application.debug or application.testing:
     # These should only be used for testing/debugging. Note that the database name
     # is checked to avoid scary production mishaps.
 
-    _ensured = False
-
-    def ensure_tables_migrated() -> None:
-        global _ensured
-        if _ensured:
-            return
-
-        from snuba.migrations import migrate
-
-        migrate.run()
-
-        _ensured = True
-
     @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
     def write(*, dataset: Dataset):
         from snuba.processor import InsertBatch
-
-        ensure_tables_migrated()
 
         rows: MutableSequence[WriterTableRow] = []
         offset_base = int(round(time.time() * 1000))
@@ -435,13 +418,14 @@ if application.debug or application.testing:
                 assert isinstance(processed_message, InsertBatch)
                 rows.extend(processed_message.rows)
 
-        enforce_table_writer(dataset).get_writer(metrics).write(rows)
+        BatchWriterEncoderWrapper(
+            enforce_table_writer(dataset).get_writer(metrics), JSONRowEncoder(),
+        ).write(rows)
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
     @application.route("/tests/<dataset:dataset>/eventstream", methods=["POST"])
     def eventstream(*, dataset: Dataset):
-        ensure_tables_migrated()
         record = json.loads(http_request.data)
 
         version = record[0]
@@ -486,9 +470,3 @@ if application.debug or application.testing:
     @application.route("/tests/error")
     def error():
         1 / 0
-
-
-else:
-
-    def ensure_tables_migrated() -> None:
-        pass
