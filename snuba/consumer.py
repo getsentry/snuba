@@ -4,6 +4,7 @@ import time
 from datetime import datetime
 from typing import (
     Any,
+    Callable,
     Mapping,
     MutableSequence,
     NamedTuple,
@@ -17,13 +18,25 @@ import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba.clickhouse.http import JSONRowEncoder
+from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.storage import WritableTableStorage
-from snuba.processor import InsertBatch, ProcessedMessage, ReplacementBatch
+from snuba.processor import (
+    InsertBatch,
+    MessageProcessor,
+    ProcessedMessage,
+    ReplacementBatch,
+)
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker
 from snuba.utils.streams.kafka import KafkaPayload
-from snuba.utils.streams.streaming import ProcessingStep
-from snuba.utils.streams.types import Message, Topic
+from snuba.utils.streams.processing import ProcessingStrategy, ProcessingStrategyFactory
+from snuba.utils.streams.streaming import (
+    CollectStep,
+    FilterStep,
+    ProcessingStep,
+    TransformStep,
+)
+from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.writer import BatchWriter, BatchWriterEncoderWrapper, WriterTableRow
 
 logger = logging.getLogger("snuba.consumer")
@@ -238,3 +251,76 @@ class ProcessedMessageBatchWriter(
                 timeout = max(timeout - (time.time() - start), 0)
 
             self.__replacement_batch_writer.join(timeout)
+
+
+class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
+    def __init__(
+        self,
+        prefilter: Optional[StreamMessageFilter[KafkaPayload]],
+        processor: MessageProcessor,
+        writer: BatchWriter[WriterTableRow],
+        max_batch_size: int,
+        max_batch_time: int,
+        replacements_producer: Optional[ConfluentKafkaProducer] = None,
+        replacements_topic: Optional[Topic] = None,
+    ) -> None:
+        self.__prefilter = prefilter
+        self.__processor = processor
+        self.__writer = writer
+
+        self.__max_batch_size = max_batch_size
+        self.__max_batch_time = max_batch_time
+
+        assert not (replacements_producer is None) ^ (replacements_topic is None)
+        self.__supports_replacements = replacements_producer is not None
+        self.__replacements_producer = replacements_producer
+        self.__replacements_topic = replacements_topic
+
+    def __should_accept(self, message: Message[KafkaPayload]) -> bool:
+        assert self.__prefilter is not None
+        return not self.__prefilter.should_drop(message)
+
+    def __process_message(
+        self, message: Message[KafkaPayload]
+    ) -> Union[None, InsertBatch, ReplacementBatch]:
+        return self.__processor.process_message(
+            rapidjson.loads(message.payload.value),
+            KafkaMessageMetadata(
+                message.offset, message.partition.index, message.timestamp
+            ),
+        )
+
+    def __build_write_step(self) -> ProcessedMessageBatchWriter:
+        insert_batch_writer = InsertBatchWriter(self.__writer)
+
+        replacement_batch_writer: Optional[ReplacementBatchWriter]
+        if self.__supports_replacements:
+            assert self.__replacements_producer is not None
+            assert self.__replacements_topic is not None
+            replacement_batch_writer = ReplacementBatchWriter(
+                self.__replacements_producer, self.__replacements_topic
+            )
+        else:
+            replacement_batch_writer = None
+
+        return ProcessedMessageBatchWriter(
+            insert_batch_writer, replacement_batch_writer
+        )
+
+    def create(
+        self, commit: Callable[[Mapping[Partition, int]], None]
+    ) -> ProcessingStrategy[KafkaPayload]:
+        strategy: ProcessingStrategy[KafkaPayload] = TransformStep(
+            self.__process_message,
+            CollectStep(
+                self.__build_write_step,
+                commit,
+                self.__max_batch_size,
+                self.__max_batch_time,
+            ),
+        )
+
+        if self.__prefilter is not None:
+            strategy = FilterStep(self.__should_accept, strategy)
+
+        return strategy
