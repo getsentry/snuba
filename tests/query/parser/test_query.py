@@ -741,6 +741,87 @@ test_cases = [
         ),
         id="Format a query with array join field in a boolean condition and array join in a function",
     ),
+    pytest.param(
+        {
+            "aggregations": [["count", None, "count"]],
+            "conditions": [
+                [
+                    [
+                        "or",
+                        [
+                            ["equals", [["ifNull", ["tags[foo]", "''"]], "'baz'"]],
+                            ["equals", [["ifNull", ["tags[foo.bar]", "''"]], "'qux'"]],
+                        ],
+                    ],
+                    "=",
+                    1,
+                ],
+            ],
+            "having": [],
+            "groupby": ["tags_key"],
+        },
+        Query(
+            {},
+            TableSource("events", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression(
+                    name="tags_key", expression=Column("tags_key", None, "tags_key"),
+                ),
+                SelectedExpression("count", FunctionCall("count", "count", ())),
+            ],
+            groupby=[Column("tags_key", None, "tags_key")],
+            condition=binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                FunctionCall(
+                    None,
+                    "or",
+                    (
+                        FunctionCall(
+                            None,
+                            "equals",
+                            (
+                                FunctionCall(
+                                    None,
+                                    "ifNull",
+                                    (
+                                        SubscriptableReference(
+                                            "tags[foo]",
+                                            Column("tags", None, "tags"),
+                                            Literal(None, "foo"),
+                                        ),
+                                        Literal(None, ""),
+                                    ),
+                                ),
+                                Literal(None, "baz"),
+                            ),
+                        ),
+                        FunctionCall(
+                            None,
+                            "equals",
+                            (
+                                FunctionCall(
+                                    None,
+                                    "ifNull",
+                                    (
+                                        SubscriptableReference(
+                                            "tags[foo.bar]",
+                                            Column("tags", None, "tags"),
+                                            Literal(None, "foo.bar"),
+                                        ),
+                                        Literal(None, ""),
+                                    ),
+                                ),
+                                Literal(None, "qux"),
+                            ),
+                        ),
+                    ),
+                ),
+                Literal(None, 1),
+            ),
+        ),
+        id="Format a query with array column nested in function",
+    ),
 ]
 
 

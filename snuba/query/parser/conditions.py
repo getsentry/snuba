@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from typing import Any, Callable, Optional, Sequence, TypeVar
 
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.dataset import Dataset
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
@@ -23,7 +24,7 @@ class InvalidConditionException(Exception):
 
 
 def parse_conditions(
-    operand_builder: Callable[[Any, Optional[Any], Optional[str]], TExpression],
+    operand_builder: Callable[[Any, ColumnSet, Optional[str]], TExpression],
     and_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     or_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     unpack_array_condition_builder: Callable[[TExpression, str, Any], TExpression],

@@ -143,7 +143,7 @@ def parse_function(
     # This check will only work if the array column is a bare column in the condition. If the array
     # column is itself nested in further functions, this transform will not work.
     if name in FUNCTION_TO_OPERATOR:
-        if len(args) == 2 and args[0] in dataset_columns:
+        if len(args) == 2 and isinstance(args[0], str) and args[0] in dataset_columns:
             column = dataset_columns[args[0]]
             if isinstance(column.type.get_raw(), Array):
                 if column.flattened != arrayjoin and column.base_name != arrayjoin:
