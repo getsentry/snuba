@@ -7,8 +7,8 @@ import pytest
 
 import snuba.query.parser.validation.functions as functions
 from snuba.clickhouse.columns import ColumnSet
+from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column, Expression, FunctionCall
-from snuba.query.parser.exceptions import InvalidExpressionException
 from snuba.query.parser.validation.functions import FunctionCallsValidator
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
 from snuba.state import set_config
