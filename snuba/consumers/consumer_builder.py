@@ -3,7 +3,8 @@ from typing import Optional, Sequence
 from confluent_kafka import KafkaError, KafkaException, Producer
 
 from snuba import environment
-from snuba.consumer import ConsumerWorker
+from snuba.clickhouse.http import JSONRowEncoder
+from snuba.consumer import StreamingConsumerStrategyFactory
 from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
@@ -19,8 +20,9 @@ from snuba.utils.streams.kafka import (
     TransportError,
     build_kafka_consumer_configuration,
 )
-from snuba.utils.streams.processing import StreamProcessor
+from snuba.utils.streams.processing import ProcessingStrategyFactory, StreamProcessor
 from snuba.utils.streams.types import Topic
+from snuba.writer import BatchWriterEncoderWrapper
 
 
 class ConsumerBuilder:
@@ -114,7 +116,9 @@ class ConsumerBuilder:
 
         self.__commit_retry_policy = commit_retry_policy
 
-    def __build_consumer(self, worker: ConsumerWorker) -> StreamProcessor[KafkaPayload]:
+    def __build_consumer(
+        self, strategy_factory: ProcessingStrategyFactory[KafkaPayload]
+    ) -> StreamProcessor[KafkaPayload]:
         configuration = build_kafka_consumer_configuration(
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
@@ -138,12 +142,7 @@ class ConsumerBuilder:
         return StreamProcessor(
             consumer,
             self.raw_topic,
-            BatchProcessingStrategyFactory(
-                worker=worker,
-                max_batch_size=self.max_batch_size,
-                max_batch_time=self.max_batch_time_ms,
-                metrics=self.metrics,
-            ),
+            strategy_factory,
             recoverable_errors=[TransportError],
         )
 
@@ -151,13 +150,24 @@ class ConsumerBuilder:
         """
         Builds the consumer with a ConsumerWorker.
         """
+        table_writer = self.storage.get_table_writer()
+        stream_loader = table_writer.get_stream_loader()
         return self.__build_consumer(
-            ConsumerWorker(
-                storage=self.storage,
-                producer=self.producer,
+            StreamingConsumerStrategyFactory(
+                stream_loader.get_pre_filter(),
+                stream_loader.get_processor(),
+                BatchWriterEncoderWrapper(
+                    table_writer.get_writer(
+                        self.metrics,
+                        {"load_balancing": "in_order", "insert_distributed_sync": 1},
+                    ),
+                    JSONRowEncoder(),
+                ),
+                max_batch_size=self.max_batch_size,
+                max_batch_time=self.max_batch_time_ms,
+                replacements_producer=self.producer,
                 replacements_topic=self.replacements_topic,
-                metrics=self.metrics,
-            )
+            ),
         )
 
     def build_snapshot_aware_consumer(
@@ -166,12 +176,18 @@ class ConsumerBuilder:
         """
         Builds the consumer with a ConsumerWorker able to handle snapshots.
         """
-        worker = SnapshotAwareWorker(
-            storage=self.storage,
-            producer=self.producer,
-            snapshot_id=snapshot_id,
-            transaction_data=transaction_data,
-            metrics=self.metrics,
-            replacements_topic=self.replacements_topic,
+        return self.__build_consumer(
+            BatchProcessingStrategyFactory(
+                worker=SnapshotAwareWorker(
+                    storage=self.storage,
+                    producer=self.producer,
+                    snapshot_id=snapshot_id,
+                    transaction_data=transaction_data,
+                    metrics=self.metrics,
+                    replacements_topic=self.replacements_topic,
+                ),
+                max_batch_size=self.max_batch_size,
+                max_batch_time=self.max_batch_time_ms,
+                metrics=self.metrics,
+            )
         )
-        return self.__build_consumer(worker)
