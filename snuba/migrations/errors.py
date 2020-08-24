@@ -2,6 +2,10 @@ class InvalidMigrationState(Exception):
     pass
 
 
+class MigrationDoesNotExist(Exception):
+    pass
+
+
 class MigrationError(Exception):
     pass
 

@@ -3,7 +3,7 @@ import logging
 from clickhouse_driver import errors
 from datetime import datetime
 from functools import partial
-from typing import List, Mapping, MutableMapping, NamedTuple, Tuple
+from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Tuple
 
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.errors import ClickhouseError
@@ -12,6 +12,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.context import Context
 from snuba.migrations.errors import (
     InvalidMigrationState,
+    MigrationDoesNotExist,
     MigrationError,
     MigrationInProgress,
 )
@@ -100,9 +101,71 @@ class Runner:
                     raise MigrationError("Requires force to run blocking migrations")
 
         for migration_key in pending_migrations:
-            self.run_migration(migration_key, force=force)
+            self._run_migration_impl(migration_key, force=force)
 
-    def _get_pending_migrations(self) -> List[MigrationKey]:
+    def run_migration(
+        self, migration_key: MigrationKey, *, force: bool = False
+    ) -> None:
+        """
+        Run a single migration given its migration key and marks the migration as complete.
+
+        Blocking migrations must be run with force.
+        """
+        migration_group, migration_id = migration_key
+
+        pending_migrations = self._get_pending_migrations(migration_key.group)
+
+        if migration_key.migration_id not in [
+            m.migration_id for m in pending_migrations
+        ]:
+            # Ensure migration exists
+            try:
+                get_group_loader(migration_group).load_migration(migration_id)
+            except MigrationDoesNotExist as e:
+                raise MigrationError(e)
+
+            raise MigrationError(
+                f"{migration_group.value}: {migration_id} is already completed"
+            )
+
+        next_migration_id = pending_migrations[0].migration_id
+
+        if next_migration_id != migration_id:
+            raise MigrationError("Earlier migrations need to be completed first")
+
+        return self._run_migration_impl(migration_key, force=force)
+
+    def _run_migration_impl(
+        self, migration_key: MigrationKey, *, force: bool = False
+    ) -> None:
+        migration_id = migration_key.migration_id
+
+        context = Context(
+            migration_id, logger, partial(self._update_migration_status, migration_key),
+        )
+        migration = get_group_loader(migration_key.group).load_migration(migration_id)
+
+        if migration.blocking and not force:
+            raise MigrationError("Blocking migrations must be run with force")
+
+        migration.forwards(context)
+
+    def reverse_migration(self, migration_key: MigrationKey) -> None:
+        migration_id = migration_key.migration_id
+
+        context = Context(
+            migration_id, logger, partial(self._update_migration_status, migration_key),
+        )
+        migration = get_group_loader(migration_key.group).load_migration(migration_id)
+
+        migration.backwards(context)
+
+    def _get_pending_migrations(
+        self, group: Optional[MigrationGroup] = None
+    ) -> List[MigrationKey]:
+        """
+        Runs pending migration for either a single group, or all groups.
+        """
         migrations: List[MigrationKey] = []
 
         migration_status = self._get_migration_status()
@@ -110,7 +173,9 @@ class Runner:
         def get_status(migration_key: MigrationKey) -> Status:
             return migration_status.get(migration_key, Status.NOT_STARTED)
 
-        for group in ACTIVE_MIGRATION_GROUPS:
+        groups = [group] if group else ACTIVE_MIGRATION_GROUPS
+
+        for group in groups:
             group_loader = get_group_loader(group)
             group_migrations: List[MigrationKey] = []
 
@@ -133,36 +198,6 @@ class Runner:
             migrations.extend(group_migrations)
 
         return migrations
-
-    def run_migration(
-        self, migration_key: MigrationKey, *, force: bool = False
-    ) -> None:
-        """
-        Run a single migration given its migration key and marks the migration as complete.
-
-        Blocking migrations must be run with force.
-        """
-        migration_id = migration_key.migration_id
-
-        context = Context(
-            migration_id, logger, partial(self._update_migration_status, migration_key),
-        )
-        migration = get_group_loader(migration_key.group).load_migration(migration_id)
-
-        if migration.blocking and not force:
-            raise MigrationError("Blocking migrations must be run with force")
-
-        migration.forwards(context)
-
-    def reverse_migration(self, migration_key: MigrationKey) -> None:
-        migration_id = migration_key.migration_id
-
-        context = Context(
-            migration_id, logger, partial(self._update_migration_status, migration_key),
-        )
-        migration = get_group_loader(migration_key.group).load_migration(migration_id)
-
-        migration.backwards(context)
 
     def _update_migration_status(
         self, migration_key: MigrationKey, status: Status

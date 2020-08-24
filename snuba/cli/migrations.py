@@ -2,7 +2,8 @@ import click
 
 from snuba.migrations.connect import check_clickhouse_connections
 from snuba.migrations.errors import MigrationError
-from snuba.migrations.runner import Runner
+from snuba.migrations.groups import MigrationGroup
+from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 
 
@@ -56,3 +57,28 @@ def migrate(force: bool) -> None:
         raise click.ClickException(str(e))
 
     click.echo("Finished running migrations")
+
+
+@migrations.command()
+@click.option("--group", required=True, help="Migration group")
+@click.option("--migration-id", required=True, help="Migration ID")
+@click.option("--force", is_flag=True)
+def run(group: str, migration_id: str, force: bool) -> None:
+    """
+    Runs a single migration.
+    The --force option must be passed in order to run blocking migrations.
+
+    Migrations that are already in an in-progress or completed status will not be run.
+    """
+    runner = Runner()
+    migration_group = MigrationGroup(group)
+    migration_key = MigrationKey(migration_group, migration_id)
+
+    try:
+        runner.run_migration(migration_key, force=force)
+    except MigrationError as e:
+        raise click.ClickException(str(e))
+
+    click.echo(
+        f"Finished running migration {migration_key.group.value}: {migration_key.migration_id}"
+    )
