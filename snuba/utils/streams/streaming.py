@@ -25,15 +25,19 @@ class FilterStep(ProcessingStep[TPayload]):
         self.__test_function = function
         self.__next_step = next_step
 
+        self.__closed = False
+
     def poll(self) -> None:
         self.__next_step.poll()
 
     def submit(self, message: Message[TPayload]) -> None:
+        assert not self.__closed
+
         if self.__test_function(message):
             self.__next_step.submit(message)
 
     def close(self) -> None:
-        pass
+        self.__closed = True
 
     def join(self, timeout: Optional[float] = None) -> None:
         self.__next_step.close()
@@ -57,10 +61,14 @@ class TransformStep(ProcessingStep[TPayload]):
         self.__transform_function = function
         self.__next_step = next_step
 
+        self.__closed = False
+
     def poll(self) -> None:
         self.__next_step.poll()
 
     def submit(self, message: Message[TPayload]) -> None:
+        assert not self.__closed
+
         self.__next_step.submit(
             Message(
                 message.partition,
@@ -71,7 +79,7 @@ class TransformStep(ProcessingStep[TPayload]):
         )
 
     def close(self) -> None:
-        pass
+        self.__closed = True
 
     def join(self, timeout: Optional[float] = None) -> None:
         self.__next_step.close()
@@ -98,6 +106,7 @@ class Batch(Generic[TPayload]):
         self.__created = time.time()
         self.__length = 0
         self.__offsets: MutableMapping[Partition, OffsetRange] = {}
+        self.__closed = False
 
     def __len__(self) -> int:
         return self.__length
@@ -109,6 +118,8 @@ class Batch(Generic[TPayload]):
         self.__step.poll()
 
     def submit(self, message: Message[TPayload]) -> None:
+        assert not self.__closed
+
         self.__step.submit(message)
         self.__length += 1
 
@@ -120,6 +131,7 @@ class Batch(Generic[TPayload]):
             )
 
     def close(self) -> None:
+        self.__closed = True
         self.__step.close()
 
     def join(self, timeout: Optional[float] = None) -> None:
@@ -148,6 +160,7 @@ class CollectStep(ProcessingStep[TPayload]):
         self.__max_batch_time = max_batch_time
 
         self.__batch: Optional[Batch[TPayload]] = None
+        self.__closed = False
 
     def __close_and_reset_batch(self) -> None:
         assert self.__batch is not None
@@ -171,12 +184,16 @@ class CollectStep(ProcessingStep[TPayload]):
             self.__close_and_reset_batch()
 
     def submit(self, message: Message[TPayload]) -> None:
+        assert not self.__closed
+
         if self.__batch is None:
             self.__batch = Batch(self.__step_factory(), self.__commit_function)
 
         self.__batch.submit(message)
 
     def close(self) -> None:
+        self.__closed = True
+
         if self.__batch is not None:
             self.__batch.close()
 
