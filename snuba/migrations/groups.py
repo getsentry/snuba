@@ -4,6 +4,7 @@ from importlib import import_module
 from typing import Sequence
 
 from snuba import settings
+from snuba.migrations.errors import MigrationDoesNotExist
 from snuba.migrations.migration import Migration
 
 
@@ -63,8 +64,11 @@ class DirectoryLoader(GroupLoader, ABC):
         raise NotImplementedError
 
     def load_migration(self, migration_id: str) -> Migration:
-        module = import_module(f"{self.__module}.{migration_id}")
-        return module.Migration()  # type: ignore
+        try:
+            module = import_module(f"{self.__module}.{migration_id}")
+            return module.Migration()  # type: ignore
+        except ModuleNotFoundError:
+            raise MigrationDoesNotExist("Invalid migration ID")
 
 
 class SystemLoader(DirectoryLoader):
@@ -103,6 +107,7 @@ class TransactionsLoader(DirectoryLoader):
             "0003_transactions_onpremise_fix_columns",
             "0004_transactions_add_tags_hash_map",
             "0005_transactions_add_measurements",
+            "0006_transactions_add_http_fields",
         ]
 
 
