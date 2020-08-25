@@ -106,7 +106,7 @@ def test_reverse_all() -> None:
     all_migrations = runner._get_pending_migrations()
     runner.run_all(force=True)
     for migration in reversed(all_migrations):
-        runner.reverse_migration(migration)
+        runner.reverse_migration(migration, force=True)
 
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE

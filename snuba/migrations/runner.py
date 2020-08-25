@@ -3,7 +3,7 @@ import logging
 from clickhouse_driver import errors
 from datetime import datetime
 from functools import partial
-from typing import Callable, List, MutableMapping, NamedTuple, Tuple
+from typing import List, Mapping, MutableMapping, NamedTuple, Tuple
 
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.errors import ClickhouseError
@@ -33,7 +33,7 @@ class MigrationKey(NamedTuple):
     migration_id: str
 
 
-class MigrationStatus(NamedTuple):
+class MigrationDetails(NamedTuple):
     migration_id: str
     status: Status
     blocking: bool
@@ -54,23 +54,26 @@ class Runner:
             ClickhouseClientSettings.MIGRATE
         )
 
-    def show_all(self) -> List[Tuple[MigrationGroup, List[MigrationStatus]]]:
+    def show_all(self) -> List[Tuple[MigrationGroup, List[MigrationDetails]]]:
         """
         Returns the list of migrations and their statuses for each group.
         """
-        migrations: List[Tuple[MigrationGroup, List[MigrationStatus]]] = []
+        migrations: List[Tuple[MigrationGroup, List[MigrationDetails]]] = []
 
-        get_status = self._get_migration_status_func()
+        migration_status = self._get_migration_status()
+
+        def get_status(migration_key: MigrationKey) -> Status:
+            return migration_status.get(migration_key, Status.NOT_STARTED)
 
         for group in ACTIVE_MIGRATION_GROUPS:
-            group_migrations: List[MigrationStatus] = []
+            group_migrations: List[MigrationDetails] = []
             group_loader = get_group_loader(group)
 
             for migration_id in group_loader.get_migrations():
                 migration_key = MigrationKey(group, migration_id)
                 migration = group_loader.load_migration(migration_id)
                 group_migrations.append(
-                    MigrationStatus(
+                    MigrationDetails(
                         migration_id, get_status(migration_key), migration.blocking
                     )
                 )
@@ -103,7 +106,10 @@ class Runner:
         if migration_id not in group_migrations:
             raise MigrationError("Could not find migration in group")
 
-        get_status = self._get_migration_status_func()
+        migration_status = self._get_migration_status()
+
+        def get_status(migration_key: MigrationKey) -> Status:
+            return migration_status.get(migration_key, Status.NOT_STARTED)
 
         if get_status(migration_key) != Status.NOT_STARTED:
             status_text = get_status(migration_key).value
@@ -143,7 +149,10 @@ class Runner:
         if migration_id not in group_migrations:
             raise MigrationError("Invalid migration")
 
-        get_status = self._get_migration_status_func()
+        migration_status = self._get_migration_status()
+
+        def get_status(migration_key: MigrationKey) -> Status:
+            return migration_status.get(migration_key, Status.NOT_STARTED)
 
         if get_status(migration_key) == Status.NOT_STARTED:
             raise MigrationError("You cannot reverse a migration that has not been run")
@@ -170,7 +179,10 @@ class Runner:
         """
         migrations: List[MigrationKey] = []
 
-        get_status = self._get_migration_status_func()
+        migration_status = self._get_migration_status()
+
+        def get_status(migration_key: MigrationKey) -> Status:
+            return migration_status.get(migration_key, Status.NOT_STARTED)
 
         for group in ACTIVE_MIGRATION_GROUPS:
             group_loader = get_group_loader(group)
@@ -227,7 +239,7 @@ class Runner:
 
         return 1
 
-    def _get_migration_status_func(self) -> Callable[[MigrationKey], Status]:
+    def _get_migration_status(self) -> Mapping[MigrationKey, Status]:
         data: MutableMapping[MigrationKey, Status] = {}
         migration_groups = (
             "("
@@ -252,4 +264,4 @@ class Runner:
             if e.code != errors.ErrorCodes.UNKNOWN_TABLE:
                 raise e
 
-        return lambda migration_key: data.get(migration_key, Status.NOT_STARTED)
+        return data
