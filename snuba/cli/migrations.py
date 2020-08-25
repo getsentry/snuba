@@ -75,17 +75,15 @@ def run(group: str, migration_id: str, force: bool) -> None:
 def reverse(group: str, migration_id: str, force: bool) -> None:
     """
     Reverses a single migration.
-    This is a potentially dangerous operation, --force must be passed.
+
+    --force is required to reverse an already completed migration.
     """
     runner = Runner()
     migration_group = MigrationGroup(group)
     migration_key = MigrationKey(migration_group, migration_id)
 
-    if force is not True:
-        raise click.ClickException("Reverse must be run with --force")
-
     try:
-        runner.reverse_migration(migration_key)
+        runner.reverse_migration(migration_key, force=force)
     except MigrationError as e:
         raise click.ClickException(str(e))
 

@@ -101,7 +101,7 @@ class Runner:
         group_migrations = get_group_loader(migration_group).get_migrations()
 
         if migration_id not in group_migrations:
-            raise MigrationError("Invalid migration")
+            raise MigrationError("Could not find migration in group")
 
         get_status = self._get_migration_status_func()
 
@@ -130,7 +130,9 @@ class Runner:
 
         migration.forwards(context)
 
-    def reverse_migration(self, migration_key: MigrationKey) -> None:
+    def reverse_migration(
+        self, migration_key: MigrationKey, *, force: bool = False
+    ) -> None:
         """
         Reverses a migration.
         """
@@ -145,6 +147,11 @@ class Runner:
 
         if get_status(migration_key) == Status.NOT_STARTED:
             raise MigrationError("You cannot reverse a migration that has not been run")
+
+        if get_status(migration_key) == Status.COMPLETED and not force:
+            raise MigrationError(
+                "You must use force to run an already completed migration"
+            )
 
         for m in group_migrations[group_migrations.index(migration_id) + 1 :]:
             if get_status(MigrationKey(migration_group, m)) != Status.NOT_STARTED:
