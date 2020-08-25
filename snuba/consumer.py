@@ -141,14 +141,19 @@ class InsertBatchWriter(ProcessingStep[InsertBatch]):
         self.__writer = writer
 
         self.__messages: MutableSequence[Message[InsertBatch]] = []
+        self.__closed = False
 
     def poll(self) -> None:
         pass
 
     def submit(self, message: Message[InsertBatch]) -> None:
+        assert not self.__closed
+
         self.__messages.append(message)
 
     def close(self) -> None:
+        self.__closed = True
+
         if not self.__messages:
             return
 
@@ -168,11 +173,14 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
         self.__topic = topic
 
         self.__messages: MutableSequence[Message[ReplacementBatch]] = []
+        self.__closed = False
 
     def poll(self) -> None:
         pass
 
     def submit(self, message: Message[ReplacementBatch]) -> None:
+        assert not self.__closed
+
         self.__messages.append(message)
 
     def __delivery_callback(self, error, message) -> None:
@@ -181,6 +189,8 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
             raise error
 
     def close(self) -> None:
+        self.__closed = True
+
         if not self.__messages:
             return
 
@@ -214,6 +224,8 @@ class ProcessedMessageBatchWriter(
         self.__insert_batch_writer = insert_batch_writer
         self.__replacement_batch_writer = replacement_batch_writer
 
+        self.__closed = False
+
     def poll(self) -> None:
         self.__insert_batch_writer.poll()
 
@@ -223,6 +235,8 @@ class ProcessedMessageBatchWriter(
     def submit(
         self, message: Message[Union[None, InsertBatch, ReplacementBatch]]
     ) -> None:
+        assert not self.__closed
+
         if message.payload is None:
             return
 
@@ -237,6 +251,8 @@ class ProcessedMessageBatchWriter(
             raise TypeError("unexpected payload type")
 
     def close(self) -> None:
+        self.__closed = True
+
         self.__insert_batch_writer.close()
 
         if self.__replacement_batch_writer is not None:
