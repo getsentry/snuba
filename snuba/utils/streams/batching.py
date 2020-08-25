@@ -113,25 +113,23 @@ class BatchProcessingStrategy(ProcessingStrategy[TPayload]):
         self.__batch: Optional[Batch[TResult]] = None
         self.__closed = False
 
-    def process(self, message: Optional[Message[TPayload]]) -> None:
+    def poll(self) -> None:
         """
-        Process a message or heartbeat.
-
-        Calling this method may trigger an in-flight batch to be flushed.
+        Check if the current in-flight batch should be flushed.
         """
         assert not self.__closed
 
-        # If we have an active batch, check if it's ready to be flushed.
         if self.__batch is not None and (
             len(self.__batch.results) >= self.__max_batch_size
             or time.time() > self.__batch.created + self.__max_batch_time / 1000.0
         ):
             self.__flush()
 
-        # If this was just a heartbeat, there is nothing to process and we can
-        # skip the rest of the method.
-        if message is None:
-            return
+    def submit(self, message: Message[TPayload]) -> None:
+        """
+        Process a message.
+        """
+        assert not self.__closed
 
         start = time.time()
 
@@ -168,12 +166,13 @@ class BatchProcessingStrategy(ProcessingStrategy[TPayload]):
             )
 
     def close(self) -> None:
-        """
-        Close the processor, discarding any messages (without committing
-        offsets) that were previously consumed and processed since the last
-        batch flush.
-        """
         self.__closed = True
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        # The active batch is discarded when exiting without attempting to
+        # write or commit, so this method can exit immediately without
+        # blocking.
+        pass
 
     def __flush(self) -> None:
         """

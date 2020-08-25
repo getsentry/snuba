@@ -1,7 +1,7 @@
 import sentry_sdk
 
 from snuba.datasets.dataset import Dataset
-from snuba.query.parser.exceptions import InvalidQueryException
+from snuba.query.exceptions import InvalidQueryException
 from snuba.querylog import record_error_building_request, record_invalid_request
 from snuba.request import Request
 from snuba.request.exceptions import InvalidJsonRequestException

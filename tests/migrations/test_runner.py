@@ -61,6 +61,14 @@ def test_run_migration() -> None:
         "SELECT group, migration_id, status, version FROM migrations_local;"
     ) == [("system", "0001_migrations", "completed", 1)]
 
+    # Invalid migration ID
+    with pytest.raises(MigrationError):
+        runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "xxx"))
+
+    # Run out of order
+    with pytest.raises(MigrationError):
+        runner.run_migration(MigrationKey(MigrationGroup.EVENTS, "0003_errors"))
+
 
 def test_get_pending_migrations() -> None:
     runner = Runner()
@@ -175,6 +183,9 @@ def test_transactions_compatibility() -> None:
 
     runner = Runner()
     runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    runner._update_migration_status(
+        MigrationKey(MigrationGroup.TRANSACTIONS, "0001_transactions"), Status.COMPLETED
+    )
     runner.run_migration(
         MigrationKey(
             MigrationGroup.TRANSACTIONS,
