@@ -116,7 +116,10 @@ class TagsHashMapOptimizer(QueryProcessor):
             return ConditionClass.OPTIMIZABLE
         elif match is None:
             for exp in condition:
-                if isinstance(exp, Column) and exp.column_name == self.__column_name:
+                if isinstance(exp, Column) and exp.column_name in (
+                    f"{self.__column_name}.key",
+                    f"{self.__column_name}.value",
+                ):
                     return ConditionClass.NOT_OPTIMIZABLE
             return ConditionClass.IRRELEVANT
         else:
