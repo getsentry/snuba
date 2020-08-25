@@ -127,9 +127,30 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
 
     arrayjoin = body.get("arrayjoin")
     if arrayjoin:
+        metrics.increment(
+            "arrayjoin.body", tags={"arrayjoin": arrayjoin},
+        )
         array_join_expr: Optional[Expression] = parse_expression(body["arrayjoin"])
     else:
         array_join_expr = None
+        array_joins = []
+        # This is going to be added in a different PR, just instrumenting it for now
+        for select_expr in select_clause:
+            if isinstance(select_expr.expression, FunctionCall):
+                if select_expr.expression.function_name == "arrayJoin":
+                    parameters = select_expr.expression.parameters
+                    for param in parameters:
+                        if isinstance(param, Column):
+                            array_joins.append(param.column_name)
+                        elif isinstance(param, Literal):
+                            array_joins.append(f"{param.value}")
+
+        if len(array_joins) > 0:
+            suffix = "gt1" if len(array_joins) > 1 else "eq1"
+            metrics.increment(
+                f"arrayjoin.function.{suffix}",
+                tags={"arrayjoin": ",".join(array_joins)},
+            )
 
     where_expr = parse_conditions_to_expr(
         body.get("conditions", []), dataset, arrayjoin
