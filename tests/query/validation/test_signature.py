@@ -3,11 +3,16 @@ from typing import Sequence
 import pytest
 
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, String
-from snuba.query.expressions import Column as ColumnExpr, Expression, Literal
+from snuba.query.expressions import (
+    Column as ColumnExpr,
+    Expression,
+    Literal as LiteralExpr,
+)
 from snuba.query.validation import InvalidFunctionCall
 from snuba.query.validation.signature import (
     Any,
     Column,
+    Literal,
     ParamType,
     SignatureValidator,
 )
@@ -16,7 +21,7 @@ test_cases = [
     pytest.param(
         (
             ColumnExpr(alias=None, table_name=None, column_name="event_id"),
-            Literal(None, "param"),
+            LiteralExpr(None, "param"),
         ),
         [Any(), Any()],
         False,
@@ -26,7 +31,7 @@ test_cases = [
     pytest.param(
         (
             ColumnExpr(alias=None, table_name=None, column_name="event_id"),
-            Literal(None, "param"),
+            LiteralExpr(None, "param"),
         ),
         [Column({String}), Any()],
         False,
@@ -36,7 +41,7 @@ test_cases = [
     pytest.param(
         (
             ColumnExpr(alias=None, table_name=None, column_name="timestamp"),
-            Literal(None, "param"),
+            LiteralExpr(None, "param"),
         ),
         [Column({String}), Any()],
         False,
@@ -46,7 +51,7 @@ test_cases = [
     pytest.param(
         (
             ColumnExpr(alias=None, table_name=None, column_name="event_id"),
-            Literal(None, "param"),
+            LiteralExpr(None, "param"),
         ),
         [Column({String})],
         True,
@@ -56,12 +61,52 @@ test_cases = [
     pytest.param(
         (
             ColumnExpr(alias=None, table_name=None, column_name="level"),
-            Literal(None, "param"),
+            LiteralExpr(None, "param"),
         ),
         [Column({String}, allow_nullable=False), Any()],
         False,
         True,
         id="Invalid, Non nullable expression required",
+    ),
+    pytest.param(
+        (
+            ColumnExpr(alias=None, table_name=None, column_name="level"),
+            LiteralExpr(None, "param"),
+        ),
+        [Column({String}), Literal({str})],
+        False,
+        False,
+        id="Valid Literal type",
+    ),
+    pytest.param(
+        (
+            ColumnExpr(alias=None, table_name=None, column_name="level"),
+            LiteralExpr(None, "param"),
+        ),
+        [Column({String}), Literal({float, int})],
+        False,
+        True,
+        id="Invalid Literal type",
+    ),
+    pytest.param(
+        (
+            ColumnExpr(alias=None, table_name=None, column_name="level"),
+            LiteralExpr(None, None),
+        ),
+        [Column({String}), Literal({float, int})],
+        False,
+        False,
+        id="None value valid if passed as type",
+    ),
+    pytest.param(
+        (
+            ColumnExpr(alias=None, table_name=None, column_name="level"),
+            LiteralExpr(None, None),
+        ),
+        [Column({String}), Literal({float, int}, allow_nullable=False)],
+        False,
+        True,
+        id="None value invalid if not allow_nullable is True",
     ),
 ]
 

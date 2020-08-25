@@ -16,10 +16,17 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.query.expressions import Expression
-from snuba.query.matchers import Any as AnyMatcher
-from snuba.query.matchers import Column as ColumnMatcher
-from snuba.query.matchers import Param
+from snuba.query.expressions import (
+    Expression,
+    Literal as LiteralType,
+    OptionalScalarType,
+)
+from snuba.query.matchers import (
+    Any as AnyMatcher,
+    Column as ColumnMatcher,
+    Literal as LiteralMatcher,
+    Param,
+)
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
 
 logger = logging.getLogger(__name__)
@@ -41,6 +48,8 @@ class Any(ParamType):
 COLUMN_PATTERN = ColumnMatcher(
     alias=None, table_name=None, column_name=Param("column_name", AnyMatcher(str)),
 )
+
+LITERAL_PATTERN = LiteralMatcher()
 
 AllowedTypes = Union[
     Type[Array],
@@ -101,6 +110,35 @@ class Column(ParamType):
                     f"Illegal type {'Nullable ' if nullable else ''}{str(column_type)} "
                     f"of argument `{column_name}`. Required types {self.__valid_types}"
                 )
+            )
+
+
+class Literal(ParamType):
+    """
+    Validates that the type of a Literal expression is in a set of
+    allowed types.
+
+    If the expression provided is not a Literal, it accepts it.
+    We may consider later whether we want to enforce only literal
+    expressions can be passed as arguments in certain functions.
+    """
+
+    def __init__(self, types: Set[OptionalScalarType], allow_nullable=True) -> None:
+        self.__valid_types = types
+        if allow_nullable:
+            self.__valid_types.add(type(None))
+
+    def __str__(self) -> str:
+        return f"{self.__valid_types}"
+
+    def validate(self, expression: Expression, schema: ColumnSet) -> None:
+        if not isinstance(expression, LiteralType):
+            return None
+
+        value = expression.value
+        if not isinstance(value, tuple(self.__valid_types)):
+            raise InvalidFunctionCall(
+                f"Illegal type {type(value)} of argument {value}. Required types {self.__valid_types}"
             )
 
 

@@ -390,7 +390,7 @@ class DiscoverDataset(TimeSeriesDataset):
             # Apdex and Impact seem very good candidates for
             # being defined by the Transaction entity when it will
             # exist, so it would run before Storage selection.
-            apdex_processor,
+            apdex_processor(self.get_abstract_columnset()),
             FailureRateProcessor(),
             TimeSeriesColumnProcessor({"time": "timestamp"}),
         ]

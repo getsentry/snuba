@@ -170,7 +170,7 @@ class TransactionsDataset(TimeSeriesDataset):
         return [
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
-            apdex_processor,
+            apdex_processor(self.get_abstract_columnset()),
             FailureRateProcessor(),
             TimeSeriesColumnProcessor(self.__time_group_columns),
         ]
