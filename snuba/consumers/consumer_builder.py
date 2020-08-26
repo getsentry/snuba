@@ -190,7 +190,7 @@ class ConsumerBuilder:
 
     def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
         """
-        Builds the consumer with a ConsumerWorker.
+        Builds the consumer with the defined processing strategy.
         """
         strategy_factory: ProcessingStrategyFactory[KafkaPayload]
         if self.strategy_factory_type is StrategyFactoryType.BATCHING:
