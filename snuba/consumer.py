@@ -243,7 +243,9 @@ class ProcessedMessageBatchWriter(
         if isinstance(message.payload, InsertBatch):
             self.__insert_batch_writer.submit(cast(Message[InsertBatch], message))
         elif isinstance(message.payload, ReplacementBatch):
-            assert self.__replacement_batch_writer is not None
+            if self.__replacement_batch_writer is None:
+                raise TypeError("writer not configured to support replacements")
+
             self.__replacement_batch_writer.submit(
                 cast(Message[ReplacementBatch], message)
             )
