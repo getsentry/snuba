@@ -125,8 +125,7 @@ class Literal(ParamType):
 
     def __init__(self, types: Set[OptionalScalarType], allow_nullable=True) -> None:
         self.__valid_types = types
-        if allow_nullable:
-            self.__valid_types.add(type(None))
+        self.__allow_nullable = allow_nullable
 
     def __str__(self) -> str:
         return f"{self.__valid_types}"
@@ -136,7 +135,11 @@ class Literal(ParamType):
             return None
 
         value = expression.value
-        if not isinstance(value, tuple(self.__valid_types)):
+        if not self.__allow_nullable and value is None:
+            raise InvalidFunctionCall(
+                f"Argument can not be be null. Required types {self.__valid_types}"
+            )
+        elif value is not None and not isinstance(value, tuple(self.__valid_types)):
             raise InvalidFunctionCall(
                 f"Illegal type {type(value)} of argument {value}. Required types {self.__valid_types}"
             )

@@ -96,7 +96,7 @@ test_cases = [
         [Column({String}), Literal({float, int})],
         False,
         False,
-        id="None value valid if passed as type",
+        id="None value valid by default",
     ),
     pytest.param(
         (
