@@ -425,10 +425,20 @@ class Query:
         return self.__get_referenced_columns(col_exprs)
 
     def get_all_ast_referenced_columns(self) -> Set[Column]:
+        return self.__get_columns_referenced_in_expressions(self.get_all_expressions())
+
+    def get_columns_referenced_in_conditions_ast(self) -> Set[Column]:
+        return self.__get_columns_referenced_in_expressions(self.__condition or [])
+
+    def __get_columns_referenced_in_expressions(
+        self, expressions: Iterable[Expression]
+    ) -> Set[Column]:
+        pass
         ret: Set[Column] = set()
-        all_expressions = self.get_all_expressions()
-        for expression in all_expressions:
+
+        for expression in expressions or []:
             ret |= {c for c in expression if isinstance(c, Column)}
+
         return ret
 
     def get_columns_referenced_in_conditions(self) -> Sequence[Any]:

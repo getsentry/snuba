@@ -11,6 +11,7 @@ from snuba.clickhouse.query import Query
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy, SplitQueryRunner
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
+    ConditionFunctions,
     combine_and_conditions,
     get_first_level_and_conditions,
     in_condition,
@@ -327,6 +328,19 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         if limit > settings.COLUMN_SPLIT_MAX_LIMIT:
             metrics.increment("column_splitter.query_above_limit")
             return None
+
+        # Do not split if there is already a = or IN condition on an ID column
+        id_column_matcher = FunctionCall(
+            None,
+            Or([String(ConditionFunctions.EQ), String(ConditionFunctions.IN)]),
+            (Column(None, None, String(self.__id_column)), AnyExpression(),),
+        )
+
+        for expr in query.get_condition_from_ast() or []:
+            match = id_column_matcher.match(expr)
+
+            if match:
+                return None
 
         total_col_count = len(query.get_all_referenced_columns())
         total_ast_count = len(
