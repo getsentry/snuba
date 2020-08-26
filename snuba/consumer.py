@@ -291,6 +291,9 @@ class ProcessedMessageBatchWriter(
             self.__replacement_batch_writer.join(timeout)
 
 
+json_row_encoder = JSONRowEncoder()
+
+
 class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
     def __init__(
         self,
@@ -329,7 +332,9 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         )
 
         if isinstance(result, InsertBatch):
-            return JSONRowInsertBatch([rapidjson.dumps(row) for row in result.rows])
+            return JSONRowInsertBatch(
+                [json_row_encoder.encode(row) for row in result.rows]
+            )
         else:
             return result
 
