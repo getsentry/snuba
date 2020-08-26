@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import Optional, Sequence
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
@@ -32,42 +31,22 @@ class TagsHashMapOptimizer(QueryProcessor):
         self.__column_name = column_name
         self.__hash_map_name = hash_map_name
 
-        left_hand_side = Or(
-            [
-                mapping_pattern,
-                FunctionCall(
-                    alias=None,
-                    function_name=String("ifNull"),
-                    parameters=(mapping_pattern, Literal(None, String(""))),
-                ),
-            ]
-        )
-        self.__optimizable_pattern = Or(
-            [
-                FunctionCall(
-                    alias=None,
-                    function_name=String("equals"),
-                    parameters=(
-                        left_hand_side,
-                        Param("right_hand_side", Literal(None, Any(str))),
-                    ),
-                ),
-                FunctionCall(
-                    alias=None,
-                    function_name=String("in"),
-                    parameters=(
-                        left_hand_side,
-                        Param(
-                            "right_hand_side",
-                            FunctionCall(
-                                alias=None,
-                                function_name=String("tuple"),
-                                parameters=None,
-                            ),
+        self.__optimizable_pattern = FunctionCall(
+            alias=None,
+            function_name=String("equals"),
+            parameters=(
+                Or(
+                    [
+                        mapping_pattern,
+                        FunctionCall(
+                            alias=None,
+                            function_name=String("ifNull"),
+                            parameters=(mapping_pattern, Literal(None, String(""))),
                         ),
-                    ),
+                    ]
                 ),
-            ]
+                Param("right_hand_side", Literal(None, Any(str))),
+            ),
         )
 
     def __classify_combined_conditions(self, condition: Expression) -> ConditionClass:
@@ -106,14 +85,10 @@ class TagsHashMapOptimizer(QueryProcessor):
             and match.string(KEY_COL_MAPPING_PARAM) == f"{self.__column_name}.key"
         ):
             rhs = match.expression("right_hand_side")
-            if isinstance(rhs, LiteralExpr):
-                if rhs.value == "":
-                    return ConditionClass.NOT_OPTIMIZABLE
-            elif isinstance(rhs, FunctionExpr):
-                for p in rhs.parameters:
-                    if not isinstance(p, LiteralExpr) or p.value == "":
-                        return ConditionClass.NOT_OPTIMIZABLE
-            return ConditionClass.OPTIMIZABLE
+            if isinstance(rhs, LiteralExpr) and rhs.value == "":
+                return ConditionClass.NOT_OPTIMIZABLE
+            else:
+                return ConditionClass.OPTIMIZABLE
         elif match is None:
             for exp in condition:
                 if isinstance(exp, Column) and exp.column_name in (
@@ -125,30 +100,6 @@ class TagsHashMapOptimizer(QueryProcessor):
         else:
             return ConditionClass.IRRELEVANT
 
-    def __build_replaced(
-        self,
-        alias: Optional[str],
-        table_name: Optional[str],
-        function: str,
-        parameters: Sequence[LiteralExpr],
-    ) -> Expression:
-        literals = [
-            Column(
-                alias=None, table_name=table_name, column_name=self.__hash_map_name,
-            ),
-            *[
-                FunctionExpr(
-                    alias=None,
-                    function_name="cityHash64",
-                    parameters=(LiteralExpr(None, param.value),),
-                )
-                for param in parameters
-            ],
-        ]
-        return FunctionExpr(
-            alias=None, function_name=function, parameters=tuple(literals),
-        )
-
     def __replace_with_hash_map(self, condition: Expression) -> Expression:
         match = self.__optimizable_pattern.match(condition)
         if (
@@ -157,27 +108,27 @@ class TagsHashMapOptimizer(QueryProcessor):
         ):
             return condition
         rhs = match.expression("right_hand_side")
-        if isinstance(rhs, LiteralExpr):
-            return self.__build_replaced(
-                condition.alias,
-                match.optional_string(TABLE_MAPPING_PARAM),
-                "has",
-                [LiteralExpr(None, f"{match.string(KEY_MAPPING_PARAM)}={rhs.value}")],
-            )
-        else:
-            assert isinstance(rhs, FunctionExpr)
-            params = []
-            for e in rhs.parameters:
-                assert isinstance(e, LiteralExpr)
-                params.append(
-                    LiteralExpr(None, f"{match.string(KEY_MAPPING_PARAM)}={e.value}")
-                )
-            return self.__build_replaced(
-                condition.alias,
-                match.optional_string(TABLE_MAPPING_PARAM),
-                "hasAny",
-                params,
-            )
+        assert isinstance(rhs, LiteralExpr)
+        return FunctionExpr(
+            alias=condition.alias,
+            function_name="has",
+            parameters=(
+                Column(
+                    alias=None,
+                    table_name=match.optional_string(TABLE_MAPPING_PARAM),
+                    column_name=self.__hash_map_name,
+                ),
+                FunctionExpr(
+                    alias=None,
+                    function_name="cityHash64",
+                    parameters=(
+                        LiteralExpr(
+                            None, f"{match.string(KEY_MAPPING_PARAM)}={rhs.value}"
+                        ),
+                    ),
+                ),
+            ),
+        )
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         cond_class = ConditionClass.IRRELEVANT

@@ -105,29 +105,6 @@ TEST_CASES = [
             selected_columns=[column("event_id")],
             condition=binary_condition(
                 None,
-                ConditionFunctions.IN,
-                nested_expression("tags", "my_tag"),
-                FunctionCall(
-                    None, "tuple", (Literal(None, "test1"), Literal(None, "test2"),)
-                ),
-            ),
-        ),
-        FunctionCall(
-            None,
-            "hasAny",
-            (
-                column("_tags_hash_map", True),
-                FunctionCall(None, "cityHash64", (Literal(None, "my_tag=test1"),)),
-                FunctionCall(None, "cityHash64", (Literal(None, "my_tag=test2"),)),
-            ),
-        ),
-        id="Optimizable IN condition",
-    ),
-    pytest.param(
-        build_query(
-            selected_columns=[column("event_id")],
-            condition=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     None,
