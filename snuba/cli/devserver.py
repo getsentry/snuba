@@ -4,8 +4,7 @@ import click
 @click.command()
 @click.option("--bootstrap/--no-bootstrap", default=True)
 @click.option("--workers/--no-workers", default=True)
-@click.option("--migrate/--no-migrate", default=True)
-def devserver(*, bootstrap: bool, workers: bool, migrate: bool) -> None:
+def devserver(*, bootstrap: bool, workers: bool) -> None:
     "Starts all Snuba processes for local development."
     import os
     import sys
@@ -15,12 +14,15 @@ def devserver(*, bootstrap: bool, workers: bool, migrate: bool) -> None:
     os.environ["PYTHONUNBUFFERED"] = "1"
 
     if bootstrap:
-        cmd = ["snuba", "bootstrap", "--force"]
+        cmd = ["snuba", "bootstrap", "--force", "--no-migrate"]
         if not workers:
             cmd.append("--no-kafka")
-        if not migrate:
-            cmd.append("--no-migrate")
         returncode = call(cmd)
+        if returncode > 0:
+            sys.exit(returncode)
+
+        # Run migrations
+        returncode = call(["snuba", "migrations", "migrate", "--force"])
         if returncode > 0:
             sys.exit(returncode)
 
