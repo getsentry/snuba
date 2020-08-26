@@ -1,16 +1,17 @@
+from typing import Optional, Sequence
+
 import pytest
 
-from typing import Optional, Sequence
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
+from snuba.query.conditions import (
+    BooleanFunctions,
+    ConditionFunctions,
+    binary_condition,
+)
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query as SnubaQuery
 from snuba.query.logical import SelectedExpression
-from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
-from snuba.query.conditions import (
-    ConditionFunctions,
-    BooleanFunctions,
-    binary_condition,
-)
 from snuba.query.processors.tags_hash_map import TagsHashMapOptimizer
 from snuba.request.request_settings import HTTPRequestSettings
 
@@ -49,6 +50,14 @@ def nested_expression(column: str, key: str) -> FunctionCall:
     )
 
 
+def nested_condition(
+    column_name: str, operator: str, key: str, val: str,
+) -> Expression:
+    return binary_condition(
+        None, operator, nested_expression(column_name, key), Literal(None, val),
+    )
+
+
 TEST_CASES = [
     pytest.param(
         build_query(
@@ -65,37 +74,24 @@ TEST_CASES = [
     pytest.param(
         build_query(
             selected_columns=[column("event_id")],
-            condition=binary_condition(
-                None,
-                ConditionFunctions.EQ,
-                nested_expression("contexts", "my_context"),
-                Literal(None, "123123"),
+            condition=nested_condition(
+                "contexts", ConditionFunctions.EQ, "my_ctx", "a"
             ),
         ),
-        binary_condition(
-            None,
-            ConditionFunctions.EQ,
-            nested_expression("contexts", "my_context"),
-            Literal(None, "123123"),
-        ),
+        nested_condition("contexts", ConditionFunctions.EQ, "my_ctx", "a"),
         id="Nested condition on the wrong column",
     ),
     pytest.param(
         build_query(
             selected_columns=[column("event_id")],
-            condition=binary_condition(
-                None,
-                ConditionFunctions.EQ,
-                nested_expression("tags", "my_tag"),
-                Literal(None, "bla"),
-            ),
+            condition=nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
         ),
         FunctionCall(
             None,
             "has",
             (
                 column("_tags_hash_map", True),
-                FunctionCall(None, "cityHash64", (Literal(None, "my_tag=bla"),)),
+                FunctionCall(None, "cityHash64", (Literal(None, "my_tag=a"),)),
             ),
         ),
         id="Optimizable simple condition",
@@ -127,19 +123,9 @@ TEST_CASES = [
     pytest.param(
         build_query(
             selected_columns=[column("event_id")],
-            condition=binary_condition(
-                None,
-                ConditionFunctions.LIKE,
-                nested_expression("tags", "my_context"),
-                Literal(None, "123123"),
-            ),
+            condition=nested_condition("tags", ConditionFunctions.LIKE, "my_tag", "a"),
         ),
-        binary_condition(
-            None,
-            ConditionFunctions.LIKE,
-            nested_expression("tags", "my_context"),
-            Literal(None, "123123"),
-        ),
+        nested_condition("tags", ConditionFunctions.LIKE, "my_tag", "a"),
         id="Unsupported condition",
     ),
     pytest.param(
@@ -148,35 +134,15 @@ TEST_CASES = [
             condition=binary_condition(
                 None,
                 BooleanFunctions.OR,
-                binary_condition(
-                    None,
-                    ConditionFunctions.EQ,
-                    nested_expression("tags", "my_tag"),
-                    Literal(None, "123123"),
-                ),
-                binary_condition(
-                    None,
-                    ConditionFunctions.LIKE,
-                    nested_expression("tags", "my_tag2"),
-                    Literal(None, "123123"),
-                ),
+                nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
+                nested_condition("tags", ConditionFunctions.LIKE, "my_tag2", "b"),
             ),
         ),
         binary_condition(
             None,
             BooleanFunctions.OR,
-            binary_condition(
-                None,
-                ConditionFunctions.EQ,
-                nested_expression("tags", "my_tag"),
-                Literal(None, "123123"),
-            ),
-            binary_condition(
-                None,
-                ConditionFunctions.LIKE,
-                nested_expression("tags", "my_tag2"),
-                Literal(None, "123123"),
-            ),
+            nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
+            nested_condition("tags", ConditionFunctions.LIKE, "my_tag2", "b"),
         ),
         id="Unsupported and supported conditions",
     ),
@@ -186,12 +152,7 @@ TEST_CASES = [
             condition=binary_condition(
                 None,
                 BooleanFunctions.AND,
-                binary_condition(
-                    None,
-                    ConditionFunctions.EQ,
-                    nested_expression("tags", "my_tag"),
-                    Literal(None, "123123"),
-                ),
+                nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
                 binary_condition(
                     None,
                     ConditionFunctions.LIKE,
@@ -208,7 +169,7 @@ TEST_CASES = [
                 "has",
                 (
                     column("_tags_hash_map", True),
-                    FunctionCall(None, "cityHash64", (Literal(None, "my_tag=123123"),)),
+                    FunctionCall(None, "cityHash64", (Literal(None, "my_tag=a"),)),
                 ),
             ),
             binary_condition(
@@ -249,12 +210,7 @@ TEST_CASES = [
     pytest.param(
         build_query(
             selected_columns=[column("event_id")],
-            condition=binary_condition(
-                None,
-                ConditionFunctions.EQ,
-                nested_expression("tags", "my_tag"),
-                Literal(None, "bla"),
-            ),
+            condition=nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
             having=binary_condition(
                 None,
                 ConditionFunctions.EQ,
@@ -262,12 +218,7 @@ TEST_CASES = [
                 Literal(None, "bla"),
             ),
         ),
-        binary_condition(
-            None,
-            ConditionFunctions.EQ,
-            nested_expression("tags", "my_tag"),
-            Literal(None, "bla"),
-        ),
+        nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
         id="Non opimizable having",
     ),
 ]

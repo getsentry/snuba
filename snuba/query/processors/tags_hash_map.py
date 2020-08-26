@@ -27,6 +27,33 @@ class ConditionClass(Enum):
 
 
 class TagsHashMapOptimizer(QueryProcessor):
+    """
+    Optimize tags conditions by relying on the tags_hash_map column.
+    It transforms tags conditions in the form of
+    `tags.value[indexOf(tags.key, 'my_tag')] = 'my_val'`
+    into
+    `has(_tags_hash_map, cityHash64('my_tag=my_val'))`
+
+    Supported use case:
+    - direct equality. Example above
+    - tags expression nested into ifNull conditions like:
+      `ifNull('tags.value[indexOf(tags.key, 'my_tag')]', '') = ...`
+    - tags conditions in both where and having
+
+    Unsupported use cases:
+    - everything that cannot be checked through the tags hash map
+      like !=, LIKE, IS NULL
+    - it will not optimize a condition if another condition still
+      requires unpacking the tags column. Like
+      `tags[a] = b AND tags[b] LIKE 'asd'`
+      That would load an additional column for almost no gain thus
+      actually degrading performance.
+    - `ifNull('tags.value[indexOf(tags.key, 'my_tag')]', '') = ''`
+       this condition is equivalent to looking whether a tag is
+       missing, which cannot be done with the hash map.
+    - IN conditions. TODO
+    """
+
     def __init__(self, column_name: str, hash_map_name: str) -> None:
         self.__column_name = column_name
         self.__hash_map_name = hash_map_name
@@ -52,22 +79,13 @@ class TagsHashMapOptimizer(QueryProcessor):
     def __classify_combined_conditions(self, condition: Expression) -> ConditionClass:
         if not isinstance(condition, FunctionExpr):
             return ConditionClass.IRRELEVANT
-        if condition.function_name == BooleanFunctions.AND:
-            classified = {
-                self.__classify_combined_conditions(c)
-                for c in get_first_level_and_conditions(condition)
-            }
-            if ConditionClass.NOT_OPTIMIZABLE in classified:
-                return ConditionClass.NOT_OPTIMIZABLE
-            elif ConditionClass.OPTIMIZABLE in classified:
-                return ConditionClass.OPTIMIZABLE
-            else:
-                return ConditionClass.IRRELEVANT
-        elif condition.function_name == BooleanFunctions.OR:
-            classified = {
-                self.__classify_combined_conditions(c)
-                for c in get_first_level_or_conditions(condition)
-            }
+        elif condition.function_name in (BooleanFunctions.AND, BooleanFunctions.OR):
+            conditions = (
+                get_first_level_and_conditions(condition)
+                if condition.function_name == BooleanFunctions.AND
+                else get_first_level_or_conditions(condition)
+            )
+            classified = {self.__classify_combined_conditions(c) for c in conditions}
             if ConditionClass.NOT_OPTIMIZABLE in classified:
                 return ConditionClass.NOT_OPTIMIZABLE
             elif ConditionClass.OPTIMIZABLE in classified:
@@ -85,11 +103,17 @@ class TagsHashMapOptimizer(QueryProcessor):
             and match.string(KEY_COL_MAPPING_PARAM) == f"{self.__column_name}.key"
         ):
             rhs = match.expression("right_hand_side")
-            if isinstance(rhs, LiteralExpr) and rhs.value == "":
-                return ConditionClass.NOT_OPTIMIZABLE
-            else:
-                return ConditionClass.OPTIMIZABLE
+            assert isinstance(rhs, LiteralExpr)
+            return (
+                ConditionClass.NOT_OPTIMIZABLE
+                # ifNull(tags[asd], '') = '' is not optimizable.
+                if rhs.value == ""
+                else ConditionClass.OPTIMIZABLE
+            )
         elif match is None:
+            # If this is not matching an optimizable condition, check
+            # that it does not reference the optimizable column.
+            # If it does it means we should not optimize this query.
             for exp in condition:
                 if isinstance(exp, Column) and exp.column_name in (
                     f"{self.__column_name}.key",
@@ -137,8 +161,9 @@ class TagsHashMapOptimizer(QueryProcessor):
             cond_class = self.__classify_combined_conditions(condition)
             if cond_class == ConditionClass.NOT_OPTIMIZABLE:
                 return
-        having_cond = query.get_having_from_ast()
+
         having_cond_class = ConditionClass.IRRELEVANT
+        having_cond = query.get_having_from_ast()
         if having_cond is not None:
             having_cond_class = self.__classify_combined_conditions(having_cond)
             if having_cond_class == ConditionClass.NOT_OPTIMIZABLE:
