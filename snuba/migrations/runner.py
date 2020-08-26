@@ -159,7 +159,7 @@ class Runner:
 
         if get_status(migration_key) == Status.COMPLETED and not force:
             raise MigrationError(
-                "You must use force to run an already completed migration"
+                "You must use force to revert an already completed migration"
             )
 
         for m in group_migrations[group_migrations.index(migration_id) + 1 :]:
