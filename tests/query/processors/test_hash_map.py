@@ -203,6 +203,96 @@ TEST_CASES = [
         ),
         id="Unsupported and supported conditions",
     ),
+    pytest.param(
+        build_query(
+            selected_columns=[column("event_id")],
+            condition=binary_condition(
+                None,
+                BooleanFunctions.AND,
+                binary_condition(
+                    None,
+                    ConditionFunctions.EQ,
+                    nested_expression("tags", "my_tag"),
+                    Literal(None, "123123"),
+                ),
+                binary_condition(
+                    None,
+                    ConditionFunctions.LIKE,
+                    Column(None, None, "something_else"),
+                    Literal(None, "123123"),
+                ),
+            ),
+        ),
+        binary_condition(
+            None,
+            BooleanFunctions.AND,
+            FunctionCall(
+                None,
+                "has",
+                (
+                    column("_tags_hash_map", True),
+                    FunctionCall(None, "cityHash64", (Literal(None, "my_tag=123123"),)),
+                ),
+            ),
+            binary_condition(
+                None,
+                ConditionFunctions.LIKE,
+                Column(None, None, "something_else"),
+                Literal(None, "123123"),
+            ),
+        ),
+        id="Supported multiple conditions",
+    ),
+    pytest.param(
+        build_query(
+            selected_columns=[column("event_id")],
+            condition=binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                FunctionCall(
+                    None,
+                    "ifNull",
+                    (nested_expression("tags", "my_tag"), Literal(None, "")),
+                ),
+                Literal(None, ""),
+            ),
+        ),
+        binary_condition(
+            None,
+            ConditionFunctions.EQ,
+            FunctionCall(
+                None,
+                "ifNull",
+                (nested_expression("tags", "my_tag"), Literal(None, "")),
+            ),
+            Literal(None, ""),
+        ),
+        id="Unsupported ifNull condition.",
+    ),
+    pytest.param(
+        build_query(
+            selected_columns=[column("event_id")],
+            condition=binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                nested_expression("tags", "my_tag"),
+                Literal(None, "bla"),
+            ),
+            having=binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                FunctionCall(None, "arrayjoin", (Column(None, None, "tags.key"),)),
+                Literal(None, "bla"),
+            ),
+        ),
+        binary_condition(
+            None,
+            ConditionFunctions.EQ,
+            nested_expression("tags", "my_tag"),
+            Literal(None, "bla"),
+        ),
+        id="Non opimizable having",
+    ),
 ]
 
 

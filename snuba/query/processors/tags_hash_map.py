@@ -187,12 +187,16 @@ class TagsHashMapOptimizer(QueryProcessor):
             if cond_class == ConditionClass.NOT_OPTIMIZABLE:
                 return
         having_cond = query.get_having_from_ast()
+        having_cond_class = ConditionClass.IRRELEVANT
         if having_cond is not None:
-            cond_class = self.__classify_combined_conditions(having_cond)
-            if cond_class == ConditionClass.NOT_OPTIMIZABLE:
+            having_cond_class = self.__classify_combined_conditions(having_cond)
+            if having_cond_class == ConditionClass.NOT_OPTIMIZABLE:
                 return
 
-        if cond_class != ConditionClass.OPTIMIZABLE:
+        if (
+            cond_class != ConditionClass.OPTIMIZABLE
+            and having_cond_class != ConditionClass.OPTIMIZABLE
+        ):
             return
 
         if condition is not None:
