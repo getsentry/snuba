@@ -31,7 +31,7 @@ class ConditionClass(Enum):
     NOT_OPTIMIZABLE = 3
 
 
-class TagsHashMapOptimizer(QueryProcessor):
+class HashMapOptimizer(QueryProcessor):
     """
     Optimize tags conditions by relying on the tags_hash_map column.
     It transforms tags conditions that are in the form of
