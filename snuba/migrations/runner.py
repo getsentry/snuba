@@ -88,8 +88,19 @@ class Runner:
 
         Requires force to run blocking migrations.
         """
-        for migration in self._get_pending_migrations():
-            self._run_migration_impl(migration, force=force)
+        pending_migrations = self._get_pending_migrations()
+
+        # Do not run migrations if any are blocking
+        if not force:
+            for migration_key in pending_migrations:
+                migration = get_group_loader(migration_key.group).load_migration(
+                    migration_key.migration_id
+                )
+                if migration.blocking:
+                    raise MigrationError("Requires force to run blocking migrations")
+
+        for migration_key in pending_migrations:
+            self._run_migration_impl(migration_key, force=force)
 
     def run_migration(
         self, migration_key: MigrationKey, *, force: bool = False

@@ -44,6 +44,22 @@ def list() -> None:
 
 
 @migrations.command()
+@click.option("--force", is_flag=True)
+def migrate(force: bool) -> None:
+    """
+    Runs all migrations. Blocking migrations will not be run unless --force is passed.
+    """
+    runner = Runner()
+
+    try:
+        runner.run_all(force=force)
+    except MigrationError as e:
+        raise click.ClickException(str(e))
+
+    click.echo("Finished running migrations")
+
+
+@migrations.command()
 @click.option("--group", required=True, help="Migration group")
 @click.option("--migration-id", required=True, help="Migration ID")
 @click.option("--force", is_flag=True)

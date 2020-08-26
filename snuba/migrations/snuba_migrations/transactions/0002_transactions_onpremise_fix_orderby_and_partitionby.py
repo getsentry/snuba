@@ -53,7 +53,7 @@ def forwards() -> None:
 
         new_create_table_statement = (
             new_create_table_statement[:idx]
-            + f"SAMPLE BY {new_sampling_key} "
+            + f" SAMPLE BY {new_sampling_key} "
             + new_create_table_statement[idx:]
         )
 

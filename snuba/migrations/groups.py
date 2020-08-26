@@ -93,6 +93,7 @@ class EventsLoader(DirectoryLoader):
             "0006_errors_tags_hash_map",
             "0007_groupedmessages",
             "0008_groupassignees",
+            "0009_errors_add_http_fields",
         ]
 
 
@@ -107,6 +108,7 @@ class TransactionsLoader(DirectoryLoader):
             "0003_transactions_onpremise_fix_columns",
             "0004_transactions_add_tags_hash_map",
             "0005_transactions_add_measurements",
+            "0006_transactions_add_http_fields",
         ]
 
 
