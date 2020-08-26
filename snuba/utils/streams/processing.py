@@ -148,6 +148,9 @@ class StreamProcessor(Generic[TPayload]):
 
             logger.info("New partitions assigned: %r", partitions)
             self.__processing_strategy = self.__processor_factory.create(self.__commit)
+            logger.debug(
+                "Initialized processing strategy: %r", self.__processing_strategy
+            )
 
         def on_partitions_revoked(partitions: Sequence[Partition]) -> None:
             if self.__processing_strategy is None:
