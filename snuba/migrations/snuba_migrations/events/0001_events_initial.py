@@ -150,7 +150,7 @@ class Migration(migration.MultiStepMigration):
                 columns=columns,
                 engine=table_engines.Distributed(
                     local_table_name="sentry_local",
-                    sharding_key="cityHash64(toString(event_id)))",
+                    sharding_key="cityHash64(toString(event_id))",
                 ),
             ),
             operations.CreateTable(
@@ -159,7 +159,7 @@ class Migration(migration.MultiStepMigration):
                 columns=columns,
                 engine=table_engines.Distributed(
                     local_table_name="sentry_local",
-                    sharding_key="cityHash64(toString(event_id)))",
+                    sharding_key="cityHash64(toString(event_id))",
                 ),
             ),
         ]
