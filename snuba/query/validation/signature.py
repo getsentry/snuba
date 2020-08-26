@@ -1,5 +1,6 @@
 import logging
 from abc import ABC
+from datetime import date, datetime
 from typing import Sequence, Set, Type, Union
 
 from snuba.clickhouse.columns import (
@@ -19,7 +20,6 @@ from snuba.clickhouse.columns import (
 from snuba.query.expressions import (
     Expression,
     Literal as LiteralType,
-    OptionalScalarType,
 )
 from snuba.query.matchers import (
     Any as AnyMatcher,
@@ -62,6 +62,16 @@ AllowedTypes = Union[
     Type[Float],
     Type[Date],
     Type[DateTime],
+]
+
+AllowedScalarTypes = Union[
+    Type[None],
+    Type[bool],
+    Type[str],
+    Type[float],
+    Type[int],
+    Type[date],
+    Type[datetime],
 ]
 
 
@@ -123,9 +133,12 @@ class Literal(ParamType):
     expressions can be passed as arguments in certain functions.
     """
 
-    def __init__(self, types: Set[OptionalScalarType], allow_nullable=True) -> None:
+    def __init__(
+        self, types: Set[AllowedScalarTypes], allow_nullable: bool = False
+    ) -> None:
         self.__valid_types = types
-        self.__allow_nullable = allow_nullable
+        if allow_nullable:
+            self.__valid_types.add(type(None))
 
     def __str__(self) -> str:
         return f"{self.__valid_types}"
@@ -135,11 +148,7 @@ class Literal(ParamType):
             return None
 
         value = expression.value
-        if not self.__allow_nullable and value is None:
-            raise InvalidFunctionCall(
-                f"Argument can not be be null. Required types {self.__valid_types}"
-            )
-        elif value is not None and not isinstance(value, tuple(self.__valid_types)):
+        if not isinstance(value, tuple(self.__valid_types)):
             raise InvalidFunctionCall(
                 f"Illegal type {type(value)} of argument {value}. Required types {self.__valid_types}"
             )

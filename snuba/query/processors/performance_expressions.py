@@ -3,7 +3,7 @@ from snuba.query.validation.signature import Column as ColType, Literal as Liter
 from snuba.query.processors.custom_function import CustomFunction
 
 
-def apdex_processor(columns: ColumnSet):
+def apdex_processor(columns: ColumnSet) -> CustomFunction:
     return CustomFunction(
         columns,
         "apdex",

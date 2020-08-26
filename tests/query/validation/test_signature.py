@@ -93,20 +93,20 @@ test_cases = [
             ColumnExpr(alias=None, table_name=None, column_name="level"),
             LiteralExpr(None, None),
         ),
-        [Column({String}), Literal({float, int})],
+        [Column({String}), Literal({float, int}, allow_nullable=True)],
         False,
         False,
-        id="None value valid by default",
+        id="None value valid when allow_nullable is True",
     ),
     pytest.param(
         (
             ColumnExpr(alias=None, table_name=None, column_name="level"),
             LiteralExpr(None, None),
         ),
-        [Column({String}), Literal({float, int}, allow_nullable=False)],
+        [Column({String}), Literal({float, int})],
         False,
         True,
-        id="None value invalid if not allow_nullable is True",
+        id="None value invalid by default",
     ),
 ]
 
