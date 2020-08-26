@@ -3,7 +3,7 @@ import logging
 from clickhouse_driver import errors
 from datetime import datetime
 from functools import partial
-from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Tuple
+from typing import List, Mapping, MutableMapping, NamedTuple, Tuple
 
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.errors import ClickhouseError
@@ -12,7 +12,6 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.context import Context
 from snuba.migrations.errors import (
     InvalidMigrationState,
-    MigrationDoesNotExist,
     MigrationError,
     MigrationInProgress,
 )
@@ -34,7 +33,7 @@ class MigrationKey(NamedTuple):
     migration_id: str
 
 
-class MigrationStatus(NamedTuple):
+class MigrationDetails(NamedTuple):
     migration_id: str
     status: Status
     blocking: bool
@@ -55,11 +54,11 @@ class Runner:
             ClickhouseClientSettings.MIGRATE
         )
 
-    def show_all(self) -> List[Tuple[MigrationGroup, List[MigrationStatus]]]:
+    def show_all(self) -> List[Tuple[MigrationGroup, List[MigrationDetails]]]:
         """
         Returns the list of migrations and their statuses for each group.
         """
-        migrations: List[Tuple[MigrationGroup, List[MigrationStatus]]] = []
+        migrations: List[Tuple[MigrationGroup, List[MigrationDetails]]] = []
 
         migration_status = self._get_migration_status()
 
@@ -67,14 +66,14 @@ class Runner:
             return migration_status.get(migration_key, Status.NOT_STARTED)
 
         for group in ACTIVE_MIGRATION_GROUPS:
-            group_migrations: List[MigrationStatus] = []
+            group_migrations: List[MigrationDetails] = []
             group_loader = get_group_loader(group)
 
             for migration_id in group_loader.get_migrations():
                 migration_key = MigrationKey(group, migration_id)
                 migration = group_loader.load_migration(migration_id)
                 group_migrations.append(
-                    MigrationStatus(
+                    MigrationDetails(
                         migration_id, get_status(migration_key), migration.blocking
                     )
                 )
@@ -113,25 +112,23 @@ class Runner:
         """
         migration_group, migration_id = migration_key
 
-        pending_migrations = self._get_pending_migrations(migration_key.group)
+        group_migrations = get_group_loader(migration_group).get_migrations()
 
-        if migration_key.migration_id not in [
-            m.migration_id for m in pending_migrations
-        ]:
-            # Ensure migration exists
-            try:
-                get_group_loader(migration_group).load_migration(migration_id)
-            except MigrationDoesNotExist as e:
-                raise MigrationError(e)
+        if migration_id not in group_migrations:
+            raise MigrationError("Could not find migration in group")
 
-            raise MigrationError(
-                f"{migration_group.value}: {migration_id} is already completed"
-            )
+        migration_status = self._get_migration_status()
 
-        next_migration_id = pending_migrations[0].migration_id
+        def get_status(migration_key: MigrationKey) -> Status:
+            return migration_status.get(migration_key, Status.NOT_STARTED)
 
-        if next_migration_id != migration_id:
-            raise MigrationError("Earlier migrations need to be completed first")
+        if get_status(migration_key) != Status.NOT_STARTED:
+            status_text = get_status(migration_key).value
+            raise MigrationError(f"Migration is already {status_text}")
+
+        for m in group_migrations[: group_migrations.index(migration_id)]:
+            if get_status(MigrationKey(migration_group, m)) != Status.COMPLETED:
+                raise MigrationError("Earlier migrations ned to be completed first")
 
         return self._run_migration_impl(migration_key, force=force)
 
@@ -150,8 +147,35 @@ class Runner:
 
         migration.forwards(context)
 
-    def reverse_migration(self, migration_key: MigrationKey) -> None:
-        migration_id = migration_key.migration_id
+    def reverse_migration(
+        self, migration_key: MigrationKey, *, force: bool = False
+    ) -> None:
+        """
+        Reverses a migration.
+        """
+        migration_group, migration_id = migration_key
+
+        group_migrations = get_group_loader(migration_group).get_migrations()
+
+        if migration_id not in group_migrations:
+            raise MigrationError("Invalid migration")
+
+        migration_status = self._get_migration_status()
+
+        def get_status(migration_key: MigrationKey) -> Status:
+            return migration_status.get(migration_key, Status.NOT_STARTED)
+
+        if get_status(migration_key) == Status.NOT_STARTED:
+            raise MigrationError("You cannot reverse a migration that has not been run")
+
+        if get_status(migration_key) == Status.COMPLETED and not force:
+            raise MigrationError(
+                "You must use force to revert an already completed migration"
+            )
+
+        for m in group_migrations[group_migrations.index(migration_id) + 1 :]:
+            if get_status(MigrationKey(migration_group, m)) != Status.NOT_STARTED:
+                raise MigrationError("Subsequent migrations must be reversed first")
 
         context = Context(
             migration_id, logger, partial(self._update_migration_status, migration_key),
@@ -160,11 +184,9 @@ class Runner:
 
         migration.backwards(context)
 
-    def _get_pending_migrations(
-        self, group: Optional[MigrationGroup] = None
-    ) -> List[MigrationKey]:
+    def _get_pending_migrations(self) -> List[MigrationKey]:
         """
-        Runs pending migration for either a single group, or all groups.
+        Gets pending migration list.
         """
         migrations: List[MigrationKey] = []
 
@@ -173,9 +195,7 @@ class Runner:
         def get_status(migration_key: MigrationKey) -> Status:
             return migration_status.get(migration_key, Status.NOT_STARTED)
 
-        groups = [group] if group else ACTIVE_MIGRATION_GROUPS
-
-        for group in groups:
+        for group in ACTIVE_MIGRATION_GROUPS:
             group_loader = get_group_loader(group)
             group_migrations: List[MigrationKey] = []
 
