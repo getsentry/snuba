@@ -165,7 +165,9 @@ class ConsumerBuilder:
                 ),
                 max_batch_size=self.max_batch_size,
                 max_batch_time=self.max_batch_time_ms,
-                replacements_producer=self.producer,
+                replacements_producer=(
+                    self.producer if self.replacements_topic is not None else None
+                ),
                 replacements_topic=self.replacements_topic,
             ),
         )
