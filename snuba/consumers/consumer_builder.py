@@ -1,10 +1,11 @@
+from enum import Enum
 from typing import Optional, Sequence
 
 from confluent_kafka import KafkaError, KafkaException, Producer
 
 from snuba import environment
 from snuba.clickhouse.http import JSONRowEncoder
-from snuba.consumer import StreamingConsumerStrategyFactory
+from snuba.consumer import ConsumerWorker, StreamingConsumerStrategyFactory
 from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
@@ -23,6 +24,9 @@ from snuba.utils.streams.kafka import (
 from snuba.utils.streams.processing import ProcessingStrategyFactory, StreamProcessor
 from snuba.utils.streams.types import Topic
 from snuba.writer import BatchWriterEncoderWrapper
+
+
+StrategyFactoryType = Enum("StrategyFactoryType", ["BATCHING", "STREAMING"])
 
 
 class ConsumerBuilder:
@@ -45,6 +49,7 @@ class ConsumerBuilder:
         auto_offset_reset: str,
         queued_max_messages_kbytes: int,
         queued_min_messages: int,
+        strategy_factory_type: StrategyFactoryType,
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
@@ -100,6 +105,7 @@ class ConsumerBuilder:
         self.auto_offset_reset = auto_offset_reset
         self.queued_max_messages_kbytes = queued_max_messages_kbytes
         self.queued_min_messages = queued_min_messages
+        self.strategy_factory_type = strategy_factory_type
 
         if commit_retry_policy is None:
             commit_retry_policy = BasicRetryPolicy(
@@ -146,31 +152,55 @@ class ConsumerBuilder:
             recoverable_errors=[TransportError],
         )
 
+    def __build_batching_strategy_factory(
+        self,
+    ) -> BatchProcessingStrategyFactory[KafkaPayload]:
+        return BatchProcessingStrategyFactory(
+            worker=ConsumerWorker(
+                storage=self.storage,
+                producer=self.producer,
+                replacements_topic=self.replacements_topic,
+                metrics=self.metrics,
+            ),
+            max_batch_size=self.max_batch_size,
+            max_batch_time=self.max_batch_time_ms,
+            metrics=self.metrics,
+        )
+
+    def __build_streaming_strategy_factory(self) -> StreamingConsumerStrategyFactory:
+        table_writer = self.storage.get_table_writer()
+        stream_loader = table_writer.get_stream_loader()
+        return StreamingConsumerStrategyFactory(
+            stream_loader.get_pre_filter(),
+            stream_loader.get_processor(),
+            BatchWriterEncoderWrapper(
+                table_writer.get_writer(
+                    self.metrics,
+                    {"load_balancing": "in_order", "insert_distributed_sync": 1},
+                ),
+                JSONRowEncoder(),
+            ),
+            max_batch_size=self.max_batch_size,
+            max_batch_time=self.max_batch_time_ms,
+            replacements_producer=(
+                self.producer if self.replacements_topic is not None else None
+            ),
+            replacements_topic=self.replacements_topic,
+        )
+
     def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
         """
         Builds the consumer with a ConsumerWorker.
         """
-        table_writer = self.storage.get_table_writer()
-        stream_loader = table_writer.get_stream_loader()
-        return self.__build_consumer(
-            StreamingConsumerStrategyFactory(
-                stream_loader.get_pre_filter(),
-                stream_loader.get_processor(),
-                BatchWriterEncoderWrapper(
-                    table_writer.get_writer(
-                        self.metrics,
-                        {"load_balancing": "in_order", "insert_distributed_sync": 1},
-                    ),
-                    JSONRowEncoder(),
-                ),
-                max_batch_size=self.max_batch_size,
-                max_batch_time=self.max_batch_time_ms,
-                replacements_producer=(
-                    self.producer if self.replacements_topic is not None else None
-                ),
-                replacements_topic=self.replacements_topic,
-            ),
-        )
+        strategy_factory: ProcessingStrategyFactory[KafkaPayload]
+        if self.strategy_factory_type is StrategyFactoryType.BATCHING:
+            strategy_factory = self.__build_batching_strategy_factory()
+        elif self.strategy_factory_type is StrategyFactoryType.STREAMING:
+            strategy_factory = self.__build_streaming_strategy_factory()
+        else:
+            raise ValueError("unexpected strategy factory type")
+
+        return self.__build_consumer(strategy_factory)
 
     def build_snapshot_aware_consumer(
         self, snapshot_id: SnapshotId, transaction_data: TransactionData,
