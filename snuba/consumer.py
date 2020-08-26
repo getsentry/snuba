@@ -17,7 +17,7 @@ from typing import (
 import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
-from snuba.clickhouse.http import JSONRowEncoder
+from snuba.clickhouse.http import JSONRow, JSONRowEncoder
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import (
@@ -38,6 +38,14 @@ from snuba.utils.streams.streaming import (
 )
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.writer import BatchWriter, BatchWriterEncoderWrapper, WriterTableRow
+
+try:
+    # PickleBuffer is only available in Python 3.8 and above and when using the
+    # pickle protocol version 5 and greater.
+    from pickle import PickleBuffer
+except ImportError:
+    pass
+
 
 logger = logging.getLogger("snuba.consumer")
 
@@ -136,17 +144,27 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
             self.producer.flush()
 
 
-class InsertBatchWriter(ProcessingStep[InsertBatch]):
-    def __init__(self, writer: BatchWriter[WriterTableRow]) -> None:
+class JSONRowInsertBatch(NamedTuple):
+    rows: Sequence[JSONRow]
+
+    def __reduce_ex__(self, protocol: int):
+        if protocol >= 5:
+            return (type(self), ([PickleBuffer(row) for row in self.rows],))
+        else:
+            return type(self), (self.rows,)
+
+
+class InsertBatchWriter(ProcessingStep[JSONRowInsertBatch]):
+    def __init__(self, writer: BatchWriter[JSONRow]) -> None:
         self.__writer = writer
 
-        self.__messages: MutableSequence[Message[InsertBatch]] = []
+        self.__messages: MutableSequence[Message[JSONRowInsertBatch]] = []
         self.__closed = False
 
     def poll(self) -> None:
         pass
 
-    def submit(self, message: Message[InsertBatch]) -> None:
+    def submit(self, message: Message[JSONRowInsertBatch]) -> None:
         assert not self.__closed
 
         self.__messages.append(message)
@@ -214,7 +232,7 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
 
 
 class ProcessedMessageBatchWriter(
-    ProcessingStep[Union[None, InsertBatch, ReplacementBatch]]
+    ProcessingStep[Union[None, JSONRowInsertBatch, ReplacementBatch]]
 ):
     def __init__(
         self,
@@ -233,15 +251,17 @@ class ProcessedMessageBatchWriter(
             self.__replacement_batch_writer.poll()
 
     def submit(
-        self, message: Message[Union[None, InsertBatch, ReplacementBatch]]
+        self, message: Message[Union[None, JSONRowInsertBatch, ReplacementBatch]]
     ) -> None:
         assert not self.__closed
 
         if message.payload is None:
             return
 
-        if isinstance(message.payload, InsertBatch):
-            self.__insert_batch_writer.submit(cast(Message[InsertBatch], message))
+        if isinstance(message.payload, JSONRowInsertBatch):
+            self.__insert_batch_writer.submit(
+                cast(Message[JSONRowInsertBatch], message)
+            )
         elif isinstance(message.payload, ReplacementBatch):
             if self.__replacement_batch_writer is None:
                 raise TypeError("writer not configured to support replacements")
@@ -276,7 +296,7 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         self,
         prefilter: Optional[StreamMessageFilter[KafkaPayload]],
         processor: MessageProcessor,
-        writer: BatchWriter[WriterTableRow],
+        writer: BatchWriter[JSONRow],
         max_batch_size: int,
         max_batch_time: int,
         replacements_producer: Optional[ConfluentKafkaProducer] = None,
@@ -300,13 +320,18 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
     def __process_message(
         self, message: Message[KafkaPayload]
-    ) -> Union[None, InsertBatch, ReplacementBatch]:
-        return self.__processor.process_message(
+    ) -> Union[None, JSONRowInsertBatch, ReplacementBatch]:
+        result = self.__processor.process_message(
             rapidjson.loads(message.payload.value),
             KafkaMessageMetadata(
                 message.offset, message.partition.index, message.timestamp
             ),
         )
+
+        if isinstance(result, InsertBatch):
+            return JSONRowInsertBatch([rapidjson.dumps(row) for row in result.rows])
+        else:
+            return result
 
     def __build_write_step(self) -> ProcessedMessageBatchWriter:
         insert_batch_writer = InsertBatchWriter(self.__writer)
