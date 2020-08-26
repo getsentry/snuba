@@ -76,7 +76,7 @@ def forwards() -> None:
 
     # Switch the primary key
     if primary_key_needs_update:
-        assert new_create_table_statement.count(curr_partition_key) == 1
+        assert new_create_table_statement.count(curr_primary_key) == 1
         new_create_table_statement = new_create_table_statement.replace(
             curr_primary_key, new_primary_key
         )
