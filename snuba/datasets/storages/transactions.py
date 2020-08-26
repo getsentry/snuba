@@ -222,13 +222,13 @@ storage = WritableTableStorage(
     storage_set_key=StorageSetKey.TRANSACTIONS,
     schema=schema,
     query_processors=[
-        TagsHashMapOptimizer("tags", "_tags_hash_map"),
         NestedFieldConditionOptimizer(
             "contexts",
             "_contexts_flattened",
             {"start_ts", "finish_ts"},
             BEGINNING_OF_TIME,
         ),
+        TagsHashMapOptimizer("tags", "_tags_hash_map"),
         TransactionColumnProcessor(),
         ArrayJoinKeyValueOptimizer("tags"),
         PrewhereProcessor(),

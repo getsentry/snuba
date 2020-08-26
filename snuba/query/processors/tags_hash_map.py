@@ -1,5 +1,6 @@
 from enum import Enum
 
+from snuba import environment
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mappers import (
@@ -19,6 +20,9 @@ from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Any, FunctionCall, Literal, Or, Param, String
 from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+
+metrics = MetricsWrapper(environment.metrics, "processors.tags_hash_map")
 
 
 class ConditionClass(Enum):
@@ -30,7 +34,7 @@ class ConditionClass(Enum):
 class TagsHashMapOptimizer(QueryProcessor):
     """
     Optimize tags conditions by relying on the tags_hash_map column.
-    It transforms tags conditions in the form of
+    It transforms tags conditions that are in the form of
     `tags.value[indexOf(tags.key, 'my_tag')] = 'my_val'`
     into
     `has(_tags_hash_map, cityHash64('my_tag=my_val'))`
@@ -59,6 +63,7 @@ class TagsHashMapOptimizer(QueryProcessor):
         self.__column_name = column_name
         self.__hash_map_name = hash_map_name
 
+        # TODO: Add the support for IN connditions.
         self.__optimizable_pattern = FunctionCall(
             alias=None,
             function_name=String("equals"),
@@ -112,9 +117,9 @@ class TagsHashMapOptimizer(QueryProcessor):
                 else ConditionClass.OPTIMIZABLE
             )
         elif match is None:
-            # If this is not matching an optimizable condition, check
-            # that it does not reference the optimizable column.
-            # If it does it means we should not optimize this query.
+            # If this condition is not matching an optimizable condition,
+            # check that it does not reference the optimizable column.
+            # If it does, it means we should not optimize this query.
             for exp in condition:
                 if isinstance(exp, Column) and exp.column_name in (
                     f"{self.__column_name}.key",
@@ -178,6 +183,8 @@ class TagsHashMapOptimizer(QueryProcessor):
             and having_cond_class != ConditionClass.OPTIMIZABLE
         ):
             return
+
+        metrics.increment("optimizable_query")
 
         if condition is not None:
             query.set_ast_condition(condition.transform(self.__replace_with_hash_map))
