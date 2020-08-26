@@ -69,6 +69,18 @@ def test_run_migration() -> None:
         runner.run_migration(MigrationKey(MigrationGroup.EVENTS, "0003_errors"))
 
 
+def test_reverse_migration() -> None:
+    runner = Runner()
+    runner.run_all(force=True)
+
+    # Invalid migration ID
+    with pytest.raises(MigrationError):
+        runner.reverse_migration(MigrationKey(MigrationGroup.SYSTEM, "xxx"))
+
+    with pytest.raises(MigrationError):
+        runner.reverse_migration(MigrationKey(MigrationGroup.EVENTS, "0003_errors"))
+
+
 def test_get_pending_migrations() -> None:
     runner = Runner()
     total_migrations = get_total_migration_count()
@@ -93,7 +105,7 @@ def test_reverse_all() -> None:
     all_migrations = runner._get_pending_migrations()
     runner.run_all(force=True)
     for migration in reversed(all_migrations):
-        runner.reverse_migration(migration)
+        runner.reverse_migration(migration, force=True)
 
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
