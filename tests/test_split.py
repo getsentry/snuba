@@ -263,6 +263,54 @@ column_split_tests = [
         "project_id",
         "timestamp",
         {
+            "selected_columns": ["group_id"],
+            "conditions": [
+                ("timestamp", ">=", "2019-09-19T10:00:00"),
+                ("timestamp", "<", "2019-09-19T12:00:00"),
+                ("project_id", "IN", [1, 2, 3]),
+                ("event_id", "=", "a" * 32),
+            ],
+            "limit": 10,
+        },
+        False,
+    ),  # Query with = on event_id, not split
+    (
+        "event_id",
+        "project_id",
+        "timestamp",
+        {
+            "selected_columns": ["group_id"],
+            "conditions": [
+                ("timestamp", ">=", "2019-09-19T10:00:00"),
+                ("timestamp", "<", "2019-09-19T12:00:00"),
+                ("project_id", "IN", [1, 2, 3]),
+                ("event_id", "IN", ["a" * 32, "b" * 32]),
+            ],
+            "limit": 10,
+        },
+        False,
+    ),  # Query with IN on event_id - do not split
+    (
+        "event_id",
+        "project_id",
+        "timestamp",
+        {
+            "selected_columns": ["group_id"],
+            "conditions": [
+                ("timestamp", ">=", "2019-09-19T10:00:00"),
+                ("timestamp", "<", "2019-09-19T12:00:00"),
+                ("project_id", "IN", [1, 2, 3]),
+                ("event_id", ">", "a" * 32),
+            ],
+            "limit": 10,
+        },
+        True,
+    ),  # Query with other condition on event_id - proceed with split
+    (
+        "event_id",
+        "project_id",
+        "timestamp",
+        {
             "selected_columns": [
                 ["f", ["event_id"], "not_event_id"],
                 "level",
