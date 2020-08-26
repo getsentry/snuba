@@ -18,6 +18,7 @@ from snuba.query.expressions import FunctionCall as FunctionExpr
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Any, FunctionCall, Literal, Or, Param, String
 from snuba.request.request_settings import RequestSettings
+from snuba.state import get_config
 
 
 class ConditionClass(Enum):
@@ -155,6 +156,9 @@ class TagsHashMapOptimizer(QueryProcessor):
         )
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+        if not get_config("tags_hash_map_enabled", 0):
+            return
+
         cond_class = ConditionClass.IRRELEVANT
         condition = query.get_condition_from_ast()
         if condition is not None:
