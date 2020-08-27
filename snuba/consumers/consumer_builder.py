@@ -48,6 +48,7 @@ class ConsumerBuilder:
         queued_max_messages_kbytes: int,
         queued_min_messages: int,
         strategy_factory_type: StrategyFactoryType,
+        processes: Optional[int],
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
@@ -104,6 +105,15 @@ class ConsumerBuilder:
         self.queued_max_messages_kbytes = queued_max_messages_kbytes
         self.queued_min_messages = queued_min_messages
         self.strategy_factory_type = strategy_factory_type
+        self.processes = processes
+
+        if (
+            self.processes is not None
+            and self.strategy_factory_type is not StrategyFactoryType.STREAMING
+        ):
+            raise ValueError(
+                "process count can only be specified when using streaming strategy"
+            )
 
         if commit_retry_policy is None:
             commit_retry_policy = BasicRetryPolicy(
@@ -177,6 +187,7 @@ class ConsumerBuilder:
             ),
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
+            processes=self.processes,
             replacements_producer=(
                 self.producer if self.replacements_topic is not None else None
             ),

@@ -78,6 +78,9 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
     type=click.Choice([k.lower() for k in StrategyFactoryType.__members__.keys()]),
     default="streaming",
 )
+@click.option(
+    "--processes", type=int,
+)
 def consumer(
     *,
     raw_events_topic: Optional[str],
@@ -94,6 +97,7 @@ def consumer(
     queued_min_messages: int,
     stateful_consumer: bool,
     strategy: str,
+    processes: Optional[int],
     log_level: Optional[str] = None,
 ) -> None:
 
@@ -120,6 +124,7 @@ def consumer(
         queued_max_messages_kbytes=queued_max_messages_kbytes,
         queued_min_messages=queued_min_messages,
         strategy_factory_type=getattr(StrategyFactoryType, strategy.upper()),
+        processes=processes,
     )
 
     if stateful_consumer:

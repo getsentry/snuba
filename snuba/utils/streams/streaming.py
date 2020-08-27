@@ -1,4 +1,5 @@
 import logging
+import multiprocessing
 import signal
 import time
 from dataclasses import dataclass
@@ -92,6 +93,14 @@ def parallel_transform_worker_initializer() -> None:
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
+def parallel_transform_worker_apply(
+    function: Callable[[Message[TPayload]], TTransformed], message: Message[TPayload]
+) -> Message[TTransformed]:
+    return Message(
+        message.partition, message.offset, function(message), message.timestamp,
+    )
+
+
 class ParallelTransformStep(ProcessingStep[TPayload]):
     def __init__(
         self,
@@ -104,15 +113,32 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
 
         self.__pool = Pool(processes, initializer=parallel_transform_worker_initializer)
 
+        self.__results = []
+
         self.__closed = False
 
     def poll(self) -> None:
-        raise NotImplementedError
+        self.__next_step.poll()
+
+        while self.__results:
+            try:
+                value = self.__results[0].get(timeout=0)
+            except multiprocessing.TimeoutError:
+                break
+
+            self.__next_step.submit(value)
+            self.__results.pop(0)
+
+            self.__next_step.poll()
 
     def submit(self, message: Message[TPayload]) -> None:
         assert not self.__closed
 
-        raise NotImplementedError
+        self.__results.append(
+            self.__pool.apply_async(
+                parallel_transform_worker_apply, (self.__transform_function, message),
+            )
+        )
 
     def close(self) -> None:
         self.__closed = True
@@ -120,7 +146,16 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         self.__pool.close()
 
     def join(self, timeout: Optional[float] = None) -> None:
+        logger.debug("Waiting for %s results...", len(self.__results))
+        for result in self.__results:
+            self.__next_step.poll()
+            self.__next_step.submit(self.__results.pop(0).get())
+
+        logger.debug("Waiting for %s...", self.__pool)
         self.__pool.join()
+
+        self.__next_step.close()
+        self.__next_step.join()
 
 
 @dataclass
