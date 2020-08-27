@@ -201,6 +201,7 @@ class CollectStep(ProcessingStep[TPayload]):
         self.__closed = True
 
         if self.__batch is not None:
+            logger.debug("Closing %r...", self.__batch)
             self.__batch.close()
 
     def join(self, timeout: Optional[float] = None) -> None:
