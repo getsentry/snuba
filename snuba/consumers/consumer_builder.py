@@ -4,7 +4,6 @@ from typing import Optional, Sequence
 from confluent_kafka import KafkaError, KafkaException, Producer
 
 from snuba import environment
-from snuba.clickhouse.http import JSONRowEncoder
 from snuba.consumer import ConsumerWorker, StreamingConsumerStrategyFactory
 from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.storages import StorageKey
@@ -23,7 +22,6 @@ from snuba.utils.streams.kafka import (
 )
 from snuba.utils.streams.processing import ProcessingStrategyFactory, StreamProcessor
 from snuba.utils.streams.types import Topic
-from snuba.writer import BatchWriterEncoderWrapper
 
 
 StrategyFactoryType = Enum("StrategyFactoryType", ["BATCHING", "STREAMING"])
@@ -173,12 +171,9 @@ class ConsumerBuilder:
         return StreamingConsumerStrategyFactory(
             stream_loader.get_pre_filter(),
             stream_loader.get_processor(),
-            BatchWriterEncoderWrapper(
-                table_writer.get_writer(
-                    self.metrics,
-                    {"load_balancing": "in_order", "insert_distributed_sync": 1},
-                ),
-                JSONRowEncoder(),
+            table_writer.get_writer(
+                self.metrics,
+                {"load_balancing": "in_order", "insert_distributed_sync": 1},
             ),
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
