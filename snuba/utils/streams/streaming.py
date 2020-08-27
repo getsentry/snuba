@@ -4,6 +4,8 @@ import signal
 import time
 from dataclasses import dataclass
 from multiprocessing import Pool
+from multiprocessing.managers import SharedMemoryManager
+from multiprocessing.shared_memory import SharedMemory
 from typing import (
     Callable,
     Generic,
@@ -15,7 +17,7 @@ from typing import (
     TypeVar,
 )
 
-from snuba.utils.streams.processing import ProcessingStrategy
+from snuba.utils.streams.processing import MessageRejected, ProcessingStrategy
 from snuba.utils.streams.types import Message, Partition, TPayload
 
 ProcessingStep = ProcessingStrategy
@@ -99,7 +101,8 @@ class TransformStep(ProcessingStep[TPayload]):
 
 
 class MessageBatch(Generic[TPayload]):
-    def __init__(self) -> None:
+    def __init__(self, block: SharedMemory) -> None:
+        self.block = block
         self.__messages: MutableSequence[Message[TPayload]] = []
 
     def __repr__(self) -> str:
@@ -144,8 +147,9 @@ def parallel_transform_worker_initializer() -> None:
 def parallel_transform_worker_apply(
     function: Callable[[Message[TPayload]], TTransformed],
     batch: MessageBatch[TPayload],
+    output_block: SharedMemory,
 ) -> MessageBatch[TTransformed]:
-    result: MessageBatch[TTransformed] = MessageBatch()
+    result: MessageBatch[TTransformed] = MessageBatch(output_block)
     for message in batch:
         result.append(
             Message(
@@ -162,12 +166,27 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         next_step: ProcessingStep[TTransformed],
         processes: int,
         max_batch_size: int,
+        input_block_size: int,
+        output_block_size: int,
     ) -> None:
         self.__transform_function = function
         self.__next_step = next_step
         self.__max_batch_size = max_batch_size
 
+        self.__shared_memory_manager = SharedMemoryManager()
+        self.__shared_memory_manager.start()
+
         self.__pool = Pool(processes, initializer=parallel_transform_worker_initializer)
+
+        self.__input_blocks = [
+            self.__shared_memory_manager.SharedMemory(input_block_size)
+            for _ in range(processes)
+        ]
+
+        self.__output_blocks = [
+            self.__shared_memory_manager.SharedMemory(output_block_size)
+            for _ in range(processes)
+        ]
 
         self.__batch_builder: Optional[BatchBuilder[TPayload]] = None
 
@@ -177,8 +196,12 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
 
     def __submit_batch(self, batch: MessageBatch[TPayload]) -> None:
         self.__results.append(
-            self.__pool.apply_async(
-                parallel_transform_worker_apply, (self.__transform_function, batch),
+            (
+                batch.block,
+                self.__pool.apply_async(
+                    parallel_transform_worker_apply,
+                    (self.__transform_function, batch, self.__output_blocks.pop()),
+                ),
             )
         )
 
@@ -186,8 +209,10 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         self.__next_step.poll()
 
         while self.__results:
+            input_block, result = self.__results[0]
+
             try:
-                batch = self.__results[0].get(timeout=0)
+                batch = result.get(timeout=0)
             except multiprocessing.TimeoutError:
                 break
 
@@ -197,6 +222,9 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
             for message in batch:
                 self.__next_step.submit(message)
                 self.__next_step.poll()
+
+            self.__input_blocks.append(input_block)
+            self.__output_blocks.append(batch.block)
 
             self.__results.pop(0)
 
@@ -210,7 +238,14 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         assert not self.__closed
 
         if self.__batch_builder is None:
-            self.__batch_builder = BatchBuilder(MessageBatch(), self.__max_batch_size)
+            try:
+                input_block = self.__input_blocks.pop()
+            except IndexError as e:
+                raise MessageRejected("no available input blocks") from e
+
+            self.__batch_builder = BatchBuilder(
+                MessageBatch(input_block), self.__max_batch_size
+            )
 
         self.__batch_builder.append(message)
 
@@ -227,8 +262,9 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
 
     def join(self, timeout: Optional[float] = None) -> None:
         logger.debug("Waiting for %s batches...", len(self.__results))
-        for result in self.__results:
-            batch = self.__results.pop(0).get()
+        while self.__results:
+            _, result = self.__results.pop(0)
+            batch = result.get()
             logger.debug("%r received, forwarding to %r...", batch, self.__next_step)
             for message in batch:
                 self.__next_step.poll()

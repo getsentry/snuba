@@ -375,7 +375,12 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             strategy = TransformStep(transform_function, collect)
         else:
             strategy = ParallelTransformStep(
-                transform_function, collect, self.__processes, max_batch_size=1000,
+                transform_function,
+                collect,
+                self.__processes,
+                max_batch_size=1000,
+                input_block_size=8 * 1024,
+                output_block_size=8 * 1024,
             )
 
         if self.__prefilter is not None:
