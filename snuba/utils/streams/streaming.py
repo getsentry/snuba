@@ -7,10 +7,11 @@ from multiprocessing import Pool
 from typing import (
     Callable,
     Generic,
+    Iterator,
     Mapping,
     MutableMapping,
+    MutableSequence,
     Optional,
-    Sequence,
     TypeVar,
 )
 
@@ -97,20 +98,61 @@ class TransformStep(ProcessingStep[TPayload]):
         self.__next_step.join(timeout)
 
 
+class MessageBatch(Generic[TPayload]):
+    def __init__(self) -> None:
+        self.__messages: MutableSequence[Message[TPayload]] = []
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__}: {len(self)} items>"
+
+    def __len__(self) -> int:
+        return len(self.__messages)
+
+    def __iter__(self) -> Iterator[Message[TPayload]]:
+        for message in self.__messages:
+            yield message
+
+    def append(self, message: Message[TPayload]) -> None:
+        self.__messages.append(message)
+
+
+class BatchBuilder(Generic[TPayload]):
+    def __init__(self, batch: MessageBatch[TPayload], max_batch_size: int) -> None:
+        self.__batch = batch
+        self.__max_batch_size = max_batch_size
+
+    def __len__(self) -> int:
+        return len(self.__batch)
+
+    def append(self, message: Message[TPayload]) -> None:
+        self.__batch.append(message)
+
+    def ready(self) -> bool:
+        if len(self.__batch) >= self.__max_batch_size:
+            return True
+        else:
+            return False
+
+    def build(self) -> MessageBatch[TPayload]:
+        return self.__batch
+
+
 def parallel_transform_worker_initializer() -> None:
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
 def parallel_transform_worker_apply(
     function: Callable[[Message[TPayload]], TTransformed],
-    batch: Sequence[Message[TPayload]],
-) -> Sequence[Message[TTransformed]]:
-    return [
-        Message(
-            message.partition, message.offset, function(message), message.timestamp,
+    batch: MessageBatch[TPayload],
+) -> MessageBatch[TTransformed]:
+    result: MessageBatch[TTransformed] = MessageBatch()
+    for message in batch:
+        result.append(
+            Message(
+                message.partition, message.offset, function(message), message.timestamp,
+            )
         )
-        for message in batch
-    ]
+    return result
 
 
 class ParallelTransformStep(ProcessingStep[TPayload]):
@@ -127,19 +169,18 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
 
         self.__pool = Pool(processes, initializer=parallel_transform_worker_initializer)
 
-        self.__batch = []
+        self.__batch_builder: Optional[BatchBuilder[TPayload]] = None
+
         self.__results = []
 
         self.__closed = False
 
-    def __submit_batch(self) -> None:
+    def __submit_batch(self, batch: MessageBatch[TPayload]) -> None:
         self.__results.append(
             self.__pool.apply_async(
-                parallel_transform_worker_apply,
-                (self.__transform_function, self.__batch),
+                parallel_transform_worker_apply, (self.__transform_function, batch),
             )
         )
-        self.__batch = []
 
     def poll(self) -> None:
         self.__next_step.poll()
@@ -150,7 +191,7 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
             except multiprocessing.TimeoutError:
                 break
 
-            logger.debug("Batch received, submitting...")
+            logger.debug("%r received, forwarding to %r...", batch, self.__next_step)
 
             # TODO: This does not handle rejections from the next step!
             for message in batch:
@@ -159,29 +200,37 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
 
             self.__results.pop(0)
 
+        if self.__batch_builder is not None and self.__batch_builder.ready():
+            batch = self.__batch_builder.build()
+            logger.debug("Submitting %r to %r...", batch, self.__pool)
+            self.__submit_batch(batch)
+            self.__batch_builder = None
+
     def submit(self, message: Message[TPayload]) -> None:
         assert not self.__closed
 
-        self.__batch.append(message)
+        if self.__batch_builder is None:
+            self.__batch_builder = BatchBuilder(MessageBatch(), self.__max_batch_size)
 
-        if len(self.__batch) >= self.__max_batch_size:
-            # TODO: Add `__repr__` to batch.
-            logger.debug("Submitting batch to %r...", self.__pool)
-            self.__submit_batch()
+        self.__batch_builder.append(message)
 
     def close(self) -> None:
         self.__closed = True
 
-        if self.__batch:
-            logger.debug("Submitting batch to %r...", self.__pool)
-            self.__submit_batch()
+        if self.__batch_builder is not None and len(self.__batch_builder) > 0:
+            batch = self.__batch_builder.build()
+            logger.debug("Submitting %r to %r...", batch, self.__pool)
+            self.__submit_batch(batch)
+            self.__batch_builder = None
 
         self.__pool.close()
 
     def join(self, timeout: Optional[float] = None) -> None:
         logger.debug("Waiting for %s batches...", len(self.__results))
         for result in self.__results:
-            for message in self.__results.pop(0).get():
+            batch = self.__results.pop(0).get()
+            logger.debug("%r received, forwarding to %r...", batch, self.__next_step)
+            for message in batch:
                 self.__next_step.poll()
                 self.__next_step.submit(message)
 
