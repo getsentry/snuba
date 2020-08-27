@@ -216,8 +216,16 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
         from_date = util.parse_datetime(from_date_str, date_align)
 
         if from_date != from_date_ast:
+            logger.warning(
+                "Mismatch in start date on time splitter.",
+                extra={"ast": str(from_date_ast), "legacy": str(from_date)},
+            )
             metrics.increment("mismatch.ast_from_date")
         if to_date != to_date_ast:
+            logger.warning(
+                "Mismatch in end date on time splitter.",
+                extra={"ast": str(to_date_ast), "legacy": str(to_date)},
+            )
             metrics.increment("mismatch.ast_to_date")
 
         remaining_offset = query.get_offset()
@@ -342,17 +350,21 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             if match:
                 return None
 
-        total_col_count = len(query.get_all_referenced_columns())
-        total_ast_count = len(
-            # We need to count the number of table/column name pairs
-            # not the number of distinct Column objects in the query
-            # so to avoid counting aliased columns multiple times.
-            {
-                (col.table_name, col.column_name)
-                for col in query.get_all_ast_referenced_columns()
-            }
-        )
+        total_legacy_cols = query.get_all_referenced_columns()
+        total_col_count = len(total_legacy_cols)
+        # We need to count the number of table/column name pairs
+        # not the number of distinct Column objects in the query
+        # so to avoid counting aliased columns multiple times.
+        total_ast_cols = {
+            (col.table_name, col.column_name)
+            for col in query.get_all_ast_referenced_columns()
+        }
+        total_ast_count = len(total_ast_cols)
         if total_col_count != total_ast_count:
+            logger.warning(
+                "Mismatch in original query referenced column when splitting",
+                extra={"ast": total_ast_cols, "legacy": total_legacy_cols},
+            )
             metrics.increment("mismatch.total_referenced_columns")
 
         minimal_query = copy.deepcopy(query)
@@ -388,15 +400,19 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
                     exc_info=True,
                 )
 
-        minimal_ast_count = len(
-            {
-                (col.table_name, col.column_name)
-                for col in minimal_query.get_all_ast_referenced_columns()
-            }
-        )
-        minimal_count = len(minimal_query.get_all_referenced_columns())
+        minimal_ast_cols = {
+            (col.table_name, col.column_name)
+            for col in minimal_query.get_all_ast_referenced_columns()
+        }
+        minimal_ast_count = len(minimal_ast_cols)
+        minimal_legacy_cols = minimal_query.get_all_referenced_columns()
+        minimal_count = len(minimal_legacy_cols)
         if minimal_count != minimal_ast_count:
-            metrics.increment("mismatch.minimaL_query_referenced_columns")
+            logger.warning(
+                "Mismatch in minimal query referenced column when splitting",
+                extra={"ast": minimal_ast_cols, "legacy": minimal_legacy_cols},
+            )
+            metrics.increment("mismatch.minimal_query_referenced_columns")
 
         if total_col_count <= minimal_count:
             return None
