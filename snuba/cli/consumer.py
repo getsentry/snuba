@@ -76,7 +76,7 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
 @click.option(
     "--strategy",
     type=click.Choice([k.lower() for k in StrategyFactoryType.__members__.keys()]),
-    default="batching",
+    default="streaming",
 )
 def consumer(
     *,
