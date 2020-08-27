@@ -1,6 +1,8 @@
 import logging
+import signal
 import time
 from dataclasses import dataclass
+from multiprocessing import Pool
 from typing import Callable, Generic, Mapping, MutableMapping, Optional, TypeVar
 
 from snuba.utils.streams.processing import ProcessingStrategy
@@ -84,6 +86,41 @@ class TransformStep(ProcessingStep[TPayload]):
     def join(self, timeout: Optional[float] = None) -> None:
         self.__next_step.close()
         self.__next_step.join(timeout)
+
+
+def parallel_transform_worker_initializer() -> None:
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+
+class ParallelTransformStep(ProcessingStep[TPayload]):
+    def __init__(
+        self,
+        function: Callable[[Message[TPayload]], TTransformed],
+        next_step: ProcessingStep[TTransformed],
+        processes: int,
+    ) -> None:
+        self.__transform_function = function
+        self.__next_step = next_step
+
+        self.__pool = Pool(processes, initializer=parallel_transform_worker_initializer)
+
+        self.__closed = False
+
+    def poll(self) -> None:
+        raise NotImplementedError
+
+    def submit(self, message: Message[TPayload]) -> None:
+        assert not self.__closed
+
+        raise NotImplementedError
+
+    def close(self) -> None:
+        self.__closed = True
+
+        self.__pool.close()
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        self.__pool.join()
 
 
 @dataclass
