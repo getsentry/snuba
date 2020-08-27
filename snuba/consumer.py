@@ -301,7 +301,7 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         processor: MessageProcessor,
         writer: BatchWriter[JSONRow],
         max_batch_size: int,
-        max_batch_time: int,
+        max_batch_time: float,
         replacements_producer: Optional[ConfluentKafkaProducer] = None,
         replacements_topic: Optional[Topic] = None,
     ) -> None:
