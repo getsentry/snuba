@@ -4,7 +4,15 @@ import signal
 import time
 from dataclasses import dataclass
 from multiprocessing import Pool
-from typing import Callable, Generic, Mapping, MutableMapping, Optional, TypeVar
+from typing import (
+    Callable,
+    Generic,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    TypeVar,
+)
 
 from snuba.utils.streams.processing import ProcessingStrategy
 from snuba.utils.streams.types import Message, Partition, TPayload
@@ -94,11 +102,15 @@ def parallel_transform_worker_initializer() -> None:
 
 
 def parallel_transform_worker_apply(
-    function: Callable[[Message[TPayload]], TTransformed], message: Message[TPayload]
-) -> Message[TTransformed]:
-    return Message(
-        message.partition, message.offset, function(message), message.timestamp,
-    )
+    function: Callable[[Message[TPayload]], TTransformed],
+    batch: Sequence[Message[TPayload]],
+) -> Sequence[Message[TTransformed]]:
+    return [
+        Message(
+            message.partition, message.offset, function(message), message.timestamp,
+        )
+        for message in batch
+    ]
 
 
 class ParallelTransformStep(ProcessingStep[TPayload]):
@@ -107,49 +119,71 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         function: Callable[[Message[TPayload]], TTransformed],
         next_step: ProcessingStep[TTransformed],
         processes: int,
+        max_batch_size: int,
     ) -> None:
         self.__transform_function = function
         self.__next_step = next_step
+        self.__max_batch_size = max_batch_size
 
         self.__pool = Pool(processes, initializer=parallel_transform_worker_initializer)
 
+        self.__batch = []
         self.__results = []
 
         self.__closed = False
+
+    def __submit_batch(self) -> None:
+        self.__results.append(
+            self.__pool.apply_async(
+                parallel_transform_worker_apply,
+                (self.__transform_function, self.__batch),
+            )
+        )
+        self.__batch = []
 
     def poll(self) -> None:
         self.__next_step.poll()
 
         while self.__results:
             try:
-                value = self.__results[0].get(timeout=0)
+                batch = self.__results[0].get(timeout=0)
             except multiprocessing.TimeoutError:
                 break
 
-            self.__next_step.submit(value)
-            self.__results.pop(0)
+            logger.debug("Batch received, submitting...")
 
-            self.__next_step.poll()
+            # TODO: This does not handle rejections from the next step!
+            for message in batch:
+                self.__next_step.submit(message)
+                self.__next_step.poll()
+
+            self.__results.pop(0)
 
     def submit(self, message: Message[TPayload]) -> None:
         assert not self.__closed
 
-        self.__results.append(
-            self.__pool.apply_async(
-                parallel_transform_worker_apply, (self.__transform_function, message),
-            )
-        )
+        self.__batch.append(message)
+
+        if len(self.__batch) >= self.__max_batch_size:
+            # TODO: Add `__repr__` to batch.
+            logger.debug("Submitting batch to %r...", self.__pool)
+            self.__submit_batch()
 
     def close(self) -> None:
         self.__closed = True
 
+        if self.__batch:
+            logger.debug("Submitting batch to %r...", self.__pool)
+            self.__submit_batch()
+
         self.__pool.close()
 
     def join(self, timeout: Optional[float] = None) -> None:
-        logger.debug("Waiting for %s results...", len(self.__results))
+        logger.debug("Waiting for %s batches...", len(self.__results))
         for result in self.__results:
-            self.__next_step.poll()
-            self.__next_step.submit(self.__results.pop(0).get())
+            for message in self.__results.pop(0).get():
+                self.__next_step.poll()
+                self.__next_step.submit(message)
 
         logger.debug("Waiting for %s...", self.__pool)
         self.__pool.join()
