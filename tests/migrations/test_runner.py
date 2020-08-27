@@ -190,21 +190,21 @@ def test_transactions_compatibility() -> None:
     )
 
     assert get_sampling_key() == ""
-    generate_transactions(5)
 
     runner = Runner()
     runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
     runner._update_migration_status(
         MigrationKey(MigrationGroup.TRANSACTIONS, "0001_transactions"), Status.COMPLETED
     )
-    runner.run_migration(
-        MigrationKey(
-            MigrationGroup.TRANSACTIONS,
-            "0002_transactions_onpremise_fix_orderby_and_partitionby",
-        ),
-        force=True,
-    )
+    transaction_migrations = get_group_loader(
+        MigrationGroup.TRANSACTIONS
+    ).get_migrations()
+    for migration in transaction_migrations[1:]:
+        runner.run_migration(
+            MigrationKey(MigrationGroup.TRANSACTIONS, migration), force=True,
+        )
 
+    generate_transactions(5)
     assert get_sampling_key() == "cityHash64(span_id)"
 
     assert connection.execute("SELECT count(*) FROM transactions_local;") == [(5,)]
@@ -269,6 +269,19 @@ def generate_transactions(count: int) -> None:
                                     "op": "http",
                                     "status": "0",
                                 },
+                            },
+                            "request": {
+                                "url": "http://127.0.0.1:/query",
+                                "headers": [
+                                    ["Accept-Encoding", "identity"],
+                                    ["Content-Length", "398"],
+                                    ["Host", "127.0.0.1:"],
+                                    ["Referer", "tagstore.something"],
+                                    ["Trace", "8fa73032d-1"],
+                                ],
+                                "data": "",
+                                "method": "POST",
+                                "env": {"SERVER_PORT": "1010", "SERVER_NAME": "snuba"},
                             },
                             "spans": [
                                 {
