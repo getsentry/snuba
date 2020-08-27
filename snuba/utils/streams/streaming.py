@@ -108,6 +108,9 @@ class Batch(Generic[TPayload]):
         self.__offsets: MutableMapping[Partition, OffsetRange] = {}
         self.__closed = False
 
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__}: {len(self)} message{'s' if len(self) != 1 else ''}, open for {self.duration():0.2f} seconds>"
+
     def __len__(self) -> int:
         return self.__length
 
@@ -136,9 +139,11 @@ class Batch(Generic[TPayload]):
 
     def join(self, timeout: Optional[float] = None) -> None:
         self.__step.join(timeout)
-        self.__commit_function(
-            {partition: offsets.hi for partition, offsets in self.__offsets.items()}
-        )
+        offsets = {
+            partition: offsets.hi for partition, offsets in self.__offsets.items()
+        }
+        logger.debug("Committing offsets: %r", offsets)
+        self.__commit_function(offsets)
 
 
 class CollectStep(ProcessingStep[TPayload]):
@@ -166,6 +171,7 @@ class CollectStep(ProcessingStep[TPayload]):
         assert self.__batch is not None
         self.__batch.close()
         self.__batch.join()
+        logger.info("Completed processing %r.", self.__batch)
         self.__batch = None
 
     def poll(self) -> None:
@@ -200,4 +206,5 @@ class CollectStep(ProcessingStep[TPayload]):
     def join(self, timeout: Optional[float] = None) -> None:
         if self.__batch is not None:
             self.__batch.join(timeout)
+            logger.info("Completed processing %r.", self.__batch)
             self.__batch = None
