@@ -9,7 +9,6 @@ from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.parser.validation import ExpressionValidator
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
 from snuba.query.validation.signature import Any, Column, SignatureValidator
-from snuba.state import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -53,10 +52,6 @@ class FunctionCallsValidator(ExpressionValidator):
             if validator is not None:
                 validator.validate(exp.parameters, dataset.get_abstract_columnset())
         except InvalidFunctionCall as exception:
-            if get_config("enforce_expression_validation", 0):
-                raise InvalidExpressionException(
-                    exp,
-                    f"Illegal call to function {exp.function_name}: {str(exception)}",
-                ) from exception
-            else:
-                logger.warning("Query validation exception", exc_info=True)
+            raise InvalidExpressionException(
+                exp, f"Illegal call to function {exp.function_name}: {str(exception)}",
+            ) from exception
