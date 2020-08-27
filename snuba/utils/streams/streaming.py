@@ -152,7 +152,7 @@ class CollectStep(ProcessingStep[TPayload]):
         step_factory: Callable[[], ProcessingStep[TPayload]],
         commit_function: Callable[[Mapping[Partition, int]], None],
         max_batch_size: int,
-        max_batch_time: int,
+        max_batch_time: float,
     ) -> None:
         self.__step_factory = step_factory
         self.__commit_function = commit_function
