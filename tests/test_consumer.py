@@ -150,6 +150,9 @@ def test_streaming_consumer_strategy() -> None:
         writer,
         max_batch_size=10,
         max_batch_time=60,
+        processes=None,
+        input_block_size=None,
+        output_block_size=None,
         replacements_producer=replacements_producer,
         replacements_topic=Topic("replacements"),
     )
