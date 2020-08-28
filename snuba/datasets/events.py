@@ -24,6 +24,7 @@ from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.null_array_functions import NullArrayFunctionsProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
@@ -162,4 +163,5 @@ class EventsDataset(TimeSeriesDataset):
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             TimeSeriesColumnProcessor(self.__time_group_columns),
+            NullArrayFunctionsProcessor(),
         ]

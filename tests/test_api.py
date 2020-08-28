@@ -617,6 +617,104 @@ class TestApi(BaseApiTest):
         )
         assert result["data"][0]["null_group_id"] == 1
 
+    def test_null_array_conditions(self):
+        events = []
+        for value in (None, False, True):
+            events.append(
+                InsertEvent(
+                    {
+                        "organization_id": 1,
+                        "project_id": 4,
+                        "event_id": uuid.uuid4().hex,
+                        "group_id": 1,
+                        "datetime": (self.base_time).strftime(
+                            settings.PAYLOAD_DATETIME_FORMAT
+                        ),
+                        "message": f"handled {value}",
+                        "platform": "test",
+                        "primary_hash": self.hashes[0],
+                        "retention_days": settings.DEFAULT_RETENTION_DAYS,
+                        "data": {
+                            "received": calendar.timegm(self.base_time.timetuple()),
+                            "tags": {},
+                            "exception": {
+                                "values": [
+                                    {
+                                        "mechanism": {
+                                            "type": "UncaughtExceptionHandler",
+                                            "handled": value,
+                                        },
+                                        "stacktrace": {
+                                            "frames": [
+                                                {"filename": "foo.py", "lineno": 1},
+                                            ]
+                                        },
+                                    }
+                                ]
+                            },
+                        },
+                    }
+                )
+            )
+        self.write_events(events)
+
+        result = json.loads(
+            self.app.post(
+                "/query",
+                data=json.dumps(
+                    {
+                        "project": 4,
+                        "selected_columns": [
+                            "message",
+                            "exception_stacks.mechanism_handled",
+                        ],
+                        "conditions": [
+                            [
+                                [
+                                    "nullArrayExists",
+                                    ["exception_stacks.mechanism_handled", 1],
+                                ],
+                                "=",
+                                1,
+                            ]
+                        ],
+                        "orderby": ["message"],
+                    }
+                ),
+            ).data
+        )
+        assert len(result["data"]) == 2
+        assert result["data"][0]["message"] == "handled None"
+        assert result["data"][1]["message"] == "handled True"
+
+        result = json.loads(
+            self.app.post(
+                "/query",
+                data=json.dumps(
+                    {
+                        "project": 4,
+                        "selected_columns": [
+                            "message",
+                            "exception_stacks.mechanism_handled",
+                        ],
+                        "conditions": [
+                            [
+                                [
+                                    "notNullArrayExists",
+                                    ["exception_stacks.mechanism_handled", 0],
+                                ],
+                                "=",
+                                1,
+                            ]
+                        ],
+                        "orderby": ["message"],
+                    }
+                ),
+            ).data
+        )
+        assert len(result["data"]) == 1
+        assert result["data"][0]["message"] == "handled False"
+
     def test_escaping(self):
         # Escape single quotes so we don't get Bobby Tables'd
         result = json.loads(
