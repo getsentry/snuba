@@ -375,9 +375,13 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
             self.__submit_batch()
 
     def join(self, timeout: Optional[float] = None) -> None:
+        deadline = time.time() + timeout if timeout is not None else None
+
         logger.debug("Waiting for %s batches...", len(self.__results))
         while self.__results:
-            self.__check_for_results(timeout=None)
+            self.__check_for_results(
+                timeout=max(deadline - time.time(), 0) if deadline is not None else None
+            )
 
         self.__pool.close()
 
@@ -390,7 +394,9 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         self.__shared_memory_manager.shutdown()
 
         self.__next_step.close()
-        self.__next_step.join()
+        self.__next_step.join(
+            timeout=max(deadline - time.time(), 0) if deadline is not None else None
+        )
 
 
 @dataclass
