@@ -3,13 +3,16 @@ import multiprocessing
 import pickle
 import signal
 import time
+from collections import deque
 from dataclasses import dataclass
 from multiprocessing import Pool
 from multiprocessing.managers import SharedMemoryManager
+from multiprocessing.pool import AsyncResult
 from multiprocessing.shared_memory import SharedMemory
 from pickle import PickleBuffer
 from typing import (
     Callable,
+    Deque,
     Generic,
     Iterator,
     Mapping,
@@ -104,11 +107,16 @@ class TransformStep(ProcessingStep[TPayload]):
         self.__next_step.join(timeout)
 
 
+# A serialized message is composed of a pickled ``Message`` instance (bytes)
+# and a sequence of ``(offset, length)`` that referenced locations in a shared
+# memory block for out of band buffer transfer.
 SerializedMessage = Tuple[bytes, Sequence[Tuple[int, int]]]
 
 
 class ValueTooLarge(ValueError):
-    pass
+    """
+    Raised when a value is too large to be written to a shared memory block.
+    """
 
 
 class MessageBatch(Generic[TPayload]):
@@ -179,21 +187,24 @@ class BatchBuilder(Generic[TPayload]):
 
 
 def parallel_transform_worker_initializer() -> None:
+    # Worker process should ignore ``SIGINT`` so that processing is not
+    # interrupted by ``KeyboardInterrupt`` during graceful shutdown.
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
 def parallel_transform_worker_apply(
     function: Callable[[Message[TPayload]], TTransformed],
-    batch: MessageBatch[TPayload],
+    input_batch: MessageBatch[TPayload],
     output_block: SharedMemory,
-    i: int = 0,
+    start_index: int = 0,
 ) -> Tuple[int, MessageBatch[TTransformed]]:
-    result: MessageBatch[TTransformed] = MessageBatch(output_block)
+    output_batch: MessageBatch[TTransformed] = MessageBatch(output_block)
 
-    while i < len(batch):
-        message = batch[i]
+    i = start_index
+    while i < len(input_batch):
+        message = input_batch[i]
         try:
-            result.append(
+            output_batch.append(
                 Message(
                     message.partition,
                     message.offset,
@@ -202,11 +213,18 @@ def parallel_transform_worker_apply(
                 )
             )
         except ValueTooLarge:
-            break
+            # If the output batch cannot accept the transformed message when
+            # the batch is empty, we'll never be able to write it and should
+            # error instead of retrying. Otherwise, we need to return the
+            # values we've already accumulated and continue processing later.
+            if len(output_batch) == 0:
+                raise
+            else:
+                break
         else:
             i += 1
 
-    return (i, result)
+    return (i, output_batch)
 
 
 class ParallelTransformStep(ProcessingStep[TPayload]):
@@ -240,59 +258,63 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
 
         self.__batch_builder: Optional[BatchBuilder[TPayload]] = None
 
-        self.__results = []
+        self.__results: Deque[
+            Tuple[
+                MessageBatch[TPayload],
+                AsyncResult[Tuple[int, MessageBatch[TTransformed]]],
+            ]
+        ] = deque()
 
         self.__closed = False
 
-    def __submit_batch(
-        self,
-        batch: MessageBatch[TPayload],
-        output_block: Optional[SharedMemory] = None,
-        i: int = 0,
-    ) -> None:
+    def __submit_batch(self) -> None:
+        assert self.__batch_builder is not None
+        batch = self.__batch_builder.build()
+        logger.debug("Submitting %r to %r...", batch, self.__pool)
         self.__results.append(
             (
                 batch,
                 self.__pool.apply_async(
                     parallel_transform_worker_apply,
-                    (
-                        self.__transform_function,
-                        batch,
-                        (
-                            output_block
-                            if output_block is not None
-                            else self.__output_blocks.pop()
-                        ),
-                        i,
-                    ),
+                    (self.__transform_function, batch, self.__output_blocks.pop()),
                 ),
             )
         )
+        self.__batch_builder = None
 
     def __check_for_results(self, timeout: Optional[float] = None) -> None:
         input_batch, result = self.__results[0]
 
         i, output_batch = result.get(timeout=timeout)
 
-        logger.debug("%r received, forwarding to %r...", output_batch, self.__next_step)
-
         # TODO: This does not handle rejections from the next step!
         for message in output_batch:
             self.__next_step.submit(message)
             self.__next_step.poll()
 
-        if i == len(input_batch):
-            logger.debug("Batch complete, reclaiming blocks...")
-            self.__input_blocks.append(input_batch.block)
-            self.__output_blocks.append(output_batch.block)
-        else:
+        if i != len(input_batch):
             logger.warning(
                 "Received incomplete batch (%0.2f%% complete), resubmitting...",
                 i / len(input_batch) * 100,
             )
-            self.__submit_batch(input_batch, output_batch.block, i)
+            # TODO: This reserializes all the ``SerializedMessage`` data prior
+            # to the processed index even though the values at those indices
+            # will never be unpacked. It probably makes sense to remove that
+            # data from the batch to avoid unnecessary serialization overhead.
+            self.__results[0] = (
+                input_batch,
+                self.__pool.apply_async(
+                    parallel_transform_worker_apply,
+                    (self.__transform_function, input_batch, output_batch.block, i,),
+                ),
+            )
+            return
 
-        self.__results.pop(0)
+        logger.debug("Completed %r, reclaiming blocks...", input_batch)
+        self.__input_blocks.append(input_batch.block)
+        self.__output_blocks.append(output_batch.block)
+
+        del self.__results[0]
 
     def poll(self) -> None:
         self.__next_step.poll()
@@ -304,10 +326,7 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
                 break
 
         if self.__batch_builder is not None and self.__batch_builder.ready():
-            batch = self.__batch_builder.build()
-            logger.debug("Submitting %r to %r...", batch, self.__pool)
-            self.__submit_batch(batch)
-            self.__batch_builder = None
+            self.__submit_batch()
 
     def __reset_batch_builder(self) -> None:
         try:
@@ -329,10 +348,8 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         try:
             self.__batch_builder.append(message)
         except ValueTooLarge as e:
-            batch = self.__batch_builder.build()
-            logger.debug("Caught %r, submitting %r to %r...", e, batch, self.__pool)
-            self.__submit_batch(batch)
-            self.__batch_builder = None
+            logger.debug("Caught %r, closing batch and retrying...", e)
+            self.__submit_batch()
 
             self.__reset_batch_builder()
             assert self.__batch_builder is not None
@@ -343,20 +360,22 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         self.__closed = True
 
         if self.__batch_builder is not None and len(self.__batch_builder) > 0:
-            batch = self.__batch_builder.build()
-            logger.debug("Submitting %r to %r...", batch, self.__pool)
-            self.__submit_batch(batch)
-            self.__batch_builder = None
-
-        self.__pool.close()
+            self.__submit_batch()
 
     def join(self, timeout: Optional[float] = None) -> None:
         logger.debug("Waiting for %s batches...", len(self.__results))
         while self.__results:
             self.__check_for_results(timeout=None)
 
+        self.__pool.close()
+
         logger.debug("Waiting for %s...", self.__pool)
+        # ``Pool.join`` doesn't accept a timeout (?!) but this really shouldn't
+        # block for any significant amount of time unless something really went
+        # wrong (i.e. we lost track of a task)
         self.__pool.join()
+
+        self.__shared_memory_manager.shutdown()
 
         self.__next_step.close()
         self.__next_step.join()
