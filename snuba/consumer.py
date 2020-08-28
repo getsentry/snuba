@@ -321,6 +321,8 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         max_batch_size: int,
         max_batch_time: float,
         processes: Optional[int],
+        input_block_size: Optional[int],
+        output_block_size: Optional[int],
         replacements_producer: Optional[ConfluentKafkaProducer] = None,
         replacements_topic: Optional[Topic] = None,
     ) -> None:
@@ -330,7 +332,21 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
         self.__max_batch_size = max_batch_size
         self.__max_batch_time = max_batch_time
+
+        if processes is not None:
+            assert input_block_size is not None, "input block size required"
+            assert output_block_size is not None, "output block size required"
+        else:
+            assert (
+                input_block_size is None
+            ), "input block size cannot be used without processes"
+            assert (
+                output_block_size is None
+            ), "output block size cannot be used without processes"
+
         self.__processes = processes
+        self.__input_block_size = input_block_size
+        self.__output_block_size = output_block_size
 
         assert not (replacements_producer is None) ^ (replacements_topic is None)
         self.__supports_replacements = replacements_producer is not None
@@ -374,13 +390,16 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         if self.__processes is None:
             strategy = TransformStep(transform_function, collect)
         else:
+            assert self.__input_block_size is not None
+            assert self.__output_block_size is not None
             strategy = ParallelTransformStep(
                 transform_function,
                 collect,
                 self.__processes,
-                max_batch_size=1000,
-                input_block_size=int(8 * 1e6),
-                output_block_size=int(16 * 1e6),
+                max_batch_size=self.__max_batch_size,
+                max_batch_time=self.__max_batch_time,
+                input_block_size=self.__input_block_size,
+                output_block_size=self.__output_block_size,
             )
 
         if self.__prefilter is not None:

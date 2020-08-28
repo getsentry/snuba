@@ -166,9 +166,12 @@ class MessageBatch(Generic[TPayload]):
 
 
 class BatchBuilder(Generic[TPayload]):
-    def __init__(self, batch: MessageBatch[TPayload], max_batch_size: int) -> None:
+    def __init__(
+        self, batch: MessageBatch[TPayload], max_batch_size: int, max_batch_time: float
+    ) -> None:
         self.__batch = batch
         self.__max_batch_size = max_batch_size
+        self.__deadline = time.time() + max_batch_time
 
     def __len__(self) -> int:
         return len(self.__batch)
@@ -178,6 +181,8 @@ class BatchBuilder(Generic[TPayload]):
 
     def ready(self) -> bool:
         if len(self.__batch) >= self.__max_batch_size:
+            return True
+        elif time.time() >= self.__deadline:
             return True
         else:
             return False
@@ -234,12 +239,14 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         next_step: ProcessingStep[TTransformed],
         processes: int,
         max_batch_size: int,
+        max_batch_time: float,
         input_block_size: int,
         output_block_size: int,
     ) -> None:
         self.__transform_function = function
         self.__next_step = next_step
         self.__max_batch_size = max_batch_size
+        self.__max_batch_time = max_batch_time
 
         self.__shared_memory_manager = SharedMemoryManager()
         self.__shared_memory_manager.start()
@@ -335,7 +342,7 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
             raise MessageRejected("no available input blocks") from e
 
         self.__batch_builder = BatchBuilder(
-            MessageBatch(input_block), self.__max_batch_size
+            MessageBatch(input_block), self.__max_batch_size, self.__max_batch_time,
         )
 
     def submit(self, message: Message[TPayload]) -> None:

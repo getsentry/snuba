@@ -49,6 +49,8 @@ class ConsumerBuilder:
         queued_min_messages: int,
         strategy_factory_type: StrategyFactoryType,
         processes: Optional[int],
+        input_block_size: Optional[int],
+        output_block_size: Optional[int],
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
@@ -106,6 +108,8 @@ class ConsumerBuilder:
         self.queued_min_messages = queued_min_messages
         self.strategy_factory_type = strategy_factory_type
         self.processes = processes
+        self.input_block_size = input_block_size
+        self.output_block_size = output_block_size
 
         if (
             self.processes is not None
@@ -188,6 +192,8 @@ class ConsumerBuilder:
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
             processes=self.processes,
+            input_block_size=self.input_block_size,
+            output_block_size=self.output_block_size,
             replacements_producer=(
                 self.producer if self.replacements_topic is not None else None
             ),
