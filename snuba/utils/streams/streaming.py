@@ -1,11 +1,13 @@
 import logging
 import multiprocessing
+import pickle
 import signal
 import time
 from dataclasses import dataclass
 from multiprocessing import Pool
 from multiprocessing.managers import SharedMemoryManager
 from multiprocessing.shared_memory import SharedMemory
+from pickle import PickleBuffer
 from typing import (
     Callable,
     Generic,
@@ -14,6 +16,8 @@ from typing import (
     MutableMapping,
     MutableSequence,
     Optional,
+    Sequence,
+    Tuple,
     TypeVar,
 )
 
@@ -100,23 +104,53 @@ class TransformStep(ProcessingStep[TPayload]):
         self.__next_step.join(timeout)
 
 
+SerializedMessage = Tuple[bytes, Sequence[Tuple[int, int]]]
+
+
+class ValueTooLarge(ValueError):
+    pass
+
+
 class MessageBatch(Generic[TPayload]):
     def __init__(self, block: SharedMemory) -> None:
         self.block = block
-        self.__messages: MutableSequence[Message[TPayload]] = []
+        self.__items: MutableSequence[SerializedMessage] = []
+        self.__offset = 0
 
     def __repr__(self) -> str:
-        return f"<{type(self).__name__}: {len(self)} items>"
+        return f"<{type(self).__name__}: {len(self)} items, {self.__offset} bytes>"
 
     def __len__(self) -> int:
-        return len(self.__messages)
+        return len(self.__items)
 
     def __iter__(self) -> Iterator[Message[TPayload]]:
-        for message in self.__messages:
-            yield message
+        for data, buffers in self.__items:
+            yield pickle.loads(
+                data,
+                buffers=[
+                    self.block.buf[offset : offset + length].tobytes()
+                    for offset, length in buffers
+                ],
+            )
 
     def append(self, message: Message[TPayload]) -> None:
-        self.__messages.append(message)
+        buffers: MutableSequence[Tuple[int, int]] = []
+
+        def buffer_callback(buffer: PickleBuffer) -> None:
+            value = buffer.raw()
+            offset = self.__offset
+            length = len(value)
+            if offset + length > self.block.size:
+                raise ValueTooLarge(
+                    f"value exceeds available space in block, {length} bytes needed but {self.block.size - offset} bytes free"
+                )
+            self.block.buf[offset : offset + length] = value
+            self.__offset += length
+            buffers.append((offset, length))
+
+        data = pickle.dumps(message, protocol=5, buffer_callback=buffer_callback)
+
+        self.__items.append((data, buffers))
 
 
 class BatchBuilder(Generic[TPayload]):
@@ -234,20 +268,35 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
             self.__submit_batch(batch)
             self.__batch_builder = None
 
+    def __reset_batch_builder(self) -> None:
+        try:
+            input_block = self.__input_blocks.pop()
+        except IndexError as e:
+            raise MessageRejected("no available input blocks") from e
+
+        self.__batch_builder = BatchBuilder(
+            MessageBatch(input_block), self.__max_batch_size
+        )
+
     def submit(self, message: Message[TPayload]) -> None:
         assert not self.__closed
 
         if self.__batch_builder is None:
-            try:
-                input_block = self.__input_blocks.pop()
-            except IndexError as e:
-                raise MessageRejected("no available input blocks") from e
+            self.__reset_batch_builder()
+            assert self.__batch_builder is not None
 
-            self.__batch_builder = BatchBuilder(
-                MessageBatch(input_block), self.__max_batch_size
-            )
+        try:
+            self.__batch_builder.append(message)
+        except ValueTooLarge as e:
+            batch = self.__batch_builder.build()
+            logger.debug("Caught %r, submitting %r to %r...", e, batch, self.__pool)
+            self.__submit_batch(batch)
+            self.__batch_builder = None
 
-        self.__batch_builder.append(message)
+            self.__reset_batch_builder()
+            assert self.__batch_builder is not None
+
+            self.__batch_builder.append(message)
 
     def close(self) -> None:
         self.__closed = True
