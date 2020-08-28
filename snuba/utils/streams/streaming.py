@@ -186,15 +186,27 @@ def parallel_transform_worker_apply(
     function: Callable[[Message[TPayload]], TTransformed],
     batch: MessageBatch[TPayload],
     output_block: SharedMemory,
-) -> MessageBatch[TTransformed]:
+    i: int = 0,
+) -> Tuple[int, MessageBatch[TTransformed]]:
     result: MessageBatch[TTransformed] = MessageBatch(output_block)
-    for message in batch:
-        result.append(
-            Message(
-                message.partition, message.offset, function(message), message.timestamp,
+
+    while i < len(batch):
+        message = batch[i]
+        try:
+            result.append(
+                Message(
+                    message.partition,
+                    message.offset,
+                    function(message),
+                    message.timestamp,
+                )
             )
-        )
-    return result
+        except ValueTooLarge:
+            break
+        else:
+            i += 1
+
+    return (i, result)
 
 
 class ParallelTransformStep(ProcessingStep[TPayload]):
@@ -232,39 +244,64 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
 
         self.__closed = False
 
-    def __submit_batch(self, batch: MessageBatch[TPayload]) -> None:
+    def __submit_batch(
+        self,
+        batch: MessageBatch[TPayload],
+        output_block: Optional[SharedMemory] = None,
+        i: int = 0,
+    ) -> None:
         self.__results.append(
             (
-                batch.block,
+                batch,
                 self.__pool.apply_async(
                     parallel_transform_worker_apply,
-                    (self.__transform_function, batch, self.__output_blocks.pop()),
+                    (
+                        self.__transform_function,
+                        batch,
+                        (
+                            output_block
+                            if output_block is not None
+                            else self.__output_blocks.pop()
+                        ),
+                        i,
+                    ),
                 ),
             )
         )
+
+    def __check_for_results(self, timeout: Optional[float] = None) -> None:
+        input_batch, result = self.__results[0]
+
+        i, output_batch = result.get(timeout=timeout)
+
+        logger.debug("%r received, forwarding to %r...", output_batch, self.__next_step)
+
+        # TODO: This does not handle rejections from the next step!
+        for message in output_batch:
+            self.__next_step.submit(message)
+            self.__next_step.poll()
+
+        if i == len(input_batch):
+            logger.debug("Batch complete, reclaiming blocks...")
+            self.__input_blocks.append(input_batch.block)
+            self.__output_blocks.append(output_batch.block)
+        else:
+            logger.warning(
+                "Received incomplete batch (%0.2f%% complete), resubmitting...",
+                i / len(input_batch) * 100,
+            )
+            self.__submit_batch(input_batch, output_batch.block, i)
+
+        self.__results.pop(0)
 
     def poll(self) -> None:
         self.__next_step.poll()
 
         while self.__results:
-            input_block, result = self.__results[0]
-
             try:
-                batch = result.get(timeout=0)
+                self.__check_for_results(timeout=0)
             except multiprocessing.TimeoutError:
                 break
-
-            logger.debug("%r received, forwarding to %r...", batch, self.__next_step)
-
-            # TODO: This does not handle rejections from the next step!
-            for message in batch:
-                self.__next_step.submit(message)
-                self.__next_step.poll()
-
-            self.__input_blocks.append(input_block)
-            self.__output_blocks.append(batch.block)
-
-            self.__results.pop(0)
 
         if self.__batch_builder is not None and self.__batch_builder.ready():
             batch = self.__batch_builder.build()
@@ -316,12 +353,7 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
     def join(self, timeout: Optional[float] = None) -> None:
         logger.debug("Waiting for %s batches...", len(self.__results))
         while self.__results:
-            _, result = self.__results.pop(0)
-            batch = result.get()
-            logger.debug("%r received, forwarding to %r...", batch, self.__next_step)
-            for message in batch:
-                self.__next_step.poll()
-                self.__next_step.submit(message)
+            self.__check_for_results(timeout=None)
 
         logger.debug("Waiting for %s...", self.__pool)
         self.__pool.join()
