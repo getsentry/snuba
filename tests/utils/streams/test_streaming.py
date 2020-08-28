@@ -1,9 +1,18 @@
 import itertools
+import pytest
 from datetime import datetime
+from multiprocessing.managers import SharedMemoryManager
 from typing import Iterator
 from unittest.mock import Mock, call
 
-from snuba.utils.streams.streaming import CollectStep, FilterStep, TransformStep
+from snuba.utils.streams.kafka import KafkaPayload
+from snuba.utils.streams.streaming import (
+    CollectStep,
+    FilterStep,
+    MessageBatch,
+    TransformStep,
+    ValueTooLarge,
+)
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.assertions import assert_changes, assert_does_not_change
 
@@ -115,3 +124,26 @@ def test_collect() -> None:
         lambda: commit_function.call_count, 1, 2
     ):
         collect_step.join()
+
+
+def test_message_batch() -> None:
+    partition = Partition(Topic("test"), 0)
+    with SharedMemoryManager() as smm:
+        block = smm.SharedMemory(4096)
+        assert block.size == 4096
+
+        message = Message(
+            partition, 0, KafkaPayload(None, b"\x00" * 4000, None), datetime.now()
+        )
+
+        batch: MessageBatch[KafkaPayload] = MessageBatch(block)
+        with assert_changes(lambda: len(batch), 0, 1):
+            batch.append(message)
+
+        assert batch[0] == message
+        assert list(batch) == [message]
+
+        with assert_does_not_change(lambda: len(batch), 1), pytest.raises(
+            ValueTooLarge
+        ):
+            batch.append(message)
