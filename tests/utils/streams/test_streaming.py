@@ -10,6 +10,7 @@ from snuba.utils.streams.streaming import (
     CollectStep,
     FilterStep,
     MessageBatch,
+    ParallelTransformStep,
     TransformStep,
     ValueTooLarge,
     parallel_transform_worker_apply,
@@ -202,3 +203,36 @@ def test_parallel_transform_worker_apply() -> None:
             parallel_transform_worker_apply(
                 transform_payload_expand, input_batch, output_block, index,
             )
+
+
+def test_parallel_transform_step() -> None:
+    next_step = Mock()
+
+    messages = [
+        Message(
+            Partition(Topic("test"), 0),
+            i,
+            KafkaPayload(None, b"\x00" * size, None),
+            datetime.now(),
+        )
+        for i, size in enumerate([1000, 1000, 2000, 2000])
+    ]
+
+    transform_step = ParallelTransformStep(
+        transform_payload_expand,
+        next_step,
+        processes=2,
+        max_batch_size=5,
+        max_batch_time=60,
+        input_block_size=4096,
+        output_block_size=4096,
+    )
+
+    for message in messages:
+        transform_step.poll()
+        transform_step.submit(message)
+
+    transform_step.close()
+    transform_step.join()
+
+    assert next_step.submit.call_count == len(messages)
