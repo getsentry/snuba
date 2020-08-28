@@ -379,8 +379,8 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
                 collect,
                 self.__processes,
                 max_batch_size=1000,
-                input_block_size=8 * 1024,
-                output_block_size=8 * 1024,
+                input_block_size=int(8 * 1e6),
+                output_block_size=int(16 * 1e6),
             )
 
         if self.__prefilter is not None:
