@@ -3,6 +3,7 @@ import itertools
 import logging
 import time
 from datetime import datetime
+from pickle import PickleBuffer
 from typing import (
     Any,
     Callable,
@@ -40,13 +41,6 @@ from snuba.utils.streams.streaming import (
 )
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.writer import BatchWriter, BatchWriterEncoderWrapper, WriterTableRow
-
-try:
-    # PickleBuffer is only available in Python 3.8 and above and when using the
-    # pickle protocol version 5 and greater.
-    from pickle import PickleBuffer
-except ImportError:
-    pass
 
 
 logger = logging.getLogger("snuba.consumer")
