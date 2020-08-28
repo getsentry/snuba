@@ -358,9 +358,14 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
             logger.debug("Caught %r, closing batch and retrying...", e)
             self.__submit_batch()
 
+            # This may raise ``MessageRejected`` (if all of the shared memory
+            # is in use) and create backpressure.
             self.__reset_batch_builder()
             assert self.__batch_builder is not None
 
+            # If this raises ``ValueTooLarge``, that means that the input block
+            # size is too small (smaller than the Kafka payload limit without
+            # compression.)
             self.__batch_builder.append(message)
 
     def close(self) -> None:
