@@ -18,6 +18,10 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
+from snuba.query.matchers import (
+    FunctionCall as FunctionCallMatch,
+    String as StringMatch,
+)
 from snuba.query.parser.conditions import parse_conditions_to_expr
 from snuba.query.parser.exceptions import (
     AliasShadowingException,
@@ -71,6 +75,7 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     # WARNING: These steps above assume table resolution did not happen
     # yet. If it is put earlier than here (unlikely), we need to adapt them.
     _deescape_aliases(query)
+    _validate_arrayjoin(query)
     validate_query(query, dataset)
     return query
 
@@ -303,6 +308,37 @@ def _expand_aliases(query: Query) -> None:
 
     visitor = AliasExpanderVisitor(fully_resolved_aliases, [])
     query.transform(visitor)
+
+
+ARRAYJOIN_FUNCTION_MATCH = FunctionCallMatch(None, StringMatch("arrayJoin"), None)
+
+
+def _validate_arrayjoin(query: Query) -> None:
+    # TODO: Actually validate arrayjoin. For now log how it is used.
+    body_arrayjoin = ""
+    arrayjoin = query.get_arrayjoin_from_ast()
+    if arrayjoin is not None:
+        if isinstance(arrayjoin, Column):
+            body_arrayjoin = arrayjoin.column_name
+
+    array_joins = set()
+    if body_arrayjoin:
+        array_joins.add(body_arrayjoin)
+    for exp in query.get_all_expressions():
+        match = ARRAYJOIN_FUNCTION_MATCH.match(exp)
+        if match is not None:
+            if isinstance(exp, Column):
+                array_joins.add(exp.column_name)
+            else:
+                array_joins.add(f"{type(exp)}")
+
+    if len(array_joins) > 0:
+        join_type = "body" if body_arrayjoin else "function"
+        suffix = "gt1" if len(array_joins) > 1 else "eq1"
+        key = f"arrayjoin.{join_type}.{suffix}"
+        metrics.increment(
+            key, tags={"arrayjoin": ",".join(array_joins)},
+        )
 
 
 DEESCAPER_RE = re.compile(r"^`(.+)`$")
