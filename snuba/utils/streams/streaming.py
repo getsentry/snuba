@@ -296,8 +296,8 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
 
         # TODO: This does not handle rejections from the next step!
         for message in output_batch:
-            self.__next_step.submit(message)
             self.__next_step.poll()
+            self.__next_step.submit(message)
 
         if i != len(input_batch):
             logger.warning(
