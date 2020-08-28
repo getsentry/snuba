@@ -123,15 +123,19 @@ class MessageBatch(Generic[TPayload]):
     def __len__(self) -> int:
         return len(self.__items)
 
+    def __getitem__(self, index: int) -> Message[TPayload]:
+        data, buffers = self.__items[index]
+        return pickle.loads(
+            data,
+            buffers=[
+                self.block.buf[offset : offset + length].tobytes()
+                for offset, length in buffers
+            ],
+        )
+
     def __iter__(self) -> Iterator[Message[TPayload]]:
-        for data, buffers in self.__items:
-            yield pickle.loads(
-                data,
-                buffers=[
-                    self.block.buf[offset : offset + length].tobytes()
-                    for offset, length in buffers
-                ],
-            )
+        for i in range(len(self.__items)):
+            yield self[i]
 
     def append(self, message: Message[TPayload]) -> None:
         buffers: MutableSequence[Tuple[int, int]] = []
