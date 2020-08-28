@@ -12,6 +12,7 @@ from snuba.utils.streams.streaming import (
     MessageBatch,
     TransformStep,
     ValueTooLarge,
+    parallel_transform_worker_apply,
 )
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.assertions import assert_changes, assert_does_not_change
@@ -128,6 +129,7 @@ def test_collect() -> None:
 
 def test_message_batch() -> None:
     partition = Partition(Topic("test"), 0)
+
     with SharedMemoryManager() as smm:
         block = smm.SharedMemory(4096)
         assert block.size == 4096
@@ -147,3 +149,56 @@ def test_message_batch() -> None:
             ValueTooLarge
         ):
             batch.append(message)
+
+
+def transform_payload_expand(message: Message[KafkaPayload]) -> KafkaPayload:
+    return KafkaPayload(
+        message.payload.key, message.payload.value * 2, message.payload.headers,
+    )
+
+
+def test_parallel_transform_worker_apply() -> None:
+    messages = [
+        Message(
+            Partition(Topic("test"), 0),
+            i,
+            KafkaPayload(None, b"\x00" * size, None),
+            datetime.now(),
+        )
+        for i, size in enumerate([1000, 1000, 2000, 4000])
+    ]
+
+    with SharedMemoryManager() as smm:
+        input_block = smm.SharedMemory(8192)
+        assert input_block.size == 8192
+
+        input_batch = MessageBatch(input_block)
+        for message in messages:
+            input_batch.append(message)
+
+        assert len(input_batch) == 4
+
+        output_block = smm.SharedMemory(4096)
+        assert output_block.size == 4096
+
+        index, output_batch = parallel_transform_worker_apply(
+            transform_payload_expand, input_batch, output_block,
+        )
+
+        # The first batch should be able to fit 2 messages.
+        assert index == 2
+        assert len(output_batch) == 2
+
+        index, output_batch = parallel_transform_worker_apply(
+            transform_payload_expand, input_batch, output_block, index,
+        )
+
+        # The second batch should be able to fit one message.
+        assert index == 3
+        assert len(output_batch) == 1
+
+        # The last message is too large to fit in the batch.
+        with pytest.raises(ValueTooLarge):
+            parallel_transform_worker_apply(
+                transform_payload_expand, input_batch, output_block, index,
+            )
