@@ -109,6 +109,7 @@ class TransactionsLoader(DirectoryLoader):
             "0004_transactions_add_tags_hash_map",
             "0005_transactions_add_measurements",
             "0006_transactions_add_http_fields",
+            "0007_spans",
         ]
 
 
