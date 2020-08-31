@@ -1,13 +1,20 @@
 import calendar
 import itertools
+import pickle
 from datetime import datetime, timedelta
+from pickle import PickleBuffer
+from typing import MutableSequence
 from unittest.mock import Mock
 
 import pytest
 import simplejson as json
 
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.consumer import ConsumerWorker, StreamingConsumerStrategyFactory
+from snuba.consumer import (
+    ConsumerWorker,
+    JSONRowInsertBatch,
+    StreamingConsumerStrategyFactory,
+)
 from snuba.datasets.factory import enforce_table_writer
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
@@ -143,6 +150,9 @@ def test_streaming_consumer_strategy() -> None:
         writer,
         max_batch_size=10,
         max_batch_time=60,
+        processes=None,
+        input_block_size=None,
+        output_block_size=None,
         replacements_producer=replacements_producer,
         replacements_topic=Topic("replacements"),
     )
@@ -165,3 +175,16 @@ def test_streaming_consumer_strategy() -> None:
 
     assert writer.write.call_count == 1
     assert len(replacements_producer.messages) == 1
+
+
+def test_json_row_batch_pickle_simple() -> None:
+    batch = JSONRowInsertBatch([b"foo", b"bar", b"baz"])
+    assert pickle.loads(pickle.dumps(batch)) == batch
+
+
+def test_json_row_batch_pickle_out_of_band() -> None:
+    batch = JSONRowInsertBatch([b"foo", b"bar", b"baz"])
+
+    buffers: MutableSequence[PickleBuffer] = []
+    data = pickle.dumps(batch, protocol=5, buffer_callback=buffers.append)
+    assert pickle.loads(data, buffers=[b.raw() for b in buffers]) == batch

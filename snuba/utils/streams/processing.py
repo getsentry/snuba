@@ -217,12 +217,13 @@ class StreamProcessor(Generic[TPayload]):
                     # If the processing strategy rejected our message, we need
                     # to pause the consumer and hold the message until it is
                     # accepted, at which point we can resume consuming.
-                    logger.debug(
-                        "Caught %r while submitting %r, pausing consumer...",
-                        e,
-                        self.__message,
-                    )
-                    self.__consumer.pause([*self.__consumer.tell().keys()])
+                    if not message_carried_over:
+                        logger.debug(
+                            "Caught %r while submitting %r, pausing consumer...",
+                            e,
+                            self.__message,
+                        )
+                        self.__consumer.pause([*self.__consumer.tell().keys()])
                 else:
                     # If we were trying to submit a message that failed to be
                     # submitted on a previous run, we can resume accepting new

@@ -4,7 +4,6 @@ from typing import Optional, Sequence
 from confluent_kafka import KafkaError, KafkaException, Producer
 
 from snuba import environment
-from snuba.clickhouse.http import JSONRowEncoder
 from snuba.consumer import ConsumerWorker, StreamingConsumerStrategyFactory
 from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.storages import StorageKey
@@ -23,7 +22,6 @@ from snuba.utils.streams.kafka import (
 )
 from snuba.utils.streams.processing import ProcessingStrategyFactory, StreamProcessor
 from snuba.utils.streams.types import Topic
-from snuba.writer import BatchWriterEncoderWrapper
 
 
 StrategyFactoryType = Enum("StrategyFactoryType", ["BATCHING", "STREAMING"])
@@ -50,6 +48,9 @@ class ConsumerBuilder:
         queued_max_messages_kbytes: int,
         queued_min_messages: int,
         strategy_factory_type: StrategyFactoryType,
+        processes: Optional[int],
+        input_block_size: Optional[int],
+        output_block_size: Optional[int],
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
@@ -106,6 +107,17 @@ class ConsumerBuilder:
         self.queued_max_messages_kbytes = queued_max_messages_kbytes
         self.queued_min_messages = queued_min_messages
         self.strategy_factory_type = strategy_factory_type
+        self.processes = processes
+        self.input_block_size = input_block_size
+        self.output_block_size = output_block_size
+
+        if (
+            self.processes is not None
+            and self.strategy_factory_type is not StrategyFactoryType.STREAMING
+        ):
+            raise ValueError(
+                "process count can only be specified when using streaming strategy"
+            )
 
         if commit_retry_policy is None:
             commit_retry_policy = BasicRetryPolicy(
@@ -173,15 +185,15 @@ class ConsumerBuilder:
         return StreamingConsumerStrategyFactory(
             stream_loader.get_pre_filter(),
             stream_loader.get_processor(),
-            BatchWriterEncoderWrapper(
-                table_writer.get_writer(
-                    self.metrics,
-                    {"load_balancing": "in_order", "insert_distributed_sync": 1},
-                ),
-                JSONRowEncoder(),
+            table_writer.get_writer(
+                self.metrics,
+                {"load_balancing": "in_order", "insert_distributed_sync": 1},
             ),
             max_batch_size=self.max_batch_size,
-            max_batch_time=self.max_batch_time_ms,
+            max_batch_time=self.max_batch_time_ms / 1000.0,
+            processes=self.processes,
+            input_block_size=self.input_block_size,
+            output_block_size=self.output_block_size,
             replacements_producer=(
                 self.producer if self.replacements_topic is not None else None
             ),

@@ -5,6 +5,7 @@ from typing import Any, Iterable, List, Optional, Tuple, Union
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
+from snuba.clickhouse.columns import ColumnSet
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -162,13 +163,15 @@ class ClickhouseVisitor(NodeVisitor):
         return generic_visit(node, visited_children)
 
 
-def parse_expression(val: Any) -> Expression:
+def parse_expression(
+    val: Any, dataset_columns: ColumnSet, arrayjoin: Optional[str] = ""
+) -> Expression:
     """
     Parse a simple or structured expression encoded in the Snuba query language
     into an AST Expression.
     """
     if is_function(val, 0):
-        return parse_function_to_expr(val)
+        return parse_function_to_expr(val, dataset_columns, arrayjoin)
     if isinstance(val, str):
         return parse_string_to_expr(val)
     raise ParsingException(
@@ -186,7 +189,10 @@ def parse_clickhouse_function(function: str) -> Expression:
 
 
 def parse_aggregation(
-    aggregation_function: str, column: Any, alias: Optional[str]
+    aggregation_function: str,
+    column: Any,
+    alias: Optional[str],
+    dataset_columns: ColumnSet,
 ) -> Expression:
     """
     Aggregations, unfortunately, support both Snuba syntax and a subset
@@ -201,7 +207,9 @@ def parse_aggregation(
     else:
         columns = column
 
-    columns_expr = [parse_expression(column) for column in columns if column]
+    columns_expr = [
+        parse_expression(column, dataset_columns) for column in columns if column
+    ]
 
     matched = FUNCTION_NAME_RE.fullmatch(aggregation_function)
 
