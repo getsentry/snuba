@@ -86,7 +86,9 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
     ) -> List[SelectedExpression]:
         output = []
         for raw_expression in raw_expressions:
-            exp = parse_expression(tuplify(raw_expression))
+            exp = parse_expression(
+                tuplify(raw_expression), dataset.get_abstract_columnset()
+            )
             output.append(
                 SelectedExpression(
                     # An expression in the query can be a string or a
@@ -118,7 +120,12 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
         aggregations.append(
             SelectedExpression(
                 name=alias,
-                expression=parse_aggregation(aggregation_function, column_expr, alias),
+                expression=parse_aggregation(
+                    aggregation_function,
+                    column_expr,
+                    alias,
+                    dataset.get_abstract_columnset(),
+                ),
             )
         )
 
@@ -132,9 +139,25 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
 
     arrayjoin = body.get("arrayjoin")
     if arrayjoin:
-        array_join_expr: Optional[Expression] = parse_expression(body["arrayjoin"])
+        array_join_expr: Optional[Expression] = parse_expression(
+            body["arrayjoin"], dataset.get_abstract_columnset()
+        )
     else:
         array_join_expr = None
+        for select_expr in select_clause:
+            if isinstance(select_expr.expression, FunctionCall):
+                if select_expr.expression.function_name == "arrayJoin":
+                    if arrayjoin:
+                        raise ParsingException(
+                            "Only one arrayJoin(...) call is allowed in a query."
+                        )
+
+                    parameters = select_expr.expression.parameters
+                    if len(parameters) != 1 or not isinstance(parameters[0], Column):
+                        raise ParsingException(
+                            "arrayJoin(...) only accepts a single column as a parameter."
+                        )
+                    arrayjoin = select_expr.expression.parameters[0].column_name
 
     where_expr = parse_conditions_to_expr(
         body.get("conditions", []), dataset, arrayjoin
@@ -172,7 +195,9 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
                     "a string nor a function call."
                 )
             )
-        orderby_parsed = parse_expression(tuplify(orderby))
+        orderby_parsed = parse_expression(
+            tuplify(orderby), dataset.get_abstract_columnset()
+        )
         orderby_exprs.append(
             OrderBy(
                 OrderByDirection.DESC if direction == "-" else OrderByDirection.ASC,
