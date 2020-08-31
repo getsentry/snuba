@@ -59,14 +59,19 @@ def forwards() -> None:
     # Insert sample clause before TTL
     if sampling_key_needs_update:
         assert "SAMPLE BY" not in new_create_table_statement
-        idx = new_create_table_statement.find("TTL")
+        pos = new_create_table_statement.find("TTL")
+        idx = pos if pos >= 0 else new_create_table_statement.find("SETTINGS")
 
-        new_create_table_statement = (
-            new_create_table_statement[:idx]
-            + f" SAMPLE BY {new_sampling_key} "
-            + new_create_table_statement[idx:]
-        )
-
+        if idx >= 0:
+            new_create_table_statement = (
+                new_create_table_statement[:idx]
+                + f" SAMPLE BY {new_sampling_key} "
+                + new_create_table_statement[idx:]
+            )
+        else:
+            new_create_table_statement = (
+                f"{new_create_table_statement} SAMPLE BY {new_sampling_key}"
+            )
     # Switch the partition key
     if partition_key_needs_update:
         assert new_create_table_statement.count(curr_partition_key) == 1
