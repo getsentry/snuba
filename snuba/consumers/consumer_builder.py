@@ -166,15 +166,26 @@ class ConsumerBuilder:
         )
 
     def __build_streaming_strategy_factory(self) -> StreamingConsumerStrategyFactory:
-        table_writer = self.storage.get_table_writer()
-        stream_loader = table_writer.get_stream_loader()
-        return StreamingConsumerStrategyFactory(
-            stream_loader.get_pre_filter(),
-            stream_loader.get_processor(),
-            table_writer.get_writer(
+        transact_table_writer = get_writable_storage(
+            StorageKey.TRANSACTIONS
+        ).get_table_writer()
+        spans_table_writer = get_writable_storage(StorageKey.SPANS).get_table_writer()
+        writers = {
+            StorageKey.TRANSACTIONS: transact_table_writer.get_writer(
                 self.metrics,
                 {"load_balancing": "in_order", "insert_distributed_sync": 1},
             ),
+            StorageKey.SPANS: spans_table_writer.get_writer(
+                self.metrics,
+                {"load_balancing": "in_order", "insert_distributed_sync": 1},
+            ),
+        }
+
+        stream_loader = transact_table_writer.get_stream_loader()
+        return StreamingConsumerStrategyFactory(
+            stream_loader.get_pre_filter(),
+            stream_loader.get_processor(),
+            writers,
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
             replacements_producer=(

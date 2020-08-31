@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
-
+from snuba.datasets.storages import StorageKey
 from snuba import environment
 from snuba.datasets.events_format import (
     enforce_retention,
@@ -159,4 +159,45 @@ class TransactionsMessageProcessor(MessageProcessor):
         if processed["sdk_version"] == "":
             metrics.increment("missing_sdk_version")
 
-        return InsertBatch([processed])
+        # Now process spans
+        spans = data["spans"]
+        ret = []
+        for s in spans:
+            span = {}
+            span["project_id"] = processed["project_id"]
+            span["transaction_id"] = processed["event_id"]
+            span["span_id"] = int(s["span_id"], 16)
+            span["parent_span_id"] = int(s["parent_span_id"], 16)
+            span["description"] = s["description"] or ""
+            span["op"] = s["op"]
+
+            status = s.get("status", None)
+            if status:
+                int_status = SPAN_STATUS_NAME_TO_CODE.get(status, UNKNOWN_SPAN_STATUS)
+            else:
+                int_status = UNKNOWN_SPAN_STATUS
+            span["status"] = int_status
+
+            span["start_ts"], span["start_ms"] = self.__extract_timestamp(
+                s["start_timestamp"],
+            )
+            span["finish_ts"], span["finish_ms"] = self.__extract_timestamp(
+                s["timestamp"],
+            )
+
+            duration_secs = (span["finish_ts"] - span["start_ts"]).total_seconds()
+            span["duration"] = max(int(duration_secs * 1000), 0)
+            tags = _as_dict_safe(s.get("tags", None))
+            span["tags.key"], span["tags.value"] = extract_extra_tags(tags)
+
+            span["retention_days"] = processed["retention_days"]
+            span["deleted"] = processed["deleted"]
+
+            ret.append(span)
+
+        return InsertBatch(
+            [
+                (StorageKey.TRANSACTIONS, processed),
+                *[(StorageKey.SPANS, span) for span in ret],
+            ]
+        )

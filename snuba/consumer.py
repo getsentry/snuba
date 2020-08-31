@@ -2,6 +2,8 @@ import itertools
 import logging
 import time
 from datetime import datetime
+from collections import defaultdict
+from snuba.datasets.storages import StorageKey
 from typing import (
     Any,
     Callable,
@@ -236,16 +238,18 @@ class ProcessedMessageBatchWriter(
 ):
     def __init__(
         self,
-        insert_batch_writer: InsertBatchWriter,
+        insert_batch_writers: Mapping[StorageKey, InsertBatchWriter],
         replacement_batch_writer: Optional[ReplacementBatchWriter] = None,
     ) -> None:
-        self.__insert_batch_writer = insert_batch_writer
+        self.__insert_batch_writers = insert_batch_writers
+
         self.__replacement_batch_writer = replacement_batch_writer
 
         self.__closed = False
 
     def poll(self) -> None:
-        self.__insert_batch_writer.poll()
+        for key in self.__insert_batch_writers:
+            self.__insert_batch_writers[key].poll()
 
         if self.__replacement_batch_writer is not None:
             self.__replacement_batch_writer.poll()
@@ -258,31 +262,48 @@ class ProcessedMessageBatchWriter(
         if message.payload is None:
             return
 
-        if isinstance(message.payload, JSONRowInsertBatch):
-            self.__insert_batch_writer.submit(
-                cast(Message[JSONRowInsertBatch], message)
+        rows = defaultdict(list)
+        for key, row in message.payload.rows:
+            rows[key].append(row)
+        for key, row_list in rows.items():
+            self.__insert_batch_writers[key].submit(
+                cast(
+                    Message[JSONRowInsertBatch],
+                    Message(
+                        message.partition,
+                        message.offset,
+                        JSONRowInsertBatch(row_list),
+                        message.timestamp,
+                    ),
+                )
             )
-        elif isinstance(message.payload, ReplacementBatch):
+        # if isinstance(message.payload, JSONRowInsertBatch):
+        #    self.__insert_batch_writer.submit(
+        #        cast(Message[JSONRowInsertBatch], message)
+        #    )
+        if isinstance(message.payload, ReplacementBatch):
             if self.__replacement_batch_writer is None:
                 raise TypeError("writer not configured to support replacements")
 
             self.__replacement_batch_writer.submit(
                 cast(Message[ReplacementBatch], message)
             )
-        else:
-            raise TypeError("unexpected payload type")
+        # else:
+        #    raise TypeError("unexpected payload type")
 
     def close(self) -> None:
         self.__closed = True
 
-        self.__insert_batch_writer.close()
+        for key in self.__insert_batch_writers:
+            self.__insert_batch_writers[key].close()
 
         if self.__replacement_batch_writer is not None:
             self.__replacement_batch_writer.close()
 
     def join(self, timeout: Optional[float] = None) -> None:
         start = time.time()
-        self.__insert_batch_writer.join(timeout)
+        for key in self.__insert_batch_writers:
+            self.__insert_batch_writers[key].join(timeout)
 
         if self.__replacement_batch_writer is not None:
             if timeout is not None:
@@ -299,7 +320,7 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         self,
         prefilter: Optional[StreamMessageFilter[KafkaPayload]],
         processor: MessageProcessor,
-        writer: BatchWriter[JSONRow],
+        writers: Union[Mapping[StorageKey, BatchWriter[JSONRow]], BatchWriter[JSONRow]],
         max_batch_size: int,
         max_batch_time: float,
         replacements_producer: Optional[ConfluentKafkaProducer] = None,
@@ -307,7 +328,7 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
     ) -> None:
         self.__prefilter = prefilter
         self.__processor = processor
-        self.__writer = writer
+        self.__writers = writers
 
         self.__max_batch_size = max_batch_size
         self.__max_batch_time = max_batch_time
@@ -333,13 +354,18 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
         if isinstance(result, InsertBatch):
             return JSONRowInsertBatch(
-                [json_row_encoder.encode(row) for row in result.rows]
+                [
+                    (key, json_row_encoder.encode(payload))
+                    for key, payload in result.rows
+                ]
             )
         else:
             return result
 
     def __build_write_step(self) -> ProcessedMessageBatchWriter:
-        insert_batch_writer = InsertBatchWriter(self.__writer)
+        batch_writers = {
+            key: InsertBatchWriter(writer) for key, writer in self.__writers.items()
+        }
 
         replacement_batch_writer: Optional[ReplacementBatchWriter]
         if self.__supports_replacements:
@@ -351,9 +377,7 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         else:
             replacement_batch_writer = None
 
-        return ProcessedMessageBatchWriter(
-            insert_batch_writer, replacement_batch_writer
-        )
+        return ProcessedMessageBatchWriter(batch_writers, replacement_batch_writer)
 
     def create(
         self, commit: Callable[[Mapping[Partition, int]], None]

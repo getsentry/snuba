@@ -32,12 +32,9 @@ columns = ColumnSet(
     [
         ("project_id", UInt(64)),
         ("transaction_id", UUID()),  # event_id of the transaction
-        ("trace_id", UUID()),
-        ("span_type", LowCardinality(String())),  # span/transaction
         ("span_id", UInt(64)),
         ("parent_span_id", UInt(64)),  # Is this actually the transaction id ?
-        ("name", LowCardinality(String())),  # description in span
-        ("name_hash", Materialized(UInt(64), "cityHash64(name)",),),
+        ("description", LowCardinality(String())),  # description in span
         ("op", LowCardinality(String())),
         (
             "status",
@@ -48,33 +45,9 @@ columns = ColumnSet(
         ("finish_ts", DateTime()),
         ("finish_ms", UInt(16)),
         ("duration", UInt(32)),
-        # These are transaction specific
-        ("platform", LowCardinality(Nullable(String()))),
-        ("environment", LowCardinality(Nullable(String()))),
-        ("release", LowCardinality(Nullable(String()))),
-        ("dist", LowCardinality(Nullable(String()))),
-        ("ip_address_v4", Nullable(IPv4())),
-        ("ip_address_v6", Nullable(IPv6())),
-        ("user", WithDefault(String(), "''",)),
-        ("user_hash", Materialized(UInt(64), "cityHash64(user)"),),
-        ("user_id", Nullable(String())),
-        ("user_name", Nullable(String())),
-        ("user_email", Nullable(String())),
-        ("sdk_name", WithDefault(LowCardinality(String()), "''")),
-        ("sdk_version", WithDefault(LowCardinality(String()), "''")),
-        ("http_method", LowCardinality(Nullable(String()))),
-        ("http_referer", Nullable(String())),
         # back to spans
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_hash_map", Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN)),
-        ("contexts", Nested([("key", String()), ("value", String())])),
-        (
-            "measurements",
-            Nested([("key", LowCardinality(String())), ("value", Float(64))]),
-        ),
-        ("partition", UInt(16)),
-        ("offset", UInt(64)),
-        ("message_timestamp", DateTime()),
         ("retention_days", UInt(16)),
         ("deleted", UInt(8)),
     ]
@@ -82,12 +55,12 @@ columns = ColumnSet(
 
 schema = ReplacingMergeTreeSchema(
     columns=columns,
-    local_table_name="spans_local",
-    dist_table_name="spans_dist",
+    local_table_name="single_spans_local",
+    dist_table_name="single_spans_dist",
     storage_set_key=StorageSetKey.TRANSACTIONS,
     mandatory_conditions=[],
-    prewhere_candidates=["transaction_id", "name", "transaction", "title"],
-    order_by="(project_id, toStartOfDay(finish_ts), span_type, name, cityHash64(parent_span_id), cityHash64(span_id))",
+    prewhere_candidates=["transaction_id", "description"],
+    order_by="(project_id, toStartOfDay(finish_ts), cityHash64(parent_span_id), cityHash64(span_id))",
     partition_by="(retention_days, toMonday(finish_ts))",
     version_column="deleted",
     sample_expr="cityHash64(span_id)",
