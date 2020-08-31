@@ -1,40 +1,12 @@
-from typing import Optional
-
-from snuba.query.conditions import (
-    binary_condition,
-    BooleanFunctions,
-    ConditionFunctions,
-)
-from snuba.query.dsl import count, countIf, divide, multiply, plus
-from snuba.query.expressions import (
-    Expression,
-    Literal,
-    Column,
-)
+from snuba.clickhouse.columns import ColumnSet, UInt
+from snuba.query.validation.signature import Column as ColType, Literal as LiteralType
+from snuba.query.processors.custom_function import CustomFunction
 
 
-def apdex(alias: Optional[str], column: Column, satisfied: Literal) -> Expression:
-    tolerated = multiply(satisfied, Literal(None, 4))
-
-    return divide(
-        plus(
-            countIf(binary_condition(None, ConditionFunctions.LTE, column, satisfied)),
-            divide(
-                countIf(
-                    binary_condition(
-                        None,
-                        BooleanFunctions.AND,
-                        binary_condition(
-                            None, ConditionFunctions.GT, column, satisfied,
-                        ),
-                        binary_condition(
-                            None, ConditionFunctions.LTE, column, tolerated,
-                        ),
-                    ),
-                ),
-                Literal(None, 2),
-            ),
-        ),
-        count(),
-        alias,
+def apdex_processor(columns: ColumnSet) -> CustomFunction:
+    return CustomFunction(
+        columns,
+        "apdex",
+        [("column", ColType({UInt})), ("satisfied", LiteralType({int}))],
+        "divide(plus(countIf(lessOrEquals(column, satisfied)), divide(countIf(and(greater(column, satisfied), lessOrEquals(column, multiply(satisfied, 4)))), 2)), count())",
     )
