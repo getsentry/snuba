@@ -5,6 +5,7 @@ from concurrent.futures import Future
 from datetime import datetime
 from enum import Enum
 from functools import partial
+from pickle import PickleBuffer
 from threading import Event
 from typing import (
     Any,
@@ -37,13 +38,6 @@ from snuba.utils.retries import NoRetryPolicy, RetryPolicy
 from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
 from snuba.utils.streams.producer import Producer
 from snuba.utils.streams.types import Message, Partition, Topic
-
-try:
-    # PickleBuffer is only available in Python 3.8 and above and when using the
-    # pickle protocol version 5 and greater.
-    from pickle import PickleBuffer
-except ImportError:
-    pass
 
 
 logger = logging.getLogger(__name__)
