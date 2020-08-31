@@ -7,11 +7,10 @@ import pytest
 
 import snuba.query.parser.validation.functions as functions
 from snuba.clickhouse.columns import ColumnSet
+from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column, Expression, FunctionCall
-from snuba.query.parser.exceptions import InvalidExpressionException
 from snuba.query.parser.validation.functions import FunctionCallsValidator
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
-from snuba.state import set_config
 
 
 class FakeValidator(FunctionCallValidator):
@@ -56,7 +55,6 @@ def test_functions(
     dataset_validators: Mapping[str, FunctionCallValidator],
     exception: Optional[Type[InvalidExpressionException]],
 ) -> None:
-    set_config("enforce_expression_validation", 1)
     functions.default_validators = default_validators
     dataset = MagicMock()
     dataset.get_function_call_validators.return_value = dataset_validators

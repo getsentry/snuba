@@ -3,7 +3,6 @@ import uuid
 from datetime import datetime, timedelta
 from functools import partial
 
-import pytest
 import pytz
 import simplejson as json
 
@@ -13,7 +12,6 @@ from snuba.datasets.factory import enforce_table_writer
 from tests.base import BaseApiTest
 
 
-@pytest.mark.usefixtures("query_type")
 class TestTransactionsApi(BaseApiTest):
     def setup_method(self, test_method, dataset_name="transactions"):
         super().setup_method(test_method, dataset_name)

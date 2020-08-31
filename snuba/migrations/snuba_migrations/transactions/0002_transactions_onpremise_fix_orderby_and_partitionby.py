@@ -25,15 +25,25 @@ def forwards() -> None:
 
     new_sampling_key = "cityHash64(span_id)"
     new_partition_key = "(retention_days, toMonday(finish_ts))"
+    new_primary_key = (
+        "(project_id, toStartOfDay(finish_ts), transaction_name, cityHash64(span_id))"
+    )
 
-    ((curr_sampling_key, curr_partition_key),) = clickhouse.execute(
-        f"SELECT sampling_key, partition_key FROM system.tables WHERE name = '{TABLE_NAME}' AND database = '{database}'"
+    ((curr_sampling_key, curr_partition_key, curr_primary_key),) = clickhouse.execute(
+        f"SELECT sampling_key, partition_key, primary_key FROM system.tables WHERE name = '{TABLE_NAME}' AND database = '{database}'"
     )
 
     sampling_key_needs_update = curr_sampling_key != new_sampling_key
     partition_key_needs_update = curr_partition_key != new_partition_key
+    primary_key_needs_update = curr_primary_key != new_primary_key
 
-    if not sampling_key_needs_update and not partition_key_needs_update:
+    if not any(
+        [
+            sampling_key_needs_update,
+            partition_key_needs_update,
+            primary_key_needs_update,
+        ]
+    ):
         # Already up to date
         return
 
@@ -53,7 +63,7 @@ def forwards() -> None:
 
         new_create_table_statement = (
             new_create_table_statement[:idx]
-            + f"SAMPLE BY {new_sampling_key} "
+            + f" SAMPLE BY {new_sampling_key} "
             + new_create_table_statement[idx:]
         )
 
@@ -62,6 +72,13 @@ def forwards() -> None:
         assert new_create_table_statement.count(curr_partition_key) == 1
         new_create_table_statement = new_create_table_statement.replace(
             curr_partition_key, new_partition_key
+        )
+
+    # Switch the primary key
+    if primary_key_needs_update:
+        assert new_create_table_statement.count(curr_primary_key) == 1
+        new_create_table_statement = new_create_table_statement.replace(
+            curr_primary_key, new_primary_key
         )
 
     clickhouse.execute(new_create_table_statement)

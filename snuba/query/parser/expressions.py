@@ -179,6 +179,15 @@ def parse_expression(
     )
 
 
+def parse_clickhouse_function(function: str) -> Expression:
+    try:
+        expression_tree = minimal_clickhouse_grammar.parse(function)
+    except Exception as cause:
+        raise ParsingException(f"Cannot parse aggregation {function}", cause) from cause
+
+    return ClickhouseVisitor().visit(expression_tree)
+
+
 def parse_aggregation(
     aggregation_function: str,
     column: Any,
@@ -207,14 +216,7 @@ def parse_aggregation(
     if matched is not None:
         return FunctionCall(alias, aggregation_function, tuple(columns_expr))
 
-    try:
-        expression_tree = minimal_clickhouse_grammar.parse(aggregation_function)
-    except Exception as cause:
-        raise ParsingException(
-            f"Cannot parse aggregation {aggregation_function}", cause
-        ) from cause
-
-    parsed_expression = ClickhouseVisitor().visit(expression_tree)
+    parsed_expression = parse_clickhouse_function(aggregation_function)
 
     if (
         # Simple Clickhouse expression with no snuba syntax
