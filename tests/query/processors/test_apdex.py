@@ -9,7 +9,7 @@ from snuba.query.conditions import (
 from snuba.query.dsl import divide, multiply, plus
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query, SelectedExpression
-from snuba.query.processors.apdex_processor import ApdexProcessor
+from snuba.query.processors.performance_expressions import apdex_processor
 from snuba.request.request_settings import HTTPRequestSettings
 
 
@@ -83,7 +83,7 @@ def test_apdex_format_expressions() -> None:
         ],
     )
 
-    ApdexProcessor().process_query(unprocessed, HTTPRequestSettings())
+    apdex_processor(ColumnSet([])).process_query(unprocessed, HTTPRequestSettings())
     assert (
         expected.get_selected_columns_from_ast()
         == unprocessed.get_selected_columns_from_ast()
