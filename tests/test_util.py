@@ -201,6 +201,39 @@ class TestUtil(BaseTest):
             == "arrayAll(x -> assumeNotNull(x NOT LIKE '%foo%'), (exception_frames.filename AS `exception_frames.filename`))"
         )
 
+        # Test scalar condition on array column is expanded as an iterator.
+        conditions = [[["equals", ["exception_frames.filename", "foo"]], "=", 1]]
+        assert (
+            conditions_expr(dataset, conditions, Query({}, source), ParsingContext())
+            == "arrayExists(x -> assumeNotNull(x = 'foo'), (exception_frames.filename AS `exception_frames.filename`)) = 1"
+        )
+
+        # Test negative scalar condition on array column is expanded as an all() type iterator.
+        conditions = [[["notEquals", ["exception_frames.filename", "foo"]], "=", 1]]
+        assert (
+            conditions_expr(dataset, conditions, Query({}, source), ParsingContext())
+            == "arrayAll(x -> assumeNotNull(x != 'foo'), (exception_frames.filename AS `exception_frames.filename`)) = 1"
+        )
+
+        # Test boolean condition on array columns is expanded correctly.
+        conditions = [
+            [
+                [
+                    "or",
+                    [
+                        ["equals", ["exception_frames.filename", "foo"]],
+                        ["equals", ["exception_frames.filename", "bar"]],
+                    ],
+                ],
+                "=",
+                1,
+            ]
+        ]
+        assert (
+            conditions_expr(dataset, conditions, Query({}, source), ParsingContext())
+            == "or(arrayExists(x -> assumeNotNull(x = 'foo'), (exception_frames.filename AS `exception_frames.filename`)), arrayExists(x -> assumeNotNull(x = 'bar'), `exception_frames.filename`)) = 1"
+        )
+
         # Test that a duplicate IN condition is deduplicated even if
         # the lists are in different orders.[
         conditions = tuplify(
@@ -468,6 +501,16 @@ class TestUtil(BaseTest):
                 ParsingContext(),
             )
             == "(if(in(release, tuple('foo')), release, 'other') AS release)"
+        )
+
+        assert (
+            complex_column_expr(
+                dataset,
+                tuplify(["equals", ["exception_stacks.type", "foo"], "just_exc_stuff"]),
+                deepcopy(query),
+                ParsingContext(),
+            )
+            == "(arrayExists(x -> assumeNotNull(x = 'foo'), (exception_stacks.type AS `exception_stacks.type`)) AS just_exc_stuff)"
         )
 
         # TODO once search_message is filled in everywhere, this can be just 'message' again.
