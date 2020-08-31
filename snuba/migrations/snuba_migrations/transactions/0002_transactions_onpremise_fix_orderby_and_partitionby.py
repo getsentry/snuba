@@ -26,7 +26,7 @@ def forwards() -> None:
     new_sampling_key = "cityHash64(span_id)"
     new_partition_key = "(retention_days, toMonday(finish_ts))"
     new_primary_key = (
-        "(project_id, toStartOfDay(finish_ts), transaction_name, cityHash64(span_id))"
+        "project_id, toStartOfDay(finish_ts), transaction_name, cityHash64(span_id)"
     )
 
     ((curr_sampling_key, curr_partition_key, curr_primary_key),) = clickhouse.execute(
