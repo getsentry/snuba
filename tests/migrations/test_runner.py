@@ -180,6 +180,8 @@ def test_transactions_compatibility() -> None:
         `user_name` Nullable(String), `user_email` Nullable(String),
         `sdk_name` LowCardinality(String) DEFAULT CAST('', 'LowCardinality(String)'),
         `sdk_version` LowCardinality(String) DEFAULT CAST('', 'LowCardinality(String)'),
+        `http_method` LowCardinality(Nullable(String)) DEFAULT CAST('', 'LowCardinality(Nullable(String))'),
+        `http_referer` Nullable(String),
         `tags.key` Array(String), `tags.value` Array(String), `_tags_flattened` String,
         `contexts.key` Array(String), `contexts.value` Array(String), `_contexts_flattened` String,
         `partition` UInt16, `offset` UInt64, `message_timestamp` DateTime, `retention_days` UInt16,
@@ -190,6 +192,7 @@ def test_transactions_compatibility() -> None:
     )
 
     assert get_sampling_key() == ""
+    generate_transactions(5)
 
     runner = Runner()
     runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
@@ -204,7 +207,6 @@ def test_transactions_compatibility() -> None:
             MigrationKey(MigrationGroup.TRANSACTIONS, migration), force=True,
         )
 
-    generate_transactions(5)
     assert get_sampling_key() == "cityHash64(span_id)"
 
     assert connection.execute("SELECT count(*) FROM transactions_local;") == [(5,)]
