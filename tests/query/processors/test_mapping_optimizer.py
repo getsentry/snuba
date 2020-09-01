@@ -100,6 +100,21 @@ TEST_CASES = [
     pytest.param(
         build_query(
             selected_columns=[column("event_id")],
+            condition=nested_condition("tags", ConditionFunctions.EQ, "my=t\\ag", "a"),
+        ),
+        FunctionCall(
+            None,
+            "has",
+            (
+                column("_tags_hash_map", True),
+                FunctionCall(None, "cityHash64", (Literal(None, "my\=t\\\\ag=a"),)),
+            ),
+        ),
+        id="Optimizable simple escaped condition",
+    ),
+    pytest.param(
+        build_query(
+            selected_columns=[column("event_id")],
             condition=binary_condition(
                 None,
                 ConditionFunctions.EQ,
@@ -220,7 +235,7 @@ TEST_CASES = [
             ),
         ),
         nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
-        id="Non opimizable having",
+        id="Non optimizable having",
     ),
 ]
 

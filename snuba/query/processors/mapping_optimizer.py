@@ -24,6 +24,8 @@ from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "processors.tags_hash_map")
 
+ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "=": "\="})
+
 
 class ConditionClass(Enum):
     IRRELEVANT = 1
@@ -140,6 +142,7 @@ class MappingOptimizer(QueryProcessor):
             return condition
         rhs = match.expression("right_hand_side")
         assert isinstance(rhs, LiteralExpr)
+        key = match.string(KEY_MAPPING_PARAM).translate(ESCAPE_TRANSLATION)
         return FunctionExpr(
             alias=condition.alias,
             function_name="has",
@@ -152,11 +155,7 @@ class MappingOptimizer(QueryProcessor):
                 FunctionExpr(
                     alias=None,
                     function_name="cityHash64",
-                    parameters=(
-                        LiteralExpr(
-                            None, f"{match.string(KEY_MAPPING_PARAM)}={rhs.value}"
-                        ),
-                    ),
+                    parameters=(LiteralExpr(None, f"{key}={rhs.value}"),),
                 ),
             ),
         )
