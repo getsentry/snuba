@@ -199,13 +199,13 @@ def test_transactions_compatibility() -> None:
     runner._update_migration_status(
         MigrationKey(MigrationGroup.TRANSACTIONS, "0001_transactions"), Status.COMPLETED
     )
-    transaction_migrations = get_group_loader(
-        MigrationGroup.TRANSACTIONS
-    ).get_migrations()
-    for migration in transaction_migrations[1:]:
-        runner.run_migration(
-            MigrationKey(MigrationGroup.TRANSACTIONS, migration), force=True,
-        )
+    runner.run_migration(
+        MigrationKey(
+            MigrationGroup.TRANSACTIONS,
+            "0002_transactions_onpremise_fix_orderby_and_partitionby",
+        ),
+        force=True,
+    )
 
     assert get_sampling_key() == "cityHash64(span_id)"
 
