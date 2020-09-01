@@ -42,9 +42,6 @@ matrix:
         #      `getconf ARG_MAX` - max # bytes of args + environ for exec()
         - pre-commit run --files $(git diff --diff-filter=d --name-only master)
     - <<: *test_base
-      name: 'Test (3.7)'
-      env: PYTHON_VERSION=3.7
-    - <<: *test_base
       name: 'Test (3.8)'
       env: PYTHON_VERSION=3.8
 

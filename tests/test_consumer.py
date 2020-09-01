@@ -1,8 +1,8 @@
 import calendar
 import itertools
 import pickle
-import sys
 from datetime import datetime, timedelta
+from pickle import PickleBuffer
 from typing import MutableSequence
 from unittest.mock import Mock
 
@@ -150,6 +150,9 @@ def test_streaming_consumer_strategy() -> None:
         writer,
         max_batch_size=10,
         max_batch_time=60,
+        processes=None,
+        input_block_size=None,
+        output_block_size=None,
         replacements_producer=replacements_producer,
         replacements_topic=Topic("replacements"),
     )
@@ -179,10 +182,7 @@ def test_json_row_batch_pickle_simple() -> None:
     assert pickle.loads(pickle.dumps(batch)) == batch
 
 
-@pytest.mark.xfail(not sys.version_info >= (3, 8), reason="python >= 3.8 required")
 def test_json_row_batch_pickle_out_of_band() -> None:
-    from pickle import PickleBuffer
-
     batch = JSONRowInsertBatch([b"foo", b"bar", b"baz"])
 
     buffers: MutableSequence[PickleBuffer] = []
