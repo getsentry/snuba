@@ -1,17 +1,14 @@
 from typing import Optional, Sequence
 
-from snuba import settings, util
-from snuba.datasets.errors_replacer import ReplacerState, get_projects_query_flags
-from snuba.datasets.storages.processors.replaced_groups import (
-    CONSISTENCY_ENFORCER_PROCESSOR_ENABLED,
-)
-from snuba.query.conditions import in_condition, not_in_condition
-from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba import util
+from snuba.datasets.errors_replacer import ReplacerState
+from snuba.query.conditions import in_condition
+from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.processors import ExtensionData, ExtensionQueryProcessor
 from snuba.request.request_settings import RequestSettings
-from snuba.state import get_config, get_configs
+from snuba.state import get_configs
 from snuba.state.rate_limit import PROJECT_RATE_LIMIT_NAME, RateLimitParameters
 
 PROJECT_EXTENSION_SCHEMA = {
@@ -120,36 +117,7 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
         query: Query,
         request_settings: RequestSettings,
     ) -> None:
-        if get_config(CONSISTENCY_ENFORCER_PROCESSOR_ENABLED, 0):
-            return
-
-        if not request_settings.get_turbo():
-            final, exclude_group_ids = get_projects_query_flags(
-                project_ids, self.__replacer_state_name
-            )
-            if not final and exclude_group_ids:
-                # If the number of groups to exclude exceeds our limit, the query
-                # should just use final instead of the exclusion set.
-                max_group_ids_exclude = get_config(
-                    "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE
-                )
-                if len(exclude_group_ids) > max_group_ids_exclude:
-                    query.set_final(True)
-                else:
-                    query.add_conditions(
-                        [(["assumeNotNull", ["group_id"]], "NOT IN", exclude_group_ids)]
-                    )
-                    query.add_condition_to_ast(
-                        not_in_condition(
-                            None,
-                            FunctionCall(
-                                None, "assumeNotNull", (Column(None, None, "group_id"),)
-                            ),
-                            [Literal(None, p) for p in exclude_group_ids],
-                        )
-                    )
-            else:
-                query.set_final(final)
+        pass
 
 
 class ProjectExtension(QueryExtension):
