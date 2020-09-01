@@ -12,7 +12,7 @@ from snuba.query.conditions import (
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query as SnubaQuery
 from snuba.query.logical import SelectedExpression
-from snuba.query.processors.hash_map_optimizer import HashMapOptimizer
+from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.state import set_config
 
@@ -228,7 +228,7 @@ TEST_CASES = [
 @pytest.mark.parametrize("query, expected_condition", TEST_CASES)
 def test_tags_hash_map(query: ClickhouseQuery, expected_condition: Expression,) -> None:
     set_config("tags_hash_map_enabled", 1)
-    HashMapOptimizer(column_name="tags", hash_map_name="_tags_hash_map").process_query(
+    MappingOptimizer(column_name="tags", hash_map_name="_tags_hash_map").process_query(
         query, HTTPRequestSettings()
     )
 

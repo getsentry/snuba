@@ -31,10 +31,11 @@ class ConditionClass(Enum):
     NOT_OPTIMIZABLE = 3
 
 
-class HashMapOptimizer(QueryProcessor):
+class MappingOptimizer(QueryProcessor):
     """
     Optimize tags conditions by relying on the tags_hash_map column.
-    It transforms tags conditions that are in the form of
+    Such column is an array of hashes of `key=value` strings.
+    This processor transforms tags conditions that are in the form of
     `tags.value[indexOf(tags.key, 'my_tag')] = 'my_val'`
     into
     `has(_tags_hash_map, cityHash64('my_tag=my_val'))`
@@ -130,7 +131,7 @@ class HashMapOptimizer(QueryProcessor):
         else:
             return ConditionClass.IRRELEVANT
 
-    def __replace_with_hash_map(self, condition: Expression) -> Expression:
+    def __replace_with_hash(self, condition: Expression) -> Expression:
         match = self.__optimizable_pattern.match(condition)
         if (
             match is None
@@ -187,6 +188,6 @@ class HashMapOptimizer(QueryProcessor):
         metrics.increment("optimizable_query")
 
         if condition is not None:
-            query.set_ast_condition(condition.transform(self.__replace_with_hash_map))
+            query.set_ast_condition(condition.transform(self.__replace_with_hash))
         if having_cond is not None:
-            query.set_ast_having(having_cond.transform(self.__replace_with_hash_map))
+            query.set_ast_having(having_cond.transform(self.__replace_with_hash))
