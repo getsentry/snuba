@@ -7,7 +7,7 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
-from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
+from snuba.query.project_extension import ProjectExtension
 from snuba.query.types import Condition
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.schemas import validate_jsonschema
@@ -43,9 +43,7 @@ def test_project_extension_query_processing(
     expected_conditions: Sequence[Condition],
     expected_ast_conditions: Expression,
 ):
-    extension = ProjectExtension(
-        processor=ProjectExtensionProcessor(project_column="project_id")
-    )
+    extension = ProjectExtension(project_column="project_id")
     valid_data = validate_jsonschema(raw_data, extension.get_schema())
     query = Query({"conditions": []}, TableSource("my_table", ColumnSet([])),)
     request_settings = HTTPRequestSettings()
@@ -57,9 +55,7 @@ def test_project_extension_query_processing(
 
 
 def test_project_extension_query_adds_rate_limits():
-    extension = ProjectExtension(
-        processor=ProjectExtensionProcessor(project_column="project_id")
-    )
+    extension = ProjectExtension(project_column="project_id")
     raw_data = {"project": [2, 3]}
     valid_data = validate_jsonschema(raw_data, extension.get_schema())
     query = Query({"conditions": []}, TableSource("my_table", ColumnSet([])),)
@@ -79,9 +75,7 @@ def test_project_extension_query_adds_rate_limits():
 
 
 def test_project_extension_project_rate_limits_are_overridden():
-    extension = ProjectExtension(
-        processor=ProjectExtensionProcessor(project_column="project_id")
-    )
+    extension = ProjectExtension(project_column="project_id")
     raw_data = {"project": [2, 3]}
     valid_data = validate_jsonschema(raw_data, extension.get_schema())
     query = Query({"conditions": []}, TableSource("my_table", ColumnSet([])),)

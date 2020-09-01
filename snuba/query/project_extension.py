@@ -1,7 +1,6 @@
-from typing import Optional, Sequence
+from typing import Sequence
 
 from snuba import util
-from snuba.datasets.errors_replacer import ReplacerState
 from snuba.query.conditions import in_condition
 from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
@@ -65,14 +64,6 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
             concurrent_limit=concurr,
         )
 
-    def do_post_processing(
-        self,
-        project_ids: Sequence[int],
-        query: Query,
-        request_settings: RequestSettings,
-    ) -> None:
-        pass
-
     def process_query(
         self,
         query: Query,
@@ -93,35 +84,10 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
 
         request_settings.add_rate_limit(self._get_rate_limit_params(project_ids))
 
-        self.do_post_processing(project_ids, query, request_settings)
-
-
-class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
-    """
-    Extension processor that makes changes to the query by
-    1. Adding the project
-    2. Taking into consideration groups that should be excluded (groups are excluded because of replacement).
-    """
-
-    def __init__(
-        self, project_column: str, replacer_state_name: Optional[ReplacerState]
-    ) -> None:
-        super().__init__(project_column)
-        # This is used to allow us to keep the replacement state in redis for multiple
-        # replacer on multiple tables. replacer_state_name is part of the redis key.
-        self.__replacer_state_name = replacer_state_name
-
-    def do_post_processing(
-        self,
-        project_ids: Sequence[int],
-        query: Query,
-        request_settings: RequestSettings,
-    ) -> None:
-        pass
-
 
 class ProjectExtension(QueryExtension):
-    def __init__(self, processor: ProjectExtensionProcessor) -> None:
+    def __init__(self, project_column: str) -> None:
         super().__init__(
-            schema=PROJECT_EXTENSION_SCHEMA, processor=processor,
+            schema=PROJECT_EXTENSION_SCHEMA,
+            processor=ProjectExtensionProcessor(project_column),
         )
