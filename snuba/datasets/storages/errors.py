@@ -37,6 +37,7 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 )
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.replace_expressions import transform_user_to_nullable
 
 
 def errors_migrations(
@@ -224,6 +225,7 @@ storage = WritableTableStorage(
         MappingColumnPromoter(mapping_specs={"tags": promoted_tag_columns}),
         ArrayJoinKeyValueOptimizer("tags"),
         PrewhereProcessor(),
+        transform_user_to_nullable(),
     ],
     stream_loader=KafkaStreamLoader(
         processor=ErrorsProcessor(promoted_tag_columns),
