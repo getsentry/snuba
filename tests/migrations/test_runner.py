@@ -68,10 +68,20 @@ def test_run_migration() -> None:
     with pytest.raises(MigrationError):
         runner.run_migration(MigrationKey(MigrationGroup.EVENTS, "0003_errors"))
 
+    # Running with --fake
+    runner.run_migration(
+        MigrationKey(MigrationGroup.EVENTS, "0001_events_initial"), fake=True
+    )
+    assert connection.execute("SHOW TABLES LIKE 'sentry_local'") == []
+
 
 def test_reverse_migration() -> None:
     runner = Runner()
     runner.run_all(force=True)
+
+    connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
+        ClickhouseClientSettings.MIGRATE
+    )
 
     # Invalid migration ID
     with pytest.raises(MigrationError):
@@ -79,6 +89,17 @@ def test_reverse_migration() -> None:
 
     with pytest.raises(MigrationError):
         runner.reverse_migration(MigrationKey(MigrationGroup.EVENTS, "0003_errors"))
+
+    # Reverse with --fake
+    for migration_id in reversed(
+        get_group_loader(MigrationGroup.EVENTS).get_migrations()
+    ):
+        runner.reverse_migration(
+            MigrationKey(MigrationGroup.EVENTS, migration_id), fake=True
+        )
+    assert (
+        len(connection.execute("SHOW TABLES LIKE 'sentry_local'")) == 1
+    ), "Table still exists"
 
 
 def test_get_pending_migrations() -> None:
