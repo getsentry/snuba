@@ -8,7 +8,7 @@ from snuba.query.processors import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
 
-class MatchReplaceProcessor(QueryProcessor):
+class PatternReplacer(QueryProcessor):
     """
     Define a processor that matches specific expressions and replaces them
     """

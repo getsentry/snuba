@@ -1,7 +1,6 @@
 import pytest
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query, SelectedExpression
@@ -11,11 +10,11 @@ from snuba.query.matchers import (
     MatchResult,
     Param,
 )
-from snuba.query.processors.match_replace_processor import MatchReplaceProcessor
+from snuba.query.processors.pattern_replacer import PatternReplacer
 from snuba.request.request_settings import HTTPRequestSettings
 
 test_data = [
-    (
+    pytest.param(
         Query(
             {},
             TableSource("events", ColumnSet([])),
@@ -39,9 +38,9 @@ test_data = [
                 SelectedExpression(name=None, expression=Column(None, None, "column2")),
             ],
         ),
-        "nullIf(column1, '')",
+        id="replace unaliased column",
     ),
-    (
+    pytest.param(
         Query(
             {},
             TableSource("events", ColumnSet([])),
@@ -67,24 +66,22 @@ test_data = [
                 SelectedExpression(name=None, expression=Column(None, None, "column2")),
             ],
         ),
-        "(nullIf(column1, '') AS some_alias)",
+        id="replace aliased column",
     ),
 ]
 
 
 @pytest.mark.parametrize(
-    "unprocessed, expected, formatted", test_data,
+    "unprocessed, expected", test_data,
 )
-def test_match_replace_format_expressions(
-    unprocessed: Query, expected: Query, formatted: str
-) -> None:
+def test_match_replace_format_expressions(unprocessed: Query, expected: Query) -> None:
     def transform(match: MatchResult, exp: Expression) -> Expression:
         assert isinstance(exp, Column)  # mypy
         return FunctionCall(
             None, "nullIf", (Column(None, None, exp.column_name), Literal(None, ""),)
         )
 
-    processor = MatchReplaceProcessor(
+    processor = PatternReplacer(
         Param("column", ColumnMatch(None, None, StringMatch("column1"))), transform,
     )
 
@@ -93,10 +90,3 @@ def test_match_replace_format_expressions(
         expected.get_selected_columns_from_ast()
         == unprocessed.get_selected_columns_from_ast()
     )
-
-    print(unprocessed.get_selected_columns_from_ast()[0].expression)
-
-    ret = unprocessed.get_selected_columns_from_ast()[0].expression.accept(
-        ClickhouseExpressionFormatter()
-    )
-    assert ret == formatted
