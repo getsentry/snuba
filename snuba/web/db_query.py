@@ -63,11 +63,12 @@ def update_query_metadata_and_stats(
 
 @with_span(op="db")
 def execute_query(
+    # TODO: Passing the whole clickhouse query here is needed as long
+    # as the execute method depends on it. Otherwise we can make this
+    # file rely either entirely on clickhouse query or entirely on
+    # the formatter.
     clickhouse_query: Query,
     request_settings: RequestSettings,
-    # TODO: Passing the SqlQuery (which basically wraps the query and formats it)
-    # will be needed as long as the legacy query representation will be around.
-    # See DictSqlQuery.
     formatted_query: SqlQuery,
     reader: Reader[SqlQuery],
     timer: Timer,
@@ -230,11 +231,12 @@ def execute_query_with_readthrough_caching(
 
 
 def raw_query(
+    # TODO: Passing the whole clickhouse query here is needed as long
+    # as the execute method depends on it. Otherwise we can make this
+    # file rely either entirely on clickhouse query or entirely on
+    # the formatter.
     clickhouse_query: Query,
     request_settings: RequestSettings,
-    # TODO: Passing the SqlQuery (which basically wraps the query and formats it)
-    # will be needed as long as the legacy query representation will be around.
-    # See DictSqlQuery.
     formatted_query: SqlQuery,
     reader: Reader[SqlQuery],
     timer: Timer,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from abc import ABC, abstractmethod
 from typing import (
     Callable,
@@ -179,7 +180,13 @@ class StreamProcessor(Generic[TPayload]):
 
     def __commit(self, offsets: Mapping[Partition, int]) -> None:
         self.__consumer.stage_offsets(offsets)
+        start = time.time()
         self.__consumer.commit_offsets()
+        logger.debug(
+            "Waited %0.4f seconds for offsets to be committed to %r.",
+            time.time() - start,
+            self.__consumer,
+        )
 
     def run(self) -> None:
         "The main run loop, see class docstring for more information."
