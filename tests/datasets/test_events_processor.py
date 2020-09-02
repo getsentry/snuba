@@ -12,6 +12,7 @@ from snuba.datasets.events_format import (
     extract_base,
     extract_extra_contexts,
     extract_extra_tags,
+    extract_http,
     extract_user,
 )
 from snuba.datasets.events_processor_base import InsertEvent
@@ -449,20 +450,23 @@ class TestEventsProcessor(BaseEventsTest):
         }
 
     def test_extract_http(self):
-        http = {
+        request = {
             "method": "GET",
             "headers": [
                 ["Referer", "https://sentry.io"],
                 ["Host", "https://google.com"],
             ],
+            "url": "the_url",
         }
         output = {}
 
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().extract_http(output, http)
+        extract_http(output, request)
 
-        assert output == {"http_method": u"GET", "http_referer": u"https://sentry.io"}
+        assert output == {
+            "http_method": u"GET",
+            "http_referer": u"https://sentry.io",
+            "http_url": "the_url",
+        }
 
     def test_extract_stacktraces(self):
         stacks = [
