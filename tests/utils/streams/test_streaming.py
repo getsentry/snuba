@@ -235,7 +235,7 @@ def test_parallel_transform_step() -> None:
         transform_step = ParallelTransformStep(
             transform_payload_expand,
             next_step,
-            processes=2,
+            processes=worker_processes,
             max_batch_size=5,
             max_batch_time=60,
             input_block_size=4096,
