@@ -185,6 +185,9 @@ class InsertBatchWriter(ProcessingStep[JSONRowInsertBatch]):
             self.__writer,
         )
 
+    def terminate(self) -> None:
+        self.__closed = True
+
     def join(self, timeout: Optional[float] = None) -> None:
         pass
 
@@ -226,6 +229,9 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
                     value=rapidjson.dumps(value).encode("utf-8"),
                     on_delivery=self.__delivery_callback,
                 )
+
+    def terminate(self) -> None:
+        self.__closed = True
 
     def join(self, timeout: Optional[float] = None) -> None:
         args = []
@@ -291,6 +297,14 @@ class ProcessedMessageBatchWriter(
 
         if self.__replacement_batch_writer is not None:
             self.__replacement_batch_writer.close()
+
+    def terminate(self) -> None:
+        self.__closed = True
+
+        self.__insert_batch_writer.terminate()
+
+        if self.__replacement_batch_writer is not None:
+            self.__replacement_batch_writer.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
         start = time.time()
