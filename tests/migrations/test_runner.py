@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import patch
 
 from snuba.clickhouse.http import JSONRowEncoder
-from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
+from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.schemas.tables import TableSchema
@@ -18,17 +18,16 @@ from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.writer import BatchWriterEncoderWrapper
 
 
-def teardown_function() -> None:
-    connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
-        ClickhouseClientSettings.MIGRATE
-    )
-    for table in [
-        "migrations_local",
-        "sentry_local",
-        "transactions_local",
-        "querylog_local",
-    ]:
-        connection.execute(f"DROP TABLE IF EXISTS {table};")
+def setup_function() -> None:
+    for cluster in CLUSTERS:
+        connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+        database = cluster.get_database()
+
+        data = connection.execute(
+            f"SELECT name FROM system.tables WHERE database = '{database}'"
+        )
+        for (table,) in data:
+            connection.execute(f"DROP TABLE IF EXISTS {table}")
 
 
 def test_show_all() -> None:
@@ -70,6 +69,18 @@ def test_run_migration() -> None:
         runner.run_migration(MigrationKey(MigrationGroup.EVENTS, "0003_errors"))
 
 
+def test_reverse_migration() -> None:
+    runner = Runner()
+    runner.run_all(force=True)
+
+    # Invalid migration ID
+    with pytest.raises(MigrationError):
+        runner.reverse_migration(MigrationKey(MigrationGroup.SYSTEM, "xxx"))
+
+    with pytest.raises(MigrationError):
+        runner.reverse_migration(MigrationKey(MigrationGroup.EVENTS, "0003_errors"))
+
+
 def test_get_pending_migrations() -> None:
     runner = Runner()
     total_migrations = get_total_migration_count()
@@ -94,7 +105,7 @@ def test_reverse_all() -> None:
     all_migrations = runner._get_pending_migrations()
     runner.run_all(force=True)
     for migration in reversed(all_migrations):
-        runner.reverse_migration(migration)
+        runner.reverse_migration(migration, force=True)
 
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
