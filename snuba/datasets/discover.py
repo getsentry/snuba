@@ -45,7 +45,7 @@ from snuba.query.processors import QueryProcessor
 from snuba.query.processors.performance_expressions import apdex_processor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.failure_rate_processor import FailureRateProcessor
-from snuba.query.processors.null_array_functions import NullArrayFunctionsProcessor
+from snuba.query.processors.handled_functions import HandledFunctionsProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
@@ -393,7 +393,7 @@ class DiscoverDataset(TimeSeriesDataset):
             # exist, so it would run before Storage selection.
             apdex_processor(self.get_abstract_columnset()),
             FailureRateProcessor(),
-            NullArrayFunctionsProcessor(),
+            HandledFunctionsProcessor(),
             TimeSeriesColumnProcessor({"time": "timestamp"}),
         ]
 

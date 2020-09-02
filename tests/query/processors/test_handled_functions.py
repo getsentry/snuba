@@ -8,11 +8,11 @@ from snuba.query.conditions import (
 )
 from snuba.query.expressions import Column, FunctionCall, Lambda, Literal, Argument
 from snuba.query.logical import Query, SelectedExpression
-from snuba.query.processors import null_array_functions
+from snuba.query.processors import handled_functions
 from snuba.request.request_settings import HTTPRequestSettings
 
 
-def test_null_array_exists_processor() -> None:
+def test_handled_processor() -> None:
     unprocessed = Query(
         {},
         TableSource("events", ColumnSet([])),
@@ -22,7 +22,7 @@ def test_null_array_exists_processor() -> None:
                 "result",
                 FunctionCall(
                     "result",
-                    "nullArrayExists",
+                    "isHandled",
                     (Column(None, None, "exception_stacks.handled"), Literal(None, 1)),
                 ),
             ),
@@ -63,7 +63,7 @@ def test_null_array_exists_processor() -> None:
             ),
         ],
     )
-    processor = null_array_functions.NullArrayFunctionsProcessor()
+    processor = handled_functions.HandledFunctionsProcessor()
     processor.process_query(unprocessed, HTTPRequestSettings())
 
     assert (
@@ -79,7 +79,7 @@ def test_null_array_exists_processor() -> None:
     )
 
 
-def test_not_null_array_exists_processor() -> None:
+def test_not_handled_processor() -> None:
     unprocessed = Query(
         {},
         TableSource("events", ColumnSet([])),
@@ -89,7 +89,7 @@ def test_not_null_array_exists_processor() -> None:
                 "result",
                 FunctionCall(
                     "result",
-                    "notNullArrayExists",
+                    "notHandled",
                     (Column(None, None, "exception_stacks.handled"), Literal(None, 0)),
                 ),
             ),
@@ -130,7 +130,7 @@ def test_not_null_array_exists_processor() -> None:
             ),
         ],
     )
-    processor = null_array_functions.NullArrayFunctionsProcessor()
+    processor = handled_functions.HandledFunctionsProcessor()
     processor.process_query(unprocessed, HTTPRequestSettings())
 
     assert (

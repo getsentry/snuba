@@ -664,14 +664,11 @@ class TestApi(BaseApiTest):
                 data=json.dumps(
                     {
                         "project": 4,
-                        "selected_columns": [
-                            "message",
-                            "exception_stacks.mechanism_handled",
-                        ],
+                        "selected_columns": ["message"],
                         "conditions": [
                             [
                                 [
-                                    "nullArrayExists",
+                                    "isHandled",
                                     ["exception_stacks.mechanism_handled", 1],
                                 ],
                                 "=",
@@ -693,14 +690,11 @@ class TestApi(BaseApiTest):
                 data=json.dumps(
                     {
                         "project": 4,
-                        "selected_columns": [
-                            "message",
-                            "exception_stacks.mechanism_handled",
-                        ],
+                        "selected_columns": ["message"],
                         "conditions": [
                             [
                                 [
-                                    "notNullArrayExists",
+                                    "notHandled",
                                     ["exception_stacks.mechanism_handled", 0],
                                 ],
                                 "=",
