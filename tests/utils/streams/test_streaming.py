@@ -284,5 +284,5 @@ def test_parallel_transform_step_terminate_workers() -> None:
         get_subprocess_count,
         starting_processes + worker_processes + manager_processes,
         starting_processes,
-    ):
+    ), assert_changes(lambda: next_step.terminate.call_count, 0, 1):
         transform_step.terminate()
