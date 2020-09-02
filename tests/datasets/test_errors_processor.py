@@ -229,6 +229,8 @@ def test_error_processor() -> None:
         "user_email": "me@myself.org",
         "sdk_name": "sentry.python",
         "sdk_version": "0.0.0.0.1",
+        "http_method": "POST",
+        "http_referer": "tagstore.something",
         "tags.key": [
             "environment",
             "handled",
@@ -259,8 +261,6 @@ def test_error_processor() -> None:
             "geo.country_code",
             "geo.region",
             "geo.city",
-            "request.http_method",
-            "request.http_referer",
         ],
         "contexts.value": [
             "3.7.6",
@@ -269,8 +269,6 @@ def test_error_processor() -> None:
             "XY",
             "fake_region",
             "fake_city",
-            "POST",
-            "tagstore.something",
         ],
         "_contexts_flattened": "",
         "partition": 1,

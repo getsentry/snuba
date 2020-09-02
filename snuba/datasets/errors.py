@@ -2,7 +2,6 @@ from datetime import timedelta
 from typing import FrozenSet, Mapping, Sequence
 
 from snuba.datasets.dataset import TimeSeriesDataset
-from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors import promoted_tag_columns
@@ -16,7 +15,7 @@ from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.handled_functions import HandledFunctionsProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
-from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
+from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 
 
@@ -76,12 +75,7 @@ class ErrorsDataset(TimeSeriesDataset):
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
-            "project": ProjectExtension(
-                processor=ProjectWithGroupsProcessor(
-                    project_column="project_id",
-                    replacer_state_name=ReplacerState.ERRORS,
-                )
-            ),
+            "project": ProjectExtension(project_column="project_id"),
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=5),
