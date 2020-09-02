@@ -70,7 +70,7 @@ class BaseDatasetTest(BaseTest):
 
     def write_rows(self, rows: Sequence[WriterTableRow]) -> None:
         BatchWriterEncoderWrapper(
-            enforce_table_writer(self.dataset).get_writer(
+            enforce_table_writer(self.dataset).get_batch_writer(
                 metrics=DummyMetricsBackend(strict=True)
             ),
             JSONRowEncoder(),
