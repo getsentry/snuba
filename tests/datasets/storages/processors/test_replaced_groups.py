@@ -12,7 +12,6 @@ from snuba.datasets.errors_replacer import (
 )
 from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storages.processors.replaced_groups import (
-    CONSISTENCY_ENFORCER_PROCESSOR_ENABLED,
     PostReplacementConsistencyEnforcer,
 )
 from snuba.query.conditions import BooleanFunctions
@@ -42,10 +41,6 @@ def query() -> ClickhouseQuery:
             condition=build_in("project_id", [2]),
         )
     )
-
-
-def setup_function() -> None:
-    state.set_config(CONSISTENCY_ENFORCER_PROCESSOR_ENABLED, 1)
 
 
 def teardown_function() -> None:
