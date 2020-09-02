@@ -83,11 +83,9 @@ def test_pattern_replacer_format_expressions(
             None, "nullIf", (Column(None, None, exp.column_name), Literal(None, ""),)
         )
 
-    processor = PatternReplacer(
+    PatternReplacer(
         Param("column", ColumnMatch(None, None, StringMatch("column1"))), transform,
-    )
-
-    processor.process_query(unprocessed, HTTPRequestSettings())
+    ).process_query(unprocessed, HTTPRequestSettings())
     assert (
         expected.get_selected_columns_from_ast()
         == unprocessed.get_selected_columns_from_ast()
