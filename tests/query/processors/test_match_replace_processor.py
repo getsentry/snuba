@@ -74,7 +74,9 @@ test_data = [
 @pytest.mark.parametrize(
     "unprocessed, expected", test_data,
 )
-def test_match_replace_format_expressions(unprocessed: Query, expected: Query) -> None:
+def test_pattern_replacer_format_expressions(
+    unprocessed: Query, expected: Query
+) -> None:
     def transform(match: MatchResult, exp: Expression) -> Expression:
         assert isinstance(exp, Column)  # mypy
         return FunctionCall(
