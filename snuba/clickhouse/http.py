@@ -2,7 +2,7 @@ import functools
 import os
 import re
 from datetime import datetime
-from typing import Any, Iterable, Mapping, Optional
+from typing import Any, Mapping, Optional
 from urllib.parse import urlencode
 
 import rapidjson
@@ -13,8 +13,7 @@ from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.utils.codecs import Encoder
 from snuba.utils.concurrent import execute
-from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.writer import BatchWriter, WriteBatch, Writer, WriterTableRow
+from snuba.writer import WriteBatch, Writer, WriterTableRow
 
 
 CLICKHOUSE_ERROR_RE = re.compile(
@@ -128,34 +127,3 @@ class JSONRowEncoder(Encoder[JSONRow, WriterTableRow]):
 
     def encode(self, value: WriterTableRow) -> JSONRow:
         return rapidjson.dumps(value, default=self.__default).encode("utf-8")
-
-
-class HTTPBatchWriter(BatchWriter[JSONRow]):
-    def __init__(
-        self,
-        table_name: str,
-        host: str,
-        port: int,
-        user: str,
-        password: str,
-        database: str,
-        metrics: MetricsBackend,
-        options: Optional[Mapping[str, Any]] = None,
-        chunk_size: Optional[int] = 1,
-    ):
-        """
-        Builds a writer to send a batch to Clickhouse.
-        The encoder function will be applied to each row to turn it into bytes.
-        We send data to the server with Transfer-Encoding: chunked. If chunk size is 0
-        we send the entire content in one chunk, otherwise it is the rows per chunk.
-        """
-        self.__writer = HTTPWriter(
-            host, port, database, table_name, user, password, options
-        )
-
-    def write(self, values: Iterable[JSONRow]) -> None:
-        batch = self.__writer.batch()
-        for value in values:
-            batch.append(value)
-        batch.close()
-        batch.join()

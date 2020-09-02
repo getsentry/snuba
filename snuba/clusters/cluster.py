@@ -16,13 +16,13 @@ from typing import (
 
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
-from snuba.clickhouse.http import HTTPBatchWriter, JSONRow
+from snuba.clickhouse.http import HTTPWriter, JSONRow
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.reader import Reader, TQuery
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.writer import BatchWriter
+from snuba.writer import BatchWriter, Writer
 
 
 class ClickhouseClientSettingsType(NamedTuple):
@@ -103,6 +103,10 @@ class Cluster(ABC, Generic[TQuery, TWriterOptions]):
 
     @abstractmethod
     def get_reader(self) -> Reader[TQuery]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_writer(self, table_name: str, options: TWriterOptions) -> Writer[JSONRow]:
         raise NotImplementedError
 
     @abstractmethod
@@ -214,6 +218,19 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
             )
         return self.__reader
 
+    def get_writer(
+        self, table_name: str, options: ClickhouseWriterOptions
+    ) -> Writer[JSONRow]:
+        return HTTPWriter(
+            host=self.__query_node.host_name,
+            port=self.__http_port,
+            database=self.__database,
+            table_name=table_name,
+            user=self.__user,
+            password=self.__password,
+            options=options,
+        )
+
     def get_batch_writer(
         self,
         table_name: str,
@@ -221,17 +238,8 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         options: ClickhouseWriterOptions,
         chunk_size: Optional[int],
     ) -> BatchWriter[JSONRow]:
-        return HTTPBatchWriter(
-            table_name,
-            host=self.__query_node.host_name,
-            port=self.__http_port,
-            user=self.__user,
-            password=self.__password,
-            database=self.__database,
-            metrics=metrics,
-            options=options,
-            chunk_size=chunk_size,
-        )
+        # TODO: Clean up unused parameters.
+        return BatchWriter(self.get_writer(table_name, options))
 
     def is_single_node(self) -> bool:
         """

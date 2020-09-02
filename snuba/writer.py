@@ -34,10 +34,16 @@ class WriteBatch(ABC, Generic[T]):
         raise NotImplementedError
 
 
-class BatchWriter(ABC, Generic[T]):
-    @abstractmethod
+class BatchWriter(Generic[T]):
+    def __init__(self, writer: Writer[T]) -> None:
+        self.__writer = writer
+
     def write(self, values: Iterable[T]) -> None:
-        raise NotImplementedError
+        batch = self.__writer.batch()
+        for value in values:
+            batch.append(value)
+        batch.close()
+        batch.join()
 
 
 class BatchWriterEncoderWrapper(BatchWriter[TDecoded]):
