@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Generic, Iterable, List, Mapping, TypeVar
+from typing import Any, Generic, Iterable, List, Mapping, Optional, TypeVar
 
 from snuba.utils.codecs import Encoder, TDecoded, TEncoded
 
@@ -12,6 +12,26 @@ WriterTableRow = Mapping[str, Any]
 
 
 T = TypeVar("T")
+
+
+class Writer(ABC, Generic[T]):
+    @abstractmethod
+    def batch(self) -> WriteBatch[T]:
+        raise NotADirectoryError
+
+
+class WriteBatch(ABC, Generic[T]):
+    @abstractmethod
+    def append(self, value: T) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def close(self) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def join(self, timeout: Optional[float] = None) -> None:
+        raise NotImplementedError
 
 
 class BatchWriter(ABC, Generic[T]):

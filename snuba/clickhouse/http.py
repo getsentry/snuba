@@ -1,3 +1,5 @@
+import functools
+import os
 import re
 from datetime import datetime
 from typing import Any, Iterable, Mapping, Optional
@@ -10,9 +12,9 @@ from urllib3.exceptions import HTTPError
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.utils.codecs import Encoder
+from snuba.utils.concurrent import execute
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
-from snuba.writer import BatchWriter, WriterTableRow
+from snuba.writer import BatchWriter, WriteBatch, Writer, WriterTableRow
 
 
 CLICKHOUSE_ERROR_RE = re.compile(
@@ -21,7 +23,100 @@ CLICKHOUSE_ERROR_RE = re.compile(
 )
 
 
+def check_clickhouse_response(response) -> None:
+    if response.status != 200:
+        # XXX: This should be switched to just parse the JSON body after
+        # https://github.com/yandex/ClickHouse/issues/6272 is available.
+        content = response.data.decode("utf8")
+        details = CLICKHOUSE_ERROR_RE.match(content)
+        if details is not None:
+            code, type, message = details.groups()
+            raise ClickhouseError(int(code), message)
+        else:
+            raise HTTPError(
+                f"Received unexpected {response.status} response: {content}"
+            )
+
+
 JSONRow = bytes  # a single row in JSONEachRow format
+
+
+class HTTPWriter(Writer[JSONRow]):
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        database: str,
+        table_name: str,
+        user: str,
+        password: str,
+        options: Optional[Mapping[str, Any]] = None,
+    ) -> None:
+        self.__pool = HTTPConnectionPool(host, port)
+        self.__database = database
+        self.__table_name = table_name
+        self.__user = user
+        self.__password = password
+        self.__options = options
+
+    def batch(self) -> WriteBatch[JSONRow]:
+        return HTTPWriteBatch(
+            self.__pool,
+            self.__database,
+            self.__table_name,
+            self.__user,
+            self.__password,
+            self.__options,
+        )
+
+
+class HTTPWriteBatch(WriteBatch[JSONRow]):
+    def __init__(
+        self,
+        pool: HTTPConnectionPool,
+        database: str,
+        table_name: str,
+        user: str,
+        password: str,
+        options: Optional[Mapping[str, Any]] = None,
+    ) -> None:
+        self.__pool = pool
+
+        read_fd, write_fd = os.pipe()
+        self.__read = open(read_fd, "rb")
+        self.__write = open(write_fd, "wb")
+
+        self.__result = execute(
+            functools.partial(
+                self.__pool.urlopen,
+                "POST",
+                "/?"
+                + urlencode(
+                    {
+                        **(options if options is not None else {}),
+                        "query": f"INSERT INTO {database}.{table_name} FORMAT JSONEachRow",
+                    }
+                ),
+                headers={
+                    "X-ClickHouse-User": user,
+                    "X-ClickHouse-Key": password,
+                    "Connection": "keep-alive",
+                    "Accept-Encoding": "gzip,deflate",
+                },
+                body=self.__read,
+                chunked=True,
+            )
+        )
+
+    def append(self, value: JSONRow) -> None:
+        self.__write.write(value)
+        # TODO: Write newlines after each chunk.
+
+    def close(self) -> None:
+        self.__write.close()
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        check_clickhouse_response(self.__result.result(timeout))
 
 
 class JSONRowEncoder(Encoder[JSONRow, WriterTableRow]):
@@ -54,65 +149,13 @@ class HTTPBatchWriter(BatchWriter[JSONRow]):
         We send data to the server with Transfer-Encoding: chunked. If chunk size is 0
         we send the entire content in one chunk, otherwise it is the rows per chunk.
         """
-        self.__pool = HTTPConnectionPool(host, port)
-        self.__options = options if options is not None else {}
-        self.__table_name = table_name
-        self.__chunk_size = chunk_size
-        self.__user = user
-        self.__password = password
-        self.__database = database
-        self.__metrics = MetricsWrapper(metrics, "writer", {"table_name": table_name})
-
-    def _prepare_chunks(self, rows: Iterable[JSONRow]) -> Iterable[bytes]:
-        total_bytes_size = 0
-        chunk = []
-
-        for row in rows:
-            chunk.append(row)
-            if self.__chunk_size and len(chunk) == self.__chunk_size:
-                chunk_bytes = b"".join(chunk)
-                yield chunk_bytes
-                self.__metrics.timing("chunk.size", len(chunk_bytes))
-                total_bytes_size += len(chunk_bytes)
-                chunk = []
-
-        if chunk:
-            chunk_bytes = b"".join(chunk)
-            yield chunk_bytes
-            self.__metrics.timing("chunk.size", len(chunk_bytes))
-            total_bytes_size += len(chunk_bytes)
-
-        self.__metrics.timing("total.size", total_bytes_size)
-
-    def write(self, values: Iterable[JSONRow]) -> None:
-        response = self.__pool.urlopen(
-            "POST",
-            "/?"
-            + urlencode(
-                {
-                    **self.__options,
-                    "query": f"INSERT INTO {self.__database}.{self.__table_name} FORMAT JSONEachRow",
-                }
-            ),
-            headers={
-                "X-ClickHouse-User": self.__user,
-                "X-ClickHouse-Key": self.__password,
-                "Connection": "keep-alive",
-                "Accept-Encoding": "gzip,deflate",
-            },
-            body=self._prepare_chunks(values),
-            chunked=True,
+        self.__writer = HTTPWriter(
+            host, port, database, table_name, user, password, options
         )
 
-        if response.status != 200:
-            # XXX: This should be switched to just parse the JSON body after
-            # https://github.com/yandex/ClickHouse/issues/6272 is available.
-            content = response.data.decode("utf8")
-            details = CLICKHOUSE_ERROR_RE.match(content)
-            if details is not None:
-                code, type, message = details.groups()
-                raise ClickhouseError(int(code), message)
-            else:
-                raise HTTPError(
-                    f"Received unexpected {response.status} response: {content}"
-                )
+    def write(self, values: Iterable[JSONRow]) -> None:
+        batch = self.__writer.batch()
+        for value in values:
+            batch.append(value)
+        batch.close()
+        batch.join()
