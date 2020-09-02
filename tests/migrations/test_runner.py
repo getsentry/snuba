@@ -295,7 +295,7 @@ def generate_transactions(count: int) -> None:
         rows.extend(processed.rows)
 
     BatchWriterEncoderWrapper(
-        table_writer.get_writer(metrics=DummyMetricsBackend(strict=True)),
+        table_writer.get_batch_writer(metrics=DummyMetricsBackend(strict=True)),
         JSONRowEncoder(),
     ).write(rows)
 
