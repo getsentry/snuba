@@ -1,5 +1,4 @@
 import functools
-import itertools
 import logging
 import time
 from datetime import datetime
@@ -40,7 +39,7 @@ from snuba.utils.streams.streaming import (
     TransformStep,
 )
 from snuba.utils.streams.types import Message, Partition, Topic
-from snuba.writer import BatchWriter, BatchWriterEncoderWrapper, WriterTableRow
+from snuba.writer import BatchWriterEncoderWrapper, Writer, WriterTableRow
 
 
 logger = logging.getLogger("snuba.consumer")
@@ -151,10 +150,10 @@ class JSONRowInsertBatch(NamedTuple):
 
 
 class InsertBatchWriter(ProcessingStep[JSONRowInsertBatch]):
-    def __init__(self, writer: BatchWriter[JSONRow]) -> None:
-        self.__writer = writer
+    def __init__(self, writer: Writer[JSONRow]) -> None:
+        self.__batch = writer.batch()
 
-        self.__messages: MutableSequence[Message[JSONRowInsertBatch]] = []
+        self.__length = 0
         self.__closed = False
 
     def poll(self) -> None:
@@ -163,30 +162,24 @@ class InsertBatchWriter(ProcessingStep[JSONRowInsertBatch]):
     def submit(self, message: Message[JSONRowInsertBatch]) -> None:
         assert not self.__closed
 
-        self.__messages.append(message)
+        for row in message.payload.rows:
+            self.__batch.append(row)
+            self.__length += 1
 
     def close(self) -> None:
         self.__closed = True
 
-        if not self.__messages:
-            return
+        self.__batch.close()
 
+    def join(self, timeout: Optional[float] = None) -> None:
         start = time.time()
-        self.__writer.write(
-            itertools.chain.from_iterable(
-                message.payload.rows for message in self.__messages
-            )
-        )
-
+        self.__batch.join(timeout)
         logger.debug(
             "Waited %0.4f seconds for %r rows to be written to %r.",
             time.time() - start,
-            sum(len(message.payload.rows) for message in self.__messages),
-            self.__writer,
+            self.__length,
+            self.__batch,
         )
-
-    def join(self, timeout: Optional[float] = None) -> None:
-        pass
 
 
 class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
@@ -327,7 +320,7 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         self,
         prefilter: Optional[StreamMessageFilter[KafkaPayload]],
         processor: MessageProcessor,
-        writer: BatchWriter[JSONRow],
+        writer: Writer[JSONRow],
         max_batch_size: int,
         max_batch_time: float,
         processes: Optional[int],

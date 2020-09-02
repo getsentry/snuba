@@ -17,7 +17,7 @@ from snuba.snapshots.loaders import BulkLoader
 from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.streams.kafka import KafkaPayload
-from snuba.writer import BatchWriter
+from snuba.writer import BatchWriter, Writer
 
 
 @dataclass(frozen=True)
@@ -127,6 +127,15 @@ class TableWriter:
 
     def get_schema(self) -> WritableTableSchema:
         return self.__table_schema
+
+    def get_writer(
+        self, table_name: Optional[str] = None, options: ClickhouseWriterOptions = None
+    ) -> Writer[JSONRow]:
+        table_name = table_name or self.__table_schema.get_table_name()
+
+        options = self.__update_writer_options(options)
+
+        return self.__cluster.get_writer(table_name, options)
 
     def get_batch_writer(
         self,
