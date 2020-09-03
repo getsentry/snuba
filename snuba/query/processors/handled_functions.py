@@ -3,6 +3,7 @@ from snuba.query.expressions import (
     Expression,
     FunctionCall,
     Lambda,
+    Literal,
 )
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
@@ -21,8 +22,8 @@ class HandledFunctionsProcessor(QueryProcessor):
     The implementation of these functions is too complex for clients to provide so
     these wrappers are required.
 
-    - The `isHandled` function searches an array field for null or the second parameter.
-    - The `notHandled` function searches an array field for the second parameter null
+    - The `isHandled` function searches an array field for null or 1.
+    - The `notHandled` function searches an array field for 0, null
       values will be excluded from the result.
 
     Both functions return 1 or 0 if a row matches.
@@ -53,7 +54,7 @@ class HandledFunctionsProcessor(QueryProcessor):
                                             "assumeNotNull",
                                             (Argument(None, "x"),),
                                         ),
-                                        exp.parameters[1],
+                                        Literal(None, 1),
                                     ),
                                 ),
                             ),
@@ -82,7 +83,7 @@ class HandledFunctionsProcessor(QueryProcessor):
                                             "assumeNotNull",
                                             (Argument(None, "x"),),
                                         ),
-                                        exp.parameters[1],
+                                        Literal(None, 0),
                                     ),
                                 ),
                             ),

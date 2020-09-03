@@ -23,7 +23,7 @@ def test_handled_processor() -> None:
                 FunctionCall(
                     "result",
                     "isHandled",
-                    (Column(None, None, "exception_stacks.handled"), Literal(None, 1)),
+                    (Column(None, None, "exception_stacks.handled"),),
                 ),
             ),
         ],
@@ -90,7 +90,7 @@ def test_not_handled_processor() -> None:
                 FunctionCall(
                     "result",
                     "notHandled",
-                    (Column(None, None, "exception_stacks.handled"), Literal(None, 0)),
+                    (Column(None, None, "exception_stacks.handled"),),
                 ),
             ),
         ],

@@ -667,10 +667,7 @@ class TestApi(BaseApiTest):
                         "selected_columns": ["message"],
                         "conditions": [
                             [
-                                [
-                                    "isHandled",
-                                    ["exception_stacks.mechanism_handled", 1],
-                                ],
+                                ["isHandled", ["exception_stacks.mechanism_handled"]],
                                 "=",
                                 1,
                             ]
@@ -693,10 +690,7 @@ class TestApi(BaseApiTest):
                         "selected_columns": ["message"],
                         "conditions": [
                             [
-                                [
-                                    "notHandled",
-                                    ["exception_stacks.mechanism_handled", 0],
-                                ],
+                                ["notHandled", ["exception_stacks.mechanism_handled"]],
                                 "=",
                                 1,
                             ]
