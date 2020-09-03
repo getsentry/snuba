@@ -164,6 +164,7 @@ def detect_table(
             EVENTS,
             EVENTS_AND_TRANSACTIONS,
         ]
+
         if event_mismatch or transaction_mismatch:
             missing_columns = ",".join(
                 sorted(event_columns if event_mismatch else transaction_columns)
@@ -176,6 +177,21 @@ def detect_table(
                 },
             )
             logger.warning("Discover generated impossible query", exc_info=True)
+
+        if selected_table == EVENTS_AND_TRANSACTIONS and (
+            event_columns or transaction_columns
+        ):
+            # Not possible in future with merge table
+            metrics.increment(
+                "query.impossible-merge-table",
+                tags={
+                    "missing_events_columns": ",".join(sorted(event_columns)),
+                    "missing_transactions_columns": ",".join(
+                        sorted(transaction_columns)
+                    ),
+                },
+            )
+
         else:
             metrics.increment("query.success")
 
