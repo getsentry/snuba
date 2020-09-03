@@ -178,9 +178,9 @@ class MappingOptimizer(QueryProcessor):
             if having_cond_class == ConditionClass.NOT_OPTIMIZABLE:
                 return
 
-        if (
-            cond_class != ConditionClass.OPTIMIZABLE
-            and having_cond_class != ConditionClass.OPTIMIZABLE
+        if not (
+            cond_class == ConditionClass.OPTIMIZABLE
+            or having_cond_class == ConditionClass.OPTIMIZABLE
         ):
             return
 
