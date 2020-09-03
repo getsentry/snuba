@@ -16,4 +16,4 @@ class ClickhouseError(Exception):
 
 @dataclass(frozen=True)
 class ClickhouseWriterError(ClickhouseError):
-    row: Optional[int] = None
+    row: Optional[int] = None  # indexes start at 1
