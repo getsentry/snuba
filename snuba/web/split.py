@@ -2,12 +2,13 @@ import copy
 import logging
 import math
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any as AnyType
-from typing import List, Optional, Tuple, Union, cast
+from typing import List, Optional, Union
 
 from snuba import environment, settings, state, util
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy, SplitQueryRunner
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
@@ -21,16 +22,7 @@ from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.logical import SelectedExpression
-from snuba.query.matchers import (
-    Any,
-    AnyExpression,
-    Column,
-    FunctionCall,
-    Literal,
-    Or,
-    Param,
-    String,
-)
+from snuba.query.matchers import AnyExpression, Column, FunctionCall, Or, Param, String
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
@@ -50,58 +42,6 @@ def _identify_condition(condition: AnyType, field: str, operator: str) -> bool:
     return (
         is_condition(condition) and condition[0] == field and condition[1] == operator
     )
-
-
-def _get_time_range(
-    query: Query, timestamp_field: str
-) -> Tuple[Optional[datetime], Optional[datetime]]:
-    """
-    Finds the minimal time range for this query. Which means, it finds
-    the >= timestamp condition with the highest datetime literal and
-    the < timestamp condition with the smallest and returns the interval
-    in the form of a tuple of Literals. It only looks into first level
-    AND conditions since, if the timestamp is nested in an OR we cannot
-    say anything on how that compares to the other timestamp conditions.
-
-    TODO: Consider making this part of the AST api if there are more use
-    cases. It would require managing a few more corner cases for being part
-    of the api.
-    """
-
-    condition_clause = query.get_condition_from_ast()
-    if not condition_clause:
-        return (None, None)
-
-    max_lower_bound = None
-    min_upper_bound = None
-    for c in get_first_level_and_conditions(condition_clause):
-        match = FunctionCall(
-            None,
-            Param(
-                "operator",
-                Or(
-                    [
-                        String(OPERATOR_TO_FUNCTION[">="]),
-                        String(OPERATOR_TO_FUNCTION["<"]),
-                    ]
-                ),
-            ),
-            (
-                Column(None, None, String(timestamp_field)),
-                Literal(None, Param("timestamp", Any(datetime))),
-            ),
-        ).match(c)
-
-        if match is not None:
-            timestamp = cast(datetime, match.scalar("timestamp"))
-            if match.string("operator") == OPERATOR_TO_FUNCTION[">="]:
-                if not max_lower_bound or timestamp > max_lower_bound:
-                    max_lower_bound = timestamp
-            else:
-                if not min_upper_bound or timestamp < min_upper_bound:
-                    min_upper_bound = timestamp
-
-    return (max_lower_bound, min_upper_bound)
 
 
 def _replace_ast_condition(
@@ -204,7 +144,7 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
             ),
             None,
         )
-        from_date_ast, to_date_ast = _get_time_range(query, self.__timestamp_col)
+        from_date_ast, to_date_ast = get_time_range(query, self.__timestamp_col)
 
         if not from_date_str or not to_date_str:
             return None
