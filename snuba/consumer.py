@@ -171,10 +171,18 @@ class InsertBatchWriter(ProcessingStep[JSONRowInsertBatch]):
         if not self.__messages:
             return
 
+        start = time.time()
         self.__writer.write(
             itertools.chain.from_iterable(
                 message.payload.rows for message in self.__messages
             )
+        )
+
+        logger.debug(
+            "Waited %0.4f seconds for %r rows to be written to %r.",
+            time.time() - start,
+            sum(len(message.payload.rows) for message in self.__messages),
+            self.__writer,
         )
 
     def join(self, timeout: Optional[float] = None) -> None:
@@ -224,7 +232,15 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
         if timeout is not None:
             args.append(timeout)
 
+        start = time.time()
         self.__producer.flush(*args)
+
+        logger.debug(
+            "Waited %0.4f seconds for %r replacements to be flushed to %r.",
+            time.time() - start,
+            sum(len(message.payload.values) for message in self.__messages),
+            self.__producer,
+        )
 
 
 class ProcessedMessageBatchWriter(

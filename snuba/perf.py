@@ -42,9 +42,9 @@ def run(events_file, dataset, repeat=1, profile_process=False, profile_write=Fal
     """
 
     from snuba.consumer import ConsumerWorker
-    from snuba.migrations.migrate import run as run_migrations
+    from snuba.migrations.runner import Runner
 
-    run_migrations()
+    Runner().run_all(force=True)
 
     writable_storage = dataset.get_writable_storage()
 

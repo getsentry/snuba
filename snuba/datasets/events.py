@@ -26,7 +26,7 @@ from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
-from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
+from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import qualified_column
@@ -142,14 +142,7 @@ class EventsDataset(TimeSeriesDataset):
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
-            "project": ProjectExtension(
-                processor=ProjectWithGroupsProcessor(
-                    project_column="project_id",
-                    # key migration is on going. As soon as all the keys we are interested
-                    # into in redis are stored with "EVENTS" in the name, we can change this.
-                    replacer_state_name=None,
-                )
-            ),
+            "project": ProjectExtension(project_column="project_id"),
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=5),
