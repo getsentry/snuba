@@ -1,16 +1,16 @@
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.cdc.groupassignee_processor import (
     GroupAssigneeProcessor,
     GroupAssigneeRow,
 )
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.query.expressions import Column
 from snuba.query.processors.prewhere import PrewhereProcessor
-
 
 columns = ColumnSet(
     [
@@ -32,7 +32,7 @@ schema = ReplacingMergeTreeSchema(
     local_table_name="groupassignee_local",
     dist_table_name="groupassignee_dist",
     storage_set_key=StorageSetKey.EVENTS,
-    order_by="(project_id, group_id)",
+    order_by=[Column(None, None, "project_id"), Column(None, None, "group_id")],
     partition_by=None,
     version_column="offset",
 )

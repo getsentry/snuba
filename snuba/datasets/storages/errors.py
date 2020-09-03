@@ -31,7 +31,7 @@ from snuba.datasets.storages.processors.replaced_groups import (
 from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.conditions import ConditionFunctions, binary_condition
-from snuba.query.expressions import Column, Literal
+from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
@@ -188,7 +188,13 @@ schema = ReplacingMergeTreeSchema(
         "environment",
         "project_id",
     ],
-    order_by="(org_id, project_id, toStartOfDay(timestamp), primary_hash_hex, event_hash)",
+    order_by=[
+        Column(None, None, "org_id"),
+        Column(None, None, "project_id"),
+        FunctionCall(None, "toStartOfDay", (Column(None, None, "timestamp"),)),
+        Column(None, None, "primary_hash_hex"),
+        Column(None, None, "event_hash"),
+    ],
     partition_by="(toMonday(timestamp), if(retention_days = 30, 30, 90))",
     version_column="deleted",
     sample_expr="event_hash",

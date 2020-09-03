@@ -166,7 +166,7 @@ def test_prewhere(
     settings.MAX_PREWHERE_CONDITIONS = 2
     events = get_dataset("events")
     query = parse_query(query_body, events)
-    query.set_data_source(TableSource("my_table", ColumnSet([]), None, keys))
+    query.set_data_source(TableSource("my_table", ColumnSet([]), [], None, keys))
 
     request_settings = HTTPRequestSettings()
     processor = PrewhereProcessor()

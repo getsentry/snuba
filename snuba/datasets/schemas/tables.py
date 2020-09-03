@@ -4,9 +4,11 @@ from abc import ABC, abstractmethod
 from typing import Callable, Mapping, NamedTuple, Optional, Sequence, Set
 
 from snuba.clickhouse.columns import ColumnSet, ColumnType
+from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.clusters.cluster import get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas import MandatoryCondition, RelationalSource, Schema
+from snuba.query.expressions import Column, Expression
 
 
 class TableSource(RelationalSource):
@@ -19,11 +21,13 @@ class TableSource(RelationalSource):
         self,
         table_name: str,
         columns: ColumnSet,
+        primary_key_columns: Optional[Sequence[str]] = None,
         mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
     ) -> None:
         self.__table_name = table_name
         self.__columns = columns
+        self.__primary_key_columns = primary_key_columns or []
         self.__mandatory_conditions = mandatory_conditions or []
         self.__prewhere_candidates = prewhere_candidates or []
 
@@ -38,6 +42,9 @@ class TableSource(RelationalSource):
 
     def get_prewhere_candidates(self) -> Sequence[str]:
         return self.__prewhere_candidates
+
+    def get_primary_key_columns(self) -> Sequence[str]:
+        return self.__primary_key_columns
 
 
 class DDLStatement(NamedTuple):
@@ -58,6 +65,7 @@ class TableSchema(Schema):
         local_table_name: str,
         dist_table_name: str,
         storage_set_key: StorageSetKey,
+        primary_key_columns: Sequence[str],
         mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
     ):
@@ -68,7 +76,11 @@ class TableSchema(Schema):
             else dist_table_name
         )
         self.__table_source = TableSource(
-            self.get_table_name(), columns, mandatory_conditions, prewhere_candidates,
+            self.get_table_name(),
+            columns,
+            primary_key_columns,
+            mandatory_conditions,
+            prewhere_candidates,
         )
 
     def get_data_source(self) -> TableSource:
@@ -106,6 +118,7 @@ class TableSchemaWithDDL(TableSchema, ABC):
         local_table_name: str,
         dist_table_name: str,
         storage_set_key: StorageSetKey,
+        primary_key_columns: Sequence[str],
         mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
         migration_function: Optional[
@@ -118,6 +131,7 @@ class TableSchemaWithDDL(TableSchema, ABC):
             local_table_name=local_table_name,
             dist_table_name=dist_table_name,
             storage_set_key=storage_set_key,
+            primary_key_columns=primary_key_columns,
             mandatory_conditions=mandatory_conditions,
             prewhere_candidates=prewhere_candidates,
         )
@@ -183,7 +197,7 @@ class MergeTreeSchema(WritableTableSchema, TableSchemaWithDDL):
         storage_set_key: StorageSetKey,
         mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
-        order_by: str,
+        order_by: Sequence[Expression],
         partition_by: Optional[str],
         sample_expr: Optional[str] = None,
         ttl_expr: Optional[str] = None,
@@ -193,11 +207,18 @@ class MergeTreeSchema(WritableTableSchema, TableSchemaWithDDL):
         ] = None,
         skipped_cols_on_creation: Optional[Set[str]] = None,
     ):
+        primary_key_cols = []
+        for exp in order_by:
+            for sub_exp in exp:
+                if isinstance(sub_exp, Column):
+                    primary_key_cols.append(sub_exp.column_name)
+
         super(MergeTreeSchema, self).__init__(
             columns=columns,
             local_table_name=local_table_name,
             dist_table_name=dist_table_name,
             storage_set_key=storage_set_key,
+            primary_key_columns=primary_key_cols,
             mandatory_conditions=mandatory_conditions,
             prewhere_candidates=prewhere_candidates,
             migration_function=migration_function,
@@ -225,10 +246,13 @@ class MergeTreeSchema(WritableTableSchema, TableSchemaWithDDL):
         else:
             settings_clause = ""
 
+        order_by = [e.accept(ClickhouseExpressionFormatter()) for e in self.__order_by]
+        order_by_clause = ", ".join(order_by)
+
         return f"""
             {self._get_engine_type()}
             {partition_by_clause}
-            ORDER BY {self.__order_by}
+            ORDER BY ({order_by_clause})
             {sample_clause}
             {ttl_clause}
             {settings_clause};"""
@@ -260,7 +284,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         storage_set_key: StorageSetKey,
         mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
-        order_by: str,
+        order_by: Sequence[Expression],
         partition_by: Optional[str],
         version_column: str,
         sample_expr: Optional[str] = None,
@@ -326,6 +350,7 @@ class MaterializedViewSchema(TableSchemaWithDDL):
             local_table_name=local_materialized_view_name,
             dist_table_name=dist_materialized_view_name,
             storage_set_key=storage_set_key,
+            primary_key_columns=[],
             mandatory_conditions=mandatory_conditions,
             prewhere_candidates=prewhere_candidates,
             migration_function=migration_function,

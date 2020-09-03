@@ -51,7 +51,7 @@ schema = ReplacingMergeTreeSchema(
         )
     ],
     prewhere_candidates=["project_id", "id"],
-    order_by="(project_id, id)",
+    order_by=[Column(None, None, "project_id"), Column(None, None, "id")],
     partition_by=None,
     version_column="offset",
     sample_expr="id",

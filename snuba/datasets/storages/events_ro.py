@@ -17,6 +17,7 @@ schema = TableSchema(
     local_table_name="sentry_local",
     dist_table_name="sentry_dist_ro",
     storage_set_key=StorageSetKey.EVENTS_RO,
+    primary_key_columns=["project_id", "timestamp", "event_id"],
     mandatory_conditions=mandatory_conditions,
     prewhere_candidates=prewhere_candidates,
 )

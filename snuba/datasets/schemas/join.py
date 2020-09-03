@@ -77,11 +77,18 @@ class TableJoinNode(TableSource, JoinNode):
         self,
         table_name: str,
         columns: ColumnSet,
+        primary_key_columns: Optional[Sequence[str]],
         mandatory_conditions: Optional[Sequence[MandatoryCondition]],
         prewhere_candidates: Optional[Sequence[str]],
         alias: str,
     ) -> None:
-        super().__init__(table_name, columns, mandatory_conditions, prewhere_candidates)
+        super().__init__(
+            table_name,
+            columns,
+            primary_key_columns,
+            mandatory_conditions,
+            prewhere_candidates,
+        )
         self.__alias = alias
 
     def format_from(self) -> str:

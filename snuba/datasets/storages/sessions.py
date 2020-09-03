@@ -1,28 +1,25 @@
 from snuba.clickhouse.columns import (
+    UUID,
     AggregateFunction,
     ColumnSet,
     DateTime,
     LowCardinality,
     String,
     UInt,
-    UUID,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import (
-    MergeTreeSchema,
-    MaterializedViewSchema,
     AggregatingMergeTreeSchema,
+    MaterializedViewSchema,
+    MergeTreeSchema,
 )
 from snuba.datasets.sessions_processor import SessionsProcessor
-from snuba.datasets.storage import (
-    ReadableTableStorage,
-    WritableTableStorage,
-)
+from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.processor import MAX_UINT32, NIL_UUID
+from snuba.query.expressions import Column
 from snuba.query.processors.prewhere import PrewhereProcessor
-
 
 WRITE_LOCAL_TABLE_NAME = "sessions_raw_local"
 WRITE_DIST_TABLE_NAME = "sessions_raw_dist"
@@ -50,12 +47,23 @@ all_columns = ColumnSet(
     ]
 )
 
+
+def column(name: str) -> Column:
+    return Column(None, None, name)
+
+
 raw_schema = MergeTreeSchema(
     columns=all_columns,
     local_table_name=WRITE_LOCAL_TABLE_NAME,
     dist_table_name=WRITE_DIST_TABLE_NAME,
     storage_set_key=StorageSetKey.SESSIONS,
-    order_by="(org_id, project_id, release, environment, started)",
+    order_by=[
+        column("org_id"),
+        column("project_id"),
+        column("release"),
+        column("environment"),
+        column("started"),
+    ],
     partition_by="(toMonday(started))",
     settings={"index_granularity": "16384"},
 )
@@ -87,7 +95,13 @@ read_schema = AggregatingMergeTreeSchema(
     dist_table_name=READ_DIST_TABLE_NAME,
     storage_set_key=StorageSetKey.SESSIONS,
     prewhere_candidates=["project_id", "org_id"],
-    order_by="(org_id, project_id, release, environment, started)",
+    order_by=[
+        column("org_id"),
+        column("project_id"),
+        column("release"),
+        column("environment"),
+        column("started"),
+    ],
     partition_by="(toMonday(started))",
     settings={"index_granularity": "256"},
 )

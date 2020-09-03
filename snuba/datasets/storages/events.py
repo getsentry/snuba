@@ -20,6 +20,7 @@ from snuba.datasets.storages.events_common import (
 )
 from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.query.expressions import Column, FunctionCall
 
 
 def events_migrations(
@@ -98,7 +99,15 @@ schema = ReplacingMergeTreeSchema(
     storage_set_key=StorageSetKey.EVENTS,
     mandatory_conditions=mandatory_conditions,
     prewhere_candidates=prewhere_candidates,
-    order_by="(project_id, toStartOfDay(timestamp), %s)" % sample_expr,
+    order_by=[
+        Column(None, None, "project_id"),
+        FunctionCall(None, "toStartOfDay", (Column(None, None, "timestamp"),)),
+        FunctionCall(
+            None,
+            "cityHash64",
+            (FunctionCall(None, "toString", (Column(None, None, "event_id"),)),),
+        ),
+    ],
     partition_by="(toMonday(timestamp), if(equals(retention_days, 30), 30, 90))",
     version_column="deleted",
     sample_expr=sample_expr,

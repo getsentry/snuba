@@ -64,6 +64,7 @@ schema = WritableTableSchema(
     local_table_name="querylog_local",
     dist_table_name="querylog_dist",
     storage_set_key=StorageSetKey.QUERYLOG,
+    primary_key_columns=[],
 )
 
 storage = WritableTableStorage(

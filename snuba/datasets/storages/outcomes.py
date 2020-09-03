@@ -1,32 +1,34 @@
 from snuba.clickhouse.columns import (
+    UUID,
     ColumnSet,
     DateTime,
     LowCardinality,
     Nullable,
     String,
     UInt,
-    UUID,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.outcomes_processor import OutcomesProcessor
-from snuba.datasets.storage import (
-    ReadableTableStorage,
-    WritableTableStorage,
-)
-
 from snuba.datasets.schemas.tables import (
+    MaterializedViewSchema,
     MergeTreeSchema,
     SummingMergeTreeSchema,
-    MaterializedViewSchema,
 )
+from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.query.expressions import Column
 from snuba.query.processors.prewhere import PrewhereProcessor
 
 WRITE_LOCAL_TABLE_NAME = "outcomes_raw_local"
 WRITE_DIST_TABLE_NAME = "outcomes_raw_dist"
 READ_LOCAL_TABLE_NAME = "outcomes_hourly_local"
 READ_DIST_TABLE_NAME = "outcomes_hourly_dist"
+
+
+def col(name: str) -> Column:
+    return Column(None, None, name)
+
 
 write_columns = ColumnSet(
     [
@@ -46,7 +48,7 @@ raw_schema = MergeTreeSchema(
     local_table_name=WRITE_LOCAL_TABLE_NAME,
     dist_table_name=WRITE_DIST_TABLE_NAME,
     storage_set_key=StorageSetKey.OUTCOMES,
-    order_by="(org_id, project_id, timestamp)",
+    order_by=[col("org_id"), col("project_id"), col("timestamp")],
     partition_by="(toMonday(timestamp))",
     settings={"index_granularity": "16384"},
 )
@@ -68,7 +70,14 @@ read_schema = SummingMergeTreeSchema(
     local_table_name=READ_LOCAL_TABLE_NAME,
     dist_table_name=READ_DIST_TABLE_NAME,
     storage_set_key=StorageSetKey.OUTCOMES,
-    order_by="(org_id, project_id, key_id, outcome, reason, timestamp)",
+    order_by=[
+        col("org_id"),
+        col("project_id"),
+        col("key_id"),
+        col("outcome"),
+        col("reason"),
+        col("timestamp"),
+    ],
     partition_by="(toMonday(timestamp))",
     settings={"index_granularity": "256"},
 )

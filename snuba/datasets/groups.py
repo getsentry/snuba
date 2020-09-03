@@ -71,6 +71,7 @@ class Groups(TimeSeriesDataset):
             left_node=TableJoinNode(
                 table_name=groupedmessage_source.format_from(),
                 columns=groupedmessage_source.get_columns(),
+                primary_key_columns=groupedmessage_source.get_primary_key_columns(),
                 mandatory_conditions=[
                     MandatoryCondition(
                         (qualified_column("record_deleted", self.GROUPS_ALIAS), "=", 0),
@@ -91,6 +92,7 @@ class Groups(TimeSeriesDataset):
             right_node=TableJoinNode(
                 table_name=events_source.format_from(),
                 columns=events_source.get_columns(),
+                primary_key_columns=events_source.get_primary_key_columns(),
                 mandatory_conditions=[
                     MandatoryCondition(
                         (qualified_column("deleted", self.EVENTS_ALIAS), "=", 0),

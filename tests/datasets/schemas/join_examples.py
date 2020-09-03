@@ -26,7 +26,7 @@ table1 = MergeTreeSchema(
     local_table_name="table1",
     dist_table_name="table1",
     storage_set_key=StorageSetKey.EVENTS,
-    order_by="",
+    order_by=[],
     partition_by="",
 ).get_data_source()
 
@@ -41,7 +41,7 @@ table2 = MergeTreeSchema(
     local_table_name="table2",
     dist_table_name="table2",
     storage_set_key=StorageSetKey.EVENTS,
-    order_by="",
+    order_by=[],
     partition_by="",
 ).get_data_source()
 
@@ -56,14 +56,14 @@ table3 = MergeTreeSchema(
     local_table_name="table3",
     dist_table_name="table3",
     storage_set_key=StorageSetKey.EVENTS,
-    order_by="",
+    order_by=[],
     partition_by="",
 ).get_data_source()
 
 
 simple_join_structure = JoinClause(
-    TableJoinNode(table1.format_from(), table1.get_columns(), [], [], "t1"),
-    TableJoinNode(table2.format_from(), table2.get_columns(), [], [], "t2"),
+    TableJoinNode(table1.format_from(), table1.get_columns(), [], [], [], "t1"),
+    TableJoinNode(table2.format_from(), table2.get_columns(), [], [], [], "t2"),
     [
         JoinCondition(
             left=JoinConditionExpression(table_alias="t1", column="t1c1"),
@@ -79,8 +79,8 @@ simple_join_structure = JoinClause(
 
 complex_join_structure = JoinClause(
     JoinClause(
-        TableJoinNode(table1.format_from(), table1.get_columns(), [], [], "t1"),
-        TableJoinNode(table2.format_from(), table2.get_columns(), [], [], "t2"),
+        TableJoinNode(table1.format_from(), table1.get_columns(), [], [], [], "t1"),
+        TableJoinNode(table2.format_from(), table2.get_columns(), [], [], [], "t2"),
         [
             JoinCondition(
                 left=JoinConditionExpression(table_alias="t1", column="t1c1"),
@@ -89,7 +89,7 @@ complex_join_structure = JoinClause(
         ],
         JoinType.FULL,
     ),
-    TableJoinNode(table3.format_from(), table3.get_columns(), [], [], "t3"),
+    TableJoinNode(table3.format_from(), table3.get_columns(), [], [], [], "t3"),
     [
         JoinCondition(
             left=JoinConditionExpression(table_alias="t1", column="t1c1"),

@@ -31,6 +31,7 @@ from snuba.datasets.transactions_processor import (
     UNKNOWN_SPAN_STATUS,
     TransactionsMessageProcessor,
 )
+from snuba.query.expressions import Column, FunctionCall
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
@@ -200,7 +201,12 @@ schema = ReplacingMergeTreeSchema(
     storage_set_key=StorageSetKey.TRANSACTIONS,
     mandatory_conditions=[],
     prewhere_candidates=["event_id", "transaction_name", "transaction", "title"],
-    order_by="(project_id, toStartOfDay(finish_ts), transaction_name, cityHash64(span_id))",
+    order_by=[
+        Column(None, None, "project_id"),
+        FunctionCall(None, "toStartOfDay", (Column(None, None, "finish_ts"),)),
+        Column(None, None, "transaction_name"),
+        FunctionCall(None, "cityHash", (Column(None, None, "span_id"),)),
+    ],
     partition_by="(retention_days, toMonday(finish_ts))",
     version_column="deleted",
     sample_expr="cityHash64(span_id)",

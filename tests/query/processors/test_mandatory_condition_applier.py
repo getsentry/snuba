@@ -67,7 +67,7 @@ def test_mand_conditions(table: str, mand_conditions: List[MandatoryCondition]) 
 
     query = Query(
         copy.deepcopy(body),
-        TableSource(table, None, mand_conditions, ["c1"]),
+        TableSource(table, None, [], mand_conditions, ["c1"]),
         None,
         None,
         binary_condition(
