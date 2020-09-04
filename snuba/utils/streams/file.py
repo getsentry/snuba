@@ -263,21 +263,24 @@ class FileProducer(Producer[TPayload]):
         return result
 
 
+import pickle
+from snuba.utils.codecs import Codec
+from snuba.utils.streams.kafka import KafkaPayload
+
+
+class KafkaPayloadFileCodec(Codec[bytes, Tuple[KafkaPayload, datetime]]):
+    def encode(self, value: Tuple[KafkaPayload, datetime]) -> bytes:
+        return pickle.dumps(value)
+
+    def decode(self, value: bytes) -> Tuple[KafkaPayload, datetime]:
+        return pickle.loads(value)
+
+
+kafka_payload_file_codec = KafkaPayloadFileCodec()
+
+
 if __name__ == "__main__":
     import sys
-
-    import pickle
-    from snuba.utils.codecs import Codec
-    from snuba.utils.streams.kafka import KafkaPayload
-
-    class KafkaPayloadFileCodec(Codec[bytes, Tuple[KafkaPayload, datetime]]):
-        def encode(self, value: Tuple[KafkaPayload, datetime]) -> bytes:
-            return pickle.dumps(value)
-
-        def decode(self, value: bytes) -> Tuple[KafkaPayload, datetime]:
-            return pickle.loads(value)
-
-    kafka_payload_file_codec = KafkaPayloadFileCodec()
 
     topics = [Topic(t) for t in sys.argv[2:]]
 
