@@ -385,15 +385,16 @@ class DiscoverDataset(TimeSeriesDataset):
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
+        columnset = self.get_abstract_columnset()
         return [
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             # Apdex and Impact seem very good candidates for
             # being defined by the Transaction entity when it will
             # exist, so it would run before Storage selection.
-            apdex_processor(self.get_abstract_columnset()),
+            apdex_processor(columnset),
             FailureRateProcessor(),
-            HandledFunctionsProcessor(),
+            HandledFunctionsProcessor("exception_stacks.mechanism_handled", columnset),
             TimeSeriesColumnProcessor({"time": "timestamp"}),
         ]
 

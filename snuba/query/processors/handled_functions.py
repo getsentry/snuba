@@ -1,5 +1,8 @@
+from snuba.clickhouse.columns import ColumnSet
+from snuba.query.validation.signature import SignatureValidator
 from snuba.query.expressions import (
     Argument,
+    Column,
     Expression,
     FunctionCall,
     Lambda,
@@ -29,10 +32,17 @@ class HandledFunctionsProcessor(QueryProcessor):
     Both functions return 1 or 0 if a row matches.
     """
 
+    def __init__(self, column: str, columnset: ColumnSet):
+        self.__column = column
+        self.__columnset = columnset
+
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         def process_functions(exp: Expression) -> Expression:
             if isinstance(exp, FunctionCall):
                 if exp.function_name == "isHandled":
+                    validator = SignatureValidator([])
+                    validator.validate(exp.parameters, self.__columnset)
+
                     return FunctionCall(
                         exp.alias,
                         "arrayExists",
@@ -58,10 +68,13 @@ class HandledFunctionsProcessor(QueryProcessor):
                                     ),
                                 ),
                             ),
-                            exp.parameters[0],
+                            Column(None, None, self.__column),
                         ),
                     )
                 if exp.function_name == "notHandled":
+                    validator = SignatureValidator([])
+                    validator.validate(exp.parameters, self.__columnset)
+
                     return FunctionCall(
                         exp.alias,
                         "arrayExists",
@@ -87,7 +100,7 @@ class HandledFunctionsProcessor(QueryProcessor):
                                     ),
                                 ),
                             ),
-                            exp.parameters[0],
+                            Column(None, None, self.__column),
                         ),
                     )
             return exp

@@ -665,13 +665,7 @@ class TestApi(BaseApiTest):
                     {
                         "project": 4,
                         "selected_columns": ["message"],
-                        "conditions": [
-                            [
-                                ["isHandled", ["exception_stacks.mechanism_handled"]],
-                                "=",
-                                1,
-                            ]
-                        ],
+                        "conditions": [[["isHandled", []], "=", 1]],
                         "orderby": ["message"],
                     }
                 ),
@@ -688,13 +682,7 @@ class TestApi(BaseApiTest):
                     {
                         "project": 4,
                         "selected_columns": ["message"],
-                        "conditions": [
-                            [
-                                ["notHandled", ["exception_stacks.mechanism_handled"]],
-                                "=",
-                                1,
-                            ]
-                        ],
+                        "conditions": [[["notHandled", []], "=", 1]],
                         "orderby": ["message"],
                     }
                 ),

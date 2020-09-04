@@ -156,5 +156,7 @@ class EventsDataset(TimeSeriesDataset):
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             TimeSeriesColumnProcessor(self.__time_group_columns),
-            HandledFunctionsProcessor(),
+            HandledFunctionsProcessor(
+                "exception_stacks.mechanism_handled", self.get_abstract_columnset()
+            ),
         ]
