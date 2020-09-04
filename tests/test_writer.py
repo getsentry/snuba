@@ -15,14 +15,14 @@ class TestHTTPBatchWriter(BaseEventsTest):
         metrics = DummyMetricsBackend(strict=True)
 
         with pytest.raises(ClickhouseWriterError) as error:
-            table_writer.get_writer(table_name="invalid", metrics=metrics).write(
+            table_writer.get_batch_writer(table_name="invalid", metrics=metrics).write(
                 [rapidjson.dumps({"x": "y"}).encode("utf-8")]
             )
 
         assert error.value.code == 60
 
         with pytest.raises(ClickhouseWriterError) as error:
-            table_writer.get_writer(metrics=metrics).write(
+            table_writer.get_batch_writer(metrics=metrics).write(
                 [b"{}", rapidjson.dumps({"timestamp": "invalid"}).encode("utf-8")]
             )
 
