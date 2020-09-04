@@ -12,7 +12,7 @@ from tests.base import BaseEventsTest
 class TestHTTPBatchWriter(BaseEventsTest):
     def test_error_handling(self):
         try:
-            enforce_table_writer(self.dataset).get_writer(
+            enforce_table_writer(self.dataset).get_batch_writer(
                 table_name="invalid", metrics=DummyMetricsBackend(strict=True)
             ).write([rapidjson.dumps({"x": "y"}).encode("utf-8")])
         except ClickhouseError as error:
@@ -21,7 +21,7 @@ class TestHTTPBatchWriter(BaseEventsTest):
             assert False, "expected error"
 
         try:
-            enforce_table_writer(self.dataset).get_writer(
+            enforce_table_writer(self.dataset).get_batch_writer(
                 metrics=DummyMetricsBackend(strict=True)
             ).write([rapidjson.dumps({"timestamp": "invalid"}).encode("utf-8")])
         except ClickhouseError as error:

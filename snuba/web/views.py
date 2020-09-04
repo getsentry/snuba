@@ -419,7 +419,7 @@ if application.debug or application.testing:
                 rows.extend(processed_message.rows)
 
         BatchWriterEncoderWrapper(
-            enforce_table_writer(dataset).get_writer(metrics), JSONRowEncoder(),
+            enforce_table_writer(dataset).get_batch_writer(metrics), JSONRowEncoder(),
         ).write(rows)
 
         return ("ok", 200, {"Content-Type": "text/plain"})
