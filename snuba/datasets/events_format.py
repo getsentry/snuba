@@ -3,6 +3,7 @@ from typing import Any, Mapping, MutableMapping, Sequence, Tuple
 
 from snuba import settings
 from snuba.processor import (
+    _as_dict_safe,
     _ensure_valid_date,
     _ensure_valid_ip,
     _unicodify,
@@ -27,6 +28,13 @@ def extract_user(output: MutableMapping[str, Any], user: Mapping[str, Any]) -> N
     output["email"] = _unicodify(user.get("email", None))
     ip_addr = _ensure_valid_ip(user.get("ip_address", None))
     output["ip_address"] = str(ip_addr) if ip_addr is not None else None
+
+
+def extract_http(output: MutableMapping[str, Any], request: Mapping[str, Any]) -> None:
+    http_headers = _as_dict_safe(request.get("headers", None))
+    output["http_method"] = _unicodify(request.get("method", None))
+    output["http_referer"] = _unicodify(http_headers.get("Referer", None))
+    output["http_url"] = _unicodify(request.get("url", None))
 
 
 def extract_extra_tags(tags) -> Tuple[Sequence[str], Sequence[str]]:

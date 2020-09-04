@@ -62,6 +62,14 @@ class MatchResult:
         assert isinstance(ret, str)
         return ret
 
+    def optional_string(self, name: str) -> Optional[str]:
+        """
+        Returns a string present in the result or it is None.
+        """
+        ret = self.results[name]
+        assert ret is None or isinstance(ret, str)
+        return ret
+
     def integer(self, name: str) -> int:
         """
         Returns a int present in the result, guaranteeing the int is there
