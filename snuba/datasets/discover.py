@@ -82,7 +82,7 @@ EVENT_CONDITION = FunctionCallMatch(
 def match_query_to_table(
     query: Query, events_only_columns: ColumnSet, transactions_only_columns: ColumnSet
 ) -> str:
-    # First check for an top level condition on the event type
+    # First check for a top level condition on the event type
     condition = query.get_condition_from_ast()
     event_types = set()
     if condition:
