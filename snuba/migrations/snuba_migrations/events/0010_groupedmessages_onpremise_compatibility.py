@@ -23,7 +23,10 @@ def fix_order_by() -> None:
         f"SELECT primary_key FROM system.tables WHERE name = '{TABLE_NAME}' AND database = '{database}'"
     )
 
-    assert curr_primary_key in [new_primary_key, old_primary_key]
+    assert curr_primary_key in [
+        new_primary_key,
+        old_primary_key,
+    ], "Groupmessage table has invalid primary key"
 
     if curr_primary_key != old_primary_key:
         return
