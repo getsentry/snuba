@@ -106,7 +106,7 @@ class Cluster(ABC, Generic[TQuery, TWriterOptions]):
         raise NotImplementedError
 
     @abstractmethod
-    def get_writer(
+    def get_batch_writer(
         self,
         table_name: str,
         metrics: MetricsBackend,
@@ -214,7 +214,7 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
             )
         return self.__reader
 
-    def get_writer(
+    def get_batch_writer(
         self,
         table_name: str,
         metrics: MetricsBackend,

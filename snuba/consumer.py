@@ -70,7 +70,7 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         self.metrics = metrics
         table_writer = storage.get_table_writer()
         self.__writer = BatchWriterEncoderWrapper(
-            table_writer.get_writer(
+            table_writer.get_batch_writer(
                 metrics, {"load_balancing": "in_order", "insert_distributed_sync": 1}
             ),
             JSONRowEncoder(),
