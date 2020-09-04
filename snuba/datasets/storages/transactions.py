@@ -36,7 +36,6 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 )
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
-from snuba.query.processors.replace_expressions import transform_user_to_nullable
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.web.split import TimeSplitQueryStrategy
 
@@ -233,7 +232,6 @@ storage = WritableTableStorage(
         TransactionColumnProcessor(),
         ArrayJoinKeyValueOptimizer("tags"),
         PrewhereProcessor(),
-        transform_user_to_nullable(),
     ],
     stream_loader=KafkaStreamLoader(
         processor=TransactionsMessageProcessor(), default_topic="events",

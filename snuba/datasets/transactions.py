@@ -14,7 +14,7 @@ from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
-from snuba.query.expressions import Column, FunctionCall
+from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
@@ -44,6 +44,9 @@ transaction_translator = TranslationMappers(
                     None, "IPv6NumToString", (Column(None, None, "ip_address_v6"),),
                 ),
             ),
+        ),
+        ColumnToFunction(
+            None, "user", "nullIf", (Column(None, None, "user"), Literal(None, ""))
         ),
         # These column aliases originally existed in the ``discover`` dataset,
         # but now live here to maintain compatibility between the composite
