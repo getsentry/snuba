@@ -310,9 +310,46 @@ def generate_transactions(count: int) -> None:
         rows.extend(processed.rows)
 
     BatchWriterEncoderWrapper(
-        table_writer.get_writer(metrics=DummyMetricsBackend(strict=True)),
+        table_writer.get_batch_writer(metrics=DummyMetricsBackend(strict=True)),
         JSONRowEncoder(),
     ).write(rows)
+
+
+def test_groupedmessages_compatibility() -> None:
+    cluster = get_cluster(StorageSetKey.EVENTS)
+    database = cluster.get_database()
+    connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+
+    # Create old style table witihout project ID
+    connection.execute(
+        """
+        CREATE TABLE groupedmessage_local (`offset` UInt64, `record_deleted` UInt8,
+        `id` UInt64, `status` Nullable(UInt8), `last_seen` Nullable(DateTime),
+        `first_seen` Nullable(DateTime), `active_at` Nullable(DateTime),
+        `first_release_id` Nullable(UInt64)) ENGINE = ReplacingMergeTree(offset)
+        ORDER BY id SAMPLE BY id SETTINGS index_granularity = 8192
+        """
+    )
+
+    migration_id = "0010_groupedmessages_onpremise_compatibility"
+
+    runner = Runner()
+    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    events_migrations = get_group_loader(MigrationGroup.EVENTS).get_migrations()
+
+    # Mark prior migrations complete
+    for migration in events_migrations[: (events_migrations.index(migration_id))]:
+        runner._update_migration_status(
+            MigrationKey(MigrationGroup.EVENTS, migration), Status.COMPLETED
+        )
+
+    runner.run_migration(
+        MigrationKey(MigrationGroup.EVENTS, migration_id), force=True,
+    )
+
+    assert connection.execute(
+        f"SELECT primary_key FROM system.tables WHERE name = 'groupedmessage_local' AND database = '{database}'"
+    ) == [("project_id, id",)]
 
 
 def test_settings_skipped_group() -> None:
