@@ -8,7 +8,7 @@ from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
 
 from snuba.clickhouse import DATETIME_FORMAT
-from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.errors import ClickhouseWriterError
 from snuba.utils.codecs import Encoder
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
@@ -16,7 +16,7 @@ from snuba.writer import BatchWriter, WriterTableRow
 
 
 CLICKHOUSE_ERROR_RE = re.compile(
-    r"^Code: (?P<code>\d+), e.displayText\(\) = (?P<type>(?:\w+)::(?:\w+)): (?P<message>.+)$",
+    r"^Code: (?P<code>\d+), e.displayText\(\) = (?P<type>(?:\w+)::(?:\w+)): (?P<message>.+?(?: \(at row (?P<row>\d+)\))?)$",
     re.MULTILINE,
 )
 
@@ -110,8 +110,10 @@ class HTTPBatchWriter(BatchWriter[JSONRow]):
             content = response.data.decode("utf8")
             details = CLICKHOUSE_ERROR_RE.match(content)
             if details is not None:
-                code, type, message = details.groups()
-                raise ClickhouseError(int(code), message)
+                code = int(details["code"])
+                message = details["message"]
+                row = int(details["row"]) if details["row"] is not None else None
+                raise ClickhouseWriterError(code, message, row)
             else:
                 raise HTTPError(
                     f"Received unexpected {response.status} response: {content}"
