@@ -8,10 +8,10 @@ from snuba.query.conditions import (
     ConditionFunctions,
     binary_condition,
 )
+from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column, FunctionCall, Lambda, Literal, Argument
 from snuba.query.logical import Query, SelectedExpression
 from snuba.query.processors import handled_functions
-from snuba.query.validation import InvalidFunctionCall
 from snuba.request.request_settings import HTTPRequestSettings
 
 
@@ -95,7 +95,7 @@ def test_handled_processor_invalid() -> None:
     processor = handled_functions.HandledFunctionsProcessor(
         "exception_stacks.mechanism_handled", columnset
     )
-    with pytest.raises(InvalidFunctionCall):
+    with pytest.raises(InvalidExpressionException):
         processor.process_query(unprocessed, HTTPRequestSettings())
 
 
@@ -179,5 +179,5 @@ def test_not_handled_processor_invalid() -> None:
     processor = handled_functions.HandledFunctionsProcessor(
         "exception_stacks.mechanism_handled", columnset
     )
-    with pytest.raises(InvalidFunctionCall):
+    with pytest.raises(InvalidExpressionException):
         processor.process_query(unprocessed, HTTPRequestSettings())

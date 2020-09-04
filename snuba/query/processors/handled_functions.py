@@ -1,5 +1,7 @@
 from snuba.clickhouse.columns import ColumnSet
+from snuba.query.validation import InvalidFunctionCall
 from snuba.query.validation.signature import SignatureValidator
+from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -36,13 +38,20 @@ class HandledFunctionsProcessor(QueryProcessor):
         self.__column = column
         self.__columnset = columnset
 
+    def validate_parameters(self, exp: FunctionCall) -> None:
+        validator = SignatureValidator([])
+        try:
+            validator.validate(exp.parameters, self.__columnset)
+        except InvalidFunctionCall as err:
+            raise InvalidExpressionException(
+                exp, f"Illegal function call to {exp.function_name}: {str(err)}"
+            ) from err
+
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         def process_functions(exp: Expression) -> Expression:
             if isinstance(exp, FunctionCall):
                 if exp.function_name == "isHandled":
-                    validator = SignatureValidator([])
-                    validator.validate(exp.parameters, self.__columnset)
-
+                    self.validate_parameters(exp)
                     return FunctionCall(
                         exp.alias,
                         "arrayExists",
@@ -72,9 +81,7 @@ class HandledFunctionsProcessor(QueryProcessor):
                         ),
                     )
                 if exp.function_name == "notHandled":
-                    validator = SignatureValidator([])
-                    validator.validate(exp.parameters, self.__columnset)
-
+                    self.validate_parameters(exp)
                     return FunctionCall(
                         exp.alias,
                         "arrayExists",
