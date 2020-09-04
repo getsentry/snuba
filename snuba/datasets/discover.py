@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 from snuba import environment, state
 from snuba.clickhouse.columns import (
@@ -17,7 +17,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.clickhouse.translators.snuba.allowed import ColumnMapper
-from snuba.clickhouse.translators.snuba.mappers import ColumnToLiteral, ColumnToMapping
+from snuba.clickhouse.translators.snuba.mappers import ColumnToMapping
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.events import event_translator
@@ -199,7 +199,7 @@ def detect_table(
 
 
 @dataclass(frozen=True)
-class DefaultNoneColumnMapper(ColumnMapper):
+class DefaultColumnMapper(ColumnMapper):
     """
     This maps a list of column names to None (NULL in SQL) as it is done
     in the discover column_expr method today. It should not be used for
@@ -208,6 +208,7 @@ class DefaultNoneColumnMapper(ColumnMapper):
     """
 
     columns: ColumnSet
+    value: Any = None
 
     def attempt_map(
         self, expression: Column, children_translator: SnubaClickhouseStrictTranslator,
@@ -218,7 +219,7 @@ class DefaultNoneColumnMapper(ColumnMapper):
                 or qualified_column(
                     expression.column_name, expression.table_name or ""
                 ),
-                value=None,
+                value=self.value,
             )
         else:
             return None
@@ -249,7 +250,7 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
                     ColumnToMapping(None, "release", None, "tags", "sentry:release"),
                     ColumnToMapping(None, "dist", None, "tags", "sentry:dist"),
                     ColumnToMapping(None, "user", None, "tags", "sentry:user"),
-                    DefaultNoneColumnMapper(self.__abstract_transactions_columns),
+                    DefaultColumnMapper(self.__abstract_transactions_columns),
                 ]
             )
         )
@@ -257,8 +258,10 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
         self.__transaction_translator = transaction_translator.concat(
             TranslationMappers(
                 columns=[
-                    ColumnToLiteral(None, "group_id", 0),
-                    DefaultNoneColumnMapper(self.__abstract_events_columns),
+                    DefaultColumnMapper(
+                        ColumnSet([("group_id", Nullable(UInt(64)))]), 0
+                    ),
+                    DefaultColumnMapper(self.__abstract_events_columns),
                 ]
             )
         )
