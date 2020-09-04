@@ -36,6 +36,7 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.web.split import TimeSplitQueryStrategy
 
@@ -228,14 +229,12 @@ storage = WritableTableStorage(
     schema=schema,
     query_processors=[
         NestedFieldConditionOptimizer(
-            "tags", "_tags_flattened", {"start_ts", "finish_ts"}, BEGINNING_OF_TIME,
-        ),
-        NestedFieldConditionOptimizer(
             "contexts",
             "_contexts_flattened",
             {"start_ts", "finish_ts"},
             BEGINNING_OF_TIME,
         ),
+        MappingOptimizer("tags", "_tags_hash_map"),
         TransactionColumnProcessor(),
         ArrayJoinKeyValueOptimizer("tags"),
         PrewhereProcessor(),
