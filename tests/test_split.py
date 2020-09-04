@@ -431,34 +431,3 @@ def test_time_split_ast() -> None:
         ("2019-09-19T01:00:00", "2019-09-19T11:00:00"),
         ("2019-09-18T10:00:00", "2019-09-19T01:00:00"),
     ]
-
-
-def test_get_time_range() -> None:
-    """
-    Test finding the time range of a query.
-    """
-    body = {
-        "selected_columns": ["event_id"],
-        "conditions": [
-            ("timestamp", ">=", "2019-09-18T10:00:00"),
-            ("timestamp", ">=", "2000-09-18T10:00:00"),
-            ("timestamp", "<", "2019-09-19T12:00:00"),
-            [("timestamp", "<", "2019-09-18T12:00:00"), ("project_id", "IN", [1])],
-            ("project_id", "IN", [1]),
-        ],
-    }
-
-    events = get_dataset("events")
-    query = parse_query(body, events)
-
-    from_date_ast, to_date_ast = get_time_range(ClickhouseQuery(query), "timestamp")
-    assert (
-        from_date_ast is not None
-        and isinstance(from_date_ast, datetime)
-        and from_date_ast.isoformat() == "2019-09-18T10:00:00"
-    )
-    assert (
-        to_date_ast is not None
-        and isinstance(to_date_ast, datetime)
-        and to_date_ast.isoformat() == "2019-09-19T12:00:00"
-    )
