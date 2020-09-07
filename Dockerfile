@@ -8,15 +8,25 @@ RUN mkdir -p /usr/src/snuba
 WORKDIR /usr/src/snuba
 
 # these are required all the way through, and removing them will cause bad things
+ENV SYSTEM_DEPENDENCIES \
+    libexpat1 \
+    libffi6 \
+    liblz4-1 \
+    libpcre3
+
+# These are temporarily needed to install things like uwsgi.
+# It's installed here for better layer caching, otherwise every time
+# "COPY . /usr/src/snuba" is invalidated we end up pulling these.
+ENV BUILD_DEPENDENCIES \
+    curl \
+    gcc \
+    libc6-dev \
+    liblz4-dev \
+    libpcre3-dev
+
 RUN set -ex; \
     apt-get update; \
-    apt-get install --no-install-recommends -y \
-        curl \
-        libexpat1 \
-        libffi6 \
-        liblz4-1 \
-        libpcre3 \
-    ; \
+    apt-get install --no-install-recommends -y $SYSTEM_DEPENDENCIES $BUILD_DEPENDENCIES; \
     rm -rf /var/lib/apt/lists/*
 
 # grab gosu for easy step-down from root
@@ -44,6 +54,8 @@ RUN set -x \
     && gosu nobody true \
     && apt-get purge -y --auto-remove $fetchDeps
 
+# Layer cache is pretty much invalidated here all the time,
+# so try not to do anything heavy beyond here.
 COPY . /usr/src/snuba
 
 RUN chown -R snuba:snuba /usr/src/snuba/
@@ -52,17 +64,6 @@ ENV PIP_NO_CACHE_DIR=off \
     PIP_DISABLE_PIP_VERSION_CHECK=on
 
 RUN set -ex; \
-    \
-    buildDeps=' \
-        gcc \
-        libc6-dev \
-        liblz4-dev \
-        libpcre3-dev \
-    '; \
-    apt-get update; \
-    apt-get install -y $buildDeps --no-install-recommends; \
-    rm -rf /var/lib/apt/lists/*; \
-    \
     pip install -e .; \
     mkdir /tmp/uwsgi-dogstatsd; \
     curl -L https://github.com/DataDog/uwsgi-dogstatsd/archive/bc56a1b5e7ee9e955b7a2e60213fc61323597a78.tar.gz \
@@ -73,8 +74,7 @@ RUN set -ex; \
     mv dogstatsd_plugin.so /var/lib/uwsgi/; \
     uwsgi --need-plugin=/var/lib/uwsgi/dogstatsd --help > /dev/null; \
     snuba --help; \
-    \
-    apt-get purge -y --auto-remove $buildDeps
+    apt-get purge -y --auto-remove $BUILD_DEPENDENCIES
 
 ARG SNUBA_VERSION_SHA
 ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA \
