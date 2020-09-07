@@ -24,13 +24,14 @@ RUN set -ex; \
     rm -rf /var/lib/apt/lists/*
 
 # grab gosu for easy step-down from root
+# TODO: this won't be needed if we build a separate image for testing only.
 RUN set -x \
     && export GOSU_VERSION=1.11 \
     && fetchDeps=" \
         dirmngr \
         gnupg \
     " \
-    && apt-get update && apt-get install -y --no-install-recommends $fetchDeps && rm -rf /var/lib/apt/lists/* \
+    && apt-get update && apt-get install -y --no-install-recommends $fetchDeps \
     && curl -L -o /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64" \
     && curl -L -o /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64.asc" \
     && export GNUPGHOME="$(mktemp -d)" \
@@ -46,7 +47,8 @@ RUN set -x \
     && rm -r "$GNUPGHOME" /usr/local/bin/gosu.asc \
     && chmod +x /usr/local/bin/gosu \
     && gosu nobody true \
-    && apt-get purge -y --auto-remove $fetchDeps
+    && apt-get purge -y --auto-remove $fetchDeps \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src/snuba
 # Layer cache is pretty much invalidated here all the time,
