@@ -54,7 +54,6 @@ ENV PIP_NO_CACHE_DIR=off \
 RUN set -ex; \
     \
     buildDeps=' \
-        git \
         gcc \
         libc6-dev \
         liblz4-dev \
