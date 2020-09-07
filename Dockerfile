@@ -1,11 +1,5 @@
 ARG PYTHON_VERSION=3.8
-
 FROM python:${PYTHON_VERSION}-slim
-
-RUN groupadd -r snuba && useradd -r -g snuba snuba
-
-RUN mkdir -p /usr/src/snuba
-WORKDIR /usr/src/snuba
 
 # these are required all the way through, and removing them will cause bad things
 ENV SYSTEM_DEPENDENCIES \
@@ -54,11 +48,14 @@ RUN set -x \
     && gosu nobody true \
     && apt-get purge -y --auto-remove $fetchDeps
 
+WORKDIR /usr/src/snuba
 # Layer cache is pretty much invalidated here all the time,
 # so try not to do anything heavy beyond here.
-COPY . /usr/src/snuba
-
-RUN chown -R snuba:snuba /usr/src/snuba/
+COPY . ./
+RUN set -ex; \
+    groupadd -r snuba; \
+    useradd -r -g snuba snuba; \
+    chown -R snuba:snuba ./
 
 ENV PIP_NO_CACHE_DIR=off \
     PIP_DISABLE_PIP_VERSION_CHECK=on
@@ -87,7 +84,5 @@ ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA \
     UWSGI_DOGSTATSD_EXTRA_TAGS=service:snuba
 
 EXPOSE 1218
-
-COPY docker_entrypoint.sh ./
 ENTRYPOINT [ "./docker_entrypoint.sh" ]
 CMD [ "api" ]
