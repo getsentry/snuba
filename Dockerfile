@@ -11,6 +11,7 @@ WORKDIR /usr/src/snuba
 RUN set -ex; \
     apt-get update; \
     apt-get install --no-install-recommends -y \
+        curl \
         libexpat1 \
         libffi6 \
         liblz4-1 \
@@ -24,11 +25,10 @@ RUN set -x \
     && fetchDeps=" \
         dirmngr \
         gnupg \
-        wget \
     " \
     && apt-get update && apt-get install -y --no-install-recommends $fetchDeps && rm -rf /var/lib/apt/lists/* \
-    && wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture)" \
-    && wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture).asc" \
+    && curl -L -o /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture)" \
+    && curl -L -o /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture).asc" \
     && export GNUPGHOME="$(mktemp -d)" \
     && for key in \
       B42F6819007F00F88E364FD4036A9C25BF357DD4 \
@@ -59,7 +59,6 @@ RUN set -ex; \
         libc6-dev \
         liblz4-dev \
         libpcre3-dev \
-        wget \
     '; \
     apt-get update; \
     apt-get install -y $buildDeps --no-install-recommends; \
@@ -67,7 +66,7 @@ RUN set -ex; \
     \
     pip install -e .; \
     mkdir /tmp/uwsgi-dogstatsd; \
-    wget -O - https://github.com/DataDog/uwsgi-dogstatsd/archive/bc56a1b5e7ee9e955b7a2e60213fc61323597a78.tar.gz \
+    curl -L https://github.com/DataDog/uwsgi-dogstatsd/archive/bc56a1b5e7ee9e955b7a2e60213fc61323597a78.tar.gz \
         | tar -xvz -C /tmp/uwsgi-dogstatsd --strip-components=1; \
     uwsgi --build-plugin /tmp/uwsgi-dogstatsd; \
     rm -rf /tmp/uwsgi-dogstatsd .uwsgi_plugins_builder; \
