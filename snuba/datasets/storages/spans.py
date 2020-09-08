@@ -47,8 +47,8 @@ columns = ColumnSet(
 
 schema = ReplacingMergeTreeSchema(
     columns=columns,
-    local_table_name="spans_local_experimental",
-    dist_table_name="spans_dist_experimental",
+    local_table_name="spans_experimental_local",
+    dist_table_name="spans_experimental_dist",
     storage_set_key=StorageSetKey.TRANSACTIONS,
     mandatory_conditions=[
         MandatoryCondition(

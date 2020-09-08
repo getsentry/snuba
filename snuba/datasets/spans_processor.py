@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from typing import Any, List, MutableMapping, Optional, Tuple
 
@@ -54,7 +55,7 @@ class SpansMessageProcessor(MessageProcessor):
             processed["retention_days"] = enforce_retention(
                 event, datetime.fromtimestamp(data["timestamp"]),
             )
-            processed["transaction_id"] = event["event_id"]
+            processed["transaction_id"] = str(uuid.UUID(event["event_id"]))
             processed["span_id"] = int(span["span_id"], 16)
             processed["transaction_name"] = _unicodify(data.get("transaction") or "")
             processed["parent_span_id"] = int(span["parent_span_id"], 16)
@@ -81,5 +82,9 @@ class SpansMessageProcessor(MessageProcessor):
 
             tags = _as_dict_safe(span.get("tags", None))
             processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
+            ret.append(processed)
 
-        return InsertBatch(ret)
+        if ret:
+            return InsertBatch(ret)
+        else:
+            return None
