@@ -15,6 +15,7 @@ from snuba.query.conditions import (
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query, SelectedExpression
 from snuba.querylog.query_metadata import ClickhouseQueryProfile, FilterProfile
+from snuba.state import safe_dumps
 
 test_cases = [
     pytest.param(
@@ -123,4 +124,27 @@ test_cases = [
 def test_format_expressions(
     query: ClickhouseQuery, profile: ClickhouseQueryProfile,
 ) -> None:
-    assert generate_profile(query) == profile
+    generated_profile = generate_profile(query)
+    assert generated_profile == profile
+    # Ensure that json serialization does not fail.
+    safe_dumps(generated_profile.to_dict())
+
+
+def test_serialization() -> None:
+    profile = ClickhouseQueryProfile(
+        time_range=10,
+        table="events",
+        multi_level_condition=True,
+        where_profile=FilterProfile(columns={"timestamp"}, mapping_cols=set(),),
+        groupby_cols={"col"},
+        array_join_cols={"arrayjoin"},
+    )
+
+    assert profile.to_dict() == {
+        "time_range": 10,
+        "table": "events",
+        "multi_level_condition": True,
+        "where_profile": {"columns": ["timestamp"], "mapping_cols": []},
+        "groupby_cols": ["col"],
+        "array_join_cols": ["arrayjoin"],
+    }
