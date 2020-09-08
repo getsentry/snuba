@@ -82,3 +82,27 @@ def run(group: str, migration_id: str, force: bool) -> None:
     click.echo(
         f"Finished running migration {migration_key.group.value}: {migration_key.migration_id}"
     )
+
+
+@migrations.command()
+@click.option("--group", required=True, help="Migration group")
+@click.option("--migration-id", required=True, help="Migration ID")
+@click.option("--force", is_flag=True)
+def reverse(group: str, migration_id: str, force: bool) -> None:
+    """
+    Reverses a single migration.
+
+    --force is required to reverse an already completed migration.
+    """
+    runner = Runner()
+    migration_group = MigrationGroup(group)
+    migration_key = MigrationKey(migration_group, migration_id)
+
+    try:
+        runner.reverse_migration(migration_key, force=force)
+    except MigrationError as e:
+        raise click.ClickException(str(e))
+
+    click.echo(
+        f"Finished reversing migration {migration_key.group.value}: {migration_key.migration_id}"
+    )

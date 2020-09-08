@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from abc import ABC, abstractmethod
 from typing import (
     Callable,
@@ -80,6 +81,15 @@ class ProcessingStrategy(ABC, Generic[TPayload]):
         raise NotImplementedError
 
     @abstractmethod
+    def terminate(self) -> None:
+        """
+        Close the processing strategy immediately, abandoning any work in
+        progress. No more messages should be accepted by the instance after
+        this method has been called.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def join(self, timeout: Optional[float] = None) -> None:
         """
         Block until the processing strategy has completed all previously
@@ -148,6 +158,9 @@ class StreamProcessor(Generic[TPayload]):
 
             logger.info("New partitions assigned: %r", partitions)
             self.__processing_strategy = self.__processor_factory.create(self.__commit)
+            logger.debug(
+                "Initialized processing strategy: %r", self.__processing_strategy
+            )
 
         def on_partitions_revoked(partitions: Sequence[Partition]) -> None:
             if self.__processing_strategy is None:
@@ -176,16 +189,35 @@ class StreamProcessor(Generic[TPayload]):
 
     def __commit(self, offsets: Mapping[Partition, int]) -> None:
         self.__consumer.stage_offsets(offsets)
+        start = time.time()
         self.__consumer.commit_offsets()
+        logger.debug(
+            "Waited %0.4f seconds for offsets to be committed to %r.",
+            time.time() - start,
+            self.__consumer,
+        )
 
     def run(self) -> None:
         "The main run loop, see class docstring for more information."
 
         logger.debug("Starting")
-        while not self.__shutdown_requested:
-            self._run_once()
+        try:
+            while not self.__shutdown_requested:
+                self._run_once()
 
-        self._shutdown()
+            self._shutdown()
+        except Exception as error:
+            logger.warning("Caught %r, shutting down...", error)
+
+            if self.__processing_strategy is not None:
+                logger.debug("Terminating %r...", self.__processing_strategy)
+                self.__processing_strategy.terminate()
+                self.__processing_strategy = None
+
+            logger.debug("Closing %r...", self.__consumer)
+            self.__consumer.close()
+
+            raise
 
     def _run_once(self) -> None:
         message_carried_over = self.__message is not None
@@ -214,12 +246,13 @@ class StreamProcessor(Generic[TPayload]):
                     # If the processing strategy rejected our message, we need
                     # to pause the consumer and hold the message until it is
                     # accepted, at which point we can resume consuming.
-                    logger.debug(
-                        "Caught %r while submitting %r, pausing consumer...",
-                        e,
-                        self.__message,
-                    )
-                    self.__consumer.pause([*self.__consumer.tell().keys()])
+                    if not message_carried_over:
+                        logger.debug(
+                            "Caught %r while submitting %r, pausing consumer...",
+                            e,
+                            self.__message,
+                        )
+                        self.__consumer.pause([*self.__consumer.tell().keys()])
                 else:
                     # If we were trying to submit a message that failed to be
                     # submitted on a previous run, we can resume accepting new

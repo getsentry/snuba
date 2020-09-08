@@ -4,7 +4,7 @@ from typing import Any, Optional, Sequence
 import click
 
 from snuba import settings
-from snuba.consumers.consumer_builder import ConsumerBuilder
+from snuba.consumers.consumer_builder import ConsumerBuilder, StrategyFactoryType
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_cdc_storage, WRITABLE_STORAGES
 from snuba.environment import setup_logging, setup_sentry
@@ -73,6 +73,20 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
     type=bool,
     help="Runs a stateful consumer (that manages snapshots) instead of a basic one.",
 )
+@click.option(
+    "--strategy",
+    type=click.Choice([k.lower() for k in StrategyFactoryType.__members__.keys()]),
+    default="streaming",
+)
+@click.option(
+    "--processes", type=int,
+)
+@click.option(
+    "--input-block-size", type=int,
+)
+@click.option(
+    "--output-block-size", type=int,
+)
 def consumer(
     *,
     raw_events_topic: Optional[str],
@@ -88,6 +102,10 @@ def consumer(
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
     stateful_consumer: bool,
+    strategy: str,
+    processes: Optional[int],
+    input_block_size: Optional[int],
+    output_block_size: Optional[int],
     log_level: Optional[str] = None,
 ) -> None:
 
@@ -113,6 +131,10 @@ def consumer(
         auto_offset_reset=auto_offset_reset,
         queued_max_messages_kbytes=queued_max_messages_kbytes,
         queued_min_messages=queued_min_messages,
+        strategy_factory_type=getattr(StrategyFactoryType, strategy.upper()),
+        processes=processes,
+        input_block_size=input_block_size,
+        output_block_size=output_block_size,
     )
 
     if stateful_consumer:
