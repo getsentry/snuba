@@ -154,13 +154,18 @@ class ErrorsReplacer(ReplacerProcessor):
         ):
             return None
         elif type_ == "end_delete_groups":
-            processed = process_delete_groups(event, self.__required_columns)
+            processed = process_delete_groups(
+                self.__state_name, event, self.__required_columns
+            )
         elif type_ == "end_merge":
-            processed = process_merge(event, self.__all_column_names)
+            processed = process_merge(self.__state_name, event, self.__all_column_names)
         elif type_ == "end_unmerge":
-            processed = process_unmerge(event, self.__all_column_names)
+            processed = process_unmerge(
+                self.__state_name, event, self.__all_column_names
+            )
         elif type_ == "end_delete_tag":
             processed = process_delete_tag(
+                self.__state_name,
                 event,
                 self.get_write_schema(),
                 self.__tag_column_map,
@@ -198,7 +203,9 @@ class ErrorsReplacer(ReplacerProcessor):
 
 
 def process_delete_groups(
-    message: Mapping[str, Any], required_columns: Sequence[str]
+    state_name: ReplacerState,
+    message: Mapping[str, Any],
+    required_columns: Sequence[str],
 ) -> Optional[Replacement]:
     group_ids = message["group_ids"]
     if not group_ids:
@@ -208,12 +215,21 @@ def process_delete_groups(
     timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
     select_columns = map(lambda i: i if i != "deleted" else "1", required_columns)
 
-    where = """\
-        PREWHERE group_id IN (%(group_ids)s)
-        WHERE project_id = %(project_id)s
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
+    if state_name == ReplacerState.ERRORS:
+        where = """\
+            PREWHERE group_id IN (%(group_ids)s)
+            WHERE org_id = 0
+            AND project_id = %(project_id)s
+            AND received <= CAST('%(timestamp)s' AS DateTime)
+            AND NOT deleted
+        """
+    else:
+        where = """\
+            PREWHERE group_id IN (%(group_ids)s)
+            WHERE project_id = %(project_id)s
+            AND received <= CAST('%(timestamp)s' AS DateTime)
+            AND NOT deleted
+        """
 
     count_query_template = (
         """\
@@ -251,7 +267,9 @@ SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
 
 
 def process_merge(
-    message: Mapping[str, Any], all_column_names: Sequence[str]
+    state_name: ReplacerState,
+    message: Mapping[str, Any],
+    all_column_names: Sequence[str],
 ) -> Optional[Replacement]:
     # HACK: We were sending duplicates of the `end_merge` message from Sentry,
     # this is only for performance of the backlog.
@@ -273,12 +291,21 @@ def process_merge(
         all_column_names,
     )
 
-    where = """\
-        PREWHERE group_id IN (%(previous_group_ids)s)
-        WHERE project_id = %(project_id)s
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
+    if state_name == ReplacerState.ERRORS:
+        where = """\
+            PREWHERE group_id IN (%(previous_group_ids)s)
+            WHERE org_id = 0
+            AND project_id = %(project_id)s
+            AND received <= CAST('%(timestamp)s' AS DateTime)
+            AND NOT deleted
+        """
+    else:
+        where = """\
+            PREWHERE group_id IN (%(previous_group_ids)s)
+            WHERE project_id = %(project_id)s
+            AND received <= CAST('%(timestamp)s' AS DateTime)
+            AND NOT deleted
+        """
 
     count_query_template = (
         """\
@@ -313,7 +340,9 @@ def process_merge(
 
 
 def process_unmerge(
-    message: Mapping[str, Any], all_column_names: Sequence[str]
+    state_name: ReplacerState,
+    message: Mapping[str, Any],
+    all_column_names: Sequence[str],
 ) -> Optional[Replacement]:
     hashes = message["hashes"]
     if not hashes:
@@ -326,13 +355,23 @@ def process_unmerge(
         all_column_names,
     )
 
-    where = """\
-        PREWHERE group_id = %(previous_group_id)s
-        WHERE project_id = %(project_id)s
-        AND primary_hash IN (%(hashes)s)
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
+    if state_name == ReplacerState.ERRORS:
+        where = """\
+            PREWHERE group_id = %(previous_group_id)s
+            WHERE org_id = 0
+            AND project_id = %(project_id)s
+            AND primary_hash IN (%(hashes)s)
+            AND received <= CAST('%(timestamp)s' AS DateTime)
+            AND NOT deleted
+        """
+    else:
+        where = """\
+            PREWHERE group_id = %(previous_group_id)s
+            WHERE project_id = %(project_id)s
+            AND primary_hash IN (%(hashes)s)
+            AND received <= CAST('%(timestamp)s' AS DateTime)
+            AND NOT deleted
+        """
 
     count_query_template = (
         """\
@@ -397,6 +436,7 @@ concat(
 
 
 def process_delete_tag(
+    state_name: ReplacerState,
     message: Mapping[str, Any],
     schema: TableSchema,
     tag_column_map: Mapping[str, Mapping[str, str]],
@@ -411,11 +451,19 @@ def process_delete_tag(
     tag_column_name = tag_column_map["tags"].get(tag, tag)
     is_promoted = tag in promoted_tags["tags"]
 
-    where = """\
-        WHERE project_id = %(project_id)s
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
+    if state_name == ReplacerState.ERRORS:
+        where = """\
+            WHERE org_id = 0
+            AND project_id = %(project_id)s
+            AND received <= CAST('%(timestamp)s' AS DateTime)
+            AND NOT deleted
+        """
+    else:
+        where = """\
+            WHERE project_id = %(project_id)s
+            AND received <= CAST('%(timestamp)s' AS DateTime)
+            AND NOT deleted
+        """
 
     if is_promoted:
         prewhere = " PREWHERE %(tag_column)s IS NOT NULL "
