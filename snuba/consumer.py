@@ -70,7 +70,7 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         self.metrics = metrics
         table_writer = storage.get_table_writer()
         self.__writer = BatchWriterEncoderWrapper(
-            table_writer.get_writer(
+            table_writer.get_batch_writer(
                 metrics, {"load_balancing": "in_order", "insert_distributed_sync": 1}
             ),
             JSONRowEncoder(),
@@ -171,11 +171,22 @@ class InsertBatchWriter(ProcessingStep[JSONRowInsertBatch]):
         if not self.__messages:
             return
 
+        start = time.time()
         self.__writer.write(
             itertools.chain.from_iterable(
                 message.payload.rows for message in self.__messages
             )
         )
+
+        logger.debug(
+            "Waited %0.4f seconds for %r rows to be written to %r.",
+            time.time() - start,
+            sum(len(message.payload.rows) for message in self.__messages),
+            self.__writer,
+        )
+
+    def terminate(self) -> None:
+        self.__closed = True
 
     def join(self, timeout: Optional[float] = None) -> None:
         pass
@@ -219,12 +230,23 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
                     on_delivery=self.__delivery_callback,
                 )
 
+    def terminate(self) -> None:
+        self.__closed = True
+
     def join(self, timeout: Optional[float] = None) -> None:
         args = []
         if timeout is not None:
             args.append(timeout)
 
+        start = time.time()
         self.__producer.flush(*args)
+
+        logger.debug(
+            "Waited %0.4f seconds for %r replacements to be flushed to %r.",
+            time.time() - start,
+            sum(len(message.payload.values) for message in self.__messages),
+            self.__producer,
+        )
 
 
 class ProcessedMessageBatchWriter(
@@ -275,6 +297,14 @@ class ProcessedMessageBatchWriter(
 
         if self.__replacement_batch_writer is not None:
             self.__replacement_batch_writer.close()
+
+    def terminate(self) -> None:
+        self.__closed = True
+
+        self.__insert_batch_writer.terminate()
+
+        if self.__replacement_batch_writer is not None:
+            self.__replacement_batch_writer.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
         start = time.time()

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Any, MutableMapping, Optional
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
@@ -10,6 +10,7 @@ from snuba.datasets.events_format import (
     extract_base,
     extract_extra_contexts,
     extract_extra_tags,
+    extract_http,
     extract_user,
     flatten_nested_field,
 )
@@ -121,6 +122,12 @@ class TransactionsMessageProcessor(MessageProcessor):
         geo = user_dict.get("geo", None) or {}
         if "geo" not in contexts and isinstance(geo, dict):
             contexts["geo"] = geo
+
+        request = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
+        http_data: MutableMapping[str, Any] = {}
+        extract_http(http_data, request)
+        processed["http_method"] = http_data["http_method"]
+        processed["http_referer"] = http_data["http_referer"]
 
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             contexts

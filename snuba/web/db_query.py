@@ -10,6 +10,7 @@ from sentry_sdk.api import configure_scope
 from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.query_profiler import generate_profile
 from snuba.clickhouse.sql import SqlQuery
 from snuba.querylog.query_metadata import (
     ClickhouseQueryMetadata,
@@ -39,6 +40,7 @@ logger = logging.getLogger("snuba.query")
 
 
 def update_query_metadata_and_stats(
+    query: Query,
     sql: str,
     timer: Timer,
     stats: MutableMapping[str, Any],
@@ -55,7 +57,13 @@ def update_query_metadata_and_stats(
     stats.update(query_settings)
 
     query_metadata.query_list.append(
-        ClickhouseQueryMetadata(sql=sql, stats=stats, status=status, trace_id=trace_id)
+        ClickhouseQueryMetadata(
+            sql=sql,
+            stats=stats,
+            status=status,
+            profile=generate_profile(query),
+            trace_id=trace_id,
+        )
     )
 
     return stats
@@ -63,11 +71,12 @@ def update_query_metadata_and_stats(
 
 @with_span(op="db")
 def execute_query(
+    # TODO: Passing the whole clickhouse query here is needed as long
+    # as the execute method depends on it. Otherwise we can make this
+    # file rely either entirely on clickhouse query or entirely on
+    # the formatter.
     clickhouse_query: Query,
     request_settings: RequestSettings,
-    # TODO: Passing the SqlQuery (which basically wraps the query and formats it)
-    # will be needed as long as the legacy query representation will be around.
-    # See DictSqlQuery.
     formatted_query: SqlQuery,
     reader: Reader[SqlQuery],
     timer: Timer,
@@ -230,11 +239,12 @@ def execute_query_with_readthrough_caching(
 
 
 def raw_query(
+    # TODO: Passing the whole clickhouse query here is needed as long
+    # as the execute method depends on it. Otherwise we can make this
+    # file rely either entirely on clickhouse query or entirely on
+    # the formatter.
     clickhouse_query: Query,
     request_settings: RequestSettings,
-    # TODO: Passing the SqlQuery (which basically wraps the query and formats it)
-    # will be needed as long as the legacy query representation will be around.
-    # See DictSqlQuery.
     formatted_query: SqlQuery,
     reader: Reader[SqlQuery],
     timer: Timer,
@@ -261,6 +271,7 @@ def raw_query(
 
     update_with_status = partial(
         update_query_metadata_and_stats,
+        clickhouse_query,
         sql,
         timer,
         stats,

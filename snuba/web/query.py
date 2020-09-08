@@ -123,7 +123,6 @@ def _run_query_pipeline(
 
     query_runner = partial(
         _format_storage_query_and_run,
-        dataset,
         timer,
         query_metadata,
         from_date,
@@ -137,9 +136,6 @@ def _run_query_pipeline(
 
 
 def _format_storage_query_and_run(
-    # TODO: remove dependency on Dataset. This is only for formatting the legacy
-    # SqlQuery with the AST this won't be needed.
-    dataset: Dataset,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     from_date: datetime,
@@ -151,8 +147,6 @@ def _format_storage_query_and_run(
 ) -> QueryResult:
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
-    TODO: When we will have the AST in production this function is probably going
-    to collapse and disappear.
     """
 
     # TODO: This function (well, it will be a wrapper of this function)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from abc import ABC, abstractmethod
 from typing import (
     Callable,
@@ -76,6 +77,15 @@ class ProcessingStrategy(ABC, Generic[TPayload]):
         prior to this method being called, the strategy should commit its
         partition offsets and release any resources that will no longer be
         used (threads, processes, sockets, files, etc.)
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def terminate(self) -> None:
+        """
+        Close the processing strategy immediately, abandoning any work in
+        progress. No more messages should be accepted by the instance after
+        this method has been called.
         """
         raise NotImplementedError
 
@@ -179,16 +189,35 @@ class StreamProcessor(Generic[TPayload]):
 
     def __commit(self, offsets: Mapping[Partition, int]) -> None:
         self.__consumer.stage_offsets(offsets)
+        start = time.time()
         self.__consumer.commit_offsets()
+        logger.debug(
+            "Waited %0.4f seconds for offsets to be committed to %r.",
+            time.time() - start,
+            self.__consumer,
+        )
 
     def run(self) -> None:
         "The main run loop, see class docstring for more information."
 
         logger.debug("Starting")
-        while not self.__shutdown_requested:
-            self._run_once()
+        try:
+            while not self.__shutdown_requested:
+                self._run_once()
 
-        self._shutdown()
+            self._shutdown()
+        except Exception as error:
+            logger.warning("Caught %r, shutting down...", error)
+
+            if self.__processing_strategy is not None:
+                logger.debug("Terminating %r...", self.__processing_strategy)
+                self.__processing_strategy.terminate()
+                self.__processing_strategy = None
+
+            logger.debug("Closing %r...", self.__consumer)
+            self.__consumer.close()
+
+            raise
 
     def _run_once(self) -> None:
         message_carried_over = self.__message is not None

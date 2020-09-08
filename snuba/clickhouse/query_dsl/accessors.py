@@ -1,10 +1,13 @@
+from datetime import datetime
 from functools import reduce
-from typing import List, Optional, Sequence, Set
+from typing import List, Optional, Sequence, Set, Tuple, cast
 
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import (
+    OPERATOR_TO_FUNCTION,
     BooleanFunctions,
     ConditionFunctions,
+    get_first_level_and_conditions,
     is_in_condition_pattern,
 )
 from snuba.query.expressions import Expression
@@ -156,3 +159,51 @@ def get_project_ids_in_query_ast(
 
     condition = query.get_condition_from_ast()
     return get_project_ids_in_condition(condition) if condition is not None else None
+
+
+def get_time_range(
+    query: Query, timestamp_field: str
+) -> Tuple[Optional[datetime], Optional[datetime]]:
+    """
+    Finds the minimal time range for this query. Which means, it finds
+    the >= timestamp condition with the highest datetime literal and
+    the < timestamp condition with the smallest and returns the interval
+    in the form of a tuple of Literals. It only looks into first level
+    AND conditions since, if the timestamp is nested in an OR we cannot
+    say anything on how that compares to the other timestamp conditions.
+    """
+
+    condition_clause = query.get_condition_from_ast()
+    if not condition_clause:
+        return (None, None)
+
+    max_lower_bound = None
+    min_upper_bound = None
+    for c in get_first_level_and_conditions(condition_clause):
+        match = FunctionCall(
+            None,
+            Param(
+                "operator",
+                Or(
+                    [
+                        String(OPERATOR_TO_FUNCTION[">="]),
+                        String(OPERATOR_TO_FUNCTION["<"]),
+                    ]
+                ),
+            ),
+            (
+                Column(None, None, String(timestamp_field)),
+                Literal(None, Param("timestamp", Any(datetime))),
+            ),
+        ).match(c)
+
+        if match is not None:
+            timestamp = cast(datetime, match.scalar("timestamp"))
+            if match.string("operator") == OPERATOR_TO_FUNCTION[">="]:
+                if not max_lower_bound or timestamp > max_lower_bound:
+                    max_lower_bound = timestamp
+            else:
+                if not min_upper_bound or timestamp < min_upper_bound:
+                    min_upper_bound = timestamp
+
+    return (max_lower_bound, min_upper_bound)
