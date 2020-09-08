@@ -16,13 +16,13 @@ RUN set -ex; \
 RUN set -x \
     && export GOSU_VERSION=1.11 \
     && fetchDeps=" \
-        curl \
         dirmngr \
         gnupg \
+        wget \
     " \
     && apt-get update && apt-get install -y --no-install-recommends $fetchDeps \
-    && curl -L -o /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64" \
-    && curl -L -o /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64.asc" \
+    && wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64" \
+    && wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64.asc" \
     && export GNUPGHOME="$(mktemp -d)" \
     && for key in \
       B42F6819007F00F88E364FD4036A9C25BF357DD4 \
@@ -49,17 +49,17 @@ COPY requirements.txt ./
 RUN set -ex; \
     \
     buildDeps=' \
-        curl \
         gcc \
         libc6-dev \
         liblz4-dev \
         libpcre3-dev \
+        wget \
     '; \
     apt-get update; \
     apt-get install -y $buildDeps --no-install-recommends; \
     pip install -r requirements.txt; \
     mkdir /tmp/uwsgi-dogstatsd; \
-    curl -L https://github.com/DataDog/uwsgi-dogstatsd/archive/bc56a1b5e7ee9e955b7a2e60213fc61323597a78.tar.gz \
+    wget -O - https://github.com/DataDog/uwsgi-dogstatsd/archive/bc56a1b5e7ee9e955b7a2e60213fc61323597a78.tar.gz \
         | tar -xvz -C /tmp/uwsgi-dogstatsd --strip-components=1; \
     uwsgi --build-plugin /tmp/uwsgi-dogstatsd; \
     rm -rf /tmp/uwsgi-dogstatsd .uwsgi_plugins_builder; \
