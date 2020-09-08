@@ -329,6 +329,9 @@ class Query:
     def get_having_from_ast(self) -> Optional[Expression]:
         return self.__having
 
+    def set_ast_having(self, condition: Optional[Expression]) -> None:
+        self.__having = condition
+
     def get_orderby(self) -> Optional[Sequence[Any]]:
         return self.__body.get("orderby")
 
@@ -430,7 +433,6 @@ class Query:
     def __get_columns_referenced_in_expressions(
         self, expressions: Iterable[Expression]
     ) -> Set[Column]:
-        pass
         ret: Set[Column] = set()
 
         for expression in expressions or []:

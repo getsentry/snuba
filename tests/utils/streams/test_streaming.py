@@ -1,4 +1,5 @@
 import itertools
+import multiprocessing
 import pytest
 from datetime import datetime
 from multiprocessing.managers import SharedMemoryManager
@@ -205,6 +206,10 @@ def test_parallel_transform_worker_apply() -> None:
             )
 
 
+def get_subprocess_count() -> int:
+    return len(multiprocessing.active_children())
+
+
 def test_parallel_transform_step() -> None:
     next_step = Mock()
 
@@ -218,21 +223,66 @@ def test_parallel_transform_step() -> None:
         for i, size in enumerate([1000, 1000, 2000, 2000])
     ]
 
-    transform_step = ParallelTransformStep(
-        transform_payload_expand,
-        next_step,
-        processes=2,
-        max_batch_size=5,
-        max_batch_time=60,
-        input_block_size=4096,
-        output_block_size=4096,
-    )
+    starting_processes = get_subprocess_count()
+    worker_processes = 2
+    manager_processes = 1
 
-    for message in messages:
-        transform_step.poll()
-        transform_step.submit(message)
+    with assert_changes(
+        get_subprocess_count,
+        starting_processes,
+        starting_processes + worker_processes + manager_processes,
+    ):
+        transform_step = ParallelTransformStep(
+            transform_payload_expand,
+            next_step,
+            processes=worker_processes,
+            max_batch_size=5,
+            max_batch_time=60,
+            input_block_size=4096,
+            output_block_size=4096,
+        )
 
-    transform_step.close()
-    transform_step.join()
+        for message in messages:
+            transform_step.poll()
+            transform_step.submit(message)
+
+        transform_step.close()
+
+    with assert_changes(
+        get_subprocess_count,
+        starting_processes + worker_processes + manager_processes,
+        starting_processes,
+    ):
+        transform_step.join()
 
     assert next_step.submit.call_count == len(messages)
+
+
+def test_parallel_transform_step_terminate_workers() -> None:
+    next_step = Mock()
+
+    starting_processes = get_subprocess_count()
+    worker_processes = 2
+    manager_processes = 1
+
+    with assert_changes(
+        get_subprocess_count,
+        starting_processes,
+        starting_processes + worker_processes + manager_processes,
+    ):
+        transform_step = ParallelTransformStep(
+            transform_payload_expand,  # doesn't matter
+            next_step,
+            processes=worker_processes,
+            max_batch_size=5,
+            max_batch_time=60,
+            input_block_size=4096,
+            output_block_size=4096,
+        )
+
+    with assert_changes(
+        get_subprocess_count,
+        starting_processes + worker_processes + manager_processes,
+        starting_processes,
+    ), assert_changes(lambda: next_step.terminate.call_count, 0, 1):
+        transform_step.terminate()

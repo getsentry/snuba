@@ -168,6 +168,9 @@ class BatchProcessingStrategy(ProcessingStrategy[TPayload]):
     def close(self) -> None:
         self.__closed = True
 
+    def terminate(self) -> None:
+        self.__closed = True
+
     def join(self, timeout: Optional[float] = None) -> None:
         # The active batch is discarded when exiting without attempting to
         # write or commit, so this method can exit immediately without
