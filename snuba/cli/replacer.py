@@ -79,7 +79,7 @@ def replacer(
 
     from snuba.replacer import ReplacerWorker
     from snuba.utils.streams.batching import BatchProcessingStrategyFactory
-    from snuba.utils.streams.kafka import (
+    from snuba.utils.streams.backends.kafka import (
         KafkaConsumer,
         TransportError,
         build_kafka_consumer_configuration,

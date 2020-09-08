@@ -30,7 +30,7 @@ from snuba.processor import (
 )
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker
-from snuba.utils.streams.kafka import KafkaPayload
+from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.processing import ProcessingStrategy, ProcessingStrategyFactory
 from snuba.utils.streams.streaming import (
     CollectStep,

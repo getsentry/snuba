@@ -10,7 +10,7 @@ from snuba.datasets.errors_replacer import FLATTENED_COLUMN_TEMPLATE
 from snuba.datasets import errors_replacer
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.kafka import KafkaPayload
+from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.base import BaseEventsTest
 

@@ -12,7 +12,7 @@ from typing import (
     Type,
 )
 
-from snuba.utils.streams.abstract import Consumer, ConsumerError
+from snuba.utils.streams.backends.abstract import Consumer, ConsumerError
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 

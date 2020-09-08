@@ -21,7 +21,7 @@ from typing import (
 )
 
 from snuba.utils.clock import Clock, TestingClock
-from snuba.utils.streams.abstract import (
+from snuba.utils.streams.backends.abstract import (
     Consumer,
     ConsumerError,
     EndOfPartition,

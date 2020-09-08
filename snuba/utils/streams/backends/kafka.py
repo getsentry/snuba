@@ -35,7 +35,7 @@ from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
 from snuba.utils.concurrent import execute
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
-from snuba.utils.streams.abstract import (
+from snuba.utils.streams.backends.abstract import (
     Consumer,
     ConsumerError,
     EndOfPartition,

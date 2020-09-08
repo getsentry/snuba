@@ -6,7 +6,7 @@ from unittest import TestCase
 
 import pytest
 
-from snuba.utils.streams.dummy import (
+from snuba.utils.streams.backends.dummy import (
     DummyBroker,
     DummyConsumer,
     DummyProducer,

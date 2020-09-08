@@ -7,7 +7,7 @@ from unittest import mock
 
 import pytest
 
-from snuba.utils.streams.abstract import (
+from snuba.utils.streams.backends.abstract import (
     Consumer,
     ConsumerError,
     EndOfPartition,
