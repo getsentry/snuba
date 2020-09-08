@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from typing import Optional, Sequence
 
@@ -18,6 +19,8 @@ from snuba.querylog.query_metadata import (
     Columnset,
     FilterProfile,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _get_date_range(query: Query) -> Optional[int]:
@@ -112,14 +115,29 @@ def generate_profile(query: Query) -> ClickhouseQueryProfile:
     where = query.get_condition_from_ast()
     groupby = query.get_groupby_from_ast()
 
-    return ClickhouseQueryProfile(
-        time_range=_get_date_range(query),
-        table=_get_table(query),
-        multi_level_condition=_has_complex_conditions(query),
-        where_profile=FilterProfile(
-            columns=_list_columns(where) if where is not None else set(),
-            mapping_cols=_list_mapping(where) if where is not None else set(),
-        ),
-        groupby_cols=_list_groupby_columns(groupby) if groupby is not None else set(),
-        array_join_cols=_list_array_join(query),
-    )
+    try:
+        return ClickhouseQueryProfile(
+            time_range=_get_date_range(query),
+            table=_get_table(query),
+            multi_level_condition=_has_complex_conditions(query),
+            where_profile=FilterProfile(
+                columns=_list_columns(where) if where is not None else set(),
+                mapping_cols=_list_mapping(where) if where is not None else set(),
+            ),
+            groupby_cols=_list_groupby_columns(groupby)
+            if groupby is not None
+            else set(),
+            array_join_cols=_list_array_join(query),
+        )
+    except Exception:
+        # Should never happen, but it is not worth failing queries while
+        # rolling this out because we cannot build he profile.
+        logger.warning("Failed to build query profile", exc_info=True)
+        return ClickhouseQueryProfile(
+            time_range=-1,
+            table="",
+            multi_level_condition=False,
+            where_profile=FilterProfile(columns=set(), mapping_cols=set(),),
+            groupby_cols=set(),
+            array_join_cols=set(),
+        )
