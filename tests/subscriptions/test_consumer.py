@@ -5,7 +5,7 @@ import pytest
 
 from snuba.subscriptions.consumer import Tick, TickConsumer
 from snuba.utils.clock import Clock
-from snuba.utils.streams.consumer import ConsumerError
+from snuba.utils.streams.abstract import ConsumerError
 from snuba.utils.streams.dummy import DummyBroker
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.utils.types import Interval

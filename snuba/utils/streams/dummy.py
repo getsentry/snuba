@@ -21,8 +21,12 @@ from typing import (
 )
 
 from snuba.utils.clock import Clock, TestingClock
-from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
-from snuba.utils.streams.producer import Producer
+from snuba.utils.streams.abstract import (
+    Consumer,
+    ConsumerError,
+    EndOfPartition,
+    Producer,
+)
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 

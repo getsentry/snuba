@@ -7,8 +7,12 @@ from unittest import mock
 
 import pytest
 
-from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
-from snuba.utils.streams.producer import Producer
+from snuba.utils.streams.abstract import (
+    Consumer,
+    ConsumerError,
+    EndOfPartition,
+    Producer,
+)
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 from tests.assertions import assert_changes, assert_does_not_change
 

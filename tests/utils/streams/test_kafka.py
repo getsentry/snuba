@@ -11,7 +11,7 @@ import pytest
 from confluent_kafka.admin import AdminClient, NewTopic
 
 from snuba import settings
-from snuba.utils.streams.consumer import ConsumerError, EndOfPartition
+from snuba.utils.streams.abstract import ConsumerError, EndOfPartition
 from snuba.utils.streams.kafka import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,

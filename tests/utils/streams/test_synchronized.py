@@ -5,7 +5,7 @@ from typing import Mapping, Optional, TypeVar
 
 import pytest
 
-from snuba.utils.streams.consumer import Consumer
+from snuba.utils.streams.abstract import Consumer
 from snuba.utils.streams.dummy import DummyBroker, DummyConsumer
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.synchronized import Commit, SynchronizedConsumer, commit_codec
