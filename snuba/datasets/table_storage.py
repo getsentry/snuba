@@ -128,7 +128,7 @@ class TableWriter:
     def get_schema(self) -> WritableTableSchema:
         return self.__table_schema
 
-    def get_writer(
+    def get_batch_writer(
         self,
         metrics: MetricsBackend,
         options=None,
@@ -139,7 +139,7 @@ class TableWriter:
 
         options = self.__update_writer_options(options)
 
-        return self.__cluster.get_writer(
+        return self.__cluster.get_batch_writer(
             table_name, metrics, options, chunk_size=chunk_size,
         )
 

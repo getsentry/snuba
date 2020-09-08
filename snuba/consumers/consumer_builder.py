@@ -185,7 +185,7 @@ class ConsumerBuilder:
         return StreamingConsumerStrategyFactory(
             stream_loader.get_pre_filter(),
             stream_loader.get_processor(),
-            table_writer.get_writer(
+            table_writer.get_batch_writer(
                 self.metrics,
                 {"load_balancing": "in_order", "insert_distributed_sync": 1},
             ),
