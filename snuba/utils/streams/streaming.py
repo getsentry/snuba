@@ -60,6 +60,12 @@ class FilterStep(ProcessingStep[TPayload]):
     def close(self) -> None:
         self.__closed = True
 
+    def terminate(self) -> None:
+        self.__closed = True
+
+        logger.debug("Terminating %r...", self.__next_step)
+        self.__next_step.terminate()
+
     def join(self, timeout: Optional[float] = None) -> None:
         self.__next_step.close()
         self.__next_step.join(timeout)
@@ -101,6 +107,12 @@ class TransformStep(ProcessingStep[TPayload]):
 
     def close(self) -> None:
         self.__closed = True
+
+    def terminate(self) -> None:
+        self.__closed = True
+
+        logger.debug("Terminating %r...", self.__next_step)
+        self.__next_step.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
         self.__next_step.close()
@@ -418,6 +430,18 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         if self.__batch_builder is not None and len(self.__batch_builder) > 0:
             self.__submit_batch()
 
+    def terminate(self) -> None:
+        self.__closed = True
+
+        logger.debug("Terminating %r...", self.__pool)
+        self.__pool.terminate()
+
+        logger.debug("Shutting down %r...", self.__shared_memory_manager)
+        self.__shared_memory_manager.shutdown()
+
+        logger.debug("Terminating %r...", self.__next_step)
+        self.__next_step.terminate()
+
     def join(self, timeout: Optional[float] = None) -> None:
         deadline = time.time() + timeout if timeout is not None else None
 
@@ -494,6 +518,12 @@ class Batch(Generic[TPayload]):
         self.__closed = True
         self.__step.close()
 
+    def terminate(self) -> None:
+        self.__closed = True
+
+        logger.debug("Terminating %r...", self.__step)
+        self.__step.terminate()
+
     def join(self, timeout: Optional[float] = None) -> None:
         self.__step.join(timeout)
         offsets = {
@@ -560,6 +590,12 @@ class CollectStep(ProcessingStep[TPayload]):
         if self.__batch is not None:
             logger.debug("Closing %r...", self.__batch)
             self.__batch.close()
+
+    def terminate(self) -> None:
+        self.__closed = True
+
+        if self.__batch is not None:
+            self.__batch.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
         if self.__batch is not None:
