@@ -158,7 +158,7 @@ class MessageBatch(Generic[TPayload]):
         # instances. If the shared memory block was reused for a different
         # batch while one of the ``Message`` instances returned by this method
         # was still "alive" in a different part of the processing pipeline, the
-        # contents of the message are liable to be corrupted (at best --
+        # contents of the message would be liable to be corrupted (at best --
         # possibly causing a data leak/security issue at worst.)
         return pickle.loads(
             data,
