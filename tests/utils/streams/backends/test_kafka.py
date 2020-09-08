@@ -22,7 +22,7 @@ from snuba.utils.streams.backends.kafka import (
 from snuba.utils.streams.synchronized import Commit, commit_codec
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
-from tests.utils.streams.mixins import StreamsTestMixin
+from tests.utils.streams.backends.mixins import StreamsTestMixin
 
 
 def test_payload_equality() -> None:

@@ -12,7 +12,7 @@ from snuba.utils.streams.backends.dummy import (
     DummyProducer,
 )
 from snuba.utils.streams.types import Topic
-from tests.utils.streams.mixins import StreamsTestMixin
+from tests.utils.streams.backends.mixins import StreamsTestMixin
 
 
 class DummyStreamsTestCase(StreamsTestMixin[int], TestCase):
