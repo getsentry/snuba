@@ -26,8 +26,8 @@ class SpansMessageProcessor(MessageProcessor):
         timestamp = _ensure_valid_date(datetime.fromtimestamp(field))
         if timestamp is None:
             timestamp = datetime.utcnow()
-        milliseconds = int(timestamp.microsecond / 1000)
-        return (timestamp, milliseconds)
+        nanoseconds = int(timestamp.microsecond * 1000)
+        return (timestamp, nanoseconds)
 
     def process_message(self, message, metadata) -> Optional[ProcessedMessage]:
         if not (isinstance(message, (list, tuple)) and len(message) >= 2):
@@ -42,9 +42,6 @@ class SpansMessageProcessor(MessageProcessor):
         data = event["data"]
         event_type = data.get("type")
         if event_type != "transaction":
-            return None
-
-        if not data.get("contexts", {}).get("trace"):
             return None
 
         ret: List[MutableMapping[str, Any]] = []

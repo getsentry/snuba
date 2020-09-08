@@ -13,7 +13,7 @@ from snuba.clickhouse.columns import (
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas import MandatoryCondition
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.datasets.spans_processor import SpansMessageProcessor, UNKNOWN_SPAN_STATUS
+from snuba.datasets.spans_processor import UNKNOWN_SPAN_STATUS, SpansMessageProcessor
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
