@@ -19,8 +19,8 @@ from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.backends.abstract import Producer
-from snuba.utils.streams.batching import AbstractBatchWorker
 from snuba.utils.streams.backends.kafka import KafkaPayload
+from snuba.utils.streams.batching import AbstractBatchWorker
 from snuba.utils.streams.types import Message, Topic
 from snuba.web.query import parse_and_run_query
 

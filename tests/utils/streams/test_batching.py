@@ -4,11 +4,11 @@ from typing import Any, MutableSequence, Sequence
 from unittest.mock import patch
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+from snuba.utils.streams.backends.dummy import DummyBroker
 from snuba.utils.streams.batching import (
     AbstractBatchWorker,
     BatchProcessingStrategyFactory,
 )
-from snuba.utils.streams.backends.dummy import DummyBroker
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.types import Message, Topic
 

@@ -12,7 +12,6 @@ from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
-from snuba.utils.streams.batching import BatchProcessingStrategyFactory
 from snuba.utils.streams.backends.kafka import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
@@ -20,6 +19,7 @@ from snuba.utils.streams.backends.kafka import (
     TransportError,
     build_kafka_consumer_configuration,
 )
+from snuba.utils.streams.batching import BatchProcessingStrategyFactory
 from snuba.utils.streams.processing import ProcessingStrategyFactory, StreamProcessor
 from snuba.utils.streams.profiler import ProcessingStrategyProfilerWrapperFactory
 from snuba.utils.streams.types import Topic
