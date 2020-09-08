@@ -8,11 +8,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     VALUE_COL_MAPPING_PARAM,
     mapping_pattern,
 )
-from snuba.query.conditions import (
-    BooleanFunctions,
-    ConditionFunctions,
-    get_first_level_and_conditions,
-)
+from snuba.query.conditions import BooleanFunctions, ConditionFunctions
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
@@ -62,12 +58,8 @@ def _has_complex_conditions(query: Query) -> bool:
     condition = query.get_condition_from_ast()
     if condition is None:
         return False
-    first_levels = get_first_level_and_conditions(condition)
-    for cond in first_levels:
-        if (
-            isinstance(cond, FunctionCallExpr)
-            and cond.function_name == BooleanFunctions.OR
-        ):
+    for c in condition:
+        if isinstance(c, FunctionCallExpr) and c.function_name == BooleanFunctions.OR:
             return True
     return False
 
