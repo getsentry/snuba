@@ -8,6 +8,8 @@ from snuba.processor import InsertBatch
 from snuba.query.logical import Query
 from snuba.querylog.query_metadata import (
     ClickhouseQueryMetadata,
+    ClickhouseQueryProfile,
+    FilterProfile,
     QueryStatus,
     SnubaQueryMetadata,
 )
@@ -17,7 +19,7 @@ from snuba.utils.clock import TestingClock
 from snuba.utils.metrics.timer import Timer
 
 
-def test_simple():
+def test_simple() -> None:
     request_body = {
         "selected_columns": ["event_id"],
         "orderby": "event_id",
@@ -49,6 +51,16 @@ def test_simple():
                 sql="select event_id from sentry_dist sample 0.1 prewhere project_id in (1) limit 50, 100",
                 stats={"sample": 10},
                 status=QueryStatus.SUCCESS,
+                profile=ClickhouseQueryProfile(
+                    time_range=10,
+                    table="events",
+                    multi_level_condition=False,
+                    where_profile=FilterProfile(
+                        columns={"timestamp"}, mapping_cols=set("tags"),
+                    ),
+                    groupby_cols=set(),
+                    array_join_cols=set(),
+                ),
                 trace_id="b" * 32,
             )
         ],
