@@ -57,7 +57,9 @@ RUN set -ex; \
     '; \
     apt-get update; \
     apt-get install -y $buildDeps --no-install-recommends; \
+    \
     pip install -r requirements.txt; \
+    \
     mkdir /tmp/uwsgi-dogstatsd; \
     wget -O - https://github.com/DataDog/uwsgi-dogstatsd/archive/bc56a1b5e7ee9e955b7a2e60213fc61323597a78.tar.gz \
         | tar -xvz -C /tmp/uwsgi-dogstatsd --strip-components=1; \
@@ -66,7 +68,7 @@ RUN set -ex; \
     mkdir -p /var/lib/uwsgi; \
     mv dogstatsd_plugin.so /var/lib/uwsgi/; \
     uwsgi --need-plugin=/var/lib/uwsgi/dogstatsd --help > /dev/null; \
-    snuba --help; \
+    \
     apt-get purge -y --auto-remove $buildDeps; \
     rm -rf /var/lib/apt/lists/*;
 
@@ -77,7 +79,8 @@ RUN set -ex; \
     groupadd -r snuba; \
     useradd -r -g snuba snuba; \
     chown -R snuba:snuba ./; \
-    pip install -e .
+    pip install -e .; \
+    snuba --help;
 
 ARG SNUBA_VERSION_SHA
 ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA \
