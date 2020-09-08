@@ -2,32 +2,21 @@ ARG PYTHON_VERSION=3.8
 FROM python:${PYTHON_VERSION}-slim
 
 # these are required all the way through, and removing them will cause bad things
-ENV SYSTEM_DEPENDENCIES \
-    libexpat1 \
-    libffi6 \
-    liblz4-1 \
-    libpcre3
-
-# These are temporarily needed to install things like uwsgi.
-# It's installed here for better layer caching, otherwise every time
-# "COPY . /usr/src/snuba" is invalidated we end up pulling these.
-ENV BUILD_DEPENDENCIES \
-    curl \
-    gcc \
-    libc6-dev \
-    liblz4-dev \
-    libpcre3-dev
-
 RUN set -ex; \
     apt-get update; \
-    apt-get install --no-install-recommends -y $SYSTEM_DEPENDENCIES $BUILD_DEPENDENCIES; \
+    apt-get install --no-install-recommends -y \
+        libexpat1 \
+        libffi6 \
+        liblz4-1 \
+        libpcre3 \
+    ; \
     rm -rf /var/lib/apt/lists/*
 
 # grab gosu for easy step-down from root
-# TODO: this won't be needed if we build a separate image for testing only.
 RUN set -x \
     && export GOSU_VERSION=1.11 \
     && fetchDeps=" \
+        curl \
         dirmngr \
         gnupg \
     " \
@@ -51,19 +40,24 @@ RUN set -x \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src/snuba
-# Layer cache is pretty much invalidated here all the time,
-# so try not to do anything heavy beyond here.
-COPY . ./
-RUN set -ex; \
-    groupadd -r snuba; \
-    useradd -r -g snuba snuba; \
-    chown -R snuba:snuba ./
 
 ENV PIP_NO_CACHE_DIR=off \
     PIP_DISABLE_PIP_VERSION_CHECK=on
 
+# Install dependencies first because requirements.txt is way less likely to be changed.
+COPY requirements.txt ./
 RUN set -ex; \
-    pip install -e .; \
+    \
+    buildDeps=' \
+        curl \
+        gcc \
+        libc6-dev \
+        liblz4-dev \
+        libpcre3-dev \
+    '; \
+    apt-get update; \
+    apt-get install -y $buildDeps --no-install-recommends; \
+    pip install -r requirements.txt; \
     mkdir /tmp/uwsgi-dogstatsd; \
     curl -L https://github.com/DataDog/uwsgi-dogstatsd/archive/bc56a1b5e7ee9e955b7a2e60213fc61323597a78.tar.gz \
         | tar -xvz -C /tmp/uwsgi-dogstatsd --strip-components=1; \
@@ -73,7 +67,17 @@ RUN set -ex; \
     mv dogstatsd_plugin.so /var/lib/uwsgi/; \
     uwsgi --need-plugin=/var/lib/uwsgi/dogstatsd --help > /dev/null; \
     snuba --help; \
-    apt-get purge -y --auto-remove $BUILD_DEPENDENCIES
+    apt-get purge -y --auto-remove $buildDeps; \
+    rm -rf /var/lib/apt/lists/*;
+
+# Layer cache is pretty much invalidated here all the time,
+# so try not to do anything heavy beyond here.
+COPY . ./
+RUN set -ex; \
+    groupadd -r snuba; \
+    useradd -r -g snuba snuba; \
+    chown -R snuba:snuba ./; \
+    pip install -e .
 
 ARG SNUBA_VERSION_SHA
 ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA \
