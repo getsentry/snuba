@@ -81,6 +81,15 @@ class ProcessingStrategy(ABC, Generic[TPayload]):
         raise NotImplementedError
 
     @abstractmethod
+    def terminate(self) -> None:
+        """
+        Close the processing strategy immediately, abandoning any work in
+        progress. No more messages should be accepted by the instance after
+        this method has been called.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def join(self, timeout: Optional[float] = None) -> None:
         """
         Block until the processing strategy has completed all previously
@@ -192,10 +201,23 @@ class StreamProcessor(Generic[TPayload]):
         "The main run loop, see class docstring for more information."
 
         logger.debug("Starting")
-        while not self.__shutdown_requested:
-            self._run_once()
+        try:
+            while not self.__shutdown_requested:
+                self._run_once()
 
-        self._shutdown()
+            self._shutdown()
+        except Exception as error:
+            logger.warning("Caught %r, shutting down...", error)
+
+            if self.__processing_strategy is not None:
+                logger.debug("Terminating %r...", self.__processing_strategy)
+                self.__processing_strategy.terminate()
+                self.__processing_strategy = None
+
+            logger.debug("Closing %r...", self.__consumer)
+            self.__consumer.close()
+
+            raise
 
     def _run_once(self) -> None:
         message_carried_over = self.__message is not None
