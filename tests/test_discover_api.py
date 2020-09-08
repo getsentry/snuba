@@ -67,6 +67,7 @@ class TestDiscoverApi(BaseApiTest):
                                 "environment": u"prød",
                                 "sentry:release": "1",
                                 "sentry:dist": "dist1",
+                                "url": "http://127.0.0.1:/query",
                                 # User
                                 "foo": "baz",
                                 "foo.bar": "qux",
@@ -97,6 +98,19 @@ class TestDiscoverApi(BaseApiTest):
                                 "name": "sentry.python",
                                 "version": "0.13.4",
                                 "integrations": ["django"],
+                            },
+                            "request": {
+                                "url": "http://127.0.0.1:/query",
+                                "headers": [
+                                    ["Accept-Encoding", "identity"],
+                                    ["Content-Length", "398"],
+                                    ["Host", "127.0.0.1:"],
+                                    ["Referer", "tagstore.something"],
+                                    ["Trace", "8fa73032d-1"],
+                                ],
+                                "data": "",
+                                "method": "POST",
+                                "env": {"SERVER_PORT": "1010", "SERVER_NAME": "snuba"},
                             },
                             "spans": [
                                 {
@@ -538,6 +552,55 @@ class TestDiscoverApi(BaseApiTest):
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["data"] == [{"count": 0}]
+
+    def test_http_fields(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [["count()", "", "count"]],
+                    "conditions": [["duration", ">=", 0]],
+                    "groupby": ["http_method", "http_referer", "tags[url]"],
+                    "limit": 1000,
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [
+            {
+                "http_method": "POST",
+                "http_referer": "tagstore.something",
+                "tags[url]": "http://127.0.0.1:/query",
+                "count": 1,
+            }
+        ]
+
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [["count()", "", "count"]],
+                    "conditions": [["group_id", ">=", 0]],
+                    "groupby": ["http_method", "http_referer", "tags[url]"],
+                    "limit": 1000,
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [
+            {
+                "http_method": "POST",
+                "http_referer": "tagstore.something",
+                "tags[url]": "http://127.0.0.1:/query",
+                "count": 1,
+            }
+        ]
 
     def test_device_fields_condition(self):
         response = self.app.post(
