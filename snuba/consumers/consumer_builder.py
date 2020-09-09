@@ -21,6 +21,7 @@ from snuba.utils.streams.kafka import (
     build_kafka_consumer_configuration,
 )
 from snuba.utils.streams.processing import ProcessingStrategyFactory, StreamProcessor
+from snuba.utils.streams.profiler import ProcessingStrategyProfilerWrapperFactory
 from snuba.utils.streams.types import Topic
 
 
@@ -52,6 +53,7 @@ class ConsumerBuilder:
         input_block_size: Optional[int],
         output_block_size: Optional[int],
         commit_retry_policy: Optional[RetryPolicy] = None,
+        profile_path: Optional[str] = None,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = bootstrap_servers
@@ -110,6 +112,7 @@ class ConsumerBuilder:
         self.processes = processes
         self.input_block_size = input_block_size
         self.output_block_size = output_block_size
+        self.__profile_path = profile_path
 
         if (
             self.processes is not None
@@ -211,6 +214,11 @@ class ConsumerBuilder:
             strategy_factory = self.__build_streaming_strategy_factory()
         else:
             raise ValueError("unexpected strategy factory type")
+
+        if self.__profile_path is not None:
+            strategy_factory = ProcessingStrategyProfilerWrapperFactory(
+                strategy_factory, self.__profile_path,
+            )
 
         return self.__build_consumer(strategy_factory)
 
