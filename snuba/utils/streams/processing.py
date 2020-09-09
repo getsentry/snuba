@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from abc import ABC, abstractmethod
 from typing import (
     Callable,
@@ -11,11 +12,15 @@ from typing import (
     Type,
 )
 
-from snuba.utils.streams.consumer import Consumer, ConsumerError
+from snuba.utils.streams.backends.abstract import Consumer, ConsumerError
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 
 logger = logging.getLogger(__name__)
+
+
+class MessageRejected(Exception):
+    pass
 
 
 class ProcessingStrategy(ABC, Generic[TPayload]):
@@ -30,26 +35,72 @@ class ProcessingStrategy(ABC, Generic[TPayload]):
     """
 
     @abstractmethod
-    def process(self, message: Optional[Message[TPayload]]) -> None:
+    def poll(self) -> None:
         """
-        Process a message, or periodic heartbeat (``None`` value.)
+        Poll the processor to check on the status of asynchronous tasks or
+        perform other scheduled work.
+
+        This method is called on each consumer loop iteration, so this method
+        should not be used to perform work that may block for a significant
+        amount of time and block the progress of the consumer or exceed the
+        consumer poll interval timeout.
+
+        This method may raise exceptions that were thrown by asynchronous
+        tasks since the previous call to ``poll``.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def submit(self, message: Message[TPayload]) -> None:
+        """
+        Submit a message for processing.
+
+        Messages may be processed synchronously or asynchronously, depending
+        on the implementation of the processing strategy. Callers of this
+        method should not assume that this method returning successfully
+        implies that the message was successfully processed.
+
+        If the processing strategy is unable to accept a message (due to it
+        being at or over capacity, for example), this method will raise a
+        ``MessageRejected`` exception.
         """
         raise NotImplementedError
 
     @abstractmethod
     def close(self) -> None:
         """
-        Close this instance. No more messages will be received by the
-        instance after this method has been called. This method is called
-        synchronously by the stream processor during assignment revocation
-        and blocks the assignment from being released until this function
-        exits, making it a good place to wait for (or choose to abandon) any
-        work in progress and commit partition offsets.
+        Close this instance. No more messages should be accepted by the
+        instance after this method has been called.
 
-        This method also should be used to release any resources that will no
-        longer be used (threads, processes, sockets, files, etc.) to avoid
-        leaking resources, as well as performing any finalization tasks that
-        may prevent this instance from being garbage collected.
+        This method should not block. Once this strategy instance has
+        finished processing (or discarded) all messages that were submitted
+        prior to this method being called, the strategy should commit its
+        partition offsets and release any resources that will no longer be
+        used (threads, processes, sockets, files, etc.)
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def terminate(self) -> None:
+        """
+        Close the processing strategy immediately, abandoning any work in
+        progress. No more messages should be accepted by the instance after
+        this method has been called.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def join(self, timeout: Optional[float] = None) -> None:
+        """
+        Block until the processing strategy has completed all previously
+        submitted work, or the provided timeout has been reached. This method
+        should be called after ``close`` to provide a graceful shutdown.
+
+        This method is called synchronously by the stream processor during
+        assignment revocation, and blocks the assignment from being released
+        until this function exits, allowing any work in progress to be
+        completed and committed before the continuing the rebalancing
+        process.
         """
         raise NotImplementedError
 
@@ -94,6 +145,9 @@ class StreamProcessor(Generic[TPayload]):
         self.__recoverable_errors = tuple(recoverable_errors or [])
 
         self.__processing_strategy: Optional[ProcessingStrategy[TPayload]] = None
+
+        self.__message: Optional[Message[TPayload]] = None
+
         self.__shutdown_requested = False
 
         def on_partitions_assigned(partitions: Mapping[Partition, int]) -> None:
@@ -104,17 +158,30 @@ class StreamProcessor(Generic[TPayload]):
 
             logger.info("New partitions assigned: %r", partitions)
             self.__processing_strategy = self.__processor_factory.create(self.__commit)
+            logger.debug(
+                "Initialized processing strategy: %r", self.__processing_strategy
+            )
 
         def on_partitions_revoked(partitions: Sequence[Partition]) -> None:
-            "Reset the current in-memory batch, letting the next consumer take over where we left off."
             if self.__processing_strategy is None:
                 raise InvalidStateError(
                     "received unexpected revocation without active processing strategy"
                 )
 
             logger.info("Partitions revoked: %r", partitions)
+
+            logger.debug("Closing %r...", self.__processing_strategy)
             self.__processing_strategy.close()
+
+            logger.debug("Waiting for %r to exit...", self.__processing_strategy)
+            self.__processing_strategy.join()
+
+            logger.debug(
+                "%r exited successfully, releasing assignment.",
+                self.__processing_strategy,
+            )
             self.__processing_strategy = None
+            self.__message = None  # avoid leaking buffered messages across assignments
 
         self.__consumer.subscribe(
             [topic], on_assign=on_partitions_assigned, on_revoke=on_partitions_revoked
@@ -122,27 +189,83 @@ class StreamProcessor(Generic[TPayload]):
 
     def __commit(self, offsets: Mapping[Partition, int]) -> None:
         self.__consumer.stage_offsets(offsets)
+        start = time.time()
         self.__consumer.commit_offsets()
+        logger.debug(
+            "Waited %0.4f seconds for offsets to be committed to %r.",
+            time.time() - start,
+            self.__consumer,
+        )
 
     def run(self) -> None:
         "The main run loop, see class docstring for more information."
 
         logger.debug("Starting")
-        while not self.__shutdown_requested:
-            self._run_once()
+        try:
+            while not self.__shutdown_requested:
+                self._run_once()
 
-        self._shutdown()
+            self._shutdown()
+        except Exception as error:
+            logger.info("Caught %r, shutting down...", error)
+
+            if self.__processing_strategy is not None:
+                logger.debug("Terminating %r...", self.__processing_strategy)
+                self.__processing_strategy.terminate()
+                self.__processing_strategy = None
+
+            logger.debug("Closing %r...", self.__consumer)
+            self.__consumer.close()
+
+            raise
 
     def _run_once(self) -> None:
-        try:
-            msg = self.__consumer.poll(timeout=1.0)
-        except self.__recoverable_errors:
-            return
+        message_carried_over = self.__message is not None
+
+        if message_carried_over:
+            # If a message was carried over from the previous run, the consumer
+            # should be paused and not returning any messages on ``poll``.
+            if self.__consumer.poll(timeout=0) is not None:
+                raise InvalidStateError(
+                    "received message when consumer was expected to be paused"
+                )
+        else:
+            # Otherwise, we need to try fetch a new message from the consumer,
+            # even if there is no active assignment and/or processing strategy.
+            try:
+                self.__message = self.__consumer.poll(timeout=1.0)
+            except self.__recoverable_errors:
+                return
 
         if self.__processing_strategy is not None:
-            self.__processing_strategy.process(msg)
+            self.__processing_strategy.poll()
+            if self.__message is not None:
+                try:
+                    self.__processing_strategy.submit(self.__message)
+                except MessageRejected as e:
+                    # If the processing strategy rejected our message, we need
+                    # to pause the consumer and hold the message until it is
+                    # accepted, at which point we can resume consuming.
+                    if not message_carried_over:
+                        logger.debug(
+                            "Caught %r while submitting %r, pausing consumer...",
+                            e,
+                            self.__message,
+                        )
+                        self.__consumer.pause([*self.__consumer.tell().keys()])
+                else:
+                    # If we were trying to submit a message that failed to be
+                    # submitted on a previous run, we can resume accepting new
+                    # messages.
+                    if message_carried_over:
+                        logger.debug(
+                            "Successfully submitted %r, resuming consumer...",
+                            self.__message,
+                        )
+                        self.__consumer.resume([*self.__consumer.tell().keys()])
+                    self.__message = None
         else:
-            if msg is not None:
+            if self.__message is not None:
                 raise InvalidStateError(
                     "received message without active processing strategy"
                 )

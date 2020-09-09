@@ -4,7 +4,6 @@ from contextlib import ExitStack
 from datetime import datetime
 from functools import partial
 
-import pytest
 import simplejson as json
 
 from snuba import settings
@@ -13,7 +12,6 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
 from tests.base import BaseApiTest, dataset_manager
 
 
-@pytest.mark.usefixtures("query_type")
 class TestDiscoverApi(BaseApiTest):
     def setup_method(self, test_method):
         super().setup_method(test_method)
@@ -69,6 +67,7 @@ class TestDiscoverApi(BaseApiTest):
                                 "environment": u"prød",
                                 "sentry:release": "1",
                                 "sentry:dist": "dist1",
+                                "url": "http://127.0.0.1:/query",
                                 # User
                                 "foo": "baz",
                                 "foo.bar": "qux",
@@ -99,6 +98,19 @@ class TestDiscoverApi(BaseApiTest):
                                 "name": "sentry.python",
                                 "version": "0.13.4",
                                 "integrations": ["django"],
+                            },
+                            "request": {
+                                "url": "http://127.0.0.1:/query",
+                                "headers": [
+                                    ["Accept-Encoding", "identity"],
+                                    ["Content-Length", "398"],
+                                    ["Host", "127.0.0.1:"],
+                                    ["Referer", "tagstore.something"],
+                                    ["Trace", "8fa73032d-1"],
+                                ],
+                                "data": "",
+                                "method": "POST",
+                                "env": {"SERVER_PORT": "1010", "SERVER_NAME": "snuba"},
                             },
                             "spans": [
                                 {
@@ -344,6 +356,182 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["data"] == [{"count": 1}]
 
+    def test_exception_stack_column_boolean_condition(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [["count", None, "count"]],
+                    "debug": True,
+                    "conditions": [
+                        [
+                            [
+                                "or",
+                                [
+                                    [
+                                        "equals",
+                                        [
+                                            "exception_stacks.type",
+                                            "'ArithmeticException'",
+                                        ],
+                                    ],
+                                    [
+                                        "equals",
+                                        ["exception_stacks.type", "'RuntimeException'"],
+                                    ],
+                                ],
+                            ],
+                            "=",
+                            1,
+                        ],
+                    ],
+                    "limit": 1000,
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [{"count": 1}]
+
+    def test_exception_stack_column_boolean_condition_with_arrayjoin(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [["count", None, "count"]],
+                    "arrayjoin": "exception_stacks.type",
+                    "groupby": "exception_stacks.type",
+                    "debug": True,
+                    "conditions": [
+                        [
+                            [
+                                "or",
+                                [
+                                    [
+                                        "equals",
+                                        [
+                                            "exception_stacks.type",
+                                            "'ArithmeticException'",
+                                        ],
+                                    ],
+                                    [
+                                        "equals",
+                                        ["exception_stacks.type", "'RuntimeException'"],
+                                    ],
+                                ],
+                            ],
+                            "=",
+                            1,
+                        ],
+                    ],
+                    "limit": 1000,
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [
+            {"count": 1, "exception_stacks.type": "ArithmeticException"}
+        ]
+
+    def test_exception_stack_column_boolean_condition_arrayjoin_function(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": [
+                        [
+                            "arrayJoin",
+                            ["exception_stacks.type"],
+                            "exception_stacks.type",
+                        ]
+                    ],
+                    "aggregations": [["count", None, "count"]],
+                    "groupby": "exception_stacks.type",
+                    "debug": True,
+                    "conditions": [
+                        [
+                            [
+                                "or",
+                                [
+                                    [
+                                        "equals",
+                                        [
+                                            "exception_stacks.type",
+                                            "'ArithmeticException'",
+                                        ],
+                                    ],
+                                    [
+                                        "equals",
+                                        ["exception_stacks.type", "'RuntimeException'"],
+                                    ],
+                                ],
+                            ],
+                            "=",
+                            1,
+                        ],
+                    ],
+                    "limit": 1000,
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [
+            {"count": 1, "exception_stacks.type": "ArithmeticException"}
+        ]
+
+    def test_tags_key_boolean_condition(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "turbo": False,
+                    "consistent": False,
+                    "aggregations": [["count", None, "count"]],
+                    "conditions": [
+                        [
+                            [
+                                "or",
+                                [
+                                    [
+                                        "equals",
+                                        [["ifNull", ["tags[foo]", "''"]], "'baz'"],
+                                    ],
+                                    [
+                                        "equals",
+                                        [["ifNull", ["tags[foo.bar]", "''"]], "'qux'"],
+                                    ],
+                                ],
+                            ],
+                            "=",
+                            1,
+                        ],
+                        ["project_id", "IN", [self.project_id]],
+                    ],
+                    "groupby": "tags_key",
+                    "orderby": ["-count", "tags_key"],
+                    "having": [
+                        [
+                            "tags_key",
+                            "NOT IN",
+                            ["trace", "trace.ctx", "trace.span", "project"],
+                        ]
+                    ],
+                    "project": [self.project_id],
+                    "limit": 10,
+                }
+            ),
+        )
+        assert response.status_code == 200
+
     def test_os_fields_condition(self):
         response = self.app.post(
             "/query",
@@ -364,6 +552,55 @@ class TestDiscoverApi(BaseApiTest):
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["data"] == [{"count": 0}]
+
+    def test_http_fields(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [["count()", "", "count"]],
+                    "conditions": [["duration", ">=", 0]],
+                    "groupby": ["http_method", "http_referer", "tags[url]"],
+                    "limit": 1000,
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [
+            {
+                "http_method": "POST",
+                "http_referer": "tagstore.something",
+                "tags[url]": "http://127.0.0.1:/query",
+                "count": 1,
+            }
+        ]
+
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [["count()", "", "count"]],
+                    "conditions": [["group_id", ">=", 0]],
+                    "groupby": ["http_method", "http_referer", "tags[url]"],
+                    "limit": 1000,
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [
+            {
+                "http_method": "POST",
+                "http_referer": "tagstore.something",
+                "tags[url]": "http://127.0.0.1:/query",
+                "count": 1,
+            }
+        ]
 
     def test_device_fields_condition(self):
         response = self.app.post(
@@ -446,6 +683,27 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["data"][0]["contexts[device.charging]"] == "True"
         assert data["data"][0]["count"] == 1
+
+    def test_is_handled(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["exception_stacks.mechanism_handled"],
+                    "conditions": [
+                        ["type", "=", "error"],
+                        [["notHandled", []], "=", 1],
+                    ],
+                    "limit": 5,
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"][0]["exception_stacks.mechanism_handled"] == [0]
 
     def test_having(self):
         result = json.loads(
@@ -591,3 +849,49 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"] == [
             {"apdex_duration_300": 1, "tags[foo]": "baz", "project_id": self.project_id}
         ]
+
+    def test_count_null_user_consistency(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [
+                        ["uniq", "user", "uniq_user"],
+                        ["count", None, "count"],
+                    ],
+                    "groupby": ["group_id", "user"],
+                    "conditions": [],
+                    "orderby": "uniq_user",
+                    "limit": 1000,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert len(data["data"]) == 1
+        assert data["data"][0]["uniq_user"] == 0
+
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [
+                        ["uniq", "user", "uniq_user"],
+                        ["count", None, "count"],
+                    ],
+                    "groupby": ["trace_id", "user_email"],
+                    "conditions": [],
+                    "orderby": "uniq_user",
+                    "limit": 1000,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert len(data["data"]) == 1
+        # Should now count '' user as Null, which is 0
+        assert data["data"][0]["uniq_user"] == 0

@@ -329,6 +329,9 @@ class Query:
     def get_having_from_ast(self) -> Optional[Expression]:
         return self.__having
 
+    def set_ast_having(self, condition: Optional[Expression]) -> None:
+        self.__having = condition
+
     def get_orderby(self) -> Optional[Sequence[Any]]:
         return self.__body.get("orderby")
 
@@ -422,10 +425,19 @@ class Query:
         return self.__get_referenced_columns(col_exprs)
 
     def get_all_ast_referenced_columns(self) -> Set[Column]:
+        return self.__get_columns_referenced_in_expressions(self.get_all_expressions())
+
+    def get_columns_referenced_in_conditions_ast(self) -> Set[Column]:
+        return self.__get_columns_referenced_in_expressions(self.__condition or [])
+
+    def __get_columns_referenced_in_expressions(
+        self, expressions: Iterable[Expression]
+    ) -> Set[Column]:
         ret: Set[Column] = set()
-        all_expressions = self.get_all_expressions()
-        for expression in all_expressions:
+
+        for expression in expressions or []:
             ret |= {c for c in expression if isinstance(c, Column)}
+
         return ret
 
     def get_columns_referenced_in_conditions(self) -> Sequence[Any]:

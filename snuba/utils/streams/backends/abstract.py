@@ -1,19 +1,11 @@
+from __future__ import annotations
+
 import logging
 from abc import ABC, abstractmethod, abstractproperty
-from typing import (
-    Callable,
-    Generic,
-    Mapping,
-    Optional,
-    Sequence,
-)
+from concurrent.futures import Future
+from typing import Callable, Generic, Mapping, Optional, Sequence, Union
 
-from snuba.utils.streams.types import (
-    Message,
-    Partition,
-    Topic,
-    TPayload,
-)
+from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 
 logger = logging.getLogger(__name__)
@@ -184,4 +176,22 @@ class Consumer(Generic[TPayload], ABC):
 
     @abstractproperty
     def closed(self) -> bool:
+        raise NotImplementedError
+
+
+class Producer(Generic[TPayload], ABC):
+    @abstractmethod
+    def produce(
+        self, destination: Union[Topic, Partition], payload: TPayload
+    ) -> Future[Message[TPayload]]:
+        """
+        Produce to a topic or partition.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def close(self) -> Future[None]:
+        """
+        Close the producer.
+        """
         raise NotImplementedError

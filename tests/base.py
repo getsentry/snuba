@@ -22,11 +22,11 @@ from tests.fixtures import raw_event
 
 @contextmanager
 def dataset_manager(name: str) -> Iterator[Dataset]:
-    from snuba.migrations.migrate import run
+    from snuba.migrations.runner import Runner
     from snuba.web.views import truncate_dataset
 
+    Runner().run_all(force=True)
     dataset = get_dataset(name)
-    run()
     truncate_dataset(dataset)
 
     try:
@@ -70,7 +70,7 @@ class BaseDatasetTest(BaseTest):
 
     def write_rows(self, rows: Sequence[WriterTableRow]) -> None:
         BatchWriterEncoderWrapper(
-            enforce_table_writer(self.dataset).get_writer(
+            enforce_table_writer(self.dataset).get_batch_writer(
                 metrics=DummyMetricsBackend(strict=True)
             ),
             JSONRowEncoder(),

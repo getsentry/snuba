@@ -7,8 +7,12 @@ from unittest import mock
 
 import pytest
 
-from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
-from snuba.utils.streams.producer import Producer
+from snuba.utils.streams.backends.abstract import (
+    Consumer,
+    ConsumerError,
+    EndOfPartition,
+    Producer,
+)
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 from tests.assertions import assert_changes, assert_does_not_change
 
@@ -95,6 +99,10 @@ class StreamsTestMixin(ABC, Generic[TPayload]):
 
             with assert_changes(consumer.paused, [], [Partition(topic, 0)]):
                 consumer.pause([Partition(topic, 0)])
+
+            # Even if there is another message available, ``poll`` should
+            # return ``None`` if the consumer is paused.
+            assert consumer.poll(1.0) is None
 
             with assert_changes(consumer.paused, [Partition(topic, 0)], []):
                 consumer.resume([Partition(topic, 0)])

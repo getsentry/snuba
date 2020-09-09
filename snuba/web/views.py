@@ -39,7 +39,7 @@ from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDe
 from snuba.util import with_span
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.streams.kafka import KafkaPayload
+from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.web import QueryException
 from snuba.web.converters import DatasetConverter
@@ -419,7 +419,7 @@ if application.debug or application.testing:
                 rows.extend(processed_message.rows)
 
         BatchWriterEncoderWrapper(
-            enforce_table_writer(dataset).get_writer(metrics), JSONRowEncoder(),
+            enforce_table_writer(dataset).get_batch_writer(metrics), JSONRowEncoder(),
         ).write(rows)
 
         return ("ok", 200, {"Content-Type": "text/plain"})

@@ -42,13 +42,13 @@ from snuba.query.matchers import String as StringMatch
 from snuba.query.matchers import Or, Param
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
-from snuba.query.processors.apdex_processor import ApdexProcessor
+from snuba.query.processors.performance_expressions import apdex_processor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.failure_rate_processor import FailureRateProcessor
-from snuba.query.processors.impact_processor import ImpactProcessor
+from snuba.query.processors.handled_functions import HandledFunctionsProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
-from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
+from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import qualified_column
@@ -292,6 +292,8 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("geo_country_code", Nullable(String())),
                 ("geo_region", Nullable(String())),
                 ("geo_city", Nullable(String())),
+                ("http_method", Nullable(String())),
+                ("http_referer", Nullable(String())),
                 # Other tags and context
                 ("tags", Nested([("key", String()), ("value", String())])),
                 ("contexts", Nested([("key", String()), ("value", String())])),
@@ -314,8 +316,6 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("received", Nullable(DateTime())),
                 ("sdk_integrations", Nullable(Array(String()))),
                 ("version", Nullable(String())),
-                ("http_method", Nullable(String())),
-                ("http_referer", Nullable(String())),
                 # exception interface
                 (
                     "exception_stacks",
@@ -385,25 +385,22 @@ class DiscoverDataset(TimeSeriesDataset):
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
+        columnset = self.get_abstract_columnset()
         return [
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             # Apdex and Impact seem very good candidates for
             # being defined by the Transaction entity when it will
             # exist, so it would run before Storage selection.
-            ApdexProcessor(),
-            ImpactProcessor(),
+            apdex_processor(columnset),
             FailureRateProcessor(),
+            HandledFunctionsProcessor("exception_stacks.mechanism_handled", columnset),
             TimeSeriesColumnProcessor({"time": "timestamp"}),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
-            "project": ProjectExtension(
-                processor=ProjectWithGroupsProcessor(
-                    project_column="project_id", replacer_state_name=None,
-                )
-            ),
+            "project": ProjectExtension(project_column="project_id"),
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=5),

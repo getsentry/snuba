@@ -5,7 +5,7 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 import uuid
 
 from snuba.consumer import KafkaMessageMetadata
-from snuba.datasets.events_format import extract_user
+from snuba.datasets.events_format import extract_http, extract_user
 from snuba.datasets.events_processor_base import EventsProcessorBase, InsertEvent
 from snuba.processor import (
     _as_dict_safe,
@@ -67,12 +67,10 @@ class ErrorsProcessor(EventsProcessorBase):
             contexts["geo"] = geo
 
         request = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
-        if "request" not in contexts and isinstance(request, dict):
-            http = {}
-            http["http_method"] = _unicodify(request.get("method", None))
-            http_headers = _as_dict_safe(request.get("headers", None))
-            http["http_referer"] = _unicodify(http_headers.get("Referer", None))
-            contexts["request"] = http
+        http_data: MutableMapping[str, Any] = {}
+        extract_http(http_data, request)
+        output["http_method"] = http_data["http_method"]
+        output["http_referer"] = http_data["http_referer"]
 
         # _as_dict_safe may not return a reference to the entry in the data
         # dictionary in some cases.
