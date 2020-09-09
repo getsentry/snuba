@@ -115,12 +115,10 @@ class TestTransactionsApi(BaseApiTest):
                                                 "op": "http",
                                                 "status": "0",
                                             },
-                                            "measures": {
-                                                "measurements": {
-                                                    "lcp": 32.129,
-                                                    "lcp.elementSize": 4242,
-                                                }
-                                            },
+                                        },
+                                        "measurements": {
+                                            "lcp": {"value": 32.129},
+                                            "lcp.elementSize": {"value": 4242},
                                         },
                                         "spans": [
                                             {

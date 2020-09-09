@@ -93,12 +93,10 @@ class TestDiscoverApi(BaseApiTest):
                                     "charging": True,
                                     "model_id": "Galaxy",
                                 },
-                                "measures": {
-                                    "measurements": {
-                                        "lcp": 32.129,
-                                        "lcp.elementSize": 4242,
-                                    }
-                                },
+                            },
+                            "measurements": {
+                                "lcp": {"value": 32.129},
+                                "lcp.elementSize": {"value": 4242},
                             },
                             "sdk": {
                                 "name": "sentry.python",
@@ -902,21 +900,20 @@ class TestDiscoverApi(BaseApiTest):
         # Should now count '' user as Null, which is 0
         assert data["data"][0]["uniq_user"] == 0
 
-
-def test_individual_measurement(self) -> None:
-    response = self.app.post(
-        "/query",
-        data=json.dumps(
-            {
-                "dataset": "discover",
-                "project": self.project_id,
-                "selected_columns": ["event_id", "measurements[lcp]"],
-                "limit": 1,
-            }
-        ),
-    )
-    data = json.loads(response.data)
-    assert response.status_code == 200, response.data
-    assert len(data["data"]) == 1, data
-    assert "measurements[lcp]" in data["data"][0]
-    assert data["data"][0]["measurements[lcp]"] == 32.129
+    def test_individual_measurement(self) -> None:
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["event_id", "measurements[lcp]"],
+                    "limit": 1,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert "measurements[lcp]" in data["data"][0]
+        assert data["data"][0]["measurements[lcp]"] == 32.129
