@@ -128,7 +128,7 @@ class TransactionsDataset(TimeSeriesDataset):
         table_alias: str = "",
     ):
         if column_name == "ip_address":
-            return f"coalesce(IPv4NumToString(ip_address_v4), IPv6NumToString(ip_address_v6))"
+            return "coalesce(IPv4NumToString(ip_address_v4), IPv6NumToString(ip_address_v6))"
         if column_name == "event_id":
             return "replaceAll(toString(event_id), '-', '')"
 
