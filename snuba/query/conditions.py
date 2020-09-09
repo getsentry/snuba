@@ -193,7 +193,13 @@ def _get_first_level_conditions(
     """
     # Ignore the identity pattern, e.g. cond = 1 or 1 = cond since Sentry uses this
     # format frequently (in Discover) as a workaround to current schema limitations.
-    nested_func_call = Param("nested_func", FunctionCallPattern())
+    nested_func_call = Param(
+        "nested_func",
+        FunctionCallPattern(
+            None, Or([String(BooleanFunctions.AND), String(BooleanFunctions.OR)])
+        ),
+    )
+
     lit = LiteralPattern(None, Int(1))
 
     id_pattern = Or(
