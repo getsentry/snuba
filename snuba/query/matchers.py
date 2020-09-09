@@ -210,6 +210,18 @@ class AnyOptionalString(Pattern[Optional[str]]):
 
 
 @dataclass(frozen=True)
+class Int(Pattern[int]):
+    """
+    Matches one specific int.
+    """
+
+    value: int
+
+    def match(self, node: AnyType) -> Optional[MatchResult]:
+        return MatchResult() if node == self.value else None
+
+
+@dataclass(frozen=True)
 class Or(Pattern[TMatchedType]):
     """
     Union of multiple patterns. Matches if at least one is a valid match

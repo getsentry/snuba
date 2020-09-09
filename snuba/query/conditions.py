@@ -2,8 +2,11 @@ from typing import Mapping, Optional, Sequence
 
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Expression, FunctionCall, Literal
-from snuba.query.matchers import FunctionCall as FunctionCallPattern
-from snuba.query.matchers import AnyExpression, Or, Param, Pattern, String
+from snuba.query.matchers import (
+    FunctionCall as FunctionCallPattern,
+    Literal as LiteralPattern,
+)
+from snuba.query.matchers import AnyExpression, Int, Or, Param, Pattern, String
 
 
 class ConditionFunctions:
@@ -188,6 +191,27 @@ def _get_first_level_conditions(
     In the AST, the condition is a tree, so we need some additional
     logic to extract the operands of the top level AND condition.
     """
+    # Ignore the identity pattern, e.g. cond = 1 or 1 = cond since Sentry uses this
+    # format frequently (in Discover) as a workaround to current schema limitations.
+    nested_func_call = Param("nested_func", FunctionCallPattern())
+    lit = LiteralPattern(None, Int(1))
+
+    id_pattern = Or(
+        [
+            FunctionCallPattern(
+                None, String(ConditionFunctions.EQ), (nested_func_call, lit),
+            ),
+            FunctionCallPattern(
+                None, String(ConditionFunctions.EQ), (lit, nested_func_call),
+            ),
+        ]
+    )
+
+    match = id_pattern.match(condition)
+
+    if match:
+        condition = match.expression("nested_func")
+
     if isinstance(condition, FunctionCall) and condition.function_name == function:
         return [
             *_get_first_level_conditions(condition.parameters[0], function),
