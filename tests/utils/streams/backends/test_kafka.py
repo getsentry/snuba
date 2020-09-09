@@ -1,9 +1,9 @@
 import contextlib
 import itertools
 import pickle
-import sys
 import uuid
 from contextlib import closing
+from pickle import PickleBuffer
 from typing import Iterator, MutableSequence, Optional
 from unittest import TestCase
 
@@ -11,8 +11,8 @@ import pytest
 from confluent_kafka.admin import AdminClient, NewTopic
 
 from snuba import settings
-from snuba.utils.streams.consumer import ConsumerError, EndOfPartition
-from snuba.utils.streams.kafka import (
+from snuba.utils.streams.backends.abstract import ConsumerError, EndOfPartition
+from snuba.utils.streams.backends.kafka import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
     KafkaPayload,
@@ -22,7 +22,7 @@ from snuba.utils.streams.kafka import (
 from snuba.utils.streams.synchronized import Commit, commit_codec
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
-from tests.utils.streams.mixins import StreamsTestMixin
+from tests.utils.streams.backends.mixins import StreamsTestMixin
 
 
 def test_payload_equality() -> None:
@@ -43,10 +43,7 @@ def test_payload_pickle_simple() -> None:
     assert pickle.loads(pickle.dumps(payload)) == payload
 
 
-@pytest.mark.xfail(not sys.version_info >= (3, 8), reason="python >= 3.8 required")
 def test_payload_pickle_out_of_band() -> None:
-    from pickle import PickleBuffer
-
     payload = KafkaPayload(b"key", b"value", [])
     buffers: MutableSequence[PickleBuffer] = []
     data = pickle.dumps(payload, protocol=5, buffer_callback=buffers.append)

@@ -51,7 +51,7 @@ def bulk_load(
     )
     # TODO: see whether we need to pass options to the writer
     writer = BufferedWriterWrapper(
-        table_writer.get_writer(
+        table_writer.get_batch_writer(
             environment.metrics,
             table_name=dest_table,
             chunk_size=settings.BULK_CLICKHOUSE_BUFFER,
