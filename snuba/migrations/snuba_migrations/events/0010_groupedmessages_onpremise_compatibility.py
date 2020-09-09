@@ -35,6 +35,16 @@ def fix_order_by() -> None:
     if curr_primary_key != old_primary_key:
         return
 
+    # Add the project_id column
+    add_column_sql = operations.AddColumn(
+        storage_set=StorageSetKey.EVENTS,
+        table_name=TABLE_NAME,
+        column=Column("project_id", UInt(64)),
+        after="record_deleted",
+    ).format_sql()
+
+    clickhouse.execute(add_column_sql)
+
     # There shouldn't be any data in the table yet
     assert (
         clickhouse.execute(f"SELECT COUNT() FROM {TABLE_NAME} FINAL;")[0][0] == 0
@@ -71,12 +81,6 @@ class Migration(migration.MultiStepMigration):
 
     def forwards_local(self) -> Sequence[operations.Operation]:
         return [
-            operations.AddColumn(
-                storage_set=StorageSetKey.EVENTS,
-                table_name=TABLE_NAME,
-                column=Column("project_id", UInt(64)),
-                after="record_deleted",
-            ),
             operations.RunPython(func=fix_order_by),
         ]
 

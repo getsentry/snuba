@@ -45,6 +45,7 @@ from snuba.query.processors import QueryProcessor
 from snuba.query.processors.performance_expressions import apdex_processor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.failure_rate_processor import FailureRateProcessor
+from snuba.query.processors.handled_functions import HandledFunctionsProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension
@@ -291,6 +292,8 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("geo_country_code", Nullable(String())),
                 ("geo_region", Nullable(String())),
                 ("geo_city", Nullable(String())),
+                ("http_method", Nullable(String())),
+                ("http_referer", Nullable(String())),
                 # Other tags and context
                 ("tags", Nested([("key", String()), ("value", String())])),
                 ("contexts", Nested([("key", String()), ("value", String())])),
@@ -313,8 +316,6 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("received", Nullable(DateTime())),
                 ("sdk_integrations", Nullable(Array(String()))),
                 ("version", Nullable(String())),
-                ("http_method", Nullable(String())),
-                ("http_referer", Nullable(String())),
                 # exception interface
                 (
                     "exception_stacks",
@@ -384,14 +385,16 @@ class DiscoverDataset(TimeSeriesDataset):
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
+        columnset = self.get_abstract_columnset()
         return [
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             # Apdex and Impact seem very good candidates for
             # being defined by the Transaction entity when it will
             # exist, so it would run before Storage selection.
-            apdex_processor(self.get_abstract_columnset()),
+            apdex_processor(columnset),
             FailureRateProcessor(),
+            HandledFunctionsProcessor("exception_stacks.mechanism_handled", columnset),
             TimeSeriesColumnProcessor({"time": "timestamp"}),
         ]
 

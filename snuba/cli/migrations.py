@@ -63,10 +63,12 @@ def migrate(force: bool) -> None:
 @click.option("--group", required=True, help="Migration group")
 @click.option("--migration-id", required=True, help="Migration ID")
 @click.option("--force", is_flag=True)
-def run(group: str, migration_id: str, force: bool) -> None:
+@click.option("--fake", is_flag=True)
+def run(group: str, migration_id: str, force: bool, fake: bool) -> None:
     """
     Runs a single migration.
-    The --force option must be passed in order to run blocking migrations.
+    --force must be passed in order to run blocking migrations.
+    --fake marks a migration as completed without running anything.
 
     Migrations that are already in an in-progress or completed status will not be run.
     """
@@ -75,34 +77,40 @@ def run(group: str, migration_id: str, force: bool) -> None:
     migration_key = MigrationKey(migration_group, migration_id)
 
     try:
-        runner.run_migration(migration_key, force=force)
+        click.confirm(
+            "This will mark the migration as completed without actually running it. Your database may be in an invalid state. Are you sure?",
+            abort=True,
+        )
+        runner.run_migration(migration_key, force=force, fake=fake)
     except MigrationError as e:
         raise click.ClickException(str(e))
 
-    click.echo(
-        f"Finished running migration {migration_key.group.value}: {migration_key.migration_id}"
-    )
+    click.echo(f"Finished running migration {migration_key}")
 
 
 @migrations.command()
 @click.option("--group", required=True, help="Migration group")
 @click.option("--migration-id", required=True, help="Migration ID")
 @click.option("--force", is_flag=True)
-def reverse(group: str, migration_id: str, force: bool) -> None:
+@click.option("--fake", is_flag=True)
+def reverse(group: str, migration_id: str, force: bool, fake: bool) -> None:
     """
     Reverses a single migration.
 
     --force is required to reverse an already completed migration.
+    --fake marks a migration as reversed without doing anything.
     """
     runner = Runner()
     migration_group = MigrationGroup(group)
     migration_key = MigrationKey(migration_group, migration_id)
 
     try:
-        runner.reverse_migration(migration_key, force=force)
+        click.confirm(
+            "This will mark the migration as not started without actually reversing it. Your database may be in an invalid state. Are you sure?",
+            abort=True,
+        )
+        runner.reverse_migration(migration_key, force=force, fake=fake)
     except MigrationError as e:
         raise click.ClickException(str(e))
 
-    click.echo(
-        f"Finished reversing migration {migration_key.group.value}: {migration_key.migration_id}"
-    )
+    click.echo(f"Finished reversing migration {migration_key}")
