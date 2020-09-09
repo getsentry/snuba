@@ -25,8 +25,8 @@ class FilterProfile:
 
     def to_dict(self) -> Mapping[str, Any]:
         return {
-            "columns": self.columns,
-            "mapping_cols": self.mapping_cols,
+            "columns": list(self.columns),
+            "mapping_cols": list(self.mapping_cols),
         }
 
 
@@ -55,8 +55,8 @@ class ClickhouseQueryProfile:
             "table": self.table,
             "multi_level_condition": self.multi_level_condition,
             "where_profile": self.where_profile.to_dict(),
-            "groupby_cols": self.groupby_cols,
-            "array_join_cols": self.array_join_cols,
+            "groupby_cols": list(self.groupby_cols),
+            "array_join_cols": list(self.array_join_cols),
         }
 
 
@@ -74,7 +74,7 @@ class ClickhouseQueryMetadata:
             "stats": self.stats,
             "status": self.status.value,
             "trace_id": self.trace_id,
-            "profile": self.profile,
+            "profile": self.profile.to_dict(),
         }
 
 
