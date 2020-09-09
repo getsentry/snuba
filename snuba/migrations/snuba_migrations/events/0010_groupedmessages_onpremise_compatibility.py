@@ -13,6 +13,10 @@ TABLE_NAME_OLD = "groupedmessage_local_old"
 
 def fix_order_by() -> None:
     cluster = get_cluster(StorageSetKey.EVENTS)
+
+    if not cluster.is_single_node():
+        return
+
     clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
     database = cluster.get_database()
 

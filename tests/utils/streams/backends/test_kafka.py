@@ -11,8 +11,8 @@ import pytest
 from confluent_kafka.admin import AdminClient, NewTopic
 
 from snuba import settings
-from snuba.utils.streams.consumer import ConsumerError, EndOfPartition
-from snuba.utils.streams.kafka import (
+from snuba.utils.streams.backends.abstract import ConsumerError, EndOfPartition
+from snuba.utils.streams.backends.kafka import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
     KafkaPayload,
@@ -22,7 +22,7 @@ from snuba.utils.streams.kafka import (
 from snuba.utils.streams.synchronized import Commit, commit_codec
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
-from tests.utils.streams.mixins import StreamsTestMixin
+from tests.utils.streams.backends.mixins import StreamsTestMixin
 
 
 def test_payload_equality() -> None:
