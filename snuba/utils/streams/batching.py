@@ -159,10 +159,10 @@ class BatchProcessingStrategy(ProcessingStrategy[TPayload]):
         self.__metrics.timing("process_message", duration)
 
         if message.partition in self.__batch.offsets:
-            self.__batch.offsets[message.partition].hi = message.get_next_offset()
+            self.__batch.offsets[message.partition].hi = message.next_offset
         else:
             self.__batch.offsets[message.partition] = Offsets(
-                message.offset, message.get_next_offset()
+                message.offset, message.next_offset
             )
 
     def close(self) -> None:
