@@ -49,7 +49,7 @@ class MessageStorage(ABC, Generic[TPayload]):
         raise NotImplementedError
 
 
-class InMemoryMessageStorage(MessageStorage[TPayload]):
+class MemoryMessageStorage(MessageStorage[TPayload]):
     def __init__(self, clock: Clock = TestingClock()) -> None:
         self.__clock = clock
         self.__topics: MutableMapping[
@@ -88,7 +88,7 @@ class InMemoryMessageStorage(MessageStorage[TPayload]):
 
 class DummyBroker(Generic[TPayload]):
     def __init__(
-        self, message_storage: MessageStorage[TPayload] = InMemoryMessageStorage()
+        self, message_storage: MessageStorage[TPayload] = MemoryMessageStorage()
     ) -> None:
         self.__message_storage = message_storage
 
