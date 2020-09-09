@@ -849,3 +849,49 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"] == [
             {"apdex_duration_300": 1, "tags[foo]": "baz", "project_id": self.project_id}
         ]
+
+    def test_count_null_user_consistency(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [
+                        ["uniq", "user", "uniq_user"],
+                        ["count", None, "count"],
+                    ],
+                    "groupby": ["group_id", "user"],
+                    "conditions": [],
+                    "orderby": "uniq_user",
+                    "limit": 1000,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert len(data["data"]) == 1
+        assert data["data"][0]["uniq_user"] == 0
+
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [
+                        ["uniq", "user", "uniq_user"],
+                        ["count", None, "count"],
+                    ],
+                    "groupby": ["trace_id", "user_email"],
+                    "conditions": [],
+                    "orderby": "uniq_user",
+                    "limit": 1000,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert len(data["data"]) == 1
+        # Should now count '' user as Null, which is 0
+        assert data["data"][0]["uniq_user"] == 0

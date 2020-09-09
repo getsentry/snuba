@@ -1,12 +1,15 @@
 from datetime import timedelta
 from typing import FrozenSet, Mapping, Sequence
 
+from snuba.clickhouse.translators.snuba.mappers import ColumnToFunction
+from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors import promoted_tag_columns
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
+from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
@@ -17,6 +20,15 @@ from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
+
+
+errors_translators = TranslationMappers(
+    columns=[
+        ColumnToFunction(
+            None, "user", "nullIf", (Column(None, None, "user"), Literal(None, ""))
+        ),
+    ]
+)
 
 
 class ErrorsDataset(TimeSeriesDataset):
@@ -34,7 +46,9 @@ class ErrorsDataset(TimeSeriesDataset):
         self.__time_group_columns = {"time": "timestamp", "rtime": "received"}
         super().__init__(
             storages=[storage],
-            query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
+            query_plan_builder=SingleStorageQueryPlanBuilder(
+                storage=storage, mappers=errors_translators
+            ),
             abstract_column_set=columns,
             writable_storage=storage,
             time_group_columns=self.__time_group_columns,
