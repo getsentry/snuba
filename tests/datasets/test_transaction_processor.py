@@ -101,6 +101,10 @@ class TransactionEvent:
                     "datetime": "2019-08-08T22:29:53.917000Z",
                     "timestamp": self.timestamp,
                     "start_timestamp": self.start_timestamp,
+                    "measurements": {
+                        "lcp": {"value": 32.129},
+                        "lcp.elementSize": {"value": 4242},
+                    },
                     "contexts": {
                         "trace": {
                             "sampled": True,
@@ -109,9 +113,6 @@ class TransactionEvent:
                             "type": "trace",
                             "span_id": self.span_id,
                             "status": self.status,
-                        },
-                        "measures": {
-                            "measurements": {"lcp": 32.129, "lcp.elementSize": 4242}
                         },
                     },
                     "tags": [

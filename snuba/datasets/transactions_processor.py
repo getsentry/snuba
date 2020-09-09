@@ -127,21 +127,19 @@ class TransactionsMessageProcessor(MessageProcessor):
         if "geo" not in contexts and isinstance(geo, dict):
             contexts["geo"] = geo
 
-        measures = contexts.get("measures")
-        if measures is not None:
-            del contexts["measures"]
+        measurements = data.get("measurements")
+        if measurements is not None:
             try:
-                measurements = measures["measurements"]
                 (
                     processed["measurements.key"],
                     processed["measurements.value"],
-                ) = extract_nested(measurements, lambda val: float(val))
+                ) = extract_nested(measurements, lambda value: float(value["value"]))
             except Exception:
                 # Not failing the event in this case just yet, because we are still
                 # developing this feature.
                 logger.error(
                     "Invalid measurements field.",
-                    extra={"measurements": measures},
+                    extra={"measurements": measurements},
                     exc_info=True,
                 )
         request = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
