@@ -433,7 +433,6 @@ class Query:
     def __get_columns_referenced_in_expressions(
         self, expressions: Iterable[Expression]
     ) -> Set[Column]:
-        pass
         ret: Set[Column] = set()
 
         for expression in expressions or []:

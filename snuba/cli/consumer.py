@@ -87,6 +87,9 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
 @click.option(
     "--output-block-size", type=int,
 )
+@click.option(
+    "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
+)
 def consumer(
     *,
     raw_events_topic: Optional[str],
@@ -107,6 +110,7 @@ def consumer(
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
+    profile_path: Optional[str] = None,
 ) -> None:
 
     if not bootstrap_server:
@@ -135,6 +139,7 @@ def consumer(
         processes=processes,
         input_block_size=input_block_size,
         output_block_size=output_block_size,
+        profile_path=profile_path,
     )
 
     if stateful_consumer:

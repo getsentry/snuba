@@ -6,6 +6,7 @@ import pytest
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet, String
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.factory import get_dataset
@@ -18,11 +19,7 @@ from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.web import QueryResult
-from snuba.web.split import (
-    ColumnSplitQueryStrategy,
-    TimeSplitQueryStrategy,
-    _get_time_range,
-)
+from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 
 def setup_function(function) -> None:
@@ -376,7 +373,7 @@ def test_time_split_ast() -> None:
     def do_query(
         query: ClickhouseQuery, request_settings: RequestSettings,
     ) -> QueryResult:
-        from_date_ast, to_date_ast = _get_time_range(query, "timestamp")
+        from_date_ast, to_date_ast = get_time_range(query, "timestamp")
         assert from_date_ast is not None and isinstance(from_date_ast, datetime)
         assert to_date_ast is not None and isinstance(to_date_ast, datetime)
 
@@ -434,34 +431,3 @@ def test_time_split_ast() -> None:
         ("2019-09-19T01:00:00", "2019-09-19T11:00:00"),
         ("2019-09-18T10:00:00", "2019-09-19T01:00:00"),
     ]
-
-
-def test_get_time_range() -> None:
-    """
-    Test finding the time range of a query.
-    """
-    body = {
-        "selected_columns": ["event_id"],
-        "conditions": [
-            ("timestamp", ">=", "2019-09-18T10:00:00"),
-            ("timestamp", ">=", "2000-09-18T10:00:00"),
-            ("timestamp", "<", "2019-09-19T12:00:00"),
-            [("timestamp", "<", "2019-09-18T12:00:00"), ("project_id", "IN", [1])],
-            ("project_id", "IN", [1]),
-        ],
-    }
-
-    events = get_dataset("events")
-    query = parse_query(body, events)
-
-    from_date_ast, to_date_ast = _get_time_range(ClickhouseQuery(query), "timestamp")
-    assert (
-        from_date_ast is not None
-        and isinstance(from_date_ast, datetime)
-        and from_date_ast.isoformat() == "2019-09-18T10:00:00"
-    )
-    assert (
-        to_date_ast is not None
-        and isinstance(to_date_ast, datetime)
-        and to_date_ast.isoformat() == "2019-09-19T12:00:00"
-    )
