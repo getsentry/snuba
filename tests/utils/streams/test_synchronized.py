@@ -5,9 +5,9 @@ from typing import Mapping, Optional, TypeVar
 
 import pytest
 
-from snuba.utils.streams.consumer import Consumer
-from snuba.utils.streams.dummy import DummyBroker, DummyConsumer
-from snuba.utils.streams.kafka import KafkaPayload
+from snuba.utils.streams.backends.abstract import Consumer
+from snuba.utils.streams.backends.dummy import DummyBroker, DummyConsumer
+from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.synchronized import Commit, SynchronizedConsumer, commit_codec
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.assertions import assert_changes, assert_does_not_change

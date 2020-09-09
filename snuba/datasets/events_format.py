@@ -2,7 +2,12 @@ from datetime import datetime, timedelta
 from typing import Any, Callable, Mapping, MutableMapping, Sequence, Tuple, TypeVar
 
 from snuba import settings
-from snuba.processor import _ensure_valid_date, _ensure_valid_ip, _unicodify
+from snuba.processor import (
+    _as_dict_safe,
+    _ensure_valid_date,
+    _ensure_valid_ip,
+    _unicodify,
+)
 
 
 def extract_project_id(
@@ -26,6 +31,13 @@ def extract_user(output: MutableMapping[str, Any], user: Mapping[str, Any]) -> N
 
 
 TVal = TypeVar("TVal")
+
+
+def extract_http(output: MutableMapping[str, Any], request: Mapping[str, Any]) -> None:
+    http_headers = _as_dict_safe(request.get("headers", None))
+    output["http_method"] = _unicodify(request.get("method", None))
+    output["http_referer"] = _unicodify(http_headers.get("Referer", None))
+    output["http_url"] = _unicodify(request.get("url", None))
 
 
 def extract_extra_tags(
