@@ -178,11 +178,11 @@ class TestReplacer(BaseEventsTest):
 
         assert (
             re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == "SELECT count() FROM %(dist_read_table_name)s FINAL PREWHERE %(tag_column)s IS NOT NULL WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "SELECT count() FROM %(dist_read_table_name)s FINAL PREWHERE %(tag_column)s IS NOT NULL WHERE org_id = 0 AND project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
         )
         assert (
             re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == "INSERT INTO %(dist_write_table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(dist_read_table_name)s FINAL PREWHERE %(tag_column)s IS NOT NULL WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "INSERT INTO %(dist_write_table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(dist_read_table_name)s FINAL PREWHERE %(tag_column)s IS NOT NULL WHERE org_id = 0 AND project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
         )
         flattened_column = FLATTENED_COLUMN_TEMPLATE % "'sentry:user'"
         assert replacement.query_args == {
@@ -214,11 +214,11 @@ class TestReplacer(BaseEventsTest):
 
         assert (
             re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == "SELECT count() FROM %(dist_read_table_name)s FINAL PREWHERE has(`tags.key`, %(tag_str)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "SELECT count() FROM %(dist_read_table_name)s FINAL PREWHERE has(`tags.key`, %(tag_str)s) WHERE org_id = 0 AND project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
         )
         assert (
             re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == "INSERT INTO %(dist_write_table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(dist_read_table_name)s FINAL PREWHERE has(`tags.key`, %(tag_str)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "INSERT INTO %(dist_write_table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(dist_read_table_name)s FINAL PREWHERE has(`tags.key`, %(tag_str)s) WHERE org_id = 0 AND project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
         )
 
         flattened_column = FLATTENED_COLUMN_TEMPLATE % "'foo:bar'"
