@@ -6,7 +6,8 @@ from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
 from snuba.environment import setup_sentry
 from snuba.utils.clock import Clock, TestingClock
-from snuba.utils.streams.backends.dummy import DummyBroker
+from snuba.utils.streams.backends.local.backend import LocalBroker
+from snuba.utils.streams.backends.local.storages.memory import MemoryMessageStorage
 from snuba.utils.streams.types import TPayload
 
 
@@ -35,5 +36,5 @@ def clock() -> Iterator[Clock]:
 
 
 @pytest.fixture
-def broker(clock: TestingClock) -> Iterator[DummyBroker[TPayload]]:
-    yield DummyBroker(clock)
+def broker(clock: TestingClock) -> Iterator[LocalBroker[TPayload]]:
+    yield LocalBroker(MemoryMessageStorage(clock))

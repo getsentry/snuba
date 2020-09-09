@@ -23,8 +23,8 @@ from snuba.subscriptions.worker import (
 )
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams import Message, Partition, Topic
-from snuba.utils.streams.backends.dummy import DummyBroker
 from snuba.utils.streams.backends.kafka import KafkaPayload
+from snuba.utils.streams.backends.local.backend import LocalBroker as Broker
 from snuba.utils.types import Interval
 from tests.base import dataset_manager
 
@@ -60,7 +60,7 @@ def dataset() -> Iterator[Dataset]:
     ],
 )
 def test_subscription_worker(
-    dataset: Dataset, broker: DummyBroker[KafkaPayload], time_shift: Optional[timedelta]
+    dataset: Dataset, broker: Broker[KafkaPayload], time_shift: Optional[timedelta]
 ) -> None:
     result_topic = Topic("subscription-results")
 

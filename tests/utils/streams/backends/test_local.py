@@ -1,29 +1,26 @@
-from abc import abstractmethod
 import contextlib
 import itertools
 import uuid
+from abc import abstractmethod
+from tempfile import TemporaryDirectory
 from typing import Iterator, Optional
 from unittest import TestCase
-from tempfile import TemporaryDirectory
 
 import pytest
 
 from snuba.utils.clock import TestingClock
-from snuba.utils.streams.backends.dummy import (
-    DummyBroker,
-    DummyConsumer,
-    DummyProducer,
-    MessageStorage,
-    MemoryMessageStorage,
-)
-from snuba.utils.streams.backends.file import FileMessageStorage
+from snuba.utils.streams.backends.abstract import Consumer, Producer
+from snuba.utils.streams.backends.local.storages.abstract import MessageStorage
+from snuba.utils.streams.backends.local.storages.file import FileMessageStorage
+from snuba.utils.streams.backends.local.storages.memory import MemoryMessageStorage
+from snuba.utils.streams.backends.local.backend import LocalBroker
 from snuba.utils.streams.types import Topic
 from tests.utils.streams.backends.mixins import StreamsTestMixin
 
 
-class DummyStreamsTestMixin(StreamsTestMixin[int]):
+class LocalStreamsTestMixin(StreamsTestMixin[int]):
     def setUp(self) -> None:
-        self.broker: DummyBroker[int] = DummyBroker(self.get_message_storage())
+        self.broker: LocalBroker[int] = LocalBroker(self.get_message_storage())
 
     @abstractmethod
     def get_message_storage(self) -> MessageStorage[int]:
@@ -37,13 +34,13 @@ class DummyStreamsTestMixin(StreamsTestMixin[int]):
 
     def get_consumer(
         self, group: Optional[str] = None, enable_end_of_partition: bool = True
-    ) -> DummyConsumer[int]:
+    ) -> Consumer[int]:
         return self.broker.get_consumer(
             group if group is not None else uuid.uuid1().hex,
             enable_end_of_partition=enable_end_of_partition,
         )
 
-    def get_producer(self) -> DummyProducer[int]:
+    def get_producer(self) -> Producer[int]:
         return self.broker.get_producer()
 
     def get_payloads(self) -> Iterator[int]:
@@ -54,12 +51,12 @@ class DummyStreamsTestMixin(StreamsTestMixin[int]):
         return super().test_pause_resume_rebalancing()
 
 
-class DummyStreamsMemoryTestCase(DummyStreamsTestMixin, TestCase):
+class LocalStreamsMemoryStorageTestCase(LocalStreamsTestMixin, TestCase):
     def get_message_storage(self) -> MessageStorage[int]:
         return MemoryMessageStorage()
 
 
-class DummyStreamsFileTestCase(DummyStreamsTestMixin, TestCase):
+class LocalStreamsFileStorageTestCase(LocalStreamsTestMixin, TestCase):
     def setUp(self) -> None:
         self.directory = TemporaryDirectory()
         super().setUp()

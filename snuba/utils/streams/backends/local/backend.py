@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 from concurrent.futures import Future
-from datetime import datetime
 from functools import partial
 from threading import Lock, RLock
 from typing import (
@@ -17,79 +15,21 @@ from typing import (
     Optional,
     Sequence,
     Set,
-    Tuple,
     Union,
 )
 
-from snuba.utils.clock import Clock, TestingClock
 from snuba.utils.streams.backends.abstract import (
     Consumer,
     ConsumerError,
     EndOfPartition,
     Producer,
 )
+from snuba.utils.streams.backends.local.storages.abstract import MessageStorage
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 
-class MessageStorage(ABC, Generic[TPayload]):
-    @abstractmethod
-    def create_topic(self, topic: Topic, partitions: int) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_partition_count(self, topic: Topic) -> int:
-        raise NotImplementedError
-
-    @abstractmethod
-    def consume(self, partition: Partition, offset: int) -> Optional[Message[TPayload]]:
-        raise NotImplementedError
-
-    @abstractmethod
-    def produce(self, partition: Partition, payload: TPayload) -> Message[TPayload]:
-        raise NotImplementedError
-
-
-class MemoryMessageStorage(MessageStorage[TPayload]):
-    def __init__(self, clock: Clock = TestingClock()) -> None:
-        self.__clock = clock
-        self.__topics: MutableMapping[
-            Topic, Sequence[MutableSequence[Tuple[TPayload, datetime]]]
-        ] = {}
-
-    def create_topic(self, topic: Topic, partitions: int) -> None:
-        if topic in self.__topics:
-            raise ValueError("topic already exists")
-
-        self.__topics[topic] = [[] for i in range(partitions)]
-
-    def get_partition_count(self, topic: Topic) -> int:
-        return len(self.__topics[topic])
-
-    def consume(self, partition: Partition, offset: int) -> Optional[Message[TPayload]]:
-        messages = self.__topics[partition.topic][partition.index]
-
-        try:
-            payload, timestamp = messages[offset]
-        except IndexError:
-            if offset == len(messages):
-                return None
-            else:
-                raise Exception("invalid offset")
-
-        return Message(partition, offset, payload, timestamp)
-
-    def produce(self, partition: Partition, payload: TPayload) -> Message[TPayload]:
-        messages = self.__topics[partition.topic][partition.index]
-        offset = len(messages)
-        timestamp = datetime.fromtimestamp(self.__clock.time())
-        messages.append((payload, timestamp))
-        return Message(partition, offset, payload, timestamp)
-
-
-class DummyBroker(Generic[TPayload]):
-    def __init__(
-        self, message_storage: MessageStorage[TPayload] = MemoryMessageStorage()
-    ) -> None:
+class LocalBroker(Generic[TPayload]):
+    def __init__(self, message_storage: MessageStorage[TPayload]) -> None:
         self.__message_storage = message_storage
 
         self.__offsets: MutableMapping[
@@ -99,7 +39,7 @@ class DummyBroker(Generic[TPayload]):
         # The active subscriptions are stored by consumer group as a mapping
         # between the consumer and it's subscribed topics.
         self.__subscriptions: MutableMapping[
-            str, MutableMapping[DummyConsumer[TPayload], Sequence[Topic]]
+            str, MutableMapping[LocalConsumer[TPayload], Sequence[Topic]]
         ] = defaultdict(dict)
 
         self.__lock = Lock()
@@ -107,12 +47,12 @@ class DummyBroker(Generic[TPayload]):
     def get_consumer(
         self, group: str, enable_end_of_partition: bool = False
     ) -> Consumer[TPayload]:
-        return DummyConsumer(
+        return LocalConsumer(
             self, group, enable_end_of_partition=enable_end_of_partition
         )
 
     def get_producer(self) -> Producer[TPayload]:
-        return DummyProducer(self)
+        return LocalProducer(self)
 
     def create_topic(self, topic: Topic, partitions: int) -> None:
         with self.__lock:
@@ -123,7 +63,7 @@ class DummyBroker(Generic[TPayload]):
             return self.__message_storage.produce(partition, payload)
 
     def subscribe(
-        self, consumer: DummyConsumer[TPayload], topics: Sequence[Topic]
+        self, consumer: LocalConsumer[TPayload], topics: Sequence[Topic]
     ) -> Mapping[Partition, int]:
         with self.__lock:
             if self.__subscriptions[consumer.group]:
@@ -154,7 +94,7 @@ class DummyBroker(Generic[TPayload]):
 
         return assignment
 
-    def unsubscribe(self, consumer: DummyConsumer[TPayload]) -> Sequence[Partition]:
+    def unsubscribe(self, consumer: LocalConsumer[TPayload]) -> Sequence[Partition]:
         with self.__lock:
             partitions: MutableSequence[Partition] = []
             for topic in self.__subscriptions[consumer.group].pop(consumer):
@@ -169,7 +109,7 @@ class DummyBroker(Generic[TPayload]):
             return self.__message_storage.consume(partition, offset)
 
     def commit(
-        self, consumer: DummyConsumer[TPayload], offsets: Mapping[Partition, int]
+        self, consumer: LocalConsumer[TPayload], offsets: Mapping[Partition, int]
     ) -> None:
         with self.__lock:
             # TODO: This could possibly use more validation?
@@ -182,10 +122,10 @@ class Subscription(NamedTuple):
     revocation_callback: Optional[Callable[[Sequence[Partition]], None]]
 
 
-class DummyConsumer(Consumer[TPayload]):
+class LocalConsumer(Consumer[TPayload]):
     def __init__(
         self,
-        broker: DummyBroker[TPayload],
+        broker: LocalBroker[TPayload],
         group: str,
         enable_end_of_partition: bool = False,
     ) -> None:
@@ -393,8 +333,8 @@ class DummyConsumer(Consumer[TPayload]):
         return self.__closed
 
 
-class DummyProducer(Producer[TPayload]):
-    def __init__(self, broker: DummyBroker[TPayload]) -> None:
+class LocalProducer(Producer[TPayload]):
+    def __init__(self, broker: LocalBroker[TPayload]) -> None:
         self.__broker = broker
 
         self.__lock = Lock()

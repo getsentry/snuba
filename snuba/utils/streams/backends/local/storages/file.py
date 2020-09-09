@@ -7,7 +7,7 @@ from typing import BinaryIO, MutableMapping, Optional, Tuple
 
 from snuba.utils.clock import Clock, SystemClock
 from snuba.utils.codecs import Codec
-from snuba.utils.streams.backends.dummy import MessageStorage
+from snuba.utils.streams.backends.local.storages.abstract import MessageStorage
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 
@@ -53,6 +53,8 @@ class FileMessageStorage(MessageStorage[TPayload]):
         for i in itertools.count():
             if not (topic_path / str(i)).exists():
                 return i
+
+        raise Exception  # unreachable
 
     def produce(self, partition: Partition, payload: TPayload) -> Message[TPayload]:
         timestamp = datetime.fromtimestamp(self.__clock.time())
