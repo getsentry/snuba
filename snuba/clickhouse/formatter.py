@@ -77,6 +77,11 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             return self.__alias(
                 "toDate('{}', 'Universal')".format(exp.value.isoformat()), exp.alias
             )
+        elif isinstance(exp.value, list):
+            if exp.value:
+                # Non empty array literals are unsupported.
+                raise ValueError("Unexpected non empty array literal")
+            return self.__alias("[]", exp.alias)
         else:
             raise ValueError(f"Unexpected literal type {type(exp.value)}")
 

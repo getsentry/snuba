@@ -26,6 +26,7 @@ test_expressions = [
     (Literal("not_null", None), "(NULL AS not_null)",),  # NULL with alias
     (Literal(None, True), "true",),  # True
     (Literal(None, False), "false",),  # False
+    (Literal(None, []), "[]"),  # []
     (Column(None, "table1", "column1"), "table1.column1"),  # Basic Column no alias
     (
         Column("table1.column1", "table1", "column1"),

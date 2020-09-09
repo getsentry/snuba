@@ -107,7 +107,7 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
         raise NotImplementedError
 
 
-OptionalScalarType = Union[None, bool, str, float, int, date, datetime]
+OptionalScalarType = Union[None, bool, str, float, int, list, date, datetime]
 
 
 @dataclass(frozen=True)

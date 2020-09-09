@@ -168,10 +168,12 @@ def detect_table(
 @dataclass(frozen=True)
 class DefaultNoneColumnMapper(ColumnMapper):
     """
-    This maps a list of column names to None (NULL in SQL) as it is done
-    in the discover column_expr method today. It should not be used for
-    any other reason or use case, thus it should not be moved out of
-    the discover dataset file.
+    This maps a list of column names to their respective empty value
+        - None for most columns corresponding to NULL in SQL
+        - [] for Array columns corresponding to [] in SQL
+    as it is done in the discover column_expr_ method today. It should
+    not be used for any other reason or use case, thus it should not be
+    moved out of the discover data file.
     """
 
     columns: ColumnSet
@@ -180,13 +182,12 @@ class DefaultNoneColumnMapper(ColumnMapper):
         self, expression: Column, children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[Literal]:
         if expression.column_name in self.columns:
-            return Literal(
-                alias=expression.alias
-                or qualified_column(
-                    expression.column_name, expression.table_name or ""
-                ),
-                value=None,
+            alias = expression.alias or qualified_column(
+                expression.column_name, expression.table_name or ""
             )
+            if isinstance(self.columns[expression.column_name].type, Array):
+                return Literal(alias=alias, value=[])
+            return Literal(alias=alias, value=None)
         else:
             return None
 
