@@ -37,6 +37,9 @@ services:
     depends_on:
       - zookeeper
     image: 'confluentinc/cp-kafka:5.1.2'
+    build:
+      cache_from:
+        - 'confluentinc/cp-kafka:5.1.2'
     environment:
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
       KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:9092'
@@ -47,12 +50,18 @@ services:
       KAFKA_TOOLS_LOG4J_LOGLEVEL: 'WARN'
   clickhouse:
     image: 'yandex/clickhouse-server:20.3.9.70'
+    build:
+      cache_from:
+        - 'yandex/clickhouse-server:20.3.9.70'
     ulimits:
       nofile:
         soft: 262144
         hard: 262144
   redis1: &redis_config
-    image: redis:5.0-alpine
+    image: 'redis:5.0-alpine'
+    build:
+      cache_from:
+        - 'redis:5.0-alpine'
     command:
       - redis-server
       - '--appendonly'
