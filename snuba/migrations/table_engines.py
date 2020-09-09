@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 
 from typing import Mapping, Optional
 
+from snuba.clickhouse.escaping import escape_string
 from snuba.clusters.cluster import ClickhouseCluster
 from snuba.clusters.storage_sets import StorageSetKey
 
@@ -106,7 +107,7 @@ class ReplacingMergeTree(MergeTree):
 class SummingMergeTree(MergeTree):
     def _get_engine_type(self, cluster: ClickhouseCluster, table_name: str) -> str:
         if cluster.is_single_node():
-            return f"SummingMergeTree()"
+            return "SummingMergeTree()"
         elif self._unsharded is True:
             return f"SummingMergeTree('/clickhouse/tables/{self._storage_set_value}/all/{table_name}', '{{replica}}')"
         else:
@@ -116,7 +117,7 @@ class SummingMergeTree(MergeTree):
 class AggregatingMergeTree(MergeTree):
     def _get_engine_type(self, cluster: ClickhouseCluster, table_name: str) -> str:
         if cluster.is_single_node():
-            return f"AggregatingMergeTree()"
+            return "AggregatingMergeTree()"
         elif self._unsharded is True:
             return f"ReplicatedAggregatingMergeTree('/clickhouse/tables/{self._storage_set_value}/all/{table_name}', '{{replica}}')"
         else:
@@ -138,3 +139,12 @@ class Distributed(TableEngine):
         )
 
         return f"Distributed({cluster_name}, {database_name}, {self.__local_table_name}{optional_sharding_key})"
+
+
+class Merge(TableEngine):
+    def __init__(self, table_name_regex: str) -> None:
+        self.__table_name_regex = table_name_regex
+
+    def get_sql(self, cluster: ClickhouseCluster, table_name: str) -> str:
+        re = escape_string(self.__table_name_regex)
+        return f"Merge(currentDatabase(), {re})"
