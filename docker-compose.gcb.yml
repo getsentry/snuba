@@ -38,6 +38,7 @@ services:
       - zookeeper
     image: 'confluentinc/cp-kafka:5.1.2'
     build:
+      context: .
       cache_from:
         - 'confluentinc/cp-kafka:5.1.2'
     environment:
@@ -51,6 +52,7 @@ services:
   clickhouse:
     image: 'yandex/clickhouse-server:20.3.9.70'
     build:
+      context: .
       cache_from:
         - 'yandex/clickhouse-server:20.3.9.70'
     ulimits:
@@ -60,6 +62,7 @@ services:
   redis1: &redis_config
     image: 'redis:5.0-alpine'
     build:
+      context: .
       cache_from:
         - 'redis:5.0-alpine'
     command:
