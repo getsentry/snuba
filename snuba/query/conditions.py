@@ -172,6 +172,40 @@ def is_unary_condition(exp: Expression, operator: str) -> bool:
     return False
 
 
+def strip_top_level_identity_condition(condition: Expression) -> Expression:
+    """
+    Strip the top level identity condition, e.g. just return `cond` if `cond = 1`
+    or `1 = cond` and cond is a nested and/or function since Sentry uses this
+    format frequently (in Discover) as a workaround to current schema limitations.
+    """
+    nested_func_call = Param(
+        "nested_func",
+        FunctionCallPattern(
+            None, Or([String(BooleanFunctions.AND), String(BooleanFunctions.OR)])
+        ),
+    )
+
+    lit = LiteralPattern(None, Int(1))
+
+    id_pattern = Or(
+        [
+            FunctionCallPattern(
+                None, String(ConditionFunctions.EQ), (nested_func_call, lit),
+            ),
+            FunctionCallPattern(
+                None, String(ConditionFunctions.EQ), (lit, nested_func_call),
+            ),
+        ]
+    )
+
+    match = id_pattern.match(condition)
+
+    if match:
+        return match.expression("nested_func")
+
+    return condition
+
+
 def get_first_level_and_conditions(condition: Expression) -> Sequence[Expression]:
     return _get_first_level_conditions(condition, BooleanFunctions.AND)
 
@@ -191,30 +225,6 @@ def _get_first_level_conditions(
     In the AST, the condition is a tree, so we need some additional
     logic to extract the operands of the top level AND condition.
     """
-    # Ignore the identity pattern, e.g. cond = 1 or 1 = cond since Sentry uses this
-    # format frequently (in Discover) as a workaround to current schema limitations.
-    nested_func_call = Param(
-        "nested_func", FunctionCallPattern(None, String(function)),
-    )
-
-    lit = LiteralPattern(None, Int(1))
-
-    id_pattern = Or(
-        [
-            FunctionCallPattern(
-                None, String(ConditionFunctions.EQ), (nested_func_call, lit),
-            ),
-            FunctionCallPattern(
-                None, String(ConditionFunctions.EQ), (lit, nested_func_call),
-            ),
-        ]
-    )
-
-    match = id_pattern.match(condition)
-
-    if match:
-        condition = match.expression("nested_func")
-
     if isinstance(condition, FunctionCall) and condition.function_name == function:
         return [
             *_get_first_level_conditions(condition.parameters[0], function),

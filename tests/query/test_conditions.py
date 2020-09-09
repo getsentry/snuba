@@ -11,6 +11,7 @@ from snuba.query.conditions import (
     is_not_in_condition,
     is_not_in_condition_pattern,
     is_unary_condition,
+    strip_top_level_identity_condition,
     unary_condition,
 )
 from snuba.query.dsl import literals_tuple
@@ -225,13 +226,52 @@ def test_first_level_conditions() -> None:
         Literal(None, "test"),
     )
 
+    cond = binary_condition(
+        None,
+        BooleanFunctions.AND,
+        binary_condition(None, BooleanFunctions.AND, c1, c2),
+        c3,
+    )
+    assert get_first_level_and_conditions(cond) == [c1, c2, c3]
+
+    cond = binary_condition(
+        None,
+        BooleanFunctions.OR,
+        binary_condition(None, BooleanFunctions.AND, c1, c2),
+        c3,
+    )
+    assert get_first_level_or_conditions(cond) == [
+        binary_condition(None, BooleanFunctions.AND, c1, c2),
+        c3,
+    ]
+
+
+def test_strip_top_level_identity_condition() -> None:
+    c1 = binary_condition(
+        None,
+        ConditionFunctions.EQ,
+        Column(None, "table1", "column1"),
+        Literal(None, "test"),
+    )
+    c2 = binary_condition(
+        None,
+        ConditionFunctions.EQ,
+        Column(None, "table2", "column2"),
+        Literal(None, "test"),
+    )
+    c3 = binary_condition(
+        None,
+        ConditionFunctions.EQ,
+        Column(None, "table3", "column3"),
+        Literal(None, "test"),
+    )
+
     cond_and = binary_condition(
         None,
         BooleanFunctions.AND,
         binary_condition(None, BooleanFunctions.AND, c1, c2),
         c3,
     )
-    assert get_first_level_and_conditions(cond_and) == [c1, c2, c3]
 
     cond_or = binary_condition(
         None,
@@ -239,22 +279,23 @@ def test_first_level_conditions() -> None:
         binary_condition(None, BooleanFunctions.AND, c1, c2),
         c3,
     )
-    assert get_first_level_or_conditions(cond_or) == [
-        binary_condition(None, BooleanFunctions.AND, c1, c2),
-        c3,
-    ]
 
     cond_identity_and = binary_condition(
         None, ConditionFunctions.EQ, cond_and, Literal(None, 1)
     )
 
-    assert get_first_level_and_conditions(cond_identity_and) == [c1, c2, c3]
-
     cond_identity_or = binary_condition(
         None, ConditionFunctions.EQ, cond_or, Literal(None, 1)
     )
 
-    assert get_first_level_or_conditions(cond_identity_or) == [
-        binary_condition(None, BooleanFunctions.AND, c1, c2),
-        c3,
-    ]
+    cond_identity_other = binary_condition(
+        None, ConditionFunctions.EQ, c3, Literal(None, 1)
+    )
+
+    assert strip_top_level_identity_condition(cond_identity_and) == cond_and
+    assert strip_top_level_identity_condition(cond_identity_or) == cond_or
+    assert strip_top_level_identity_condition(cond_and) == cond_and
+    assert strip_top_level_identity_condition(cond_or) == cond_or
+    assert (
+        strip_top_level_identity_condition(cond_identity_other) == cond_identity_other
+    )
