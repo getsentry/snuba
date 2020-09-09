@@ -451,17 +451,7 @@ class Query:
         )
 
     def get_columns_referenced_in_conditions_ast(self) -> Set[Column]:
-        return self.__get_columns_referenced_in_expressions(self.__condition or [])
-
-    def __get_columns_referenced_in_expressions(
-        self, expressions: Iterable[Expression]
-    ) -> Set[Column]:
-        ret: Set[Column] = set()
-
-        for expression in expressions or []:
-            ret |= {c for c in expression if isinstance(c, Column)}
-
-        return ret
+        return self.__get_all_ast_referenced_expressions(self.__condition or [], Column)
 
     def get_columns_referenced_in_conditions(self) -> Sequence[Any]:
         col_exprs: MutableSequence[Any] = []
