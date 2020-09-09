@@ -684,6 +684,27 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"][0]["contexts[device.charging]"] == "True"
         assert data["data"][0]["count"] == 1
 
+    def test_is_handled(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["exception_stacks.mechanism_handled"],
+                    "conditions": [
+                        ["type", "=", "error"],
+                        [["notHandled", []], "=", 1],
+                    ],
+                    "limit": 5,
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"][0]["exception_stacks.mechanism_handled"] == [0]
+
     def test_having(self):
         result = json.loads(
             self.app.post(
