@@ -67,6 +67,10 @@ def _has_complex_conditions(query: Query) -> bool:
     return False
 
 
+def _get_all_columns(query: Query) -> Columnset:
+    return {c.column_name for c in query.get_all_ast_referenced_columns()}
+
+
 def _get_columns_from_expression(expression: Expression) -> Columnset:
     return {c.column_name for c in expression if isinstance(c, ColumnExpr)}
 
@@ -119,6 +123,7 @@ def generate_profile(query: Query) -> ClickhouseQueryProfile:
         return ClickhouseQueryProfile(
             time_range=_get_date_range(query),
             table=_get_table(query),
+            all_columns=_get_all_columns(query),
             multi_level_condition=_has_complex_conditions(query),
             where_profile=FilterProfile(
                 columns=_list_columns(where) if where is not None else set(),
@@ -136,6 +141,7 @@ def generate_profile(query: Query) -> ClickhouseQueryProfile:
         return ClickhouseQueryProfile(
             time_range=-1,
             table="",
+            all_columns=set(),
             multi_level_condition=False,
             where_profile=FilterProfile(columns=set(), mapping_cols=set(),),
             groupby_cols=set(),

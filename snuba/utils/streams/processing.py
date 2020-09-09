@@ -207,7 +207,7 @@ class StreamProcessor(Generic[TPayload]):
 
             self._shutdown()
         except Exception as error:
-            logger.warning("Caught %r, shutting down...", error)
+            logger.info("Caught %r, shutting down...", error)
 
             if self.__processing_strategy is not None:
                 logger.debug("Terminating %r...", self.__processing_strategy)

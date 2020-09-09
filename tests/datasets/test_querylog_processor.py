@@ -54,6 +54,7 @@ def test_simple() -> None:
                 profile=ClickhouseQueryProfile(
                     time_range=10,
                     table="events",
+                    all_columns={"timestamp", "tags"},
                     multi_level_condition=False,
                     where_profile=FilterProfile(
                         columns={"timestamp"}, mapping_cols=set("tags"),
