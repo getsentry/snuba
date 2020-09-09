@@ -25,8 +25,8 @@ class FilterProfile:
 
     def to_dict(self) -> Mapping[str, Any]:
         return {
-            "columns": sorted(list(self.columns)),
-            "mapping_cols": sorted(list(self.mapping_cols)),
+            "columns": sorted(self.columns),
+            "mapping_cols": sorted(self.mapping_cols),
         }
 
 
@@ -54,11 +54,11 @@ class ClickhouseQueryProfile:
         return {
             "time_range": self.time_range,
             "table": self.table,
-            "all_columns": sorted(list(self.all_columns)),
+            "all_columns": sorted(self.all_columns),
             "multi_level_condition": self.multi_level_condition,
             "where_profile": self.where_profile.to_dict(),
-            "groupby_cols": sorted(list(self.groupby_cols)),
-            "array_join_cols": sorted(list(self.array_join_cols)),
+            "groupby_cols": sorted(self.groupby_cols),
+            "array_join_cols": sorted(self.array_join_cols),
         }
 
 
