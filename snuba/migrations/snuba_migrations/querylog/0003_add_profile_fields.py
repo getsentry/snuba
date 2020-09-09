@@ -1,6 +1,13 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import Array, Column, LowCardinality, String, UInt
+from snuba.clickhouse.columns import (
+    Array,
+    Column,
+    LowCardinality,
+    Nullable,
+    String,
+    UInt,
+)
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 
@@ -17,7 +24,9 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.QUERYLOG,
                 table_name=table_name,
-                column=Column("clickhouse_queries.time_range", Array(UInt(16))),
+                column=Column(
+                    "clickhouse_queries.time_range", Array(Nullable(UInt(16)))
+                ),
                 after="clickhouse_queries.consistent",
             ),
             operations.AddColumn(
