@@ -25,8 +25,8 @@ class FilterProfile:
 
     def to_dict(self) -> Mapping[str, Any]:
         return {
-            "columns": list(self.columns),
-            "mapping_cols": list(self.mapping_cols),
+            "columns": sorted(list(self.columns)),
+            "mapping_cols": sorted(list(self.mapping_cols)),
         }
 
 
@@ -39,6 +39,7 @@ class ClickhouseQueryProfile:
 
     time_range: Optional[int]  # range in days
     table: str
+    all_columns: Columnset
     # True if we have a combination of AND and OR instead of
     # only having AND conditions.
     multi_level_condition: bool
@@ -53,10 +54,11 @@ class ClickhouseQueryProfile:
         return {
             "time_range": self.time_range,
             "table": self.table,
+            "all_columns": sorted(list(self.all_columns)),
             "multi_level_condition": self.multi_level_condition,
             "where_profile": self.where_profile.to_dict(),
-            "groupby_cols": list(self.groupby_cols),
-            "array_join_cols": list(self.array_join_cols),
+            "groupby_cols": sorted(list(self.groupby_cols)),
+            "array_join_cols": sorted(list(self.array_join_cols)),
         }
 
 

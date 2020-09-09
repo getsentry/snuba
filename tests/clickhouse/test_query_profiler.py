@@ -71,6 +71,14 @@ test_cases = [
         ClickhouseQueryProfile(
             time_range=31,
             table="events",
+            all_columns={
+                "timestamp",
+                "column2",
+                "column3",
+                "contexts.key",
+                "tags.key",
+                "tags.value",
+            },
             multi_level_condition=False,
             where_profile=FilterProfile(
                 columns={"timestamp", "tags.key", "tags.value"},
@@ -110,6 +118,7 @@ test_cases = [
         ClickhouseQueryProfile(
             time_range=None,
             table="events",
+            all_columns={"column2", "timestamp"},
             multi_level_condition=True,
             where_profile=FilterProfile(columns={"timestamp"}, mapping_cols=set(),),
             groupby_cols=set(),
@@ -134,6 +143,7 @@ def test_serialization() -> None:
     profile = ClickhouseQueryProfile(
         time_range=10,
         table="events",
+        all_columns={"col", "timestamp", "arrayjoin"},
         multi_level_condition=True,
         where_profile=FilterProfile(columns={"timestamp"}, mapping_cols=set(),),
         groupby_cols={"col"},
@@ -143,6 +153,7 @@ def test_serialization() -> None:
     assert profile.to_dict() == {
         "time_range": 10,
         "table": "events",
+        "all_columns": ["arrayjoin", "col", "timestamp"],
         "multi_level_condition": True,
         "where_profile": {"columns": ["timestamp"], "mapping_cols": []},
         "groupby_cols": ["col"],
