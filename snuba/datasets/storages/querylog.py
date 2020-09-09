@@ -50,6 +50,13 @@ columns = ColumnSet(
                     # ``Cache.get_readthrough`` query execution path. See GH-902.
                     ("is_duplicate", UInt(8)),
                     ("consistent", UInt(8)),
+                    ("time_range", UInt(16)),
+                    ("all_columns", Array(LowCardinality(String()))),
+                    ("or_conditions", UInt(8)),
+                    ("where_columns", Array(LowCardinality(String()))),
+                    ("where_mapping_columns", Array(LowCardinality(String()))),
+                    ("groupby_columns", Array(LowCardinality(String()))),
+                    ("array_join_columns", Array(LowCardinality(String()))),
                 ]
             ),
         ),
