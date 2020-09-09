@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 from concurrent.futures import Future
 from datetime import datetime
@@ -30,12 +31,66 @@ from snuba.utils.streams.backends.abstract import (
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 
-class DummyBroker(Generic[TPayload]):
+class MessageStorage(ABC, Generic[TPayload]):
+    @abstractmethod
+    def create_topic(self, topic: Topic, partitions: int) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_partition_count(self, topic: Topic) -> int:
+        raise NotImplementedError
+
+    @abstractmethod
+    def consume(self, partition: Partition, offset: int) -> Optional[Message[TPayload]]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def produce(self, partition: Partition, payload: TPayload) -> Message[TPayload]:
+        raise NotImplementedError
+
+
+class InMemoryMessageStorage(MessageStorage[TPayload]):
     def __init__(self, clock: Clock = TestingClock()) -> None:
         self.__clock = clock
         self.__topics: MutableMapping[
             Topic, Sequence[MutableSequence[Tuple[TPayload, datetime]]]
         ] = {}
+
+    def create_topic(self, topic: Topic, partitions: int) -> None:
+        if topic in self.__topics:
+            raise ValueError("topic already exists")
+
+        self.__topics[topic] = [[] for i in range(partitions)]
+
+    def get_partition_count(self, topic: Topic) -> int:
+        return len(self.__topics[topic])
+
+    def consume(self, partition: Partition, offset: int) -> Optional[Message[TPayload]]:
+        messages = self.__topics[partition.topic][partition.index]
+
+        try:
+            payload, timestamp = messages[offset]
+        except IndexError:
+            if offset == len(messages):
+                return None
+            else:
+                raise Exception("invalid offset")
+
+        return Message(partition, offset, payload, timestamp)
+
+    def produce(self, partition: Partition, payload: TPayload) -> Message[TPayload]:
+        messages = self.__topics[partition.topic][partition.index]
+        offset = len(messages)
+        timestamp = datetime.fromtimestamp(self.__clock.time())
+        messages.append((payload, timestamp))
+        return Message(partition, offset, payload, timestamp)
+
+
+class DummyBroker(Generic[TPayload]):
+    def __init__(
+        self, message_storage: MessageStorage[TPayload] = InMemoryMessageStorage()
+    ) -> None:
+        self.__message_storage = message_storage
 
         self.__offsets: MutableMapping[
             str, MutableMapping[Partition, int]
@@ -61,19 +116,11 @@ class DummyBroker(Generic[TPayload]):
 
     def create_topic(self, topic: Topic, partitions: int) -> None:
         with self.__lock:
-            if topic in self.__topics:
-                raise ValueError("topic already exists")
-
-            self.__topics[topic] = [[] for i in range(partitions)]
+            self.__message_storage.create_topic(topic, partitions)
 
     def produce(self, partition: Partition, payload: TPayload) -> Message[TPayload]:
         with self.__lock:
-            messages = self.__topics[partition.topic][partition.index]
-            offset = len(messages)
-            timestamp = datetime.fromtimestamp(self.__clock.time())
-            messages.append((payload, timestamp))
-
-        return Message(partition, offset, payload, timestamp)
+            return self.__message_storage.produce(partition, payload)
 
     def subscribe(
         self, consumer: DummyConsumer[TPayload], topics: Sequence[Topic]
@@ -92,8 +139,13 @@ class DummyBroker(Generic[TPayload]):
 
             assignment: MutableMapping[Partition, int] = {}
 
-            for topic in self.__topics.keys() & set(topics):
-                for index in range(len(self.__topics[topic])):
+            for topic in set(topics):
+                try:
+                    partition_count = self.__message_storage.get_partition_count(topic)
+                except KeyError:
+                    continue
+
+                for index in range(partition_count):
                     partition = Partition(topic, index)
                     # TODO: Handle offset reset more realistically.
                     assignment[partition] = self.__offsets[consumer.group].get(
@@ -107,23 +159,14 @@ class DummyBroker(Generic[TPayload]):
             partitions: MutableSequence[Partition] = []
             for topic in self.__subscriptions[consumer.group].pop(consumer):
                 partitions.extend(
-                    Partition(topic, i) for i in range(len(self.__topics[topic]))
+                    Partition(topic, i)
+                    for i in range(self.__message_storage.get_partition_count(topic))
                 )
             return partitions
 
     def consume(self, partition: Partition, offset: int) -> Optional[Message[TPayload]]:
         with self.__lock:
-            messages = self.__topics[partition.topic][partition.index]
-
-            try:
-                payload, timestamp = messages[offset]
-            except IndexError:
-                if offset == len(messages):
-                    return None
-                else:
-                    raise Exception("invalid offset")
-
-        return Message(partition, offset, payload, timestamp)
+            return self.__message_storage.consume(partition, offset)
 
     def commit(
         self, consumer: DummyConsumer[TPayload], offsets: Mapping[Partition, int]
