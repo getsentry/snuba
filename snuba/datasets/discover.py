@@ -292,6 +292,8 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("geo_country_code", Nullable(String())),
                 ("geo_region", Nullable(String())),
                 ("geo_city", Nullable(String())),
+                ("http_method", Nullable(String())),
+                ("http_referer", Nullable(String())),
                 # Other tags and context
                 ("tags", Nested([("key", String()), ("value", String())])),
                 ("contexts", Nested([("key", String()), ("value", String())])),
@@ -314,8 +316,6 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("received", Nullable(DateTime())),
                 ("sdk_integrations", Nullable(Array(String()))),
                 ("version", Nullable(String())),
-                ("http_method", Nullable(String())),
-                ("http_referer", Nullable(String())),
                 # exception interface
                 (
                     "exception_stacks",
