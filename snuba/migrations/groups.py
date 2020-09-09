@@ -94,6 +94,7 @@ class EventsLoader(DirectoryLoader):
             "0007_groupedmessages",
             "0008_groupassignees",
             "0009_errors_add_http_fields",
+            "0010_groupedmessages_onpremise_compatibility",
         ]
 
 

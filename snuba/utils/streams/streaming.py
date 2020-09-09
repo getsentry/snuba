@@ -60,6 +60,12 @@ class FilterStep(ProcessingStep[TPayload]):
     def close(self) -> None:
         self.__closed = True
 
+    def terminate(self) -> None:
+        self.__closed = True
+
+        logger.debug("Terminating %r...", self.__next_step)
+        self.__next_step.terminate()
+
     def join(self, timeout: Optional[float] = None) -> None:
         self.__next_step.close()
         self.__next_step.join(timeout)
@@ -102,6 +108,12 @@ class TransformStep(ProcessingStep[TPayload]):
     def close(self) -> None:
         self.__closed = True
 
+    def terminate(self) -> None:
+        self.__closed = True
+
+        logger.debug("Terminating %r...", self.__next_step)
+        self.__next_step.terminate()
+
     def join(self, timeout: Optional[float] = None) -> None:
         self.__next_step.close()
         self.__next_step.join(timeout)
@@ -120,6 +132,11 @@ class ValueTooLarge(ValueError):
 
 
 class MessageBatch(Generic[TPayload]):
+    """
+    Contains a sequence of ``Message`` instances that are intended to be
+    shared across processes.
+    """
+
     def __init__(self, block: SharedMemory) -> None:
         self.block = block
         self.__items: MutableSequence[SerializedMessage] = []
@@ -132,7 +149,29 @@ class MessageBatch(Generic[TPayload]):
         return len(self.__items)
 
     def __getitem__(self, index: int) -> Message[TPayload]:
+        """
+        Get a message in this batch by its index.
+
+        The message returned by this method is effectively a copy of the
+        original message within this batch, and may be safely passed
+        around without requiring any special accomodation to keep the shared
+        block open or free from conflicting updates.
+        """
         data, buffers = self.__items[index]
+        # The buffers read from the shared memory block are converted to
+        # ``bytes`` rather than being forwarded as ``memoryview`` for two
+        # reasons. First, true buffer support protocol is still pretty rare (at
+        # writing, it is not supported by either standard library ``json`` or
+        # ``rapidjson``, nor by the Confluent Kafka producer), so we'd be
+        # copying these values at a later stage anyway. Second, copying these
+        # values from the shared memory block (rather than referencing location
+        # within it) means that we do not have to ensure that the shared memory
+        # block is not recycled during the life of one of these ``Message``
+        # instances. If the shared memory block was reused for a different
+        # batch while one of the ``Message`` instances returned by this method
+        # was still "alive" in a different part of the processing pipeline, the
+        # contents of the message would be liable to be corrupted (at best --
+        # possibly causing a data leak/security issue at worst.)
         return pickle.loads(
             data,
             buffers=[
@@ -142,10 +181,27 @@ class MessageBatch(Generic[TPayload]):
         )
 
     def __iter__(self) -> Iterator[Message[TPayload]]:
+        """
+        Iterate through the messages contained in this batch.
+
+        See ``__getitem__`` for more details about the ``Message`` instances
+        yielded by the iterator returned by this method.
+        """
         for i in range(len(self.__items)):
             yield self[i]
 
     def append(self, message: Message[TPayload]) -> None:
+        """
+        Add a message to this batch.
+
+        Internally, this serializes the message using ``pickle`` (effectively
+        creating a copy of the input), writing any data that supports
+        out-of-band buffer transfer via the ``PickleBuffer`` interface to the
+        shared memory block associated with this batch. If there is not
+        enough space in the shared memory block to write all buffers to be
+        transferred out-of-band, this method will raise a ``ValueTooLarge``
+        error.
+        """
         buffers: MutableSequence[Tuple[int, int]] = []
 
         def buffer_callback(buffer: PickleBuffer) -> None:
@@ -374,6 +430,18 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         if self.__batch_builder is not None and len(self.__batch_builder) > 0:
             self.__submit_batch()
 
+    def terminate(self) -> None:
+        self.__closed = True
+
+        logger.debug("Terminating %r...", self.__pool)
+        self.__pool.terminate()
+
+        logger.debug("Shutting down %r...", self.__shared_memory_manager)
+        self.__shared_memory_manager.shutdown()
+
+        logger.debug("Terminating %r...", self.__next_step)
+        self.__next_step.terminate()
+
     def join(self, timeout: Optional[float] = None) -> None:
         deadline = time.time() + timeout if timeout is not None else None
 
@@ -450,6 +518,12 @@ class Batch(Generic[TPayload]):
         self.__closed = True
         self.__step.close()
 
+    def terminate(self) -> None:
+        self.__closed = True
+
+        logger.debug("Terminating %r...", self.__step)
+        self.__step.terminate()
+
     def join(self, timeout: Optional[float] = None) -> None:
         self.__step.join(timeout)
         offsets = {
@@ -516,6 +590,12 @@ class CollectStep(ProcessingStep[TPayload]):
         if self.__batch is not None:
             logger.debug("Closing %r...", self.__batch)
             self.__batch.close()
+
+    def terminate(self) -> None:
+        self.__closed = True
+
+        if self.__batch is not None:
+            self.__batch.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
         if self.__batch is not None:

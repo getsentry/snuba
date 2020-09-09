@@ -18,6 +18,19 @@ raw_event = {
         "name": "sentry-java",
         "version": "1.6.1-d1e3a",
     },
+    "request": {
+        "url": "http://127.0.0.1:/query",
+        "headers": [
+            ["Accept-Encoding", "identity"],
+            ["Content-Length", "398"],
+            ["Host", "127.0.0.1:"],
+            ["Referer", "tagstore.something"],
+            ["Trace", "8fa73032d-1"],
+        ],
+        "data": "",
+        "method": "POST",
+        "env": {"SERVER_PORT": "1010", "SERVER_NAME": "snuba"},
+    },
     "contexts": {"device": {"online": True, "charging": True, "model_id": "Galaxy"}},
     "sentry.interfaces.Exception": {
         "exc_omitted": None,
@@ -102,6 +115,7 @@ raw_event = {
         ["server_name", "localhost.localdomain"],
         ["level", "error"],
         ["custom_tag", "custom_value"],
+        ["url", "http://127.0.0.1:/query"],
     ],
     "time_spent": None,
     "type": "error",

@@ -29,8 +29,8 @@ from snuba.processor import (
     ReplacementBatch,
 )
 from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.batching import AbstractBatchWorker
-from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.processing import ProcessingStrategy, ProcessingStrategyFactory
 from snuba.utils.streams.streaming import (
     CollectStep,
@@ -70,7 +70,7 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         self.metrics = metrics
         table_writer = storage.get_table_writer()
         self.__writer = BatchWriterEncoderWrapper(
-            table_writer.get_writer(
+            table_writer.get_batch_writer(
                 metrics, {"load_balancing": "in_order", "insert_distributed_sync": 1}
             ),
             JSONRowEncoder(),
@@ -185,6 +185,9 @@ class InsertBatchWriter(ProcessingStep[JSONRowInsertBatch]):
             self.__writer,
         )
 
+    def terminate(self) -> None:
+        self.__closed = True
+
     def join(self, timeout: Optional[float] = None) -> None:
         pass
 
@@ -226,6 +229,9 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
                     value=rapidjson.dumps(value).encode("utf-8"),
                     on_delivery=self.__delivery_callback,
                 )
+
+    def terminate(self) -> None:
+        self.__closed = True
 
     def join(self, timeout: Optional[float] = None) -> None:
         args = []
@@ -291,6 +297,14 @@ class ProcessedMessageBatchWriter(
 
         if self.__replacement_batch_writer is not None:
             self.__replacement_batch_writer.close()
+
+    def terminate(self) -> None:
+        self.__closed = True
+
+        self.__insert_batch_writer.terminate()
+
+        if self.__replacement_batch_writer is not None:
+            self.__replacement_batch_writer.terminate()
 
     def join(self, timeout: Optional[float] = None) -> None:
         start = time.time()
