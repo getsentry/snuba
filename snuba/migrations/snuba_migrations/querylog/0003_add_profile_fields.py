@@ -4,7 +4,6 @@ from snuba.clickhouse.columns import (
     Array,
     Column,
     LowCardinality,
-    Nullable,
     String,
     UInt,
 )
@@ -25,18 +24,10 @@ class Migration(migration.MultiStepMigration):
                 storage_set=StorageSetKey.QUERYLOG,
                 table_name=table_name,
                 column=Column(
-                    "clickhouse_queries.time_range", Array(Nullable(UInt(16)))
-                ),
-                after="clickhouse_queries.consistent",
-            ),
-            operations.AddColumn(
-                storage_set=StorageSetKey.QUERYLOG,
-                table_name=table_name,
-                column=Column(
                     "clickhouse_queries.all_columns",
                     Array(Array(LowCardinality(String()))),
                 ),
-                after="clickhouse_queries.time_range",
+                after="clickhouse_queries.consistent",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.QUERYLOG,
@@ -84,9 +75,6 @@ class Migration(migration.MultiStepMigration):
 
     def __backwards_migrations(self, table_name: str) -> Sequence[operations.Operation]:
         return [
-            operations.DropColumn(
-                StorageSetKey.QUERYLOG, table_name, "clickhouse_queries.time_range"
-            ),
             operations.DropColumn(
                 StorageSetKey.QUERYLOG, table_name, "clickhouse_queries.all_columns"
             ),

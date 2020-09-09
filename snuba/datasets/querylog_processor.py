@@ -37,7 +37,6 @@ class QuerylogProcessor(MessageProcessor):
         query_id = []
         is_duplicate = []
         consistent = []
-        time_range = []
         all_columns = []
         or_conditions = []
         where_columns = []
@@ -56,7 +55,6 @@ class QuerylogProcessor(MessageProcessor):
             cache_hit.append(int(query["stats"].get("cache_hit") or 0))
             sample.append(query["stats"].get("sample") or 0)
             max_threads.append(query["stats"].get("max_threads") or 0)
-            num_days.append(query["stats"].get("num_days") or 0)
             clickhouse_table.append(query["stats"].get("clickhouse_table") or "")
             query_id.append(query["stats"].get("query_id") or "")
             # XXX: ``is_duplicate`` is currently not set when using the
@@ -64,21 +62,20 @@ class QuerylogProcessor(MessageProcessor):
             is_duplicate.append(int(query["stats"].get("is_duplicate") or 0))
             consistent.append(int(query["stats"].get("consistent") or 0))
             profile = query.get("profile") or {
-                "time_range": None,
+                "time_range": 0,
                 "all_columns": [],
                 "multi_level_condition": False,
                 "where_profile": {"columns": [], "mapping_cols": []},
                 "groupby_cols": [],
                 "array_join_cols": [],
             }
-            if profile is not None:
-                time_range.append(profile["time_range"])
-                all_columns.append(profile.get("all_columns") or [])
-                or_conditions.append(profile["multi_level_condition"])
-                where_columns.append(profile["where_profile"]["columns"])
-                where_mapping_columns.append(profile["where_profile"]["mapping_cols"])
-                groupby_columns.append(profile["groupby_cols"])
-                array_join_columns.append(profile["array_join_cols"])
+            num_days.append(profile["time_range"] or 0)
+            all_columns.append(profile.get("all_columns") or [])
+            or_conditions.append(profile["multi_level_condition"])
+            where_columns.append(profile["where_profile"]["columns"])
+            where_mapping_columns.append(profile["where_profile"]["mapping_cols"])
+            groupby_columns.append(profile["groupby_cols"])
+            array_join_columns.append(profile["array_join_cols"])
 
         return {
             "clickhouse_queries.sql": sql,
@@ -95,7 +92,6 @@ class QuerylogProcessor(MessageProcessor):
             "clickhouse_queries.query_id": query_id,
             "clickhouse_queries.is_duplicate": is_duplicate,
             "clickhouse_queries.consistent": consistent,
-            "clickhouse_queries.time_range": time_range,
             "clickhouse_queries.all_columns": all_columns,
             "clickhouse_queries.or_conditions": or_conditions,
             "clickhouse_queries.where_columns": where_columns,
