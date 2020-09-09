@@ -78,6 +78,7 @@ def replacer(
 ) -> None:
 
     from snuba.replacer import ReplacerWorker
+    from snuba.utils.streams import Topic
     from snuba.utils.streams.backends.kafka import (
         KafkaConsumer,
         TransportError,
@@ -85,7 +86,6 @@ def replacer(
     )
     from snuba.utils.streams.batching import BatchProcessingStrategyFactory
     from snuba.utils.streams.processing import StreamProcessor
-    from snuba.utils.streams.types import Topic
 
     setup_logging(log_level)
     setup_sentry()

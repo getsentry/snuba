@@ -18,6 +18,7 @@ from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.worker import SubscriptionWorker
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.streams import Topic
 from snuba.utils.streams.backends.kafka import (
     KafkaConsumer,
     KafkaProducer,
@@ -26,7 +27,6 @@ from snuba.utils.streams.backends.kafka import (
 from snuba.utils.streams.batching import BatchProcessingStrategyFactory
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.synchronized import SynchronizedConsumer
-from snuba.utils.streams.types import Topic
 
 
 logger = logging.getLogger(__name__)
