@@ -1,10 +1,10 @@
 import logging
-import sys
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, TypedDict
 
 from jsonschema_typed import JSONSchema
+
 from snuba import settings
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.events_format import (
@@ -28,12 +28,6 @@ from snuba.processor import (
     _hashify,
     _unicodify,
 )
-
-# Required until we are 100% on Py 3.8
-if sys.version_info >= (3, 8):
-    from typing import TypedDict  # pylint: disable=no-name-in-module
-else:
-    from typing_extensions import TypedDict
 
 logger = logging.getLogger(__name__)
 
