@@ -11,8 +11,8 @@ from snuba.datasets.storages.factory import get_storage
 from snuba.processor import InsertBatch, ProcessedMessage
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.kafka import KafkaPayload
-from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.streams import Message, Partition, Topic
+from snuba.utils.streams.backends.kafka import KafkaPayload
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
 INSERT_MSG = (

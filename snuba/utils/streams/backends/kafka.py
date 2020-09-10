@@ -35,8 +35,12 @@ from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
 from snuba.utils.concurrent import execute
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
-from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
-from snuba.utils.streams.producer import Producer
+from snuba.utils.streams.backends.abstract import (
+    Consumer,
+    ConsumerError,
+    EndOfPartition,
+    Producer,
+)
 from snuba.utils.streams.types import Message, Partition, Topic
 
 
@@ -431,7 +435,7 @@ class KafkaConsumer(Consumer[KafkaPayload]):
             datetime.utcfromtimestamp(message.timestamp()[1] / 1000.0),
         )
 
-        self.__offsets[result.partition] = result.get_next_offset()
+        self.__offsets[result.partition] = result.next_offset
 
         return result
 

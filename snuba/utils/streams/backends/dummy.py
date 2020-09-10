@@ -21,8 +21,12 @@ from typing import (
 )
 
 from snuba.utils.clock import Clock, TestingClock
-from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
-from snuba.utils.streams.producer import Producer
+from snuba.utils.streams.backends.abstract import (
+    Consumer,
+    ConsumerError,
+    EndOfPartition,
+    Producer,
+)
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 
@@ -248,7 +252,7 @@ class DummyConsumer(Consumer[TPayload]):
                         self.__last_eof_at[partition] = offset
                         raise EndOfPartition(partition, offset)
                 else:
-                    self.__offsets[partition] = message.get_next_offset()
+                    self.__offsets[partition] = message.next_offset
                     return message
 
             return None

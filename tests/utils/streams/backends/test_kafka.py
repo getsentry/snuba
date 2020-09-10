@@ -11,8 +11,8 @@ import pytest
 from confluent_kafka.admin import AdminClient, NewTopic
 
 from snuba import settings
-from snuba.utils.streams.consumer import ConsumerError, EndOfPartition
-from snuba.utils.streams.kafka import (
+from snuba.utils.streams.backends.abstract import ConsumerError, EndOfPartition
+from snuba.utils.streams.backends.kafka import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
     KafkaPayload,
@@ -22,7 +22,7 @@ from snuba.utils.streams.kafka import (
 from snuba.utils.streams.synchronized import Commit, commit_codec
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
-from tests.utils.streams.mixins import StreamsTestMixin
+from tests.utils.streams.backends.mixins import StreamsTestMixin
 
 
 def test_payload_equality() -> None:
@@ -163,10 +163,10 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
             message = consumer.poll(10.0)  # XXX: getting the subscription is slow
             assert isinstance(message, Message)
 
-            consumer.stage_offsets({message.partition: message.get_next_offset()})
+            consumer.stage_offsets({message.partition: message.next_offset})
 
             assert consumer.commit_offsets() == {
-                Partition(topic, 0): message.get_next_offset()
+                Partition(topic, 0): message.next_offset
             }
 
             assert len(commit_log_producer.messages) == 1
@@ -175,7 +175,7 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
 
             assert commit_codec.decode(
                 KafkaPayload(commit_message.key(), commit_message.value())
-            ) == Commit("test", Partition(topic, 0), message.get_next_offset())
+            ) == Commit("test", Partition(topic, 0), message.next_offset)
 
 
 def test_commit_codec() -> None:
