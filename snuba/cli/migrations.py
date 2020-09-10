@@ -72,10 +72,11 @@ def run(group: str, migration_id: str, force: bool, fake: bool) -> None:
     migration_key = MigrationKey(migration_group, migration_id)
 
     try:
-        click.confirm(
-            "This will mark the migration as completed without actually running it. Your database may be in an invalid state. Are you sure?",
-            abort=True,
-        )
+        if fake:
+            click.confirm(
+                "This will mark the migration as completed without actually running it. Your database may be in an invalid state. Are you sure?",
+                abort=True,
+            )
         runner.run_migration(migration_key, force=force, fake=fake)
     except MigrationError as e:
         raise click.ClickException(str(e))
@@ -100,10 +101,11 @@ def reverse(group: str, migration_id: str, force: bool, fake: bool) -> None:
     migration_key = MigrationKey(migration_group, migration_id)
 
     try:
-        click.confirm(
-            "This will mark the migration as not started without actually reversing it. Your database may be in an invalid state. Are you sure?",
-            abort=True,
-        )
+        if fake:
+            click.confirm(
+                "This will mark the migration as not started without actually reversing it. Your database may be in an invalid state. Are you sure?",
+                abort=True,
+            )
         runner.reverse_migration(migration_key, force=force, fake=fake)
     except MigrationError as e:
         raise click.ClickException(str(e))
