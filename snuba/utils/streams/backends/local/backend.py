@@ -87,10 +87,7 @@ class LocalBroker(Generic[TPayload]):
             assignment: MutableMapping[Partition, int] = {}
 
             for topic in set(topics):
-                try:
-                    partition_count = self.__message_storage.get_partition_count(topic)
-                except KeyError:
-                    continue
+                partition_count = self.__message_storage.get_partition_count(topic)
 
                 for index in range(partition_count):
                     partition = Partition(topic, index)
