@@ -73,22 +73,22 @@ class FileMessageStorage(MessageStorage[TPayload]):
             (topic_path / str(i)).touch()
 
     def __get_file_partitions_for_topic(self, topic: Topic) -> Sequence[FilePartition]:
-        if topic in self.__topic_partition_cache:
-            return self.__topic_partition_cache[topic]
+        if topic not in self.__topic_partition_cache:
+            topic_path = self.__directory / topic.name
+            if not topic_path.exists():
+                raise TopicDoesNotExist(topic)
 
-        topic_path = self.__directory / topic.name
-        if not topic_path.exists():
-            raise TopicDoesNotExist(topic)
+            partitions: MutableSequence[FilePartition] = []
+            for i in itertools.count():
+                partition = FilePartition(topic_path / str(i))
+                if not partition.exists():
+                    break
+                else:
+                    partitions.append(partition)
 
-        partitions: MutableSequence[FilePartition] = []
-        for i in itertools.count():
-            partition = FilePartition(topic_path / str(i))
-            if not partition.exists():
-                return partitions
-            else:
-                partitions.append(partition)
+            self.__topic_partition_cache[topic] = partitions
 
-        raise Exception  # unreachable
+        return self.__topic_partition_cache[topic]
 
     def __get_file_partition(self, partition: Partition) -> FilePartition:
         partitions = self.__get_file_partitions_for_topic(partition.topic)
