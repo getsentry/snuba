@@ -163,10 +163,10 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
             message = consumer.poll(10.0)  # XXX: getting the subscription is slow
             assert isinstance(message, Message)
 
-            consumer.stage_offsets({message.partition: message.get_next_offset()})
+            consumer.stage_offsets({message.partition: message.next_offset})
 
             assert consumer.commit_offsets() == {
-                Partition(topic, 0): message.get_next_offset()
+                Partition(topic, 0): message.next_offset
             }
 
             assert len(commit_log_producer.messages) == 1
@@ -175,7 +175,7 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
 
             assert commit_codec.decode(
                 KafkaPayload(commit_message.key(), commit_message.value())
-            ) == Commit("test", Partition(topic, 0), message.get_next_offset())
+            ) == Commit("test", Partition(topic, 0), message.next_offset)
 
 
 def test_commit_codec() -> None:
