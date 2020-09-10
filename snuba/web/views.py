@@ -39,8 +39,8 @@ from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDe
 from snuba.util import with_span
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.kafka import KafkaPayload
-from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.web import QueryException
 from snuba.web.converters import DatasetConverter
 from snuba.web.query import parse_and_run_query
