@@ -3,10 +3,15 @@ import pickle
 from datetime import datetime
 from pathlib import Path
 from struct import Struct
-from typing import BinaryIO, MutableMapping, Optional, Tuple
+from typing import BinaryIO, MutableMapping, MutableSequence, Optional, Sequence, Tuple
 
 from snuba.utils.codecs import Codec
-from snuba.utils.streams.backends.local.storages.abstract import MessageStorage
+from snuba.utils.streams.backends.local.storages.abstract import (
+    MessageStorage,
+    PartitionDoesNotExist,
+    TopicDoesNotExist,
+    TopicExists,
+)
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 
@@ -29,40 +34,76 @@ class FileMessageStorage(MessageStorage[TPayload]):
         self.__codec = codec
 
         self.__record_header = Struct("!L")
-        self.__readers: MutableMapping[Partition, BinaryIO] = {}
-        self.__writers: MutableMapping[Partition, BinaryIO] = {}
+        self.__readers: MutableMapping[Topic, Sequence[BinaryIO]] = {}
+        self.__writers: MutableMapping[Topic, Sequence[BinaryIO]] = {}
 
     def create_topic(self, topic: Topic, partitions: int) -> None:
         topic_path = self.__directory / topic.name
         if topic_path.exists():
-            raise ValueError("topic already exists")
+            raise TopicExists(topic)
 
         topic_path.mkdir()
 
         for i in range(partitions):
             (topic_path / str(i)).touch()
 
-    def get_partition_count(self, topic: Topic) -> int:
+    def __get_partitions(self, topic: Topic) -> Sequence[Path]:
         topic_path = self.__directory / topic.name
         if not topic_path.exists():
-            raise KeyError("topic does not exist")
+            raise TopicDoesNotExist(topic)
 
+        paths: MutableSequence[Path] = []
         for i in itertools.count():
-            if not (topic_path / str(i)).exists():
-                return i
+            partition_path = topic_path / str(i)
+            if not partition_path.exists():
+                return paths
+            else:
+                paths.append(partition_path)
 
         raise Exception  # unreachable
+
+    def get_partition_count(self, topic: Topic) -> int:
+        return len(self.__get_partitions(topic))
+
+    def __get_reader(self, partition: Partition) -> BinaryIO:
+        # TODO: Maybe this should be enforced in the ``Partition`` constructor?
+        if not partition.index >= 0:
+            raise PartitionDoesNotExist(partition)
+
+        try:
+            partitions = self.__readers[partition.topic]
+        except KeyError:
+            partitions = self.__readers[partition.topic] = [
+                path.open("rb") for path in self.__get_partitions(partition.topic)
+            ]
+
+        try:
+            return partitions[partition.index]
+        except IndexError as e:
+            raise PartitionDoesNotExist(partition) from e
+
+    def __get_writer(self, partition: Partition) -> BinaryIO:
+        # TODO: Maybe this should be enforced in the ``Partition`` constructor?
+        if not partition.index >= 0:
+            raise PartitionDoesNotExist(partition)
+
+        try:
+            partitions = self.__writers[partition.topic]
+        except KeyError:
+            partitions = self.__writers[partition.topic] = [
+                path.open("ab") for path in self.__get_partitions(partition.topic)
+            ]
+
+        try:
+            return partitions[partition.index]
+        except IndexError as e:
+            raise PartitionDoesNotExist(partition) from e
 
     def produce(
         self, partition: Partition, payload: TPayload, timestamp: datetime
     ) -> Message[TPayload]:
         encoded = self.__codec.encode((payload, timestamp))
-        try:
-            file = self.__writers[partition]
-        except KeyError:
-            file = self.__writers[partition] = (
-                self.__directory / partition.topic.name / str(partition.index)
-            ).open("ab")
+        file = self.__get_writer(partition)
         offset = file.tell()
         file.write(self.__record_header.pack(len(encoded)))
         file.write(encoded)
@@ -71,12 +112,7 @@ class FileMessageStorage(MessageStorage[TPayload]):
         return Message(partition, offset, payload, timestamp, next_offset)
 
     def consume(self, partition: Partition, offset: int) -> Optional[Message[TPayload]]:
-        try:
-            file = self.__readers[partition]
-        except KeyError:
-            file = self.__readers[partition] = (
-                self.__directory / partition.topic.name / str(partition.index)
-            ).open("rb")
+        file = self.__get_reader(partition)
 
         if file.tell() != offset:
             file.seek(offset)

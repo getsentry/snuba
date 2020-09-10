@@ -1,7 +1,12 @@
 from datetime import datetime
 from typing import MutableMapping, MutableSequence, Optional, Sequence, Tuple
 
-from snuba.utils.streams.backends.local.storages.abstract import MessageStorage
+from snuba.utils.streams.backends.local.storages.abstract import (
+    MessageStorage,
+    PartitionDoesNotExist,
+    TopicDoesNotExist,
+    TopicExists,
+)
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 
@@ -13,15 +18,32 @@ class MemoryMessageStorage(MessageStorage[TPayload]):
 
     def create_topic(self, topic: Topic, partitions: int) -> None:
         if topic in self.__topics:
-            raise ValueError("topic already exists")
+            raise TopicExists(topic)
 
         self.__topics[topic] = [[] for i in range(partitions)]
 
     def get_partition_count(self, topic: Topic) -> int:
-        return len(self.__topics[topic])
+        try:
+            return len(self.__topics[topic])
+        except KeyError as e:
+            raise TopicDoesNotExist(topic) from e
+
+    def __get_messages(
+        self, partition: Partition
+    ) -> MutableSequence[Tuple[TPayload, datetime]]:
+        # TODO: Maybe this should be enforced in the ``Partition`` constructor?
+        if not partition.index >= 0:
+            raise PartitionDoesNotExist(partition)
+
+        try:
+            return self.__topics[partition.topic][partition.index]
+        except KeyError as e:
+            raise TopicDoesNotExist(partition.topic) from e
+        except IndexError as e:
+            raise PartitionDoesNotExist(partition) from e
 
     def consume(self, partition: Partition, offset: int) -> Optional[Message[TPayload]]:
-        messages = self.__topics[partition.topic][partition.index]
+        messages = self.__get_messages(partition)
 
         try:
             payload, timestamp = messages[offset]
@@ -36,7 +58,8 @@ class MemoryMessageStorage(MessageStorage[TPayload]):
     def produce(
         self, partition: Partition, payload: TPayload, timestamp: datetime
     ) -> Message[TPayload]:
-        messages = self.__topics[partition.topic][partition.index]
+        messages = self.__get_messages(partition)
+
         offset = len(messages)
         messages.append((payload, timestamp))
         return Message(partition, offset, payload, timestamp)

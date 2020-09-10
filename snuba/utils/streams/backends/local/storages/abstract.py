@@ -5,21 +5,64 @@ from typing import Generic, Optional
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 
+class TopicExists(Exception):
+    def __init__(self, topic: Topic) -> None:
+        self.topic = topic
+
+
+class TopicDoesNotExist(Exception):
+    def __init__(self, topic: Topic) -> None:
+        self.topic = topic
+
+
+class PartitionDoesNotExist(Exception):
+    def __init__(self, partition: Partition) -> None:
+        self.partition = partition
+
+
 class MessageStorage(ABC, Generic[TPayload]):
     @abstractmethod
     def create_topic(self, topic: Topic, partitions: int) -> None:
+        """
+        Create a topic with the given number of partitions.
+
+        If the topic already exists, a ``TopicExists`` exception will be
+        raised.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def get_partition_count(self, topic: Topic) -> int:
+        """
+        Get the number of partitions within a topic.
+
+        If the topic does not exist, a ``TopicDoesNotExist`` exception will
+        be raised.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def consume(self, partition: Partition, offset: int) -> Optional[Message[TPayload]]:
+        """
+        Consume a message from the provided partition, reading from the given
+        offset. If no message exists at the given offset, this method returns
+        ``None``.
+
+        If the topic does not exist, a ``TopicDoesNotExist`` exception will
+        be raised. If the topic exists but the partition does not, a
+        ``PartitionDoesNotExist`` exception will be raised.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def produce(
         self, partition: Partition, payload: TPayload, timestamp: datetime
     ) -> Message[TPayload]:
+        """
+        Produce a single message to the provided partition.
+
+        If the topic does not exist, a ``TopicDoesNotExist`` exception will
+        be raised. If the topic exists but the partition does not, a
+        ``PartitionDoesNotExist`` exception will be raised.
+        """
         raise NotImplementedError
