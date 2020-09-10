@@ -37,4 +37,4 @@ def clock() -> Iterator[Clock]:
 
 @pytest.fixture
 def broker(clock: TestingClock) -> Iterator[LocalBroker[TPayload]]:
-    yield LocalBroker(MemoryMessageStorage(clock))
+    yield LocalBroker(MemoryMessageStorage(), clock)

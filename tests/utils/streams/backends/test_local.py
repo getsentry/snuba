@@ -20,7 +20,9 @@ from tests.utils.streams.backends.mixins import StreamsTestMixin
 
 class LocalStreamsTestMixin(StreamsTestMixin[int]):
     def setUp(self) -> None:
-        self.broker: LocalBroker[int] = LocalBroker(self.get_message_storage())
+        self.broker: LocalBroker[int] = LocalBroker(
+            self.get_message_storage(), TestingClock()
+        )
 
     @abstractmethod
     def get_message_storage(self) -> MessageStorage[int]:
@@ -62,4 +64,4 @@ class LocalStreamsFileStorageTestCase(LocalStreamsTestMixin, TestCase):
         super().setUp()
 
     def get_message_storage(self) -> MessageStorage[int]:
-        return FileMessageStorage(self.directory.name, clock=TestingClock())
+        return FileMessageStorage(self.directory.name)

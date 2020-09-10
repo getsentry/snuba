@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict, deque
 from concurrent.futures import Future
+from datetime import datetime
 from functools import partial
 from threading import Lock, RLock
 from typing import (
@@ -18,6 +19,7 @@ from typing import (
     Union,
 )
 
+from snuba.utils.clock import Clock, SystemClock
 from snuba.utils.streams.backends.abstract import (
     Consumer,
     ConsumerError,
@@ -29,8 +31,11 @@ from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 
 class LocalBroker(Generic[TPayload]):
-    def __init__(self, message_storage: MessageStorage[TPayload]) -> None:
+    def __init__(
+        self, message_storage: MessageStorage[TPayload], clock: Clock = SystemClock()
+    ) -> None:
         self.__message_storage = message_storage
+        self.__clock = clock
 
         self.__offsets: MutableMapping[
             str, MutableMapping[Partition, int]
@@ -60,7 +65,9 @@ class LocalBroker(Generic[TPayload]):
 
     def produce(self, partition: Partition, payload: TPayload) -> Message[TPayload]:
         with self.__lock:
-            return self.__message_storage.produce(partition, payload)
+            return self.__message_storage.produce(
+                partition, payload, datetime.fromtimestamp(self.__clock.time())
+            )
 
     def subscribe(
         self, consumer: LocalConsumer[TPayload], topics: Sequence[Topic]

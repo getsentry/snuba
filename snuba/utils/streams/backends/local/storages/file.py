@@ -5,7 +5,6 @@ from pathlib import Path
 from struct import Struct
 from typing import BinaryIO, MutableMapping, Optional, Tuple
 
-from snuba.utils.clock import Clock, SystemClock
 from snuba.utils.codecs import Codec
 from snuba.utils.streams.backends.local.storages.abstract import MessageStorage
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
@@ -24,12 +23,10 @@ class FileMessageStorage(MessageStorage[TPayload]):
         self,
         directory: str,
         codec: Codec[bytes, Tuple[TPayload, datetime]] = PickleCodec(),
-        clock: Clock = SystemClock(),
     ) -> None:
         self.__directory = Path(directory)
         assert self.__directory.exists() and self.__directory.is_dir()
         self.__codec = codec
-        self.__clock = clock
 
         self.__record_header = Struct("!L")
         self.__readers: MutableMapping[Partition, BinaryIO] = {}
@@ -56,8 +53,9 @@ class FileMessageStorage(MessageStorage[TPayload]):
 
         raise Exception  # unreachable
 
-    def produce(self, partition: Partition, payload: TPayload) -> Message[TPayload]:
-        timestamp = datetime.fromtimestamp(self.__clock.time())
+    def produce(
+        self, partition: Partition, payload: TPayload, timestamp: datetime
+    ) -> Message[TPayload]:
         encoded = self.__codec.encode((payload, timestamp))
         try:
             file = self.__writers[partition]
