@@ -435,7 +435,7 @@ class KafkaConsumer(Consumer[KafkaPayload]):
             datetime.utcfromtimestamp(message.timestamp()[1] / 1000.0),
         )
 
-        self.__offsets[result.partition] = result.get_next_offset()
+        self.__offsets[result.partition] = result.next_offset
 
         return result
 

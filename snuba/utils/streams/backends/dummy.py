@@ -252,7 +252,7 @@ class DummyConsumer(Consumer[TPayload]):
                         self.__last_eof_at[partition] = offset
                         raise EndOfPartition(partition, offset)
                 else:
-                    self.__offsets[partition] = message.get_next_offset()
+                    self.__offsets[partition] = message.next_offset
                     return message
 
             return None

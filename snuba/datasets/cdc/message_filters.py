@@ -1,8 +1,8 @@
 from snuba import environment
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.streams import Message
 from snuba.utils.streams.backends.kafka import KafkaPayload
-from snuba.utils.streams.types import Message
 
 metrics = MetricsWrapper(environment.metrics, "cdc.consumer")
 

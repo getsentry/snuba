@@ -29,6 +29,7 @@ from snuba.processor import (
     ReplacementBatch,
 )
 from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.batching import AbstractBatchWorker
 from snuba.utils.streams.processing import ProcessingStrategy, ProcessingStrategyFactory
@@ -39,7 +40,6 @@ from snuba.utils.streams.streaming import (
     ProcessingStep,
     TransformStep,
 )
-from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.writer import BatchWriter, BatchWriterEncoderWrapper, WriterTableRow
 
 
