@@ -4,9 +4,14 @@ from typing import Any, Mapping, MutableMapping
 import _strptime  # NOQA fixes _strptime deferred import issue
 from snuba.clickhouse.columns import ColumnSet
 from snuba.consumer import KafkaMessageMetadata
-from snuba.datasets.events_format import extract_user
+from snuba.datasets.events_format import extract_http, extract_user
 from snuba.datasets.events_processor_base import EventsProcessorBase, InsertEvent
-from snuba.processor import _as_dict_safe, _boolify, _floatify, _unicodify
+from snuba.processor import (
+    _boolify,
+    _floatify,
+    _unicodify,
+)
+
 
 logger = logging.getLogger("snuba.processor")
 
@@ -54,13 +59,11 @@ class EventsProcessor(EventsProcessorBase):
         geo = user.get("geo", None) or {}
         self.extract_geo(output, geo)
 
-        http = (
-            data.get(
-                "request", data.get("sentry.interfaces.Http", None)  # type: ignore
-            )
-            or {}
-        )  # types: ignore
-        self.extract_http(output, http)
+        request = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
+        http_data: MutableMapping[str, Any] = {}
+        extract_http(http_data, request)
+        output["http_method"] = http_data["http_method"]
+        output["http_referer"] = http_data["http_referer"]
 
     def extract_tags_custom(
         self,
@@ -135,8 +138,3 @@ class EventsProcessor(EventsProcessorBase):
         output["geo_country_code"] = _unicodify(geo.get("country_code", None))
         output["geo_region"] = _unicodify(geo.get("region", None))
         output["geo_city"] = _unicodify(geo.get("city", None))
-
-    def extract_http(self, output, http):
-        output["http_method"] = _unicodify(http.get("method", None))
-        http_headers = _as_dict_safe(http.get("headers", None))
-        output["http_referer"] = _unicodify(http_headers.get("Referer", None))

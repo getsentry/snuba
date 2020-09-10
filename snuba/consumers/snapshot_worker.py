@@ -8,7 +8,7 @@ from snuba.datasets.storage import WritableTableStorage
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams.types import Topic
+from snuba.utils.streams import Topic
 
 logger = logging.getLogger("snuba.snapshot-consumer")
 

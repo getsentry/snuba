@@ -2,21 +2,24 @@ import logging
 from collections import ChainMap
 from typing import Mapping
 
-from snuba.clickhouse.columns import String
+from snuba.clickhouse.columns import Array, String
 from snuba.datasets.dataset import Dataset
+from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Expression, FunctionCall
-from snuba.query.parser.exceptions import InvalidExpressionException
 from snuba.query.parser.validation import ExpressionValidator
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
 from snuba.query.validation.signature import Any, Column, SignatureValidator
-from snuba.state import get_config
 
 logger = logging.getLogger(__name__)
 
 
 default_validators: Mapping[str, FunctionCallValidator] = {
-    "like": SignatureValidator([Column({String}), Any()]),
-    "notLike": SignatureValidator([Column({String}), Any()]),
+    # like and notLike need to take care of Arrays as well since
+    # Arrays are exploded into strings if they are part of the arrayjoin
+    # clause.
+    # TODO: provide a more restrictive support for arrayjoin.
+    "like": SignatureValidator([Column({Array, String}), Any()]),
+    "notLike": SignatureValidator([Column({Array, String}), Any()]),
 }
 
 
@@ -49,10 +52,6 @@ class FunctionCallsValidator(ExpressionValidator):
             if validator is not None:
                 validator.validate(exp.parameters, dataset.get_abstract_columnset())
         except InvalidFunctionCall as exception:
-            if get_config("enforce_expression_validation", 0):
-                raise InvalidExpressionException(
-                    exp,
-                    f"Illegal call to function {exp.function_name}: {str(exception)}",
-                ) from exception
-            else:
-                logger.warning("Query validation exception", exc_info=True)
+            raise InvalidExpressionException(
+                exp, f"Illegal call to function {exp.function_name}: {str(exception)}",
+            ) from exception

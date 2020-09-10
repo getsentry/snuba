@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Generic
 
-from snuba.utils.streams.kafka import KafkaPayload
+from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, TPayload
 
 

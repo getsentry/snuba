@@ -22,9 +22,9 @@ from snuba.subscriptions.worker import (
     subscription_task_result_encoder,
 )
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.dummy import DummyBroker
-from snuba.utils.streams.kafka import KafkaPayload
-from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.streams import Message, Partition, Topic
+from snuba.utils.streams.backends.dummy import DummyBroker
+from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.types import Interval
 from tests.base import dataset_manager
 

@@ -14,7 +14,7 @@ class Operation(ABC):
     """
 
     @abstractmethod
-    def execute(self) -> None:
+    def execute(self, local: bool) -> None:
         raise NotImplementedError
 
 
@@ -22,10 +22,12 @@ class SqlOperation(Operation, ABC):
     def __init__(self, storage_set: StorageSetKey):
         self._storage_set = storage_set
 
-    def execute(self) -> None:
+    def execute(self, local: bool) -> None:
         cluster = get_cluster(self._storage_set)
 
-        for node in cluster.get_local_nodes():
+        nodes = cluster.get_local_nodes() if local else cluster.get_distributed_nodes()
+
+        for node in nodes:
             connection = cluster.get_node_connection(
                 ClickhouseClientSettings.MIGRATE, node
             )
@@ -249,5 +251,5 @@ class RunPython(Operation):
     def __init__(self, func: Callable[[], None]) -> None:
         self.__func = func
 
-    def execute(self) -> None:
+    def execute(self, local: bool) -> None:
         self.__func()

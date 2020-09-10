@@ -33,7 +33,7 @@ matrix:
     - name: 'pre-commit hooks (includes python formatting + linting)'
       stage: pre_commit
       language: python
-      python: 3.7
+      python: 3.8
       install:
         - make setup-git
       script:
@@ -41,9 +41,6 @@ matrix:
         # XXX: there is a very small chance that it'll expand to exceed Linux's limits
         #      `getconf ARG_MAX` - max # bytes of args + environ for exec()
         - pre-commit run --files $(git diff --diff-filter=d --name-only master)
-    - <<: *test_base
-      name: 'Test (3.7)'
-      env: PYTHON_VERSION=3.7
     - <<: *test_base
       name: 'Test (3.8)'
       env: PYTHON_VERSION=3.8

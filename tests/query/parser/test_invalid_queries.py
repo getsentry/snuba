@@ -3,12 +3,9 @@ from typing import Any, MutableMapping, Type
 import pytest
 
 from snuba.datasets.factory import get_dataset
-from snuba.query.parser.exceptions import (
-    AliasShadowingException,
-    InvalidQueryException,
-    ParsingException,
-)
+from snuba.query.exceptions import InvalidQueryException
 from snuba.query.parser import parse_query
+from snuba.query.parser.exceptions import AliasShadowingException, ParsingException
 
 test_cases = [
     pytest.param(

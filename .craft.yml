@@ -10,7 +10,7 @@ statusProvider:
   name: github
   config:
     contexts:
-      - 'Trigger: 753987fc-383a-479a-803c-90301cfd2435'
+      - 'build-on-branch-push (sentryio)'
 targets:
   - name: github
   - name: docker

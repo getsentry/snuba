@@ -1,17 +1,27 @@
 import calendar
+import itertools
+import pickle
 from datetime import datetime, timedelta
+from pickle import PickleBuffer
+from typing import MutableSequence
+from unittest.mock import Mock
 
+import pytest
 import simplejson as json
 
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.consumer import ConsumerWorker
+from snuba.consumer import (
+    ConsumerWorker,
+    JSONRowInsertBatch,
+    StreamingConsumerStrategyFactory,
+)
 from snuba.datasets.factory import enforce_table_writer
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.processor import ReplacementBatch
+from snuba.processor import InsertBatch, ReplacementBatch
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.kafka import KafkaPayload
-from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.streams import Message, Partition, Topic
+from snuba.utils.streams.backends.kafka import KafkaPayload
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 from tests.base import BaseEventsTest
 
@@ -110,3 +120,71 @@ class TestConsumer(BaseEventsTest):
             ("event-replacements", b"1", b'{"project_id":1}'),
             ("event-replacements", b"2", b'{"project_id":2}'),
         ]
+
+
+def test_streaming_consumer_strategy() -> None:
+    messages = (
+        Message(
+            Partition(Topic("events"), 0),
+            i,
+            KafkaPayload(None, b"{}", None),
+            datetime.now(),
+        )
+        for i in itertools.count()
+    )
+
+    replacements_producer = FakeConfluentKafkaProducer()
+
+    processor = Mock()
+    processor.process_message.side_effect = [
+        None,
+        InsertBatch([{}]),
+        ReplacementBatch("key", [{}]),
+    ]
+
+    writer = Mock()
+
+    factory = StreamingConsumerStrategyFactory(
+        None,
+        processor,
+        writer,
+        max_batch_size=10,
+        max_batch_time=60,
+        processes=None,
+        input_block_size=None,
+        output_block_size=None,
+        replacements_producer=replacements_producer,
+        replacements_topic=Topic("replacements"),
+    )
+
+    commit_function = Mock()
+    strategy = factory.create(commit_function)
+
+    for i in range(3):
+        strategy.poll()
+        strategy.submit(next(messages))
+
+    processor.process_message.side_effect = [{}]
+
+    with pytest.raises(TypeError):
+        strategy.poll()
+        strategy.submit(next(messages))
+
+    strategy.close()
+    strategy.join()
+
+    assert writer.write.call_count == 1
+    assert len(replacements_producer.messages) == 1
+
+
+def test_json_row_batch_pickle_simple() -> None:
+    batch = JSONRowInsertBatch([b"foo", b"bar", b"baz"])
+    assert pickle.loads(pickle.dumps(batch)) == batch
+
+
+def test_json_row_batch_pickle_out_of_band() -> None:
+    batch = JSONRowInsertBatch([b"foo", b"bar", b"baz"])
+
+    buffers: MutableSequence[PickleBuffer] = []
+    data = pickle.dumps(batch, protocol=5, buffer_callback=buffers.append)
+    assert pickle.loads(data, buffers=[b.raw() for b in buffers]) == batch

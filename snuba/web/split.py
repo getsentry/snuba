@@ -1,15 +1,18 @@
 import copy
+import logging
 import math
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any as AnyType
-from typing import List, Optional, Tuple, Union, cast
+from typing import List, Optional, Union
 
 from snuba import environment, settings, state, util
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy, SplitQueryRunner
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
+    ConditionFunctions,
     combine_and_conditions,
     get_first_level_and_conditions,
     in_condition,
@@ -19,21 +22,13 @@ from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.logical import SelectedExpression
-from snuba.query.matchers import (
-    Any,
-    AnyExpression,
-    Column,
-    FunctionCall,
-    Literal,
-    Or,
-    Param,
-    String,
-)
+from snuba.query.matchers import AnyExpression, Column, FunctionCall, Or, Param, String
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.web import QueryResult
 
+logger = logging.getLogger("snuba.query.split")
 metrics = MetricsWrapper(environment.metrics, "query.splitter")
 
 # Every time we find zero results for a given step, expand the search window by
@@ -47,58 +42,6 @@ def _identify_condition(condition: AnyType, field: str, operator: str) -> bool:
     return (
         is_condition(condition) and condition[0] == field and condition[1] == operator
     )
-
-
-def _get_time_range(
-    query: Query, timestamp_field: str
-) -> Tuple[Optional[datetime], Optional[datetime]]:
-    """
-    Finds the minimal time range for this query. Which means, it finds
-    the >= timestamp condition with the highest datetime literal and
-    the < timestamp condition with the smallest and returns the interval
-    in the form of a tuple of Literals. It only looks into first level
-    AND conditions since, if the timestamp is nested in an OR we cannot
-    say anything on how that compares to the other timestamp conditions.
-
-    TODO: Consider making this part of the AST api if there are more use
-    cases. It would require managing a few more corner cases for being part
-    of the api.
-    """
-
-    condition_clause = query.get_condition_from_ast()
-    if not condition_clause:
-        return (None, None)
-
-    max_lower_bound = None
-    min_upper_bound = None
-    for c in get_first_level_and_conditions(condition_clause):
-        match = FunctionCall(
-            None,
-            Param(
-                "operator",
-                Or(
-                    [
-                        String(OPERATOR_TO_FUNCTION[">="]),
-                        String(OPERATOR_TO_FUNCTION["<"]),
-                    ]
-                ),
-            ),
-            (
-                Column(None, None, String(timestamp_field)),
-                Literal(None, Param("timestamp", Any(datetime))),
-            ),
-        ).match(c)
-
-        if match is not None:
-            timestamp = cast(datetime, match.scalar("timestamp"))
-            if match.string("operator") == OPERATOR_TO_FUNCTION[">="]:
-                if not max_lower_bound or timestamp > max_lower_bound:
-                    max_lower_bound = timestamp
-            else:
-                if not min_upper_bound or timestamp < min_upper_bound:
-                    min_upper_bound = timestamp
-
-    return (max_lower_bound, min_upper_bound)
 
 
 def _replace_ast_condition(
@@ -201,7 +144,7 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
             ),
             None,
         )
-        from_date_ast, to_date_ast = _get_time_range(query, self.__timestamp_col)
+        from_date_ast, to_date_ast = get_time_range(query, self.__timestamp_col)
 
         if not from_date_str or not to_date_str:
             return None
@@ -213,8 +156,16 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
         from_date = util.parse_datetime(from_date_str, date_align)
 
         if from_date != from_date_ast:
+            logger.warning(
+                "Mismatch in start date on time splitter.",
+                extra={"ast": str(from_date_ast), "legacy": str(from_date)},
+            )
             metrics.increment("mismatch.ast_from_date")
         if to_date != to_date_ast:
+            logger.warning(
+                "Mismatch in end date on time splitter.",
+                extra={"ast": str(to_date_ast), "legacy": str(to_date)},
+            )
             metrics.increment("mismatch.ast_to_date")
 
         remaining_offset = query.get_offset()
@@ -326,17 +277,34 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             metrics.increment("column_splitter.query_above_limit")
             return None
 
-        total_col_count = len(query.get_all_referenced_columns())
-        total_ast_count = len(
-            # We need to count the number of table/column name pairs
-            # not the number of distinct Column objects in the query
-            # so to avoid counting aliased columns multiple times.
-            {
-                (col.table_name, col.column_name)
-                for col in query.get_all_ast_referenced_columns()
-            }
+        # Do not split if there is already a = or IN condition on an ID column
+        id_column_matcher = FunctionCall(
+            None,
+            Or([String(ConditionFunctions.EQ), String(ConditionFunctions.IN)]),
+            (Column(None, None, String(self.__id_column)), AnyExpression(),),
         )
+
+        for expr in query.get_condition_from_ast() or []:
+            match = id_column_matcher.match(expr)
+
+            if match:
+                return None
+
+        total_legacy_cols = query.get_all_referenced_columns()
+        total_col_count = len(total_legacy_cols)
+        # We need to count the number of table/column name pairs
+        # not the number of distinct Column objects in the query
+        # so to avoid counting aliased columns multiple times.
+        total_ast_cols = {
+            (col.table_name, col.column_name)
+            for col in query.get_all_ast_referenced_columns()
+        }
+        total_ast_count = len(total_ast_cols)
         if total_col_count != total_ast_count:
+            logger.warning(
+                "Mismatch in original query referenced column when splitting",
+                extra={"ast": total_ast_cols, "legacy": total_legacy_cols},
+            )
             metrics.increment("mismatch.total_referenced_columns")
 
         minimal_query = copy.deepcopy(query)
@@ -360,15 +328,31 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             ]
         )
 
-        minimal_ast_count = len(
-            {
-                (col.table_name, col.column_name)
-                for col in minimal_query.get_all_ast_referenced_columns()
-            }
-        )
-        minimal_count = len(minimal_query.get_all_referenced_columns())
+        for exp in minimal_query.get_all_expressions():
+            if exp.alias in (
+                self.__id_column,
+                self.__project_column,
+                self.__timestamp_column,
+            ) and not (isinstance(exp, ColumnExpr) and exp.column_name == exp.alias):
+                logger.warning(
+                    "Potential alias shadowing due to column splitter",
+                    extra={"expression": exp},
+                    exc_info=True,
+                )
+
+        minimal_ast_cols = {
+            (col.table_name, col.column_name)
+            for col in minimal_query.get_all_ast_referenced_columns()
+        }
+        minimal_ast_count = len(minimal_ast_cols)
+        minimal_legacy_cols = minimal_query.get_all_referenced_columns()
+        minimal_count = len(minimal_legacy_cols)
         if minimal_count != minimal_ast_count:
-            metrics.increment("mismatch.minimaL_query_referenced_columns")
+            logger.warning(
+                "Mismatch in minimal query referenced column when splitting",
+                extra={"ast": minimal_ast_cols, "legacy": minimal_legacy_cols},
+            )
+            metrics.increment("mismatch.minimal_query_referenced_columns")
 
         if total_col_count <= minimal_count:
             return None

@@ -77,7 +77,7 @@ DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000
 DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 10000
 DEFAULT_QUEUED_MIN_MESSAGES = 10000
 DISCARD_OLD_EVENTS = True
-CLICKHOUSE_HTTP_CHUNK_SIZE = 1
+CLICKHOUSE_HTTP_CHUNK_SIZE = 8192
 
 DEFAULT_RETENTION_DAYS = 90
 RETENTION_OVERRIDES: Mapping[int, int] = {}
@@ -103,28 +103,10 @@ PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 
-AST_DATASET_ROLLOUT: Mapping[str, int] = {
-    "discover": 50,
-    "events": 100,
-    "outcomes": 100,
-    "sessions": 100,
-    "transactions": 100,
-}  # (dataset name: percentage)
-AST_REFERRER_ROLLOUT: Mapping[str, Mapping[Optional[str], int]] = {
-    "discover": {
-        # Eventstore
-        "eventstore.get_next_or_prev_event_id": 100,
-        # Performance view
-        "api.performance.durationpercentilechart": 100,
-        "api.organization-event-stats.key-transactions": 100,
-        "discover.key_transactions": 100,
-        "api.performance.latencychart": 100,
-        # Main view
-        "api.organization-event-stats.find-topn": 100,
-        "tagstore.get_tag_value_paginator_for_projects": 100,
-        "api.organization-events-facets.top-tags": 100,
-    },
-}  # (dataset name: (referrer: percentage))
+AST_DATASET_ROLLOUT: Mapping[str, int] = {}  # (dataset name: percentage)
+AST_REFERRER_ROLLOUT: Mapping[
+    str, Mapping[Optional[str], int]
+] = {}  # (dataset name: (referrer: percentage))
 
 COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000

@@ -72,16 +72,18 @@ class Migration(migration.Migration):
         migration_id, logger, update_status = context
         logger.info(f"Running migration: {migration_id}")
         for op in self.__forwards_local():
-            op.execute()
-        # TODO: Run the forwards_dist operations here when multi node clusters are supported
+            op.execute(local=True)
+        for op in self.__forwards_dist():
+            op.execute(local=False)
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
 
     def backwards(self, context: Context) -> None:
         migration_id, logger, update_status = context
         logger.info(f"Reversing migration: {migration_id}")
+        update_status(Status.IN_PROGRESS)
+        for op in self.__backwards_dist():
+            op.execute(local=False)
         for op in self.__backwards_local():
-            op.execute()
-        # TODO: Run the backwards_dist operations here when multi node clusters are supported
+            op.execute(local=True)
         logger.info(f"Finished reversing: {migration_id}")
-        update_status(Status.NOT_STARTED)

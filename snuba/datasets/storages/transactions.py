@@ -7,6 +7,7 @@ from snuba.clickhouse.columns import (
     ColumnSet,
     ColumnType,
     DateTime,
+    Float,
     IPv4,
     IPv6,
     LowCardinality,
@@ -34,6 +35,7 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.web.split import TimeSplitQueryStrategy
 
@@ -117,6 +119,31 @@ def transactions_migrations(
             )
         )
 
+    # `Nested` is only syntactic sugar for table creation. Nested columns are actually arrays.
+    # So current_schema does not contain any single `measurements` column. It includes
+    # two separate arrays instead.
+    if "measurements.key" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN measurements.key Array(LowCardinality(String)) "
+            f"AFTER _contexts_flattened"
+        )
+
+    if "measurements.value" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN measurements.value Array(Float64) "
+            f"AFTER measurements.key"
+        )
+
+    if "http_method" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_method LowCardinality(Nullable(String)) AFTER sdk_version"
+        )
+
+    if "http_referer" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_referer Nullable(String) AFTER http_method"
+        )
+
     return ret
 
 
@@ -148,11 +175,17 @@ columns = ColumnSet(
         ("user_email", Nullable(String())),
         ("sdk_name", WithDefault(LowCardinality(String()), "''")),
         ("sdk_version", WithDefault(LowCardinality(String()), "''")),
+        ("http_method", LowCardinality(Nullable(String()))),
+        ("http_referer", Nullable(String())),
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
         ("_tags_hash_map", Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN)),
         ("contexts", Nested([("key", String()), ("value", String())])),
         ("_contexts_flattened", String()),
+        (
+            "measurements",
+            Nested([("key", LowCardinality(String())), ("value", Float(64))]),
+        ),
         ("partition", UInt(16)),
         ("offset", UInt(64)),
         ("message_timestamp", DateTime()),
@@ -190,14 +223,12 @@ storage = WritableTableStorage(
     schema=schema,
     query_processors=[
         NestedFieldConditionOptimizer(
-            "tags", "_tags_flattened", {"start_ts", "finish_ts"}, BEGINNING_OF_TIME,
-        ),
-        NestedFieldConditionOptimizer(
             "contexts",
             "_contexts_flattened",
             {"start_ts", "finish_ts"},
             BEGINNING_OF_TIME,
         ),
+        MappingOptimizer("tags", "_tags_hash_map"),
         TransactionColumnProcessor(),
         ArrayJoinKeyValueOptimizer("tags"),
         PrewhereProcessor(),

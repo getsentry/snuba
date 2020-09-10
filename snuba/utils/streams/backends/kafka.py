@@ -5,6 +5,7 @@ from concurrent.futures import Future
 from datetime import datetime
 from enum import Enum
 from functools import partial
+from pickle import PickleBuffer
 from threading import Event
 from typing import (
     Any,
@@ -34,8 +35,12 @@ from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
 from snuba.utils.concurrent import execute
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
-from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
-from snuba.utils.streams.producer import Producer
+from snuba.utils.streams.backends.abstract import (
+    Consumer,
+    ConsumerError,
+    EndOfPartition,
+    Producer,
+)
 from snuba.utils.streams.types import Message, Partition, Topic
 
 
@@ -95,6 +100,15 @@ class KafkaPayload:
                 and self.value == other.value
                 and self.headers == other.headers
             )
+
+    def __reduce_ex__(self, protocol: int):
+        if protocol >= 5:
+            return (
+                type(self),
+                (self.key, PickleBuffer(self.value), self.headers),
+            )
+        else:
+            return type(self), (self.key, self.value, self.headers)
 
 
 def as_kafka_configuration_bool(value: Any) -> bool:

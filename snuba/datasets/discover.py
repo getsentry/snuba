@@ -31,21 +31,27 @@ from snuba.datasets.storage import (
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.transactions import transaction_translator
+from snuba.query.conditions import BINARY_OPERATORS, ConditionFunctions
 from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
+from snuba.query.matchers import Column as ColumnMatch
+from snuba.query.matchers import FunctionCall as FunctionCallMatch
+from snuba.query.matchers import Literal as LiteralMatch
+from snuba.query.matchers import String as StringMatch
+from snuba.query.matchers import Or, Param
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
-from snuba.query.processors.apdex_processor import ApdexProcessor
+from snuba.query.processors.performance_expressions import apdex_processor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.failure_rate_processor import FailureRateProcessor
-from snuba.query.processors.impact_processor import ImpactProcessor
+from snuba.query.processors.handled_functions import HandledFunctionsProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
-from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
+from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
-from snuba.util import is_condition, qualified_column
+from snuba.util import qualified_column
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 
 EVENTS = "events"
@@ -53,6 +59,67 @@ TRANSACTIONS = "transactions"
 
 metrics = MetricsWrapper(environment.metrics, "api.discover")
 logger = logging.getLogger(__name__)
+
+
+EVENT_CONDITION = FunctionCallMatch(
+    None,
+    Param("function", Or([StringMatch(op) for op in BINARY_OPERATORS])),
+    (
+        Or(
+            [
+                ColumnMatch(None, None, StringMatch("type")),
+                LiteralMatch(StringMatch("type"), None),
+            ]
+        ),
+        Param("event_type", Or([ColumnMatch(), LiteralMatch()])),
+    ),
+)
+
+
+def match_query_to_table(
+    query: Query, events_only_columns: ColumnSet, transactions_only_columns: ColumnSet
+) -> str:
+    has_event_columns = False
+    has_transaction_columns = False
+    for col in query.get_all_ast_referenced_columns():
+        if events_only_columns.get(col.column_name):
+            has_event_columns = True
+        elif transactions_only_columns.get(col.column_name):
+            has_transaction_columns = True
+
+    # Unless we have an impossible query, we only need to check which columns are referenced.
+    # If all columns are common, use the events table by default.
+    if not (has_event_columns and has_transaction_columns):
+        return TRANSACTIONS if has_transaction_columns else EVENTS
+
+    # In the case of an impossible query, check to see if the user has specified which type of event
+    # they want to see, and use that to inform the table selection. If there is no specification,
+    # default to events.
+    condition = query.get_condition_from_ast()
+    event_types = set()
+    if condition:
+        for cond in condition:
+            result = EVENT_CONDITION.match(cond)
+            if not result:
+                continue
+
+            event_type_param = result.expression("event_type")
+            event_type = None
+            if isinstance(event_type_param, Column):
+                event_type = event_type_param.column_name
+            else:
+                event_type = event_type_param.value
+            if result:
+                if result.string("function") == ConditionFunctions.EQ:
+                    event_types.add(event_type)
+                elif result.string("function") == ConditionFunctions.NEQ:
+                    if event_type == "transaction":
+                        return EVENTS
+
+    if len(event_types) == 1 and event_types.pop() == "transaction":
+        return TRANSACTIONS
+
+    return EVENTS
 
 
 def detect_table(
@@ -65,52 +132,19 @@ def detect_table(
     Given a query, we attempt to guess whether it is better to fetch data from the
     "events" or "transactions" storage. This is going to be wrong in some cases.
     """
-    event_columns = set()
-    transaction_columns = set()
-    for col in query.get_all_referenced_columns():
-        if events_only_columns.get(col):
-            event_columns.add(col)
-        elif transactions_only_columns.get(col):
-            transaction_columns.add(col)
-    for col in query.get_all_ast_referenced_columns():
-        if events_only_columns.get(col.column_name):
-            event_columns.add(col.column_name)
-        elif transactions_only_columns.get(col.column_name):
-            transaction_columns.add(col.column_name)
-
-    selected_table = None
-
-    # First check for a top level condition that matches either type = transaction
-    # type != transaction.
-    conditions = query.get_conditions()
-    if conditions:
-        for idx, condition in enumerate(conditions):
-            if is_condition(condition):
-                if tuple(condition) == ("type", "=", "error"):
-                    selected_table = EVENTS
-                elif tuple(condition) == ("type", "=", "transaction"):
-                    selected_table = TRANSACTIONS
-
-    if not selected_table:
-        # Check for any conditions that reference a table specific field
-        condition_columns = query.get_columns_referenced_in_conditions()
-        if any(events_only_columns.get(col) for col in condition_columns):
-            selected_table = EVENTS
-        if any(transactions_only_columns.get(col) for col in condition_columns):
-            selected_table = TRANSACTIONS
-
-    if not selected_table:
-        # Check for any other references to a table specific field
-        if len(event_columns) > 0:
-            selected_table = EVENTS
-        elif len(transaction_columns) > 0:
-            selected_table = TRANSACTIONS
-
-    # Use events by default
-    if selected_table is None:
-        selected_table = EVENTS
+    selected_table = match_query_to_table(
+        query, events_only_columns, transactions_only_columns
+    )
 
     if track_bad_queries:
+        event_columns = set()
+        transaction_columns = set()
+        for col in query.get_all_ast_referenced_columns():
+            if events_only_columns.get(col.column_name):
+                event_columns.add(col.column_name)
+            elif transactions_only_columns.get(col.column_name):
+                transaction_columns.add(col.column_name)
+
         event_mismatch = event_columns and selected_table == TRANSACTIONS
         transaction_mismatch = transaction_columns and selected_table == EVENTS
         if event_mismatch or transaction_mismatch:
@@ -258,6 +292,8 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("geo_country_code", Nullable(String())),
                 ("geo_region", Nullable(String())),
                 ("geo_city", Nullable(String())),
+                ("http_method", Nullable(String())),
+                ("http_referer", Nullable(String())),
                 # Other tags and context
                 ("tags", Nested([("key", String()), ("value", String())])),
                 ("contexts", Nested([("key", String()), ("value", String())])),
@@ -280,8 +316,6 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("received", Nullable(DateTime())),
                 ("sdk_integrations", Nullable(Array(String()))),
                 ("version", Nullable(String())),
-                ("http_method", Nullable(String())),
-                ("http_referer", Nullable(String())),
                 # exception interface
                 (
                     "exception_stacks",
@@ -351,25 +385,22 @@ class DiscoverDataset(TimeSeriesDataset):
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
+        columnset = self.get_abstract_columnset()
         return [
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             # Apdex and Impact seem very good candidates for
             # being defined by the Transaction entity when it will
             # exist, so it would run before Storage selection.
-            ApdexProcessor(),
-            ImpactProcessor(),
+            apdex_processor(columnset),
             FailureRateProcessor(),
+            HandledFunctionsProcessor("exception_stacks.mechanism_handled", columnset),
             TimeSeriesColumnProcessor({"time": "timestamp"}),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
-            "project": ProjectExtension(
-                processor=ProjectWithGroupsProcessor(
-                    project_column="project_id", replacer_state_name=None,
-                )
-            ),
+            "project": ProjectExtension(project_column="project_id"),
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=5),

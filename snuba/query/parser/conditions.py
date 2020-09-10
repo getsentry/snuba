@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from typing import Any, Callable, Optional, Sequence, TypeVar
 
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.dataset import Dataset
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
@@ -23,7 +24,7 @@ class InvalidConditionException(Exception):
 
 
 def parse_conditions(
-    operand_builder: Callable[[Any], TExpression],
+    operand_builder: Callable[[Any, ColumnSet, Optional[str]], TExpression],
     and_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     or_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     unpack_array_condition_builder: Callable[[TExpression, str, Any], TExpression],
@@ -99,11 +100,20 @@ def parse_conditions(
             and lhs in columns
             and isinstance(columns[lhs].type, Array)
             and columns[lhs].base_name != array_join
+            and columns[lhs].flattened != array_join
             and not isinstance(lit, (list, tuple))
         ):
-            return unpack_array_condition_builder(operand_builder(lhs), op, lit)
+            return unpack_array_condition_builder(
+                operand_builder(lhs, dataset.get_abstract_columnset(), array_join),
+                op,
+                lit,
+            )
         else:
-            return simple_condition_builder(operand_builder(lhs), op, lit)
+            return simple_condition_builder(
+                operand_builder(lhs, dataset.get_abstract_columnset(), array_join),
+                op,
+                lit,
+            )
 
     elif depth == 1:
         sub_expression = (
@@ -171,7 +181,7 @@ def parse_conditions_to_expr(
     ) -> Expression:
         function_name = "arrayExists" if op in POSITIVE_OPERATORS else "arrayAll"
 
-        # This is an expresison like:
+        # This is an expression like:
         # arrayExists(x -> assumeNotNull(notLike(x, rhs)), lhs)
         return FunctionCall(
             None,

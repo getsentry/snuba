@@ -14,18 +14,17 @@ from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
-from snuba.query.expressions import Column, FunctionCall
+from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
-from snuba.query.processors.apdex_processor import ApdexProcessor
+from snuba.query.processors.performance_expressions import apdex_processor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.failure_rate_processor import FailureRateProcessor
-from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
-from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
+from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 
 # TODO: This will be a property of the relationship between entity and
@@ -45,6 +44,9 @@ transaction_translator = TranslationMappers(
                     None, "IPv6NumToString", (Column(None, None, "ip_address_v6"),),
                 ),
             ),
+        ),
+        ColumnToFunction(
+            None, "user", "nullIf", (Column(None, None, "user"), Literal(None, ""))
         ),
         # These column aliases originally existed in the ``discover`` dataset,
         # but now live here to maintain compatibility between the composite
@@ -110,9 +112,7 @@ class TransactionsDataset(TimeSeriesDataset):
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
-            "project": ProjectExtension(
-                processor=ProjectExtensionProcessor(project_column="project_id")
-            ),
+            "project": ProjectExtension(project_column="project_id"),
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=5),
@@ -128,7 +128,7 @@ class TransactionsDataset(TimeSeriesDataset):
         table_alias: str = "",
     ):
         if column_name == "ip_address":
-            return f"coalesce(IPv4NumToString(ip_address_v4), IPv6NumToString(ip_address_v6))"
+            return "coalesce(IPv4NumToString(ip_address_v4), IPv6NumToString(ip_address_v6))"
         if column_name == "event_id":
             return "replaceAll(toString(event_id), '-', '')"
 
@@ -171,8 +171,7 @@ class TransactionsDataset(TimeSeriesDataset):
         return [
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
-            ApdexProcessor(),
-            ImpactProcessor(),
+            apdex_processor(self.get_abstract_columnset()),
             FailureRateProcessor(),
             TimeSeriesColumnProcessor(self.__time_group_columns),
         ]

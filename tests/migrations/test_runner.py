@@ -1,30 +1,52 @@
 import importlib
+import pytest
 from unittest.mock import patch
 
-from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
+from snuba.clickhouse.http import JSONRowEncoder
+from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import get_group_loader, MigrationGroup
 from snuba.migrations.parse_schema import get_local_schema
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+from snuba.writer import BatchWriterEncoderWrapper
 
 
-def teardown_function() -> None:
-    connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
-        ClickhouseClientSettings.MIGRATE
+def setup_function() -> None:
+    for cluster in CLUSTERS:
+        connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+        database = cluster.get_database()
+
+        data = connection.execute(
+            f"SELECT name FROM system.tables WHERE database = '{database}'"
+        )
+        for (table,) in data:
+            connection.execute(f"DROP TABLE IF EXISTS {table}")
+
+
+def test_show_all() -> None:
+    runner = Runner()
+    assert all(
+        [
+            migration.status == Status.NOT_STARTED
+            for (_, group_migrations) in runner.show_all()
+            for migration in group_migrations
+        ]
     )
-    for table in [
-        "migrations_local",
-        "sentry_local",
-        "transactions_local",
-        "querylog_local",
-    ]:
-        connection.execute(f"DROP TABLE IF EXISTS {table};")
+    runner.run_all(force=True)
+    assert all(
+        [
+            migration.status == Status.COMPLETED
+            for (_, group_migrations) in runner.show_all()
+            for migration in group_migrations
+        ]
+    )
 
 
 def test_run_migration() -> None:
@@ -37,6 +59,47 @@ def test_run_migration() -> None:
     assert connection.execute(
         "SELECT group, migration_id, status, version FROM migrations_local;"
     ) == [("system", "0001_migrations", "completed", 1)]
+
+    # Invalid migration ID
+    with pytest.raises(MigrationError):
+        runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "xxx"))
+
+    # Run out of order
+    with pytest.raises(MigrationError):
+        runner.run_migration(MigrationKey(MigrationGroup.EVENTS, "0003_errors"))
+
+    # Running with --fake
+    runner.run_migration(
+        MigrationKey(MigrationGroup.EVENTS, "0001_events_initial"), fake=True
+    )
+    assert connection.execute("SHOW TABLES LIKE 'sentry_local'") == []
+
+
+def test_reverse_migration() -> None:
+    runner = Runner()
+    runner.run_all(force=True)
+
+    connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
+        ClickhouseClientSettings.MIGRATE
+    )
+
+    # Invalid migration ID
+    with pytest.raises(MigrationError):
+        runner.reverse_migration(MigrationKey(MigrationGroup.SYSTEM, "xxx"))
+
+    with pytest.raises(MigrationError):
+        runner.reverse_migration(MigrationKey(MigrationGroup.EVENTS, "0003_errors"))
+
+    # Reverse with --fake
+    for migration_id in reversed(
+        get_group_loader(MigrationGroup.EVENTS).get_migrations()
+    ):
+        runner.reverse_migration(
+            MigrationKey(MigrationGroup.EVENTS, migration_id), fake=True
+        )
+    assert (
+        len(connection.execute("SHOW TABLES LIKE 'sentry_local'")) == 1
+    ), "Table still exists"
 
 
 def test_get_pending_migrations() -> None:
@@ -51,8 +114,24 @@ def test_run_all() -> None:
     runner = Runner()
     assert len(runner._get_pending_migrations()) == get_total_migration_count()
 
-    runner.run_all()
+    with pytest.raises(MigrationError):
+        runner.run_all(force=False)
+
+    runner.run_all(force=True)
     assert runner._get_pending_migrations() == []
+
+
+def test_reverse_all() -> None:
+    runner = Runner()
+    all_migrations = runner._get_pending_migrations()
+    runner.run_all(force=True)
+    for migration in reversed(all_migrations):
+        runner.reverse_migration(migration, force=True)
+
+    connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
+        ClickhouseClientSettings.MIGRATE
+    )
+    assert connection.execute("SHOW TABLES") == [], "All tables should be deleted"
 
 
 def get_total_migration_count() -> int:
@@ -75,7 +154,7 @@ def test_version() -> None:
 
 def test_no_schema_differences() -> None:
     runner = Runner()
-    runner.run_all()
+    runner.run_all(force=True)
 
     for storage_key in StorageKey:
         storage = get_storage(storage_key)
@@ -122,6 +201,8 @@ def test_transactions_compatibility() -> None:
         `user_name` Nullable(String), `user_email` Nullable(String),
         `sdk_name` LowCardinality(String) DEFAULT CAST('', 'LowCardinality(String)'),
         `sdk_version` LowCardinality(String) DEFAULT CAST('', 'LowCardinality(String)'),
+        `http_method` LowCardinality(Nullable(String)) DEFAULT CAST('', 'LowCardinality(Nullable(String))'),
+        `http_referer` Nullable(String),
         `tags.key` Array(String), `tags.value` Array(String), `_tags_flattened` String,
         `contexts.key` Array(String), `contexts.value` Array(String), `_contexts_flattened` String,
         `partition` UInt16, `offset` UInt64, `message_timestamp` DateTime, `retention_days` UInt16,
@@ -136,11 +217,15 @@ def test_transactions_compatibility() -> None:
 
     runner = Runner()
     runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    runner._update_migration_status(
+        MigrationKey(MigrationGroup.TRANSACTIONS, "0001_transactions"), Status.COMPLETED
+    )
     runner.run_migration(
         MigrationKey(
             MigrationGroup.TRANSACTIONS,
             "0002_transactions_onpremise_fix_orderby_and_partitionby",
-        )
+        ),
+        force=True,
     )
 
     assert get_sampling_key() == "cityHash64(span_id)"
@@ -208,6 +293,19 @@ def generate_transactions(count: int) -> None:
                                     "status": "0",
                                 },
                             },
+                            "request": {
+                                "url": "http://127.0.0.1:/query",
+                                "headers": [
+                                    ["Accept-Encoding", "identity"],
+                                    ["Content-Length", "398"],
+                                    ["Host", "127.0.0.1:"],
+                                    ["Referer", "tagstore.something"],
+                                    ["Trace", "8fa73032d-1"],
+                                ],
+                                "data": "",
+                                "method": "POST",
+                                "env": {"SERVER_PORT": "1010", "SERVER_NAME": "snuba"},
+                            },
                             "spans": [
                                 {
                                     "op": "db",
@@ -232,7 +330,47 @@ def generate_transactions(count: int) -> None:
         )
         rows.extend(processed.rows)
 
-    table_writer.get_writer(metrics=DummyMetricsBackend(strict=True)).write(rows)
+    BatchWriterEncoderWrapper(
+        table_writer.get_batch_writer(metrics=DummyMetricsBackend(strict=True)),
+        JSONRowEncoder(),
+    ).write(rows)
+
+
+def test_groupedmessages_compatibility() -> None:
+    cluster = get_cluster(StorageSetKey.EVENTS)
+    database = cluster.get_database()
+    connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+
+    # Create old style table witihout project ID
+    connection.execute(
+        """
+        CREATE TABLE groupedmessage_local (`offset` UInt64, `record_deleted` UInt8,
+        `id` UInt64, `status` Nullable(UInt8), `last_seen` Nullable(DateTime),
+        `first_seen` Nullable(DateTime), `active_at` Nullable(DateTime),
+        `first_release_id` Nullable(UInt64)) ENGINE = ReplacingMergeTree(offset)
+        ORDER BY id SAMPLE BY id SETTINGS index_granularity = 8192
+        """
+    )
+
+    migration_id = "0010_groupedmessages_onpremise_compatibility"
+
+    runner = Runner()
+    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    events_migrations = get_group_loader(MigrationGroup.EVENTS).get_migrations()
+
+    # Mark prior migrations complete
+    for migration in events_migrations[: (events_migrations.index(migration_id))]:
+        runner._update_migration_status(
+            MigrationKey(MigrationGroup.EVENTS, migration), Status.COMPLETED
+        )
+
+    runner.run_migration(
+        MigrationKey(MigrationGroup.EVENTS, migration_id), force=True,
+    )
+
+    assert connection.execute(
+        f"SELECT primary_key FROM system.tables WHERE name = 'groupedmessage_local' AND database = '{database}'"
+    ) == [("project_id, id",)]
 
 
 def test_settings_skipped_group() -> None:
@@ -241,7 +379,7 @@ def test_settings_skipped_group() -> None:
     with patch("snuba.settings.SKIPPED_MIGRATION_GROUPS", {"querylog"}):
         importlib.reload(groups)
         importlib.reload(runner)
-        runner.Runner().run_all()
+        runner.Runner().run_all(force=True)
 
     connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
         ClickhouseClientSettings.MIGRATE
