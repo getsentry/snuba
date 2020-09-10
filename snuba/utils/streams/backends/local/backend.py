@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from collections import defaultdict, deque
 from concurrent.futures import Future
 from datetime import datetime
@@ -62,6 +63,10 @@ class LocalBroker(Generic[TPayload]):
     def create_topic(self, topic: Topic, partitions: int) -> None:
         with self.__lock:
             self.__message_storage.create_topic(topic, partitions)
+
+    def get_topic_partition_count(self, topic: Topic) -> int:
+        with self.__lock:
+            return self.__message_storage.get_partition_count(topic)
 
     def produce(self, partition: Partition, payload: TPayload) -> Message[TPayload]:
         with self.__lock:
@@ -352,7 +357,12 @@ class LocalProducer(Producer[TPayload]):
 
             partition: Partition
             if isinstance(destination, Topic):
-                partition = Partition(destination, 0)  # TODO: Randomize?
+                partition = Partition(
+                    destination,
+                    random.randint(
+                        0, self.__broker.get_topic_partition_count(destination) - 1
+                    ),
+                )
             elif isinstance(destination, Partition):
                 partition = destination
             else:
