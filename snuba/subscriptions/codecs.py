@@ -2,7 +2,9 @@ import json
 from datetime import timedelta
 
 from snuba.subscriptions.data import SubscriptionData
-from snuba.utils.codecs import Codec
+from snuba.subscriptions.worker import SubscriptionTaskResult
+from snuba.utils.codecs import Codec, Encoder
+from snuba.utils.streams.backends.kafka import KafkaPayload
 
 
 class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):
@@ -25,4 +27,26 @@ class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):
             aggregations=data["aggregations"],
             time_window=timedelta(seconds=data["time_window"]),
             resolution=timedelta(seconds=data["resolution"]),
+        )
+
+
+class SubscriptionTaskResultKafkaPayloadEncoder(
+    Encoder[KafkaPayload, SubscriptionTaskResult]
+):
+    def encode(self, value: SubscriptionTaskResult) -> KafkaPayload:
+        subscription_id = str(value.task.task.identifier)
+        request, result = value.result
+        return KafkaPayload(
+            subscription_id.encode("utf-8"),
+            json.dumps(
+                {
+                    "version": 2,
+                    "payload": {
+                        "subscription_id": subscription_id,
+                        "request": {**request.body},
+                        "result": result,
+                        "timestamp": value.task.timestamp.isoformat(),
+                    },
+                }
+            ).encode("utf-8"),
         )
