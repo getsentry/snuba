@@ -62,9 +62,10 @@ class MappingOptimizer(QueryProcessor):
     - IN conditions. TODO
     """
 
-    def __init__(self, column_name: str, hash_map_name: str) -> None:
+    def __init__(self, column_name: str, hash_map_name: str, killswitch: str) -> None:
         self.__column_name = column_name
         self.__hash_map_name = hash_map_name
+        self.__killswitch = killswitch
 
         # TODO: Add the support for IN connditions.
         self.__optimizable_pattern = FunctionCall(
@@ -161,7 +162,7 @@ class MappingOptimizer(QueryProcessor):
         )
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
-        if not get_config("tags_hash_map_enabled", 0):
+        if not get_config(self.__killswitch, 0):
             return
 
         cond_class = ConditionClass.IRRELEVANT
