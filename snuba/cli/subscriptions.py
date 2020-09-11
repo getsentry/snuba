@@ -12,8 +12,8 @@ from snuba import environment, settings
 from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
 from snuba.environment import setup_logging, setup_sentry
 from snuba.redis import redis_client
-from snuba.subscriptions.consumer import TickConsumer
 from snuba.subscriptions.codecs import SubscriptionTaskResultKafkaPayloadEncoder
+from snuba.subscriptions.consumer import TickConsumer
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore

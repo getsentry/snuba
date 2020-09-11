@@ -1,7 +1,7 @@
 from snuba.utils.codecs import Encoder
-from snuba.utils.streams.types import Topic, Message
 from snuba.utils.streams.backends.dummy import DummyBroker as Broker
 from snuba.utils.streams.encoding import ProducerEncodingWrapper
+from snuba.utils.streams.types import Message, Topic
 
 
 def test_encoding_producer(broker: Broker[str]) -> None:
