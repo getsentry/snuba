@@ -1,47 +1,13 @@
-from datetime import timedelta
-from typing import Mapping, Sequence
-
-from snuba.datasets.dataset import TimeSeriesDataset
-from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.query.extensions import QueryExtension
-from snuba.query.organization_extension import OrganizationExtension
-from snuba.query.processors import QueryProcessor
-from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
-from snuba.query.timeseries_extension import TimeSeriesExtension
+from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import get_entity
 
 
-class OutcomesRawDataset(TimeSeriesDataset):
+class OutcomesRawDataset(Dataset):
+    """
+    Tracks event ingestion outcomes in Sentry.
+    """
+
     def __init__(self) -> None:
-        storage = get_storage(StorageKey.OUTCOMES_RAW)
-
-        self.__time_group_columns = {"time": "timestamp"}
-        super().__init__(
-            storages=[storage],
-            query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
-            abstract_column_set=storage.get_schema().get_columns(),
-            writable_storage=None,
-            time_group_columns=self.__time_group_columns,
-            time_parse_columns=("timestamp",),
-        )
-
-    def get_extensions(self) -> Mapping[str, QueryExtension]:
-        return {
-            "timeseries": TimeSeriesExtension(
-                default_granularity=3600,
-                default_window=timedelta(days=7),
-                timestamp_column="timestamp",
-            ),
-            "organization": OrganizationExtension(),
-        }
-
-    def get_prewhere_keys(self) -> Sequence[str]:
-        return ["project_id", "org_id"]
-
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return [
-            BasicFunctionsProcessor(),
-            TimeSeriesColumnProcessor(self.__time_group_columns),
-        ]
+        outcomes_raw_entity = get_entity(EntityKey.OUTCOMES_RAW)
+        super().__init__(entities=[outcomes_raw_entity])

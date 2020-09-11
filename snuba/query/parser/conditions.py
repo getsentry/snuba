@@ -75,7 +75,7 @@ def parse_conditions(
         return and_builder([s for s in sub.keys() if s])
     elif is_condition(conditions):
         try:
-            lhs, op, lit = dataset.process_condition(conditions)
+            lhs, op, lit = conditions
         except Exception as cause:
             raise ParsingException(
                 f"Cannot process condition {conditions}", cause
@@ -164,7 +164,7 @@ def parse_conditions_to_expr(
                         "Operator must be IN/NOT IN"
                     )
                 )
-            literals = tuple([Literal(None, l) for l in literal])
+            literals = tuple([Literal(None, lit) for lit in literal])
             return FunctionCall(None, "tuple", literals)
         else:
             if op in ["IN", "NOT IN"]:
