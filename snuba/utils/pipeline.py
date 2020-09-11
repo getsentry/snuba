@@ -19,7 +19,13 @@ R = TypeVar("R")
 
 class Source(ABC, Generic[T]):
     @abstractmethod
-    def poll(self, timeout: Optional[float] = None) -> Optional[T]:
+    def poll(self, timeout: Optional[float] = None) -> T:
+        """
+        Poll the source for the next value.
+
+        This method will throw a ``TimeoutError`` if a value is not available
+        within the given timeout.
+        """
         raise NotImplementedError
 
     def filter(self, function: Callable[[T], bool]) -> Source[T]:
@@ -36,7 +42,7 @@ class Iterator(Source[T]):
     def __init__(self, iterator: IteratorType[T]) -> None:
         self.__iterator = iterator
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[T]:
+    def poll(self, timeout: Optional[float] = None) -> T:
         return next(self.__iterator)
 
 
@@ -45,13 +51,16 @@ class Filter(Source[T]):
         self.__source = source
         self.__function = function
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[T]:
-        value = self.__source.poll(timeout)
+    def poll(self, timeout: Optional[float] = None) -> T:
+        # TODO: This needs to mock the clock out for testing purposes.
+        deadline = time.time() + timeout if timeout is not None else None
 
-        if value is None:
-            return None
-
-        return value if self.__function(value) else None
+        while True:
+            value = self.__source.poll(
+                deadline - time.time() if deadline is not None else None
+            )
+            if self.__function(value):
+                return value
 
 
 class Map(Source[R]):
@@ -59,13 +68,8 @@ class Map(Source[R]):
         self.__source = source
         self.__function = function
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[R]:
-        value = self.__source.poll(timeout)
-
-        if value is None:
-            return None
-
-        return self.__function(value)
+    def poll(self, timeout: Optional[float] = None) -> R:
+        return self.__function(self.__source.poll(timeout))
 
 
 class Batch(Source[Sequence[T]]):
@@ -75,16 +79,16 @@ class Batch(Source[Sequence[T]]):
 
         self.__batch: MutableSequence[T] = []
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[Sequence[T]]:
+    def poll(self, timeout: Optional[float] = None) -> Sequence[T]:
         # TODO: This needs to mock the clock out for testing purposes.
         deadline = time.time() + timeout if timeout is not None else None
 
         while self.__size > len(self.__batch):
-            value = self.__source.poll(
-                deadline - time.time() if deadline is not None else None
+            self.__batch.append(
+                self.__source.poll(
+                    deadline - time.time() if deadline is not None else None
+                )
             )
-            if value is not None:
-                self.__batch.append(value)
 
         batch = self.__batch
         self.__batch = []
