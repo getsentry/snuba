@@ -69,7 +69,10 @@ class QuerylogProcessor(MessageProcessor):
                 "groupby_cols": [],
                 "array_join_cols": [],
             }
-            num_days.append(profile["time_range"] or 0)
+            time_range = profile["time_range"]
+            num_days.append(
+                time_range if time_range is not None and time_range >= 0 else 0
+            )
             all_columns.append(profile.get("all_columns") or [])
             or_conditions.append(profile["multi_level_condition"])
             where_columns.append(profile["where_profile"]["columns"])
