@@ -68,7 +68,7 @@ class Runner:
         Returns the status and timestamp of a migration.
         """
 
-        if self.__status.get(migration_key):
+        if migration_key in self.__status:
             return self.__status[migration_key]
 
         try:
