@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from abc import ABC, abstractmethod
 from typing import (
     Callable,
@@ -18,7 +19,7 @@ R = TypeVar("R")
 
 class Source(ABC, Generic[T]):
     @abstractmethod
-    def poll(self) -> Optional[T]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[T]:
         raise NotImplementedError
 
     def filter(self, function: Callable[[T], bool]) -> Source[T]:
@@ -35,7 +36,7 @@ class Iterator(Source[T]):
     def __init__(self, iterator: IteratorType[T]) -> None:
         self.__iterator = iterator
 
-    def poll(self) -> Optional[T]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[T]:
         return next(self.__iterator)
 
 
@@ -44,8 +45,9 @@ class Filter(Source[T]):
         self.__source = source
         self.__function = function
 
-    def poll(self) -> Optional[T]:
-        value = self.__source.poll()
+    def poll(self, timeout: Optional[float] = None) -> Optional[T]:
+        value = self.__source.poll(timeout)
+
         if value is None:
             return None
 
@@ -57,8 +59,9 @@ class Map(Source[R]):
         self.__source = source
         self.__function = function
 
-    def poll(self) -> Optional[R]:
-        value = self.__source.poll()
+    def poll(self, timeout: Optional[float] = None) -> Optional[R]:
+        value = self.__source.poll(timeout)
+
         if value is None:
             return None
 
@@ -72,9 +75,14 @@ class Batch(Source[Sequence[T]]):
 
         self.__batch: MutableSequence[T] = []
 
-    def poll(self) -> Optional[Sequence[T]]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Sequence[T]]:
+        # TODO: This needs to mock the clock out for testing purposes.
+        deadline = time.time() + timeout if timeout is not None else None
+
         while self.__size > len(self.__batch):
-            value = self.__source.poll()
+            value = self.__source.poll(
+                deadline - time.time() if deadline is not None else None
+            )
             if value is not None:
                 self.__batch.append(value)
 
