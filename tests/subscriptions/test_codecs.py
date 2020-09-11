@@ -15,7 +15,7 @@ from snuba.subscriptions.worker import (
     SubscriptionTaskResult,
     subscription_task_result_encoder,
 )
-from snuba.subscriptions.scheduler import ScheduledTask
+from snuba.utils.scheduler import ScheduledTask
 from snuba.utils.metrics.timer import Timer
 from tests.base import BaseTest
 

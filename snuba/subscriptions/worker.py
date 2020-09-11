@@ -13,11 +13,11 @@ from snuba.reader import Result
 from snuba.request import Request
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import Subscription
-from snuba.subscriptions.scheduler import ScheduledTask, Scheduler
 from snuba.utils.codecs import Encoder
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.scheduler import ScheduledTask, Scheduler
 from snuba.utils.streams import Producer, Message, Topic
 from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.batching import AbstractBatchWorker
