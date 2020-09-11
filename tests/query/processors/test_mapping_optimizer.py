@@ -243,8 +243,10 @@ TEST_CASES = [
 @pytest.mark.parametrize("query, expected_condition", TEST_CASES)
 def test_tags_hash_map(query: ClickhouseQuery, expected_condition: Expression,) -> None:
     set_config("tags_hash_map_enabled", 1)
-    MappingOptimizer(column_name="tags", hash_map_name="_tags_hash_map").process_query(
-        query, HTTPRequestSettings()
-    )
+    MappingOptimizer(
+        column_name="tags",
+        hash_map_name="_tags_hash_map",
+        killswitch="tags_hash_map_enabled",
+    ).process_query(query, HTTPRequestSettings())
 
     assert query.get_condition_from_ast() == expected_condition
