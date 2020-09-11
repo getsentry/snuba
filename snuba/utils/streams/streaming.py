@@ -508,10 +508,10 @@ class Batch(Generic[TPayload]):
         self.__length += 1
 
         if message.partition in self.__offsets:
-            self.__offsets[message.partition].hi = message.get_next_offset()
+            self.__offsets[message.partition].hi = message.next_offset
         else:
             self.__offsets[message.partition] = OffsetRange(
-                message.offset, message.get_next_offset()
+                message.offset, message.next_offset
             )
 
     def close(self) -> None:
