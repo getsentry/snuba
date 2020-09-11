@@ -19,7 +19,6 @@ def test_error_processor() -> None:
         {
             "event_id": "dcb9d002cac548c795d1c9adbfc68040",
             "group_id": 100,
-            "organization_id": 3,
             "project_id": 300688,
             "release": None,
             "dist": None,
@@ -252,7 +251,6 @@ def test_error_processor() -> None:
             "this_is_me",
             "snuba",
         ],
-        "_tags_flattened": "",
         "contexts.key": [
             "runtime.version",
             "runtime.name",
@@ -269,7 +267,6 @@ def test_error_processor() -> None:
             "fake_region",
             "fake_city",
         ],
-        "_contexts_flattened": "",
         "partition": 1,
         "offset": 2,
         "message_timestamp": datetime(1970, 1, 1),
@@ -277,7 +274,6 @@ def test_error_processor() -> None:
         "deleted": 0,
         "group_id": 100,
         "primary_hash": "04233d08ac90cf6fc015b1be5932e7e2",
-        "event_string": "dcb9d002cac548c795d1c9adbfc68040",
         "received": received_timestamp.astimezone(pytz.utc).replace(
             tzinfo=None, microsecond=0
         ),

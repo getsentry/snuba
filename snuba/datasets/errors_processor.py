@@ -37,7 +37,6 @@ class ErrorsProcessor(EventsProcessorBase):
         self, output: MutableMapping[str, Any], event: InsertEvent,
     ) -> None:
         output["event_id"] = str(uuid.UUID(event["event_id"]))
-        output["event_string"] = event["event_id"]
 
     def extract_custom(
         self,
@@ -100,7 +99,7 @@ class ErrorsProcessor(EventsProcessorBase):
         contexts: Mapping[str, Any],
         metadata: KafkaMessageMetadata,
     ) -> None:
-        output["_contexts_flattened"] = ""
+        pass
 
     def extract_promoted_contexts(
         self,

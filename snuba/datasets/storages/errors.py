@@ -72,16 +72,9 @@ def errors_migrations(
 
 all_columns = ColumnSet(
     [
-        ("org_id", UInt(64)),
         ("project_id", UInt(64)),
         ("timestamp", DateTime()),
         ("event_id", WithCodecs(UUID(), ["NONE"])),
-        (
-            "event_hash",
-            WithCodecs(
-                Materialized(UInt(64), "cityHash64(toString(event_id))",), ["NONE"],
-            ),
-        ),
         ("platform", LowCardinality(String())),
         ("environment", LowCardinality(Nullable(String()))),
         ("release", LowCardinality(Nullable(String()))),
@@ -98,10 +91,8 @@ all_columns = ColumnSet(
         ("http_method", LowCardinality(Nullable(String()))),
         ("http_referer", Nullable(String())),
         ("tags", Nested([("key", String()), ("value", String())])),
-        ("_tags_flattened", String()),
         ("_tags_hash_map", Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN)),
         ("contexts", Nested([("key", String()), ("value", String())])),
-        ("_contexts_flattened", String()),
         ("transaction_name", WithDefault(LowCardinality(String()), "''")),
         ("transaction_hash", Materialized(UInt(64), "cityHash64(transaction_name)"),),
         ("span_id", Nullable(UInt(64))),
@@ -113,8 +104,6 @@ all_columns = ColumnSet(
         ("deleted", UInt(8)),
         ("group_id", UInt(64)),
         ("primary_hash", FixedString(32)),
-        ("primary_hash_hex", Materialized(UInt(64), "hex(primary_hash)")),
-        ("event_string", WithCodecs(String(), ["NONE"])),
         ("received", DateTime()),
         ("message", String()),
         ("title", String()),
@@ -204,7 +193,6 @@ schema = ReplacingMergeTreeSchema(
 )
 
 required_columns = [
-    "org_id",
     "event_id",
     "project_id",
     "group_id",

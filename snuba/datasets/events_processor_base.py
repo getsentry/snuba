@@ -213,7 +213,6 @@ class EventsProcessorBase(MessageProcessor, ABC):
             contexts
         )
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
-        processed["_tags_flattened"] = ""
 
         exception = (
             data.get("exception", data.get("sentry.interfaces.Exception", None)) or {}
