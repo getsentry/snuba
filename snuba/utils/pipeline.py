@@ -47,16 +47,16 @@ class Source(ABC, Generic[T]):
             return
 
     def filter(self, function: Callable[[T], bool]) -> Source[T]:
-        return Filter(self, function)
+        return FilteredSource(self, function)
 
     def map(self, target: Union[Callable[[T], R], ParallelExecutor[T, R]]) -> Source[R]:
         if isinstance(target, ParallelExecutor):
-            return ParallelMap(self, target)
+            return ParallelMappedSource(self, target)
         else:
-            return Map(self, target)
+            return MappedSource(self, target)
 
     def batch(self, size: int) -> Source[Sequence[T]]:
-        return Batch(self, size)
+        return BatchedSource(self, size)
 
 
 class IterableSource(Source[T]):
@@ -70,7 +70,7 @@ class IterableSource(Source[T]):
             raise EndOfStream()
 
 
-class Filter(Source[T]):
+class FilteredSource(Source[T]):
     def __init__(self, source: Source[T], function: Callable[[T], bool]) -> None:
         self.__source = source
         self.__function = function
@@ -87,7 +87,7 @@ class Filter(Source[T]):
                 return value
 
 
-class Map(Source[R]):
+class MappedSource(Source[R]):
     def __init__(self, source: Source[T], function: Callable[[T], R]) -> None:
         self.__source = source
         self.__function = function
@@ -163,7 +163,7 @@ class ThreadedParallelExecutor(ParallelExecutor[T, R]):
         return self.__closed
 
 
-class ParallelMap(Source[R]):
+class ParallelMappedSource(Source[R]):
     def __init__(self, source: Source[T], executor: ParallelExecutor[T, R]) -> None:
         self.__source = source
         self.__executor = executor
@@ -208,7 +208,7 @@ class ParallelMap(Source[R]):
         return self.__executor.poll(timeout)
 
 
-class Batch(Source[Sequence[T]]):
+class BatchedSource(Source[Sequence[T]]):
     def __init__(self, source: Source[T], size: int) -> None:
         self.__source = source
         self.__size = size
