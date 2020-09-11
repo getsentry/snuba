@@ -5,16 +5,22 @@ from abc import ABC, abstractmethod
 from typing import (
     Callable,
     Generic,
-    Iterator as IteratorType,
-    Optional,
+    Iterable,
+    Iterator,
     MutableSequence,
+    Optional,
     Sequence,
     TypeVar,
 )
 
-
 T = TypeVar("T")
 R = TypeVar("R")
+
+
+class EndOfStream(StopIteration):
+    """
+    Exception raised when the end of a stream has been reached.
+    """
 
 
 class Source(ABC, Generic[T]):
@@ -28,6 +34,13 @@ class Source(ABC, Generic[T]):
         """
         raise NotImplementedError
 
+    def __iter__(self) -> Iterator[T]:
+        try:
+            while True:
+                yield self.poll()
+        except EndOfStream:
+            return
+
     def filter(self, function: Callable[[T], bool]) -> Source[T]:
         return Filter(self, function)
 
@@ -38,12 +51,15 @@ class Source(ABC, Generic[T]):
         return Batch(self, size)
 
 
-class Iterator(Source[T]):
-    def __init__(self, iterator: IteratorType[T]) -> None:
-        self.__iterator = iterator
+class IterableSource(Source[T]):
+    def __init__(self, iterable: Iterable[T]) -> None:
+        self.__iterator = iter(iterable)
 
     def poll(self, timeout: Optional[float] = None) -> T:
-        return next(self.__iterator)
+        try:
+            return next(self.__iterator)
+        except StopIteration:
+            raise EndOfStream()
 
 
 class Filter(Source[T]):
@@ -83,12 +99,18 @@ class Batch(Source[Sequence[T]]):
         # TODO: This needs to mock the clock out for testing purposes.
         deadline = time.time() + timeout if timeout is not None else None
 
-        while self.__size > len(self.__batch):
-            self.__batch.append(
-                self.__source.poll(
-                    deadline - time.time() if deadline is not None else None
+        try:
+            while self.__size > len(self.__batch):
+                self.__batch.append(
+                    self.__source.poll(
+                        deadline - time.time() if deadline is not None else None
+                    )
                 )
-            )
+        except EndOfStream:
+            # If we've reached the end of the stream and there is a batch in
+            # progress, suppress the exception so that we can return the batch.
+            if not self.__batch:
+                raise
 
         batch = self.__batch
         self.__batch = []
