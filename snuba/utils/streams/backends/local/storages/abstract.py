@@ -45,8 +45,12 @@ class MessageStorage(ABC, Generic[TPayload]):
     def consume(self, partition: Partition, offset: int) -> Optional[Message[TPayload]]:
         """
         Consume a message from the provided partition, reading from the given
-        offset. If no message exists at the given offset, this method returns
-        ``None``.
+        offset. If no message exists at the given offset when reading from
+        the tail of the partition, this method returns ``None``.
+
+        If the offset is out of range (there are no messages, and we're not
+        reading from the tail of the partition where the next message would
+        be if it existed), an ``OffsetOutOfRange`` exception will be raised.
 
         If the topic does not exist, a ``TopicDoesNotExist`` exception will
         be raised. If the topic exists but the partition does not, a
