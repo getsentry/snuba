@@ -18,7 +18,10 @@ from snuba.utils.streams.backends.local.storages.abstract import (
     TopicDoesNotExist,
     TopicExists,
 )
-from snuba.utils.streams.backends.local.storages.file import FileMessageStorage
+from snuba.utils.streams.backends.local.storages.file import (
+    FileMessageStorage,
+    InvalidChecksum,
+)
 from snuba.utils.streams.backends.local.storages.memory import MemoryMessageStorage
 from snuba.utils.streams.types import Partition, Topic
 from tests.utils.streams.backends.mixins import StreamsTestMixin
@@ -102,3 +105,16 @@ class LocalStreamsFileStorageTestCase(LocalStreamsTestMixin, TestCase):
 
     def get_message_storage(self) -> MessageStorage[int]:
         return FileMessageStorage(self.directory.name)
+
+    def test_unaligned_offset(self) -> None:
+        topic = Topic(uuid.uuid1().hex)
+        partition = Partition(topic, 0)
+        self.storage.create_topic(topic, 1)
+
+        message = self.storage.produce(partition, 1, datetime.now())
+
+        invalid_offset = message.offset + 4
+        assert message.next_offset > invalid_offset > message.offset
+
+        with pytest.raises(InvalidChecksum):
+            self.storage.consume(partition, invalid_offset)

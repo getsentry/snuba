@@ -1,5 +1,6 @@
 import itertools
 import pickle
+from binascii import crc32
 from datetime import datetime
 from functools import cached_property
 from pathlib import Path
@@ -51,6 +52,10 @@ class FilePartition:
         return self.__path.open("ab")
 
 
+class InvalidChecksum(ValueError):
+    pass
+
+
 class FileMessageStorage(MessageStorage[TPayload]):
     def __init__(
         self,
@@ -61,7 +66,7 @@ class FileMessageStorage(MessageStorage[TPayload]):
         assert self.__directory.exists() and self.__directory.is_dir()
         self.__codec = codec
 
-        self.__record_header = Struct("!L")
+        self.__record_header = Struct("!LI")
         self.__topic_partition_cache: MutableMapping[
             Topic, Sequence[FilePartition]
         ] = {}
@@ -115,7 +120,7 @@ class FileMessageStorage(MessageStorage[TPayload]):
         encoded = self.__codec.encode((payload, timestamp))
         file = self.__get_file_partition(partition).writer
         offset = file.tell()
-        file.write(self.__record_header.pack(len(encoded)))
+        file.write(self.__record_header.pack(len(encoded), crc32(encoded)))
         file.write(encoded)
         file.flush()
         next_offset = file.tell()
@@ -135,7 +140,13 @@ class FileMessageStorage(MessageStorage[TPayload]):
             else:
                 return None
 
-        [size] = self.__record_header.unpack(size_raw)
-        payload, timestamp = self.__codec.decode(file.read(size))
+        [size, expected_checksum] = self.__record_header.unpack(size_raw)
+        encoded = file.read(size)
+        actual_checksum = crc32(encoded)
+        if not actual_checksum == expected_checksum:
+            raise InvalidChecksum(
+                f"checksum mismatch: expected {expected_checksum:#0x}, got {actual_checksum:#0x}"
+            )
+        payload, timestamp = self.__codec.decode(encoded)
 
         return Message(partition, offset, payload, timestamp, file.tell())
