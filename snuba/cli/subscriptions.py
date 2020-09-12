@@ -12,7 +12,7 @@ from snuba import environment, settings
 from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
 from snuba.environment import setup_logging, setup_sentry
 from snuba.redis import redis_client
-from snuba.subscriptions.codecs import SubscriptionTaskResultKafkaPayloadEncoder
+from snuba.subscriptions.codecs import SubscriptionTaskResultEncoder
 from snuba.subscriptions.consumer import TickConsumer
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.scheduler import SubscriptionScheduler
@@ -165,7 +165,7 @@ def subscriptions(
                 "message.max.bytes": 50000000,  # 50MB, default is 1MB
             }
         ),
-        SubscriptionTaskResultKafkaPayloadEncoder(),
+        SubscriptionTaskResultEncoder(),
     )
 
     executor = ThreadPoolExecutor(max_workers=max_query_workers)

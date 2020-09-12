@@ -6,7 +6,7 @@ from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
 from snuba.subscriptions.codecs import (
     SubscriptionDataCodec,
-    SubscriptionTaskResultKafkaPayloadEncoder,
+    SubscriptionTaskResultEncoder,
 )
 from snuba.subscriptions.data import (
     PartitionId,
@@ -62,7 +62,7 @@ class TestSubscriptionCodec(BaseTest):
 
 
 def test_subscription_task_result_encoder() -> None:
-    codec = SubscriptionTaskResultKafkaPayloadEncoder()
+    codec = SubscriptionTaskResultEncoder()
 
     timestamp = datetime.now()
 
