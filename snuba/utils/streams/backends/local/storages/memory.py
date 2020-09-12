@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import MutableMapping, MutableSequence, Optional, Sequence, Tuple
 
+from snuba.utils.streams.backends.abstract import OffsetOutOfRange
 from snuba.utils.streams.backends.local.storages.abstract import (
     MessageStorage,
     PartitionDoesNotExist,
@@ -51,7 +52,7 @@ class MemoryMessageStorage(MessageStorage[TPayload]):
             if offset == len(messages):
                 return None
             else:
-                raise Exception("invalid offset")
+                raise OffsetOutOfRange()
 
         return Message(partition, offset, payload, timestamp)
 

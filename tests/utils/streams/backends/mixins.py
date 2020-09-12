@@ -11,6 +11,7 @@ from snuba.utils.streams.backends.abstract import (
     Consumer,
     ConsumerError,
     EndOfPartition,
+    OffsetOutOfRange,
     Producer,
 )
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
@@ -200,6 +201,36 @@ class StreamsTestMixin(ABC, Generic[TPayload]):
 
             with assert_changes(lambda: revocation_callback.called, False, True):
                 consumer.close()
+
+    def test_consumer_offset_out_of_range(self) -> None:
+        payloads = self.get_payloads()
+
+        with self.get_topic() as topic:
+            with closing(self.get_producer()) as producer:
+                messages = [producer.produce(topic, next(payloads)).result(5.0)]
+
+            consumer = self.get_consumer()
+            consumer.subscribe([topic])
+
+            for i in range(5):
+                message = consumer.poll(1.0)
+                if message is not None:
+                    break
+                else:
+                    time.sleep(1.0)
+            else:
+                raise Exception("assignment never received")
+
+            with pytest.raises(EndOfPartition):
+                consumer.poll()
+
+            # Somewhat counterintuitively, seeking to an invalid position
+            # should be allowed -- we don't know it's invalid until we try and
+            # read from it.
+            consumer.seek({Partition(topic, 0): messages[-1].next_offset + 1000})
+
+            with pytest.raises(OffsetOutOfRange):
+                consumer.poll()
 
     def test_working_offsets(self) -> None:
         payloads = self.get_payloads()

@@ -14,6 +14,7 @@ from typing import (
 )
 
 from snuba.utils.codecs import Codec
+from snuba.utils.streams.backends.abstract import OffsetOutOfRange
 from snuba.utils.streams.backends.local.storages.abstract import (
     MessageStorage,
     PartitionDoesNotExist,
@@ -37,6 +38,9 @@ class FilePartition:
 
     def exists(self) -> bool:
         return self.__path.exists()
+
+    def size(self) -> int:
+        return self.__path.lstat().st_size
 
     @cached_property
     def reader(self) -> BinaryIO:
@@ -118,14 +122,18 @@ class FileMessageStorage(MessageStorage[TPayload]):
         return Message(partition, offset, payload, timestamp, next_offset)
 
     def consume(self, partition: Partition, offset: int) -> Optional[Message[TPayload]]:
-        file = self.__get_file_partition(partition).reader
+        file_partition = self.__get_file_partition(partition)
+        file = file_partition.reader
 
         if file.tell() != offset:
             file.seek(offset)
 
         size_raw = file.read(self.__record_header.size)
         if not size_raw:
-            return None  # XXX: cannot distinguish between end and invalid
+            if offset > file_partition.size():
+                raise OffsetOutOfRange()
+            else:
+                return None
 
         [size] = self.__record_header.unpack(size_raw)
         payload, timestamp = self.__codec.decode(file.read(size))

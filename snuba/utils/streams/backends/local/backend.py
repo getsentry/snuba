@@ -233,6 +233,8 @@ class LocalConsumer(Consumer[TPayload]):
 
                 try:
                     message = self.__broker.consume(partition, offset)
+                except ConsumerError:
+                    raise
                 except Exception as e:
                     raise ConsumerError("error consuming mesage") from e
 
