@@ -192,6 +192,7 @@ class ConsumerBuilder:
                 self.metrics,
                 {"load_balancing": "in_order", "insert_distributed_sync": 1},
             ),
+            self.metrics,
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
             processes=self.processes,
