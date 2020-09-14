@@ -24,8 +24,8 @@ from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.kafka import KafkaPayload
 from tests.assertions import assert_changes
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
-from tests.base import BaseEventsTest
 from tests.backends.metrics import TestingMetricsBackend, Timing
+from tests.base import BaseEventsTest
 
 
 class TestConsumer(BaseEventsTest):
