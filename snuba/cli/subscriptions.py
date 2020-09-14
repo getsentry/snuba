@@ -12,6 +12,7 @@ from snuba import environment, settings
 from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
 from snuba.environment import setup_logging, setup_sentry
 from snuba.redis import redis_client
+from snuba.subscriptions.codecs import SubscriptionTaskResultEncoder
 from snuba.subscriptions.consumer import TickConsumer
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.scheduler import SubscriptionScheduler
@@ -25,6 +26,7 @@ from snuba.utils.streams.backends.kafka import (
     build_kafka_consumer_configuration,
 )
 from snuba.utils.streams.batching import BatchProcessingStrategyFactory
+from snuba.utils.streams.encoding import ProducerEncodingWrapper
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.synchronized import SynchronizedConsumer
 
@@ -155,12 +157,15 @@ def subscriptions(
         )
     )
 
-    producer = KafkaProducer(
-        {
-            "bootstrap.servers": ",".join(bootstrap_servers),
-            "partitioner": "consistent",
-            "message.max.bytes": 50000000,  # 50MB, default is 1MB
-        }
+    producer = ProducerEncodingWrapper(
+        KafkaProducer(
+            {
+                "bootstrap.servers": ",".join(bootstrap_servers),
+                "partitioner": "consistent",
+                "message.max.bytes": 50000000,  # 50MB, default is 1MB
+            }
+        ),
+        SubscriptionTaskResultEncoder(),
     )
 
     executor = ThreadPoolExecutor(max_workers=max_query_workers)
