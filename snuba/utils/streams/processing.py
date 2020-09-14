@@ -12,7 +12,7 @@ from typing import (
     Type,
 )
 
-from snuba.utils.streams.consumer import Consumer, ConsumerError
+from snuba.utils.streams.backends.abstract import Consumer, ConsumerError
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 
@@ -207,7 +207,7 @@ class StreamProcessor(Generic[TPayload]):
 
             self._shutdown()
         except Exception as error:
-            logger.warning("Caught %r, shutting down...", error)
+            logger.info("Caught %r, shutting down...", error)
 
             if self.__processing_strategy is not None:
                 logger.debug("Terminating %r...", self.__processing_strategy)

@@ -6,13 +6,13 @@ from unittest import TestCase
 
 import pytest
 
-from snuba.utils.streams.dummy import (
+from snuba.utils.streams.backends.dummy import (
     DummyBroker,
     DummyConsumer,
     DummyProducer,
 )
 from snuba.utils.streams.types import Topic
-from tests.utils.streams.mixins import StreamsTestMixin
+from tests.utils.streams.backends.mixins import StreamsTestMixin
 
 
 class DummyStreamsTestCase(StreamsTestMixin[int], TestCase):

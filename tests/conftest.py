@@ -6,7 +6,7 @@ from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
 from snuba.environment import setup_sentry
 from snuba.utils.clock import Clock, TestingClock
-from snuba.utils.streams.dummy import DummyBroker
+from snuba.utils.streams.backends.dummy import DummyBroker
 from snuba.utils.streams.types import TPayload
 
 

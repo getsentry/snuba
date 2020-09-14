@@ -54,9 +54,10 @@ def test_simple() -> None:
                 profile=ClickhouseQueryProfile(
                     time_range=10,
                     table="events",
+                    all_columns={"timestamp", "tags"},
                     multi_level_condition=False,
                     where_profile=FilterProfile(
-                        columns={"timestamp"}, mapping_cols=set("tags"),
+                        columns={"timestamp"}, mapping_cols={"tags"},
                     ),
                     groupby_cols=set(),
                     array_join_cols=set(),
@@ -98,11 +99,17 @@ def test_simple() -> None:
                 "clickhouse_queries.cache_hit": [0],
                 "clickhouse_queries.sample": [10.0],
                 "clickhouse_queries.max_threads": [0],
-                "clickhouse_queries.num_days": [0],
+                "clickhouse_queries.num_days": [10],
                 "clickhouse_queries.clickhouse_table": [""],
                 "clickhouse_queries.query_id": [""],
                 "clickhouse_queries.is_duplicate": [0],
                 "clickhouse_queries.consistent": [0],
+                "clickhouse_queries.all_columns": [["tags", "timestamp"]],
+                "clickhouse_queries.or_conditions": [False],
+                "clickhouse_queries.where_columns": [["timestamp"]],
+                "clickhouse_queries.where_mapping_columns": [["tags"]],
+                "clickhouse_queries.groupby_columns": [[]],
+                "clickhouse_queries.array_join_columns": [[]],
             }
         ],
     )

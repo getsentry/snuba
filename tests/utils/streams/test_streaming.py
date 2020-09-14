@@ -6,7 +6,7 @@ from multiprocessing.managers import SharedMemoryManager
 from typing import Iterator
 from unittest.mock import Mock, call
 
-from snuba.utils.streams.kafka import KafkaPayload
+from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.streaming import (
     CollectStep,
     FilterStep,

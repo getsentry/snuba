@@ -1,4 +1,3 @@
-import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Iterable, Iterator, MutableMapping, Optional, Tuple
@@ -19,12 +18,10 @@ from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.subscriptions.worker import (
     SubscriptionWorker,
     SubscriptionTaskResult,
-    subscription_task_result_encoder,
 )
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.dummy import DummyBroker
-from snuba.utils.streams.kafka import KafkaPayload
-from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.streams import Message, Partition, Topic
+from snuba.utils.streams.backends.dummy import DummyBroker
 from snuba.utils.types import Interval
 from tests.base import dataset_manager
 
@@ -60,7 +57,9 @@ def dataset() -> Iterator[Dataset]:
     ],
 )
 def test_subscription_worker(
-    dataset: Dataset, broker: DummyBroker[KafkaPayload], time_shift: Optional[timedelta]
+    dataset: Dataset,
+    broker: DummyBroker[SubscriptionTaskResult],
+    time_shift: Optional[timedelta],
 ) -> None:
     result_topic = Topic("subscription-results")
 
@@ -128,28 +127,23 @@ def test_subscription_worker(
         assert message is not None
         assert message.partition.topic == result_topic
 
-        task_result_future = result_futures[i]
-        expected_payload = subscription_task_result_encoder.encode(
-            SubscriptionTaskResult(
-                task_result_future.task, task_result_future.future.result()
-            )
-        )
+        task, future = result_futures[i]
+        future_result = request, result = future.result()
+        assert message.payload.task.timestamp == timestamp
+        assert message.payload == SubscriptionTaskResult(task, future_result)
 
-        assert message.payload == expected_payload
-
-        decoded_payload = json.loads(expected_payload.value)["payload"]
-        assert decoded_payload["timestamp"] == timestamp.isoformat()
+        # NOTE: The time series extension is folded back into the request
+        # body, ideally this would reference the timeseries options in
+        # isolation.
         assert (
-            # NOTE: The time series extension is folded back into the request
-            # body, ideally this would reference the timeseries options in
-            # isolation.
-            decoded_payload["request"].items()
+            request.body.items()
             > {
                 "from_date": (timestamp - subscription.data.time_window).isoformat(),
                 "to_date": timestamp.isoformat(),
             }.items()
         )
-        assert decoded_payload["result"] == {
+
+        assert result == {
             "meta": [{"name": "count", "type": "UInt64"}],
             "data": [{"count": 0}],
         }
