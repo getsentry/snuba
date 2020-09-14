@@ -401,6 +401,8 @@ because they contain a data migration) will also be executed. Blocking migration
 take some time to complete. Running with --force assumes that any consumers filling
 the corresponding table are stopped and no new data is being written to the table
 as the migration is taking place.
+- Running this without the --force flag, will only execute the migrations if none
+are blocking.
 - If you are running `snuba devserver`, this command automatically run when the
 devserver is started and there is no need to manage migrations manually.
 
@@ -424,6 +426,12 @@ with the new migration identifier you have chosen. By convention we prefix migra
 IDs with a number matching the position of the migration in the group, i.e. the 4th
 migration in that group will be prefixed with `0004_`. Add a file which will contain
 the new migration at `/migrations/snuba_migrations/<group>/<migration_id>.py`.
+
+If you need to create a new group, add the group to `migrations.groups.MigrationGroup`
+and a loader for the group defining the path to the directory where that group's
+migrations will be located. Register these to `migrations.groups._REGISTERED_GROUPS` -
+note the position of the group in this list determines the order the migrations
+will be executed in.
 
 The new migration should contain a class called `Migration` which inherits from
 `MultiStepMigration`. You should define all four methods - `forwards_local`,
