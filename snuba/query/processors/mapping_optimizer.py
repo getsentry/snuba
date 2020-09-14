@@ -162,7 +162,7 @@ class MappingOptimizer(QueryProcessor):
         )
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
-        if not get_config(self.__killswitch, 0):
+        if not get_config(self.__killswitch, 1):
             return
 
         cond_class = ConditionClass.IRRELEVANT
