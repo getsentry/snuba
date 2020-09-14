@@ -101,6 +101,10 @@ class TransactionEvent:
                     "datetime": "2019-08-08T22:29:53.917000Z",
                     "timestamp": self.timestamp,
                     "start_timestamp": self.start_timestamp,
+                    "measurements": {
+                        "lcp": {"value": 32.129},
+                        "lcp.elementSize": {"value": 4242},
+                    },
                     "contexts": {
                         "trace": {
                             "sampled": True,
@@ -109,7 +113,7 @@ class TransactionEvent:
                             "type": "trace",
                             "span_id": self.span_id,
                             "status": self.status,
-                        }
+                        },
                     },
                     "tags": [
                         ["sentry:release", self.release],
@@ -205,6 +209,8 @@ class TransactionEvent:
                 f"|trace.op={self.op}||trace.sampled=True||trace.span_id={self.span_id}||trace.status={str(self.status)}|"
                 f"|trace.trace_id={self.trace_id}|"
             ),
+            "measurements.key": ["lcp", "lcp.elementSize"],
+            "measurements.value": [32.129, 4242.0],
         }
 
         if self.ipv4:

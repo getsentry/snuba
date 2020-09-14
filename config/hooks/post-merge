@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+red="$(tput setaf 1)"
+bold="$(tput bold)"
+reset="$(tput sgr0)"
+
+
+files_changed_upstream="$(mktemp)"
+trap "rm -f ${files_changed_upstream}" EXIT
+
+git diff-tree -r --name-only --no-commit-id ORIG_HEAD HEAD > "$files_changed_upstream"
+
+grep -E --quiet 'migrations/groups.py' "$files_changed_upstream"          && needs_update=1
+
+[[ "$needs_update" ]] && cat <<EOF
+
+[${red}${bold}!!!${reset}] Some migrations may have changed, you may need to run:
+
+  snuba migrations migrate --force
+
+EOF
+
+if [[ "$needs_update" ]]; then
+  $update_command
+fi

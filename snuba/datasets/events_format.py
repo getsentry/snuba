@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Any, Mapping, MutableMapping, Sequence, Tuple
+from typing import Any, Callable, Mapping, MutableMapping, Sequence, Tuple, TypeVar
 
 from snuba import settings
 from snuba.processor import (
@@ -30,6 +30,9 @@ def extract_user(output: MutableMapping[str, Any], user: Mapping[str, Any]) -> N
     output["ip_address"] = str(ip_addr) if ip_addr is not None else None
 
 
+TVal = TypeVar("TVal")
+
+
 def extract_http(output: MutableMapping[str, Any], request: Mapping[str, Any]) -> None:
     http_headers = _as_dict_safe(request.get("headers", None))
     output["http_method"] = _unicodify(request.get("method", None))
@@ -37,16 +40,24 @@ def extract_http(output: MutableMapping[str, Any], request: Mapping[str, Any]) -
     output["http_url"] = _unicodify(request.get("url", None))
 
 
-def extract_extra_tags(tags) -> Tuple[Sequence[str], Sequence[str]]:
-    tag_keys = []
-    tag_values = []
-    for tag_key, tag_value in sorted(tags.items()):
-        value = _unicodify(tag_value)
-        if value:
-            tag_keys.append(_unicodify(tag_key))
-            tag_values.append(value)
+def extract_extra_tags(
+    nested_col: Mapping[str, Any],
+) -> Tuple[Sequence[str], Sequence[str]]:
+    return extract_nested(nested_col, lambda s: _unicodify(s) or None)
 
-    return (tag_keys, tag_values)
+
+def extract_nested(
+    nested_col: Mapping[str, Any], val_processor: Callable[[Any], TVal]
+) -> Tuple[Sequence[str], Sequence[TVal]]:
+    keys = []
+    values = []
+    for key, value in sorted(nested_col.items()):
+        value = val_processor(value)
+        if value is not None:
+            keys.append(_unicodify(key))
+            values.append(value)
+
+    return (keys, values)
 
 
 def extract_extra_contexts(contexts) -> Tuple[Sequence[str], Sequence[str]]:

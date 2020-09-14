@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime
 from typing import Any, MutableMapping, Optional
@@ -11,6 +12,7 @@ from snuba.datasets.events_format import (
     extract_extra_contexts,
     extract_extra_tags,
     extract_http,
+    extract_nested,
     extract_user,
     flatten_nested_field,
 )
@@ -24,6 +26,8 @@ from snuba.processor import (
     _unicodify,
 )
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+
+logger = logging.getLogger(__name__)
 
 metrics = MetricsWrapper(environment.metrics, "transactions.processor")
 
@@ -123,6 +127,21 @@ class TransactionsMessageProcessor(MessageProcessor):
         if "geo" not in contexts and isinstance(geo, dict):
             contexts["geo"] = geo
 
+        measurements = data.get("measurements")
+        if measurements is not None:
+            try:
+                (
+                    processed["measurements.key"],
+                    processed["measurements.value"],
+                ) = extract_nested(measurements, lambda value: float(value["value"]))
+            except Exception:
+                # Not failing the event in this case just yet, because we are still
+                # developing this feature.
+                logger.error(
+                    "Invalid measurements field.",
+                    extra={"measurements": measurements},
+                    exc_info=True,
+                )
         request = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
         http_data: MutableMapping[str, Any] = {}
         extract_http(http_data, request)
