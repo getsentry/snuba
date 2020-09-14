@@ -22,3 +22,4 @@ class StorageSetKey(Enum):
     QUERYLOG = "querylog"
     SESSIONS = "sessions"
     TRANSACTIONS = "transactions"
+    METRICS = "metrics"

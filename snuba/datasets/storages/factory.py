@@ -18,6 +18,7 @@ from snuba.datasets.storages.sessions import (
     materialized_storage as sessions_hourly_storage,
 )
 from snuba.datasets.storages.transactions import storage as transactions_storage
+from snuba.datasets.storages.metrics import storage as metrics_storage
 
 
 CDC_STORAGES: Mapping[StorageKey, CdcStorage] = {
@@ -36,6 +37,7 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
             querylog_storage,
             sessions_raw_storage,
             transactions_storage,
+            metrics_storage,
         ]
     },
 }

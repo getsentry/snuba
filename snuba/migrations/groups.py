@@ -15,6 +15,7 @@ class MigrationGroup(Enum):
     OUTCOMES = "outcomes"
     SESSIONS = "sessions"
     QUERYLOG = "querylog"
+    METRICS = "metrics"
 
 
 # Migration groups are mandatory by default, unless they are on this list
@@ -137,6 +138,14 @@ class QuerylogLoader(DirectoryLoader):
         return ["0001_querylog", "0002_status_type_change", "0003_add_profile_fields"]
 
 
+class MetricsLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.migrations.snuba_migrations.metrics")
+
+    def get_migrations(self) -> Sequence[str]:
+        return ["0001_metrics"]
+
+
 _REGISTERED_GROUPS = {
     MigrationGroup.SYSTEM: SystemLoader(),
     MigrationGroup.EVENTS: EventsLoader(),
@@ -144,6 +153,7 @@ _REGISTERED_GROUPS = {
     MigrationGroup.OUTCOMES: OutcomesLoader(),
     MigrationGroup.SESSIONS: SessionsLoader(),
     MigrationGroup.QUERYLOG: QuerylogLoader(),
+    MigrationGroup.METRICS: MetricsLoader(),
 }
 
 
