@@ -21,7 +21,7 @@ from snuba.subscriptions.worker import (
 )
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams import Message, Partition, Topic
-from snuba.utils.streams.backends.dummy import DummyBroker
+from snuba.utils.streams.backends.local.backend import LocalBroker as Broker
 from snuba.utils.types import Interval
 from tests.base import dataset_manager
 
@@ -50,7 +50,7 @@ def dataset() -> Iterator[Dataset]:
 
 
 def test_subscription_worker(
-    dataset: Dataset, broker: DummyBroker[SubscriptionTaskResult],
+    dataset: Dataset, broker: Broker[SubscriptionTaskResult],
 ) -> None:
     result_topic = Topic("subscription-results")
 

@@ -6,12 +6,12 @@ from typing import Mapping, Optional, TypeVar
 import pytest
 
 from snuba.utils.streams.backends.abstract import Consumer
-from snuba.utils.streams.backends.dummy import DummyBroker, DummyConsumer
 from snuba.utils.streams.backends.kafka import KafkaPayload
+from snuba.utils.streams.backends.local.backend import LocalConsumer
+from snuba.utils.streams.backends.local.backend import LocalBroker as Broker
 from snuba.utils.streams.synchronized import Commit, SynchronizedConsumer, commit_codec
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.assertions import assert_changes, assert_does_not_change
-
 
 T = TypeVar("T")
 
@@ -30,7 +30,7 @@ def wait_for_consumer(consumer: Consumer[T], message: Message[T], attempts: int 
     )
 
 
-def test_synchronized_consumer(broker: DummyBroker[KafkaPayload]) -> None:
+def test_synchronized_consumer(broker: Broker[KafkaPayload]) -> None:
     topic = Topic("topic")
     commit_log_topic = Topic("commit-log")
 
@@ -179,7 +179,7 @@ def test_synchronized_consumer(broker: DummyBroker[KafkaPayload]) -> None:
             assert synchronized_consumer.poll(0.0) == messages[4]
 
 
-def test_synchronized_consumer_pause_resume(broker: DummyBroker[KafkaPayload]) -> None:
+def test_synchronized_consumer_pause_resume(broker: Broker[KafkaPayload]) -> None:
     topic = Topic("topic")
     commit_log_topic = Topic("commit-log")
 
@@ -261,7 +261,7 @@ def test_synchronized_consumer_pause_resume(broker: DummyBroker[KafkaPayload]) -
 
 
 def test_synchronized_consumer_handles_end_of_partition(
-    broker: DummyBroker[KafkaPayload],
+    broker: Broker[KafkaPayload],
 ) -> None:
     topic = Topic("topic")
     commit_log_topic = Topic("commit-log")
@@ -316,7 +316,7 @@ def test_synchronized_consumer_handles_end_of_partition(
 
 
 def test_synchronized_consumer_worker_crash_before_assignment(
-    broker: DummyBroker[KafkaPayload],
+    broker: Broker[KafkaPayload],
 ) -> None:
     topic = Topic("topic")
     commit_log_topic = Topic("commit-log")
@@ -329,7 +329,7 @@ def test_synchronized_consumer_worker_crash_before_assignment(
     class BrokenConsumerException(Exception):
         pass
 
-    class BrokenDummyConsumer(DummyConsumer[KafkaPayload]):
+    class BrokenConsumer(LocalConsumer[KafkaPayload]):
         def poll(
             self, timeout: Optional[float] = None
         ) -> Optional[Message[KafkaPayload]]:
@@ -339,7 +339,7 @@ def test_synchronized_consumer_worker_crash_before_assignment(
                 poll_called.set()
 
     consumer = broker.get_consumer("consumer")
-    commit_log_consumer: Consumer[KafkaPayload] = BrokenDummyConsumer(
+    commit_log_consumer: Consumer[KafkaPayload] = BrokenConsumer(
         broker, "commit-log-consumer"
     )
 
@@ -353,12 +353,11 @@ def test_synchronized_consumer_worker_crash_before_assignment(
 
 
 def test_synchronized_consumer_worker_crash_after_assignment(
-    broker: DummyBroker[KafkaPayload],
+    broker: Broker[KafkaPayload],
 ) -> None:
     topic = Topic("topic")
     commit_log_topic = Topic("commit-log")
 
-    broker: DummyBroker[KafkaPayload] = DummyBroker()
     broker.create_topic(topic, partitions=1)
     broker.create_topic(commit_log_topic, partitions=1)
 
@@ -367,7 +366,7 @@ def test_synchronized_consumer_worker_crash_after_assignment(
     class BrokenConsumerException(Exception):
         pass
 
-    class BrokenDummyConsumer(DummyConsumer[KafkaPayload]):
+    class BrokenConsumer(LocalConsumer[KafkaPayload]):
         def poll(
             self, timeout: Optional[float] = None
         ) -> Optional[Message[KafkaPayload]]:
@@ -379,8 +378,8 @@ def test_synchronized_consumer_worker_crash_after_assignment(
                 finally:
                     poll_called.set()
 
-    consumer: Consumer[KafkaPayload] = DummyConsumer(broker, "consumer")
-    commit_log_consumer: Consumer[KafkaPayload] = BrokenDummyConsumer(
+    consumer: Consumer[KafkaPayload] = broker.get_consumer("consumer")
+    commit_log_consumer: Consumer[KafkaPayload] = BrokenConsumer(
         broker, "commit-log-consumer"
     )
 
