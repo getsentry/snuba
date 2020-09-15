@@ -55,6 +55,7 @@ from snuba.query.processors.performance_expressions import apdex_processor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension
+from snuba.query.subscripts import subscript_key_column_name
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import qualified_column
@@ -125,6 +126,13 @@ def match_query_to_table(
         elif transactions_only_columns.get(col.column_name):
             has_transaction_columns = True
 
+    for subscript in query.get_all_ast_referenced_subscripts():
+        schema_col_name = subscript_key_column_name(subscript)
+        if events_only_columns.get(schema_col_name):
+            has_event_columns = True
+        if transactions_only_columns.get(schema_col_name):
+            has_transaction_columns = True
+
     if has_event_columns and has_transaction_columns:
         # Impossible query, use the merge table
         return EVENTS_AND_TRANSACTIONS
@@ -161,6 +169,13 @@ def detect_table(
                 event_columns.add(col.column_name)
             elif transactions_only_columns.get(col.column_name):
                 transaction_columns.add(col.column_name)
+
+        for subscript in query.get_all_ast_referenced_subscripts():
+            schema_col_name = subscript_key_column_name(subscript)
+            if events_only_columns.get(schema_col_name):
+                event_columns.add(schema_col_name)
+            if transactions_only_columns.get(schema_col_name):
+                transaction_columns.add(schema_col_name)
 
         event_mismatch = event_columns and selected_table == TRANSACTIONS
         transaction_mismatch = transaction_columns and selected_table in [
