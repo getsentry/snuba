@@ -127,6 +127,10 @@ def match_query_to_table(
             has_transaction_columns = True
 
     for subscript in query.get_all_ast_referenced_subscripts():
+        # Subscriptable references will not be properly recognized above
+        # through get_all_ast_referenced_columns since the columns that
+        # method will find will look like `tags` or `measurements`, while
+        # the column sets contains `tags.key` and `tags.value`.
         schema_col_name = subscript_key_column_name(subscript)
         if events_only_columns.get(schema_col_name):
             has_event_columns = True

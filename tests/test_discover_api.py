@@ -907,7 +907,11 @@ class TestDiscoverApi(BaseApiTest):
                 {
                     "dataset": "discover",
                     "project": self.project_id,
-                    "selected_columns": ["event_id", "measurements[lcp]"],
+                    "selected_columns": [
+                        "event_id",
+                        "measurements[lcp]",
+                        "measurements[lcp.elementSize]",
+                    ],
                     "limit": 1,
                 }
             ),
@@ -917,3 +921,5 @@ class TestDiscoverApi(BaseApiTest):
         assert len(data["data"]) == 1, data
         assert "measurements[lcp]" in data["data"][0]
         assert data["data"][0]["measurements[lcp]"] == 32.129
+        assert "measurements[lcp.elementSize]" in data["data"][0]
+        assert data["data"][0]["measurements[lcp.elementSize]"] == 4242
