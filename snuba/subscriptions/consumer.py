@@ -88,9 +88,12 @@ class TickConsumer(Consumer[Tick]):
     # between B and C, since the message B was the first message received by
     # the consumer.
 
-    def __init__(self, consumer: Consumer[Any]) -> None:
+    def __init__(
+        self, consumer: Consumer[Any], time_shift: Optional[timedelta] = None
+    ) -> None:
         self.__consumer = consumer
         self.__previous_messages: MutableMapping[Partition, MessageDetails] = {}
+        self.__time_shift = time_shift if time_shift is not None else timedelta()
 
     def subscribe(
         self,
@@ -139,7 +142,7 @@ class TickConsumer(Consumer[Tick]):
                     Tick(
                         Interval(previous_message.offset, message.offset),
                         time_interval,
-                    ),
+                    ).time_shift(self.__time_shift),
                     message.timestamp,
                 )
         else:

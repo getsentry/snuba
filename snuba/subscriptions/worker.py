@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import copy
 import itertools
-import json
 import time
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
-from datetime import timedelta
 from typing import Mapping, NamedTuple, Optional, Sequence, Tuple
 
 from snuba.datasets.dataset import Dataset
@@ -13,13 +11,11 @@ from snuba.reader import Result
 from snuba.request import Request
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import Subscription
-from snuba.subscriptions.scheduler import ScheduledTask, Scheduler
-from snuba.utils.codecs import Encoder
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.scheduler import ScheduledTask, Scheduler
 from snuba.utils.streams import Producer, Message, Topic
-from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.batching import AbstractBatchWorker
 from snuba.web.query import parse_and_run_query
 
@@ -42,10 +38,9 @@ class SubscriptionWorker(
         dataset: Dataset,
         executor: ThreadPoolExecutor,
         schedulers: Mapping[int, Scheduler[Subscription]],
-        producer: Producer[KafkaPayload],
+        producer: Producer[SubscriptionTaskResult],
         topic: Topic,
         metrics: MetricsBackend,
-        time_shift: Optional[timedelta] = None,
     ) -> None:
         self.__dataset = dataset
         self.__executor = executor
@@ -53,7 +48,6 @@ class SubscriptionWorker(
         self.__producer = producer
         self.__topic = topic
         self.__metrics = metrics
-        self.__time_shift = time_shift if time_shift is not None else timedelta()
 
         self.__concurrent_gauge = Gauge(self.__metrics, "executor.concurrent")
 
@@ -101,7 +95,7 @@ class SubscriptionWorker(
         # waiting for them to complete during ``flush_batch`` may exceed the
         # consumer poll timeout (or session timeout during consumer
         # rebalancing) and cause the entire batch to be have to be replayed.
-        tick = message.payload.time_shift(self.__time_shift)
+        tick = message.payload
         return [
             SubscriptionTaskResultFuture(
                 task, self.__executor.submit(self.__execute, task, tick)
@@ -126,34 +120,6 @@ class SubscriptionWorker(
         # them to complete. Again, either the entire batch succeeds, or the
         # entire batch fails.
         for future in as_completed(
-            [
-                self.__producer.produce(
-                    self.__topic, subscription_task_result_encoder.encode(result)
-                )
-                for result in results
-            ]
+            [self.__producer.produce(self.__topic, result) for result in results]
         ):
             future.result()
-
-
-class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult]):
-    def encode(self, value: SubscriptionTaskResult) -> KafkaPayload:
-        subscription_id = str(value.task.task.identifier)
-        request, result = value.result
-        return KafkaPayload(
-            subscription_id.encode("utf-8"),
-            json.dumps(
-                {
-                    "version": 2,
-                    "payload": {
-                        "subscription_id": subscription_id,
-                        "request": {**request.body},
-                        "result": result,
-                        "timestamp": value.task.timestamp.isoformat(),
-                    },
-                }
-            ).encode("utf-8"),
-        )
-
-
-subscription_task_result_encoder = SubscriptionTaskResultEncoder()
