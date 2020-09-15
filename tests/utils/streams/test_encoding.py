@@ -1,5 +1,5 @@
 from snuba.utils.codecs import Encoder
-from snuba.utils.streams.backends.dummy import DummyBroker as Broker
+from snuba.utils.streams.backends.local.backend import LocalBroker as Broker
 from snuba.utils.streams.encoding import ProducerEncodingWrapper
 from snuba.utils.streams.types import Message, Topic
 

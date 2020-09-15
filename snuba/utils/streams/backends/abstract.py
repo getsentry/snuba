@@ -34,6 +34,12 @@ class EndOfPartition(ConsumerError):
         self.offset = offset
 
 
+class OffsetOutOfRange(ConsumerError):
+    """
+    Raised when trying to read from an invalid position in the partition.
+    """
+
+
 class Consumer(Generic[TPayload], ABC):
     """
     This abstract class provides an interface for consuming messages from a
@@ -87,6 +93,15 @@ class Consumer(Generic[TPayload], ABC):
 
     @abstractmethod
     def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
+        """
+        Fetch a message from the consumer. If no message is available before
+        the timeout, ``None`` is returned.
+
+        This method may raise an ``OffsetOutOfRange`` exception if the
+        consumer attempts to read from an invalid location in one of it's
+        assigned partitions. (Additional details can be found in the
+        docstring for ``Consumer.seek``.)
+        """
         raise NotImplementedError
 
     @abstractmethod
@@ -145,8 +160,8 @@ class Consumer(Generic[TPayload], ABC):
         that is too high which is not yet associated with a message.) Since
         this method only updates the local working offset (and does not
         communicate with the broker), setting an invalid offset will cause a
-        subsequent ``poll`` call to raise an exception, even though the call
-        to ``seek`` succeeded.
+        subsequent ``poll`` call to raise ``OffsetOutOfRange`` exception,
+        even though the call to ``seek`` succeeded.
 
         If any provided partitions are not in the assignment set, an
         exception will be raised and no offsets will be modified.
