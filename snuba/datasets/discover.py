@@ -33,7 +33,11 @@ from snuba.datasets.storage import (
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.transactions import transaction_translator
-from snuba.query.conditions import BINARY_OPERATORS, ConditionFunctions
+from snuba.query.conditions import (
+    BINARY_OPERATORS,
+    ConditionFunctions,
+    get_first_level_and_conditions,
+)
 from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
@@ -51,7 +55,6 @@ from snuba.query.processors.performance_expressions import apdex_processor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension
-from snuba.query.subscripts import subscript_key_column_name
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import qualified_column
@@ -59,10 +62,10 @@ from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 
 EVENTS = "events"
 TRANSACTIONS = "transactions"
+EVENTS_AND_TRANSACTIONS = "events_and_transactions"
 
 metrics = MetricsWrapper(environment.metrics, "api.discover")
 logger = logging.getLogger(__name__)
-
 
 EVENT_CONDITION = FunctionCallMatch(
     None,
@@ -82,39 +85,19 @@ EVENT_CONDITION = FunctionCallMatch(
 def match_query_to_table(
     query: Query, events_only_columns: ColumnSet, transactions_only_columns: ColumnSet
 ) -> str:
-    has_event_columns = False
-    has_transaction_columns = False
-    for col in query.get_all_ast_referenced_columns():
-        if events_only_columns.get(col.column_name):
-            has_event_columns = True
-        elif transactions_only_columns.get(col.column_name):
-            has_transaction_columns = True
-
-    for subscript in query.get_all_ast_referenced_subscripts():
-        schema_col_name = subscript_key_column_name(subscript)
-        if events_only_columns.get(schema_col_name):
-            has_event_columns = True
-        if transactions_only_columns.get(schema_col_name):
-            has_transaction_columns = True
-
-    # Unless we have an impossible query, we only need to check which columns are referenced.
-    # If all columns are common, use the events table by default.
-    if not (has_event_columns and has_transaction_columns):
-        return TRANSACTIONS if has_transaction_columns else EVENTS
-
-    # In the case of an impossible query, check to see if the user has specified which type of event
-    # they want to see, and use that to inform the table selection. If there is no specification,
-    # default to events.
+    # First check for a top level condition on the event type
     condition = query.get_condition_from_ast()
     event_types = set()
     if condition:
-        for cond in condition:
+        top_level_condition = get_first_level_and_conditions(condition)
+
+        for cond in top_level_condition:
             result = EVENT_CONDITION.match(cond)
             if not result:
                 continue
 
             event_type_param = result.expression("event_type")
-            event_type = None
+
             if isinstance(event_type_param, Column):
                 event_type = event_type_param.column_name
             else:
@@ -126,10 +109,31 @@ def match_query_to_table(
                     if event_type == "transaction":
                         return EVENTS
 
-    if len(event_types) == 1 and event_types.pop() == "transaction":
+    if len(event_types) == 1 and "transaction" in event_types:
         return TRANSACTIONS
 
-    return EVENTS
+    if len(event_types) > 0 and "transaction" not in event_types:
+        return EVENTS
+
+    # If we cannot clearly pick a table from the top level conditions, then
+    # inspect the columns requested to infer a selection.
+    has_event_columns = False
+    has_transaction_columns = False
+    for col in query.get_all_ast_referenced_columns():
+        if events_only_columns.get(col.column_name):
+            has_event_columns = True
+        elif transactions_only_columns.get(col.column_name):
+            has_transaction_columns = True
+
+    if has_event_columns and has_transaction_columns:
+        # Impossible query, use the merge table
+        return EVENTS_AND_TRANSACTIONS
+    elif has_event_columns:
+        return EVENTS
+    elif has_transaction_columns:
+        return TRANSACTIONS
+    else:
+        return EVENTS_AND_TRANSACTIONS
 
 
 def detect_table(
@@ -140,7 +144,10 @@ def detect_table(
 ) -> str:
     """
     Given a query, we attempt to guess whether it is better to fetch data from the
-    "events" or "transactions" storage. This is going to be wrong in some cases.
+    "events", "transactions" or future merged storage.
+
+    The merged storage resolves to the events storage until errors and transactions
+    are split into separate physical tables.
     """
     selected_table = match_query_to_table(
         query, events_only_columns, transactions_only_columns
@@ -156,7 +163,11 @@ def detect_table(
                 transaction_columns.add(col.column_name)
 
         event_mismatch = event_columns and selected_table == TRANSACTIONS
-        transaction_mismatch = transaction_columns and selected_table == EVENTS
+        transaction_mismatch = transaction_columns and selected_table in [
+            EVENTS,
+            EVENTS_AND_TRANSACTIONS,
+        ]
+
         if event_mismatch or transaction_mismatch:
             missing_columns = ",".join(
                 sorted(event_columns if event_mismatch else transaction_columns)
@@ -169,6 +180,21 @@ def detect_table(
                 },
             )
             logger.warning("Discover generated impossible query", exc_info=True)
+
+        if selected_table == EVENTS_AND_TRANSACTIONS and (
+            event_columns or transaction_columns
+        ):
+            # Not possible in future with merge table
+            metrics.increment(
+                "query.impossible-merge-table",
+                tags={
+                    "missing_events_columns": ",".join(sorted(event_columns)),
+                    "missing_transactions_columns": ",".join(
+                        sorted(transaction_columns)
+                    ),
+                },
+            )
+
         else:
             metrics.increment("query.success")
 

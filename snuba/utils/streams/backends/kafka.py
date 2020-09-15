@@ -39,6 +39,7 @@ from snuba.utils.streams.backends.abstract import (
     Consumer,
     ConsumerError,
     EndOfPartition,
+    OffsetOutOfRange,
     Producer,
 )
 from snuba.utils.streams.types import Message, Partition, Topic
@@ -422,6 +423,8 @@ class KafkaConsumer(Consumer[KafkaPayload]):
                 )
             elif code == KafkaError._TRANSPORT:
                 raise TransportError(str(error))
+            elif code == KafkaError.OFFSET_OUT_OF_RANGE:
+                raise OffsetOutOfRange(str(error))
             else:
                 raise ConsumerError(str(error))
 
@@ -435,7 +438,7 @@ class KafkaConsumer(Consumer[KafkaPayload]):
             datetime.utcfromtimestamp(message.timestamp()[1] / 1000.0),
         )
 
-        self.__offsets[result.partition] = result.get_next_offset()
+        self.__offsets[result.partition] = result.next_offset
 
         return result
 
