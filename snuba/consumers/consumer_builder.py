@@ -1,15 +1,18 @@
 from enum import Enum
 from typing import Optional, Sequence
 
-from confluent_kafka import KafkaError, KafkaException, Producer
+from confluent_kafka import KafkaError, KafkaException
+from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba import environment
 from snuba.consumer import ConsumerWorker, StreamingConsumerStrategyFactory
-from snuba.consumers.snapshot_worker import SnapshotAwareWorker
+from snuba.consumers.snapshot_worker import SnapshotProcessor
+from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
+from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
 from snuba.utils.streams import Topic
@@ -26,6 +29,27 @@ from snuba.utils.streams.profiler import ProcessingStrategyProfilerWrapperFactor
 
 
 StrategyFactoryType = Enum("StrategyFactoryType", ["BATCHING", "STREAMING"])
+
+
+DEFAULT_WRITER_OPTIONS = ({"load_balancing": "in_order", "insert_distributed_sync": 1},)
+
+
+def build_consumer_worker(
+    storage: WritableTableStorage,
+    metrics: MetricsBackend,
+    producer: Optional[ConfluentKafkaProducer] = None,
+    replacements_topic: Optional[Topic] = None,
+) -> ConsumerWorker:
+    table_writer = storage.get_table_writer()
+    stream_loader = table_writer.get_stream_loader()
+    return ConsumerWorker(
+        stream_loader.get_pre_filter(),
+        stream_loader.get_processor(),
+        table_writer.get_batch_writer(metrics, DEFAULT_WRITER_OPTIONS),
+        producer=producer,
+        replacements_topic=replacements_topic,
+        metrics=metrics,
+    )
 
 
 class ConsumerBuilder:
@@ -88,7 +112,7 @@ class ConsumerBuilder:
 
         # XXX: This can result in a producer being built in cases where it's
         # not actually required.
-        self.producer = Producer(
+        self.producer = ConfluentKafkaProducer(
             {
                 "bootstrap.servers": ",".join(self.bootstrap_servers),
                 "partitioner": "consistent",
@@ -171,11 +195,8 @@ class ConsumerBuilder:
         self,
     ) -> BatchProcessingStrategyFactory[KafkaPayload]:
         return BatchProcessingStrategyFactory(
-            worker=ConsumerWorker(
-                storage=self.storage,
-                producer=self.producer,
-                replacements_topic=self.replacements_topic,
-                metrics=self.metrics,
+            worker=build_consumer_worker(
+                self.storage, self.metrics, self.producer, self.replacements_topic
             ),
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms,
@@ -188,10 +209,7 @@ class ConsumerBuilder:
         return StreamingConsumerStrategyFactory(
             stream_loader.get_pre_filter(),
             stream_loader.get_processor(),
-            table_writer.get_batch_writer(
-                self.metrics,
-                {"load_balancing": "in_order", "insert_distributed_sync": 1},
-            ),
+            table_writer.get_batch_writer(self.metrics, DEFAULT_WRITER_OPTIONS),
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
             processes=self.processes,
@@ -228,15 +246,21 @@ class ConsumerBuilder:
         """
         Builds the consumer with a ConsumerWorker able to handle snapshots.
         """
+        table_writer = self.storage.get_table_writer()
+        stream_loader = table_writer.get_stream_loader()
         return self.__build_consumer(
             BatchProcessingStrategyFactory(
-                worker=SnapshotAwareWorker(
-                    storage=self.storage,
+                ConsumerWorker(
+                    stream_loader.get_pre_filter(),
+                    SnapshotProcessor(
+                        stream_loader.get_processor(),
+                        snapshot_id=snapshot_id,
+                        transaction_data=transaction_data,
+                    ),
+                    table_writer.get_batch_writer(self.metrics, DEFAULT_WRITER_OPTIONS),
                     producer=self.producer,
-                    snapshot_id=snapshot_id,
-                    transaction_data=transaction_data,
-                    metrics=self.metrics,
                     replacements_topic=self.replacements_topic,
+                    metrics=self.metrics,
                 ),
                 max_batch_size=self.max_batch_size,
                 max_batch_time=self.max_batch_time_ms,

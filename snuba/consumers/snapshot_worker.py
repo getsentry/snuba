@@ -1,19 +1,15 @@
 import logging
 from typing import Any, Mapping, Optional, Set
 
-from confluent_kafka import Producer
-
-from snuba.consumer import ConsumerWorker, KafkaMessageMetadata
-from snuba.datasets.storage import WritableTableStorage
+from snuba.consumer import KafkaMessageMetadata
+from snuba.processor import MessageProcessor, ProcessedMessage
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
-from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams import Topic
 
 logger = logging.getLogger("snuba.snapshot-consumer")
 
 
-class SnapshotAwareWorker(ConsumerWorker):
+class SnapshotProcessor(MessageProcessor):
     """
     This worker consumes messages in a similar way to its parent class ConsumerWorker.
     The main difference is that it is used when catching up on the main topic after
@@ -34,29 +30,23 @@ class SnapshotAwareWorker(ConsumerWorker):
 
     def __init__(
         self,
-        storage: WritableTableStorage,
-        producer: Producer,
+        processor: MessageProcessor,
         snapshot_id: SnapshotId,
         transaction_data: TransactionData,
-        metrics: MetricsBackend,
-        replacements_topic: Optional[Topic] = None,
     ) -> None:
-        super().__init__(
-            storage=storage,
-            producer=producer,
-            replacements_topic=replacements_topic,
-            metrics=metrics,
-        )
+        self.__processor = processor
         self.__snapshot_id = snapshot_id
         self.__transaction_data = transaction_data
+
         self.__catching_up = True
         self.__skipped: Set[int] = set()
         self.__xip_list_applied: Set[int] = set()
-        logger.debug("Starting snapshot aware worker for id %s", self.__snapshot_id)
+
+        logger.debug("Starting snapshot aware processor for id %s", self.__snapshot_id)
 
     def __accept_message(
-        self, xid: int, value: Mapping[str, Any], metadata: KafkaMessageMetadata
-    ):
+        self, xid: int, message: Mapping[str, Any], metadata: KafkaMessageMetadata
+    ) -> Optional[ProcessedMessage]:
         if self.__catching_up and xid and xid >= self.__transaction_data.xmax:
             logger.info(
                 "Found xid(%s) >= xmax:(%s). Catch up phase is over",
@@ -72,11 +62,9 @@ class SnapshotAwareWorker(ConsumerWorker):
             self.__xip_list_applied.clear()
             self.__catching_up = False
 
-        return super()._process_message_impl(value, metadata,)
+        return self.__processor.process_message(message, metadata)
 
-    def __drop_message(
-        self, xid: int,
-    ):
+    def __drop_message(self, xid: int) -> Optional[ProcessedMessage]:
         current_len = len(self.__skipped)
         self.__skipped.add(xid)
         new_len = len(self.__skipped)
@@ -86,9 +74,9 @@ class SnapshotAwareWorker(ConsumerWorker):
             )
         return None
 
-    def _process_message_impl(
-        self, value: Mapping[str, Any], metadata: KafkaMessageMetadata,
-    ):
+    def process_message(
+        self, message, metadata: KafkaMessageMetadata
+    ) -> Optional[ProcessedMessage]:
         """
         This delegates the processing of all transactions that follow the snapshot
         to the parent class and discard those that were already loaded.
@@ -114,7 +102,7 @@ class SnapshotAwareWorker(ConsumerWorker):
         - After seeing xmax, all transactions have to be applied since they are either
           higher of xmax or part of xip_list.
         """
-        xid = value.get("xid")
+        xid = message.get("xid")
 
         if xid is not None:
             if self.__catching_up:
@@ -136,4 +124,4 @@ class SnapshotAwareWorker(ConsumerWorker):
                     else:
                         return self.__drop_message(xid)
 
-        return self.__accept_message(xid, value, metadata)
+        return self.__accept_message(xid, message, metadata)

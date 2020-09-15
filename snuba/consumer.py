@@ -21,7 +21,6 @@ from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder
 from snuba.datasets.message_filters import StreamMessageFilter
-from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import (
     InsertBatch,
     MessageProcessor,
@@ -59,27 +58,19 @@ class InvalidActionType(Exception):
 class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
     def __init__(
         self,
-        storage: WritableTableStorage,
+        prefilter: Optional[StreamMessageFilter[KafkaPayload]],
+        processor: MessageProcessor,
+        writer: BatchWriter[JSONRow],
         metrics: MetricsBackend,
         producer: Optional[ConfluentKafkaProducer] = None,
         replacements_topic: Optional[Topic] = None,
     ) -> None:
-        self.__storage = storage
+        self.__pre_filter = prefilter
+        self.__processor = processor
+        self.__writer = BatchWriterEncoderWrapper(writer, JSONRowEncoder())
         self.producer = producer
         self.replacements_topic = replacements_topic
         self.metrics = metrics
-        table_writer = storage.get_table_writer()
-        self.__writer = BatchWriterEncoderWrapper(
-            table_writer.get_batch_writer(
-                metrics, {"load_balancing": "in_order", "insert_distributed_sync": 1}
-            ),
-            JSONRowEncoder(),
-        )
-
-        self.__pre_filter = table_writer.get_stream_loader().get_pre_filter()
-        self.__processor = (
-            self.__storage.get_table_writer().get_stream_loader().get_processor()
-        )
 
     def process_message(
         self, message: Message[KafkaPayload]

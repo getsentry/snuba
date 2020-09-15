@@ -445,9 +445,9 @@ if application.debug or application.testing:
         assert storage is not None
 
         if type_ == "insert":
-            from snuba.consumer import ConsumerWorker
+            from snuba.consumers.consumer_builder import build_consumer_worker
 
-            worker = ConsumerWorker(storage, metrics=metrics)
+            worker = build_consumer_worker(storage, metrics)
         else:
             from snuba.replacer import ReplacerWorker
 
