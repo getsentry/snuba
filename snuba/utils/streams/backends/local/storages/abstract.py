@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Generic, Optional
+from typing import Iterator, Generic, Optional
 
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
@@ -28,6 +28,23 @@ class MessageStorage(ABC, Generic[TPayload]):
 
         If the topic already exists, a ``TopicExists`` exception will be
         raised.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def list_topics(self) -> Iterator[Topic]:
+        """
+        List all topics.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def delete_topic(self, topic: Topic) -> None:
+        """
+        Delete a topic.
+
+        If the topic does not exist, a ``TopicDoesNotExist`` exception will
+        be raised.
         """
         raise NotImplementedError
 

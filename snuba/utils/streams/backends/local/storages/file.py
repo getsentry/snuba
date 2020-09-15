@@ -7,6 +7,7 @@ from pathlib import Path
 from struct import Struct
 from typing import (
     BinaryIO,
+    Iterator,
     MutableMapping,
     MutableSequence,
     Optional,
@@ -36,6 +37,12 @@ class PickleCodec(Codec[bytes, Tuple[TPayload, datetime]]):
 class FilePartition:
     def __init__(self, path: Path) -> None:
         self.__path = path
+
+    def create(self) -> None:
+        self.__path.touch()
+
+    def delete(self) -> None:
+        self.__path.unlink()
 
     def exists(self) -> bool:
         return self.__path.exists()
@@ -79,7 +86,22 @@ class FileMessageStorage(MessageStorage[TPayload]):
         topic_path.mkdir()
 
         for i in range(partitions):
-            (topic_path / str(i)).touch()
+            FilePartition(topic_path / str(i)).create()
+
+    def list_topics(self) -> Iterator[Topic]:
+        for path in self.__directory.iterdir():
+            if path.is_dir():
+                yield Topic(path.name)
+
+    def delete_topic(self, topic: Topic):
+        topic_path = self.__directory / topic.name
+        if not topic_path.exists():
+            raise TopicDoesNotExist(topic)
+
+        for partition in self.__get_file_partitions_for_topic(topic):
+            partition.delete()
+
+        topic_path.rmdir()
 
     def __get_file_partitions_for_topic(self, topic: Topic) -> Sequence[FilePartition]:
         if topic not in self.__topic_partition_cache:

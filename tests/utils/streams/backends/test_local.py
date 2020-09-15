@@ -66,6 +66,8 @@ class LocalStreamsTestMixin(StreamsTestMixin[int]):
 
         self.storage.create_topic(topic, partitions)
 
+        assert [*self.storage.list_topics()] == [topic]
+
         assert self.storage.get_partition_count(topic) == partitions
 
         with pytest.raises(TopicExists):
@@ -91,6 +93,11 @@ class LocalStreamsTestMixin(StreamsTestMixin[int]):
 
         with pytest.raises(PartitionDoesNotExist):
             self.storage.produce(Partition(topic, partitions + 1), 0, datetime.now())
+
+        self.storage.delete_topic(topic)
+
+        with pytest.raises(TopicDoesNotExist):
+            self.storage.delete_topic(topic)
 
 
 class LocalStreamsMemoryStorageTestCase(LocalStreamsTestMixin, TestCase):

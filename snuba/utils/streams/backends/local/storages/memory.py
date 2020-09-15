@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import MutableMapping, MutableSequence, Optional, Sequence, Tuple
+from typing import Iterator, MutableMapping, MutableSequence, Optional, Sequence, Tuple
 
 from snuba.utils.streams.backends.abstract import OffsetOutOfRange
 from snuba.utils.streams.backends.local.storages.abstract import (
@@ -22,6 +22,15 @@ class MemoryMessageStorage(MessageStorage[TPayload]):
             raise TopicExists(topic)
 
         self.__topics[topic] = [[] for i in range(partitions)]
+
+    def list_topics(self) -> Iterator[Topic]:
+        return iter(self.__topics.keys())
+
+    def delete_topic(self, topic: Topic) -> None:
+        try:
+            del self.__topics[topic]
+        except KeyError as e:
+            raise TopicDoesNotExist(topic) from e
 
     def get_partition_count(self, topic: Topic) -> int:
         try:
