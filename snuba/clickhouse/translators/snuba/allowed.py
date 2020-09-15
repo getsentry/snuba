@@ -73,7 +73,7 @@ class CurriedFunctionCallMapper(
 
 class SubscriptableReferenceMapper(
     SnubaClickhouseMapper[
-        SubscriptableReference, Union[FunctionCall, SubscriptableReference],
+        SubscriptableReference, Union[FunctionCall, Literal, SubscriptableReference],
     ],
 ):
     """

@@ -923,3 +923,20 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"][0]["measurements[lcp]"] == 32.129
         assert "measurements[lcp.elementSize]" in data["data"][0]
         assert data["data"][0]["measurements[lcp.elementSize]"] == 4242
+
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["group_id", "measurements[lcp]"],
+                    "limit": 1,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert "measurements[lcp]" in data["data"][0]
+        assert data["data"][0]["measurements[lcp]"] is None

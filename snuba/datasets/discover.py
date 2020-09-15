@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Mapping, Optional, Sequence
+from typing import Mapping, Optional, Sequence, Set
 
 from snuba import environment, state
 from snuba.clickhouse.columns import (
@@ -18,7 +18,10 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
-from snuba.clickhouse.translators.snuba.allowed import ColumnMapper
+from snuba.clickhouse.translators.snuba.allowed import (
+    ColumnMapper,
+    SubscriptableReferenceMapper,
+)
 from snuba.clickhouse.translators.snuba.mappers import ColumnToLiteral, ColumnToMapping
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.dataset import TimeSeriesDataset
@@ -38,7 +41,7 @@ from snuba.query.conditions import (
     ConditionFunctions,
     get_first_level_and_conditions,
 )
-from snuba.query.expressions import Column, Literal
+from snuba.query.expressions import Column, Literal, SubscriptableReference
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.matchers import Column as ColumnMatch
@@ -246,6 +249,28 @@ class DefaultNoneColumnMapper(ColumnMapper):
             return None
 
 
+@dataclass(frozen=True)
+class DefaultNoneSubscriptMapper(SubscriptableReferenceMapper):
+    """
+    This maps a subscriptable reference to None (NULL in SQL) as it is done
+    in the discover column_expr method today. It should not be used for
+    any other reason or use case, thus it should not be moved out of
+    the discover dataset file.
+    """
+
+    subscript_names: Set[str]
+
+    def attempt_map(
+        self,
+        expression: SubscriptableReference,
+        children_translator: SnubaClickhouseStrictTranslator,
+    ) -> Optional[Literal]:
+        if expression.column.column_name in self.subscript_names:
+            return Literal(alias=expression.alias, value=None,)
+        else:
+            return None
+
+
 class DiscoverQueryStorageSelector(QueryStorageSelector):
     def __init__(
         self,
@@ -273,6 +298,7 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
                     ColumnToMapping(None, "user", None, "tags", "sentry:user"),
                     DefaultNoneColumnMapper(self.__abstract_transactions_columns),
                 ],
+                subscriptables=[DefaultNoneSubscriptMapper({"measurements"})],
             )
         )
 
