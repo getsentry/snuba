@@ -911,6 +911,7 @@ class TestDiscoverApi(BaseApiTest):
                         "event_id",
                         "measurements[lcp]",
                         "measurements[lcp.elementSize]",
+                        "measurements[asd]",
                     ],
                     "limit": 1,
                 }
@@ -919,10 +920,9 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 1, data
-        assert "measurements[lcp]" in data["data"][0]
         assert data["data"][0]["measurements[lcp]"] == 32.129
-        assert "measurements[lcp.elementSize]" in data["data"][0]
         assert data["data"][0]["measurements[lcp.elementSize]"] == 4242
+        assert data["data"][0]["measurements[asd]"] is None
 
         response = self.app.post(
             "/query",

@@ -343,7 +343,11 @@ class TestTransactionsApi(BaseApiTest):
                 {
                     "dataset": "transactions",
                     "project": 1,
-                    "selected_columns": ["event_id", "measurements[lcp]"],
+                    "selected_columns": [
+                        "event_id",
+                        "measurements[lcp]",
+                        "measurements[asd]",
+                    ],
                     "limit": 1,
                 }
             ),
@@ -353,3 +357,4 @@ class TestTransactionsApi(BaseApiTest):
         assert len(data["data"]) == 1, data
         assert "measurements[lcp]" in data["data"][0]
         assert data["data"][0]["measurements[lcp]"] == 32.129
+        assert data["data"][0]["measurements[asd]"] is None
