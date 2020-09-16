@@ -45,15 +45,56 @@ class SpansMessageProcessor(MessageProcessor):
             return None
 
         ret: List[MutableMapping[str, Any]] = []
+        retention = enforce_retention(event, datetime.fromtimestamp(data["timestamp"]))
+        transaction_ctx = data["contexts"]["trace"]
+        trace_id = transaction_ctx["trace_id"]
+        transaction_span_id = int(transaction_ctx["span_id"], 16)
+
+        # Add the transaction span
+        processed: MutableMapping[str, Any] = {"deleted": 0}
+        processed["project_id"] = event["project_id"]
+        processed["retention_days"] = retention
+        processed["transaction_span_id"] = transaction_span_id
+        processed["span_id"] = transaction_span_id
+        processed["trace_id"] = trace_id
+        processed["transaction_name"] = _unicodify(data.get("transaction") or "")
+        processed["parent_span_id"] = (
+            int(transaction_ctx["parent_span_id"], 16)
+            if "parent_span_id" in transaction_ctx
+            else 0
+        )
+        processed["description"] = _unicodify(data.get("transaction") or "")
+        processed["op"] = _unicodify(transaction_ctx.get("op") or "")
+
+        status = transaction_ctx.get("status", None)
+        if status:
+            int_status = SPAN_STATUS_NAME_TO_CODE.get(status, UNKNOWN_SPAN_STATUS)
+        else:
+            int_status = UNKNOWN_SPAN_STATUS
+        processed["status"] = int_status
+
+        data = event["data"]
+        processed["start_ts"], processed["start_ns"] = self.__extract_timestamp(
+            data["start_timestamp"],
+        )
+        processed["finish_ts"], processed["finish_ns"] = self.__extract_timestamp(
+            data["timestamp"],
+        )
+        duration_secs = (processed["finish_ts"] - processed["start_ts"]).total_seconds()
+        processed["duration"] = max(int(duration_secs * 1000), 0)
+
+        tags = _as_dict_safe(data.get("tags", None))
+        processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
+        ret.append(processed)
+
         spans = data.get("spans", [])
         for span in spans:
             processed: MutableMapping[str, Any] = {"deleted": 0}
-            extract_project_id(processed, event)
-            processed["retention_days"] = enforce_retention(
-                event, datetime.fromtimestamp(data["timestamp"]),
-            )
-            processed["transaction_id"] = str(uuid.UUID(event["event_id"]))
+            processed["project_id"] = event["project_id"]
+            processed["retention_days"] = retention
+            processed["transaction_span_id"] = transaction_span_id
             processed["span_id"] = int(span["span_id"], 16)
+            processed["trace_id"] = trace_id
             processed["transaction_name"] = _unicodify(data.get("transaction") or "")
             processed["parent_span_id"] = int(span["parent_span_id"], 16)
             processed["description"] = span.get("description", "") or ""
