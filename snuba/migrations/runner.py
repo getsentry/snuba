@@ -3,7 +3,7 @@ import logging
 from clickhouse_driver import errors
 from datetime import datetime
 from functools import partial
-from typing import List, Mapping, MutableMapping, NamedTuple, Tuple
+from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Tuple
 
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.errors import ClickhouseError
@@ -56,6 +56,44 @@ class Runner:
         self.__connection = migrations_cluster.get_query_connection(
             ClickhouseClientSettings.MIGRATE
         )
+
+        self.__status: MutableMapping[
+            MigrationKey, Tuple[Status, Optional[datetime]]
+        ] = {}
+
+    def get_status(
+        self, migration_key: MigrationKey
+    ) -> Tuple[Status, Optional[datetime]]:
+        """
+        Returns the status and timestamp of a migration.
+        """
+
+        if migration_key in self.__status:
+            return self.__status[migration_key]
+
+        try:
+            data = self.__connection.execute(
+                f"SELECT status, timestamp FROM {self.__table_name} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s",
+                {
+                    "group": migration_key.group.value,
+                    "migration_id": migration_key.migration_id,
+                },
+            )
+
+            if data:
+                status, timestamp = data[0]
+                self.__status[migration_key] = (Status(status), timestamp)
+            else:
+                self.__status[migration_key] = (Status.NOT_STARTED, None)
+
+            return self.__status[migration_key]
+
+        except ClickhouseError as e:
+            # If the table wasn't created yet, no migrations have started.
+            if e.code != errors.ErrorCodes.UNKNOWN_TABLE:
+                raise e
+
+        return Status.NOT_STARTED, None
 
     def show_all(self) -> List[Tuple[MigrationGroup, List[MigrationDetails]]]:
         """
@@ -235,6 +273,7 @@ class Runner:
     def _update_migration_status(
         self, migration_key: MigrationKey, status: Status
     ) -> None:
+        self.__status = {}
         next_version = self._get_next_version(migration_key)
 
         statement = f"INSERT INTO {self.__table_name} FORMAT JSONEachRow"
