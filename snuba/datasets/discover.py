@@ -52,9 +52,11 @@ from snuba.query.matchers import String as StringMatch
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.failure_rate_processor import FailureRateProcessor
 from snuba.query.processors.handled_functions import HandledFunctionsProcessor
-from snuba.query.processors.performance_expressions import apdex_processor
+from snuba.query.processors.performance_expressions import (
+    apdex_processor,
+    failure_rate_processor,
+)
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension
@@ -478,7 +480,7 @@ class DiscoverDataset(TimeSeriesDataset):
             # being defined by the Transaction entity when it will
             # exist, so it would run before Storage selection.
             apdex_processor(columnset),
-            FailureRateProcessor(),
+            failure_rate_processor(columnset),
             HandledFunctionsProcessor("exception_stacks.mechanism_handled", columnset),
             TimeSeriesColumnProcessor({"time": "timestamp"}),
         ]

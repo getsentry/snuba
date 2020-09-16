@@ -76,6 +76,7 @@ TEST_CASES = [
                             FunctionCall(
                                 None, "inner_call", (Column("param2", None, "param2"),)
                             ),
+                            Literal(None, 420),
                         ),
                     ),
                 ),
@@ -127,6 +128,7 @@ TEST_CASES = [
                                     ),
                                 ),
                             ),
+                            Literal(None, 420),
                         ),
                     ),
                 ),
@@ -143,7 +145,8 @@ def test_format_expressions(query: Query, expected_query: Query) -> None:
         ColumnSet([("param1", String()), ("param2", UInt(8)), ("other_col", String())]),
         "f_call",
         [("param1", ColType({String})), ("param2", ColType({UInt}))],
-        "f_call_impl(param1, inner_call(param2))",
+        [("my_const", 420)],
+        "f_call_impl(param1, inner_call(param2), my_const)",
     )
     # We cannot just run == on the query objects. The content of the two
     # objects is different, being one the AST and the ont the AST + raw body
@@ -204,6 +207,7 @@ def test_invalid_call(query: Query) -> None:
         ColumnSet([("param1", String()), ("param2", UInt(8)), ("other_col", String())]),
         "f_call",
         [("param1", ColType({String})), ("param2", ColType({UInt}))],
+        [],
         "f_call_impl(param1, inner_call(param2))",
     )
     with pytest.raises(InvalidCustomFunctionCall):

@@ -1,9 +1,9 @@
 from dataclasses import replace
-from typing import Sequence, Tuple
+from typing import Any, Sequence, Tuple
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.query.exceptions import InvalidExpressionException
-from snuba.query.expressions import Column, Expression, FunctionCall
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.parser.expressions import parse_clickhouse_function
 from snuba.query.processors import QueryProcessor
@@ -52,13 +52,18 @@ class CustomFunction(QueryProcessor):
         dataset_schema: ColumnSet,
         name: str,
         signature: Sequence[Tuple[str, ParamType]],
+        constants: Sequence[Tuple[str, Any]],
         body: str,
     ) -> None:
         self.__dataset_schema = dataset_schema
         self.__function_name = name
-        self.__param_names, param_types = zip(*signature)
+        self.__param_names = []
+        param_types = []
+        if len(signature) > 0:
+            self.__param_names, param_types = zip(*signature)
         self.__body = parse_clickhouse_function(body)
         self.__validator = SignatureValidator(param_types)
+        self.__constants = {name: const for (name, const) in constants}
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         def apply_function(expression: Expression) -> Expression:
@@ -83,11 +88,15 @@ class CustomFunction(QueryProcessor):
                     )
                 }
 
-                ret = self.__body.transform(
-                    lambda exp: resolved_params[exp.column_name]
-                    if isinstance(exp, Column) and exp.column_name in resolved_params
-                    else exp
-                )
+                def transform_fn(exp: Expression) -> Expression:
+                    if isinstance(exp, Column):
+                        if exp.column_name in resolved_params:
+                            return resolved_params[exp.column_name]
+                        elif exp.column_name in self.__constants:
+                            return Literal(exp.alias, self.__constants[exp.column_name])
+                    return exp
+
+                ret = self.__body.transform(transform_fn)
                 return replace(ret, alias=expression.alias)
             else:
                 return expression
