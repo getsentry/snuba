@@ -7,7 +7,6 @@ from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 from snuba.datasets.events_format import (
     enforce_retention,
     extract_extra_tags,
-    extract_project_id,
 )
 from snuba.processor import (
     InsertBatch,
@@ -47,7 +46,7 @@ class SpansMessageProcessor(MessageProcessor):
         ret: List[MutableMapping[str, Any]] = []
         retention = enforce_retention(event, datetime.fromtimestamp(data["timestamp"]))
         transaction_ctx = data["contexts"]["trace"]
-        trace_id = transaction_ctx["trace_id"]
+        trace_id = str(uuid.UUID(transaction_ctx["trace_id"]))
         transaction_span_id = int(transaction_ctx["span_id"], 16)
 
         # Add the transaction span
