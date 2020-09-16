@@ -2,14 +2,13 @@ import numbers
 import re
 
 from datetime import date, datetime
-from typing import Any, List, Optional, Sequence, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 import _strptime  # NOQA fixes _strptime deferred import issue
 
 from snuba import state
 from snuba.clickhouse.escaping import escape_alias, NEGATE_RE
 from snuba.query.conditions import FUNCTION_TO_OPERATOR
 from snuba.query.logical import Query
-from snuba.query.parser.conditions import parse_conditions
 from snuba.query.parser.functions import parse_function
 from snuba.query.parsing import ParsingContext
 from snuba.query.schema import POSITIVE_OPERATORS
@@ -144,41 +143,3 @@ def complex_column_expr(
         expr,
         depth,
     )
-
-
-def conditions_expr(
-    dataset, conditions, query: Query, parsing_context: ParsingContext, depth=0
-) -> str:
-    # The other argument is to keep the signature in sync with the ast parser.
-    def operand_builder(val, *_) -> str:
-        return str(column_expr(dataset, val, query, parsing_context))
-
-    def and_builder(expressions: Sequence[str]) -> str:
-        return " AND ".join(e for e in expressions if e)
-
-    def or_builder(expressions: Sequence[str]) -> str:
-        res = " OR ".join(expressions)
-        return "({})".format(res) if len(expressions) > 1 else res
-
-    def unpack_array_condition_builder(lhs: str, op: str, literal: Any) -> str:
-        any_or_all = "arrayExists" if op in POSITIVE_OPERATORS else "arrayAll"
-        return "{}(x -> assumeNotNull(x {} {}), {})".format(
-            any_or_all, op, escape_literal(literal), lhs,
-        )
-
-    def simple_condition_builder(lhs: str, op: str, literal: Any) -> str:
-        return "{} {} {}".format(lhs, op, escape_literal(literal))
-
-    condition = parse_conditions(
-        operand_builder,
-        and_builder,
-        or_builder,
-        unpack_array_condition_builder,
-        simple_condition_builder,
-        dataset,
-        conditions,
-        query.get_arrayjoin(),
-        depth,
-    )
-
-    return condition or ""
