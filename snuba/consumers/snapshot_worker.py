@@ -165,11 +165,11 @@ class SnapshotAwareWorker(ConsumerWorker):
         self.__snapshot_id = snapshot_id
         self.__transaction_data = transaction_data
 
-    def get_processor(self) -> MessageProcessor:
+    def _get_processor(self) -> MessageProcessor:
         try:
             return self.__processor
         except AttributeError:
             self.__processor = SnapshotProcessor(
-                super().get_processor(), self.__snapshot_id, self.__transaction_data
+                super()._get_processor(), self.__snapshot_id, self.__transaction_data
             )
             return self.__processor

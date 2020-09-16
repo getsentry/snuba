@@ -79,7 +79,7 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         self.__processor: MessageProcessor
         self.__pre_filter = table_writer.get_stream_loader().get_pre_filter()
 
-    def get_processor(self) -> MessageProcessor:
+    def _get_processor(self) -> MessageProcessor:
         try:
             return self.__processor
         except AttributeError:
@@ -95,7 +95,7 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         if self.__pre_filter and self.__pre_filter.should_drop(message):
             return None
 
-        return self.get_processor().process_message(
+        return self._get_processor().process_message(
             rapidjson.loads(message.payload.value),
             KafkaMessageMetadata(
                 offset=message.offset,
