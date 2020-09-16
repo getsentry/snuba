@@ -266,7 +266,7 @@ class DefaultNoneSubscriptMapper(SubscriptableReferenceMapper):
         children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[Literal]:
         if expression.column.column_name in self.subscript_names:
-            return Literal(alias=expression.alias, value=None,)
+            return Literal(alias=expression.alias, value=None)
         else:
             return None
 
