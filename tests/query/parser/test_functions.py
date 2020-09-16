@@ -310,6 +310,53 @@ test_data = [
             ),
         ),
     ),
+    (
+        tuplify(
+            [
+                "or",
+                [
+                    ["equals", ["exception_stacks.mechanism_handled", 0]],
+                    ["equals", [["ifNull", ["tags[handled]", "''"]], "'no'"]],
+                ],
+            ]
+        ),
+        binary_condition(
+            None,
+            BooleanFunctions.OR,
+            FunctionCall(
+                None,
+                "arrayExists",
+                (
+                    Lambda(
+                        None,
+                        ("x",),
+                        transformation=FunctionCall(
+                            None,
+                            "assumeNotNull",
+                            (
+                                FunctionCall(
+                                    None,
+                                    "equals",
+                                    (Argument(None, name="x"), Literal(None, 0)),
+                                ),
+                            ),
+                        ),
+                    ),
+                    Column(None, None, "exception_stacks.mechanism_handled"),
+                ),
+            ),
+            binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                FunctionCall(
+                    None,
+                    "ifNull",
+                    (Column(None, None, "tags[handled]",), Literal(None, "")),
+                ),
+                Literal(None, "no"),
+            ),
+        ),
+    ),
 ]
 
 

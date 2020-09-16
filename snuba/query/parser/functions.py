@@ -233,7 +233,10 @@ def parse_function_to_expr(
                         "Function cannot be in()/notIn()"
                     )
                 )
-            return parse_string_to_expr(literal)
+            if isinstance(literal, str):
+                return parse_string_to_expr(literal)
+            else:
+                return Literal(None, literal)
 
     def unpack_array_condition_builder(
         lhs: Expression, func: str, literal: Any, alias: Optional[str],

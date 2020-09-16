@@ -13,8 +13,8 @@ from snuba.datasets.cdc.groupassignee_processor import (
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
 from snuba.datasets.storages.groupassignees import POSTGRES_TABLE
 from snuba.processor import InsertBatch
-from snuba.utils.streams.kafka import Headers, KafkaPayload
-from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.streams import Message, Partition, Topic
+from snuba.utils.streams.backends.kafka import Headers, KafkaPayload
 from tests.base import BaseDatasetTest
 
 

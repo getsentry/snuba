@@ -3,7 +3,7 @@ import logging
 from clickhouse_driver import errors
 from datetime import datetime
 from functools import partial
-from typing import List, Mapping, MutableMapping, NamedTuple, Tuple
+from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Tuple
 
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.errors import ClickhouseError
@@ -32,6 +32,9 @@ class MigrationKey(NamedTuple):
     group: MigrationGroup
     migration_id: str
 
+    def __str__(self) -> str:
+        return f"{self.group.value}: {self.migration_id}"
+
 
 class MigrationDetails(NamedTuple):
     migration_id: str
@@ -53,6 +56,44 @@ class Runner:
         self.__connection = migrations_cluster.get_query_connection(
             ClickhouseClientSettings.MIGRATE
         )
+
+        self.__status: MutableMapping[
+            MigrationKey, Tuple[Status, Optional[datetime]]
+        ] = {}
+
+    def get_status(
+        self, migration_key: MigrationKey
+    ) -> Tuple[Status, Optional[datetime]]:
+        """
+        Returns the status and timestamp of a migration.
+        """
+
+        if migration_key in self.__status:
+            return self.__status[migration_key]
+
+        try:
+            data = self.__connection.execute(
+                f"SELECT status, timestamp FROM {self.__table_name} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s",
+                {
+                    "group": migration_key.group.value,
+                    "migration_id": migration_key.migration_id,
+                },
+            )
+
+            if data:
+                status, timestamp = data[0]
+                self.__status[migration_key] = (Status(status), timestamp)
+            else:
+                self.__status[migration_key] = (Status.NOT_STARTED, None)
+
+            return self.__status[migration_key]
+
+        except ClickhouseError as e:
+            # If the table wasn't created yet, no migrations have started.
+            if e.code != errors.ErrorCodes.UNKNOWN_TABLE:
+                raise e
+
+        return Status.NOT_STARTED, None
 
     def show_all(self) -> List[Tuple[MigrationGroup, List[MigrationDetails]]]:
         """
@@ -103,7 +144,7 @@ class Runner:
             self._run_migration_impl(migration_key, force=force)
 
     def run_migration(
-        self, migration_key: MigrationKey, *, force: bool = False
+        self, migration_key: MigrationKey, *, force: bool = False, fake: bool = False,
     ) -> None:
         """
         Run a single migration given its migration key and marks the migration as complete.
@@ -130,7 +171,10 @@ class Runner:
             if get_status(MigrationKey(migration_group, m)) != Status.COMPLETED:
                 raise MigrationError("Earlier migrations ned to be completed first")
 
-        return self._run_migration_impl(migration_key, force=force)
+        if fake:
+            self._update_migration_status(migration_key, Status.COMPLETED)
+        else:
+            self._run_migration_impl(migration_key, force=force)
 
     def _run_migration_impl(
         self, migration_key: MigrationKey, *, force: bool = False
@@ -148,7 +192,7 @@ class Runner:
         migration.forwards(context)
 
     def reverse_migration(
-        self, migration_key: MigrationKey, *, force: bool = False
+        self, migration_key: MigrationKey, *, force: bool = False, fake: bool = False,
     ) -> None:
         """
         Reverses a migration.
@@ -168,7 +212,7 @@ class Runner:
         if get_status(migration_key) == Status.NOT_STARTED:
             raise MigrationError("You cannot reverse a migration that has not been run")
 
-        if get_status(migration_key) == Status.COMPLETED and not force:
+        if get_status(migration_key) == Status.COMPLETED and not force and not fake:
             raise MigrationError(
                 "You must use force to revert an already completed migration"
             )
@@ -177,12 +221,19 @@ class Runner:
             if get_status(MigrationKey(migration_group, m)) != Status.NOT_STARTED:
                 raise MigrationError("Subsequent migrations must be reversed first")
 
-        context = Context(
-            migration_id, logger, partial(self._update_migration_status, migration_key),
-        )
-        migration = get_group_loader(migration_key.group).load_migration(migration_id)
+        if fake:
+            self._update_migration_status(migration_key, Status.NOT_STARTED)
+        else:
+            context = Context(
+                migration_id,
+                logger,
+                partial(self._update_migration_status, migration_key),
+            )
+            migration = get_group_loader(migration_key.group).load_migration(
+                migration_id
+            )
 
-        migration.backwards(context)
+            migration.backwards(context)
 
     def _get_pending_migrations(self) -> List[MigrationKey]:
         """
@@ -222,6 +273,7 @@ class Runner:
     def _update_migration_status(
         self, migration_key: MigrationKey, status: Status
     ) -> None:
+        self.__status = {}
         next_version = self._get_next_version(migration_key)
 
         statement = f"INSERT INTO {self.__table_name} FORMAT JSONEachRow"

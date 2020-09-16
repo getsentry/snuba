@@ -214,7 +214,6 @@ def test_error_processor() -> None:
     )
 
     expected_result = {
-        "org_id": 3,
         "project_id": 300688,
         "timestamp": error_timestamp,
         "event_id": str(UUID("dcb9d002cac548c795d1c9adbfc68040")),
