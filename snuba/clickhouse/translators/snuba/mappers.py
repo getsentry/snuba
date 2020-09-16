@@ -143,15 +143,13 @@ class SubscriptableMapper(SubscriptableReferenceMapper):
             and expression.column.column_name == self.from_column_name
         ):
             key = expression.key.accept(children_translator)
-            resolved_expr = build_mapping_expr(
-                expression.alias,
-                self.to_nested_col_table,
-                self.to_nested_col_name,
-                key,
-            )
-
             return (
-                resolved_expr
+                build_mapping_expr(
+                    expression.alias,
+                    self.to_nested_col_table,
+                    self.to_nested_col_name,
+                    key,
+                )
                 if not self.nullable
                 else build_nullable_mapping_expr(
                     expression.alias,
