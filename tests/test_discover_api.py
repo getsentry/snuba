@@ -94,6 +94,10 @@ class TestDiscoverApi(BaseApiTest):
                                     "model_id": "Galaxy",
                                 },
                             },
+                            "measurements": {
+                                "lcp": {"value": 32.129},
+                                "lcp.elementSize": {"value": 4242},
+                            },
                             "sdk": {
                                 "name": "sentry.python",
                                 "version": "0.13.4",
@@ -895,3 +899,44 @@ class TestDiscoverApi(BaseApiTest):
         assert len(data["data"]) == 1
         # Should now count '' user as Null, which is 0
         assert data["data"][0]["uniq_user"] == 0
+
+    def test_individual_measurement(self) -> None:
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": [
+                        "event_id",
+                        "measurements[lcp]",
+                        "measurements[lcp.elementSize]",
+                    ],
+                    "limit": 1,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert "measurements[lcp]" in data["data"][0]
+        assert data["data"][0]["measurements[lcp]"] == 32.129
+        assert "measurements[lcp.elementSize]" in data["data"][0]
+        assert data["data"][0]["measurements[lcp.elementSize]"] == 4242
+
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["group_id", "measurements[lcp]"],
+                    "limit": 1,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert "measurements[lcp]" in data["data"][0]
+        assert data["data"][0]["measurements[lcp]"] is None

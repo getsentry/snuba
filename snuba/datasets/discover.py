@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Mapping, Optional, Sequence
+from typing import Mapping, Optional, Sequence, Set
 
 from snuba import environment, state
 from snuba.clickhouse.columns import (
@@ -10,13 +10,18 @@ from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
     FixedString,
+    Float,
+    LowCardinality,
     Nested,
     Nullable,
     String,
     UInt,
 )
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
-from snuba.clickhouse.translators.snuba.allowed import ColumnMapper
+from snuba.clickhouse.translators.snuba.allowed import (
+    ColumnMapper,
+    SubscriptableReferenceMapper,
+)
 from snuba.clickhouse.translators.snuba.mappers import ColumnToLiteral, ColumnToMapping
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.dataset import TimeSeriesDataset
@@ -36,23 +41,24 @@ from snuba.query.conditions import (
     ConditionFunctions,
     get_first_level_and_conditions,
 )
-from snuba.query.expressions import Column, Literal
+from snuba.query.expressions import Column, Literal, SubscriptableReference
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.matchers import Column as ColumnMatch
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
-from snuba.query.matchers import String as StringMatch
 from snuba.query.matchers import Or, Param
+from snuba.query.matchers import String as StringMatch
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
-from snuba.query.processors.performance_expressions import apdex_processor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.failure_rate_processor import FailureRateProcessor
 from snuba.query.processors.handled_functions import HandledFunctionsProcessor
+from snuba.query.processors.performance_expressions import apdex_processor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension
+from snuba.query.subscripts import subscript_key_column_name
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import qualified_column
@@ -123,6 +129,17 @@ def match_query_to_table(
         elif transactions_only_columns.get(col.column_name):
             has_transaction_columns = True
 
+    for subscript in query.get_all_ast_referenced_subscripts():
+        # Subscriptable references will not be properly recognized above
+        # through get_all_ast_referenced_columns since the columns that
+        # method will find will look like `tags` or `measurements`, while
+        # the column sets contains `tags.key` and `tags.value`.
+        schema_col_name = subscript_key_column_name(subscript)
+        if events_only_columns.get(schema_col_name):
+            has_event_columns = True
+        if transactions_only_columns.get(schema_col_name):
+            has_transaction_columns = True
+
     if has_event_columns and has_transaction_columns:
         # Impossible query, use the merge table
         return EVENTS_AND_TRANSACTIONS
@@ -159,6 +176,13 @@ def detect_table(
                 event_columns.add(col.column_name)
             elif transactions_only_columns.get(col.column_name):
                 transaction_columns.add(col.column_name)
+
+        for subscript in query.get_all_ast_referenced_subscripts():
+            schema_col_name = subscript_key_column_name(subscript)
+            if events_only_columns.get(schema_col_name):
+                event_columns.add(schema_col_name)
+            if transactions_only_columns.get(schema_col_name):
+                transaction_columns.add(schema_col_name)
 
         event_mismatch = event_columns and selected_table == TRANSACTIONS
         transaction_mismatch = transaction_columns and selected_table in [
@@ -225,6 +249,28 @@ class DefaultNoneColumnMapper(ColumnMapper):
             return None
 
 
+@dataclass(frozen=True)
+class DefaultNoneSubscriptMapper(SubscriptableReferenceMapper):
+    """
+    This maps a subscriptable reference to None (NULL in SQL) as it is done
+    in the discover column_expr method today. It should not be used for
+    any other reason or use case, thus it should not be moved out of
+    the discover dataset file.
+    """
+
+    subscript_names: Set[str]
+
+    def attempt_map(
+        self,
+        expression: SubscriptableReference,
+        children_translator: SnubaClickhouseStrictTranslator,
+    ) -> Optional[Literal]:
+        if expression.column.column_name in self.subscript_names:
+            return Literal(alias=expression.alias, value=None)
+        else:
+            return None
+
+
 class DiscoverQueryStorageSelector(QueryStorageSelector):
     def __init__(
         self,
@@ -251,7 +297,8 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
                     ColumnToMapping(None, "dist", None, "tags", "sentry:dist"),
                     ColumnToMapping(None, "user", None, "tags", "sentry:user"),
                     DefaultNoneColumnMapper(self.__abstract_transactions_columns),
-                ]
+                ],
+                subscriptables=[DefaultNoneSubscriptMapper({"measurements"})],
             )
         )
 
@@ -390,6 +437,10 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("transaction_op", Nullable(String())),
                 ("transaction_status", Nullable(UInt(8))),
                 ("duration", Nullable(UInt(32))),
+                (
+                    "measurements",
+                    Nested([("key", LowCardinality(String())), ("value", Float(64))]),
+                ),
             ]
         )
 
