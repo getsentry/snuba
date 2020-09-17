@@ -35,7 +35,7 @@ columns = ColumnSet(
         ("start_ns", UInt(32)),
         ("finish_ts", DateTime()),
         ("finish_ns", UInt(32)),
-        ("duration", UInt(32)),
+        ("duration_ms", UInt(32)),
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_hash_map", Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN)),
         ("retention_days", UInt(16)),

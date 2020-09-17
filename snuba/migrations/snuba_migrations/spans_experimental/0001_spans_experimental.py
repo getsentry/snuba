@@ -35,7 +35,7 @@ columns = [
     Column("start_ns", UInt(32)),
     Column("finish_ts", DateTime()),
     Column("finish_ns", UInt(32)),
-    Column("duration", UInt(32)),
+    Column("duration_ms", UInt(32)),
     tags_col,
     Column("retention_days", UInt(16)),
     Column("deleted", UInt(8)),

@@ -26,6 +26,9 @@ class SpansMessageProcessor(MessageProcessor):
         return (timestamp, nanoseconds)
 
     def __init_span(self, event: Mapping[str, Any]) -> MutableMapping[str, Any]:
+        """
+        Initializes the fields that are the same for all spans within a transaction.
+        """
         data = event["data"]
         transaction_ctx = data["contexts"]["trace"]
 
@@ -52,6 +55,10 @@ class SpansMessageProcessor(MessageProcessor):
     def __fill_common(
         self, span: MutableMapping[str, Any], data: Mapping[str, Any]
     ) -> None:
+        """
+        Fills in the fields that have the same structure between transactions and spans
+        but that come from a different dictionary.
+        """
         span["start_ts"], span["start_ns"] = self.__extract_timestamp(
             data["start_timestamp"],
         )
@@ -59,7 +66,8 @@ class SpansMessageProcessor(MessageProcessor):
             data["timestamp"],
         )
         duration_secs = (span["finish_ts"] - span["start_ts"]).total_seconds()
-        span["duration"] = max(int(duration_secs * 1000), 0)
+        # duration is in milliseconds
+        span["duration_ms"] = max(int(duration_secs * 1000), 0)
 
         tags = _as_dict_safe(data.get("tags", None))
         span["tags.key"], span["tags.value"] = extract_extra_tags(tags)
@@ -82,7 +90,11 @@ class SpansMessageProcessor(MessageProcessor):
         ret: List[MutableMapping[str, Any]] = []
 
         # Add the transaction span
-        transaction_ctx = data["contexts"]["trace"]
+        transaction_ctx = data["contexts"].get("trace")
+        if not transaction_ctx:
+            return None
+
+        # Add the transaction root span
         processed = self.__init_span(event)
         processed["span_id"] = int(transaction_ctx["span_id"], 16)
         processed["transaction_name"] = _unicodify(data.get("transaction") or "")
