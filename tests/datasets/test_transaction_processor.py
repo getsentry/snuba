@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Optional, Tuple
 
 from snuba.consumer import KafkaMessageMetadata
@@ -147,8 +147,8 @@ class TransactionEvent:
         )
 
     def build_result(self, meta: KafkaMessageMetadata) -> Mapping[str, Any]:
-        start_timestamp = datetime.fromtimestamp(self.start_timestamp)
-        finish_timestamp = datetime.fromtimestamp(self.timestamp)
+        start_timestamp = datetime.utcfromtimestamp(self.start_timestamp)
+        finish_timestamp = datetime.utcfromtimestamp(self.timestamp)
 
         ret = {
             "deleted": 0,
@@ -222,7 +222,9 @@ class TransactionEvent:
 
 class TestTransactionsProcessor(BaseTest):
     def __get_timestamps(slef) -> Tuple[float, float]:
-        timestamp = datetime.utcnow() - timedelta(seconds=5)
+        timestamp = datetime.utcnow().replace(tzinfo=timezone.utc) - timedelta(
+            seconds=5
+        )
         start_timestamp = timestamp - timedelta(seconds=5)
         return (start_timestamp.timestamp(), timestamp.timestamp())
 
