@@ -33,6 +33,7 @@ class CommitCodec(Codec[KafkaPayload, Commit]):
                 "utf-8"
             ),
             f"{value.offset}".encode("utf-8"),
+            [],
         )
 
     def decode(self, value: KafkaPayload) -> Commit:
