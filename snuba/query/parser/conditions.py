@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Any, Callable, Optional, Sequence, TypeVar
+from typing import Any, Callable, Optional, Sequence, Set, TypeVar
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.dataset import Dataset
@@ -24,14 +24,14 @@ class InvalidConditionException(Exception):
 
 
 def parse_conditions(
-    operand_builder: Callable[[Any, ColumnSet, Optional[str]], TExpression],
+    operand_builder: Callable[[Any, ColumnSet, Set[str]], TExpression],
     and_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     or_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     unpack_array_condition_builder: Callable[[TExpression, str, Any], TExpression],
     simple_condition_builder: Callable[[TExpression, str, Any], TExpression],
     dataset: Dataset,
     conditions: Any,
-    array_join: Optional[str],
+    array_join: Set[str],
     depth: int = 0,
 ) -> Optional[TExpression]:
     """
@@ -99,8 +99,8 @@ def parse_conditions(
             isinstance(lhs, str)
             and lhs in columns
             and isinstance(columns[lhs].type, Array)
-            and columns[lhs].base_name != array_join
-            and columns[lhs].flattened != array_join
+            and columns[lhs].base_name not in array_join
+            and columns[lhs].flattened not in array_join
             and not isinstance(lit, (list, tuple))
         ):
             return unpack_array_condition_builder(
@@ -136,7 +136,7 @@ def parse_conditions(
 
 
 def parse_conditions_to_expr(
-    expr: Sequence[Any], dataset: Dataset, arrayjoin: Optional[str]
+    expr: Sequence[Any], dataset: Dataset, arrayjoin: Set[str]
 ) -> Optional[Expression]:
     """
     Relies on parse_conditions to parse a list of conditions into an Expression.
@@ -164,7 +164,7 @@ def parse_conditions_to_expr(
                         "Operator must be IN/NOT IN"
                     )
                 )
-            literals = tuple([Literal(None, l) for l in literal])
+            literals = tuple([Literal(None, lit) for lit in literal])
             return FunctionCall(None, "tuple", literals)
         else:
             if op in ["IN", "NOT IN"]:

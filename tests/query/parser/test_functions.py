@@ -365,7 +365,7 @@ def test_complex_conditions_expr(actual, expected) -> None:
     dataset = get_dataset("events")
     assert (
         parse_function_to_expr(
-            actual, dataset.get_abstract_columnset(), "sdk_integrations"
+            actual, dataset.get_abstract_columnset(), {"sdk_integrations"}
         )
         == expected
     ), actual
