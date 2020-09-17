@@ -2,7 +2,7 @@ from copy import deepcopy
 
 from snuba.datasets.factory import get_dataset
 from snuba import state
-from snuba.query.columns import column_expr, conditions_expr
+from snuba.query.columns import column_expr
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
 from snuba.util import tuplify
@@ -167,83 +167,6 @@ def test_alias_in_alias():
     assert (
         column_expr(dataset, "events.tags_value", query, parsing_context)
         == "(arrayElement(all_tags, 2) AS `events.tags_value`)"
-    )
-
-
-def test_conditions_expr():
-    dataset = get_dataset("groups")
-    source = dataset.get_all_storages()[0].get_schema().get_data_source()
-    state.set_config("use_escape_alias", 1)
-    conditions = [["events.a", "=", 1]]
-    query = Query({}, source)
-    assert (
-        conditions_expr(dataset, conditions, deepcopy(query), ParsingContext())
-        == "(events.a AS `events.a`) = 1"
-    )
-
-    conditions = [
-        [["events.a", "=", 1], ["groups.b", "=", 2]],
-        [["events.c", "=", 3], ["groups.d", "=", 4]],
-    ]
-    assert conditions_expr(dataset, conditions, deepcopy(query), ParsingContext()) == (
-        "((events.a AS `events.a`) = 1 OR (groups.b AS `groups.b`) = 2)"
-        " AND ((events.c AS `events.c`) = 3 OR (groups.d AS `groups.d`) = 4)"
-    )
-
-    # Test column expansion
-    conditions = [[["events.tags[foo]", "=", 1], ["groups.b", "=", 2]]]
-    expanded = column_expr(
-        dataset, "events.tags[foo]", deepcopy(query), ParsingContext()
-    )
-    assert conditions_expr(
-        dataset, conditions, deepcopy(query), ParsingContext()
-    ) == "({} = 1 OR (groups.b AS `groups.b`) = 2)".format(expanded)
-
-    # Test using alias if column has already been expanded in SELECT clause
-    reuse_query = deepcopy(query)
-    parsing_context = ParsingContext()
-    conditions = [[["events.tags[foo]", "=", 1], ["groups.b", "=", 2]]]
-    column_expr(
-        dataset, "events.tags[foo]", reuse_query, parsing_context
-    )  # Expand it once so the next time is aliased
-    assert (
-        conditions_expr(dataset, conditions, reuse_query, parsing_context)
-        == "(`events.tags[foo]` = 1 OR (groups.b AS `groups.b`) = 2)"
-    )
-
-    # Test special output format of LIKE
-    conditions = [["events.primary_hash", "LIKE", "%foo%"]]
-    assert (
-        conditions_expr(dataset, conditions, deepcopy(query), ParsingContext())
-        == "(events.primary_hash AS `events.primary_hash`) LIKE '%foo%'"
-    )
-
-    conditions = tuplify(
-        [[["notEmpty", ["arrayElement", ["events.exception_stacks.type", 1]]], "=", 1]]
-    )
-    assert (
-        conditions_expr(dataset, conditions, deepcopy(query), ParsingContext())
-        == "notEmpty(arrayElement((events.exception_stacks.type AS `events.exception_stacks.type`), 1)) = 1"
-    )
-
-    conditions = tuplify([[["notEmpty", ["events.tags[sentry:user]"]], "=", 1]])
-    assert (
-        conditions_expr(dataset, conditions, deepcopy(query), ParsingContext())
-        == "notEmpty(`events.tags[sentry:user]`) = 1"
-    )
-
-    conditions = tuplify([[["notEmpty", ["events.tags_key"]], "=", 1]])
-    q = Query({"selected_columns": ["events.tags_key"]}, source)
-    assert (
-        conditions_expr(dataset, conditions, q, ParsingContext())
-        == "notEmpty((arrayJoin(events.tags.key) AS `events.tags_key`)) = 1"
-    )
-
-    # Test scalar condition on array column is expanded as an iterator.
-    conditions = [["events.exception_frames.filename", "LIKE", "%foo%"]]
-    assert (
-        conditions_expr(dataset, conditions, deepcopy(query), ParsingContext())
-        == "arrayExists(x -> assumeNotNull(x LIKE '%foo%'), (events.exception_frames.filename AS `events.exception_frames.filename`))"
     )
 
 

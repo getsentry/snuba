@@ -67,6 +67,7 @@ transaction_translator = TranslationMappers(
     subscriptables=[
         SubscriptableMapper(None, "tags", None, "tags"),
         SubscriptableMapper(None, "contexts", None, "contexts"),
+        SubscriptableMapper(None, "measurements", None, "measurements", nullable=True),
     ],
 )
 
