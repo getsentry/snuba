@@ -133,13 +133,16 @@ def complex_column_expr(
             ret = alias_expr(ret, alias, parsing_context)
         return ret
 
+    arrayjoin = query.get_arrayjoin()
     return parse_function(
         output_builder,
         column_builder,
         literal_builder,
         unpack_array_condition_builder,
         dataset.get_abstract_columnset(),
-        query.get_arrayjoin(),
+        {arrayjoin}
+        if arrayjoin
+        else set(),  # There is already a PR to remove this entire file.
         expr,
         depth,
     )
