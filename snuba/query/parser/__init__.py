@@ -140,6 +140,9 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
 
     array_join_cols = set()
     arrayjoin = body.get("arrayjoin")
+    # TODO: Properly detect all array join columns in all clauses of the query.
+    # This is missing an arrayJoin in condition with an alias that is then
+    # used in the select.
     if arrayjoin:
         array_join_cols.add(arrayjoin)
         array_join_expr: Optional[Expression] = parse_expression(
