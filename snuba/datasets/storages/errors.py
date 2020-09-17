@@ -235,7 +235,7 @@ storage = WritableTableStorage(
         read_schema=schema,
         required_columns=required_columns,
         tag_column_map={"tags": promoted_tag_columns, "contexts": {}},
-        promoted_tags={"tags": promoted_tag_columns.keys(), "contexts": {}},
+        promoted_tags={"tags": list(promoted_tag_columns.keys()), "contexts": []},
         state_name=ReplacerState.ERRORS,
     ),
 )
