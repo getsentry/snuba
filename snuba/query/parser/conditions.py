@@ -31,7 +31,7 @@ def parse_conditions(
     simple_condition_builder: Callable[[TExpression, str, Any], TExpression],
     dataset: Dataset,
     conditions: Any,
-    array_join: Set[str],
+    arrayjoin_cols: Set[str],
     depth: int = 0,
 ) -> Optional[TExpression]:
     """
@@ -65,7 +65,7 @@ def parse_conditions(
                     simple_condition_builder,
                     dataset,
                     cond,
-                    array_join,
+                    arrayjoin_cols,
                     depth + 1,
                 ),
                 None,
@@ -99,18 +99,18 @@ def parse_conditions(
             isinstance(lhs, str)
             and lhs in columns
             and isinstance(columns[lhs].type, Array)
-            and columns[lhs].base_name not in array_join
-            and columns[lhs].flattened not in array_join
+            and columns[lhs].base_name not in arrayjoin_cols
+            and columns[lhs].flattened not in arrayjoin_cols
             and not isinstance(lit, (list, tuple))
         ):
             return unpack_array_condition_builder(
-                operand_builder(lhs, dataset.get_abstract_columnset(), array_join),
+                operand_builder(lhs, dataset.get_abstract_columnset(), arrayjoin_cols),
                 op,
                 lit,
             )
         else:
             return simple_condition_builder(
-                operand_builder(lhs, dataset.get_abstract_columnset(), array_join),
+                operand_builder(lhs, dataset.get_abstract_columnset(), arrayjoin_cols),
                 op,
                 lit,
             )
@@ -125,7 +125,7 @@ def parse_conditions(
                 simple_condition_builder,
                 dataset,
                 cond,
-                array_join,
+                arrayjoin_cols,
                 depth + 1,
             )
             for cond in conditions

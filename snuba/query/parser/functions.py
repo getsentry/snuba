@@ -108,7 +108,7 @@ def parse_function(
         [TExpression, str, Any, Optional[str]], TExpression
     ],
     dataset_columns: ColumnSet,
-    arrayjoin: Set[str],
+    arrayjoin_cols: Set[str],
     expr: Any,
     depth: int = 0,
 ) -> TExpression:
@@ -147,8 +147,8 @@ def parse_function(
             column = dataset_columns[args[0]]
             if isinstance(column.type.get_raw(), Array):
                 if (
-                    column.flattened not in arrayjoin
-                    and column.base_name not in arrayjoin
+                    column.flattened not in arrayjoin_cols
+                    and column.base_name not in arrayjoin_cols
                 ):
                     return unpack_array_condition_builder(
                         simple_expression_builder(args[0]), name, args[1], alias,
@@ -166,7 +166,7 @@ def parse_function(
                     literal_builder,
                     unpack_array_condition_builder,
                     dataset_columns,
-                    arrayjoin,
+                    arrayjoin_cols,
                     next_2,
                     depth + 1,
                 )
@@ -182,7 +182,7 @@ def parse_function(
                         literal_builder,
                         unpack_array_condition_builder,
                         dataset_columns,
-                        arrayjoin,
+                        arrayjoin_cols,
                         nxt,
                         depth + 1,
                     )
@@ -197,7 +197,7 @@ def parse_function(
 
 
 def parse_function_to_expr(
-    expr: Any, dataset_columns: ColumnSet, arrayjoin: Set[str]
+    expr: Any, dataset_columns: ColumnSet, arrayjoin_cols: Set[str]
 ) -> Expression:
     """
     Parses a function expression in the Snuba syntax and produces an AST Expression.
@@ -286,7 +286,7 @@ def parse_function_to_expr(
         literal_builder,
         unpack_array_condition_builder,
         dataset_columns,
-        arrayjoin,
+        arrayjoin_cols,
         expr,
         0,
     )
