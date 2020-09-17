@@ -30,8 +30,4 @@ class CdcTableNameMessageFilter(StreamMessageFilter[KafkaPayload]):
             (value for key, value in message.payload.headers if key == "table"), None
         )
 
-        if table_name:
-            if table_name.decode("utf-8") != self.__postgres_table:
-                return True
-
-        return False
+        return table_name and table_name.decode("utf-8") != self.__postgres_table
