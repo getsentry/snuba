@@ -75,9 +75,9 @@ def _get_mapping_keys_in_condition(
             function = match.expression("tuple")
             assert isinstance(function, FunctionCallExpr)
             keys_found |= {
-                l.value
-                for l in function.parameters
-                if isinstance(l, LiteralExpr) and isinstance(l.value, str)
+                lit.value
+                for lit in function.parameters
+                if isinstance(lit, LiteralExpr) and isinstance(lit.value, str)
             }
 
     return keys_found
