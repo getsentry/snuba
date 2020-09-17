@@ -71,26 +71,14 @@ class KafkaPayload:
     # objects, it's probably more important to preserve their performance and
     # memory impact than it is their developer friendliness (unfortunately.)
 
-    __slots__ = ["__key", "__value", "__headers"]
+    __slots__ = ["key", "value", "headers"]
 
     def __init__(
         self, key: Optional[bytes], value: bytes, headers: Optional[Headers] = None
     ) -> None:
-        self.__key = key
-        self.__value = value
-        self.__headers = headers if headers is not None else []
-
-    @property
-    def key(self) -> Optional[bytes]:
-        return self.__key
-
-    @property
-    def value(self) -> bytes:
-        return self.__value
-
-    @property
-    def headers(self) -> Headers:
-        return self.__headers
+        self.key = key
+        self.value = value
+        self.headers = headers if headers is not None else []
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, KafkaPayload):
