@@ -67,6 +67,7 @@ class TestDiscoverApi(BaseApiTest):
                                 "environment": u"prød",
                                 "sentry:release": "1",
                                 "sentry:dist": "dist1",
+                                "url": "http://127.0.0.1:/query",
                                 # User
                                 "foo": "baz",
                                 "foo.bar": "qux",
@@ -93,10 +94,27 @@ class TestDiscoverApi(BaseApiTest):
                                     "model_id": "Galaxy",
                                 },
                             },
+                            "measurements": {
+                                "lcp": {"value": 32.129},
+                                "lcp.elementSize": {"value": 4242},
+                            },
                             "sdk": {
                                 "name": "sentry.python",
                                 "version": "0.13.4",
                                 "integrations": ["django"],
+                            },
+                            "request": {
+                                "url": "http://127.0.0.1:/query",
+                                "headers": [
+                                    ["Accept-Encoding", "identity"],
+                                    ["Content-Length", "398"],
+                                    ["Host", "127.0.0.1:"],
+                                    ["Referer", "tagstore.something"],
+                                    ["Trace", "8fa73032d-1"],
+                                ],
+                                "data": "",
+                                "method": "POST",
+                                "env": {"SERVER_PORT": "1010", "SERVER_NAME": "snuba"},
                             },
                             "spans": [
                                 {
@@ -539,6 +557,55 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["data"] == [{"count": 0}]
 
+    def test_http_fields(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [["count()", "", "count"]],
+                    "conditions": [["duration", ">=", 0]],
+                    "groupby": ["http_method", "http_referer", "tags[url]"],
+                    "limit": 1000,
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [
+            {
+                "http_method": "POST",
+                "http_referer": "tagstore.something",
+                "tags[url]": "http://127.0.0.1:/query",
+                "count": 1,
+            }
+        ]
+
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [["count()", "", "count"]],
+                    "conditions": [["group_id", ">=", 0]],
+                    "groupby": ["http_method", "http_referer", "tags[url]"],
+                    "limit": 1000,
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [
+            {
+                "http_method": "POST",
+                "http_referer": "tagstore.something",
+                "tags[url]": "http://127.0.0.1:/query",
+                "count": 1,
+            }
+        ]
+
     def test_device_fields_condition(self):
         response = self.app.post(
             "/query",
@@ -620,6 +687,27 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["data"][0]["contexts[device.charging]"] == "True"
         assert data["data"][0]["count"] == 1
+
+    def test_is_handled(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["exception_stacks.mechanism_handled"],
+                    "conditions": [
+                        ["type", "=", "error"],
+                        [["notHandled", []], "=", 1],
+                    ],
+                    "limit": 5,
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"][0]["exception_stacks.mechanism_handled"] == [0]
 
     def test_having(self):
         result = json.loads(
@@ -765,3 +853,90 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"] == [
             {"apdex_duration_300": 1, "tags[foo]": "baz", "project_id": self.project_id}
         ]
+
+    def test_count_null_user_consistency(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [
+                        ["uniq", "user", "uniq_user"],
+                        ["count", None, "count"],
+                    ],
+                    "groupby": ["group_id", "user"],
+                    "conditions": [],
+                    "orderby": "uniq_user",
+                    "limit": 1000,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert len(data["data"]) == 1
+        assert data["data"][0]["uniq_user"] == 0
+
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [
+                        ["uniq", "user", "uniq_user"],
+                        ["count", None, "count"],
+                    ],
+                    "groupby": ["trace_id", "user_email"],
+                    "conditions": [],
+                    "orderby": "uniq_user",
+                    "limit": 1000,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert len(data["data"]) == 1
+        # Should now count '' user as Null, which is 0
+        assert data["data"][0]["uniq_user"] == 0
+
+    def test_individual_measurement(self) -> None:
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": [
+                        "event_id",
+                        "measurements[lcp]",
+                        "measurements[lcp.elementSize]",
+                        "measurements[asd]",
+                    ],
+                    "limit": 1,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert data["data"][0]["measurements[lcp]"] == 32.129
+        assert data["data"][0]["measurements[lcp.elementSize]"] == 4242
+        assert data["data"][0]["measurements[asd]"] is None
+
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["group_id", "measurements[lcp]"],
+                    "limit": 1,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert "measurements[lcp]" in data["data"][0]
+        assert data["data"][0]["measurements[lcp]"] is None

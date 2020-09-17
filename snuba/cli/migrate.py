@@ -10,6 +10,8 @@ from snuba.migrations.connect import check_clickhouse_connections
 @click.command()
 @click.option("--log-level", help="Logging level to use.")
 def migrate(*, log_level: Optional[str] = None) -> None:
+    click.echo("Warning: The migrate command is deprecated and will be removed soon\n")
+
     setup_logging(log_level)
 
     check_clickhouse_connections()

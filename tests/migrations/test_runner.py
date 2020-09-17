@@ -1,5 +1,6 @@
 import importlib
 import pytest
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from snuba.clickhouse.http import JSONRowEncoder
@@ -28,6 +29,24 @@ def setup_function() -> None:
         )
         for (table,) in data:
             connection.execute(f"DROP TABLE IF EXISTS {table}")
+
+
+def test_get_status() -> None:
+    runner = Runner()
+    assert runner.get_status(
+        MigrationKey(MigrationGroup.EVENTS, "0001_events_initial")
+    ) == (Status.NOT_STARTED, None)
+    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    assert runner.get_status(
+        MigrationKey(MigrationGroup.EVENTS, "0001_events_initial")
+    ) == (Status.NOT_STARTED, None)
+    runner.run_migration(MigrationKey(MigrationGroup.EVENTS, "0001_events_initial"))
+    status = runner.get_status(
+        MigrationKey(MigrationGroup.EVENTS, "0001_events_initial")
+    )
+    assert status[0] == Status.COMPLETED
+    assert isinstance(status[1], datetime)
+    assert status[1] > datetime.now() - timedelta(seconds=1)
 
 
 def test_show_all() -> None:
@@ -68,10 +87,20 @@ def test_run_migration() -> None:
     with pytest.raises(MigrationError):
         runner.run_migration(MigrationKey(MigrationGroup.EVENTS, "0003_errors"))
 
+    # Running with --fake
+    runner.run_migration(
+        MigrationKey(MigrationGroup.EVENTS, "0001_events_initial"), fake=True
+    )
+    assert connection.execute("SHOW TABLES LIKE 'sentry_local'") == []
+
 
 def test_reverse_migration() -> None:
     runner = Runner()
     runner.run_all(force=True)
+
+    connection = get_cluster(StorageSetKey.MIGRATIONS).get_query_connection(
+        ClickhouseClientSettings.MIGRATE
+    )
 
     # Invalid migration ID
     with pytest.raises(MigrationError):
@@ -79,6 +108,17 @@ def test_reverse_migration() -> None:
 
     with pytest.raises(MigrationError):
         runner.reverse_migration(MigrationKey(MigrationGroup.EVENTS, "0003_errors"))
+
+    # Reverse with --fake
+    for migration_id in reversed(
+        get_group_loader(MigrationGroup.EVENTS).get_migrations()
+    ):
+        runner.reverse_migration(
+            MigrationKey(MigrationGroup.EVENTS, migration_id), fake=True
+        )
+    assert (
+        len(connection.execute("SHOW TABLES LIKE 'sentry_local'")) == 1
+    ), "Table still exists"
 
 
 def test_get_pending_migrations() -> None:
@@ -310,9 +350,46 @@ def generate_transactions(count: int) -> None:
         rows.extend(processed.rows)
 
     BatchWriterEncoderWrapper(
-        table_writer.get_writer(metrics=DummyMetricsBackend(strict=True)),
+        table_writer.get_batch_writer(metrics=DummyMetricsBackend(strict=True)),
         JSONRowEncoder(),
     ).write(rows)
+
+
+def test_groupedmessages_compatibility() -> None:
+    cluster = get_cluster(StorageSetKey.EVENTS)
+    database = cluster.get_database()
+    connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+
+    # Create old style table witihout project ID
+    connection.execute(
+        """
+        CREATE TABLE groupedmessage_local (`offset` UInt64, `record_deleted` UInt8,
+        `id` UInt64, `status` Nullable(UInt8), `last_seen` Nullable(DateTime),
+        `first_seen` Nullable(DateTime), `active_at` Nullable(DateTime),
+        `first_release_id` Nullable(UInt64)) ENGINE = ReplacingMergeTree(offset)
+        ORDER BY id SAMPLE BY id SETTINGS index_granularity = 8192
+        """
+    )
+
+    migration_id = "0010_groupedmessages_onpremise_compatibility"
+
+    runner = Runner()
+    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+    events_migrations = get_group_loader(MigrationGroup.EVENTS).get_migrations()
+
+    # Mark prior migrations complete
+    for migration in events_migrations[: (events_migrations.index(migration_id))]:
+        runner._update_migration_status(
+            MigrationKey(MigrationGroup.EVENTS, migration), Status.COMPLETED
+        )
+
+    runner.run_migration(
+        MigrationKey(MigrationGroup.EVENTS, migration_id), force=True,
+    )
+
+    assert connection.execute(
+        f"SELECT primary_key FROM system.tables WHERE name = 'groupedmessage_local' AND database = '{database}'"
+    ) == [("project_id, id",)]
 
 
 def test_settings_skipped_group() -> None:

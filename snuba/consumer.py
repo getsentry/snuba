@@ -5,7 +5,6 @@ import time
 from datetime import datetime
 from pickle import PickleBuffer
 from typing import (
-    Any,
     Callable,
     Mapping,
     MutableSequence,
@@ -29,8 +28,10 @@ from snuba.processor import (
     ReplacementBatch,
 )
 from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.streams import Message, Partition, Topic
+from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.batching import AbstractBatchWorker
-from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.processing import ProcessingStrategy, ProcessingStrategyFactory
 from snuba.utils.streams.streaming import (
     CollectStep,
@@ -39,7 +40,6 @@ from snuba.utils.streams.streaming import (
     ProcessingStep,
     TransformStep,
 )
-from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.writer import BatchWriter, BatchWriterEncoderWrapper, WriterTableRow
 
 
@@ -70,16 +70,23 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         self.metrics = metrics
         table_writer = storage.get_table_writer()
         self.__writer = BatchWriterEncoderWrapper(
-            table_writer.get_writer(
+            table_writer.get_batch_writer(
                 metrics, {"load_balancing": "in_order", "insert_distributed_sync": 1}
             ),
             JSONRowEncoder(),
         )
 
+        self.__processor: MessageProcessor
         self.__pre_filter = table_writer.get_stream_loader().get_pre_filter()
-        self.__processor = (
-            self.__storage.get_table_writer().get_stream_loader().get_processor()
-        )
+
+    def _get_processor(self) -> MessageProcessor:
+        try:
+            return self.__processor
+        except AttributeError:
+            self.__processor = (
+                self.__storage.get_table_writer().get_stream_loader().get_processor()
+            )
+            return self.__processor
 
     def process_message(
         self, message: Message[KafkaPayload]
@@ -88,7 +95,7 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         if self.__pre_filter and self.__pre_filter.should_drop(message):
             return None
 
-        return self._process_message_impl(
+        return self._get_processor().process_message(
             rapidjson.loads(message.payload.value),
             KafkaMessageMetadata(
                 offset=message.offset,
@@ -96,11 +103,6 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
                 timestamp=message.timestamp,
             ),
         )
-
-    def _process_message_impl(
-        self, value: Mapping[str, Any], metadata: KafkaMessageMetadata,
-    ) -> Optional[ProcessedMessage]:
-        return self.__processor.process_message(value, metadata)
 
     def delivery_callback(self, error, message):
         if error is not None:
@@ -151,8 +153,9 @@ class JSONRowInsertBatch(NamedTuple):
 
 
 class InsertBatchWriter(ProcessingStep[JSONRowInsertBatch]):
-    def __init__(self, writer: BatchWriter[JSONRow]) -> None:
+    def __init__(self, writer: BatchWriter[JSONRow], metrics: MetricsBackend) -> None:
         self.__writer = writer
+        self.__metrics = metrics
 
         self.__messages: MutableSequence[Message[JSONRowInsertBatch]] = []
         self.__closed = False
@@ -171,19 +174,28 @@ class InsertBatchWriter(ProcessingStep[JSONRowInsertBatch]):
         if not self.__messages:
             return
 
-        start = time.time()
+        write_start = time.time()
         self.__writer.write(
             itertools.chain.from_iterable(
                 message.payload.rows for message in self.__messages
             )
         )
+        write_finish = time.time()
+
+        for message in self.__messages:
+            self.__metrics.timing(
+                "latency_ms", (write_finish - message.timestamp.timestamp()) * 1000
+            )
 
         logger.debug(
             "Waited %0.4f seconds for %r rows to be written to %r.",
-            time.time() - start,
+            write_finish - write_start,
             sum(len(message.payload.rows) for message in self.__messages),
             self.__writer,
         )
+
+    def terminate(self) -> None:
+        self.__closed = True
 
     def join(self, timeout: Optional[float] = None) -> None:
         pass
@@ -226,6 +238,9 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
                     value=rapidjson.dumps(value).encode("utf-8"),
                     on_delivery=self.__delivery_callback,
                 )
+
+    def terminate(self) -> None:
+        self.__closed = True
 
     def join(self, timeout: Optional[float] = None) -> None:
         args = []
@@ -292,6 +307,14 @@ class ProcessedMessageBatchWriter(
         if self.__replacement_batch_writer is not None:
             self.__replacement_batch_writer.close()
 
+    def terminate(self) -> None:
+        self.__closed = True
+
+        self.__insert_batch_writer.terminate()
+
+        if self.__replacement_batch_writer is not None:
+            self.__replacement_batch_writer.terminate()
+
     def join(self, timeout: Optional[float] = None) -> None:
         start = time.time()
         self.__insert_batch_writer.join(timeout)
@@ -328,6 +351,7 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         prefilter: Optional[StreamMessageFilter[KafkaPayload]],
         processor: MessageProcessor,
         writer: BatchWriter[JSONRow],
+        metrics: MetricsBackend,
         max_batch_size: int,
         max_batch_time: float,
         processes: Optional[int],
@@ -339,6 +363,7 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         self.__prefilter = prefilter
         self.__processor = processor
         self.__writer = writer
+        self.__metrics = metrics
 
         self.__max_batch_size = max_batch_size
         self.__max_batch_time = max_batch_time
@@ -368,7 +393,9 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         return not self.__prefilter.should_drop(message)
 
     def __build_write_step(self) -> ProcessedMessageBatchWriter:
-        insert_batch_writer = InsertBatchWriter(self.__writer)
+        insert_batch_writer = InsertBatchWriter(
+            self.__writer, MetricsWrapper(self.__metrics, "insertions")
+        )
 
         replacement_batch_writer: Optional[ReplacementBatchWriter]
         if self.__supports_replacements:

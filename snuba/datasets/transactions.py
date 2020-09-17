@@ -14,7 +14,7 @@ from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
-from snuba.query.expressions import Column, FunctionCall
+from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
@@ -45,6 +45,9 @@ transaction_translator = TranslationMappers(
                 ),
             ),
         ),
+        ColumnToFunction(
+            None, "user", "nullIf", (Column(None, None, "user"), Literal(None, ""))
+        ),
         # These column aliases originally existed in the ``discover`` dataset,
         # but now live here to maintain compatibility between the composite
         # ``discover`` dataset and the standalone ``transaction`` dataset. In
@@ -64,6 +67,7 @@ transaction_translator = TranslationMappers(
     subscriptables=[
         SubscriptableMapper(None, "tags", None, "tags"),
         SubscriptableMapper(None, "contexts", None, "contexts"),
+        SubscriptableMapper(None, "measurements", None, "measurements", nullable=True),
     ],
 )
 
@@ -125,7 +129,7 @@ class TransactionsDataset(TimeSeriesDataset):
         table_alias: str = "",
     ):
         if column_name == "ip_address":
-            return f"coalesce(IPv4NumToString(ip_address_v4), IPv6NumToString(ip_address_v6))"
+            return "coalesce(IPv4NumToString(ip_address_v4), IPv6NumToString(ip_address_v6))"
         if column_name == "event_id":
             return "replaceAll(toString(event_id), '-', '')"
 

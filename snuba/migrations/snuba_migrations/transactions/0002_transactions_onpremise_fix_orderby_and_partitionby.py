@@ -20,6 +20,9 @@ def forwards() -> None:
     """
     cluster = get_cluster(StorageSetKey.TRANSACTIONS)
 
+    if not cluster.is_single_node():
+        return
+
     clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
     database = cluster.get_database()
 
@@ -126,6 +129,9 @@ def backwards() -> None:
     in the middle. Otherwise it's a no-op.
     """
     cluster = get_cluster(StorageSetKey.TRANSACTIONS)
+
+    if not cluster.is_single_node():
+        return
 
     clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 

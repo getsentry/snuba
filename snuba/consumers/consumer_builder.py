@@ -12,16 +12,17 @@ from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
-from snuba.utils.streams.batching import BatchProcessingStrategyFactory
-from snuba.utils.streams.kafka import (
+from snuba.utils.streams import Topic
+from snuba.utils.streams.backends.kafka import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
     KafkaPayload,
     TransportError,
     build_kafka_consumer_configuration,
 )
+from snuba.utils.streams.batching import BatchProcessingStrategyFactory
 from snuba.utils.streams.processing import ProcessingStrategyFactory, StreamProcessor
-from snuba.utils.streams.types import Topic
+from snuba.utils.streams.profiler import ProcessingStrategyProfilerWrapperFactory
 
 
 StrategyFactoryType = Enum("StrategyFactoryType", ["BATCHING", "STREAMING"])
@@ -52,6 +53,7 @@ class ConsumerBuilder:
         input_block_size: Optional[int],
         output_block_size: Optional[int],
         commit_retry_policy: Optional[RetryPolicy] = None,
+        profile_path: Optional[str] = None,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = bootstrap_servers
@@ -110,6 +112,7 @@ class ConsumerBuilder:
         self.processes = processes
         self.input_block_size = input_block_size
         self.output_block_size = output_block_size
+        self.__profile_path = profile_path
 
         if (
             self.processes is not None
@@ -185,10 +188,11 @@ class ConsumerBuilder:
         return StreamingConsumerStrategyFactory(
             stream_loader.get_pre_filter(),
             stream_loader.get_processor(),
-            table_writer.get_writer(
+            table_writer.get_batch_writer(
                 self.metrics,
                 {"load_balancing": "in_order", "insert_distributed_sync": 1},
             ),
+            self.metrics,
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
             processes=self.processes,
@@ -211,6 +215,11 @@ class ConsumerBuilder:
             strategy_factory = self.__build_streaming_strategy_factory()
         else:
             raise ValueError("unexpected strategy factory type")
+
+        if self.__profile_path is not None:
+            strategy_factory = ProcessingStrategyProfilerWrapperFactory(
+                strategy_factory, self.__profile_path,
+            )
 
         return self.__build_consumer(strategy_factory)
 

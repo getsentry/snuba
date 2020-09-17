@@ -94,6 +94,7 @@ class EventsLoader(DirectoryLoader):
             "0007_groupedmessages",
             "0008_groupassignees",
             "0009_errors_add_http_fields",
+            "0010_groupedmessages_onpremise_compatibility",
         ]
 
 
@@ -133,7 +134,7 @@ class QuerylogLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.querylog")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_querylog", "0002_status_type_change"]
+        return ["0001_querylog", "0002_status_type_change", "0003_add_profile_fields"]
 
 
 _REGISTERED_GROUPS = {
