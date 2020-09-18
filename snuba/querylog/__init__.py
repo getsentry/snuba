@@ -3,8 +3,8 @@ from typing import Optional
 from snuba import environment, settings, state
 from snuba.querylog.query_metadata import QueryStatus, SnubaQueryMetadata
 from snuba.request import Request
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "api")
 

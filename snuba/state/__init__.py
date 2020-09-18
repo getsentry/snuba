@@ -14,7 +14,7 @@ from confluent_kafka import Producer
 
 from snuba import environment, settings
 from snuba.redis import redis_client as rds
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "snuba.state")
 logger = logging.getLogger("snuba.state")

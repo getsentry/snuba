@@ -13,7 +13,7 @@ from snuba.processor import (
     _collapse_uint32,
     _ensure_valid_date,
 )
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 STATUS_MAPPING = {
     "ok": 0,
