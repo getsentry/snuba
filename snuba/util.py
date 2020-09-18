@@ -28,7 +28,7 @@ from snuba import settings
 from snuba.clickhouse.escaping import escape_string
 from snuba.query.parsing import ParsingContext
 from snuba.query.schema import CONDITION_OPERATORS
-from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.types import Tags
 

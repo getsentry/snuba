@@ -19,7 +19,7 @@ from snuba.request.request_settings import (
     SubscriptionRequestSettings,
 )
 from snuba.schemas import Schema, validate_jsonschema
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "parser")
 

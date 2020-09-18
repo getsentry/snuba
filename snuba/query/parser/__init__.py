@@ -31,7 +31,7 @@ from snuba.query.parser.exceptions import (
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
 from snuba.query.parser.validation import validate_query
 from snuba.util import is_function, to_list, tuplify
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
 

@@ -27,8 +27,8 @@ from snuba.processor import (
     ProcessedMessage,
     ReplacementBatch,
 )
-from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics import MetricsBackend
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.batching import AbstractBatchWorker
