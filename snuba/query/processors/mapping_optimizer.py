@@ -20,7 +20,7 @@ from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Any, FunctionCall, Literal, Or, Param, String
 from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "processors.tags_hash_map")
 

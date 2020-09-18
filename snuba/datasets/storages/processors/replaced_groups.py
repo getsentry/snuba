@@ -10,7 +10,7 @@ from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "processors.replaced_groups")

@@ -18,8 +18,8 @@ from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 from snuba.util import with_span
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException, QueryResult
 from snuba.web.db_query import raw_query
 

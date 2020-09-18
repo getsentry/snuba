@@ -25,7 +25,7 @@ from snuba.query.logical import SelectedExpression
 from snuba.query.matchers import AnyExpression, Column, FunctionCall, Or, Param, String
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryResult
 
 logger = logging.getLogger("snuba.query.split")
