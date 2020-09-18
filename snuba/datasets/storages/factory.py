@@ -9,16 +9,16 @@ from snuba.datasets.storages.events_ro import storage as events_ro_storage
 from snuba.datasets.storages.groupassignees import storage as groupassignees_storage
 from snuba.datasets.storages.groupedmessages import storage as groupedmessages_storage
 from snuba.datasets.storages.outcomes import (
-    raw_storage as outcomes_raw_storage,
     materialized_storage as outcomes_hourly_storage,
 )
+from snuba.datasets.storages.outcomes import raw_storage as outcomes_raw_storage
 from snuba.datasets.storages.querylog import storage as querylog_storage
 from snuba.datasets.storages.sessions import (
-    raw_storage as sessions_raw_storage,
     materialized_storage as sessions_hourly_storage,
 )
+from snuba.datasets.storages.sessions import raw_storage as sessions_raw_storage
+from snuba.datasets.storages.spans import storage as spans_storage
 from snuba.datasets.storages.transactions import storage as transactions_storage
-
 
 CDC_STORAGES: Mapping[StorageKey, CdcStorage] = {
     storage.get_storage_key(): storage
@@ -36,6 +36,7 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
             querylog_storage,
             sessions_raw_storage,
             transactions_storage,
+            spans_storage,
         ]
     },
 }
