@@ -222,9 +222,7 @@ class TransactionEvent:
 
 class TestTransactionsProcessor(BaseTest):
     def __get_timestamps(slef) -> Tuple[float, float]:
-        timestamp = datetime.utcnow().replace(tzinfo=timezone.utc) - timedelta(
-            seconds=5
-        )
+        timestamp = datetime.now(tz=timezone.utc) - timedelta(seconds=5)
         start_timestamp = timestamp - timedelta(seconds=5)
         return (start_timestamp.timestamp(), timestamp.timestamp())
 
