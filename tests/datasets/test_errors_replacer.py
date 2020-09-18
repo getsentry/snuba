@@ -36,7 +36,7 @@ class TestReplacer(BaseEventsTest):
         return Message(
             Partition(Topic("replacements"), 0),
             0,
-            KafkaPayload(None, json.dumps(msg).encode("utf-8")),
+            KafkaPayload(None, json.dumps(msg).encode("utf-8"), []),
             datetime.now(),
         )
 
@@ -262,6 +262,7 @@ class TestReplacer(BaseEventsTest):
                         },
                     )
                 ).encode("utf-8"),
+                [],
             ),
             datetime.now(),
         )
@@ -299,6 +300,7 @@ class TestReplacer(BaseEventsTest):
                         },
                     )
                 ).encode("utf-8"),
+                [],
             ),
             datetime.now(),
         )
@@ -338,6 +340,7 @@ class TestReplacer(BaseEventsTest):
                         },
                     )
                 ).encode("utf-8"),
+                [],
             ),
             datetime.now(),
         )

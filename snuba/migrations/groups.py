@@ -118,7 +118,7 @@ class OutcomesLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.outcomes")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_outcomes"]
+        return ["0001_outcomes", "0002_outcomes_remove_size_and_bytes"]
 
 
 class SessionsLoader(DirectoryLoader):
