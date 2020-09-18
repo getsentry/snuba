@@ -1,5 +1,5 @@
 from dataclasses import replace
-from typing import Any, Sequence, Tuple
+from typing import Any, Mapping, Sequence, Tuple
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.query.exceptions import InvalidExpressionException
@@ -15,6 +15,27 @@ from snuba.request.request_settings import RequestSettings
 class InvalidCustomFunctionCall(InvalidExpressionException):
     def __str__(self) -> str:
         return f"Invalid custom function call {self.expression}: {self.message}"
+
+
+def replace_in_expression(
+    body: Expression, replace_lookup: Mapping[str, Expression]
+) -> Expression:
+    ret = body.transform(
+        lambda exp: replace_lookup[exp.column_name]
+        if isinstance(exp, Column) and exp.column_name in replace_lookup
+        else exp
+    )
+    return ret
+
+
+def simple_function(body: str) -> Expression:
+    return parse_clickhouse_function(body)
+
+
+def partial_function(body: str, constants: Sequence[Tuple[str, Any]]) -> Expression:
+    parsed = parse_clickhouse_function(body)
+    constants_lookup = {name: Literal(None, value) for (name, value) in constants}
+    return replace_in_expression(parsed, constants_lookup)
 
 
 class CustomFunction(QueryProcessor):
@@ -52,8 +73,7 @@ class CustomFunction(QueryProcessor):
         dataset_schema: ColumnSet,
         name: str,
         signature: Sequence[Tuple[str, ParamType]],
-        constants: Sequence[Tuple[str, Any]],
-        body: str,
+        body: Expression,
     ) -> None:
         self.__dataset_schema = dataset_schema
         self.__function_name = name
@@ -61,9 +81,8 @@ class CustomFunction(QueryProcessor):
         param_types = []
         if len(signature) > 0:
             self.__param_names, param_types = zip(*signature)
-        self.__body = parse_clickhouse_function(body)
+        self.__body = body
         self.__validator = SignatureValidator(param_types)
-        self.__constants = {name: const for (name, const) in constants}
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         def apply_function(expression: Expression) -> Expression:
@@ -88,15 +107,7 @@ class CustomFunction(QueryProcessor):
                     )
                 }
 
-                def transform_fn(exp: Expression) -> Expression:
-                    if isinstance(exp, Column):
-                        if exp.column_name in resolved_params:
-                            return resolved_params[exp.column_name]
-                        elif exp.column_name in self.__constants:
-                            return Literal(exp.alias, self.__constants[exp.column_name])
-                    return exp
-
-                ret = self.__body.transform(transform_fn)
+                ret = replace_in_expression(self.__body, resolved_params)
                 return replace(ret, alias=expression.alias)
             else:
                 return expression
