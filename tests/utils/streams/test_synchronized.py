@@ -42,7 +42,9 @@ def test_synchronized_consumer(broker: Broker[KafkaPayload]) -> None:
     commit_log_consumer = broker.get_consumer("commit-log-consumer")
 
     messages = [
-        producer.produce(topic, KafkaPayload(None, f"{i}".encode("utf8"))).result(1.0)
+        producer.produce(topic, KafkaPayload(None, f"{i}".encode("utf8"), [])).result(
+            1.0
+        )
         for i in range(6)
     ]
 
@@ -191,7 +193,9 @@ def test_synchronized_consumer_pause_resume(broker: Broker[KafkaPayload]) -> Non
     commit_log_consumer = broker.get_consumer("commit-log-consumer")
 
     messages = [
-        producer.produce(topic, KafkaPayload(None, f"{i}".encode("utf8"))).result(1.0)
+        producer.produce(topic, KafkaPayload(None, f"{i}".encode("utf8"), [])).result(
+            1.0
+        )
         for i in range(2)
     ]
 
@@ -274,7 +278,9 @@ def test_synchronized_consumer_handles_end_of_partition(
     commit_log_consumer = broker.get_consumer("commit-log-consumer")
 
     messages = [
-        producer.produce(topic, KafkaPayload(None, f"{i}".encode("utf8"))).result(1.0)
+        producer.produce(topic, KafkaPayload(None, f"{i}".encode("utf8"), [])).result(
+            1.0
+        )
         for i in range(2)
     ]
 

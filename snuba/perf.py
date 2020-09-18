@@ -29,7 +29,7 @@ def get_messages(events_file) -> Sequence[Message[KafkaPayload]]:
             Message(
                 Partition(Topic("events"), 1),
                 0,
-                KafkaPayload(None, raw_event.encode("utf-8")),
+                KafkaPayload(None, raw_event.encode("utf-8"), []),
                 datetime.now(),
             ),
         )
