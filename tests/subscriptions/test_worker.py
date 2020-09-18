@@ -1,11 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from typing import Iterable, Iterator, MutableMapping, Tuple
+from typing import Iterable, MutableMapping, Tuple
 from uuid import UUID, uuid1
 
-import pytest
-
-from snuba.datasets.dataset import Dataset
+from snuba.datasets.factory import get_dataset
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import (
     PartitionId,
@@ -23,7 +21,12 @@ from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.local.backend import LocalBroker as Broker
 from snuba.utils.types import Interval
-from tests.base import dataset_manager
+
+
+def setup_function() -> None:
+    from snuba.migrations.runner import Runner
+
+    Runner().run_all(force=True)
 
 
 class DummySubscriptionDataStore(SubscriptionDataStore):
@@ -43,15 +46,8 @@ class DummySubscriptionDataStore(SubscriptionDataStore):
         return [*self.__subscriptions.items()]
 
 
-@pytest.fixture
-def dataset() -> Iterator[Dataset]:
-    with dataset_manager("events") as dataset:
-        yield dataset
-
-
-def test_subscription_worker(
-    dataset: Dataset, broker: Broker[SubscriptionTaskResult],
-) -> None:
+def test_subscription_worker(broker: Broker[SubscriptionTaskResult],) -> None:
+    dataset = get_dataset("events")
     result_topic = Topic("subscription-results")
 
     broker.create_topic(result_topic, partitions=1)

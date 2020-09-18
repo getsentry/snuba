@@ -1,18 +1,16 @@
 import calendar
-import os
 import uuid
-from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import md5
-from typing import Iterator, MutableSequence, Optional, Sequence
+from typing import MutableSequence, Sequence
 
 from snuba import settings
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.consumer import KafkaMessageMetadata
-from snuba.datasets.dataset import Dataset
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import enforce_table_writer, get_dataset
+from snuba.datasets.storages.factory import STORAGES
 from snuba.processor import InsertBatch, ProcessedMessage
 from snuba.redis import redis_client
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
@@ -20,47 +18,52 @@ from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 from tests.fixtures import raw_event
 
 
-@contextmanager
-def dataset_manager(name: str) -> Iterator[Dataset]:
+def _setup() -> None:
+    assert (
+        settings.TESTING
+    ), "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
+
     from snuba.migrations.runner import Runner
-    from snuba.web.views import truncate_dataset
 
     Runner().run_all(force=True)
-    dataset = get_dataset(name)
-    truncate_dataset(dataset)
 
-    try:
-        yield dataset
-    finally:
-        truncate_dataset(dataset)
+    redis_client.flushdb()
+
+
+def _teardown() -> None:
+    from snuba.web.views import truncate_storage
+
+    for storage_key in STORAGES:
+        truncate_storage(STORAGES[storage_key])
+    redis_client.flushdb()
 
 
 class BaseTest(object):
-    def setup_method(self, test_method, dataset_name: Optional[str] = None):
-        assert (
-            settings.TESTING
-        ), "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
+    def setup_method(self) -> None:
+        _setup()
 
-        self.database = os.environ.get("CLICKHOUSE_DATABASE", "default")
+    def teardown_method(self) -> None:
+        _teardown()
+
+
+class BaseStorageTest(object):
+    def setup_method(self, test_method, storage_name: str) -> None:
+        _setup()
+        self.storage_name = storage_name
+
+    def teardown_method(self) -> None:
+        _teardown()
+
+
+class BaseDatasetTest(object):
+    def setup_method(self, test_method, dataset_name: str) -> None:
+        _setup()
         self.dataset_name = dataset_name
+        self.dataset = get_dataset(dataset_name)
+        from snuba.web.views import truncate_dataset
 
-        if dataset_name is not None:
-            self.__dataset_manager = dataset_manager(dataset_name)
-            self.dataset = self.__dataset_manager.__enter__()
-        else:
-            self.__dataset_manager = None
-            self.dataset = None
+        truncate_dataset(self.dataset)
 
-        redis_client.flushdb()
-
-    def teardown_method(self, test_method):
-        if self.__dataset_manager:
-            self.__dataset_manager.__exit__(None, None, None)
-
-        redis_client.flushdb()
-
-
-class BaseDatasetTest(BaseTest):
     def write_processed_messages(self, messages: Sequence[ProcessedMessage]) -> None:
         rows: MutableSequence[WriterTableRow] = []
         for message in messages:
@@ -75,6 +78,9 @@ class BaseDatasetTest(BaseTest):
             ),
             JSONRowEncoder(),
         ).write(rows)
+
+    def teardown_method(self) -> None:
+        _teardown()
 
 
 class BaseEventsTest(BaseDatasetTest):

@@ -9,16 +9,12 @@ from snuba.datasets.storages.factory import get_storage
 
 
 class TestOptimize(BaseEventsTest):
-    def test(self):
-        clickhouse = (
-            get_storage(StorageKey.EVENTS)
-            .get_cluster()
-            .get_query_connection(ClickhouseClientSettings.OPTIMIZE)
-        )
+    def test(self) -> None:
+        cluster = get_storage(StorageKey.EVENTS).get_cluster()
+        database = cluster.get_database()
+        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
         # no data, 0 partitions to optimize
-        parts = optimize.get_partitions_to_optimize(
-            clickhouse, self.database, self.table
-        )
+        parts = optimize.get_partitions_to_optimize(clickhouse, database, self.table)
         assert parts == []
 
         base = datetime(1999, 12, 26)  # a sunday
@@ -26,23 +22,17 @@ class TestOptimize(BaseEventsTest):
 
         # 1 event, 0 unoptimized parts
         self.write_rows([self.create_event_row_for_date(base)])
-        parts = optimize.get_partitions_to_optimize(
-            clickhouse, self.database, self.table
-        )
+        parts = optimize.get_partitions_to_optimize(clickhouse, database, self.table)
         assert parts == []
 
         # 2 events in the same part, 1 unoptimized part
         self.write_rows([self.create_event_row_for_date(base)])
-        parts = optimize.get_partitions_to_optimize(
-            clickhouse, self.database, self.table
-        )
+        parts = optimize.get_partitions_to_optimize(clickhouse, database, self.table)
         assert parts == [(base_monday, 90)]
 
         # 3 events in the same part, 1 unoptimized part
         self.write_rows([self.create_event_row_for_date(base)])
-        parts = optimize.get_partitions_to_optimize(
-            clickhouse, self.database, self.table
-        )
+        parts = optimize.get_partitions_to_optimize(clickhouse, database, self.table)
         assert parts == [(base_monday, 90)]
 
         # 3 events in one part, 2 in another, 2 unoptimized parts
@@ -52,22 +42,18 @@ class TestOptimize(BaseEventsTest):
         )
         self.write_rows([self.create_event_row_for_date(a_month_earlier_monday)])
         self.write_rows([self.create_event_row_for_date(a_month_earlier_monday)])
-        parts = optimize.get_partitions_to_optimize(
-            clickhouse, self.database, self.table
-        )
+        parts = optimize.get_partitions_to_optimize(clickhouse, database, self.table)
         assert parts == [(base_monday, 90), (a_month_earlier_monday, 90)]
 
         # respects before (base is properly excluded)
         assert list(
             optimize.get_partitions_to_optimize(
-                clickhouse, self.database, self.table, before=base
+                clickhouse, database, self.table, before=base
             )
         ) == [(a_month_earlier_monday, 90)]
 
-        optimize.optimize_partitions(clickhouse, self.database, self.table, parts)
+        optimize.optimize_partitions(clickhouse, database, self.table, parts)
 
         # all parts should be optimized
-        parts = optimize.get_partitions_to_optimize(
-            clickhouse, self.database, self.table
-        )
+        parts = optimize.get_partitions_to_optimize(clickhouse, database, self.table)
         assert parts == []

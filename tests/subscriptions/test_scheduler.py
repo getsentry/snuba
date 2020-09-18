@@ -14,10 +14,10 @@ from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.scheduler import ScheduledTask
 from snuba.utils.types import Interval
-from tests.base import BaseTest
+from tests.base import BaseDatasetTest
 
 
-class TestSubscriptionScheduler(BaseTest):
+class TestSubscriptionScheduler(BaseDatasetTest):
     def setup_method(self, test_method, dataset_name="events") -> None:
         super().setup_method(test_method, dataset_name)
         self.now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)

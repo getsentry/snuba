@@ -4,8 +4,7 @@ import pytest
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.factory import DATASET_NAMES
-from tests.base import dataset_manager
+from snuba.datasets.factory import DATASET_NAMES, get_dataset
 
 
 def test_runs_all_migrations_without_errors() -> None:
@@ -16,8 +15,7 @@ def test_runs_all_migrations_without_errors() -> None:
 
 @pytest.fixture(params=DATASET_NAMES)
 def dataset(request) -> Iterator[Dataset]:
-    with dataset_manager(request.param) as instance:
-        yield instance
+    yield get_dataset(request.param)
 
 
 def test_no_schema_diffs(dataset: Dataset) -> None:

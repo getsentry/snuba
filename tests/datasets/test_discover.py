@@ -1,7 +1,7 @@
 import simplejson as json
 import pytest
 from typing import Any, MutableMapping
-from tests.base import BaseDatasetTest
+from tests.base import BaseTest
 
 from snuba.datasets.factory import get_dataset
 from snuba.query.parser import parse_query
@@ -9,7 +9,7 @@ from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 
 
-def get_dataset_source(dataset_name):
+def get_dataset_source(dataset_name: str):
     return (
         get_dataset(dataset_name).get_all_storages()[0].get_schema().get_data_source()
     )
@@ -142,7 +142,7 @@ test_data = [
 ]
 
 
-class TestDiscover(BaseDatasetTest):
+class TestDiscover(BaseTest):
     @pytest.mark.parametrize("query_body, expected_table", test_data)
     def test_data_source(
         self, query_body: MutableMapping[str, Any], expected_table: str,

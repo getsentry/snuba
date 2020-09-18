@@ -26,6 +26,7 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
+from snuba.datasets.storage import Storage
 from snuba.query.exceptions import InvalidQueryException
 from snuba.redis import redis_client
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
@@ -93,20 +94,24 @@ def check_clickhouse() -> bool:
         return False
 
 
+def truncate_storage(storage: Storage) -> None:
+    cluster = storage.get_cluster()
+    clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+    database = cluster.get_database()
+
+    schema = storage.get_schema()
+
+    if not isinstance(schema, TableSchema):
+        return
+
+    table = schema.get_local_table_name()
+
+    clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
+
+
 def truncate_dataset(dataset: Dataset) -> None:
     for storage in dataset.get_all_storages():
-        cluster = storage.get_cluster()
-        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
-        database = cluster.get_database()
-
-        schema = storage.get_schema()
-
-        if not isinstance(schema, TableSchema):
-            return
-
-        table = schema.get_local_table_name()
-
-        clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
+        truncate_storage(storage)
 
 
 application = Flask(__name__, static_url_path="")
