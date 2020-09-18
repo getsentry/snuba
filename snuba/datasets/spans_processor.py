@@ -4,6 +4,7 @@ from typing import Any, List, Mapping, MutableMapping, Optional, Tuple
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
+from snuba import environment
 from snuba.datasets.events_format import enforce_retention, extract_extra_tags
 from snuba.processor import (
     InsertBatch,
@@ -13,8 +14,11 @@ from snuba.processor import (
     _ensure_valid_date,
     _unicodify,
 )
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 
 UNKNOWN_SPAN_STATUS = 2
+
+metrics = MetricsWrapper(environment.metrics, "spans.processor")
 
 
 class SpansMessageProcessor(MessageProcessor):
@@ -93,6 +97,7 @@ class SpansMessageProcessor(MessageProcessor):
         # Add the transaction span
         transaction_ctx = data["contexts"].get("trace")
         if not transaction_ctx:
+            metrics.increment("missing_trace_ctx")
             return None
 
         # Add the transaction root span
@@ -102,7 +107,7 @@ class SpansMessageProcessor(MessageProcessor):
         processed["parent_span_id"] = (
             int(transaction_ctx["parent_span_id"], 16)
             if "parent_span_id" in transaction_ctx
-            else 0
+            else None
         )
         processed["description"] = _unicodify(data.get("transaction") or "")
         processed["op"] = _unicodify(transaction_ctx.get("op") or "")

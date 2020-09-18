@@ -6,6 +6,7 @@ from snuba.clickhouse.columns import (
     LowCardinality,
     Materialized,
     Nested,
+    Nullable,
     String,
     UInt,
     WithDefault,
@@ -27,9 +28,9 @@ columns = ColumnSet(
         ("trace_id", UUID()),
         ("transaction_span_id", UInt(64)),
         ("span_id", UInt(64)),
-        ("parent_span_id", UInt(64)),
+        ("parent_span_id", Nullable(UInt(64))),
         ("transaction_name", LowCardinality(String())),
-        ("description", LowCardinality(String())),  # description in span
+        ("description", String()),  # description in span
         ("op", LowCardinality(String())),
         ("status", WithDefault(UInt(8), str(UNKNOWN_SPAN_STATUS)),),
         ("start_ts", DateTime()),

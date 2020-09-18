@@ -1,4 +1,3 @@
-from copy import deepcopy
 from typing import Sequence
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
@@ -11,6 +10,7 @@ from snuba.clickhouse.columns import (
     LowCardinality,
     Materialized,
     Nested,
+    Nullable,
     String,
     UInt,
     WithDefault,
@@ -29,9 +29,9 @@ columns = [
     Column("trace_id", UUID()),
     Column("transaction_span_id", UInt(64)),
     Column("span_id", UInt(64)),
-    Column("parent_span_id", UInt(64)),
+    Column("parent_span_id", Nullable(UInt(64))),
     Column("transaction_name", LowCardinality(String())),
-    Column("description", LowCardinality(String())),  # description in span
+    Column("description", String()),  # description in span
     Column("op", LowCardinality(String())),
     Column("status", WithDefault(UInt(8), str(UNKNOWN_SPAN_STATUS)),),
     Column("start_ts", DateTime()),
@@ -88,19 +88,24 @@ class Migration(migration.MultiStepMigration):
         ]
 
     def forwards_dist(self) -> Sequence[operations.Operation]:
-        dest_index = columns.index(tags_col)
-        dist_cols = deepcopy(columns)
-        dist_cols.insert(dest_index, Column("_tags_hash_map", Array(UInt(64))))
-
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="spans_experimental_dist",
-                columns=dist_cols,
+                columns=columns,
                 engine=table_engines.Distributed(
                     local_table_name="spans_experimental_local",
                     sharding_key="cityHash64(transaction_span_id)",
                 ),
+            ),
+            operations.AddColumn(
+                storage_set=StorageSetKey.TRANSACTIONS,
+                table_name="spans_experimental_dist",
+                column=Column(
+                    "_tags_hash_map",
+                    Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN),
+                ),
+                after="tags.value",
             ),
         ]
 
