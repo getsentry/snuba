@@ -10,8 +10,8 @@ from urllib3.exceptions import HTTPError
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.errors import ClickhouseWriterError
 from snuba.utils.codecs import Encoder
-from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics import MetricsBackend
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.writer import BatchWriter, WriterTableRow
 
 
