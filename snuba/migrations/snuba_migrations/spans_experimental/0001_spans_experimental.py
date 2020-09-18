@@ -1,6 +1,8 @@
 from copy import deepcopy
 from typing import Sequence
 
+from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
+
 from snuba.clickhouse.columns import (
     UUID,
     Array,
@@ -17,7 +19,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations, table_engines
 
-UNKNOWN_SPAN_STATUS = 2
+UNKNOWN_SPAN_STATUS = SPAN_STATUS_NAME_TO_CODE["unknown"]
 
 tags_col = Column("tags", Nested([("key", String()), ("value", String())]))
 
