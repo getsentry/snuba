@@ -23,6 +23,7 @@ tags_col = Column("tags", Nested([("key", String()), ("value", String())]))
 
 columns = [
     Column("project_id", UInt(64)),
+    Column("transaction_id", UUID()),
     Column("trace_id", UUID()),
     Column("transaction_span_id", UInt(64)),
     Column("span_id", UInt(64)),
@@ -54,7 +55,11 @@ class Migration(migration.MultiStepMigration):
                 engine=table_engines.ReplacingMergeTree(
                     storage_set=StorageSetKey.TRANSACTIONS,
                     version_column="deleted",
-                    order_by="(project_id, toStartOfDay(finish_ts), cityHash64(transaction_span_id), op, cityHash64(toString(trace_id)), cityHash64(span_id))",
+                    order_by=(
+                        "(project_id, toStartOfDay(finish_ts), transaction_name, "
+                        "cityHash64(transaction_span_id), op, cityHash64(trace_id), "
+                        "cityHash64(span_id))"
+                    ),
                     partition_by="(toMonday(finish_ts))",
                     sample_by="cityHash64(span_id)",
                     ttl="finish_ts + toIntervalDay(retention_days)",

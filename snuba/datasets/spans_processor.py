@@ -35,6 +35,7 @@ class SpansMessageProcessor(MessageProcessor):
         return {
             "deleted": 0,
             "project_id": event["project_id"],
+            "transaction_id": str(uuid.UUID(event["event_id"])),
             "retention_days": enforce_retention(
                 event, datetime.fromtimestamp(data["timestamp"])
             ),

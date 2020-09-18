@@ -23,6 +23,7 @@ from snuba.web.split import TimeSplitQueryStrategy
 columns = ColumnSet(
     [
         ("project_id", UInt(64)),
+        ("transaction_id", UUID()),
         ("trace_id", UUID()),
         ("transaction_span_id", UInt(64)),
         ("span_id", UInt(64)),
