@@ -9,9 +9,11 @@ KAFKA_ONLY_PARTITION = (
 
 class CdcTableNameMessageFilter(StreamMessageFilter[KafkaPayload]):
     """
-    Filters CDC messages not related with the table this filter is interested into.
-    This filtering happens based on the table header when present and without
-    parsing the message payload.
+    Removes all messages from the stream that are not change events (insert,
+    update, delete) on the specified table. (This also removes transactional
+    events, such as begin and commit events, as they are not directed at a
+    specific table.) This filtering utilizes the table header and does not
+    require parsing the payload value.
     """
 
     def __init__(self, postgres_table: str) -> None:
@@ -26,4 +28,4 @@ class CdcTableNameMessageFilter(StreamMessageFilter[KafkaPayload]):
             (value for key, value in message.payload.headers if key == "table"), None
         )
 
-        return table_name and table_name.decode("utf-8") != self.__postgres_table
+        return not table_name or table_name.decode("utf-8") != self.__postgres_table
