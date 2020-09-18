@@ -22,7 +22,9 @@ from snuba.processor import InsertBatch, ReplacementBatch
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.kafka import KafkaPayload
+from tests.assertions import assert_changes
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
+from tests.backends.metrics import TestingMetricsBackend, Timing
 from tests.base import BaseEventsTest
 
 
@@ -37,7 +39,7 @@ class TestConsumer(BaseEventsTest):
             Partition(Topic("events"), 456),
             123,
             KafkaPayload(
-                None, json.dumps((2, "insert", event)).encode("utf-8")
+                None, json.dumps((2, "insert", event)).encode("utf-8"), []
             ),  # event doesn't really matter
             datetime.now(),
         )
@@ -89,7 +91,7 @@ class TestConsumer(BaseEventsTest):
         message: Message[KafkaPayload] = Message(
             Partition(Topic("events"), 1),
             42,
-            KafkaPayload(None, json.dumps((2, "insert", event)).encode("utf-8")),
+            KafkaPayload(None, json.dumps((2, "insert", event)).encode("utf-8"), []),
             datetime.now(),
         )
 
@@ -144,10 +146,13 @@ def test_streaming_consumer_strategy() -> None:
 
     writer = Mock()
 
+    metrics = TestingMetricsBackend()
+
     factory = StreamingConsumerStrategyFactory(
         None,
         processor,
         writer,
+        metrics,
         max_batch_size=10,
         max_batch_time=60,
         processes=None,
@@ -164,17 +169,32 @@ def test_streaming_consumer_strategy() -> None:
         strategy.poll()
         strategy.submit(next(messages))
 
+    assert metrics.calls == []
+
     processor.process_message.side_effect = [{}]
 
     with pytest.raises(TypeError):
         strategy.poll()
         strategy.submit(next(messages))
 
-    strategy.close()
-    strategy.join()
+    def get_number_of_insertion_metrics() -> int:
+        count = 0
+        for call in metrics.calls:
+            if isinstance(call, Timing) and call.name == "insertions.latency_ms":
+                count += 1
+        return count
 
-    assert writer.write.call_count == 1
-    assert len(replacements_producer.messages) == 1
+    expected_write_count = 1
+
+    with assert_changes(
+        get_number_of_insertion_metrics, 0, expected_write_count
+    ), assert_changes(
+        lambda: writer.write.call_count, 0, expected_write_count
+    ), assert_changes(
+        lambda: len(replacements_producer.messages), 0, 1
+    ):
+        strategy.close()
+        strategy.join()
 
 
 def test_json_row_batch_pickle_simple() -> None:

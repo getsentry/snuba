@@ -6,7 +6,13 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.conditions import ConditionFunctions, binary_condition
-from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.expressions import (
+    Column,
+    Expression,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
 from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
 from snuba.query.parser import parse_query
 from snuba.request import Request
@@ -156,6 +162,14 @@ def test_get_all_columns() -> None:
         Column("times_seen", None, "times_seen"),
         Column("event_id", None, "event_id"),
         Column("timestamp", None, "timestamp"),
+    }
+
+    assert query.get_all_ast_referenced_subscripts() == {
+        SubscriptableReference(
+            "tags[sentry:dist]",
+            Column("tags", None, "tags"),
+            Literal(None, "sentry:dist"),
+        )
     }
 
 
