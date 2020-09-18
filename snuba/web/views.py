@@ -435,7 +435,7 @@ if application.debug or application.testing:
         message: Message[KafkaPayload] = Message(
             Partition(Topic("topic"), 0),
             0,
-            KafkaPayload(None, http_request.data),
+            KafkaPayload(None, http_request.data, []),
             datetime.now(),
         )
 

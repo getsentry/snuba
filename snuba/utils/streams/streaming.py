@@ -348,6 +348,14 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
     def __check_for_results(self, timeout: Optional[float] = None) -> None:
         input_batch, result = self.__results[0]
 
+        # If this call is being made in a context where it is intended to be
+        # nonblocking, checking if the result is ready (rather than trying to
+        # retrieve the result itself) avoids costly synchronization.
+        if timeout == 0 and not result.ready():
+            # ``multiprocessing.TimeoutError`` (rather than builtin
+            # ``TimeoutError``) maintains consistency with ``AsyncResult.get``.
+            raise multiprocessing.TimeoutError()
+
         i, output_batch = result.get(timeout=timeout)
 
         # TODO: This does not handle rejections from the next step!
