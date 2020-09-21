@@ -5,8 +5,8 @@ from snuba.datasets.entity import Entity
 from snuba.datasets.entities import EntityKey
 from snuba.util import with_span
 
-ENTITY_IMPL: MutableMapping[str, Entity] = {}
-ENTITY_NAME_LOOKUP: MutableMapping[Entity, str] = {}
+ENTITY_IMPL: MutableMapping[EntityKey, Entity] = {}
+ENTITY_NAME_LOOKUP: MutableMapping[Entity, EntityKey] = {}
 
 
 class InvalidEntityError(Exception):
@@ -34,7 +34,7 @@ def get_entity(name: EntityKey) -> Entity:
     from snuba.datasets.entities.sessions import SessionsEntity
     from snuba.datasets.entities.transactions import TransactionsEntity
 
-    entity_factories: MutableMapping[str, Callable[[], Entity]] = {
+    entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {
         EntityKey.DISCOVER: DiscoverEntity,
         EntityKey.ERRORS: ErrorsEntity,
         EntityKey.EVENTS: EventsEntity,
@@ -54,10 +54,3 @@ def get_entity(name: EntityKey) -> Entity:
         raise InvalidEntityError(f"entity {name!r} does not exist") from error
 
     return entity
-
-
-def get_entity_name(entity: Entity) -> str:
-    try:
-        return ENTITY_NAME_LOOKUP[entity]
-    except KeyError as error:
-        raise InvalidEntityError("Entity name not specified") from error

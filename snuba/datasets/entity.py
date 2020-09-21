@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from typing import Any, Mapping, Optional, Sequence, Tuple, Union
 
 from snuba.clickhouse.columns import ColumnSet
@@ -11,7 +12,7 @@ from snuba.query.processors import QueryProcessor
 from snuba.util import qualified_column
 
 
-class Entity(object):
+class Entity(ABC):
     def __init__(
         self,
         *,
@@ -26,6 +27,7 @@ class Entity(object):
         # TODO: This data model will change as we add more functionality
         self.__data_model = abstract_column_set
 
+    @abstractmethod
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         """
         Returns the extensions for this entity.
@@ -33,8 +35,10 @@ class Entity(object):
         The schema tells Snuba how to parse the query.
         The processor actually does query processing for this extension.
         """
+        # TODO: How does this work with JOINs?
         raise NotImplementedError("entity does not support queries")
 
+    @abstractmethod
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         """
         Returns a series of transformation functions (in the form of QueryProcessor objects)

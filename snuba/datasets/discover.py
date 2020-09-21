@@ -8,4 +8,4 @@ from snuba.datasets.entities.factory import get_entity
 class DiscoverDataset(Dataset):
     def __init__(self) -> None:
         discover_entity = get_entity(EntityKey.DISCOVER)
-        super().__init__(entities=[discover_entity])
+        super().__init__(default_entity=discover_entity)

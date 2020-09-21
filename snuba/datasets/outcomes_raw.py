@@ -10,4 +10,4 @@ class OutcomesRawDataset(Dataset):
 
     def __init__(self) -> None:
         outcomes_raw_entity = get_entity(EntityKey.OUTCOMES_RAW)
-        super().__init__(entities=[outcomes_raw_entity])
+        super().__init__(default_entity=outcomes_raw_entity)

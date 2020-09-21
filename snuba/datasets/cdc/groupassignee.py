@@ -14,4 +14,4 @@ class GroupAssigneeDataset(Dataset):
 
     def __init__(self) -> None:
         groupassignees_entity = get_entity(EntityKey.GROUPASSIGNEE)
-        super().__init__(entities=[groupassignees_entity])
+        super().__init__(default_entity=groupassignees_entity)
