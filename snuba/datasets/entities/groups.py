@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence, Tuple, Union
 
 from snuba.clickhouse.processors import QueryProcessor as ClickhouseProcessor
 from snuba.clusters.storage_sets import StorageSetKey
@@ -30,10 +30,10 @@ from snuba.query.processors import QueryProcessor as LogicalProcessor
 from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
-from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
-from snuba.util import qualified_column
+from snuba.util import parse_datetime, qualified_column
 
 
 class JoinedStorage(ReadableStorage):
@@ -149,11 +149,11 @@ class GroupsEntity(Entity):
 
     def column_expr(
         self,
-        column_name,
+        column_name: str,
         query: Query,
         parsing_context: ParsingContext,
         table_alias: str = "",
-    ):
+    ) -> Union[None, Any]:
         # Eventually joined dataset should not be represented by the same abstraction
         # as joinable datasets. That will be easier through the TableStorage abstraction.
         # Thus, as of now, receiving a table_alias here is not supported.
@@ -197,5 +197,20 @@ class GroupsEntity(Entity):
     def get_query_processors(self) -> Sequence[LogicalProcessor]:
         return [
             TagsExpanderProcessor(),
-            TimeSeriesProcessor(self.__time_group_columns, self.__time_parse_columns),
+            TimeSeriesColumnProcessor(self.__time_group_columns),
         ]
+
+    # TODO: This needs to burned with fire, for so many reasons.
+    # It's here now to reduce the scope of the initial entity changes
+    # but can be moved to a processor if not removed entirely.
+    def process_condition(
+        self, condition: Tuple[str, str, Any]
+    ) -> Tuple[str, str, Any]:
+        lhs, op, lit = condition
+        if (
+            lhs in self.__time_parse_columns
+            and op in (">", "<", ">=", "<=", "=", "!=")
+            and isinstance(lit, str)
+        ):
+            lit = parse_datetime(lit)
+        return lhs, op, lit

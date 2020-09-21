@@ -4,7 +4,7 @@ from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.datasets.factory import get_dataset
 from snuba.query.parser import parse_query
-from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.request.request_settings import HTTPRequestSettings
 
 
@@ -27,7 +27,7 @@ def test_get_time_range() -> None:
     query = parse_query(body, events)
     processors = events.get_query_processors()
     for processor in processors:
-        if isinstance(processor, TimeSeriesProcessor):
+        if isinstance(processor, TimeSeriesColumnProcessor):
             processor.process_query(query, HTTPRequestSettings())
 
     from_date_ast, to_date_ast = get_time_range(ClickhouseQuery(query), "timestamp")

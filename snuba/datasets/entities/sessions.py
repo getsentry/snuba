@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence
+from typing import Any, Mapping, Sequence, Tuple, Union
 
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToCurriedFunction,
@@ -17,9 +17,10 @@ from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
+from snuba.util import parse_datetime
 
 
 def function_rule(col_name: str, function_name: str) -> ColumnToFunction:
@@ -84,17 +85,17 @@ class SessionsEntity(Entity):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
-            TimeSeriesProcessor(self.__time_group_columns, self.__time_parse_columns),
+            TimeSeriesColumnProcessor(self.__time_group_columns),
         ]
 
     # Seems like this could be removed in favour of the storage translators.
     def column_expr(
         self,
-        column_name,
+        column_name: str,
         query: Query,
         parsing_context: ParsingContext,
         table_alias: str = "",
-    ):
+    ) -> Union[None, Any]:
         full_col = super().column_expr(column_name, query, parsing_context, table_alias)
         func = None
         if column_name == "duration_quantiles":
@@ -112,3 +113,18 @@ class SessionsEntity(Entity):
         if func is not None:
             return "{}({})".format(func, full_col)
         return full_col
+
+    # TODO: This needs to burned with fire, for so many reasons.
+    # It's here now to reduce the scope of the initial entity changes
+    # but can be moved to a processor if not removed entirely.
+    def process_condition(
+        self, condition: Tuple[str, str, Any]
+    ) -> Tuple[str, str, Any]:
+        lhs, op, lit = condition
+        if (
+            lhs in self.__time_parse_columns
+            and op in (">", "<", ">=", "<=", "=", "!=")
+            and isinstance(lit, str)
+        ):
+            lit = parse_datetime(lit)
+        return lhs, op, lit

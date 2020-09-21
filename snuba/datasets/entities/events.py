@@ -1,10 +1,10 @@
 from datetime import timedelta
-from typing import Mapping, Sequence
+from typing import Any, Mapping, Sequence, Tuple, Union
 
 from snuba import state
 from snuba.clickhouse.translators.snuba.mappers import SubscriptableMapper
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.dataset import Entity
+from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import (
     QueryStorageSelector,
@@ -25,11 +25,11 @@ from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.handled_functions import HandledFunctionsProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
-from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
-from snuba.util import qualified_column
+from snuba.util import parse_datetime, qualified_column
 
 # TODO: This will be a property of the relationship between entity and
 # storage. Now we do not have entities so it is between dataset and
@@ -96,11 +96,11 @@ class EventsEntity(Entity):
 
     def column_expr(
         self,
-        column_name,
+        column_name: str,
         query: Query,
         parsing_context: ParsingContext,
         table_alias: str = "",
-    ):
+    ) -> Union[None, Any]:
         processed_column = self.__tags_processor.process_column_expression(
             column_name, query, parsing_context, table_alias
         )
@@ -153,8 +153,23 @@ class EventsEntity(Entity):
         return [
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
-            TimeSeriesProcessor(self.__time_group_columns, self.__time_parse_columns),
+            TimeSeriesColumnProcessor(self.__time_group_columns),
             HandledFunctionsProcessor(
                 "exception_stacks.mechanism_handled", self.get_data_model()
             ),
         ]
+
+    # TODO: This needs to burned with fire, for so many reasons.
+    # It's here now to reduce the scope of the initial entity changes
+    # but can be moved to a processor if not removed entirely.
+    def process_condition(
+        self, condition: Tuple[str, str, Any]
+    ) -> Tuple[str, str, Any]:
+        lhs, op, lit = condition
+        if (
+            lhs in self.__time_parse_columns
+            and op in (">", "<", ">=", "<=", "=", "!=")
+            and isinstance(lit, str)
+        ):
+            lit = parse_datetime(lit)
+        return lhs, op, lit

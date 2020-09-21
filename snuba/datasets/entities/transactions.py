@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence
+from typing import Any, FrozenSet, Mapping, Sequence, Tuple, Union
 
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToFunction,
@@ -19,13 +19,16 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
-from snuba.query.processors.performance_expressions import apdex_processor
+from snuba.query.processors.performance_expressions import (
+    apdex_processor,
+    failure_rate_processor,
+)
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.failure_rate_processor import FailureRateProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
-from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
+from snuba.util import parse_datetime
 
 # TODO: This will be a property of the relationship between entity and
 # storage. Now we do not have entities so it is between dataset and
@@ -96,14 +99,14 @@ class TransactionsEntity(Entity):
             writable_storage=storage,
         )
 
-    def _get_promoted_columns(self):
+    def _get_promoted_columns(self) -> Mapping[str, FrozenSet[str]]:
         # TODO: Support promoted tags
         return {
             "tags": frozenset(),
             "contexts": frozenset(),
         }
 
-    def _get_column_tag_map(self):
+    def _get_column_tag_map(self) -> Mapping[str, Mapping[str, str]]:
         # TODO: Support promoted tags
         return {
             "tags": {},
@@ -122,11 +125,11 @@ class TransactionsEntity(Entity):
 
     def column_expr(
         self,
-        column_name,
+        column_name: str,
         query: Query,
         parsing_context: ParsingContext,
         table_alias: str = "",
-    ):
+    ) -> Union[None, Any]:
         if column_name == "ip_address":
             return "coalesce(IPv4NumToString(ip_address_v4), IPv6NumToString(ip_address_v6))"
         if column_name == "event_id":
@@ -172,6 +175,21 @@ class TransactionsEntity(Entity):
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             apdex_processor(self.get_data_model()),
-            FailureRateProcessor(),
-            TimeSeriesProcessor(self.__time_group_columns, self.__time_parse_columns),
+            failure_rate_processor(self.get_data_model()),
+            TimeSeriesColumnProcessor(self.__time_group_columns),
         ]
+
+    # TODO: This needs to burned with fire, for so many reasons.
+    # It's here now to reduce the scope of the initial entity changes
+    # but can be moved to a processor if not removed entirely.
+    def process_condition(
+        self, condition: Tuple[str, str, Any]
+    ) -> Tuple[str, str, Any]:
+        lhs, op, lit = condition
+        if (
+            lhs in self.__time_parse_columns
+            and op in (">", "<", ">=", "<=", "=", "!=")
+            and isinstance(lit, str)
+        ):
+            lit = parse_datetime(lit)
+        return lhs, op, lit

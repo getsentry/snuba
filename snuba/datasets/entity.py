@@ -1,4 +1,4 @@
-from typing import Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence, Tuple, Union
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
@@ -74,18 +74,29 @@ class Entity(object):
         Once consumers/replacers no longer reference entity, this can be removed
         and entity can have more than one writable storage.
         """
+        # TODO: mypy complains here about WritableStorage vs WritableTableStorage.
         return self.__writable_storage
 
     # DEPRECATED: Should move to translations/processors
     def column_expr(
         self,
-        column_name,
+        column_name: str,
         query: Query,
         parsing_context: ParsingContext,
         table_alias: str = "",
-    ):
+    ) -> Union[None, Any]:
         """
         Return an expression for the column name. Handle special column aliases
         that evaluate to something else.
         """
         return escape_identifier(qualified_column(column_name, table_alias))
+
+    def process_condition(
+        self, condition: Tuple[str, str, Any]
+    ) -> Tuple[str, str, Any]:
+        """
+        Return a processed condition tuple.
+        This enables a dataset to do any parsing/transformations
+        a condition before it is added to the query.
+        """
+        return condition
