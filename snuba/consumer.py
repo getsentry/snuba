@@ -35,12 +35,14 @@ from snuba.utils.streams.processing.strategies.abstract import (
     ProcessingStrategy,
     ProcessingStrategyFactory,
 )
+from snuba.utils.streams.processing.strategies.abstract import (
+    ProcessingStrategy as ProcessingStep,
+)
 from snuba.utils.streams.processing.strategies.batching import AbstractBatchWorker
 from snuba.utils.streams.processing.strategies.streaming import (
     CollectStep,
     FilterStep,
     ParallelTransformStep,
-    ProcessingStep,
     TransformStep,
 )
 from snuba.writer import BatchWriter, BatchWriterEncoderWrapper, WriterTableRow
