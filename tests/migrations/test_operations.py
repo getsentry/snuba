@@ -53,7 +53,7 @@ def test_create_materialized_view() -> None:
 
 def test_rename_table() -> None:
     assert (
-        RenameTable(StorageSetKey.EVENTS, "old_table", "new_table",).format_sql()
+        RenameTable(StorageSetKey.EVENTS, "old_table", "new_table").format_sql()
         == "RENAME TABLE old_table TO new_table;"
     )
 
