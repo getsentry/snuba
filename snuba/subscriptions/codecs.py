@@ -47,4 +47,5 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
                     },
                 }
             ).encode("utf-8"),
+            [],
         )

@@ -26,13 +26,13 @@ from tests.utils.streams.backends.mixins import StreamsTestMixin
 
 
 def test_payload_equality() -> None:
-    assert KafkaPayload(None, b"") == KafkaPayload(None, b"")
-    assert KafkaPayload(b"key", b"value") == KafkaPayload(b"key", b"value")
+    assert KafkaPayload(None, b"", []) == KafkaPayload(None, b"", [])
+    assert KafkaPayload(b"key", b"value", []) == KafkaPayload(b"key", b"value", [])
     assert KafkaPayload(None, b"", [("key", b"value")]) == KafkaPayload(
         None, b"", [("key", b"value")]
     )
-    assert not KafkaPayload(None, b"a") == KafkaPayload(None, b"b")
-    assert not KafkaPayload(b"this", b"") == KafkaPayload(b"that", b"")
+    assert not KafkaPayload(None, b"a", []) == KafkaPayload(None, b"b", [])
+    assert not KafkaPayload(b"this", b"", []) == KafkaPayload(b"that", b"", [])
     assert not KafkaPayload(None, b"", [("key", b"this")]) == KafkaPayload(
         None, b"", [("key", b"that")]
     )
@@ -93,7 +93,7 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
 
     def get_payloads(self) -> Iterator[KafkaPayload]:
         for i in itertools.count():
-            yield KafkaPayload(None, f"{i}".encode("utf8"))
+            yield KafkaPayload(None, f"{i}".encode("utf8"), [])
 
     def test_auto_offset_reset_earliest(self) -> None:
         with self.get_topic() as topic:
@@ -174,7 +174,11 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
             assert commit_message.topic() == "commit-log"
 
             assert commit_codec.decode(
-                KafkaPayload(commit_message.key(), commit_message.value())
+                KafkaPayload(
+                    commit_message.key(),
+                    commit_message.value(),
+                    commit_message.headers(),
+                )
             ) == Commit("test", Partition(topic, 0), message.next_offset)
 
 

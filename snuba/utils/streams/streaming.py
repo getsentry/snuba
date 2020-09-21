@@ -24,6 +24,8 @@ from typing import (
     TypeVar,
 )
 
+from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.streams.processing import MessageRejected, ProcessingStrategy
 from snuba.utils.streams.types import Message, Partition, TPayload
 
@@ -298,6 +300,7 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         max_batch_time: float,
         input_block_size: int,
         output_block_size: int,
+        metrics: MetricsBackend,
     ) -> None:
         self.__transform_function = function
         self.__next_step = next_step
@@ -328,6 +331,8 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
             ]
         ] = deque()
 
+        self.__batches_in_progress = Gauge(metrics, "batches_in_progress")
+
         self.__closed = False
 
     def __submit_batch(self) -> None:
@@ -343,10 +348,19 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
                 ),
             )
         )
+        self.__batches_in_progress.increment()
         self.__batch_builder = None
 
     def __check_for_results(self, timeout: Optional[float] = None) -> None:
         input_batch, result = self.__results[0]
+
+        # If this call is being made in a context where it is intended to be
+        # nonblocking, checking if the result is ready (rather than trying to
+        # retrieve the result itself) avoids costly synchronization.
+        if timeout == 0 and not result.ready():
+            # ``multiprocessing.TimeoutError`` (rather than builtin
+            # ``TimeoutError``) maintains consistency with ``AsyncResult.get``.
+            raise multiprocessing.TimeoutError()
 
         i, output_batch = result.get(timeout=timeout)
 
@@ -376,6 +390,7 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         logger.debug("Completed %r, reclaiming blocks...", input_batch)
         self.__input_blocks.append(input_batch.block)
         self.__output_blocks.append(output_batch.block)
+        self.__batches_in_progress.decrement()
 
         del self.__results[0]
 

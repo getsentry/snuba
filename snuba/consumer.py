@@ -5,7 +5,6 @@ import time
 from datetime import datetime
 from pickle import PickleBuffer
 from typing import (
-    Any,
     Callable,
     Mapping,
     MutableSequence,
@@ -28,8 +27,8 @@ from snuba.processor import (
     ProcessedMessage,
     ReplacementBatch,
 )
-from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics import MetricsBackend
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.batching import AbstractBatchWorker
@@ -77,10 +76,17 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
             JSONRowEncoder(),
         )
 
+        self.__processor: MessageProcessor
         self.__pre_filter = table_writer.get_stream_loader().get_pre_filter()
-        self.__processor = (
-            self.__storage.get_table_writer().get_stream_loader().get_processor()
-        )
+
+    def _get_processor(self) -> MessageProcessor:
+        try:
+            return self.__processor
+        except AttributeError:
+            self.__processor = (
+                self.__storage.get_table_writer().get_stream_loader().get_processor()
+            )
+            return self.__processor
 
     def process_message(
         self, message: Message[KafkaPayload]
@@ -89,7 +95,7 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         if self.__pre_filter and self.__pre_filter.should_drop(message):
             return None
 
-        return self._process_message_impl(
+        return self._get_processor().process_message(
             rapidjson.loads(message.payload.value),
             KafkaMessageMetadata(
                 offset=message.offset,
@@ -97,11 +103,6 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
                 timestamp=message.timestamp,
             ),
         )
-
-    def _process_message_impl(
-        self, value: Mapping[str, Any], metadata: KafkaMessageMetadata,
-    ) -> Optional[ProcessedMessage]:
-        return self.__processor.process_message(value, metadata)
 
     def delivery_callback(self, error, message):
         if error is not None:
@@ -436,6 +437,7 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
                 max_batch_time=self.__max_batch_time,
                 input_block_size=self.__input_block_size,
                 output_block_size=self.__output_block_size,
+                metrics=MetricsWrapper(self.__metrics, "process"),
             )
 
         if self.__prefilter is not None:
