@@ -36,7 +36,7 @@ from snuba.utils.streams.processing.strategies.abstract import (
     ProcessingStrategyFactory,
 )
 from snuba.utils.streams.processing.strategies.batching import AbstractBatchWorker
-from snuba.utils.streams.streaming import (
+from snuba.utils.streams.processing.strategies.streaming import (
     CollectStep,
     FilterStep,
     ParallelTransformStep,

@@ -7,7 +7,7 @@ from typing import Iterator
 from unittest.mock import Mock, call
 
 from snuba.utils.streams.backends.kafka import KafkaPayload
-from snuba.utils.streams.streaming import (
+from snuba.utils.streams.processing.strategies.streaming import (
     CollectStep,
     FilterStep,
     MessageBatch,
