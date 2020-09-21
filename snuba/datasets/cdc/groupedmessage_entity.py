@@ -1,9 +1,10 @@
-from typing import Sequence
+from typing import Mapping, Sequence
 
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_cdc_storage
+from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 
@@ -32,3 +33,6 @@ class GroupedMessageEntity(Entity):
         return [
             BasicFunctionsProcessor(),
         ]
+
+    def get_extensions(self) -> Mapping[str, QueryExtension]:
+        return {}
