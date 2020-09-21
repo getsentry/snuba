@@ -5,11 +5,11 @@ from unittest.mock import patch
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.backends.local.backend import LocalBroker as Broker
-from snuba.utils.streams.batching import (
+from snuba.utils.streams.processing.processor import StreamProcessor
+from snuba.utils.streams.processing.strategies.batching import (
     AbstractBatchWorker,
     BatchProcessingStrategyFactory,
 )
-from snuba.utils.streams.processing.processor import StreamProcessor
 from snuba.utils.streams.types import Message, Topic
 
 
