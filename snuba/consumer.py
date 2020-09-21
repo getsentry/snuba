@@ -31,11 +31,11 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.kafka import KafkaPayload
-from snuba.utils.streams.processing.strategies.abstract import (
+from snuba.utils.streams.processing.strategies import (
     ProcessingStrategy,
     ProcessingStrategyFactory,
 )
-from snuba.utils.streams.processing.strategies.abstract import (
+from snuba.utils.streams.processing.strategies import (
     ProcessingStrategy as ProcessingStep,
 )
 from snuba.utils.streams.processing.strategies.batching import AbstractBatchWorker

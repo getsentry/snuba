@@ -20,10 +20,8 @@ from snuba.utils.streams.backends.kafka import (
     TransportError,
     build_kafka_consumer_configuration,
 )
-from snuba.utils.streams.processing.processor import (
-    ProcessingStrategyFactory,
-    StreamProcessor,
-)
+from snuba.utils.streams.processing.processor import StreamProcessor
+from snuba.utils.streams.processing.strategies import ProcessingStrategyFactory
 from snuba.utils.streams.processing.strategies.batching import (
     BatchProcessingStrategyFactory,
 )
