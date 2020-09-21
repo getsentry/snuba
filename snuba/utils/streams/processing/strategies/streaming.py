@@ -26,7 +26,10 @@ from typing import (
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge
-from snuba.utils.streams.processing import MessageRejected, ProcessingStrategy
+from snuba.utils.streams.processing.strategies.abstract import (
+    MessageRejected,
+    ProcessingStrategy,
+)
 from snuba.utils.streams.types import Message, Partition, TPayload
 
 ProcessingStep = ProcessingStrategy
