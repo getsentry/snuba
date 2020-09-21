@@ -23,9 +23,9 @@ def arrayJoin(alias: Optional[str], content: Expression) -> Expression:
 
 # Tuple functions
 def tupleElement(
-    alias: Optional[str], array: Expression, index: Expression
+    alias: Optional[str], tuple_expr: Expression, index: Expression
 ) -> FunctionCall:
-    return FunctionCall(alias, "tupleElement", (array, index))
+    return FunctionCall(alias, "tupleElement", (tuple_expr, index))
 
 
 # arithmetic function

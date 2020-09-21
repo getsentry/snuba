@@ -229,11 +229,11 @@ class ArrayJoinKeyValueOptimizer(QueryProcessor):
 
 
 def _unfiltered_mapping_pairs(
-    alias: Optional[str], column_name: str, pair_alias: str, array_index: LiteralExpr
+    alias: Optional[str], column_name: str, pair_alias: str, tuple_index: LiteralExpr
 ) -> Expression:
     # (arrayJoin(
-    #   arrayMap((x,y) -> [x,y], tags.key, tags.value)
-    #  as all_tags)[1]
+    #   arrayMap((x,y) -> (x,y), tags.key, tags.value)
+    #  as all_tags).1
     return tupleElement(
         alias,
         arrayJoin(
@@ -243,7 +243,7 @@ def _unfiltered_mapping_pairs(
                 ColumnExpr(None, None, val_column(column_name)),
             ),
         ),
-        array_index,
+        tuple_index,
     )
 
 
@@ -257,7 +257,7 @@ def _filtered_mapping_pairs(
     # (arrayJoin(arrayFilter(
     #       pair -> tupleElement(pair, 1) IN (tags),
     #       arrayMap((x,y) -> (x,y), tags.key, tags.value)
-    #  )) as all_tags)[1]
+    #  )) as all_tags).1
     return tupleElement(
         alias,
         arrayJoin(
