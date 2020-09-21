@@ -37,7 +37,6 @@ class ErrorsProcessor(EventsProcessorBase):
         self, output: MutableMapping[str, Any], event: InsertEvent,
     ) -> None:
         output["event_id"] = str(uuid.UUID(event["event_id"]))
-        output["event_string"] = event["event_id"]
 
     def extract_custom(
         self,

@@ -277,7 +277,6 @@ def test_error_processor() -> None:
         "deleted": 0,
         "group_id": 100,
         "primary_hash": "04233d08ac90cf6fc015b1be5932e7e2",
-        "event_string": "dcb9d002cac548c795d1c9adbfc68040",
         "received": received_timestamp.astimezone(pytz.utc).replace(
             tzinfo=None, microsecond=0
         ),
