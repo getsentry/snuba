@@ -6,9 +6,46 @@ from snuba.utils.metrics.types import Tags
 
 
 class Gauge:
+    def __init__(
+        self, metrics: MetricsBackend, name: str, tags: Optional[Tags] = None,
+    ) -> None:
+        self.__metrics = metrics
+        self.__name = name
+        self.__tags = tags
+
+        self.__value = 0.0
+
+        self.__report()
+
+    def __enter__(self) -> None:
+        self.increment()
+
+    def __exit__(
+        self,
+        type: Optional[Any] = None,
+        value: Optional[Any] = None,
+        traceback: Optional[Any] = None,
+    ) -> None:
+        self.decrement()
+
+    def __report(self) -> None:
+        self.__metrics.gauge(self.__name, self.__value, self.__tags)
+
+    def increment(self, value: float = 1.0) -> None:
+        self.__value += value
+        self.__report()
+
+    def decrement(self, value: float = 1.0) -> None:
+        self.__value -= 1
+        self.__report()
+
+
+class ThreadSafeGauge(Gauge):
     """
-    Implements a thread-safe gauge as a context manager. This can be used to
-    track how many threads are concurrently executing a code block.
+    Implements a thread-safe gauge.
+
+    This can be used to track how many threads are concurrently executing a
+    code block.
     """
 
     def __init__(
@@ -21,29 +58,14 @@ class Gauge:
         if lock is None:
             lock = Lock()
 
-        self.__metrics = metrics
-        self.__name = name
-        self.__tags = tags
+        super().__init__(metrics, name, tags)
 
         self.__lock = lock
-        self.__value = 0
 
-        self.__report()
-
-    def __report(self) -> None:
-        self.__metrics.gauge(self.__name, self.__value, self.__tags)
-
-    def __enter__(self) -> None:
+    def increment(self, value: float = 1.0) -> None:
         with self.__lock:
-            self.__value += 1
-            self.__report()
+            super().increment(value)
 
-    def __exit__(
-        self,
-        type: Optional[Any] = None,
-        value: Optional[Any] = None,
-        traceback: Optional[Any] = None,
-    ) -> None:
+    def decrement(self, value: float = 1.0) -> None:
         with self.__lock:
-            self.__value -= 1
-            self.__report()
+            super().decrement(value)
