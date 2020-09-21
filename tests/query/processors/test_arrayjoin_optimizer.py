@@ -12,7 +12,7 @@ from snuba.query.conditions import (
     binary_condition,
     in_condition,
 )
-from snuba.query.dsl import arrayElement, arrayJoin
+from snuba.query.dsl import arrayJoin, tupleElement
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query as SnubaQuery
 from snuba.query.logical import SelectedExpression
@@ -197,7 +197,7 @@ test_data = [
         },
         build_query(
             selected_columns=[
-                arrayElement(
+                tupleElement(
                     "tags_key",
                     arrayJoin(
                         "snuba_all_tags",
@@ -208,7 +208,7 @@ test_data = [
                     ),
                     Literal(None, 1),
                 ),
-                arrayElement(
+                tupleElement(
                     "tags_value",
                     arrayJoin(
                         "snuba_all_tags",
@@ -262,7 +262,7 @@ test_data = [
         },
         build_query(
             selected_columns=[
-                arrayElement(
+                tupleElement(
                     "tags_key",
                     arrayJoin(
                         "snuba_all_tags",
@@ -276,7 +276,7 @@ test_data = [
                     ),
                     Literal(None, 1),
                 ),
-                arrayElement(
+                tupleElement(
                     "tags_value",
                     arrayJoin(
                         "snuba_all_tags",
@@ -293,7 +293,7 @@ test_data = [
             ],
             condition=in_condition(
                 None,
-                arrayElement(
+                tupleElement(
                     "tags_key",
                     arrayJoin(
                         "snuba_all_tags",
@@ -348,7 +348,7 @@ def test_formatting() -> None:
     """
     Validates the formatting of the arrayFilter expressions.
     """
-    assert arrayElement(
+    assert tupleElement(
         "tags_key",
         arrayJoin(
             "snuba_all_tags",
@@ -358,11 +358,11 @@ def test_formatting() -> None:
         ),
         Literal(None, 1),
     ).accept(ClickhouseExpressionFormatter()) == (
-        "(arrayElement((arrayJoin(arrayMap((x, y -> [x, y]), "
+        "(tupleElement((arrayJoin(arrayMap((x, y -> tuple(x, y)), "
         "tags.key, tags.value)) AS snuba_all_tags), 1) AS tags_key)"
     )
 
-    assert arrayElement(
+    assert tupleElement(
         "tags_key",
         arrayJoin(
             "snuba_all_tags",
@@ -375,9 +375,9 @@ def test_formatting() -> None:
         ),
         Literal(None, 1),
     ).accept(ClickhouseExpressionFormatter()) == (
-        "(arrayElement((arrayJoin(arrayFilter((pair -> in("
-        "arrayElement(pair, 1), tuple('t1', 't2'))), "
-        "arrayMap((x, y -> [x, y]), tags.key, tags.value))) AS snuba_all_tags), 1) AS tags_key)"
+        "(tupleElement((arrayJoin(arrayFilter((pair -> in("
+        "tupleElement(pair, 1), tuple('t1', 't2'))), "
+        "arrayMap((x, y -> tuple(x, y)), tags.key, tags.value))) AS snuba_all_tags), 1) AS tags_key)"
     )
 
 
@@ -397,8 +397,8 @@ def test_aliasing() -> None:
     sql = AstSqlQuery(processed, HTTPRequestSettings()).format_sql()
 
     assert sql == (
-        "SELECT (arrayElement((arrayJoin(arrayMap((x, y -> [x, y]), "
+        "SELECT (tupleElement((arrayJoin(arrayMap((x, y -> tuple(x, y)), "
         "tags.key, tags.value)) AS snuba_all_tags), 2) AS tags_value) "
         "FROM transactions_local "
-        "WHERE in((arrayElement(snuba_all_tags, 1) AS tags_key), tuple('t1', 't2'))"
+        "WHERE in((tupleElement(snuba_all_tags, 1) AS tags_key), tuple('t1', 't2'))"
     )
