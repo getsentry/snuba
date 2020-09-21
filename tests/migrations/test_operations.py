@@ -10,6 +10,7 @@ from snuba.migrations.operations import (
     DropTable,
     InsertIntoSelect,
     ModifyColumn,
+    RenameTable,
 )
 from snuba.migrations.table_engines import ReplacingMergeTree
 
@@ -47,6 +48,13 @@ def test_create_materialized_view() -> None:
             "SELECT id, count() as count FROM test_table_local GROUP BY id",
         ).format_sql()
         == "CREATE MATERIALIZED VIEW IF NOT EXISTS test_table_mv TO test_table_dest (id String) AS SELECT id, count() as count FROM test_table_local GROUP BY id;"
+    )
+
+
+def test_rename_table() -> None:
+    assert (
+        RenameTable(StorageSetKey.EVENTS, "old_table", "new_table",).format_sql()
+        == "RENAME TABLE old_table TO new_table;"
     )
 
 
