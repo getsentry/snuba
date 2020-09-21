@@ -14,7 +14,7 @@ from snuba.processor import (
     _ensure_valid_date,
     _unicodify,
 )
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 UNKNOWN_SPAN_STATUS = 2
 

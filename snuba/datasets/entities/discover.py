@@ -178,18 +178,18 @@ def detect_table(
             elif transactions_only_columns.get(col.column_name):
                 transaction_columns.add(col.column_name)
 
-        event_mismatch = event_columns and selected_table == TRANSACTIONS
-        transaction_mismatch = transaction_columns and selected_table in [
-            EVENTS,
-            EVENTS_AND_TRANSACTIONS,
-        ]
-
         for subscript in query.get_all_ast_referenced_subscripts():
             schema_col_name = subscript_key_column_name(subscript)
             if events_only_columns.get(schema_col_name):
                 event_columns.add(schema_col_name)
             if transactions_only_columns.get(schema_col_name):
                 transaction_columns.add(schema_col_name)
+
+        event_mismatch = event_columns and selected_table == TRANSACTIONS
+        transaction_mismatch = transaction_columns and selected_table in [
+            EVENTS,
+            EVENTS_AND_TRANSACTIONS,
+        ]
 
         if event_mismatch or transaction_mismatch:
             missing_columns = ",".join(
