@@ -31,7 +31,7 @@ from snuba.query.parser.exceptions import (
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
 from snuba.query.parser.validation import validate_query
 from snuba.util import is_function, to_list, tuplify
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
 
@@ -154,11 +154,23 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
             if isinstance(select_expr.expression, FunctionCall):
                 if select_expr.expression.function_name == "arrayJoin":
                     parameters = select_expr.expression.parameters
-                    if len(parameters) != 1 or not isinstance(parameters[0], Column):
+                    if len(parameters) != 1:
                         raise ParsingException(
-                            "arrayJoin(...) only accepts a single column as a parameter."
+                            "arrayJoin(...) only accepts a single parameter."
                         )
-                    array_join_cols.add(parameters[0].column_name)
+                    if isinstance(parameters[0], Column):
+                        array_join_cols.add(parameters[0].column_name)
+                    else:
+                        # We only accepts columns or functions that do not
+                        # reference columns. We could not say whether we are
+                        # actually arrayjoining on the values of the column
+                        # if it is nested in an arbitrary function. But
+                        # functions of literals are fine.
+                        for e in parameters[0]:
+                            if isinstance(e, Column):
+                                raise ParsingException(
+                                    "arrayJoin(...) cannot contain columns nested in functions."
+                                )
 
     where_expr = parse_conditions_to_expr(
         body.get("conditions", []), dataset, array_join_cols
