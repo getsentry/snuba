@@ -4,7 +4,7 @@ from typing import Optional, Tuple
 from snuba.consumers.consumer_builder import ConsumerBuilder
 from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
 from snuba.utils.streams.backends.kafka import KafkaPayload
-from snuba.utils.streams.processing.processor import StreamProcessor
+from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.state_machine import State
 
 logger = logging.getLogger("snuba.snapshot-catchup")

@@ -26,7 +26,7 @@ from snuba.utils.streams.backends.kafka import (
     build_kafka_consumer_configuration,
 )
 from snuba.utils.streams.encoding import ProducerEncodingWrapper
-from snuba.utils.streams.processing.processor import StreamProcessor
+from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.processing.strategies.batching import (
     BatchProcessingStrategyFactory,
 )
