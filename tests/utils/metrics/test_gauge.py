@@ -1,24 +1,32 @@
 from concurrent.futures import wait
 from threading import Barrier
+from typing import Callable
+
+import pytest
+
 from snuba.utils.concurrent import execute
-from snuba.utils.metrics.gauge import Gauge
-from tests.backends.metrics import TestingMetricsBackend, Gauge as GaugeCall
+from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
+from snuba.utils.metrics.types import Tags
+from tests.backends.metrics import Gauge as GaugeCall
+from tests.backends.metrics import TestingMetricsBackend
 
 
-def test_gauge_simple() -> None:
+@pytest.mark.parametrize("factory", [Gauge, ThreadSafeGauge])
+def test_gauge_simple(factory: Callable[[MetricsBackend, str, Tags], Gauge]) -> None:
     backend = TestingMetricsBackend()
 
     name = "name"
     tags = {"tag": "value"}
-    gauge = Gauge(backend, name, tags)
+    gauge = factory(backend, name, tags)
 
     with gauge:
         pass
 
     assert backend.calls == [
-        GaugeCall(name, 0, tags),
-        GaugeCall(name, 1, tags),
-        GaugeCall(name, 0, tags),
+        GaugeCall(name, 0.0, tags),
+        GaugeCall(name, 1.0, tags),
+        GaugeCall(name, 0.0, tags),
     ]
 
 
@@ -27,7 +35,7 @@ def test_gauge_concurrent() -> None:
 
     name = "name"
     tags = {"tag": "value"}
-    gauge = Gauge(backend, name, tags)
+    gauge = ThreadSafeGauge(backend, name, tags)
 
     workers = 4
     barrier = Barrier(workers)
@@ -39,13 +47,13 @@ def test_gauge_concurrent() -> None:
     wait([execute(waiter) for i in range(workers)])
 
     assert backend.calls == [
-        GaugeCall(name, 0, tags),
-        GaugeCall(name, 1, tags),
-        GaugeCall(name, 2, tags),
-        GaugeCall(name, 3, tags),
-        GaugeCall(name, 4, tags),
-        GaugeCall(name, 3, tags),
-        GaugeCall(name, 2, tags),
-        GaugeCall(name, 1, tags),
-        GaugeCall(name, 0, tags),
+        GaugeCall(name, 0.0, tags),
+        GaugeCall(name, 1.0, tags),
+        GaugeCall(name, 2.0, tags),
+        GaugeCall(name, 3.0, tags),
+        GaugeCall(name, 4.0, tags),
+        GaugeCall(name, 3.0, tags),
+        GaugeCall(name, 2.0, tags),
+        GaugeCall(name, 1.0, tags),
+        GaugeCall(name, 0.0, tags),
     ]
