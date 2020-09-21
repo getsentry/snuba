@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -14,6 +15,9 @@ from snuba.clickhouse.errors import ClickhouseWriterError
 from snuba.utils.codecs import Encoder
 from snuba.utils.metrics import MetricsBackend
 from snuba.writer import BatchWriter, WriterTableRow
+
+
+logger = logging.getLogger(__name__)
 
 
 CLICKHOUSE_ERROR_RE = re.compile(
@@ -69,11 +73,23 @@ class HTTPWriteBatch:
             body=open(read_fd, "rb"),
         )
 
+        self.__rows = 0
+        self.__size = 0
+        self.__closed = False
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__}: {self.__rows} rows ({self.__size} bytes)>"
+
     def append(self, value: JSONRow) -> None:
+        assert not self.__closed
+
         self.__input.write(value)
+        self.__rows += 1
+        self.__size += len(value)
 
     def close(self) -> None:
         self.__input.close()
+        self.__closed = True
 
     def join(self, timeout: Optional[float] = None) -> None:
         response = self.__result.result(timeout)
@@ -117,6 +133,7 @@ class HTTPBatchWriter(BatchWriter[JSONRow]):
         self.__database = database
 
     def write(self, values: Iterable[JSONRow]) -> None:
+        logger.debug("Starting write batch...")
         batch = HTTPWriteBatch(
             self.__executor,
             self.__pool,
@@ -130,5 +147,10 @@ class HTTPBatchWriter(BatchWriter[JSONRow]):
         for value in values:
             batch.append(value)
 
+        logger.debug("Closing %r...", batch)
         batch.close()
+
+        logger.debug("Waiting for completion of %r...", batch)
         batch.join()
+
+        logger.debug("Succesfully applied %r.", batch)

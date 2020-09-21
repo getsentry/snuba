@@ -8,19 +8,26 @@ from tests.base import BaseEventsTest
 
 
 class TestHTTPBatchWriter(BaseEventsTest):
+
+    metrics = DummyMetricsBackend(strict=True)
+
+    def test_empty_batch(self) -> None:
+        enforce_table_writer(self.dataset).get_batch_writer(metrics=self.metrics).write(
+            []
+        )
+
     def test_error_handling(self) -> None:
         table_writer = enforce_table_writer(self.dataset)
-        metrics = DummyMetricsBackend(strict=True)
 
         with pytest.raises(ClickhouseWriterError) as error:
-            table_writer.get_batch_writer(table_name="invalid", metrics=metrics).write(
-                [rapidjson.dumps({"x": "y"}).encode("utf-8")]
-            )
+            table_writer.get_batch_writer(
+                table_name="invalid", metrics=self.metrics
+            ).write([rapidjson.dumps({"x": "y"}).encode("utf-8")])
 
         assert error.value.code == 60
 
         with pytest.raises(ClickhouseWriterError) as error:
-            table_writer.get_batch_writer(metrics=metrics).write(
+            table_writer.get_batch_writer(metrics=self.metrics).write(
                 [b"{}", rapidjson.dumps({"timestamp": "invalid"}).encode("utf-8")]
             )
 
