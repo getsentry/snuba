@@ -21,7 +21,7 @@ from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.reader import Reader, TQuery
-from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.metrics import MetricsBackend
 from snuba.writer import BatchWriter
 
 
@@ -106,7 +106,7 @@ class Cluster(ABC, Generic[TQuery, TWriterOptions]):
         raise NotImplementedError
 
     @abstractmethod
-    def get_writer(
+    def get_batch_writer(
         self,
         table_name: str,
         metrics: MetricsBackend,
@@ -214,7 +214,7 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
             )
         return self.__reader
 
-    def get_writer(
+    def get_batch_writer(
         self,
         table_name: str,
         metrics: MetricsBackend,

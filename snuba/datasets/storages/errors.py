@@ -57,6 +57,16 @@ def errors_migrations(
             )
         )
 
+    if "http_method" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_method LowCardinality(Nullable(String)) AFTER sdk_version"
+        )
+
+    if "http_referer" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_referer Nullable(String) AFTER http_method"
+        )
+
     return ret
 
 
@@ -85,6 +95,8 @@ all_columns = ColumnSet(
         ("user_email", Nullable(String())),
         ("sdk_name", LowCardinality(Nullable(String()))),
         ("sdk_version", LowCardinality(Nullable(String()))),
+        ("http_method", LowCardinality(Nullable(String()))),
+        ("http_referer", Nullable(String())),
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
         ("_tags_hash_map", Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN)),
@@ -223,7 +235,7 @@ storage = WritableTableStorage(
         read_schema=schema,
         required_columns=required_columns,
         tag_column_map={"tags": promoted_tag_columns, "contexts": {}},
-        promoted_tags={"tags": promoted_tag_columns.keys(), "contexts": {}},
+        promoted_tags={"tags": list(promoted_tag_columns.keys()), "contexts": []},
         state_name=ReplacerState.ERRORS,
     ),
 )

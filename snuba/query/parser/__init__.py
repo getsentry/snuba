@@ -18,6 +18,10 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
+from snuba.query.matchers import (
+    FunctionCall as FunctionCallMatch,
+    String as StringMatch,
+)
 from snuba.query.parser.conditions import parse_conditions_to_expr
 from snuba.query.parser.exceptions import (
     AliasShadowingException,
@@ -27,7 +31,7 @@ from snuba.query.parser.exceptions import (
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
 from snuba.query.parser.validation import validate_query
 from snuba.util import is_function, to_list, tuplify
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +75,7 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     # WARNING: These steps above assume table resolution did not happen
     # yet. If it is put earlier than here (unlikely), we need to adapt them.
     _deescape_aliases(query)
+    _validate_arrayjoin(query)
     validate_query(query, dataset)
     return query
 
@@ -81,7 +86,9 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
     ) -> List[SelectedExpression]:
         output = []
         for raw_expression in raw_expressions:
-            exp = parse_expression(tuplify(raw_expression))
+            exp = parse_expression(
+                tuplify(raw_expression), dataset.get_abstract_columnset(), set()
+            )
             output.append(
                 SelectedExpression(
                     # An expression in the query can be a string or a
@@ -113,7 +120,13 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
         aggregations.append(
             SelectedExpression(
                 name=alias,
-                expression=parse_aggregation(aggregation_function, column_expr, alias),
+                expression=parse_aggregation(
+                    aggregation_function,
+                    column_expr,
+                    alias,
+                    dataset.get_abstract_columnset(),
+                    set(),
+                ),
             )
         )
 
@@ -125,16 +138,46 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
         + build_selected_expressions(body.get("selected_columns", []))
     )
 
+    array_join_cols = set()
     arrayjoin = body.get("arrayjoin")
+    # TODO: Properly detect all array join columns in all clauses of the query.
+    # This is missing an arrayJoin in condition with an alias that is then
+    # used in the select.
     if arrayjoin:
-        array_join_expr: Optional[Expression] = parse_expression(body["arrayjoin"])
+        array_join_cols.add(arrayjoin)
+        array_join_expr: Optional[Expression] = parse_expression(
+            body["arrayjoin"], dataset.get_abstract_columnset(), {arrayjoin}
+        )
     else:
         array_join_expr = None
+        for select_expr in select_clause:
+            if isinstance(select_expr.expression, FunctionCall):
+                if select_expr.expression.function_name == "arrayJoin":
+                    parameters = select_expr.expression.parameters
+                    if len(parameters) != 1:
+                        raise ParsingException(
+                            "arrayJoin(...) only accepts a single parameter."
+                        )
+                    if isinstance(parameters[0], Column):
+                        array_join_cols.add(parameters[0].column_name)
+                    else:
+                        # We only accepts columns or functions that do not
+                        # reference columns. We could not say whether we are
+                        # actually arrayjoining on the values of the column
+                        # if it is nested in an arbitrary function. But
+                        # functions of literals are fine.
+                        for e in parameters[0]:
+                            if isinstance(e, Column):
+                                raise ParsingException(
+                                    "arrayJoin(...) cannot contain columns nested in functions."
+                                )
 
     where_expr = parse_conditions_to_expr(
-        body.get("conditions", []), dataset, arrayjoin
+        body.get("conditions", []), dataset, array_join_cols
     )
-    having_expr = parse_conditions_to_expr(body.get("having", []), dataset, arrayjoin)
+    having_expr = parse_conditions_to_expr(
+        body.get("having", []), dataset, array_join_cols
+    )
 
     orderby_exprs = []
     for orderby in to_list(body.get("orderby", [])):
@@ -167,7 +210,9 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
                     "a string nor a function call."
                 )
             )
-        orderby_parsed = parse_expression(tuplify(orderby))
+        orderby_parsed = parse_expression(
+            tuplify(orderby), dataset.get_abstract_columnset(), set()
+        )
         orderby_exprs.append(
             OrderBy(
                 OrderByDirection.DESC if direction == "-" else OrderByDirection.ASC,
@@ -303,6 +348,37 @@ def _expand_aliases(query: Query) -> None:
 
     visitor = AliasExpanderVisitor(fully_resolved_aliases, [])
     query.transform(visitor)
+
+
+ARRAYJOIN_FUNCTION_MATCH = FunctionCallMatch(None, StringMatch("arrayJoin"), None)
+
+
+def _validate_arrayjoin(query: Query) -> None:
+    # TODO: Actually validate arrayjoin. For now log how it is used.
+    body_arrayjoin = ""
+    arrayjoin = query.get_arrayjoin_from_ast()
+    if arrayjoin is not None:
+        if isinstance(arrayjoin, Column):
+            body_arrayjoin = arrayjoin.column_name
+
+    array_joins = set()
+    if body_arrayjoin:
+        array_joins.add(body_arrayjoin)
+    for exp in query.get_all_expressions():
+        match = ARRAYJOIN_FUNCTION_MATCH.match(exp)
+        if match is not None:
+            if isinstance(exp, Column):
+                array_joins.add(exp.column_name)
+            else:
+                array_joins.add(f"{type(exp)}")
+
+    if len(array_joins) > 0:
+        join_type = "body" if body_arrayjoin else "function"
+        suffix = "gt1" if len(array_joins) > 1 else "eq1"
+        key = f"arrayjoin.{join_type}.{suffix}"
+        metrics.increment(
+            key, tags={"arrayjoin": ",".join(array_joins)},
+        )
 
 
 DEESCAPER_RE = re.compile(r"^`(.+)`$")

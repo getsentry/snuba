@@ -9,8 +9,8 @@ from typing import MutableSequence, Sequence
 
 from snuba.util import settings_override
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.kafka import KafkaPayload
-from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.streams import Message, Partition, Topic
+from snuba.utils.streams.backends.kafka import KafkaPayload
 
 
 logger = logging.getLogger("snuba.perf")
@@ -29,7 +29,7 @@ def get_messages(events_file) -> Sequence[Message[KafkaPayload]]:
             Message(
                 Partition(Topic("events"), 1),
                 0,
-                KafkaPayload(None, raw_event.encode("utf-8")),
+                KafkaPayload(None, raw_event.encode("utf-8"), []),
                 datetime.now(),
             ),
         )
@@ -42,9 +42,9 @@ def run(events_file, dataset, repeat=1, profile_process=False, profile_write=Fal
     """
 
     from snuba.consumer import ConsumerWorker
-    from snuba.migrations.migrate import run as run_migrations
+    from snuba.migrations.runner import Runner
 
-    run_migrations()
+    Runner().run_all(force=True)
 
     writable_storage = dataset.get_writable_storage()
 

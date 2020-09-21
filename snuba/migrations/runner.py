@@ -12,7 +12,6 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.context import Context
 from snuba.migrations.errors import (
     InvalidMigrationState,
-    MigrationDoesNotExist,
     MigrationError,
     MigrationInProgress,
 )
@@ -33,8 +32,11 @@ class MigrationKey(NamedTuple):
     group: MigrationGroup
     migration_id: str
 
+    def __str__(self) -> str:
+        return f"{self.group.value}: {self.migration_id}"
 
-class MigrationStatus(NamedTuple):
+
+class MigrationDetails(NamedTuple):
     migration_id: str
     status: Status
     blocking: bool
@@ -55,11 +57,49 @@ class Runner:
             ClickhouseClientSettings.MIGRATE
         )
 
-    def show_all(self) -> List[Tuple[MigrationGroup, List[MigrationStatus]]]:
+        self.__status: MutableMapping[
+            MigrationKey, Tuple[Status, Optional[datetime]]
+        ] = {}
+
+    def get_status(
+        self, migration_key: MigrationKey
+    ) -> Tuple[Status, Optional[datetime]]:
+        """
+        Returns the status and timestamp of a migration.
+        """
+
+        if migration_key in self.__status:
+            return self.__status[migration_key]
+
+        try:
+            data = self.__connection.execute(
+                f"SELECT status, timestamp FROM {self.__table_name} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s",
+                {
+                    "group": migration_key.group.value,
+                    "migration_id": migration_key.migration_id,
+                },
+            )
+
+            if data:
+                status, timestamp = data[0]
+                self.__status[migration_key] = (Status(status), timestamp)
+            else:
+                self.__status[migration_key] = (Status.NOT_STARTED, None)
+
+            return self.__status[migration_key]
+
+        except ClickhouseError as e:
+            # If the table wasn't created yet, no migrations have started.
+            if e.code != errors.ErrorCodes.UNKNOWN_TABLE:
+                raise e
+
+        return Status.NOT_STARTED, None
+
+    def show_all(self) -> List[Tuple[MigrationGroup, List[MigrationDetails]]]:
         """
         Returns the list of migrations and their statuses for each group.
         """
-        migrations: List[Tuple[MigrationGroup, List[MigrationStatus]]] = []
+        migrations: List[Tuple[MigrationGroup, List[MigrationDetails]]] = []
 
         migration_status = self._get_migration_status()
 
@@ -67,14 +107,14 @@ class Runner:
             return migration_status.get(migration_key, Status.NOT_STARTED)
 
         for group in ACTIVE_MIGRATION_GROUPS:
-            group_migrations: List[MigrationStatus] = []
+            group_migrations: List[MigrationDetails] = []
             group_loader = get_group_loader(group)
 
             for migration_id in group_loader.get_migrations():
                 migration_key = MigrationKey(group, migration_id)
                 migration = group_loader.load_migration(migration_id)
                 group_migrations.append(
-                    MigrationStatus(
+                    MigrationDetails(
                         migration_id, get_status(migration_key), migration.blocking
                     )
                 )
@@ -104,7 +144,7 @@ class Runner:
             self._run_migration_impl(migration_key, force=force)
 
     def run_migration(
-        self, migration_key: MigrationKey, *, force: bool = False
+        self, migration_key: MigrationKey, *, force: bool = False, fake: bool = False,
     ) -> None:
         """
         Run a single migration given its migration key and marks the migration as complete.
@@ -113,27 +153,28 @@ class Runner:
         """
         migration_group, migration_id = migration_key
 
-        pending_migrations = self._get_pending_migrations(migration_key.group)
+        group_migrations = get_group_loader(migration_group).get_migrations()
 
-        if migration_key.migration_id not in [
-            m.migration_id for m in pending_migrations
-        ]:
-            # Ensure migration exists
-            try:
-                get_group_loader(migration_group).load_migration(migration_id)
-            except MigrationDoesNotExist as e:
-                raise MigrationError(e)
+        if migration_id not in group_migrations:
+            raise MigrationError("Could not find migration in group")
 
-            raise MigrationError(
-                f"{migration_group.value}: {migration_id} is already completed"
-            )
+        migration_status = self._get_migration_status()
 
-        next_migration_id = pending_migrations[0].migration_id
+        def get_status(migration_key: MigrationKey) -> Status:
+            return migration_status.get(migration_key, Status.NOT_STARTED)
 
-        if next_migration_id != migration_id:
-            raise MigrationError("Earlier migrations need to be completed first")
+        if get_status(migration_key) != Status.NOT_STARTED:
+            status_text = get_status(migration_key).value
+            raise MigrationError(f"Migration is already {status_text}")
 
-        return self._run_migration_impl(migration_key, force=force)
+        for m in group_migrations[: group_migrations.index(migration_id)]:
+            if get_status(MigrationKey(migration_group, m)) != Status.COMPLETED:
+                raise MigrationError("Earlier migrations ned to be completed first")
+
+        if fake:
+            self._update_migration_status(migration_key, Status.COMPLETED)
+        else:
+            self._run_migration_impl(migration_key, force=force)
 
     def _run_migration_impl(
         self, migration_key: MigrationKey, *, force: bool = False
@@ -150,21 +191,53 @@ class Runner:
 
         migration.forwards(context)
 
-    def reverse_migration(self, migration_key: MigrationKey) -> None:
-        migration_id = migration_key.migration_id
-
-        context = Context(
-            migration_id, logger, partial(self._update_migration_status, migration_key),
-        )
-        migration = get_group_loader(migration_key.group).load_migration(migration_id)
-
-        migration.backwards(context)
-
-    def _get_pending_migrations(
-        self, group: Optional[MigrationGroup] = None
-    ) -> List[MigrationKey]:
+    def reverse_migration(
+        self, migration_key: MigrationKey, *, force: bool = False, fake: bool = False,
+    ) -> None:
         """
-        Runs pending migration for either a single group, or all groups.
+        Reverses a migration.
+        """
+        migration_group, migration_id = migration_key
+
+        group_migrations = get_group_loader(migration_group).get_migrations()
+
+        if migration_id not in group_migrations:
+            raise MigrationError("Invalid migration")
+
+        migration_status = self._get_migration_status()
+
+        def get_status(migration_key: MigrationKey) -> Status:
+            return migration_status.get(migration_key, Status.NOT_STARTED)
+
+        if get_status(migration_key) == Status.NOT_STARTED:
+            raise MigrationError("You cannot reverse a migration that has not been run")
+
+        if get_status(migration_key) == Status.COMPLETED and not force and not fake:
+            raise MigrationError(
+                "You must use force to revert an already completed migration"
+            )
+
+        for m in group_migrations[group_migrations.index(migration_id) + 1 :]:
+            if get_status(MigrationKey(migration_group, m)) != Status.NOT_STARTED:
+                raise MigrationError("Subsequent migrations must be reversed first")
+
+        if fake:
+            self._update_migration_status(migration_key, Status.NOT_STARTED)
+        else:
+            context = Context(
+                migration_id,
+                logger,
+                partial(self._update_migration_status, migration_key),
+            )
+            migration = get_group_loader(migration_key.group).load_migration(
+                migration_id
+            )
+
+            migration.backwards(context)
+
+    def _get_pending_migrations(self) -> List[MigrationKey]:
+        """
+        Gets pending migration list.
         """
         migrations: List[MigrationKey] = []
 
@@ -173,9 +246,7 @@ class Runner:
         def get_status(migration_key: MigrationKey) -> Status:
             return migration_status.get(migration_key, Status.NOT_STARTED)
 
-        groups = [group] if group else ACTIVE_MIGRATION_GROUPS
-
-        for group in groups:
+        for group in ACTIVE_MIGRATION_GROUPS:
             group_loader = get_group_loader(group)
             group_migrations: List[MigrationKey] = []
 
@@ -202,6 +273,7 @@ class Runner:
     def _update_migration_status(
         self, migration_key: MigrationKey, status: Status
     ) -> None:
+        self.__status = {}
         next_version = self._get_next_version(migration_key)
 
         statement = f"INSERT INTO {self.__table_name} FORMAT JSONEachRow"

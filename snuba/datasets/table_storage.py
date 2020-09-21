@@ -15,8 +15,8 @@ from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.snapshots import BulkLoadSource
 from snuba.snapshots.loaders import BulkLoader
 from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
-from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams.kafka import KafkaPayload
+from snuba.utils.metrics import MetricsBackend
+from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.writer import BatchWriter
 
 
@@ -128,7 +128,7 @@ class TableWriter:
     def get_schema(self) -> WritableTableSchema:
         return self.__table_schema
 
-    def get_writer(
+    def get_batch_writer(
         self,
         metrics: MetricsBackend,
         options=None,
@@ -139,7 +139,7 @@ class TableWriter:
 
         options = self.__update_writer_options(options)
 
-        return self.__cluster.get_writer(
+        return self.__cluster.get_batch_writer(
             table_name, metrics, options, chunk_size=chunk_size,
         )
 

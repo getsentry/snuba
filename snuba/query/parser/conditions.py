@@ -1,6 +1,7 @@
 from collections import OrderedDict
-from typing import Any, Callable, Optional, Sequence, TypeVar
+from typing import Any, Callable, Optional, Sequence, Set, TypeVar
 
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.dataset import Dataset
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
@@ -23,14 +24,14 @@ class InvalidConditionException(Exception):
 
 
 def parse_conditions(
-    operand_builder: Callable[[Any], TExpression],
+    operand_builder: Callable[[Any, ColumnSet, Set[str]], TExpression],
     and_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     or_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     unpack_array_condition_builder: Callable[[TExpression, str, Any], TExpression],
     simple_condition_builder: Callable[[TExpression, str, Any], TExpression],
     dataset: Dataset,
     conditions: Any,
-    array_join: Optional[str],
+    arrayjoin_cols: Set[str],
     depth: int = 0,
 ) -> Optional[TExpression]:
     """
@@ -64,7 +65,7 @@ def parse_conditions(
                     simple_condition_builder,
                     dataset,
                     cond,
-                    array_join,
+                    arrayjoin_cols,
                     depth + 1,
                 ),
                 None,
@@ -98,12 +99,21 @@ def parse_conditions(
             isinstance(lhs, str)
             and lhs in columns
             and isinstance(columns[lhs].type, Array)
-            and columns[lhs].base_name != array_join
+            and columns[lhs].base_name not in arrayjoin_cols
+            and columns[lhs].flattened not in arrayjoin_cols
             and not isinstance(lit, (list, tuple))
         ):
-            return unpack_array_condition_builder(operand_builder(lhs), op, lit)
+            return unpack_array_condition_builder(
+                operand_builder(lhs, dataset.get_abstract_columnset(), arrayjoin_cols),
+                op,
+                lit,
+            )
         else:
-            return simple_condition_builder(operand_builder(lhs), op, lit)
+            return simple_condition_builder(
+                operand_builder(lhs, dataset.get_abstract_columnset(), arrayjoin_cols),
+                op,
+                lit,
+            )
 
     elif depth == 1:
         sub_expression = (
@@ -115,7 +125,7 @@ def parse_conditions(
                 simple_condition_builder,
                 dataset,
                 cond,
-                array_join,
+                arrayjoin_cols,
                 depth + 1,
             )
             for cond in conditions
@@ -126,7 +136,7 @@ def parse_conditions(
 
 
 def parse_conditions_to_expr(
-    expr: Sequence[Any], dataset: Dataset, arrayjoin: Optional[str]
+    expr: Sequence[Any], dataset: Dataset, arrayjoin: Set[str]
 ) -> Optional[Expression]:
     """
     Relies on parse_conditions to parse a list of conditions into an Expression.
@@ -154,7 +164,7 @@ def parse_conditions_to_expr(
                         "Operator must be IN/NOT IN"
                     )
                 )
-            literals = tuple([Literal(None, l) for l in literal])
+            literals = tuple([Literal(None, lit) for lit in literal])
             return FunctionCall(None, "tuple", literals)
         else:
             if op in ["IN", "NOT IN"]:
@@ -171,7 +181,7 @@ def parse_conditions_to_expr(
     ) -> Expression:
         function_name = "arrayExists" if op in POSITIVE_OPERATORS else "arrayAll"
 
-        # This is an expresison like:
+        # This is an expression like:
         # arrayExists(x -> assumeNotNull(notLike(x, rhs)), lhs)
         return FunctionCall(
             None,

@@ -15,12 +15,14 @@ class MigrationGroup(Enum):
     OUTCOMES = "outcomes"
     SESSIONS = "sessions"
     QUERYLOG = "querylog"
+    SPANS_EXPERIMENTAL = "spans_experimental"
 
 
 # Migration groups are mandatory by default, unless they are on this list
 OPTIONAL_GROUPS = {
     MigrationGroup.SESSIONS,
     MigrationGroup.QUERYLOG,
+    MigrationGroup.SPANS_EXPERIMENTAL,
 }
 
 ACTIVE_MIGRATION_GROUPS = [
@@ -93,6 +95,8 @@ class EventsLoader(DirectoryLoader):
             "0006_errors_tags_hash_map",
             "0007_groupedmessages",
             "0008_groupassignees",
+            "0009_errors_add_http_fields",
+            "0010_groupedmessages_onpremise_compatibility",
         ]
 
 
@@ -116,7 +120,7 @@ class OutcomesLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.outcomes")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_outcomes"]
+        return ["0001_outcomes", "0002_outcomes_remove_size_and_bytes"]
 
 
 class SessionsLoader(DirectoryLoader):
@@ -132,7 +136,15 @@ class QuerylogLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.querylog")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_querylog", "0002_status_type_change"]
+        return ["0001_querylog", "0002_status_type_change", "0003_add_profile_fields"]
+
+
+class SpansExperimentalLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.migrations.snuba_migrations.spans_experimental")
+
+    def get_migrations(self) -> Sequence[str]:
+        return ["0001_spans_experimental"]
 
 
 _REGISTERED_GROUPS = {
@@ -142,6 +154,7 @@ _REGISTERED_GROUPS = {
     MigrationGroup.OUTCOMES: OutcomesLoader(),
     MigrationGroup.SESSIONS: SessionsLoader(),
     MigrationGroup.QUERYLOG: QuerylogLoader(),
+    MigrationGroup.SPANS_EXPERIMENTAL: SpansExperimentalLoader(),
 }
 
 

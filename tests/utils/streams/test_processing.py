@@ -102,3 +102,30 @@ def test_stream_processor_lifecycle() -> None:
 
     with assert_changes(lambda: consumer.close.call_count, 0, 1):
         processor._shutdown()
+
+
+def test_stream_processor_termination_on_error() -> None:
+    topic = Topic("test")
+
+    consumer = mock.Mock()
+    consumer.poll.return_value = Message(Partition(topic, 0), 0, 0, datetime.now())
+
+    exception = NotImplementedError("error")
+
+    strategy = mock.Mock()
+    strategy.submit.side_effect = exception
+
+    factory = mock.Mock()
+    factory.create.return_value = strategy
+
+    processor: StreamProcessor[int] = StreamProcessor(consumer, topic, factory)
+
+    assignment_callback = consumer.subscribe.call_args.kwargs["on_assign"]
+    assignment_callback({Partition(topic, 0): 0})
+
+    with pytest.raises(Exception) as e, assert_changes(
+        lambda: strategy.terminate.call_count, 0, 1
+    ), assert_changes(lambda: consumer.close.call_count, 0, 1):
+        processor.run()
+
+    assert e.value == exception

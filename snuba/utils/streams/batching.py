@@ -15,7 +15,7 @@ from typing import (
     TypeVar,
 )
 
-from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.processing import ProcessingStrategy, ProcessingStrategyFactory
 from snuba.utils.streams.types import Message, Partition, TPayload
 
@@ -159,13 +159,16 @@ class BatchProcessingStrategy(ProcessingStrategy[TPayload]):
         self.__metrics.timing("process_message", duration)
 
         if message.partition in self.__batch.offsets:
-            self.__batch.offsets[message.partition].hi = message.get_next_offset()
+            self.__batch.offsets[message.partition].hi = message.next_offset
         else:
             self.__batch.offsets[message.partition] = Offsets(
-                message.offset, message.get_next_offset()
+                message.offset, message.next_offset
             )
 
     def close(self) -> None:
+        self.__closed = True
+
+    def terminate(self) -> None:
         self.__closed = True
 
     def join(self, timeout: Optional[float] = None) -> None:

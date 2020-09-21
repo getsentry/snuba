@@ -55,6 +55,7 @@ test_data = [
     (("Array(DateTime)", "", "", ""), Array(DateTime())),
     (("Array(UInt64)", "", "", ""), Array(UInt(64))),
     (("Array(Nullable(UUID))", "", "", ""), Array(Nullable(UUID()))),
+    (("Array(Array(Nullable(UUID)))", "", "", ""), Array(Array(Nullable(UUID())))),
     # Nullable
     (("Nullable(String)", "", "", ""), Nullable(String())),
     (("Nullable(FixedString(8))", "", "", ""), Nullable(FixedString(8))),

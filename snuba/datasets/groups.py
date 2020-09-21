@@ -30,7 +30,7 @@ from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
-from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
+from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.util import qualified_column
 
@@ -186,11 +186,7 @@ class Groups(TimeSeriesDataset):
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
-            "project": ProjectExtension(
-                processor=ProjectWithGroupsProcessor(
-                    project_column="events.project_id", replacer_state_name=None,
-                )
-            ),
+            "project": ProjectExtension(project_column="events.project_id"),
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=5),

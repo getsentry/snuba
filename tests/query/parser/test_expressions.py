@@ -1,5 +1,6 @@
 import pytest
 
+from snuba.datasets.factory import get_dataset
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -228,5 +229,12 @@ test_data = [
 
 @pytest.mark.parametrize("aggregation, expected_function", test_data)
 def test_aggregation_parsing(aggregation, expected_function):
-    function = parse_aggregation(aggregation[0], aggregation[1], aggregation[2])
-    assert function == expected_function
+    dataset = get_dataset("events")
+    function = parse_aggregation(
+        aggregation[0],
+        aggregation[1],
+        aggregation[2],
+        dataset.get_abstract_columnset(),
+        set(),
+    )
+    assert function == expected_function, expected_function

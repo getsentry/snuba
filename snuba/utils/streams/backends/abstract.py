@@ -1,19 +1,11 @@
+from __future__ import annotations
+
 import logging
 from abc import ABC, abstractmethod, abstractproperty
-from typing import (
-    Callable,
-    Generic,
-    Mapping,
-    Optional,
-    Sequence,
-)
+from concurrent.futures import Future
+from typing import Callable, Generic, Mapping, Optional, Sequence, Union
 
-from snuba.utils.streams.types import (
-    Message,
-    Partition,
-    Topic,
-    TPayload,
-)
+from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 
 logger = logging.getLogger(__name__)
@@ -40,6 +32,12 @@ class EndOfPartition(ConsumerError):
         # The next unconsumed offset in the partition (where there is currently
         # no message.)
         self.offset = offset
+
+
+class OffsetOutOfRange(ConsumerError):
+    """
+    Raised when trying to read from an invalid position in the partition.
+    """
 
 
 class Consumer(Generic[TPayload], ABC):
@@ -95,6 +93,15 @@ class Consumer(Generic[TPayload], ABC):
 
     @abstractmethod
     def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
+        """
+        Fetch a message from the consumer. If no message is available before
+        the timeout, ``None`` is returned.
+
+        This method may raise an ``OffsetOutOfRange`` exception if the
+        consumer attempts to read from an invalid location in one of it's
+        assigned partitions. (Additional details can be found in the
+        docstring for ``Consumer.seek``.)
+        """
         raise NotImplementedError
 
     @abstractmethod
@@ -153,8 +160,8 @@ class Consumer(Generic[TPayload], ABC):
         that is too high which is not yet associated with a message.) Since
         this method only updates the local working offset (and does not
         communicate with the broker), setting an invalid offset will cause a
-        subsequent ``poll`` call to raise an exception, even though the call
-        to ``seek`` succeeded.
+        subsequent ``poll`` call to raise ``OffsetOutOfRange`` exception,
+        even though the call to ``seek`` succeeded.
 
         If any provided partitions are not in the assignment set, an
         exception will be raised and no offsets will be modified.
@@ -184,4 +191,22 @@ class Consumer(Generic[TPayload], ABC):
 
     @abstractproperty
     def closed(self) -> bool:
+        raise NotImplementedError
+
+
+class Producer(Generic[TPayload], ABC):
+    @abstractmethod
+    def produce(
+        self, destination: Union[Topic, Partition], payload: TPayload
+    ) -> Future[Message[TPayload]]:
+        """
+        Produce to a topic or partition.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def close(self) -> Future[None]:
+        """
+        Close the producer.
+        """
         raise NotImplementedError

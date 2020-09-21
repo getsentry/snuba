@@ -1,6 +1,7 @@
+import logging
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Any, MutableMapping, Optional
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
@@ -10,6 +11,8 @@ from snuba.datasets.events_format import (
     extract_base,
     extract_extra_contexts,
     extract_extra_tags,
+    extract_http,
+    extract_nested,
     extract_user,
     flatten_nested_field,
 )
@@ -22,7 +25,9 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify,
 )
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
+
+logger = logging.getLogger(__name__)
 
 metrics = MetricsWrapper(environment.metrics, "transactions.processor")
 
@@ -121,6 +126,27 @@ class TransactionsMessageProcessor(MessageProcessor):
         geo = user_dict.get("geo", None) or {}
         if "geo" not in contexts and isinstance(geo, dict):
             contexts["geo"] = geo
+
+        measurements = data.get("measurements")
+        if measurements is not None:
+            try:
+                (
+                    processed["measurements.key"],
+                    processed["measurements.value"],
+                ) = extract_nested(measurements, lambda value: float(value["value"]))
+            except Exception:
+                # Not failing the event in this case just yet, because we are still
+                # developing this feature.
+                logger.error(
+                    "Invalid measurements field.",
+                    extra={"measurements": measurements},
+                    exc_info=True,
+                )
+        request = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
+        http_data: MutableMapping[str, Any] = {}
+        extract_http(http_data, request)
+        processed["http_method"] = http_data["http_method"]
+        processed["http_referer"] = http_data["http_referer"]
 
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             contexts

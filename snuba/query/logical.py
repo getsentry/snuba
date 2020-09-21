@@ -14,6 +14,7 @@ from typing import (
     Sequence,
     Set,
     Tuple,
+    Type,
     TypeVar,
     Union,
 )
@@ -23,7 +24,12 @@ from deprecation import deprecated
 from snuba.clickhouse.escaping import SAFE_COL_RE
 from snuba.datasets.schemas import RelationalSource
 from snuba.query.conditions import BooleanFunctions, binary_condition
-from snuba.query.expressions import Column, Expression, ExpressionVisitor
+from snuba.query.expressions import (
+    Column,
+    Expression,
+    ExpressionVisitor,
+    SubscriptableReference,
+)
 from snuba.query.types import Condition
 from snuba.util import columns_in_expr, is_condition, to_list
 
@@ -36,6 +42,8 @@ Groupby = Sequence[Any]
 Limitby = Tuple[int, str]
 
 TElement = TypeVar("TElement")
+
+TExp = TypeVar("TExp", bound=Expression)
 
 
 class OrderByDirection(Enum):
@@ -329,6 +337,9 @@ class Query:
     def get_having_from_ast(self) -> Optional[Expression]:
         return self.__having
 
+    def set_ast_having(self, condition: Optional[Expression]) -> None:
+        self.__having = condition
+
     def get_orderby(self) -> Optional[Sequence[Any]]:
         return self.__body.get("orderby")
 
@@ -421,22 +432,28 @@ class Query:
         # Return the set of all columns referenced in any expression
         return self.__get_referenced_columns(col_exprs)
 
+    def __get_all_ast_referenced_expressions(
+        self, expressions: Iterable[Expression], exp_type: Type[TExp]
+    ) -> Set[TExp]:
+        ret: Set[TExp] = set()
+        for expression in expressions:
+            ret |= {c for c in expression if isinstance(c, exp_type)}
+        return ret
+
     def get_all_ast_referenced_columns(self) -> Set[Column]:
-        return self.__get_columns_referenced_in_expressions(self.get_all_expressions())
+        return self.__get_all_ast_referenced_expressions(
+            self.get_all_expressions(), Column
+        )
+
+    def get_all_ast_referenced_subscripts(self) -> Set[SubscriptableReference]:
+        return self.__get_all_ast_referenced_expressions(
+            self.get_all_expressions(), SubscriptableReference
+        )
 
     def get_columns_referenced_in_conditions_ast(self) -> Set[Column]:
-        return self.__get_columns_referenced_in_expressions(self.__condition or [])
-
-    def __get_columns_referenced_in_expressions(
-        self, expressions: Iterable[Expression]
-    ) -> Set[Column]:
-        pass
-        ret: Set[Column] = set()
-
-        for expression in expressions or []:
-            ret |= {c for c in expression if isinstance(c, Column)}
-
-        return ret
+        return self.__get_all_ast_referenced_expressions(
+            [self.__condition] if self.__condition is not None else [], Column
+        )
 
     def get_columns_referenced_in_conditions(self) -> Sequence[Any]:
         col_exprs: MutableSequence[Any] = []

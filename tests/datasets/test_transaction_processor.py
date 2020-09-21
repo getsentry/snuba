@@ -29,6 +29,8 @@ class TransactionEvent:
     release: str
     sdk_name: Optional[str]
     sdk_version: Optional[str]
+    http_method: Optional[str]
+    http_referer: Optional[str]
     geo: Mapping[str, str]
     status: str
 
@@ -99,6 +101,10 @@ class TransactionEvent:
                     "datetime": "2019-08-08T22:29:53.917000Z",
                     "timestamp": self.timestamp,
                     "start_timestamp": self.start_timestamp,
+                    "measurements": {
+                        "lcp": {"value": 32.129},
+                        "lcp.elementSize": {"value": 4242},
+                    },
                     "contexts": {
                         "trace": {
                             "sampled": True,
@@ -107,7 +113,7 @@ class TransactionEvent:
                             "type": "trace",
                             "span_id": self.span_id,
                             "status": self.status,
-                        }
+                        },
                     },
                     "tags": [
                         ["sentry:release", self.release],
@@ -121,6 +127,19 @@ class TransactionEvent:
                         "id": self.user_id,
                         "email": self.user_email,
                         "geo": self.geo,
+                    },
+                    "request": {
+                        "url": "http://127.0.0.1:/query",
+                        "headers": [
+                            ["Accept-Encoding", "identity"],
+                            ["Content-Length", "398"],
+                            ["Host", "127.0.0.1:"],
+                            ["Referer", self.http_referer],
+                            ["Trace", "8fa73032d-1"],
+                        ],
+                        "data": "",
+                        "method": self.http_method,
+                        "env": {"SERVER_PORT": "1010", "SERVER_NAME": "snuba"},
                     },
                     "transaction": self.transaction_name,
                 },
@@ -179,6 +198,8 @@ class TransactionEvent:
             ],
             "sdk_name": "sentry.python",
             "sdk_version": "0.9.0",
+            "http_method": self.http_method,
+            "http_referer": self.http_referer,
             "offset": meta.offset,
             "partition": meta.partition,
             "retention_days": 90,
@@ -188,6 +209,8 @@ class TransactionEvent:
                 f"|trace.op={self.op}||trace.sampled=True||trace.span_id={self.span_id}||trace.status={str(self.status)}|"
                 f"|trace.trace_id={self.trace_id}|"
             ),
+            "measurements.key": ["lcp", "lcp.elementSize"],
+            "measurements.value": [32.129, 4242.0],
         }
 
         if self.ipv4:
@@ -225,6 +248,8 @@ class TestTransactionsProcessor(BaseTest):
             release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
             sdk_name="sentry.python",
             sdk_version="0.9.0",
+            http_method="POST",
+            http_referer="tagstore.something",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
         )
         payload = message.serialize()
@@ -259,6 +284,8 @@ class TestTransactionsProcessor(BaseTest):
             release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
             sdk_name="sentry.python",
             sdk_version="0.9.0",
+            http_method="POST",
+            http_referer="tagstore.something",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
         )
         payload = message.serialize()
@@ -293,6 +320,8 @@ class TestTransactionsProcessor(BaseTest):
             release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
             sdk_name="sentry.python",
             sdk_version="0.9.0",
+            http_method="POST",
+            http_referer="tagstore.something",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
         )
         meta = KafkaMessageMetadata(

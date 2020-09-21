@@ -3,7 +3,6 @@ import uuid
 from datetime import datetime, timedelta
 from functools import partial
 
-import pytest
 import pytz
 import simplejson as json
 
@@ -13,7 +12,6 @@ from snuba.datasets.factory import enforce_table_writer
 from tests.base import BaseApiTest
 
 
-@pytest.mark.usefixtures("query_type")
 class TestTransactionsApi(BaseApiTest):
     def setup_method(self, test_method, dataset_name="transactions"):
         super().setup_method(test_method, dataset_name)
@@ -117,6 +115,10 @@ class TestTransactionsApi(BaseApiTest):
                                                 "op": "http",
                                                 "status": "0",
                                             },
+                                        },
+                                        "measurements": {
+                                            "lcp": {"value": 32.129},
+                                            "lcp.elementSize": {"value": 4242},
                                         },
                                         "spans": [
                                             {
@@ -333,3 +335,55 @@ class TestTransactionsApi(BaseApiTest):
             # we select duration to make debugging easier on failure
             "duration": 1000,
         }
+
+    def test_individual_measurement(self) -> None:
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": [
+                        "event_id",
+                        "measurements[lcp]",
+                        "measurements[asd]",
+                    ],
+                    "limit": 1,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert "measurements[lcp]" in data["data"][0]
+        assert data["data"][0]["measurements[lcp]"] == 32.129
+        assert data["data"][0]["measurements[asd]"] is None
+
+    def test_arrayjoin_measurements(self) -> None:
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": [
+                        "event_id",
+                        ["arrayJoin", ["measurements.key"], "key"],
+                        ["arrayJoin", ["measurements.value"], "value"],
+                    ],
+                    "limit": 4,
+                    "orderby": ["event_id", "key"],
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 4, data
+        assert data["data"][0]["key"] == "lcp"
+        assert data["data"][0]["value"] == 32.129
+        assert data["data"][1]["key"] == "lcp.elementSize"
+        assert data["data"][1]["value"] == 4242
+        assert data["data"][2]["key"] == "lcp"
+        assert data["data"][2]["value"] == 32.129
+        assert data["data"][3]["key"] == "lcp.elementSize"
+        assert data["data"][3]["value"] == 4242

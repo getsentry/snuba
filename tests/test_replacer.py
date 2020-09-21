@@ -12,8 +12,8 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.kafka import KafkaPayload
-from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.streams import Message, Partition, Topic
+from snuba.utils.streams.backends.kafka import KafkaPayload
 from tests.base import BaseEventsTest
 
 
@@ -39,7 +39,7 @@ class TestReplacer(BaseEventsTest):
         return Message(
             Partition(Topic("replacements"), 0),
             0,
-            KafkaPayload(None, json.dumps(msg).encode("utf-8")),
+            KafkaPayload(None, json.dumps(msg).encode("utf-8"), []),
             datetime.now(),
         )
 
@@ -263,6 +263,7 @@ class TestReplacer(BaseEventsTest):
                         },
                     )
                 ).encode("utf-8"),
+                [],
             ),
             datetime.now(),
         )
@@ -300,6 +301,7 @@ class TestReplacer(BaseEventsTest):
                         },
                     )
                 ).encode("utf-8"),
+                [],
             ),
             datetime.now(),
         )
@@ -339,6 +341,7 @@ class TestReplacer(BaseEventsTest):
                         },
                     )
                 ).encode("utf-8"),
+                [],
             ),
             datetime.now(),
         )
@@ -395,6 +398,7 @@ class TestReplacer(BaseEventsTest):
                         },
                     )
                 ).encode("utf-8"),
+                [],
             ),
             datetime.now(),
         )
@@ -454,6 +458,7 @@ class TestReplacer(BaseEventsTest):
                         },
                     )
                 ).encode("utf-8"),
+                [],
             ),
             datetime.now(),
         )

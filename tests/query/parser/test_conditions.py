@@ -321,6 +321,156 @@ test_conditions = [
         ),
     ),  # Test negative scalar condition on array column is expanded as an all() type iterator.
     (
+        [[["equals", ["exception_frames.filename", "'foo'"]], "=", 1]],
+        FunctionCall(
+            None,
+            ConditionFunctions.EQ,
+            (
+                FunctionCall(
+                    None,
+                    "arrayExists",
+                    (
+                        Lambda(
+                            None,
+                            ("x",),
+                            FunctionCall(
+                                None,
+                                "assumeNotNull",
+                                (
+                                    FunctionCall(
+                                        None,
+                                        ConditionFunctions.EQ,
+                                        (Argument(None, "x"), Literal(None, "foo")),
+                                    ),
+                                ),
+                            ),
+                        ),
+                        Column(None, None, "exception_frames.filename"),
+                    ),
+                ),
+                Literal(None, 1),
+            ),
+        ),
+    ),  # Test function condition on array column is expanded as an iterator.
+    (
+        [[["notEquals", ["exception_frames.filename", "'foo'"]], "=", 1]],
+        FunctionCall(
+            None,
+            ConditionFunctions.EQ,
+            (
+                FunctionCall(
+                    None,
+                    "arrayAll",
+                    (
+                        Lambda(
+                            None,
+                            ("x",),
+                            FunctionCall(
+                                None,
+                                "assumeNotNull",
+                                (
+                                    FunctionCall(
+                                        None,
+                                        ConditionFunctions.NEQ,
+                                        (Argument(None, "x"), Literal(None, "foo")),
+                                    ),
+                                ),
+                            ),
+                        ),
+                        Column(None, None, "exception_frames.filename"),
+                    ),
+                ),
+                Literal(None, 1),
+            ),
+        ),
+    ),  # Test negative function condition on array column is expanded as an all() type iterator.
+    (
+        [
+            [
+                [
+                    "or",
+                    [
+                        ["equals", ["exception_frames.filename", "'foo'"]],
+                        ["equals", ["exception_frames.filename", "'bar'"]],
+                    ],
+                ],
+                "=",
+                1,
+            ]
+        ],
+        FunctionCall(
+            None,
+            ConditionFunctions.EQ,
+            (
+                FunctionCall(
+                    None,
+                    "or",
+                    (
+                        FunctionCall(
+                            None,
+                            "arrayExists",
+                            (
+                                Lambda(
+                                    None,
+                                    ("x",),
+                                    FunctionCall(
+                                        None,
+                                        "assumeNotNull",
+                                        (
+                                            FunctionCall(
+                                                None,
+                                                ConditionFunctions.EQ,
+                                                (
+                                                    Argument(None, "x"),
+                                                    Literal(None, "foo"),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                                Column(None, None, "exception_frames.filename"),
+                            ),
+                        ),
+                        FunctionCall(
+                            None,
+                            "arrayExists",
+                            (
+                                Lambda(
+                                    None,
+                                    ("x",),
+                                    FunctionCall(
+                                        None,
+                                        "assumeNotNull",
+                                        (
+                                            FunctionCall(
+                                                None,
+                                                ConditionFunctions.EQ,
+                                                (
+                                                    Argument(None, "x"),
+                                                    Literal(None, "bar"),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                                Column(None, None, "exception_frames.filename"),
+                            ),
+                        ),
+                    ),
+                ),
+                Literal(None, 1),
+            ),
+        ),
+    ),  # Test array columns in boolean functions are expanded as an iterator.
+    (
+        [["tags.key", "=", "key"]],
+        FunctionCall(
+            None,
+            ConditionFunctions.EQ,
+            (Column(None, None, "tags.key"), Literal(None, "key")),
+        ),
+    ),  # Array columns not expanded because in arrayjoin
+    (
         tuplify(
             [["platform", "IN", ["a", "b", "c"]], ["platform", "IN", ["c", "b", "a"]]]
         ),
@@ -349,15 +499,17 @@ test_conditions = [
 @pytest.mark.parametrize("conditions, expected", test_conditions)
 def test_conditions_expr(conditions: Sequence[Any], expected: Expression) -> None:
     dataset = get_dataset("events")
-    assert parse_conditions_to_expr(conditions, dataset, None) == expected
+    assert parse_conditions_to_expr(conditions, dataset, {"tags.key"}) == expected, str(
+        conditions
+    )
 
 
 def test_invalid_conditions() -> None:
     dataset = get_dataset("events")
     is_null = [["group_id", "IS NULL", "I am not valid"]]
     with pytest.raises(Exception):
-        parse_conditions_to_expr(is_null, dataset, None)
+        parse_conditions_to_expr(is_null, dataset, set())
 
     binary = [["group_id", "=", None]]
     with pytest.raises(Exception):
-        parse_conditions_to_expr(binary, dataset, None)
+        parse_conditions_to_expr(binary, dataset, set())

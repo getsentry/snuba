@@ -5,8 +5,12 @@ from typing import Callable, Mapping, MutableMapping, Optional, Sequence, Set
 
 from snuba.utils.codecs import Codec
 from snuba.utils.concurrent import Synchronized, execute
-from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
-from snuba.utils.streams.kafka import KafkaPayload
+from snuba.utils.streams.backends.abstract import (
+    Consumer,
+    ConsumerError,
+    EndOfPartition,
+)
+from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 
@@ -29,6 +33,7 @@ class CommitCodec(Codec[KafkaPayload, Commit]):
                 "utf-8"
             ),
             f"{value.offset}".encode("utf-8"),
+            [],
         )
 
     def decode(self, value: KafkaPayload) -> Commit:

@@ -16,4 +16,5 @@ class StorageKey(Enum):
     QUERYLOG = "querylog"
     SESSIONS_RAW = "sessions_raw"
     SESSIONS_HOURLY = "sessions_hourly"
+    SPANS = "spans"
     TRANSACTIONS = "transactions"

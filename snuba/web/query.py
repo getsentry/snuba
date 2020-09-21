@@ -7,7 +7,6 @@ import sentry_sdk
 
 from snuba import environment
 from snuba.clickhouse.astquery import AstSqlQuery
-from snuba.clickhouse.dictquery import DictSqlQuery
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.dataset import Dataset
@@ -19,10 +18,9 @@ from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 from snuba.util import with_span
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException, QueryResult
-from snuba.web.ast_rollout import is_ast_rolled_out
 from snuba.web.db_query import raw_query
 
 logger = logging.getLogger("snuba.query")
@@ -125,7 +123,6 @@ def _run_query_pipeline(
 
     query_runner = partial(
         _format_storage_query_and_run,
-        dataset,
         timer,
         query_metadata,
         from_date,
@@ -139,9 +136,6 @@ def _run_query_pipeline(
 
 
 def _format_storage_query_and_run(
-    # TODO: remove dependency on Dataset. This is only for formatting the legacy
-    # SqlQuery with the AST this won't be needed.
-    dataset: Dataset,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     from_date: datetime,
@@ -153,8 +147,6 @@ def _format_storage_query_and_run(
 ) -> QueryResult:
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
-    TODO: When we will have the AST in production this function is probably going
-    to collapse and disappear.
     """
 
     # TODO: This function (well, it will be a wrapper of this function)
@@ -164,21 +156,9 @@ def _format_storage_query_and_run(
 
     source = clickhouse_query.get_data_source().format_from()
     with sentry_sdk.start_span(description="create_query", op="db") as span:
-        legacy_query = DictSqlQuery(dataset, clickhouse_query, request_settings)
-        span.set_data("legacy_query", legacy_query.sql_data())
-
-        ast_query = AstSqlQuery(clickhouse_query, request_settings)
-        span.set_data("ast_query", ast_query.sql_data())
-
-        if is_ast_rolled_out(get_dataset_name(dataset), referrer):
-            formatted_query: SqlQuery = ast_query
-            query_type = "ast"
-        else:
-            formatted_query = legacy_query
-            query_type = "legacy"
-
-        metrics.increment("execute", tags={"query_type": query_type})
-        span.set_tag("query_type", query_type)
+        formatted_query = AstSqlQuery(clickhouse_query, request_settings)
+        span.set_data("query", formatted_query.sql_data())
+        metrics.increment("execute")
 
     timer.mark("prepare_query")
 

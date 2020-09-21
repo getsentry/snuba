@@ -5,11 +5,10 @@ import pytest
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
 from snuba.environment import setup_sentry
-from snuba.state import delete_config, set_config
 from snuba.utils.clock import Clock, TestingClock
-from snuba.utils.streams.dummy import DummyBroker
+from snuba.utils.streams.backends.local.backend import LocalBroker
+from snuba.utils.streams.backends.local.storages.memory import MemoryMessageStorage
 from snuba.utils.streams.types import TPayload
-from snuba.web.ast_rollout import ROLLOUT_RATE_CONFIG
 
 
 def pytest_configure() -> None:
@@ -31,18 +30,11 @@ def pytest_configure() -> None:
     connection.execute(f"CREATE DATABASE {database_name};")
 
 
-@pytest.fixture(params=[0, 100], ids=["legacy", "ast"])
-def query_type(request) -> None:
-    set_config(ROLLOUT_RATE_CONFIG, request.param)
-    yield
-    delete_config(ROLLOUT_RATE_CONFIG)
-
-
 @pytest.fixture
 def clock() -> Iterator[Clock]:
     yield TestingClock()
 
 
 @pytest.fixture
-def broker(clock: TestingClock) -> Iterator[DummyBroker[TPayload]]:
-    yield DummyBroker(clock)
+def broker(clock: TestingClock) -> Iterator[LocalBroker[TPayload]]:
+    yield LocalBroker(MemoryMessageStorage(), clock)

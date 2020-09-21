@@ -1,11 +1,24 @@
 import itertools
+import multiprocessing
+import pytest
 from datetime import datetime
+from multiprocessing.managers import SharedMemoryManager
 from typing import Iterator
 from unittest.mock import Mock, call
 
-from snuba.utils.streams.streaming import CollectStep, FilterStep, TransformStep
+from snuba.utils.streams.backends.kafka import KafkaPayload
+from snuba.utils.streams.streaming import (
+    CollectStep,
+    FilterStep,
+    MessageBatch,
+    ParallelTransformStep,
+    TransformStep,
+    ValueTooLarge,
+    parallel_transform_worker_apply,
+)
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.assertions import assert_changes, assert_does_not_change
+from tests.backends.metrics import Gauge as GaugeCall, TestingMetricsBackend
 
 
 def test_filter() -> None:
@@ -115,3 +128,178 @@ def test_collect() -> None:
         lambda: commit_function.call_count, 1, 2
     ):
         collect_step.join()
+
+
+def test_message_batch() -> None:
+    partition = Partition(Topic("test"), 0)
+
+    with SharedMemoryManager() as smm:
+        block = smm.SharedMemory(4096)
+        assert block.size == 4096
+
+        message = Message(
+            partition, 0, KafkaPayload(None, b"\x00" * 4000, None), datetime.now()
+        )
+
+        batch: MessageBatch[KafkaPayload] = MessageBatch(block)
+        with assert_changes(lambda: len(batch), 0, 1):
+            batch.append(message)
+
+        assert batch[0] == message
+        assert list(batch) == [message]
+
+        with assert_does_not_change(lambda: len(batch), 1), pytest.raises(
+            ValueTooLarge
+        ):
+            batch.append(message)
+
+
+def transform_payload_expand(message: Message[KafkaPayload]) -> KafkaPayload:
+    return KafkaPayload(
+        message.payload.key, message.payload.value * 2, message.payload.headers,
+    )
+
+
+def test_parallel_transform_worker_apply() -> None:
+    messages = [
+        Message(
+            Partition(Topic("test"), 0),
+            i,
+            KafkaPayload(None, b"\x00" * size, None),
+            datetime.now(),
+        )
+        for i, size in enumerate([1000, 1000, 2000, 4000])
+    ]
+
+    with SharedMemoryManager() as smm:
+        input_block = smm.SharedMemory(8192)
+        assert input_block.size == 8192
+
+        input_batch = MessageBatch(input_block)
+        for message in messages:
+            input_batch.append(message)
+
+        assert len(input_batch) == 4
+
+        output_block = smm.SharedMemory(4096)
+        assert output_block.size == 4096
+
+        index, output_batch = parallel_transform_worker_apply(
+            transform_payload_expand, input_batch, output_block,
+        )
+
+        # The first batch should be able to fit 2 messages.
+        assert index == 2
+        assert len(output_batch) == 2
+
+        index, output_batch = parallel_transform_worker_apply(
+            transform_payload_expand, input_batch, output_block, index,
+        )
+
+        # The second batch should be able to fit one message.
+        assert index == 3
+        assert len(output_batch) == 1
+
+        # The last message is too large to fit in the batch.
+        with pytest.raises(ValueTooLarge):
+            parallel_transform_worker_apply(
+                transform_payload_expand, input_batch, output_block, index,
+            )
+
+
+def get_subprocess_count() -> int:
+    return len(multiprocessing.active_children())
+
+
+def test_parallel_transform_step() -> None:
+    next_step = Mock()
+
+    messages = [
+        Message(
+            Partition(Topic("test"), 0),
+            i,
+            KafkaPayload(None, b"\x00" * size, None),
+            datetime.now(),
+        )
+        for i, size in enumerate([1000, 1000, 2000, 2000])
+    ]
+
+    starting_processes = get_subprocess_count()
+    worker_processes = 2
+    manager_processes = 1
+    metrics = TestingMetricsBackend()
+
+    with assert_changes(
+        get_subprocess_count,
+        starting_processes,
+        starting_processes + worker_processes + manager_processes,
+    ), assert_changes(
+        lambda: metrics.calls,
+        [],
+        [
+            GaugeCall("batches_in_progress", value, tags=None)
+            for value in [0.0, 1.0, 2.0]
+        ],
+    ):
+        transform_step = ParallelTransformStep(
+            transform_payload_expand,
+            next_step,
+            processes=worker_processes,
+            max_batch_size=5,
+            max_batch_time=60,
+            input_block_size=4096,
+            output_block_size=4096,
+            metrics=metrics,
+        )
+
+        for message in messages:
+            transform_step.poll()
+            transform_step.submit(message)
+
+        transform_step.close()
+
+    metrics.calls.clear()
+
+    with assert_changes(
+        get_subprocess_count,
+        starting_processes + worker_processes + manager_processes,
+        starting_processes,
+    ), assert_changes(
+        lambda: metrics.calls,
+        [],
+        [GaugeCall("batches_in_progress", value, tags=None) for value in [1.0, 0.0]],
+    ):
+        transform_step.join()
+
+    assert next_step.submit.call_count == len(messages)
+
+
+def test_parallel_transform_step_terminate_workers() -> None:
+    next_step = Mock()
+
+    starting_processes = get_subprocess_count()
+    worker_processes = 2
+    manager_processes = 1
+
+    with assert_changes(
+        get_subprocess_count,
+        starting_processes,
+        starting_processes + worker_processes + manager_processes,
+    ):
+        transform_step = ParallelTransformStep(
+            transform_payload_expand,  # doesn't matter
+            next_step,
+            processes=worker_processes,
+            max_batch_size=5,
+            max_batch_time=60,
+            input_block_size=4096,
+            output_block_size=4096,
+            metrics=TestingMetricsBackend(),
+        )
+
+    with assert_changes(
+        get_subprocess_count,
+        starting_processes + worker_processes + manager_processes,
+        starting_processes,
+    ), assert_changes(lambda: next_step.terminate.call_count, 0, 1):
+        transform_step.terminate()
