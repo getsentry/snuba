@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any, FrozenSet, Mapping, Sequence, Tuple
+from typing import Any, FrozenSet, Mapping, Sequence, Tuple, Union
 
 from snuba.clickhouse.translators.snuba.mappers import ColumnToFunction
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
@@ -63,11 +63,11 @@ class ErrorsEntity(Entity):
 
     def column_expr(
         self,
-        column_name,
+        column_name: str,
         query: Query,
         parsing_context: ParsingContext,
         table_alias: str = "",
-    ):
+    ) -> Union[None, Any]:
         processed_column = self.__tags_processor.process_column_expression(
             column_name, query, parsing_context, table_alias
         )

@@ -67,7 +67,7 @@ tests = [
 
 @pytest.mark.parametrize("granularity, ast_value, formatted_value", tests)
 def test_timeseries_column_format_expressions(
-    granularity, ast_value, formatted_value
+    granularity: int, ast_value: FunctionCall, formatted_value: str
 ) -> None:
     unprocessed = Query(
         {"granularity": granularity},

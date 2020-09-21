@@ -13,8 +13,6 @@ PORT = 1218
 DEFAULT_DATASET_NAME = "events"
 DISABLED_DATASETS: Set[str] = set()
 
-DISABLED_ENTITIES: Set[str] = set()
-
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
 

@@ -1,6 +1,5 @@
 from typing import Callable, MutableMapping
 
-from snuba import settings
 from snuba.datasets.entity import Entity
 from snuba.datasets.entities import EntityKey
 from snuba.util import with_span
@@ -17,11 +16,6 @@ class InvalidEntityError(Exception):
 def get_entity(name: EntityKey) -> Entity:
     if name in ENTITY_IMPL:
         return ENTITY_IMPL[name]
-
-    if name in settings.DISABLED_ENTITIES:
-        raise InvalidEntityError(
-            f"entity {name!r} is not available in this environment"
-        )
 
     from snuba.datasets.cdc.groupassignee_entity import GroupAssigneeEntity
     from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
