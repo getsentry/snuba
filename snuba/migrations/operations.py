@@ -104,6 +104,18 @@ class CreateMaterializedView(SqlOperation):
         return f"CREATE MATERIALIZED VIEW IF NOT EXISTS {self.__view_name} TO {self.__destination_table_name} ({columns}) AS {self.__query};"
 
 
+class RenameTable(SqlOperation):
+    def __init__(
+        self, storage_set: StorageSetKey, old_table_name: str, new_table_name: str,
+    ):
+        super().__init__(storage_set)
+        self.__old_table_name = old_table_name
+        self.__new_table_name = new_table_name
+
+    def format_sql(self) -> str:
+        return f"RENAME TABLE {self.__old_table_name} TO {self.__new_table_name};"
+
+
 class AddColumn(SqlOperation):
     """
     Adds a column to a table.
