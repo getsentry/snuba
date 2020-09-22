@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -19,9 +18,6 @@ from snuba.utils.codecs import Encoder
 from snuba.utils.iterators import chunked
 from snuba.utils.metrics import MetricsBackend
 from snuba.writer import BatchWriter, WriterTableRow
-
-
-logger = logging.getLogger(__name__)
 
 
 CLICKHOUSE_ERROR_RE = re.compile(
@@ -155,7 +151,6 @@ class HTTPBatchWriter(BatchWriter[JSONRow]):
         self.__chunk_size = chunk_size
 
     def write(self, values: Iterable[JSONRow]) -> None:
-        logger.debug("Starting write batch...")
         batch = HTTPWriteBatch(
             self.__executor,
             self.__pool,
@@ -170,10 +165,5 @@ class HTTPBatchWriter(BatchWriter[JSONRow]):
         for value in values:
             batch.append(value)
 
-        logger.debug("Closing %r...", batch)
         batch.close()
-
-        logger.debug("Waiting for completion of %r...", batch)
         batch.join()
-
-        logger.debug("Succesfully applied %r.", batch)
