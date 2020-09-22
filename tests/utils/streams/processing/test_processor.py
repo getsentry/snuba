@@ -3,11 +3,8 @@ from unittest import mock
 
 import pytest
 
-from snuba.utils.streams.processing import (
-    InvalidStateError,
-    MessageRejected,
-    StreamProcessor,
-)
+from snuba.utils.streams.processing.processor import InvalidStateError, StreamProcessor
+from snuba.utils.streams.processing.strategies.abstract import MessageRejected
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.assertions import assert_changes, assert_does_not_change
 

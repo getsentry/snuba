@@ -4,7 +4,10 @@ from cProfile import Profile
 from pathlib import Path
 from typing import Callable, Mapping, Optional
 
-from snuba.utils.streams.processing import ProcessingStrategy, ProcessingStrategyFactory
+from snuba.utils.streams.processing.strategies.abstract import (
+    ProcessingStrategy,
+    ProcessingStrategyFactory,
+)
 from snuba.utils.streams.types import Message, Partition, TPayload
 
 

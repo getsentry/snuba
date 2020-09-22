@@ -1,15 +1,16 @@
 import itertools
 import multiprocessing
-import pytest
 from datetime import datetime
 from multiprocessing.managers import SharedMemoryManager
 from typing import Iterator
 from unittest.mock import Mock, call
 
+import pytest
+
 from snuba.utils.streams.backends.kafka import KafkaPayload
-from snuba.utils.streams.streaming import (
-    CollectStep,
-    FilterStep,
+from snuba.utils.streams.processing.strategies.streaming.collect import CollectStep
+from snuba.utils.streams.processing.strategies.streaming.filter import FilterStep
+from snuba.utils.streams.processing.strategies.streaming.transform import (
     MessageBatch,
     ParallelTransformStep,
     TransformStep,
@@ -18,7 +19,8 @@ from snuba.utils.streams.streaming import (
 )
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.assertions import assert_changes, assert_does_not_change
-from tests.backends.metrics import Gauge as GaugeCall, TestingMetricsBackend
+from tests.backends.metrics import Gauge as GaugeCall
+from tests.backends.metrics import TestingMetricsBackend
 
 
 def test_filter() -> None:
