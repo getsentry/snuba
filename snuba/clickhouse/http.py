@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -18,6 +19,9 @@ from snuba.utils.codecs import Encoder
 from snuba.utils.iterators import chunked
 from snuba.utils.metrics import MetricsBackend
 from snuba.writer import BatchWriter, WriterTableRow
+
+
+logger = logging.getLogger(__name__)
 
 
 CLICKHOUSE_ERROR_RE = re.compile(
@@ -93,6 +97,7 @@ class HTTPWriteBatch:
         while True:
             value = self.__queue.get()
             if value is None:
+                logger.debug("Finished sending data from %r.", self)
                 return
 
             yield value
@@ -110,6 +115,7 @@ class HTTPWriteBatch:
 
     def join(self, timeout: Optional[float] = None) -> None:
         response = self.__result.result(timeout)
+        logger.debug("Received response for %r.", self)
 
         if response.status != 200:
             # XXX: This should be switched to just parse the JSON body after
