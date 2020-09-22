@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, TypedDict
+from typing import Any, cast, Mapping, MutableMapping, Optional, Sequence, TypedDict
 
 from jsonschema_typed import JSONSchema
 
@@ -44,7 +44,7 @@ REPLACEMENT_EVENT_TYPES = frozenset(
     ]
 )
 
-EventData = JSONSchema["schema/event.schema.json"]
+EventData = JSONSchema["schemas/event.schema.json"]
 
 
 class InsertEvent(TypedDict):
@@ -160,11 +160,10 @@ class EventsProcessorBase(MessageProcessor, ABC):
             raise InvalidMessageVersion(f"Unsupported message version: {version}")
 
         # version 2: (2, type, data, [state])
-        event: InsertEvent
         type_, event = message[1:3]
         if type_ == "insert":
             try:
-                row = self.process_insert(event, metadata)
+                row = self.process_insert(cast(InsertEvent, event), metadata)
             except EventTooOld:
                 return None
 

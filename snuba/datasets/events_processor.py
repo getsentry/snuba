@@ -1,17 +1,12 @@
+import _strptime  # NOQA fixes _strptime deferred import issue
 import logging
 from typing import Any, Mapping, MutableMapping
 
-import _strptime  # NOQA fixes _strptime deferred import issue
 from snuba.clickhouse.columns import ColumnSet
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.events_format import extract_http, extract_user
 from snuba.datasets.events_processor_base import EventsProcessorBase, InsertEvent
-from snuba.processor import (
-    _boolify,
-    _floatify,
-    _unicodify,
-)
-
+from snuba.processor import _boolify, _floatify, _unicodify
 
 logger = logging.getLogger("snuba.processor")
 
