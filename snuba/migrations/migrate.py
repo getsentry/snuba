@@ -14,7 +14,6 @@ logger = logging.getLogger("snuba.migrate")
 
 STORAGES_TO_MIGRATE = [
     StorageKey.EVENTS,
-    StorageKey.ERRORS,
     StorageKey.GROUPEDMESSAGES,
     StorageKey.GROUPASSIGNEES,
     StorageKey.OUTCOMES_RAW,
