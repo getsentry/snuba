@@ -310,6 +310,80 @@ test_data = [
             ),
         ),
     ),
+    (
+        tuplify(
+            [
+                "and",
+                [
+                    ["equals", ["sdk_integrations", "'b'"]],
+                    ["equals", ["tags.key", "'c'"]],
+                ],
+            ]
+        ),
+        binary_condition(
+            None,
+            BooleanFunctions.AND,
+            binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                Column(alias=None, table_name=None, column_name="sdk_integrations"),
+                Literal(None, "b"),
+            ),
+            binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                Column(alias=None, table_name=None, column_name="tags.key"),
+                Literal(None, "c"),
+            ),
+        ),
+    ),
+    (
+        tuplify(
+            [
+                "or",
+                [
+                    ["equals", ["exception_stacks.mechanism_handled", 0]],
+                    ["equals", [["ifNull", ["tags[handled]", "''"]], "'no'"]],
+                ],
+            ]
+        ),
+        binary_condition(
+            None,
+            BooleanFunctions.OR,
+            FunctionCall(
+                None,
+                "arrayExists",
+                (
+                    Lambda(
+                        None,
+                        ("x",),
+                        transformation=FunctionCall(
+                            None,
+                            "assumeNotNull",
+                            (
+                                FunctionCall(
+                                    None,
+                                    "equals",
+                                    (Argument(None, name="x"), Literal(None, 0)),
+                                ),
+                            ),
+                        ),
+                    ),
+                    Column(None, None, "exception_stacks.mechanism_handled"),
+                ),
+            ),
+            binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                FunctionCall(
+                    None,
+                    "ifNull",
+                    (Column(None, None, "tags[handled]",), Literal(None, "")),
+                ),
+                Literal(None, "no"),
+            ),
+        ),
+    ),
 ]
 
 
@@ -318,7 +392,7 @@ def test_complex_conditions_expr(actual, expected) -> None:
     dataset = get_dataset("events")
     assert (
         parse_function_to_expr(
-            actual, dataset.get_abstract_columnset(), "sdk_integrations"
+            actual, dataset.get_abstract_columnset(), {"sdk_integrations", "tags.key"}
         )
         == expected
     ), actual

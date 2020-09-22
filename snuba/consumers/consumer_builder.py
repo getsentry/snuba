@@ -10,7 +10,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
 from snuba.utils.streams import Topic
 from snuba.utils.streams.backends.kafka import (
@@ -192,6 +192,7 @@ class ConsumerBuilder:
                 self.metrics,
                 {"load_balancing": "in_order", "insert_distributed_sync": 1},
             ),
+            self.metrics,
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
             processes=self.processes,

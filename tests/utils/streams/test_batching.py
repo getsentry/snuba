@@ -4,7 +4,7 @@ from typing import Any, MutableSequence, Sequence
 from unittest.mock import patch
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.backends.dummy import DummyBroker
+from snuba.utils.streams.backends.local.backend import LocalBroker as Broker
 from snuba.utils.streams.batching import (
     AbstractBatchWorker,
     BatchProcessingStrategyFactory,
@@ -27,7 +27,7 @@ class FakeWorker(AbstractBatchWorker[int, int]):
 
 
 class TestConsumer(object):
-    def test_batch_size(self, broker: DummyBroker[int]) -> None:
+    def test_batch_size(self, broker: Broker[int]) -> None:
         topic = Topic("topic")
         broker.create_topic(topic, partitions=1)
         producer = broker.get_producer()
@@ -59,7 +59,7 @@ class TestConsumer(object):
         assert consumer.close_calls == 1
 
     @patch("time.time")
-    def test_batch_time(self, mock_time: Any, broker: DummyBroker[int]) -> None:
+    def test_batch_time(self, mock_time: Any, broker: Broker[int]) -> None:
         topic = Topic("topic")
         broker.create_topic(topic, partitions=1)
         producer = broker.get_producer()

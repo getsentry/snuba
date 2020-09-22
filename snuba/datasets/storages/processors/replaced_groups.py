@@ -10,7 +10,7 @@ from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "processors.replaced_groups")
@@ -46,6 +46,8 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             final, exclude_group_ids = get_projects_query_flags(
                 list(project_ids), self.__replacer_state_name,
             )
+            if final:
+                metrics.increment("final", tags={"cause": "final_flag"})
             if not final and exclude_group_ids:
                 # If the number of groups to exclude exceeds our limit, the query
                 # should just use final instead of the exclusion set.
@@ -53,6 +55,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                     "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE
                 )
                 if len(exclude_group_ids) > max_group_ids_exclude:
+                    metrics.increment("final", tags={"cause": "max_groups"})
                     set_final = True
                 else:
                     condition_to_add = (

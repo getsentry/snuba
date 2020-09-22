@@ -16,7 +16,7 @@ def get_dataset_source(dataset_name):
 
 
 test_data = [
-    ({"conditions": [["type", "=", "transaction"]]}, "sentry_local"),
+    ({"conditions": [["type", "=", "transaction"]]}, "transactions_local"),
     (
         {"conditions": [["type", "=", "transaction"], ["duration", ">", 1000]]},
         "transactions_local",
@@ -138,6 +138,11 @@ test_data = [
         {"aggregations": [["apdex(duration, 300)", None, "apdex_duration_300"]]},
         "transactions_local",
     ),
+    (
+        {"aggregations": [["failure_rate()", None, "failure_rate"]]},
+        "transactions_local",
+    ),
+    ({"selected_columns": ["measurements[lcp.elementSize]"]}, "transactions_local"),
 ]
 
 

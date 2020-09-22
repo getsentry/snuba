@@ -228,9 +228,10 @@ storage = WritableTableStorage(
             {"start_ts", "finish_ts"},
             BEGINNING_OF_TIME,
         ),
-        MappingOptimizer("tags", "_tags_hash_map"),
+        MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
         TransactionColumnProcessor(),
         ArrayJoinKeyValueOptimizer("tags"),
+        ArrayJoinKeyValueOptimizer("measurements"),
         PrewhereProcessor(),
     ],
     stream_loader=KafkaStreamLoader(

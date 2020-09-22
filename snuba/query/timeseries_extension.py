@@ -13,8 +13,8 @@ from snuba.query.logical import Query
 from snuba.query.processors import ExtensionData, ExtensionQueryProcessor
 from snuba.request.request_settings import RequestSettings
 from snuba.util import parse_datetime
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.decorators import track_calls
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 
 timeseries_metrics = MetricsWrapper(environment.metrics, "extensions.timeseries")

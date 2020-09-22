@@ -369,3 +369,83 @@ column.
 
 Note, when using this expression. the thing you are counting is tags, not events, so if you
 have 10 events, each of which has 10 tags, then a `count()` of `tags_key` will return 100.
+
+
+##  Migrations
+
+Snuba provides functionality to manage ClickHouse database migrations. Migrations
+in Snuba are organized into groups, which typically correspond with features / sets
+of related tables in Snuba. In some cases, groups can provide a mechanism to test
+experimental features in Snuba that should not be rolled out to most users yet.
+Migration groups can be defined as either optional or mandatory. Optional groups
+can be toggled by the user via `settings.SKIPPED_MIGRATION_GROUPS`. In most cases,
+the default in settings.py should not be changed, and doing so may result in
+unexpected behavior.
+
+
+### Commands
+The `snuba migrations` group of commands provides some functions to manage migrations.
+
+#### List migrations
+`snuba migrations list`
+
+- Lists all migrations and their statuses
+
+#### Run all migrations
+`snuba migrations migrate --force`
+
+- Runs all pending migrations and brings your database to the latest state.
+- Running with the --force flag means that any migrations marked blocking (generally
+because they contain a data migration) will also be executed. Blocking migrations may
+take some time to complete. Running with --force assumes that any consumers filling
+the corresponding table are stopped and no new data is being written to the table
+as the migration is taking place.
+- Running this without the --force flag, will only execute the migrations if none
+are blocking.
+- If you are running `snuba devserver`, this command automatically run when the
+devserver is started and there is no need to manage migrations manually.
+
+#### Run a single migration
+`snuba migrations run --group <group> --migration-id <migration_id>`
+
+- Runs a single migration
+- Only allowed if there are no prior migrations in that group that have not been completed
+
+#### Reverse a single migration
+`snuba migrations reverse --group <group> --migration-id <migration_id>`
+
+- Reverses a single migration
+- Only allowed if there are no subsequent completed migrations in that group
+
+
+### Add a new migration
+In order to add a new migration, first determine which migration group the new
+migration should be added to, and add an entry to that group in `migrations/groups.py`
+with the new migration identifier you have chosen. By convention we prefix migration
+IDs with a number matching the position of the migration in the group, i.e. the 4th
+migration in that group will be prefixed with `0004_`. Add a file which will contain
+the new migration at `/migrations/snuba_migrations/<group>/<migration_id>.py`.
+
+If you need to create a new group, add the group to `migrations.groups.MigrationGroup`
+and a loader for the group defining the path to the directory where that group's
+migrations will be located. Register these to `migrations.groups._REGISTERED_GROUPS` -
+note the position of the group in this list determines the order the migrations
+will be executed in.
+
+The new migration should contain a class called `Migration` which inherits from
+`MultiStepMigration`. You should define all four methods - `forwards_local`,
+`backwards_local`, `forwards_dist` and `backwards_dist` in order to provide the
+DDL for all ClickHouse layouts that a user may have. The operations provided in
+the `_local` methods will run on each local ClickHouse node and the `_dist` methods
+will run on each distributed ClickHouse nodes (if any).
+
+For each forwards method, you should provide the sequence of operations to be run
+on that node. In case the forwards methods fail halfway, the corresponding backwards
+methods should also restore the original state so the migration can be retried.
+For example if a temporary table is created during the forwards migration, the backwards
+migration should drop it.
+
+A migration that can not immediately complete (i.e. requires data to be rewritten)
+should be marked as blocking. Typically this indicates that the migration needs to
+be run with the relevant consumer stopped or an alternate strategy (e.g. dual writing)
+employed to ensure no downtime as the migration is running.

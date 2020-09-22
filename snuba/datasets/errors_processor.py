@@ -76,7 +76,6 @@ class ErrorsProcessor(EventsProcessorBase):
         data["contexts"] = contexts
 
         output["message"] = _unicodify(event["message"])
-        output["org_id"] = event["organization_id"]
 
     def extract_tags_custom(
         self,

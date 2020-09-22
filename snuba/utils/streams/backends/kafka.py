@@ -13,6 +13,7 @@ from typing import (
     Mapping,
     MutableMapping,
     MutableSequence,
+    NamedTuple,
     Optional,
     Sequence,
     Set,
@@ -39,6 +40,7 @@ from snuba.utils.streams.backends.abstract import (
     Consumer,
     ConsumerError,
     EndOfPartition,
+    OffsetOutOfRange,
     Producer,
 )
 from snuba.utils.streams.types import Message, Partition, Topic
@@ -64,42 +66,10 @@ class InvalidState(RuntimeError):
 Headers = Sequence[Tuple[str, bytes]]
 
 
-class KafkaPayload:
-    # XXX: This is not a dataclass since dataclasses do not support classes
-    # with __slots__ *and* default values. Since we create a lot of these
-    # objects, it's probably more important to preserve their performance and
-    # memory impact than it is their developer friendliness (unfortunately.)
-
-    __slots__ = ["__key", "__value", "__headers"]
-
-    def __init__(
-        self, key: Optional[bytes], value: bytes, headers: Optional[Headers] = None
-    ) -> None:
-        self.__key = key
-        self.__value = value
-        self.__headers = headers if headers is not None else []
-
-    @property
-    def key(self) -> Optional[bytes]:
-        return self.__key
-
-    @property
-    def value(self) -> bytes:
-        return self.__value
-
-    @property
-    def headers(self) -> Headers:
-        return self.__headers
-
-    def __eq__(self, other: Any) -> bool:
-        if not isinstance(other, KafkaPayload):
-            return False
-        else:
-            return (
-                self.key == other.key
-                and self.value == other.value
-                and self.headers == other.headers
-            )
+class KafkaPayload(NamedTuple):
+    key: Optional[bytes]
+    value: bytes
+    headers: Headers
 
     def __reduce_ex__(self, protocol: int):
         if protocol >= 5:
@@ -422,6 +392,8 @@ class KafkaConsumer(Consumer[KafkaPayload]):
                 )
             elif code == KafkaError._TRANSPORT:
                 raise TransportError(str(error))
+            elif code == KafkaError.OFFSET_OUT_OF_RANGE:
+                raise OffsetOutOfRange(str(error))
             else:
                 raise ConsumerError(str(error))
 
@@ -435,7 +407,7 @@ class KafkaConsumer(Consumer[KafkaPayload]):
             datetime.utcfromtimestamp(message.timestamp()[1] / 1000.0),
         )
 
-        self.__offsets[result.partition] = result.get_next_offset()
+        self.__offsets[result.partition] = result.next_offset
 
         return result
 

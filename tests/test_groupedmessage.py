@@ -110,19 +110,9 @@ class TestGroupedMessage(BaseDatasetTest):
             offset=42, partition=0, timestamp=datetime(1970, 1, 1)
         )
 
-        assert not message_filter.should_drop(
-            self.__make_msg(0, 42, self.BEGIN_MSG, [])
-        )
-        begin_msg = json.loads(self.BEGIN_MSG)
-        ret = processor.process_message(begin_msg, metadata)
-        assert ret is None
+        assert message_filter.should_drop(self.__make_msg(0, 42, self.BEGIN_MSG, []))
 
-        assert not message_filter.should_drop(
-            self.__make_msg(0, 42, self.COMMIT_MSG, [])
-        )
-        commit_msg = json.loads(self.COMMIT_MSG)
-        ret = processor.process_message(commit_msg, metadata)
-        assert ret is None
+        assert message_filter.should_drop(self.__make_msg(0, 42, self.COMMIT_MSG, []))
 
         assert not message_filter.should_drop(
             self.__make_msg(
@@ -160,7 +150,9 @@ class TestGroupedMessage(BaseDatasetTest):
         assert ret == InsertBatch([self.PROCESSED])
 
         assert not message_filter.should_drop(
-            self.__make_msg(0, 42, self.DELETE_MSG, [])
+            self.__make_msg(
+                0, 42, self.DELETE_MSG, [("table", "sentry_groupedmessage".encode())]
+            )
         )
         delete_msg = json.loads(self.DELETE_MSG)
         ret = processor.process_message(delete_msg, metadata)

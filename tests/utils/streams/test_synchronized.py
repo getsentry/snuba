@@ -6,12 +6,12 @@ from typing import Mapping, Optional, TypeVar
 import pytest
 
 from snuba.utils.streams.backends.abstract import Consumer
-from snuba.utils.streams.backends.dummy import DummyBroker, DummyConsumer
 from snuba.utils.streams.backends.kafka import KafkaPayload
+from snuba.utils.streams.backends.local.backend import LocalConsumer
+from snuba.utils.streams.backends.local.backend import LocalBroker as Broker
 from snuba.utils.streams.synchronized import Commit, SynchronizedConsumer, commit_codec
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.assertions import assert_changes, assert_does_not_change
-
 
 T = TypeVar("T")
 
@@ -20,7 +20,7 @@ def wait_for_consumer(consumer: Consumer[T], message: Message[T], attempts: int 
     """Block until the provided consumer has received the provided message."""
     for i in range(attempts):
         part = consumer.tell().get(message.partition)
-        if part is not None and part >= message.get_next_offset():
+        if part is not None and part >= message.next_offset:
             return
 
         time.sleep(0.1)
@@ -30,7 +30,7 @@ def wait_for_consumer(consumer: Consumer[T], message: Message[T], attempts: int 
     )
 
 
-def test_synchronized_consumer(broker: DummyBroker[KafkaPayload]) -> None:
+def test_synchronized_consumer(broker: Broker[KafkaPayload]) -> None:
     topic = Topic("topic")
     commit_log_topic = Topic("commit-log")
 
@@ -42,7 +42,9 @@ def test_synchronized_consumer(broker: DummyBroker[KafkaPayload]) -> None:
     commit_log_consumer = broker.get_consumer("commit-log-consumer")
 
     messages = [
-        producer.produce(topic, KafkaPayload(None, f"{i}".encode("utf8"))).result(1.0)
+        producer.produce(topic, KafkaPayload(None, f"{i}".encode("utf8"), [])).result(
+            1.0
+        )
         for i in range(6)
     ]
 
@@ -68,9 +70,7 @@ def test_synchronized_consumer(broker: DummyBroker[KafkaPayload]) -> None:
             producer.produce(
                 commit_log_topic,
                 commit_codec.encode(
-                    Commit(
-                        "leader-a", Partition(topic, 0), messages[0].get_next_offset()
-                    )
+                    Commit("leader-a", Partition(topic, 0), messages[0].next_offset)
                 ),
             ).result(),
         )
@@ -89,9 +89,7 @@ def test_synchronized_consumer(broker: DummyBroker[KafkaPayload]) -> None:
             producer.produce(
                 commit_log_topic,
                 commit_codec.encode(
-                    Commit(
-                        "leader-b", Partition(topic, 0), messages[0].get_next_offset()
-                    )
+                    Commit("leader-b", Partition(topic, 0), messages[0].next_offset)
                 ),
             ).result(),
         )
@@ -101,7 +99,7 @@ def test_synchronized_consumer(broker: DummyBroker[KafkaPayload]) -> None:
         with assert_changes(consumer.paused, [Partition(topic, 0)], []), assert_changes(
             consumer.tell,
             {Partition(topic, 0): messages[0].offset},
-            {Partition(topic, 0): messages[0].get_next_offset()},
+            {Partition(topic, 0): messages[0].next_offset},
         ):
             assert synchronized_consumer.poll(0.0) == messages[0]
 
@@ -141,7 +139,7 @@ def test_synchronized_consumer(broker: DummyBroker[KafkaPayload]) -> None:
         with assert_changes(consumer.paused, [Partition(topic, 0)], []), assert_changes(
             consumer.tell,
             {Partition(topic, 0): messages[1].offset},
-            {Partition(topic, 0): messages[1].get_next_offset()},
+            {Partition(topic, 0): messages[1].next_offset},
         ):
             assert synchronized_consumer.poll(0.0) == messages[1]
 
@@ -178,12 +176,12 @@ def test_synchronized_consumer(broker: DummyBroker[KafkaPayload]) -> None:
         with assert_changes(consumer.paused, [Partition(topic, 0)], []), assert_changes(
             consumer.tell,
             {Partition(topic, 0): messages[4].offset},
-            {Partition(topic, 0): messages[4].get_next_offset()},
+            {Partition(topic, 0): messages[4].next_offset},
         ):
             assert synchronized_consumer.poll(0.0) == messages[4]
 
 
-def test_synchronized_consumer_pause_resume(broker: DummyBroker[KafkaPayload]) -> None:
+def test_synchronized_consumer_pause_resume(broker: Broker[KafkaPayload]) -> None:
     topic = Topic("topic")
     commit_log_topic = Topic("commit-log")
 
@@ -195,7 +193,9 @@ def test_synchronized_consumer_pause_resume(broker: DummyBroker[KafkaPayload]) -
     commit_log_consumer = broker.get_consumer("commit-log-consumer")
 
     messages = [
-        producer.produce(topic, KafkaPayload(None, f"{i}".encode("utf8"))).result(1.0)
+        producer.produce(topic, KafkaPayload(None, f"{i}".encode("utf8"), [])).result(
+            1.0
+        )
         for i in range(2)
     ]
 
@@ -225,7 +225,7 @@ def test_synchronized_consumer_pause_resume(broker: DummyBroker[KafkaPayload]) -
             producer.produce(
                 commit_log_topic,
                 commit_codec.encode(
-                    Commit("leader", Partition(topic, 0), messages[0].get_next_offset())
+                    Commit("leader", Partition(topic, 0), messages[0].next_offset)
                 ),
             ).result(),
         )
@@ -265,7 +265,7 @@ def test_synchronized_consumer_pause_resume(broker: DummyBroker[KafkaPayload]) -
 
 
 def test_synchronized_consumer_handles_end_of_partition(
-    broker: DummyBroker[KafkaPayload],
+    broker: Broker[KafkaPayload],
 ) -> None:
     topic = Topic("topic")
     commit_log_topic = Topic("commit-log")
@@ -278,7 +278,9 @@ def test_synchronized_consumer_handles_end_of_partition(
     commit_log_consumer = broker.get_consumer("commit-log-consumer")
 
     messages = [
-        producer.produce(topic, KafkaPayload(None, f"{i}".encode("utf8"))).result(1.0)
+        producer.produce(topic, KafkaPayload(None, f"{i}".encode("utf8"), [])).result(
+            1.0
+        )
         for i in range(2)
     ]
 
@@ -297,9 +299,7 @@ def test_synchronized_consumer_handles_end_of_partition(
             producer.produce(
                 commit_log_topic,
                 commit_codec.encode(
-                    Commit(
-                        "leader", Partition(topic, 0), messages[0].get_next_offset()
-                    ),
+                    Commit("leader", Partition(topic, 0), messages[0].next_offset),
                 ),
             ).result(),
         )
@@ -313,9 +313,7 @@ def test_synchronized_consumer_handles_end_of_partition(
             producer.produce(
                 commit_log_topic,
                 commit_codec.encode(
-                    Commit(
-                        "leader", Partition(topic, 0), messages[1].get_next_offset()
-                    ),
+                    Commit("leader", Partition(topic, 0), messages[1].next_offset),
                 ),
             ).result(),
         )
@@ -324,7 +322,7 @@ def test_synchronized_consumer_handles_end_of_partition(
 
 
 def test_synchronized_consumer_worker_crash_before_assignment(
-    broker: DummyBroker[KafkaPayload],
+    broker: Broker[KafkaPayload],
 ) -> None:
     topic = Topic("topic")
     commit_log_topic = Topic("commit-log")
@@ -337,7 +335,7 @@ def test_synchronized_consumer_worker_crash_before_assignment(
     class BrokenConsumerException(Exception):
         pass
 
-    class BrokenDummyConsumer(DummyConsumer[KafkaPayload]):
+    class BrokenConsumer(LocalConsumer[KafkaPayload]):
         def poll(
             self, timeout: Optional[float] = None
         ) -> Optional[Message[KafkaPayload]]:
@@ -347,7 +345,7 @@ def test_synchronized_consumer_worker_crash_before_assignment(
                 poll_called.set()
 
     consumer = broker.get_consumer("consumer")
-    commit_log_consumer: Consumer[KafkaPayload] = BrokenDummyConsumer(
+    commit_log_consumer: Consumer[KafkaPayload] = BrokenConsumer(
         broker, "commit-log-consumer"
     )
 
@@ -361,12 +359,11 @@ def test_synchronized_consumer_worker_crash_before_assignment(
 
 
 def test_synchronized_consumer_worker_crash_after_assignment(
-    broker: DummyBroker[KafkaPayload],
+    broker: Broker[KafkaPayload],
 ) -> None:
     topic = Topic("topic")
     commit_log_topic = Topic("commit-log")
 
-    broker: DummyBroker[KafkaPayload] = DummyBroker()
     broker.create_topic(topic, partitions=1)
     broker.create_topic(commit_log_topic, partitions=1)
 
@@ -375,7 +372,7 @@ def test_synchronized_consumer_worker_crash_after_assignment(
     class BrokenConsumerException(Exception):
         pass
 
-    class BrokenDummyConsumer(DummyConsumer[KafkaPayload]):
+    class BrokenConsumer(LocalConsumer[KafkaPayload]):
         def poll(
             self, timeout: Optional[float] = None
         ) -> Optional[Message[KafkaPayload]]:
@@ -387,8 +384,8 @@ def test_synchronized_consumer_worker_crash_after_assignment(
                 finally:
                     poll_called.set()
 
-    consumer: Consumer[KafkaPayload] = DummyConsumer(broker, "consumer")
-    commit_log_consumer: Consumer[KafkaPayload] = BrokenDummyConsumer(
+    consumer: Consumer[KafkaPayload] = broker.get_consumer("consumer")
+    commit_log_consumer: Consumer[KafkaPayload] = BrokenConsumer(
         broker, "commit-log-consumer"
     )
 
