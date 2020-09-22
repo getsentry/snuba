@@ -8,14 +8,11 @@ reset="$(tput sgr0)"
 mkdir -p schemas
 curl https://raw.githubusercontent.com/getsentry/sentry-data-schemas/main/relay/event.schema.json -o schemas/event.schema.json
 mypy snuba > /dev/null
-if [ "$$?" -gt 1 ]; then
-cat <<EOF
-[${red}${bold}!!!${reset}] Error loading schemas.
-EOF
+if [ $? -gt 1 ]; then
+  echo [${red}${bold}!!!${reset}] Could not dowload schemas.
 fi
 
 # Ensures migrations are executed
-
 files_changed_upstream="$(mktemp)"
 trap "rm -f ${files_changed_upstream}" EXIT
 
