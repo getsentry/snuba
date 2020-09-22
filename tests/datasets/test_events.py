@@ -1,6 +1,6 @@
 from snuba import state
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.datasets.events import EventsQueryStorageSelector
+from snuba.datasets.entities.events import EventsQueryStorageSelector
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.query.logical import Query

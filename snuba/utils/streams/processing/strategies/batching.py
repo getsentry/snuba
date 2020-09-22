@@ -16,7 +16,10 @@ from typing import (
 )
 
 from snuba.utils.metrics import MetricsBackend
-from snuba.utils.streams.processing import ProcessingStrategy, ProcessingStrategyFactory
+from snuba.utils.streams.processing.strategies.abstract import (
+    ProcessingStrategy,
+    ProcessingStrategyFactory,
+)
 from snuba.utils.streams.types import Message, Partition, TPayload
 
 
