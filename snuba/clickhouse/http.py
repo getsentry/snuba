@@ -12,9 +12,11 @@ import rapidjson
 from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
 
+from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.errors import ClickhouseWriterError
 from snuba.utils.codecs import Encoder
+from snuba.utils.iterators import chunked
 from snuba.utils.metrics import MetricsBackend
 from snuba.writer import BatchWriter, WriterTableRow
 
@@ -52,8 +54,18 @@ class HTTPWriteBatch:
         user: str,
         password: str,
         options: Mapping[str, Any],  # should be ``Mapping[str, str]``?
+        chunk_size: Optional[int] = None,
     ) -> None:
+        if chunk_size is None:
+            chunk_size = settings.CLICKHOUSE_HTTP_CHUNK_SIZE
+
         self.__queue: SimpleQueue[Union[JSONRow, None]] = SimpleQueue()
+
+        body = self.__read_until_eof()
+        if chunk_size > 1:
+            body = (b"".join(chunk) for chunk in chunked(body, chunk_size))
+        elif not chunk_size > 0:
+            raise ValueError("chunk size must be greater than zero")
 
         self.__result = executor.submit(
             pool.urlopen,
@@ -71,7 +83,7 @@ class HTTPWriteBatch:
                 "Connection": "keep-alive",
                 "Accept-Encoding": "gzip,deflate",
             },
-            body=self.__read_until_eof(),
+            body=body,
         )
 
         self.__rows = 0
@@ -130,7 +142,7 @@ class HTTPBatchWriter(BatchWriter[JSONRow]):
         database: str,
         metrics: MetricsBackend,  # deprecated
         options: Optional[Mapping[str, Any]] = None,
-        chunk_size: Optional[int] = None,  # deprecated
+        chunk_size: Optional[int] = None,
     ):
         self.__pool = HTTPConnectionPool(host, port)
         self.__executor = ThreadPoolExecutor()
@@ -140,6 +152,7 @@ class HTTPBatchWriter(BatchWriter[JSONRow]):
         self.__user = user
         self.__password = password
         self.__database = database
+        self.__chunk_size = chunk_size
 
     def write(self, values: Iterable[JSONRow]) -> None:
         logger.debug("Starting write batch...")
@@ -151,6 +164,7 @@ class HTTPBatchWriter(BatchWriter[JSONRow]):
             self.__user,
             self.__password,
             self.__options,
+            self.__chunk_size,
         )
 
         for value in values:
