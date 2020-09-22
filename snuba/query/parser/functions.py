@@ -1,7 +1,7 @@
 import numbers
 import re
 from datetime import date, datetime
-from typing import Any, Callable, List, Optional, Tuple, TypeVar, Union
+from typing import Any, Callable, List, Optional, Set, Tuple, TypeVar, Union
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
@@ -108,7 +108,7 @@ def parse_function(
         [TExpression, str, Any, Optional[str]], TExpression
     ],
     dataset_columns: ColumnSet,
-    arrayjoin: Optional[str],
+    arrayjoin_cols: Set[str],
     expr: Any,
     depth: int = 0,
 ) -> TExpression:
@@ -146,7 +146,10 @@ def parse_function(
         if len(args) == 2 and isinstance(args[0], str) and args[0] in dataset_columns:
             column = dataset_columns[args[0]]
             if isinstance(column.type.get_raw(), Array):
-                if column.flattened != arrayjoin and column.base_name != arrayjoin:
+                if (
+                    column.flattened not in arrayjoin_cols
+                    and column.base_name not in arrayjoin_cols
+                ):
                     return unpack_array_condition_builder(
                         simple_expression_builder(args[0]), name, args[1], alias,
                     )
@@ -163,7 +166,7 @@ def parse_function(
                     literal_builder,
                     unpack_array_condition_builder,
                     dataset_columns,
-                    arrayjoin,
+                    arrayjoin_cols,
                     next_2,
                     depth + 1,
                 )
@@ -179,7 +182,7 @@ def parse_function(
                         literal_builder,
                         unpack_array_condition_builder,
                         dataset_columns,
-                        arrayjoin,
+                        arrayjoin_cols,
                         nxt,
                         depth + 1,
                     )
@@ -194,7 +197,7 @@ def parse_function(
 
 
 def parse_function_to_expr(
-    expr: Any, dataset_columns: ColumnSet, arrayjoin: Optional[str]
+    expr: Any, dataset_columns: ColumnSet, arrayjoin_cols: Set[str]
 ) -> Expression:
     """
     Parses a function expression in the Snuba syntax and produces an AST Expression.
@@ -283,7 +286,7 @@ def parse_function_to_expr(
         literal_builder,
         unpack_array_condition_builder,
         dataset_columns,
-        arrayjoin,
+        arrayjoin_cols,
         expr,
         0,
     )

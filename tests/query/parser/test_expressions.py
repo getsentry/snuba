@@ -231,6 +231,10 @@ test_data = [
 def test_aggregation_parsing(aggregation, expected_function):
     dataset = get_dataset("events")
     function = parse_aggregation(
-        aggregation[0], aggregation[1], aggregation[2], dataset.get_abstract_columnset()
+        aggregation[0],
+        aggregation[1],
+        aggregation[2],
+        dataset.get_abstract_columnset(),
+        set(),
     )
     assert function == expected_function, expected_function
