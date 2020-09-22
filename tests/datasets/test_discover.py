@@ -138,6 +138,10 @@ test_data = [
         {"aggregations": [["apdex(duration, 300)", None, "apdex_duration_300"]]},
         "transactions_local",
     ),
+    (
+        {"aggregations": [["failure_rate()", None, "failure_rate"]]},
+        "transactions_local",
+    ),
     ({"selected_columns": ["measurements[lcp.elementSize]"]}, "transactions_local"),
 ]
 

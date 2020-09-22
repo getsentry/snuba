@@ -79,8 +79,8 @@ class TestReplacer(BaseEventsTest):
         assert replacement.query_args == {
             "group_ids": "1, 2, 3",
             "project_id": self.project_id,
-            "required_columns": "org_id, event_id, project_id, group_id, timestamp, deleted, retention_days",
-            "select_columns": "org_id, event_id, project_id, group_id, timestamp, 1, retention_days",
+            "required_columns": "event_id, project_id, group_id, timestamp, deleted, retention_days",
+            "select_columns": "event_id, project_id, group_id, timestamp, 1, retention_days",
             "timestamp": timestamp.strftime(DATETIME_FORMAT),
         }
         assert replacement.query_time_flags == (

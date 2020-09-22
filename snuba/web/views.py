@@ -37,8 +37,8 @@ from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import InvalidSubscriptionError, PartitionId
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.util import with_span
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.web import QueryException

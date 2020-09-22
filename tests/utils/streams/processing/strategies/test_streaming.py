@@ -1,15 +1,16 @@
 import itertools
 import multiprocessing
-import pytest
 from datetime import datetime
 from multiprocessing.managers import SharedMemoryManager
 from typing import Iterator
 from unittest.mock import Mock, call
 
+import pytest
+
 from snuba.utils.streams.backends.kafka import KafkaPayload
-from snuba.utils.streams.streaming import (
-    CollectStep,
-    FilterStep,
+from snuba.utils.streams.processing.strategies.streaming.collect import CollectStep
+from snuba.utils.streams.processing.strategies.streaming.filter import FilterStep
+from snuba.utils.streams.processing.strategies.streaming.transform import (
     MessageBatch,
     ParallelTransformStep,
     TransformStep,
@@ -18,6 +19,8 @@ from snuba.utils.streams.streaming import (
 )
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.assertions import assert_changes, assert_does_not_change
+from tests.backends.metrics import Gauge as GaugeCall
+from tests.backends.metrics import TestingMetricsBackend
 
 
 def test_filter() -> None:
@@ -226,11 +229,19 @@ def test_parallel_transform_step() -> None:
     starting_processes = get_subprocess_count()
     worker_processes = 2
     manager_processes = 1
+    metrics = TestingMetricsBackend()
 
     with assert_changes(
         get_subprocess_count,
         starting_processes,
         starting_processes + worker_processes + manager_processes,
+    ), assert_changes(
+        lambda: metrics.calls,
+        [],
+        [
+            GaugeCall("batches_in_progress", value, tags=None)
+            for value in [0.0, 1.0, 2.0]
+        ],
     ):
         transform_step = ParallelTransformStep(
             transform_payload_expand,
@@ -240,6 +251,7 @@ def test_parallel_transform_step() -> None:
             max_batch_time=60,
             input_block_size=4096,
             output_block_size=4096,
+            metrics=metrics,
         )
 
         for message in messages:
@@ -248,10 +260,16 @@ def test_parallel_transform_step() -> None:
 
         transform_step.close()
 
+    metrics.calls.clear()
+
     with assert_changes(
         get_subprocess_count,
         starting_processes + worker_processes + manager_processes,
         starting_processes,
+    ), assert_changes(
+        lambda: metrics.calls,
+        [],
+        [GaugeCall("batches_in_progress", value, tags=None) for value in [1.0, 0.0]],
     ):
         transform_step.join()
 
@@ -278,6 +296,7 @@ def test_parallel_transform_step_terminate_workers() -> None:
             max_batch_time=60,
             input_block_size=4096,
             output_block_size=4096,
+            metrics=TestingMetricsBackend(),
         )
 
     with assert_changes(

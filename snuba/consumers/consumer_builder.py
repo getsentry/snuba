@@ -10,7 +10,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
 from snuba.utils.streams import Topic
 from snuba.utils.streams.backends.kafka import (
@@ -20,8 +20,11 @@ from snuba.utils.streams.backends.kafka import (
     TransportError,
     build_kafka_consumer_configuration,
 )
-from snuba.utils.streams.batching import BatchProcessingStrategyFactory
-from snuba.utils.streams.processing import ProcessingStrategyFactory, StreamProcessor
+from snuba.utils.streams.processing import StreamProcessor
+from snuba.utils.streams.processing.strategies import ProcessingStrategyFactory
+from snuba.utils.streams.processing.strategies.batching import (
+    BatchProcessingStrategyFactory,
+)
 from snuba.utils.streams.profiler import ProcessingStrategyProfilerWrapperFactory
 
 

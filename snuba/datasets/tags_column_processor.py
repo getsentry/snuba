@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List, Mapping, Optional, Sequence, Set, Union
+from typing import Any, FrozenSet, List, Mapping, Optional, Sequence, Union
 
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
@@ -69,7 +69,7 @@ class TagColumnProcessor:
     def __init__(
         self,
         columns: ColumnSet,
-        promoted_columns: Mapping[str, Set[str]],
+        promoted_columns: Mapping[str, FrozenSet[str]],
         column_tag_map: Mapping[str, Mapping[str, str]],
     ) -> None:
         # The ColumnSet of the dataset. Used to format promoted
