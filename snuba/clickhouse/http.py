@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import logging
-import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from typing import Any, Iterable, Mapping, Optional
+from queue import SimpleQueue
+from typing import Any, Iterable, Iterator, Mapping, Optional, Union
 from urllib.parse import urlencode
 
 import rapidjson
@@ -51,8 +53,7 @@ class HTTPWriteBatch:
         password: str,
         options: Mapping[str, Any],  # should be ``Mapping[str, str]``?
     ) -> None:
-        read_fd, write_fd = os.pipe()
-        self.__input = open(write_fd, "wb")
+        self.__queue: SimpleQueue[Union[JSONRow, None]] = SimpleQueue()
 
         self.__result = executor.submit(
             pool.urlopen,
@@ -70,7 +71,7 @@ class HTTPWriteBatch:
                 "Connection": "keep-alive",
                 "Accept-Encoding": "gzip,deflate",
             },
-            body=open(read_fd, "rb"),
+            body=self.__read_until_eof(),
         )
 
         self.__rows = 0
@@ -80,15 +81,23 @@ class HTTPWriteBatch:
     def __repr__(self) -> str:
         return f"<{type(self).__name__}: {self.__rows} rows ({self.__size} bytes)>"
 
+    def __read_until_eof(self) -> Iterator[JSONRow]:
+        while True:
+            value = self.__queue.get()
+            if value is None:
+                return
+
+            yield value
+
     def append(self, value: JSONRow) -> None:
         assert not self.__closed
 
-        self.__input.write(value)
+        self.__queue.put(value)
         self.__rows += 1
         self.__size += len(value)
 
     def close(self) -> None:
-        self.__input.close()
+        self.__queue.put(None)
         self.__closed = True
 
     def join(self, timeout: Optional[float] = None) -> None:
