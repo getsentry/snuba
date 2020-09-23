@@ -1,10 +1,7 @@
-from typing import Mapping, Sequence
-
 from snuba.clickhouse.columns import (
     UUID,
     Array,
     ColumnSet,
-    ColumnType,
     DateTime,
     FixedString,
     IPv4,
@@ -37,37 +34,6 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 )
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
-
-
-def errors_migrations(
-    clickhouse_table: str, current_schema: Mapping[str, ColumnType]
-) -> Sequence[str]:
-    ret = []
-
-    if "message_timestamp" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN message_timestamp DateTime AFTER offset"
-        )
-
-    if "_tags_hash_map" not in current_schema:
-        ret.append(
-            (
-                f"ALTER TABLE {clickhouse_table} ADD COLUMN _tags_hash_map Array(UInt64) "
-                f"MATERIALIZED {TAGS_HASH_MAP_COLUMN} AFTER _tags_flattened"
-            )
-        )
-
-    if "http_method" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_method LowCardinality(Nullable(String)) AFTER sdk_version"
-        )
-
-    if "http_referer" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_referer Nullable(String) AFTER http_method"
-        )
-
-    return ret
 
 
 all_columns = ColumnSet(
