@@ -231,6 +231,7 @@ storage = WritableTableStorage(
         MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
         TransactionColumnProcessor(),
         ArrayJoinKeyValueOptimizer("tags"),
+        ArrayJoinKeyValueOptimizer("measurements"),
         PrewhereProcessor(),
     ],
     stream_loader=KafkaStreamLoader(

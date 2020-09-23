@@ -6,8 +6,8 @@ import click
 from snuba import settings
 from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging
-from snuba.migrations.migrate import run as run_migrate
 from snuba.migrations.connect import check_clickhouse_connections
+from snuba.migrations.runner import Runner
 
 
 @click.command()
@@ -98,4 +98,4 @@ def bootstrap(
 
     if migrate:
         check_clickhouse_connections()
-        run_migrate()
+        Runner().run_all(force=True)

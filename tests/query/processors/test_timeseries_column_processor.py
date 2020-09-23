@@ -67,7 +67,7 @@ tests = [
 
 @pytest.mark.parametrize("granularity, ast_value, formatted_value", tests)
 def test_timeseries_column_format_expressions(
-    granularity, ast_value, formatted_value
+    granularity: int, ast_value: FunctionCall, formatted_value: str
 ) -> None:
     unprocessed = Query(
         {"granularity": granularity},
@@ -91,9 +91,10 @@ def test_timeseries_column_format_expressions(
     )
 
     dataset = TransactionsDataset()
-    TimeSeriesColumnProcessor(
-        dataset._TimeSeriesDataset__time_group_columns
-    ).process_query(unprocessed, HTTPRequestSettings())
+    for processor in dataset.get_query_processors():
+        if isinstance(processor, TimeSeriesColumnProcessor):
+            processor.process_query(unprocessed, HTTPRequestSettings())
+
     assert (
         expected.get_selected_columns_from_ast()
         == unprocessed.get_selected_columns_from_ast()

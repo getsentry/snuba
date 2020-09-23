@@ -10,7 +10,7 @@ from snuba.query.conditions import (
     is_binary_condition,
     is_in_condition_pattern,
 )
-from snuba.query.dsl import arrayElement, arrayJoin
+from snuba.query.dsl import arrayJoin, tupleElement
 from snuba.query.expressions import Argument
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
@@ -225,12 +225,12 @@ class ArrayJoinKeyValueOptimizer(QueryProcessor):
 
 
 def _unfiltered_mapping_pairs(
-    alias: Optional[str], column_name: str, pair_alias: str, array_index: LiteralExpr
+    alias: Optional[str], column_name: str, pair_alias: str, tuple_index: LiteralExpr
 ) -> Expression:
     # (arrayJoin(
-    #   arrayMap((x,y) -> [x,y], tags.key, tags.value)
-    #  as all_tags)[1]
-    return arrayElement(
+    #   arrayMap((x,y) -> (x,y), tags.key, tags.value)
+    #  as all_tags).1
+    return tupleElement(
         alias,
         arrayJoin(
             pair_alias,
@@ -239,7 +239,7 @@ def _unfiltered_mapping_pairs(
                 ColumnExpr(None, None, val_column(column_name)),
             ),
         ),
-        array_index,
+        tuple_index,
     )
 
 
@@ -251,10 +251,10 @@ def _filtered_mapping_pairs(
     array_index: LiteralExpr,
 ) -> Expression:
     # (arrayJoin(arrayFilter(
-    #       pair -> arrayElement(pair, 1) IN (tags),
-    #       arrayMap((x,y) -> [x,y], tags.key, tags.value)
-    #  )) as all_tags)[1]
-    return arrayElement(
+    #       pair -> tupleElement(pair, 1) IN (tags),
+    #       arrayMap((x,y) -> (x,y), tags.key, tags.value)
+    #  )) as all_tags).1
+    return tupleElement(
         alias,
         arrayJoin(
             pair_alias,
@@ -295,7 +295,7 @@ def zip_columns(column1: ColumnExpr, column2: ColumnExpr) -> Expression:
                 None,
                 ("x", "y"),
                 FunctionCallExpr(
-                    None, "array", (Argument(None, "x"), Argument(None, "y"),),
+                    None, "tuple", (Argument(None, "x"), Argument(None, "y"),),
                 ),
             ),
             column1,
@@ -320,10 +320,10 @@ def filter_key_values(
                 ("pair",),
                 in_condition(
                     None,
-                    # A pair here is an array with two elements (key
+                    # A pair here is a tuple with two elements (key
                     # and value) and the index of the first element in
                     # Clickhouse is 1 instead of 0.
-                    arrayElement(None, Argument(None, "pair"), LiteralExpr(None, 1),),
+                    tupleElement(None, Argument(None, "pair"), LiteralExpr(None, 1),),
                     keys,
                 ),
             ),
