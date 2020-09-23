@@ -217,8 +217,7 @@ storage = WritableTableStorage(
         replacement_topic="errors-replacements",
     ),
     replacer_processor=ErrorsReplacer(
-        write_schema=schema,
-        read_schema=schema,
+        schema=schema,
         required_columns=required_columns,
         tag_column_map={"tags": promoted_tag_columns, "contexts": {}},
         promoted_tags={"tags": list(promoted_tag_columns.keys()), "contexts": []},
