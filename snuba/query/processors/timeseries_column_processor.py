@@ -17,7 +17,7 @@ class TimeSeriesColumnProcessor(QueryProcessor):
 
     def time_expr(
         self, column_name: str, granularity: int, alias: Optional[str]
-    ) -> str:
+    ) -> FunctionCall:
         function_call = {
             3600: FunctionCall(
                 alias,

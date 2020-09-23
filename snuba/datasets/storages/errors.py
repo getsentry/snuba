@@ -22,7 +22,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.schemas import MandatoryCondition
-from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
+from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.processors.replaced_groups import (
@@ -153,7 +153,7 @@ promoted_tag_columns = {
     "level": "level",
 }
 
-schema = ReplacingMergeTreeSchema(
+schema = WritableTableSchema(
     columns=all_columns,
     local_table_name="errors_local",
     dist_table_name="errors_dist",
@@ -177,19 +177,6 @@ schema = ReplacingMergeTreeSchema(
         "environment",
         "project_id",
     ],
-    order_by="(org_id, project_id, toStartOfDay(timestamp), primary_hash_hex, event_hash)",
-    partition_by="(toMonday(timestamp), if(retention_days = 30, 30, 90))",
-    version_column="deleted",
-    sample_expr="event_hash",
-    ttl_expr="timestamp + toIntervalDay(retention_days)",
-    settings={"index_granularity": "8192"},
-    migration_function=errors_migrations,
-    # Tags hashmap is a materialized column. Clickhouse does not allow
-    # us to create a materialized column that references a nested one
-    # during create statement
-    # (https://github.com/ClickHouse/ClickHouse/issues/12586), so the
-    # materialization is added with a migration.
-    skipped_cols_on_creation={"_tags_hash_map"},
 )
 
 required_columns = [
