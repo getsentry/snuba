@@ -92,15 +92,6 @@ class ErrorsProcessor(EventsProcessorBase):
         # an empty string.
         output["transaction_name"] = tags.get("transaction", "") or ""
 
-    def extract_contexts_custom(
-        self,
-        output: MutableMapping[str, Any],
-        event: InsertEvent,
-        contexts: Mapping[str, Any],
-        metadata: KafkaMessageMetadata,
-    ) -> None:
-        pass
-
     def extract_promoted_contexts(
         self,
         output: MutableMapping[str, Any],

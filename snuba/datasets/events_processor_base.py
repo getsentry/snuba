@@ -108,16 +108,6 @@ class EventsProcessorBase(MessageProcessor, ABC):
     ) -> None:
         raise NotImplementedError
 
-    @abstractmethod
-    def extract_contexts_custom(
-        self,
-        output: MutableMapping[str, Any],
-        event: InsertEvent,
-        contexts: Mapping[str, Any],
-        metadata: KafkaMessageMetadata,
-    ) -> None:
-        raise NotImplementedError
-
     def extract_required(
         self, output: MutableMapping[str, Any], event: InsertEvent,
     ) -> None:
@@ -207,7 +197,6 @@ class EventsProcessorBase(MessageProcessor, ABC):
 
         contexts = data.get("contexts", None) or {}
         self.extract_promoted_contexts(processed, contexts, tags)
-        self.extract_contexts_custom(processed, event, contexts, metadata)
 
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             contexts
