@@ -14,6 +14,7 @@ from snuba.clickhouse.columns import (
     IPv4,
     IPv6,
     Nullable,
+    NullableOld,
     String,
     UInt,
 )
@@ -111,7 +112,10 @@ class Column(ParamType):
             return
 
         column_type = column.type.get_raw()
-        nullable = Nullable in column.type.get_all_modifiers()
+        nullable = NullableOld in column.type.get_all_modifiers() or isinstance(
+            column.type, Nullable
+        )
+
         if not isinstance(column_type, tuple(self.__valid_types)) or (
             nullable and not self.__allow_nullable
         ):
