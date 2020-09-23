@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Sequence
 
 from snuba.clickhouse.columns import (
@@ -150,6 +151,14 @@ class Migration(migration.MultiStepMigration):
         ]
 
     def forwards_dist(self) -> Sequence[operations.Operation]:
+        def strip_materialized(columns: Sequence[Column]) -> None:
+            for col in columns:
+                if isinstance(col.type, Materialized):
+                    col.type = col.type.inner_type
+
+        dist_columns = deepcopy(columns)
+        strip_materialized(dist_columns)
+
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.EVENTS,
