@@ -176,6 +176,12 @@ class Migration(migration.MultiStepMigration):
                     local_table_name="errors_local", sharding_key=sample_expr,
                 ),
             ),
+            operations.AddColumn(
+                storage_set=StorageSetKey.EVENTS,
+                table_name="errors_dist_new",
+                column=Column("_tags_hash_map", Array(UInt(64)),),
+                after="tags",
+            ),
             operations.DropTable(
                 storage_set=StorageSetKey.EVENTS, table_name="errors_dist",
             ),
