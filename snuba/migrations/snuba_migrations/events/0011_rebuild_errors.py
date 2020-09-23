@@ -42,6 +42,7 @@ columns = [
     Column("http_method", LowCardinality(Nullable(String()))),
     Column("http_referer", Nullable(String())),
     Column("tags", Nested([("key", String()), ("value", String())])),
+    Column("_tags_hash_map", Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN),),
     Column("contexts", Nested([("key", String()), ("value", String())])),
     Column("transaction_name", WithDefault(LowCardinality(String()), "''")),
     Column("transaction_hash", Materialized(UInt(64), "cityHash64(transaction_name)"),),
@@ -130,15 +131,6 @@ class Migration(migration.MultiStepMigration):
                     ttl="timestamp + toIntervalDay(retention_days)",
                     settings={"index_granularity": "8192"},
                 ),
-            ),
-            operations.AddColumn(
-                storage_set=StorageSetKey.EVENTS,
-                table_name="errors_local_new",
-                column=Column(
-                    "_tags_hash_map",
-                    Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN),
-                ),
-                after="tags",
             ),
             operations.DropTable(
                 storage_set=StorageSetKey.EVENTS, table_name="errors_local",
