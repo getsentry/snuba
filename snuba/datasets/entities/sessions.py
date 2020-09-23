@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any, Mapping, Sequence, Tuple, Union
+from typing import Any, Mapping, Sequence, Union
 
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToCurriedFunction,
@@ -17,10 +17,9 @@ from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
+from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
-from snuba.util import parse_datetime
 
 
 def function_rule(col_name: str, function_name: str) -> ColumnToFunction:
@@ -85,7 +84,7 @@ class SessionsEntity(Entity):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
-            TimeSeriesColumnProcessor(self.__time_group_columns),
+            TimeSeriesProcessor(self.__time_group_columns, self.__time_parse_columns),
         ]
 
     # Seems like this could be removed in favour of the storage translators.
@@ -113,18 +112,3 @@ class SessionsEntity(Entity):
         if func is not None:
             return "{}({})".format(func, full_col)
         return full_col
-
-    # TODO: This needs to burned with fire, for so many reasons.
-    # It's here now to reduce the scope of the initial entity changes
-    # but can be moved to a processor if not removed entirely.
-    def process_condition(
-        self, condition: Tuple[str, str, Any]
-    ) -> Tuple[str, str, Any]:
-        lhs, op, lit = condition
-        if (
-            lhs in self.__time_parse_columns
-            and op in (">", "<", ">=", "<=", "=", "!=")
-            and isinstance(lit, str)
-        ):
-            lit = parse_datetime(lit)
-        return lhs, op, lit

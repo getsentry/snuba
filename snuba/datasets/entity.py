@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Mapping, Optional, Sequence, Union
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
@@ -94,13 +94,3 @@ class Entity(ABC):
         that evaluate to something else.
         """
         return escape_identifier(qualified_column(column_name, table_alias))
-
-    def process_condition(
-        self, condition: Tuple[str, str, Any]
-    ) -> Tuple[str, str, Any]:
-        """
-        Return a processed condition tuple.
-        This enables a dataset to do any parsing/transformations
-        a condition before it is added to the query.
-        """
-        return condition

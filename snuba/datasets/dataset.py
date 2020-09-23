@@ -1,4 +1,4 @@
-from typing import Any, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Mapping, Optional, Sequence, Union
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entity import Entity
@@ -88,11 +88,6 @@ class Dataset(object):
 
     # TODO: The following functions are shims to the Entity. They need to be evaluated one by one
     # to see which ones should exist at which level.
-    def process_condition(
-        self, condition: Tuple[str, str, Any]
-    ) -> Tuple[str, str, Any]:
-        return self.__default_entity.process_condition(condition)
-
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return self.__default_entity.get_extensions()
 

@@ -75,7 +75,7 @@ def parse_conditions(
         return and_builder([s for s in sub.keys() if s])
     elif is_condition(conditions):
         try:
-            lhs, op, lit = dataset.process_condition(conditions)
+            lhs, op, lit = conditions
         except Exception as cause:
             raise ParsingException(
                 f"Cannot process condition {conditions}", cause
