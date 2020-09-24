@@ -124,18 +124,17 @@ def get_projects_query_flags(
 class ErrorsReplacer(ReplacerProcessor):
     def __init__(
         self,
-        write_schema: WritableTableSchema,
-        read_schema: TableSchema,
+        schema: WritableTableSchema,
         required_columns: Sequence[str],
         tag_column_map: Mapping[str, Mapping[str, str]],
         promoted_tags: Mapping[str, Sequence[str]],
         state_name: ReplacerState,
     ) -> None:
-        super().__init__(write_schema=write_schema, read_schema=read_schema)
+        super().__init__(schema=schema)
         self.__required_columns = required_columns
         self.__all_column_names = [
             col.escaped
-            for col in write_schema.get_columns()
+            for col in schema.get_columns()
             if Materialized not in col.type.get_all_modifiers()
         ]
         self.__tag_column_map = tag_column_map
@@ -161,10 +160,7 @@ class ErrorsReplacer(ReplacerProcessor):
             processed = process_unmerge(event, self.__all_column_names)
         elif type_ == "end_delete_tag":
             processed = process_delete_tag(
-                event,
-                self.get_write_schema(),
-                self.__tag_column_map,
-                self.__promoted_tags,
+                event, self.get_schema(), self.__tag_column_map, self.__promoted_tags,
             )
         else:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
@@ -218,16 +214,16 @@ def process_delete_groups(
     count_query_template = (
         """\
         SELECT count()
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + where
     )
 
     insert_query_template = (
         """\
-        INSERT INTO %(dist_write_table_name)s (%(required_columns)s)
+        INSERT INTO %(table_name)s (%(required_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + where
     )
@@ -283,16 +279,16 @@ def process_merge(
     count_query_template = (
         """\
         SELECT count()
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + where
     )
 
     insert_query_template = (
         """\
-        INSERT INTO %(dist_write_table_name)s (%(all_columns)s)
+        INSERT INTO %(table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + where
     )
@@ -337,16 +333,16 @@ def process_unmerge(
     count_query_template = (
         """\
         SELECT count()
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + where
     )
 
     insert_query_template = (
         """\
-        INSERT INTO %(dist_write_table_name)s (%(all_columns)s)
+        INSERT INTO %(table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + where
     )
@@ -424,9 +420,9 @@ def process_delete_tag(
 
     insert_query_template = (
         """\
-        INSERT INTO %(dist_write_table_name)s (%(all_columns)s)
+        INSERT INTO %(table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + prewhere
         + where
@@ -469,7 +465,7 @@ def process_delete_tag(
     count_query_template = (
         """\
         SELECT count()
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + prewhere
         + where
