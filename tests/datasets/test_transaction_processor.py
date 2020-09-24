@@ -104,6 +104,7 @@ class TransactionEvent:
                     "measurements": {
                         "lcp": {"value": 32.129},
                         "lcp.elementSize": {"value": 4242},
+                        "fid": {"value": None},
                     },
                     "contexts": {
                         "trace": {
