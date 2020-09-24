@@ -235,20 +235,17 @@ VALUE_COL_MAPPING_PARAM = "value_column"
 KEY_COL_MAPPING_PARAM = "key_column"
 KEY_MAPPING_PARAM = "key"
 mapping_pattern = FunctionCall(
-    None,
     String("arrayElement"),
     (
         Column(
-            None,
             Param(TABLE_MAPPING_PARAM, AnyOptionalString()),
             Param(VALUE_COL_MAPPING_PARAM, Any(str)),
         ),
         FunctionCall(
-            None,
             String("indexOf"),
             (
-                Column(None, None, Param(KEY_COL_MAPPING_PARAM, Any(str))),
-                Literal(None, Param(KEY_MAPPING_PARAM, Any(str))),
+                Column(None, Param(KEY_COL_MAPPING_PARAM, Any(str))),
+                Literal(Param(KEY_MAPPING_PARAM, Any(str))),
             ),
         ),
     ),
