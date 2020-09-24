@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any, FrozenSet, Mapping, Sequence, Tuple, Union
+from typing import Any, FrozenSet, Mapping, Sequence, Tuple
 
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToFunction,
@@ -16,8 +16,6 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
-from snuba.query.logical import Query
-from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.performance_expressions import (
     apdex_processor,
@@ -122,53 +120,6 @@ class TransactionsEntity(Entity):
                 timestamp_column="finish_ts",
             ),
         }
-
-    def column_expr(
-        self,
-        column_name: str,
-        query: Query,
-        parsing_context: ParsingContext,
-        table_alias: str = "",
-    ) -> Union[None, Any]:
-        if column_name == "ip_address":
-            return "coalesce(IPv4NumToString(ip_address_v4), IPv6NumToString(ip_address_v6))"
-        if column_name == "event_id":
-            return "replaceAll(toString(event_id), '-', '')"
-
-        # These column aliases originally existed in the ``discover`` dataset,
-        # but now live here to maintain compatibility between the composite
-        # ``discover`` dataset and the standalone ``transaction`` dataset. In
-        # the future, these aliases should be defined on the Transaction entity
-        # instead of the dataset.
-        if column_name == "type":
-            return "'transaction'"
-        if column_name == "timestamp":
-            return "finish_ts"
-        if column_name == "username":
-            return "user_name"
-        if column_name == "email":
-            return "user_email"
-        if column_name == "transaction":
-            return "transaction_name"
-        if column_name == "message":
-            return "transaction_name"
-        if column_name == "title":
-            return "transaction_name"
-
-        if column_name == "geo_country_code":
-            column_name = "contexts[geo.country_code]"
-        if column_name == "geo_region":
-            column_name = "contexts[geo.region]"
-        if column_name == "geo_city":
-            column_name = "contexts[geo.city]"
-
-        processed_column = self.__tags_processor.process_column_expression(
-            column_name, query, parsing_context, table_alias
-        )
-        if processed_column:
-            # If processed_column is None, this was not a tag/context expression
-            return processed_column
-        return super().column_expr(column_name, query, parsing_context)
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
