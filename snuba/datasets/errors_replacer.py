@@ -1,5 +1,6 @@
 import logging
 import time
+import uuid
 
 from collections import deque
 from datetime import datetime
@@ -158,7 +159,9 @@ class ErrorsReplacer(ReplacerProcessor):
         elif type_ == "end_merge":
             processed = process_merge(event, self.__all_column_names)
         elif type_ == "end_unmerge":
-            processed = process_unmerge(event, self.__all_column_names)
+            processed = process_unmerge(
+                event, self.__all_column_names, self.__state_name
+            )
         elif type_ == "end_delete_tag":
             processed = process_delete_tag(
                 event,
@@ -313,13 +316,16 @@ def process_merge(
 
 
 def process_unmerge(
-    message: Mapping[str, Any], all_column_names: Sequence[str]
+    message: Mapping[str, Any],
+    all_column_names: Sequence[str],
+    state_name: ReplacerState,
 ) -> Optional[Replacement]:
     hashes = message["hashes"]
     if not hashes:
         return None
 
     assert all(isinstance(h, str) for h in hashes)
+
     timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
     select_columns = map(
         lambda i: i if i != "group_id" else str(message["new_group_id"]),
@@ -356,9 +362,15 @@ def process_unmerge(
         "select_columns": ", ".join(select_columns),
         "previous_group_id": message["previous_group_id"],
         "project_id": message["project_id"],
-        "hashes": ", ".join("'%s'" % _hashify(h) for h in hashes),
         "timestamp": timestamp.strftime(DATETIME_FORMAT),
     }
+
+    if state_name == ReplacerState.ERRORS:
+        query_args["hashes"] = ", ".join(
+            ["'%s'" % str(uuid.UUID(_hashify(h))) for h in hashes]
+        )
+    else:
+        query_args["hashes"] = ", ".join("'%s'" % _hashify(h) for h in hashes)
 
     query_time_flags = (NEEDS_FINAL, message["project_id"])
 
