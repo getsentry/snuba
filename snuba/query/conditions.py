@@ -77,11 +77,10 @@ def __set_condition_pattern(
     lhs: Pattern[Expression], operator: str
 ) -> FunctionCallPattern:
     return FunctionCallPattern(
-        None,
         String(operator),
         (
             Param("lhs", lhs),
-            Param("tuple", FunctionCallPattern(None, String("tuple"), None)),
+            Param("tuple", FunctionCallPattern(String("tuple"), None)),
         ),
     )
 
@@ -106,7 +105,7 @@ def __is_set_condition(exp: Expression, operator: str) -> bool:
 def in_condition(
     alias: Optional[str], lhs: Expression, rhs: Sequence[Literal],
 ) -> Expression:
-    return __set_condition(alias, ConditionFunctions.IN, lhs, rhs,)
+    return __set_condition(alias, ConditionFunctions.IN, lhs, rhs)
 
 
 def is_in_condition(exp: Expression) -> bool:
@@ -138,7 +137,7 @@ def binary_condition(
 
 
 binary_condition_patterns = {
-    op: FunctionCallPattern(None, String(op), (AnyExpression(), AnyExpression()))
+    op: FunctionCallPattern(String(op), (AnyExpression(), AnyExpression()))
     for op in BINARY_OPERATORS
 }
 
@@ -157,8 +156,7 @@ def unary_condition(
 
 
 unary_condition_patterns = {
-    op: FunctionCallPattern(None, String(op), (AnyExpression(),))
-    for op in UNARY_OPERATORS
+    op: FunctionCallPattern(String(op), (AnyExpression(),)) for op in UNARY_OPERATORS
 }
 
 
@@ -226,12 +224,11 @@ def _combine_conditions(conditions: Sequence[Expression], function: str) -> Expr
 CONDITION_MATCH = Or(
     [
         FunctionCallPattern(
-            None,
             Or([String(op) for op in BINARY_OPERATORS]),
             (AnyExpression(), AnyExpression()),
         ),
         FunctionCallPattern(
-            None, Or([String(op) for op in UNARY_OPERATORS]), (AnyExpression(),)
+            Or([String(op) for op in UNARY_OPERATORS]), (AnyExpression(),)
         ),
     ]
 )

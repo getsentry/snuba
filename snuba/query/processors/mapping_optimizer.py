@@ -69,20 +69,18 @@ class MappingOptimizer(QueryProcessor):
 
         # TODO: Add the support for IN connditions.
         self.__optimizable_pattern = FunctionCall(
-            alias=None,
             function_name=String("equals"),
             parameters=(
                 Or(
                     [
                         mapping_pattern,
                         FunctionCall(
-                            alias=None,
                             function_name=String("ifNull"),
-                            parameters=(mapping_pattern, Literal(None, String(""))),
+                            parameters=(mapping_pattern, Literal(String(""))),
                         ),
                     ]
                 ),
-                Param("right_hand_side", Literal(None, Any(str))),
+                Param("right_hand_side", Literal(Any(str))),
             ),
         )
 

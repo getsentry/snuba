@@ -156,9 +156,9 @@ def test_in_condition() -> None:
     )
     assert is_in_condition(in_condition)
 
-    match = is_in_condition_pattern(
-        ColumnPattern(None, None, String("tags_key"))
-    ).match(in_condition)
+    match = is_in_condition_pattern(ColumnPattern(None, String("tags_key"))).match(
+        in_condition
+    )
     assert match is not None
     assert match.expression("tuple") == literals_tuple(
         None, [Literal(None, "t1"), Literal(None, "t2")]
@@ -175,9 +175,9 @@ def test_not_in_condition() -> None:
     )
     assert is_not_in_condition(not_in_condition)
 
-    match = is_not_in_condition_pattern(
-        ColumnPattern(None, None, String("tags_key"))
-    ).match(not_in_condition)
+    match = is_not_in_condition_pattern(ColumnPattern(None, String("tags_key"))).match(
+        not_in_condition
+    )
     assert match is not None
     assert match.expression("tuple") == literals_tuple(
         None, [Literal(None, "t1"), Literal(None, "t2")]

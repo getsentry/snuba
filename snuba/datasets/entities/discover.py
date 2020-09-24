@@ -75,15 +75,9 @@ metrics = MetricsWrapper(environment.metrics, "api.discover")
 logger = logging.getLogger(__name__)
 
 EVENT_CONDITION = FunctionCallMatch(
-    None,
     Param("function", Or([StringMatch(op) for op in BINARY_OPERATORS])),
     (
-        Or(
-            [
-                ColumnMatch(None, None, StringMatch("type")),
-                LiteralMatch(StringMatch("type"), None),
-            ]
-        ),
+        Or([ColumnMatch(None, StringMatch("type")), LiteralMatch(None)]),
         Param("event_type", Or([ColumnMatch(), LiteralMatch()])),
     ),
 )
