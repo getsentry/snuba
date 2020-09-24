@@ -167,6 +167,7 @@ class ConsumerBuilder:
             consumer,
             self.raw_topic,
             strategy_factory,
+            metrics=self.metrics,
             recoverable_errors=[TransportError],
         )
 
