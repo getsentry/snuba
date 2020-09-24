@@ -11,6 +11,9 @@ from snuba.datasets.cdc.groupassignee_processor import (
     GroupAssigneeRow,
 )
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
+from snuba.datasets.cdc.types import BeginEvent, CommitEvent, DeleteEvent
+from snuba.datasets.cdc.types import Event as CDCEvent
+from snuba.datasets.cdc.types import InsertEvent, UpdateEvent
 from snuba.datasets.storages.groupassignees import POSTGRES_TABLE
 from snuba.processor import InsertBatch
 from snuba.utils.streams import Message, Partition, Topic
@@ -24,32 +27,116 @@ class TestGroupassignee(BaseDatasetTest):
             test_method, "groupassignee",
         )
 
-    BEGIN_MSG = '{"event":"begin","xid":2380836}'
-    COMMIT_MSG = '{"event":"commit"}'
-    UPDATE_MSG_NO_KEY_CHANGE = (
-        '{"event":"change","xid":3803891,"timestamp":"2019-09-19 00:06:56.376853+00","kind":"update","schema":"public","table":'
-        '"sentry_groupasignee","columnnames":["id","project_id","group_id","user_id","date_added","team_id"],"columntypes":["bigint",'
-        '"bigint","bigint","integer","timestamp with time zone","bigint"],"columnvalues":[35,2,1359,1,"2019-09-19 00:17:55+00"'
-        ',null],"oldkeys":{"keynames":["project_id", "group_id"],"keytypes":["bigint", "bigint"],"keyvalues":[2, 1359]}}'
+    BEGIN_MSG = BeginEvent({"event": "begin", "xid": 2380836})
+    COMMIT_MSG = CommitEvent({"event": "commit"})
+
+    UPDATE_MSG_NO_KEY_CHANGE = UpdateEvent(
+        {
+            "columnnames": [
+                "id",
+                "project_id",
+                "group_id",
+                "user_id",
+                "date_added",
+                "team_id",
+            ],
+            "columntypes": [
+                "bigint",
+                "bigint",
+                "bigint",
+                "integer",
+                "timestamp with time zone",
+                "bigint",
+            ],
+            "columnvalues": [35, 2, 1359, 1, "2019-09-19 00:17:55+00", None],
+            "event": "change",
+            "kind": "update",
+            "oldkeys": {
+                "keynames": ["project_id", "group_id"],
+                "keytypes": ["bigint", "bigint"],
+                "keyvalues": [2, 1359],
+            },
+            "schema": "public",
+            "table": "sentry_groupasignee",
+            "timestamp": "2019-09-19 00:06:56.376853+00",
+            "xid": 3803891,
+        }
+    )
+    UPDATE_MSG_WITH_KEY_CHANGE = UpdateEvent(
+        {
+            "columnnames": [
+                "id",
+                "project_id",
+                "group_id",
+                "user_id",
+                "date_added",
+                "team_id",
+            ],
+            "columntypes": [
+                "bigint",
+                "bigint",
+                "bigint",
+                "integer",
+                "timestamp with time zone",
+                "bigint",
+            ],
+            "columnvalues": [35, 3, 1359, 1, "2019-09-19 00:17:55+00", None],
+            "event": "change",
+            "kind": "update",
+            "oldkeys": {
+                "keynames": ["project_id", "group_id"],
+                "keytypes": ["bigint", "bigint"],
+                "keyvalues": [2, 1359],
+            },
+            "schema": "public",
+            "table": "sentry_groupasignee",
+            "timestamp": "2019-09-19 00:06:56.376853+00",
+            "xid": 3803891,
+        }
     )
 
-    UPDATE_MSG_WITH_KEY_CHANGE = (
-        '{"event":"change","xid":3803891,"timestamp":"2019-09-19 00:06:56.376853+00","kind":"update","schema":"public","table":'
-        '"sentry_groupasignee","columnnames":["id","project_id","group_id","user_id","date_added","team_id"],"columntypes":["bigint",'
-        '"bigint","bigint","integer","timestamp with time zone","bigint"],"columnvalues":[35,3,1359,1,"2019-09-19 00:17:55+00"'
-        ',null],"oldkeys":{"keynames":["project_id", "group_id"],"keytypes":["bigint", "bigint"],"keyvalues":[2, 1359]}}'
+    DELETE_MSG = DeleteEvent(
+        {
+            "event": "change",
+            "kind": "delete",
+            "oldkeys": {
+                "keynames": ["project_id", "group_id"],
+                "keytypes": ["bigint", "bigint"],
+                "keyvalues": [2, 1359],
+            },
+            "schema": "public",
+            "table": "sentry_groupasignee",
+            "timestamp": "2019-09-19 00:17:21.44787+00",
+            "xid": 3803954,
+        }
     )
 
-    DELETE_MSG = (
-        '{"event":"change","xid":3803954,"timestamp":"2019-09-19 00:17:21.44787+00","kind":"delete","schema":"public","table":"sent'
-        'ry_groupasignee","oldkeys":{"keynames":["project_id", "group_id"],"keytypes":["bigint", "bigint"],"keyvalues":[2, 1359]}}'
-    )
-
-    INSERT_MSG = (
-        '{"event":"change","xid":3803982,"timestamp":"2019-09-19 00:17:55.032443+00","kind":"insert","schema":"public","table":"sen'
-        'try_groupasignee","columnnames":["id","project_id","group_id","user_id","date_added","team_id"],"columntypes":["bigint","b'
-        'igint","bigint","integer","timestamp with time zone","bigint"],"columnvalues":[35,2,1359,1,"2019-09-19 00:17:55+00"'
-        ",null]}"
+    INSERT_MSG = InsertEvent(
+        {
+            "columnnames": [
+                "id",
+                "project_id",
+                "group_id",
+                "user_id",
+                "date_added",
+                "team_id",
+            ],
+            "columntypes": [
+                "bigint",
+                "bigint",
+                "bigint",
+                "integer",
+                "timestamp with time zone",
+                "bigint",
+            ],
+            "columnvalues": [35, 2, 1359, 1, "2019-09-19 00:17:55+00", None],
+            "event": "change",
+            "kind": "insert",
+            "schema": "public",
+            "table": "sentry_groupasignee",
+            "timestamp": "2019-09-19 00:17:55.032443+00",
+            "xid": 3803982,
+        }
     )
 
     PROCESSED = {
@@ -83,16 +170,16 @@ class TestGroupassignee(BaseDatasetTest):
     }
 
     def __make_msg(
-        self, partition: int, offset: int, payload: str, headers: Headers
+        self, partition: int, offset: int, payload: CDCEvent, headers: Headers
     ) -> Message[KafkaPayload]:
         return Message(
             partition=Partition(Topic("topic"), partition),
             offset=offset,
-            payload=KafkaPayload(b"key", payload.encode(), headers),
+            payload=KafkaPayload(b"key", json.dumps(payload).encode(), headers),
             timestamp=datetime(2019, 6, 19, 6, 46, 28),
         )
 
-    def test_messages(self):
+    def test_messages(self) -> None:
         processor = GroupAssigneeProcessor("sentry_groupasignee")
         message_filter = CdcTableNameMessageFilter(postgres_table=POSTGRES_TABLE)
 
@@ -109,8 +196,8 @@ class TestGroupassignee(BaseDatasetTest):
                 0, 42, self.INSERT_MSG, [("table", POSTGRES_TABLE.encode())]
             )
         )
-        insert_msg = json.loads(self.INSERT_MSG)
-        ret = processor.process_message(insert_msg, metadata)
+
+        ret = processor.process_message(self.INSERT_MSG, metadata)
         assert ret == InsertBatch([self.PROCESSED])
         self.write_processed_messages([ret])
         ret = (
@@ -136,8 +223,7 @@ class TestGroupassignee(BaseDatasetTest):
                 [("table", POSTGRES_TABLE.encode())],
             )
         )
-        update_msg = json.loads(self.UPDATE_MSG_NO_KEY_CHANGE)
-        ret = processor.process_message(update_msg, metadata)
+        ret = processor.process_message(self.UPDATE_MSG_NO_KEY_CHANGE, metadata)
         assert ret == InsertBatch([self.PROCESSED])
 
         # Tests an update with key change which becomes a two inserts:
@@ -150,8 +236,7 @@ class TestGroupassignee(BaseDatasetTest):
                 [("table", POSTGRES_TABLE.encode())],
             )
         )
-        update_msg = json.loads(self.UPDATE_MSG_WITH_KEY_CHANGE)
-        ret = processor.process_message(update_msg, metadata)
+        ret = processor.process_message(self.UPDATE_MSG_WITH_KEY_CHANGE, metadata)
         assert ret == InsertBatch([self.DELETED, self.PROCESSED_UPDATE])
 
         assert not message_filter.should_drop(
@@ -159,11 +244,10 @@ class TestGroupassignee(BaseDatasetTest):
                 0, 42, self.DELETE_MSG, [("table", POSTGRES_TABLE.encode())],
             )
         )
-        delete_msg = json.loads(self.DELETE_MSG)
-        ret = processor.process_message(delete_msg, metadata)
+        ret = processor.process_message(self.DELETE_MSG, metadata)
         assert ret == InsertBatch([self.DELETED])
 
-    def test_bulk_load(self):
+    def test_bulk_load(self) -> None:
         row = GroupAssigneeRow.from_bulk(
             {
                 "project_id": "2",
