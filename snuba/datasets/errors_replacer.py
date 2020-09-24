@@ -10,7 +10,7 @@ from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.columns import FlattenedColumn, ReadOnly
 from snuba.clickhouse.escaping import escape_identifier, escape_string
-from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
+from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import InvalidMessageType, _hashify
 from snuba.redis import redis_client
 from snuba.replacers.replacer_processor import (
@@ -124,19 +124,16 @@ def get_projects_query_flags(
 class ErrorsReplacer(ReplacerProcessor):
     def __init__(
         self,
-        write_schema: WritableTableSchema,
-        read_schema: TableSchema,
+        schema: WritableTableSchema,
         required_columns: Sequence[str],
         tag_column_map: Mapping[str, Mapping[str, str]],
         promoted_tags: Mapping[str, Sequence[str]],
         state_name: ReplacerState,
     ) -> None:
-        super().__init__(write_schema=write_schema, read_schema=read_schema)
+        super().__init__(schema=schema)
         self.__required_columns = required_columns
         self.__all_columns = [
-            col
-            for col in write_schema.get_columns()
-            if not isinstance(col.type, ReadOnly)
+            col for col in schema.get_columns() if not isinstance(col.type, ReadOnly)
         ]
 
         self.__tag_column_map = tag_column_map
@@ -216,16 +213,16 @@ def process_delete_groups(
     count_query_template = (
         """\
         SELECT count()
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + where
     )
 
     insert_query_template = (
         """\
-        INSERT INTO %(dist_write_table_name)s (%(required_columns)s)
+        INSERT INTO %(table_name)s (%(required_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + where
     )
@@ -282,16 +279,16 @@ def process_merge(
     count_query_template = (
         """\
         SELECT count()
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + where
     )
 
     insert_query_template = (
         """\
-        INSERT INTO %(dist_write_table_name)s (%(all_columns)s)
+        INSERT INTO %(table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + where
     )
@@ -337,16 +334,16 @@ def process_unmerge(
     count_query_template = (
         """\
         SELECT count()
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + where
     )
 
     insert_query_template = (
         """\
-        INSERT INTO %(dist_write_table_name)s (%(all_columns)s)
+        INSERT INTO %(table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + where
     )
@@ -424,9 +421,9 @@ def process_delete_tag(
 
     insert_query_template = (
         """\
-        INSERT INTO %(dist_write_table_name)s (%(all_columns)s)
+        INSERT INTO %(table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + prewhere
         + where
@@ -464,7 +461,7 @@ def process_delete_tag(
     count_query_template = (
         """\
         SELECT count()
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + prewhere
         + where

@@ -50,8 +50,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         for replacement in batch:
             query_args = {
                 **replacement.query_args,
-                "dist_read_table_name": self.__replacer_processor.get_read_schema().get_table_name(),
-                "dist_write_table_name": self.__replacer_processor.get_write_schema().get_table_name(),
+                "table_name": self.__replacer_processor.get_schema().get_table_name(),
             }
             count = self.clickhouse.execute_robust(
                 replacement.count_query_template % query_args
