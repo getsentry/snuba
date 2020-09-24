@@ -1,10 +1,7 @@
-from typing import Mapping, Sequence
-
 from snuba.clickhouse.columns import (
     UUID,
     Array,
     ColumnSet,
-    ColumnType,
     DateTime,
     FixedString,
     IPv4,
@@ -22,7 +19,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.schemas import MandatoryCondition
-from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
+from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.processors.replaced_groups import (
@@ -37,37 +34,6 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 )
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
-
-
-def errors_migrations(
-    clickhouse_table: str, current_schema: Mapping[str, ColumnType]
-) -> Sequence[str]:
-    ret = []
-
-    if "message_timestamp" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN message_timestamp DateTime AFTER offset"
-        )
-
-    if "_tags_hash_map" not in current_schema:
-        ret.append(
-            (
-                f"ALTER TABLE {clickhouse_table} ADD COLUMN _tags_hash_map Array(UInt64) "
-                f"MATERIALIZED {TAGS_HASH_MAP_COLUMN} AFTER _tags_flattened"
-            )
-        )
-
-    if "http_method" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_method LowCardinality(Nullable(String)) AFTER sdk_version"
-        )
-
-    if "http_referer" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_referer Nullable(String) AFTER http_method"
-        )
-
-    return ret
 
 
 all_columns = ColumnSet(
@@ -164,7 +130,7 @@ promoted_tag_columns = {
     "level": "level",
 }
 
-schema = ReplacingMergeTreeSchema(
+schema = WritableTableSchema(
     columns=all_columns,
     local_table_name="errors_local",
     dist_table_name="errors_dist",
@@ -188,23 +154,9 @@ schema = ReplacingMergeTreeSchema(
         "environment",
         "project_id",
     ],
-    order_by="(org_id, project_id, toStartOfDay(timestamp), primary_hash_hex, event_hash)",
-    partition_by="(toMonday(timestamp), if(retention_days = 30, 30, 90))",
-    version_column="deleted",
-    sample_expr="event_hash",
-    ttl_expr="timestamp + toIntervalDay(retention_days)",
-    settings={"index_granularity": "8192"},
-    migration_function=errors_migrations,
-    # Tags hashmap is a materialized column. Clickhouse does not allow
-    # us to create a materialized column that references a nested one
-    # during create statement
-    # (https://github.com/ClickHouse/ClickHouse/issues/12586), so the
-    # materialization is added with a migration.
-    skipped_cols_on_creation={"_tags_hash_map"},
 )
 
 required_columns = [
-    "org_id",
     "event_id",
     "project_id",
     "group_id",

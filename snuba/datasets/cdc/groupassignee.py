@@ -1,11 +1,6 @@
-from typing import Sequence
-
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_cdc_storage
-from snuba.query.processors import QueryProcessor
-from snuba.query.processors.basic_functions import BasicFunctionsProcessor
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import get_entity
 
 
 class GroupAssigneeDataset(Dataset):
@@ -18,17 +13,5 @@ class GroupAssigneeDataset(Dataset):
     """
 
     def __init__(self) -> None:
-        storage = get_cdc_storage(StorageKey.GROUPASSIGNEES)
-        schema = storage.get_table_writer().get_schema()
-
-        super().__init__(
-            storages=[storage],
-            query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
-            abstract_column_set=schema.get_columns(),
-            writable_storage=storage,
-        )
-
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return [
-            BasicFunctionsProcessor(),
-        ]
+        groupassignees_entity = get_entity(EntityKey.GROUPASSIGNEE)
+        super().__init__(default_entity=groupassignees_entity)

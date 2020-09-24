@@ -46,7 +46,7 @@ class Any(ParamType):
 
 
 COLUMN_PATTERN = ColumnMatcher(
-    alias=None, table_name=None, column_name=Param("column_name", AnyMatcher(str)),
+    table_name=None, column_name=Param("column_name", AnyMatcher(str)),
 )
 
 LITERAL_PATTERN = LiteralMatcher()
