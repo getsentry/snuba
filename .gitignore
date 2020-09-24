@@ -7,4 +7,3 @@
 .venv
 htmlcov/
 snuba.egg-info/
-schemas/
