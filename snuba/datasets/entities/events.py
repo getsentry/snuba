@@ -12,12 +12,7 @@ from snuba.datasets.storage import (
     StorageAndMappers,
 )
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.events_common import (
-    get_column_tag_map,
-    get_promoted_columns,
-)
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
-from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
@@ -85,12 +80,6 @@ class EventsEntity(Entity):
             ),
             abstract_column_set=columns,
             writable_storage=storage,
-        )
-
-        self.__tags_processor = TagColumnProcessor(
-            columns=columns,
-            promoted_columns=get_promoted_columns(),
-            column_tag_map=get_column_tag_map(),
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

@@ -8,7 +8,6 @@ from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors import promoted_tag_columns
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
@@ -51,12 +50,6 @@ class ErrorsEntity(Entity):
             ),
             abstract_column_set=columns,
             writable_storage=storage,
-        )
-
-        self.__tags_processor = TagColumnProcessor(
-            columns=columns,
-            promoted_columns=self._get_promoted_columns(),
-            column_tag_map=self._get_column_tag_map(),
         )
 
     def _get_promoted_columns(self) -> Mapping[str, FrozenSet[str]]:

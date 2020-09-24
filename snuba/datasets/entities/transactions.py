@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any, FrozenSet, Mapping, Sequence, Tuple
+from typing import Any, Mapping, Sequence, Tuple
 
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToFunction,
@@ -13,7 +13,6 @@ from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
@@ -77,13 +76,7 @@ class TransactionsEntity(Entity):
     def __init__(self) -> None:
         storage = get_writable_storage(StorageKey.TRANSACTIONS)
         schema = storage.get_table_writer().get_schema()
-        columns = schema.get_columns()
 
-        self.__tags_processor = TagColumnProcessor(
-            columns=columns,
-            promoted_columns=self._get_promoted_columns(),
-            column_tag_map=self._get_column_tag_map(),
-        )
         self.__time_group_columns = {
             "time": "finish_ts",
         }
@@ -96,20 +89,6 @@ class TransactionsEntity(Entity):
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,
         )
-
-    def _get_promoted_columns(self) -> Mapping[str, FrozenSet[str]]:
-        # TODO: Support promoted tags
-        return {
-            "tags": frozenset(),
-            "contexts": frozenset(),
-        }
-
-    def _get_column_tag_map(self) -> Mapping[str, Mapping[str, str]]:
-        # TODO: Support promoted tags
-        return {
-            "tags": {},
-            "contexts": {},
-        }
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
