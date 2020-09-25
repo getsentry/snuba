@@ -2,7 +2,7 @@ from snuba.clickhouse.columns import (
     Array,
     ColumnSet,
     Materialized,
-    Nullable,
+    NullableOld as Nullable,
     String,
     WithCodecs,
     WithDefault,

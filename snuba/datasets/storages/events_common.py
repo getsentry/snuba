@@ -9,7 +9,8 @@ from snuba.clickhouse.columns import (
     Float,
     Materialized,
     Nested,
-    Nullable,
+    NullableOld as Nullable,
+    ReadOnly,
     String,
     UInt,
 )
@@ -137,7 +138,10 @@ all_columns = (
         # other tags
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
-        ("_tags_hash_map", Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN)),
+        (
+            "_tags_hash_map",
+            ReadOnly(Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN)),
+        ),
         # other context
         ("contexts", Nested([("key", String()), ("value", String())])),
         # http interface

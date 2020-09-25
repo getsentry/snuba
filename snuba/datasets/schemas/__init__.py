@@ -3,7 +3,12 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Mapping, NamedTuple, Sequence
 
-from snuba.clickhouse.columns import ColumnSet, ColumnType
+from snuba.clickhouse.columns import (
+    ColumnSet,
+    ColumnType,
+    ColumnTypeWithModifier,
+    ReadOnly,
+)
 from snuba.query.expressions import FunctionCall
 from snuba.query.types import Condition
 
@@ -116,10 +121,21 @@ class Schema(ABC):
 
             expected_type = self.get_columns()[column_name].type
 
+            if isinstance(expected_type, ReadOnly):
+                expected_type = expected_type.inner_type
+
+            # TODO: Remove if statement once modifiers are only used in migrations
             if column != expected_type:
-                errors.append(
-                    "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)"
-                    % (column_name, expected_type, column)
-                )
+                while True:
+                    if isinstance(column, ColumnTypeWithModifier):
+                        column = column.inner_type
+                    else:
+                        break
+
+                if column != expected_type:
+                    errors.append(
+                        "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)"
+                        % (column_name, expected_type, column)
+                    )
 
         return errors
