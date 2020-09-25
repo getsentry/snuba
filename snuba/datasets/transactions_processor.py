@@ -1,4 +1,5 @@
 import logging
+import numbers
 import uuid
 from datetime import datetime
 from typing import Any, MutableMapping, Optional
@@ -133,7 +134,12 @@ class TransactionsMessageProcessor(MessageProcessor):
                 (
                     processed["measurements.key"],
                     processed["measurements.value"],
-                ) = extract_nested(measurements, lambda value: float(value["value"]))
+                ) = extract_nested(
+                    measurements,
+                    lambda value: float(value["value"])
+                    if isinstance(value["value"], numbers.Number)
+                    else None,
+                )
             except Exception:
                 # Not failing the event in this case just yet, because we are still
                 # developing this feature.

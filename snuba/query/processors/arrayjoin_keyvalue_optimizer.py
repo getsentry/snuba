@@ -31,9 +31,7 @@ def val_column(col_name: str) -> str:
 
 def array_join_pattern(column_name: str) -> FunctionCall:
     return FunctionCall(
-        None,
-        String("arrayJoin"),
-        (Column(column_name=String(key_column(column_name))),),
+        String("arrayJoin"), (Column(column_name=String(key_column(column_name))),),
     )
 
 
@@ -63,9 +61,8 @@ def _get_mapping_keys_in_condition(
             return None
 
         match = FunctionCall(
-            None,
             String(ConditionFunctions.EQ),
-            (array_join_pattern(column_name), Literal(None, Param("key", Any(str)))),
+            (array_join_pattern(column_name), Literal(Param("key", Any(str)))),
         ).match(c)
         if match is not None:
             keys_found.add(match.string("key"))
@@ -143,7 +140,6 @@ class ArrayJoinKeyValueOptimizer(QueryProcessor):
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         arrayjoin_pattern = FunctionCall(
-            None,
             String("arrayJoin"),
             (
                 Column(

@@ -85,7 +85,7 @@ class ColumnType:
     def get_all_modifiers(self) -> MutableSequence[Type[ColumnTypeWithModifier]]:
         """
         Basic column types never have any modifiers, since modifiers wrap a basic
-        column type in order to modify it in some way.
+        column type in order to modify it in some way. Deprecated.
         """
         return []
 
@@ -114,7 +114,9 @@ class ColumnTypeWithModifier(ABC, ColumnType):
         return self.inner_type.get_raw()
 
 
-class Nullable(ColumnTypeWithModifier):
+class NullableOld(ColumnTypeWithModifier):
+    # Old version of Nullable that inherits from ColumnTypeWithModifier, will be
+    # removed after old migration system is gone.
     def __init__(self, inner_type: ColumnType) -> None:
         super().__init__(inner_type)
 
@@ -123,9 +125,8 @@ class Nullable(ColumnTypeWithModifier):
 
     def __eq__(self, other: object) -> bool:
         return (
-            self.__class__ == other.__class__
-            and self.inner_type == cast(Nullable, other).inner_type
-        )
+            self.__class__ == other.__class__ or isinstance(other, Nullable)
+        ) and self.inner_type == cast(NullableOld, other).inner_type
 
     def for_schema(self) -> str:
         return "Nullable({})".format(self.inner_type.for_schema())
@@ -188,6 +189,36 @@ class WithDefault(ColumnTypeWithModifier):
 
     def for_schema(self) -> str:
         return "{} DEFAULT {}".format(self.inner_type.for_schema(), self.default)
+
+
+class ReadOnly(ColumnType):
+    def __init__(self, inner_type: ColumnType) -> None:
+        self.inner_type = inner_type
+
+    def __repr__(self) -> str:
+        return "ReadOnly({})".format(repr(self.inner_type))
+
+    def get_raw(self) -> ColumnType:
+        return self.inner_type.get_raw()
+
+
+class Nullable(ColumnType):
+    def __init__(self, inner_type: ColumnType) -> None:
+        self.inner_type = inner_type
+
+    def __repr__(self) -> str:
+        return "Nullable({})".format(repr(self.inner_type))
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__ or isinstance(other, NullableOld)
+        ) and self.inner_type == cast(Nullable, other).inner_type
+
+    def for_schema(self) -> str:
+        return "Nullable({})".format(self.inner_type.for_schema())
+
+    def get_raw(self) -> ColumnType:
+        return self.inner_type.get_raw()
 
 
 class Array(ColumnType):

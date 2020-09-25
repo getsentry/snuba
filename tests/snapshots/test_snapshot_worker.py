@@ -6,7 +6,8 @@ import pytest
 import pytz
 
 from snuba.consumer import KafkaMessageMetadata
-from snuba.consumers.snapshot_worker import CDCEvent, SnapshotProcessor
+from snuba.consumers.snapshot_worker import SnapshotProcessor
+from snuba.datasets.cdc.types import InsertEvent
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.processor import InsertBatch, ProcessedMessage
@@ -15,7 +16,7 @@ from snuba.snapshots.postgres_snapshot import Xid
 from snuba.stateful_consumer.control_protocol import TransactionData
 
 
-def get_insert_event(xid: int) -> CDCEvent:
+def get_insert_event(xid: int) -> InsertEvent:
     return {
         "event": "change",
         "xid": xid,
