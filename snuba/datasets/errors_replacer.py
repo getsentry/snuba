@@ -9,9 +9,9 @@ from typing import Any, Deque, Mapping, Optional, Sequence, Tuple
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
-from snuba.clickhouse.columns import Materialized
+from snuba.clickhouse.columns import FlattenedColumn, ReadOnly
 from snuba.clickhouse.escaping import escape_identifier, escape_string
-from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
+from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import InvalidMessageType, _hashify
 from snuba.redis import redis_client
 from snuba.replacers.replacer_processor import (
@@ -125,20 +125,18 @@ def get_projects_query_flags(
 class ErrorsReplacer(ReplacerProcessor):
     def __init__(
         self,
-        write_schema: WritableTableSchema,
-        read_schema: TableSchema,
+        schema: WritableTableSchema,
         required_columns: Sequence[str],
         tag_column_map: Mapping[str, Mapping[str, str]],
         promoted_tags: Mapping[str, Sequence[str]],
         state_name: ReplacerState,
     ) -> None:
-        super().__init__(write_schema=write_schema, read_schema=read_schema)
+        super().__init__(schema=schema)
         self.__required_columns = required_columns
-        self.__all_column_names = [
-            col.escaped
-            for col in write_schema.get_columns()
-            if Materialized not in col.type.get_all_modifiers()
+        self.__all_columns = [
+            col for col in schema.get_columns() if not isinstance(col.type, ReadOnly)
         ]
+
         self.__tag_column_map = tag_column_map
         self.__promoted_tags = promoted_tags
         self.__state_name = state_name
@@ -157,17 +155,12 @@ class ErrorsReplacer(ReplacerProcessor):
         elif type_ == "end_delete_groups":
             processed = process_delete_groups(event, self.__required_columns)
         elif type_ == "end_merge":
-            processed = process_merge(event, self.__all_column_names)
+            processed = process_merge(event, self.__all_columns)
         elif type_ == "end_unmerge":
-            processed = process_unmerge(
-                event, self.__all_column_names, self.__state_name
-            )
+            processed = process_unmerge(event, self.__all_columns, self.__state_name)
         elif type_ == "end_delete_tag":
             processed = process_delete_tag(
-                event,
-                self.get_write_schema(),
-                self.__tag_column_map,
-                self.__promoted_tags,
+                event, self.__all_columns, self.__tag_column_map, self.__promoted_tags,
             )
         else:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
@@ -221,16 +214,16 @@ def process_delete_groups(
     count_query_template = (
         """\
         SELECT count()
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + where
     )
 
     insert_query_template = (
         """\
-        INSERT INTO %(dist_write_table_name)s (%(required_columns)s)
+        INSERT INTO %(table_name)s (%(required_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + where
     )
@@ -254,7 +247,7 @@ SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
 
 
 def process_merge(
-    message: Mapping[str, Any], all_column_names: Sequence[str]
+    message: Mapping[str, Any], all_columns: Sequence[FlattenedColumn]
 ) -> Optional[Replacement]:
     # HACK: We were sending duplicates of the `end_merge` message from Sentry,
     # this is only for performance of the backlog.
@@ -271,6 +264,7 @@ def process_merge(
 
     assert all(isinstance(gid, int) for gid in previous_group_ids)
     timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+    all_column_names = [c.escaped for c in all_columns]
     select_columns = map(
         lambda i: i if i != "group_id" else str(message["new_group_id"]),
         all_column_names,
@@ -286,16 +280,16 @@ def process_merge(
     count_query_template = (
         """\
         SELECT count()
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + where
     )
 
     insert_query_template = (
         """\
-        INSERT INTO %(dist_write_table_name)s (%(all_columns)s)
+        INSERT INTO %(table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + where
     )
@@ -317,7 +311,7 @@ def process_merge(
 
 def process_unmerge(
     message: Mapping[str, Any],
-    all_column_names: Sequence[str],
+    all_columns: Sequence[FlattenedColumn],
     state_name: ReplacerState,
 ) -> Optional[Replacement]:
     hashes = message["hashes"]
@@ -327,6 +321,7 @@ def process_unmerge(
     assert all(isinstance(h, str) for h in hashes)
 
     timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+    all_column_names = [c.escaped for c in all_columns]
     select_columns = map(
         lambda i: i if i != "group_id" else str(message["new_group_id"]),
         all_column_names,
@@ -343,16 +338,16 @@ def process_unmerge(
     count_query_template = (
         """\
         SELECT count()
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + where
     )
 
     insert_query_template = (
         """\
-        INSERT INTO %(dist_write_table_name)s (%(all_columns)s)
+        INSERT INTO %(table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + where
     )
@@ -410,7 +405,7 @@ concat(
 
 def process_delete_tag(
     message: Mapping[str, Any],
-    schema: TableSchema,
+    all_columns: Sequence[FlattenedColumn],
     tag_column_map: Mapping[str, Mapping[str, str]],
     promoted_tags: Mapping[str, Sequence[str]],
 ) -> Optional[Replacement]:
@@ -436,19 +431,14 @@ def process_delete_tag(
 
     insert_query_template = (
         """\
-        INSERT INTO %(dist_write_table_name)s (%(all_columns)s)
+        INSERT INTO %(table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + prewhere
         + where
     )
 
-    all_columns = [
-        col
-        for col in schema.get_columns()
-        if Materialized not in col.type.get_all_modifiers()
-    ]
     select_columns = []
     for col in all_columns:
         if is_promoted and col.flattened == tag_column_name:
@@ -481,7 +471,7 @@ def process_delete_tag(
     count_query_template = (
         """\
         SELECT count()
-        FROM %(dist_read_table_name)s FINAL
+        FROM %(table_name)s FINAL
     """
         + prewhere
         + where

@@ -125,8 +125,7 @@ storage = WritableTableStorage(
     ),
     query_splitters=query_splitters,
     replacer_processor=ErrorsReplacer(
-        write_schema=schema,
-        read_schema=schema,
+        schema=schema,
         required_columns=[col.escaped for col in required_columns],
         tag_column_map=get_tag_column_map(),
         promoted_tags=get_promoted_tags(),

@@ -6,7 +6,7 @@ from snuba.clickhouse.columns import (
     DateTime,
     Float,
     LowCardinality,
-    Nullable,
+    NullableOld as Nullable,
     String,
     UInt,
     WithDefault,

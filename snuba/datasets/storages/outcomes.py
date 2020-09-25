@@ -2,7 +2,7 @@ from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
     LowCardinality,
-    Nullable,
+    NullableOld as Nullable,
     String,
     UInt,
     UUID,
