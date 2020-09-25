@@ -97,6 +97,7 @@ class TestGroupedMessage(BaseDatasetTest):
             "oldkeys": {"keynames": ["id"], "keytypes": ["bigint"], "keyvalues": [74]},
             "schema": "public",
             "table": "sentry_groupedmessage",
+            "timestamp": "2019-09-19 00:17:21.44787+00",
             "xid": 2380866,
         }
     )
@@ -112,6 +113,7 @@ class TestGroupedMessage(BaseDatasetTest):
             },
             "schema": "public",
             "table": "sentry_groupedmessage",
+            "timestamp": "2019-09-19 00:17:21.44787+00",
             "xid": 2380866,
         }
     )
@@ -192,6 +194,7 @@ class TestGroupedMessage(BaseDatasetTest):
             "kind": "insert",
             "schema": "public",
             "table": "sentry_groupedmessage",
+            "timestamp": "2019-09-19 00:17:21.44787+00",
             "xid": 2380866,
         }
     )
