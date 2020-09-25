@@ -103,12 +103,12 @@ class Migration(migration.MultiStepMigration):
     - Dropped event_string column
     - Dropped event_hash materialized column
     - Dropped primary_hash_hex materialized column
+    - primary_hash type converted from FixedString32 to UUID
     - Primary key is now more in line with what we have for the events table:
         - no org_id
         - cityHash64(toString(event_id)) instead of primary_hash_hex, event_hash
     - Sharding key for distributed table is also cityHash64(toString(event_id))
-    - No _tags_flattened and _contexts_flattened since we are mostly no longer
-    using these already
+    - No _tags_flattened and _contexts_flattened since these are already unused
     - TTL reflects retention_days value not only 30 or 90
     """
 
