@@ -131,6 +131,9 @@ class NullableOld(ColumnTypeWithModifier):
     def for_schema(self) -> str:
         return "Nullable({})".format(self.inner_type.for_schema())
 
+    def get_raw(self) -> ColumnType:
+        return Nullable(self.inner_type.get_raw())
+
 
 class Materialized(ColumnTypeWithModifier):
     def __init__(self, inner_type: ColumnType, expression: str) -> None:
@@ -218,7 +221,7 @@ class Nullable(ColumnType):
         return "Nullable({})".format(self.inner_type.for_schema())
 
     def get_raw(self) -> ColumnType:
-        return self.inner_type.get_raw()
+        return Nullable(self.inner_type.get_raw())
 
 
 class Array(ColumnType):
@@ -236,6 +239,9 @@ class Array(ColumnType):
 
     def for_schema(self) -> str:
         return "Array({})".format(self.inner_type.for_schema())
+
+    def get_raw(self) -> ColumnType:
+        return Array(self.inner_type.get_raw())
 
 
 class Nested(ColumnType):
