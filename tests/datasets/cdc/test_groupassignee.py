@@ -1,8 +1,6 @@
 from datetime import datetime
 
 import pytz
-import simplejson as json
-
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.consumer import KafkaMessageMetadata
@@ -10,14 +8,8 @@ from snuba.datasets.cdc.groupassignee_processor import (
     GroupAssigneeProcessor,
     GroupAssigneeRow,
 )
-from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
-from snuba.datasets.cdc.types import BeginEvent, CommitEvent, DeleteEvent
-from snuba.datasets.cdc.types import Event as CDCEvent
-from snuba.datasets.cdc.types import InsertEvent, UpdateEvent
-from snuba.datasets.storages.groupassignees import POSTGRES_TABLE
+from snuba.datasets.cdc.types import DeleteEvent, InsertEvent, UpdateEvent
 from snuba.processor import InsertBatch
-from snuba.utils.streams import Message, Partition, Topic
-from snuba.utils.streams.backends.kafka import Headers, KafkaPayload
 from tests.base import BaseDatasetTest
 
 
@@ -26,9 +18,6 @@ class TestGroupassignee(BaseDatasetTest):
         super().setup_method(
             test_method, "groupassignee",
         )
-
-    BEGIN_MSG = BeginEvent({"event": "begin", "xid": 2380836})
-    COMMIT_MSG = CommitEvent({"event": "commit"})
 
     UPDATE_MSG_NO_KEY_CHANGE = UpdateEvent(
         {
@@ -169,32 +158,11 @@ class TestGroupassignee(BaseDatasetTest):
         "date_added": None,
     }
 
-    def __make_msg(
-        self, partition: int, offset: int, payload: CDCEvent, headers: Headers
-    ) -> Message[KafkaPayload]:
-        return Message(
-            partition=Partition(Topic("topic"), partition),
-            offset=offset,
-            payload=KafkaPayload(b"key", json.dumps(payload).encode(), headers),
-            timestamp=datetime(2019, 6, 19, 6, 46, 28),
-        )
-
     def test_messages(self) -> None:
         processor = GroupAssigneeProcessor("sentry_groupasignee")
-        message_filter = CdcTableNameMessageFilter(postgres_table=POSTGRES_TABLE)
 
         metadata = KafkaMessageMetadata(
             offset=42, partition=0, timestamp=datetime(1970, 1, 1)
-        )
-
-        assert message_filter.should_drop(self.__make_msg(0, 42, self.BEGIN_MSG, []))
-
-        assert message_filter.should_drop(self.__make_msg(0, 42, self.COMMIT_MSG, []))
-
-        assert not message_filter.should_drop(
-            self.__make_msg(
-                0, 42, self.INSERT_MSG, [("table", POSTGRES_TABLE.encode())]
-            )
         )
 
         ret = processor.process_message(self.INSERT_MSG, metadata)
@@ -215,35 +183,14 @@ class TestGroupassignee(BaseDatasetTest):
             None,  # team_id
         )
 
-        assert not message_filter.should_drop(
-            self.__make_msg(
-                0,
-                42,
-                self.UPDATE_MSG_NO_KEY_CHANGE,
-                [("table", POSTGRES_TABLE.encode())],
-            )
-        )
         ret = processor.process_message(self.UPDATE_MSG_NO_KEY_CHANGE, metadata)
         assert ret == InsertBatch([self.PROCESSED])
 
         # Tests an update with key change which becomes a two inserts:
         # one deletion and the insertion of the new row.
-        assert not message_filter.should_drop(
-            self.__make_msg(
-                0,
-                42,
-                self.UPDATE_MSG_WITH_KEY_CHANGE,
-                [("table", POSTGRES_TABLE.encode())],
-            )
-        )
         ret = processor.process_message(self.UPDATE_MSG_WITH_KEY_CHANGE, metadata)
         assert ret == InsertBatch([self.DELETED, self.PROCESSED_UPDATE])
 
-        assert not message_filter.should_drop(
-            self.__make_msg(
-                0, 42, self.DELETE_MSG, [("table", POSTGRES_TABLE.encode())],
-            )
-        )
         ret = processor.process_message(self.DELETE_MSG, metadata)
         assert ret == InsertBatch([self.DELETED])
 
