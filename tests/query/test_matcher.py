@@ -24,45 +24,41 @@ from snuba.query.matchers import (
 test_cases = [
     (
         "Single node match",
-        Column(None, OptionalString("table"), String("test_col")),
+        Column(OptionalString("table"), String("test_col")),
         ColumnExpr("alias_we_don't_care_of", "table", "test_col"),
         MatchResult(),
     ),
     (
         "Single node no match",
-        Column(None, None, String("test_col")),
+        Column(None, String("test_col")),
         ColumnExpr(None, None, "not_a_test_col"),
         None,
     ),
     (
         "Matches a None table name",
-        Column(None, Param("table_name", AnyOptionalString()), None),
+        Column(Param("table_name", AnyOptionalString()), None),
         ColumnExpr(None, None, "not_a_test_col"),
         MatchResult({"table_name": None}),
     ),
     (
         "Matches None as table name",
-        Column(None, Param("table_name", OptionalString(None)), None),
+        Column(Param("table_name", OptionalString(None)), None),
         ColumnExpr(None, None, "not_a_test_col"),
         MatchResult({"table_name": None}),
     ),
     (
         "Not matching a non None table",
-        Column(None, Param("table_name", OptionalString(None)), None),
+        Column(Param("table_name", OptionalString(None)), None),
         ColumnExpr(None, "not None", "not_a_test_col"),
         None,
     ),
     (
         "Matches a column with all fields",
         Column(
-            Param("alias", AnyOptionalString()),
-            Param("table_name", AnyOptionalString()),
-            Param("column_name", Any(str)),
+            Param("table_name", AnyOptionalString()), Param("column_name", Any(str)),
         ),
         ColumnExpr("alias", "table_name", "test_col"),
-        MatchResult(
-            {"alias": "alias", "column_name": "test_col", "table_name": "table_name"}
-        ),
+        MatchResult({"column_name": "test_col", "table_name": "table_name"}),
     ),
     (
         "Match anything",
@@ -72,20 +68,20 @@ test_cases = [
     ),
     (
         "Match a string through Any(str)",
-        Column(Param("p_alias", Any(str)), None, None),
-        ColumnExpr("alias", "irrelevant", "irrelevant"),
-        MatchResult({"p_alias": "alias"}),
+        Column(Param("p_table_name", Any(str)), None),
+        ColumnExpr("irrelevant", "table_name", "irrelevant"),
+        MatchResult({"p_table_name": "table_name"}),
     ),
     (
         "Match a None string through Any",
-        Column(Param("p_alias", Any(type(None))), None, None),
-        ColumnExpr(None, "irrelevant", "irrelevant"),
-        MatchResult({"p_alias": None}),
+        Column(Param("p_table_name", Any(type(None))), None),
+        ColumnExpr("irrelevant", None, "irrelevant"),
+        MatchResult({"p_table_name": None}),
     ),
     (
         "Do not Match a None string through Any",
-        Column(Param("p_alias", Any(type(None))), None, None),
-        ColumnExpr("alias", "irrelevant", "irrelevant"),
+        Column(Param("p_table_name", Any(type(None))), None),
+        ColumnExpr("irrelevant", "not_none", "irrelevant"),
         None,
     ),
     (
@@ -96,7 +92,7 @@ test_cases = [
     ),
     (
         "Match any expression of Column type within function",
-        FunctionCall(None, None, (Param("p1", Any(ColumnExpr)),)),
+        FunctionCall(None, (Param("p1", Any(ColumnExpr)),)),
         FunctionCallExpr(
             "irrelevant",
             "irrelevant",
@@ -106,7 +102,7 @@ test_cases = [
     ),
     (
         "Wrong number of parameters, does not match",
-        FunctionCall(None, None, (Param("p1", Any(ColumnExpr)),)),
+        FunctionCall(None, (Param("p1", Any(ColumnExpr)),)),
         FunctionCallExpr(
             "irrelevant",
             "irrelevant",
@@ -119,7 +115,7 @@ test_cases = [
     ),
     (
         "Does not match any Column",
-        FunctionCall(None, None, (Param("p1", Any(ColumnExpr)),)),
+        FunctionCall(None, (Param("p1", Any(ColumnExpr)),)),
         FunctionCallExpr("irrelevant", "irrelevant", (LiteralExpr(None, "str"),),),
         None,
     ),
@@ -127,8 +123,8 @@ test_cases = [
         "Union of two patterns - match",
         Or(
             [
-                Param("option1", Column(None, None, String("col_name"))),
-                Param("option2", Column(None, None, String("other_col_name"))),
+                Param("option1", Column(None, String("col_name"))),
+                Param("option2", Column(None, String("other_col_name"))),
             ]
         ),
         ColumnExpr(None, None, "other_col_name"),
@@ -138,8 +134,8 @@ test_cases = [
         "Union of two patterns - no match",
         Or(
             [
-                Param("option1", Column(None, None, String("col_name"))),
-                Param("option2", Column(None, None, String("other_col_name"))),
+                Param("option1", Column(None, String("col_name"))),
+                Param("option2", Column(None, String("other_col_name"))),
             ]
         ),
         ColumnExpr(None, None, "none_of_the_two"),
@@ -149,42 +145,36 @@ test_cases = [
         "Or within a Param",
         Param(
             "one_of_the_two",
-            Or(
-                [
-                    Column(None, None, String("col_name1")),
-                    Column(None, None, String("col_name2")),
-                ]
-            ),
+            Or([Column(None, String("col_name1")), Column(None, String("col_name2"))]),
         ),
         ColumnExpr("irrelevant", None, "col_name2"),
         MatchResult({"one_of_the_two": ColumnExpr("irrelevant", None, "col_name2")}),
     ),
     (
         "Match String Literal",
-        Literal(None, OptionalString("value")),
+        Literal(OptionalString("value")),
         LiteralExpr("irrelevant", "value"),
         MatchResult(),
     ),
     (
         "Match any string as Literal",
-        Literal(None, Any(str)),
+        Literal(Any(str)),
         LiteralExpr("irrelevant", "value"),
         MatchResult(),
     ),
     (
         "Does not match an int as Literal",
-        Literal(None, Any(str)),
+        Literal(Any(str)),
         LiteralExpr("irrelevant", 123),
         None,
     ),
     (
         "returns the columns in any function",
         FunctionCall(
-            Param("alias", OptionalString(None)),
             String("f_name"),
             (
-                Param("p_1", Column(None, None, Any(str))),
-                Param("p_2", Column(None, None, Any(str))),
+                Param("p_1", Column(None, Any(str))),
+                Param("p_2", Column(None, Any(str))),
             ),
         ),
         FunctionCallExpr(
@@ -197,7 +187,6 @@ test_cases = [
         ),
         MatchResult(
             {
-                "alias": None,
                 "p_1": ColumnExpr(None, None, "c_name1"),
                 "p_2": ColumnExpr("another_irrelevant_alias", None, "c_name2"),
             }
@@ -207,10 +196,9 @@ test_cases = [
         "matches a function with optional params",
         FunctionCall(
             None,
-            None,
             (
-                Param("p_1", Column(None, None, Any(str))),
-                Param("p_2", Column(None, None, Any(str))),
+                Param("p_1", Column(None, Any(str))),
+                Param("p_2", Column(None, Any(str))),
             ),
             with_optionals=True,
         ),
@@ -235,10 +223,9 @@ test_cases = [
         "dows not match even with optionals",
         FunctionCall(
             None,
-            None,
             (
-                Param("p_1", Column(None, None, Any(str))),
-                Param("p_2", Column(None, None, Any(str))),
+                Param("p_1", Column(None, Any(str))),
+                Param("p_2", Column(None, Any(str))),
             ),
             with_optionals=True,
         ),
@@ -250,15 +237,12 @@ test_cases = [
     (
         "nested parameters no match",
         FunctionCall(
-            None,
             String("f_name"),
             (
-                FunctionCall(
-                    None, String("f"), (Column(None, None, String("my_col")),)
-                ),
+                FunctionCall(String("f"), (Column(None, String("my_col")),)),
                 Param(
                     "second_function",
-                    FunctionCall(None, Param("second_function_name", Any(str)), None),
+                    FunctionCall(Param("second_function_name", Any(str)), None),
                 ),
             ),
         ),
@@ -275,15 +259,12 @@ test_cases = [
     (
         "complex structure matches",
         FunctionCall(
-            None,
             String("f_name"),
             (
-                FunctionCall(
-                    None, String("f"), (Column(None, None, String("my_col")),)
-                ),
+                FunctionCall(String("f"), (Column(None, String("my_col")),)),
                 Param(
                     "second_function",
-                    FunctionCall(None, Param("second_function_name", Any(str)), None),
+                    FunctionCall(Param("second_function_name", Any(str)), None),
                 ),
             ),
         ),
@@ -318,13 +299,12 @@ def test_base_expression(
 
 def test_accessors() -> None:
     func = FunctionCall(
-        None,
         String("f_name"),
         (
-            FunctionCall(None, String("f"), (Column(None, None, String("my_col")),)),
+            FunctionCall(String("f"), (Column(None, String("my_col")),)),
             Param(
                 "second_function",
-                FunctionCall(None, Param("second_function_name", Any(str)), None),
+                FunctionCall(Param("second_function_name", Any(str)), None),
             ),
         ),
     )
