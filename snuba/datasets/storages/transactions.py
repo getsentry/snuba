@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from snuba.clickhouse.columns import (
     UUID,
     Array,
@@ -8,27 +6,21 @@ from snuba.clickhouse.columns import (
     Float,
     IPv4,
     IPv6,
-    LowCardinality,
-    Materialized,
     Nested,
-    NullableOld as Nullable,
+    Nullable,
+    ReadOnly,
     String,
     UInt,
-    WithDefault,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.datasets.storages.transaction_column_processor import (
     TransactionColumnProcessor,
 )
 from snuba.datasets.table_storage import KafkaStreamLoader
-from snuba.datasets.transactions_processor import (
-    UNKNOWN_SPAN_STATUS,
-    TransactionsMessageProcessor,
-)
+from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
@@ -37,12 +29,6 @@ from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.web.split import TimeSplitQueryStrategy
 
-# This is the moment in time we started filling in flattened_tags and flattened_contexts
-# columns. It is captured to use the flattened tags optimization only for queries that
-# do not go back this much in time.
-# Will be removed in february.
-BEGINNING_OF_TIME = datetime(2019, 12, 11, 0, 0, 0)
-
 
 columns = ColumnSet(
     [
@@ -50,39 +36,36 @@ columns = ColumnSet(
         ("event_id", UUID()),
         ("trace_id", UUID()),
         ("span_id", UInt(64)),
-        ("transaction_name", LowCardinality(String())),
-        ("transaction_hash", Materialized(UInt(64), "cityHash64(transaction_name)",),),
-        ("transaction_op", LowCardinality(String())),
-        ("transaction_status", WithDefault(UInt(8), str(UNKNOWN_SPAN_STATUS))),
+        ("transaction_name", String()),
+        ("transaction_hash", ReadOnly(UInt(64))),
+        ("transaction_op", String()),
+        ("transaction_status", UInt(8)),
         ("start_ts", DateTime()),
         ("start_ms", UInt(16)),
         ("finish_ts", DateTime()),
         ("finish_ms", UInt(16)),
         ("duration", UInt(32)),
-        ("platform", LowCardinality(String())),
-        ("environment", LowCardinality(Nullable(String()))),
-        ("release", LowCardinality(Nullable(String()))),
-        ("dist", LowCardinality(Nullable(String()))),
+        ("platform", String()),
+        ("environment", Nullable(String())),
+        ("release", Nullable(String())),
+        ("dist", Nullable(String())),
         ("ip_address_v4", Nullable(IPv4())),
         ("ip_address_v6", Nullable(IPv6())),
-        ("user", WithDefault(String(), "''",)),
-        ("user_hash", Materialized(UInt(64), "cityHash64(user)"),),
+        ("user", String()),
+        ("user_hash", ReadOnly(UInt(64))),
         ("user_id", Nullable(String())),
         ("user_name", Nullable(String())),
         ("user_email", Nullable(String())),
-        ("sdk_name", WithDefault(LowCardinality(String()), "''")),
-        ("sdk_version", WithDefault(LowCardinality(String()), "''")),
-        ("http_method", LowCardinality(Nullable(String()))),
+        ("sdk_name", String()),
+        ("sdk_version", String()),
+        ("http_method", Nullable(String())),
         ("http_referer", Nullable(String())),
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
-        ("_tags_hash_map", Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN)),
+        ("_tags_hash_map", ReadOnly(Array(UInt(64)))),
         ("contexts", Nested([("key", String()), ("value", String())])),
         ("_contexts_flattened", String()),
-        (
-            "measurements",
-            Nested([("key", LowCardinality(String())), ("value", Float(64))]),
-        ),
+        ("measurements", Nested([("key", String()), ("value", Float(64))]),),
         ("partition", UInt(16)),
         ("offset", UInt(64)),
         ("message_timestamp", DateTime()),
@@ -107,10 +90,7 @@ storage = WritableTableStorage(
     schema=schema,
     query_processors=[
         NestedFieldConditionOptimizer(
-            "contexts",
-            "_contexts_flattened",
-            {"start_ts", "finish_ts"},
-            BEGINNING_OF_TIME,
+            "contexts", "_contexts_flattened", {"start_ts", "finish_ts"},
         ),
         MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
         TransactionColumnProcessor(),
