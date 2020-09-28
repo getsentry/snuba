@@ -1,11 +1,9 @@
 from datetime import datetime
-from typing import Mapping, Sequence
 
 from snuba.clickhouse.columns import (
     UUID,
     Array,
     ColumnSet,
-    ColumnType,
     DateTime,
     Float,
     IPv4,
@@ -19,7 +17,7 @@ from snuba.clickhouse.columns import (
     WithDefault,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
+from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
@@ -44,107 +42,6 @@ from snuba.web.split import TimeSplitQueryStrategy
 # do not go back this much in time.
 # Will be removed in february.
 BEGINNING_OF_TIME = datetime(2019, 12, 11, 0, 0, 0)
-
-
-def transactions_migrations(
-    clickhouse_table: str, current_schema: Mapping[str, ColumnType]
-) -> Sequence[str]:
-    ret = []
-    duration_col = current_schema.get("duration")
-    if duration_col and Materialized in duration_col.get_all_modifiers():
-        ret.append("ALTER TABLE %s MODIFY COLUMN duration UInt32" % clickhouse_table)
-
-    if "sdk_name" not in current_schema:
-        ret.append(
-            "ALTER TABLE %s ADD COLUMN sdk_name LowCardinality(String) DEFAULT ''"
-            % clickhouse_table
-        )
-
-    if "sdk_version" not in current_schema:
-        ret.append(
-            "ALTER TABLE %s ADD COLUMN sdk_version LowCardinality(String) DEFAULT ''"
-            % clickhouse_table
-        )
-
-    if "transaction_status" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN transaction_status UInt8 DEFAULT {UNKNOWN_SPAN_STATUS} AFTER transaction_op"
-        )
-
-    if "_tags_flattened" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN _tags_flattened String DEFAULT ''"
-        )
-
-    if "_contexts_flattened" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN _contexts_flattened String DEFAULT ''"
-        )
-
-    if "user_hash" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN user_hash UInt64 MATERIALIZED cityHash64(user) AFTER user"
-        )
-
-    low_cardinality_cols = [
-        "transaction_name",
-        "release",
-        "dist",
-        "sdk_name",
-        "sdk_version",
-        "environment",
-    ]
-    for col_name in low_cardinality_cols:
-        col = current_schema.get(col_name)
-
-        if col and LowCardinality not in col.get_all_modifiers():
-            if isinstance(col, WithDefault):
-                col.inner_type = LowCardinality(col.inner_type)
-            else:
-                col = LowCardinality(col)
-            ret.append(
-                f"ALTER TABLE {clickhouse_table} MODIFY COLUMN {col_name} {col.for_schema()}"
-            )
-
-    if "message_timestamp" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN message_timestamp DateTime AFTER offset"
-        )
-
-    if "_tags_hash_map" not in current_schema:
-        ret.append(
-            (
-                f"ALTER TABLE {clickhouse_table} ADD COLUMN _tags_hash_map Array(UInt64) "
-                f"MATERIALIZED {TAGS_HASH_MAP_COLUMN} AFTER _tags_flattened"
-            )
-        )
-
-    # `Nested` is only syntactic sugar for table creation. Nested columns are actually arrays.
-    # So current_schema does not contain any single `measurements` column. It includes
-    # two separate arrays instead.
-    if "measurements.key" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN measurements.key Array(LowCardinality(String)) "
-            f"AFTER _contexts_flattened"
-        )
-
-    if "measurements.value" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN measurements.value Array(Float64) "
-            f"AFTER measurements.key"
-        )
-
-    if "http_method" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_method LowCardinality(Nullable(String)) AFTER sdk_version"
-        )
-
-    if "http_referer" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_referer Nullable(String) AFTER http_method"
-        )
-
-    return ret
 
 
 columns = ColumnSet(
@@ -194,26 +91,13 @@ columns = ColumnSet(
     ]
 )
 
-schema = ReplacingMergeTreeSchema(
+schema = WritableTableSchema(
     columns=columns,
     local_table_name="transactions_local",
     dist_table_name="transactions_dist",
     storage_set_key=StorageSetKey.TRANSACTIONS,
     mandatory_conditions=[],
     prewhere_candidates=["event_id", "transaction_name", "transaction", "title"],
-    order_by="(project_id, toStartOfDay(finish_ts), transaction_name, cityHash64(span_id))",
-    partition_by="(retention_days, toMonday(finish_ts))",
-    version_column="deleted",
-    sample_expr="cityHash64(span_id)",
-    ttl_expr="finish_ts + toIntervalDay(retention_days)",
-    settings={"index_granularity": "8192"},
-    migration_function=transactions_migrations,
-    # Tags hashmap is a materialized column. Clickhouse does not allow
-    # us to create a materialized column that references a nested one
-    # during create statement
-    # (https://github.com/ClickHouse/ClickHouse/issues/12586), so the
-    # materialization is added with a migration.
-    skipped_cols_on_creation={"_tags_hash_map"},
 )
 
 

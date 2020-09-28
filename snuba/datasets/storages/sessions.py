@@ -9,9 +9,8 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import (
-    MergeTreeSchema,
-    MaterializedViewSchema,
-    AggregatingMergeTreeSchema,
+    TableSchema,
+    WritableTableSchema,
 )
 from snuba.datasets.sessions_processor import SessionsProcessor
 from snuba.datasets.storage import (
@@ -20,7 +19,6 @@ from snuba.datasets.storage import (
 )
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader
-from snuba.processor import MAX_UINT32, NIL_UUID
 from snuba.query.processors.prewhere import PrewhereProcessor
 
 
@@ -50,14 +48,11 @@ all_columns = ColumnSet(
     ]
 )
 
-raw_schema = MergeTreeSchema(
+raw_schema = WritableTableSchema(
     columns=all_columns,
     local_table_name=WRITE_LOCAL_TABLE_NAME,
     dist_table_name=WRITE_DIST_TABLE_NAME,
     storage_set_key=StorageSetKey.SESSIONS,
-    order_by="(org_id, project_id, release, environment, started)",
-    partition_by="(toMonday(started))",
-    settings={"index_granularity": "16384"},
 )
 
 read_columns = ColumnSet(
@@ -81,50 +76,19 @@ read_columns = ColumnSet(
         ("users_errored", AggregateFunction("uniqIf", UUID(), UInt(8))),
     ]
 )
-read_schema = AggregatingMergeTreeSchema(
+read_schema = TableSchema(
     columns=read_columns,
     local_table_name=READ_LOCAL_TABLE_NAME,
     dist_table_name=READ_DIST_TABLE_NAME,
     storage_set_key=StorageSetKey.SESSIONS,
     prewhere_candidates=["project_id", "org_id"],
-    order_by="(org_id, project_id, release, environment, started)",
-    partition_by="(toMonday(started))",
-    settings={"index_granularity": "256"},
 )
-materialized_view_schema = MaterializedViewSchema(
-    local_materialized_view_name=READ_LOCAL_MV_NAME,
-    dist_materialized_view_name=READ_DIST_MV_NAME,
+materialized_view_schema = TableSchema(
+    local_table_name=READ_LOCAL_MV_NAME,
+    dist_table_name=READ_DIST_MV_NAME,
     storage_set_key=StorageSetKey.SESSIONS,
     prewhere_candidates=["project_id", "org_id"],
     columns=read_columns,
-    query=f"""
-        SELECT
-            org_id,
-            project_id,
-            toStartOfHour(started) as started,
-            release,
-            environment,
-            quantilesIfState(0.5, 0.9)(
-                duration,
-                duration <> {MAX_UINT32} AND status == 1
-            ) as duration_quantiles,
-            countIfState(session_id, seq == 0) as sessions,
-            uniqIfState(distinct_id, distinct_id != '{NIL_UUID}') as users,
-            countIfState(session_id, status == 2) as sessions_crashed,
-            countIfState(session_id, status == 3) as sessions_abnormal,
-            uniqIfState(session_id, errors > 0) as sessions_errored,
-            uniqIfState(distinct_id, status == 2) as users_crashed,
-            uniqIfState(distinct_id, status == 3) as users_abnormal,
-            uniqIfState(distinct_id, errors > 0) as users_errored
-        FROM
-            %(source_table_name)s
-        GROUP BY
-            org_id, project_id, started, release, environment
-    """,
-    local_source_table_name=WRITE_LOCAL_TABLE_NAME,
-    local_destination_table_name=READ_LOCAL_TABLE_NAME,
-    dist_source_table_name=WRITE_DIST_TABLE_NAME,
-    dist_destination_table_name=READ_DIST_TABLE_NAME,
 )
 
 # The raw table we write onto, and that potentially we could
