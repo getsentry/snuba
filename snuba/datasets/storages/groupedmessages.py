@@ -7,7 +7,7 @@ from snuba.datasets.cdc.groupedmessage_processor import (
 )
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
 from snuba.datasets.schemas import MandatoryCondition
-from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
+from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.conditions import ConditionFunctions, binary_condition
@@ -34,7 +34,7 @@ columns = ColumnSet(
     ]
 )
 
-schema = ReplacingMergeTreeSchema(
+schema = WritableTableSchema(
     columns=columns,
     local_table_name="groupedmessage_local",
     dist_table_name="groupedmessage_dist",
@@ -51,10 +51,6 @@ schema = ReplacingMergeTreeSchema(
         )
     ],
     prewhere_candidates=["project_id", "id"],
-    order_by="(project_id, id)",
-    partition_by=None,
-    version_column="offset",
-    sample_expr="id",
 )
 
 POSTGRES_TABLE = "sentry_groupedmessage"
