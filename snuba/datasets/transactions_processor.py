@@ -138,7 +138,7 @@ class TransactionsMessageProcessor(MessageProcessor):
                     measurements,
                     lambda value: float(value["value"])
                     if (
-                        isinstance(value, dict)
+                        value is not None
                         and isinstance(value.get("value"), numbers.Number)
                     )
                     else None,
