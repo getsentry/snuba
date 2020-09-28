@@ -109,7 +109,7 @@ class Migration(migration.MultiStepMigration):
         - cityHash64(toString(event_id)) instead of primary_hash_hex, event_hash
     - Sharding key for distributed table is also cityHash64(toString(event_id))
     - No _tags_flattened and _contexts_flattened since these are already unused
-    - TTL reflects retention_days value not only 30 or 90
+    - Partition key reflects retention_days value not only 30 or 90
     """
 
     blocking = False
