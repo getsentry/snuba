@@ -7,11 +7,9 @@ from typing import (
     Iterator,
     Mapping,
     MutableMapping,
-    MutableSequence,
     List,
     Optional,
     Sequence,
-    Type,
     Tuple,
     Union,
 )
@@ -82,13 +80,6 @@ class ColumnType:
     def flatten(self, name: str) -> Sequence[FlattenedColumn]:
         return [FlattenedColumn(None, name, self)]
 
-    def get_all_modifiers(self) -> MutableSequence[Type[ColumnTypeWithModifier]]:
-        """
-        Basic column types never have any modifiers, since modifiers wrap a basic
-        column type in order to modify it in some way. Deprecated.
-        """
-        return []
-
     def get_raw(self) -> ColumnType:
         return self
 
@@ -96,19 +87,6 @@ class ColumnType:
 class ColumnTypeWithModifier(ABC, ColumnType):
     def __init__(self, inner_type: ColumnType) -> None:
         self.inner_type = inner_type
-
-    def get_all_modifiers(self) -> MutableSequence[Type[ColumnTypeWithModifier]]:
-        def get_nested_modifiers(
-            obj: ColumnType,
-        ) -> MutableSequence[Type[ColumnTypeWithModifier]]:
-            if not isinstance(obj, ColumnTypeWithModifier):
-                return obj.get_all_modifiers()
-            else:
-                nested_modifiers = get_nested_modifiers(obj.inner_type)
-                nested_modifiers.append(type(obj))
-                return nested_modifiers
-
-        return get_nested_modifiers(self)
 
     def get_raw(self) -> ColumnType:
         return self.inner_type.get_raw()
