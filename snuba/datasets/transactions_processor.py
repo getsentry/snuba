@@ -137,7 +137,10 @@ class TransactionsMessageProcessor(MessageProcessor):
                 ) = extract_nested(
                     measurements,
                     lambda value: float(value["value"])
-                    if isinstance(value["value"], numbers.Number)
+                    if (
+                        isinstance(value, dict)
+                        and isinstance(value.get("value"), numbers.Number)
+                    )
                     else None,
                 )
             except Exception:
