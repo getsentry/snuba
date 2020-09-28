@@ -1,8 +1,7 @@
 from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
-    LowCardinality,
-    NullableOld as Nullable,
+    Nullable,
     String,
     UInt,
     UUID,
@@ -34,7 +33,7 @@ write_columns = ColumnSet(
         ("key_id", Nullable(UInt(64))),
         ("timestamp", DateTime()),
         ("outcome", UInt(8)),
-        ("reason", LowCardinality(Nullable(String()))),
+        ("reason", Nullable(String())),
         ("event_id", Nullable(UUID())),
     ]
 )
@@ -54,7 +53,7 @@ read_columns = ColumnSet(
         ("key_id", UInt(64)),
         ("timestamp", DateTime()),
         ("outcome", UInt(8)),
-        ("reason", LowCardinality(String())),
+        ("reason", String()),
         ("times_seen", UInt(64)),
     ]
 )
