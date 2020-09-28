@@ -212,6 +212,7 @@ def subscriptions(
                 max_batch_time_ms,
                 metrics,
             ),
+            metrics=metrics,
         )
 
         def handler(signum, frame) -> None:

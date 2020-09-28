@@ -37,15 +37,14 @@ class TestConsumer(object):
         consumer = broker.get_consumer("group")
 
         worker = FakeWorker()
+        metrics = DummyMetricsBackend(strict=True)
         batching_consumer = StreamProcessor(
             consumer,
             topic,
             BatchProcessingStrategyFactory(
-                worker=worker,
-                max_batch_size=2,
-                max_batch_time=100,
-                metrics=DummyMetricsBackend(strict=True),
+                worker=worker, max_batch_size=2, max_batch_time=100, metrics=metrics,
             ),
+            metrics=metrics,
         )
 
         for _ in range(3):
@@ -66,15 +65,14 @@ class TestConsumer(object):
         consumer = broker.get_consumer("group")
 
         worker = FakeWorker()
+        metrics = DummyMetricsBackend(strict=True)
         batching_consumer = StreamProcessor(
             consumer,
             topic,
             BatchProcessingStrategyFactory(
-                worker=worker,
-                max_batch_size=100,
-                max_batch_time=2000,
-                metrics=DummyMetricsBackend(strict=True),
+                worker=worker, max_batch_size=100, max_batch_time=2000, metrics=metrics,
             ),
+            metrics=metrics,
         )
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())
