@@ -136,7 +136,7 @@ all_columns = (
         # other tags
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
-        ("_tags_hash_map", ReadOnly(Array(UInt(64))),),
+        ("_tags_hash_map", ReadOnly(Array(UInt(64)))),
         # other context
         ("contexts", Nested([("key", String()), ("value", String())])),
         # http interface
