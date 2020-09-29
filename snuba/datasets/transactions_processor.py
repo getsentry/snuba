@@ -45,7 +45,9 @@ class TransactionsMessageProcessor(MessageProcessor):
     }
 
     def __extract_timestamp(self, field):
-        timestamp = _ensure_valid_date(datetime.fromtimestamp(field))
+        # We are purposely using a naive datetime here to work with the rest of the codebase.
+        # We can be confident that clients are only sending UTC dates.
+        timestamp = _ensure_valid_date(datetime.utcfromtimestamp(field))
         if timestamp is None:
             timestamp = datetime.utcnow()
         milliseconds = int(timestamp.microsecond / 1000)
@@ -67,8 +69,10 @@ class TransactionsMessageProcessor(MessageProcessor):
         if event_type != "transaction":
             return None
         extract_base(processed, event)
+        # We are purposely using a naive datetime here to work with the rest of the codebase.
+        # We can be confident that clients are only sending UTC dates.
         processed["retention_days"] = enforce_retention(
-            event, datetime.fromtimestamp(data["timestamp"]),
+            event, datetime.utcfromtimestamp(data["timestamp"]),
         )
         if not data.get("contexts", {}).get("trace"):
             return None
