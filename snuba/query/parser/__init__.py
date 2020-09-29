@@ -350,7 +350,7 @@ def _expand_aliases(query: Query) -> None:
     query.transform(visitor)
 
 
-ARRAYJOIN_FUNCTION_MATCH = FunctionCallMatch(None, StringMatch("arrayJoin"), None)
+ARRAYJOIN_FUNCTION_MATCH = FunctionCallMatch(StringMatch("arrayJoin"), None)
 
 
 def _validate_arrayjoin(query: Query) -> None:

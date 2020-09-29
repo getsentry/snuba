@@ -1,7 +1,7 @@
 import calendar
 import uuid
 from contextlib import ExitStack
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import partial
 
 import simplejson as json
@@ -25,7 +25,9 @@ class TestDiscoverApi(BaseApiTest):
         self.app.post = partial(self.app.post, headers={"referer": "test"})
         self.project_id = self.event["project_id"]
 
-        self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+        self.base_time = datetime.utcnow().replace(
+            minute=0, second=0, microsecond=0, tzinfo=timezone.utc
+        )
         self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
         self.span_id = "8841662216cc598b"
         self.generate_event()

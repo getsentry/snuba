@@ -5,11 +5,9 @@ from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
     Float,
-    LowCardinality,
     Nullable,
     String,
     UInt,
-    WithDefault,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.querylog_processor import QuerylogProcessor
@@ -18,19 +16,17 @@ from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader
 
-NESTED_ARRAY_DEFAULT = "arrayResize([['']], length(clickhouse_queries.sql))"
-
 columns = ColumnSet(
     [
         ("request_id", UUID()),
         ("request_body", String()),
-        ("referrer", LowCardinality(String())),
-        ("dataset", LowCardinality(String())),
+        ("referrer", String()),
+        ("dataset", String()),
         ("projects", Array(UInt(64))),
         ("organization", Nullable(UInt(64))),
         ("timestamp", DateTime()),
         ("duration_ms", UInt(32)),
-        ("status", LowCardinality(String())),
+        ("status", String()),
         # clickhouse_queries Nested columns.
         # This is expanded into arrays instead of being expressed as a
         # Nested column because, when adding new columns to a nested field
@@ -41,7 +37,7 @@ columns = ColumnSet(
         # use the Nested construct, this schema cannot match the one generated
         # by the migration framework (or by any ALTER statement).
         ("clickhouse_queries.sql", Array(String())),
-        ("clickhouse_queries.status", Array(LowCardinality(String()))),
+        ("clickhouse_queries.status", Array(String())),
         ("clickhouse_queries.trace_id", Array(Nullable(UUID()))),
         ("clickhouse_queries.duration_ms", Array(UInt(32))),
         ("clickhouse_queries.stats", Array(String())),
@@ -50,38 +46,18 @@ columns = ColumnSet(
         ("clickhouse_queries.sample", Array(Float(32))),
         ("clickhouse_queries.max_threads", Array(UInt(8))),
         ("clickhouse_queries.num_days", Array(UInt(32))),
-        ("clickhouse_queries.clickhouse_table", Array(LowCardinality(String()))),
+        ("clickhouse_queries.clickhouse_table", Array(String())),
         ("clickhouse_queries.query_id", Array(String())),
         # XXX: ``is_duplicate`` is currently not set when using the
         # ``Cache.get_readthrough`` query execution path. See GH-902.
         ("clickhouse_queries.is_duplicate", Array(UInt(8))),
         ("clickhouse_queries.consistent", Array(UInt(8))),
-        (
-            "clickhouse_queries.all_columns",
-            WithDefault(Array(Array(LowCardinality(String()))), NESTED_ARRAY_DEFAULT),
-        ),
-        (
-            "clickhouse_queries.or_conditions",
-            WithDefault(
-                Array(UInt(8)), "arrayResize([0], length(clickhouse_queries.sql))",
-            ),
-        ),
-        (
-            "clickhouse_queries.where_columns",
-            WithDefault(Array(Array(LowCardinality(String()))), NESTED_ARRAY_DEFAULT),
-        ),
-        (
-            "clickhouse_queries.where_mapping_columns",
-            WithDefault(Array(Array(LowCardinality(String()))), NESTED_ARRAY_DEFAULT),
-        ),
-        (
-            "clickhouse_queries.groupby_columns",
-            WithDefault(Array(Array(LowCardinality(String()))), NESTED_ARRAY_DEFAULT),
-        ),
-        (
-            "clickhouse_queries.array_join_columns",
-            WithDefault(Array(Array(LowCardinality(String()))), NESTED_ARRAY_DEFAULT),
-        ),
+        ("clickhouse_queries.all_columns", Array(Array(String()))),
+        ("clickhouse_queries.or_conditions", Array(UInt(8))),
+        ("clickhouse_queries.where_columns", Array(Array(String()))),
+        ("clickhouse_queries.where_mapping_columns", Array(Array(String()))),
+        ("clickhouse_queries.groupby_columns", Array(Array(String()))),
+        ("clickhouse_queries.array_join_columns", Array(Array(String()))),
     ]
 )
 

@@ -8,7 +8,7 @@ setup-git:
 	pre-commit install --install-hooks
 
 test:
-	SNUBA_SETTINGS=test py.test -vv
+	SNUBA_SETTINGS=test pytest -vv
 
 install-python-dependencies:
 	pip install -e .

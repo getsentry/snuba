@@ -27,7 +27,6 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.events import event_translator
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import (
     QueryStorageSelector,
@@ -50,7 +49,6 @@ from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import String as StringMatch
 from snuba.query.matchers import Or, Param
-from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.performance_expressions import (
     apdex_processor,
@@ -75,15 +73,9 @@ metrics = MetricsWrapper(environment.metrics, "api.discover")
 logger = logging.getLogger(__name__)
 
 EVENT_CONDITION = FunctionCallMatch(
-    None,
     Param("function", Or([StringMatch(op) for op in BINARY_OPERATORS])),
     (
-        Or(
-            [
-                ColumnMatch(None, None, StringMatch("type")),
-                LiteralMatch(StringMatch("type"), None),
-            ]
-        ),
+        Or([ColumnMatch(None, StringMatch("type")), LiteralMatch(None)]),
         Param("event_type", Or([ColumnMatch(), LiteralMatch()])),
     ),
 )
@@ -402,7 +394,6 @@ class DiscoverEntity(Entity):
                 ("server_name", Nullable(String())),
                 ("site", Nullable(String())),
                 ("url", Nullable(String())),
-                ("search_message", Nullable(String())),
                 ("location", Nullable(String())),
                 ("culprit", Nullable(String())),
                 ("received", Nullable(DateTime())),
@@ -504,41 +495,6 @@ class DiscoverEntity(Entity):
                 timestamp_column="timestamp",
             ),
         }
-
-    def column_expr(
-        self,
-        column_name: str,
-        query: Query,
-        parsing_context: ParsingContext,
-        table_alias: str = "",
-    ) -> Union[None, Any]:
-        detected_entity = detect_table(
-            query, self.__events_columns, self.__transactions_columns, False,
-        )
-
-        if detected_entity == TRANSACTIONS:
-            if column_name == "group_id":
-                # TODO: We return 0 here instead of NULL so conditions like group_id
-                # in (1, 2, 3) will work, since Clickhouse won't run a query like:
-                # SELECT (NULL AS group_id) FROM transactions WHERE group_id IN (1, 2, 3)
-                # When we have the query AST, we should solve this by transforming the
-                # nonsensical conditions instead.
-                return "0"
-            if self.__events_columns.get(column_name):
-                return "NULL"
-        else:
-            if column_name == "release":
-                column_name = "tags[sentry:release]"
-            if column_name == "dist":
-                column_name = "tags[sentry:dist]"
-            if column_name == "user":
-                column_name = "tags[sentry:user]"
-            if self.__transactions_columns.get(column_name):
-                return "NULL"
-
-        return get_entity(detected_entity).column_expr(
-            column_name, query, parsing_context
-        )
 
     # TODO: This needs to burned with fire, for so many reasons.
     # It's here now to reduce the scope of the initial entity changes

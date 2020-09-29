@@ -2,7 +2,7 @@ from unittest.mock import call, patch
 
 from clickhouse_driver import errors
 
-from snuba.clickhouse.columns import Array, ColumnSet, Nested, Nullable, String, UInt
+from snuba.clickhouse.columns import Array, Nullable, UInt
 from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.factory import enforce_table_writer
 from tests.base import BaseEventsTest
@@ -20,13 +20,6 @@ class TestClickhouse(BaseEventsTest):
         assert columns["exception_frames.in_app"].name == "in_app"
         assert columns["exception_frames.in_app"].base_name == "exception_frames"
         assert columns["exception_frames.in_app"].flattened == "exception_frames.in_app"
-
-    def test_schema(self):
-        cols = ColumnSet([("foo", UInt(8)), ("bar", Nested([("qux:mux", String())]))])
-
-        assert cols.for_schema() == "foo UInt8, bar Nested(`qux:mux` String)"
-        assert cols["foo"].type == UInt(8)
-        assert cols["bar.qux:mux"].type == Array(String())
 
     @patch("snuba.clickhouse.native.Client")
     def test_reconnect(self, FakeClient):
