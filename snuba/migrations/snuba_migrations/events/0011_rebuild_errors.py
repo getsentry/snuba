@@ -92,7 +92,7 @@ columns = [
     Column("modules", Nested([("name", String()), ("version", String())])),
 ]
 
-sample_expr = "cityHash64(toString(event_id))"
+sample_expr = "cityHash64(event_id)"
 
 
 class Migration(migration.MultiStepMigration):
@@ -105,9 +105,10 @@ class Migration(migration.MultiStepMigration):
     - Dropped primary_hash_hex materialized column
     - primary_hash type converted from FixedString32 to UUID
     - Replaced deleted with row_version
-    - Primary key is now more in line with what we have for the events table:
+    - Primary key updated:
         - no org_id
-        - cityHash64(toString(event_id)) instead of primary_hash_hex, event_hash
+        - primary_hash instead of primary_hash_hex
+        - cityHash64(event_id) instead of event_hash
     - Sharding key for distributed table is also cityHash64(toString(event_id))
     - No _tags_flattened and _contexts_flattened since these are already unused
     - Partition key reflects retention_days value not only 30 or 90
@@ -124,7 +125,8 @@ class Migration(migration.MultiStepMigration):
                 engine=table_engines.ReplacingMergeTree(
                     storage_set=StorageSetKey.EVENTS,
                     version_column="row_version",
-                    order_by="(project_id, toStartOfDay(timestamp), %s)" % sample_expr,
+                    order_by="(project_id, toStartOfDay(timestamp), primary_hash, %s)"
+                    % sample_expr,
                     partition_by="(retention_days, toMonday(timestamp))",
                     sample_by=sample_expr,
                     ttl="timestamp + toIntervalDay(retention_days)",
