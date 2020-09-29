@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any, Mapping, Sequence, Union
+from typing import Mapping, Sequence
 
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToCurriedFunction,
@@ -12,9 +12,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
-from snuba.query.logical import Query
 from snuba.query.organization_extension import OrganizationExtension
-from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
@@ -86,29 +84,3 @@ class SessionsEntity(Entity):
             BasicFunctionsProcessor(),
             TimeSeriesProcessor(self.__time_group_columns, self.__time_parse_columns),
         ]
-
-    # Seems like this could be removed in favour of the storage translators.
-    def column_expr(
-        self,
-        column_name: str,
-        query: Query,
-        parsing_context: ParsingContext,
-        table_alias: str = "",
-    ) -> Union[None, Any]:
-        full_col = super().column_expr(column_name, query, parsing_context, table_alias)
-        func = None
-        if column_name == "duration_quantiles":
-            func = "quantilesIfMerge(0.5, 0.9)"
-        elif column_name in ("sessions", "sessions_crashed", "sessions_abnormal"):
-            func = "countIfMerge"
-        elif column_name in (
-            "users",
-            "sessions_errored",
-            "users_crashed",
-            "users_abnormal",
-            "users_errored",
-        ):
-            func = "uniqIfMerge"
-        if func is not None:
-            return "{}({})".format(func, full_col)
-        return full_col

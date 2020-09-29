@@ -1,12 +1,10 @@
-from typing import Any, Mapping, Optional, Sequence, Union
+from typing import Mapping, Optional, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
 from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.query.extensions import QueryExtension
-from snuba.query.logical import Query
-from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
 from snuba.query.validation import FunctionCallValidator
 
@@ -99,15 +97,3 @@ class Dataset(object):
 
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
         return self.__default_entity.get_writable_storage()
-
-    # DEPRECATED: Should move to translations/processors
-    def column_expr(
-        self,
-        column_name: str,
-        query: Query,
-        parsing_context: ParsingContext,
-        table_alias: str = "",
-    ) -> Union[None, Any]:
-        return self.__default_entity.column_expr(
-            column_name, query, parsing_context, table_alias
-        )

@@ -1,22 +1,16 @@
-from typing import Mapping, Sequence
-
 from snuba.clickhouse.columns import (
     UUID,
     Array,
     ColumnSet,
-    ColumnType,
     DateTime,
     FixedString,
     IPv4,
     IPv6,
-    LowCardinality,
-    Materialized,
     Nested,
     Nullable,
+    ReadOnly,
     String,
     UInt,
-    WithCodecs,
-    WithDefault,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.errors_processor import ErrorsProcessor
@@ -28,7 +22,6 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
-from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
@@ -39,90 +32,54 @@ from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 
 
-def errors_migrations(
-    clickhouse_table: str, current_schema: Mapping[str, ColumnType]
-) -> Sequence[str]:
-    ret = []
-
-    if "message_timestamp" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN message_timestamp DateTime AFTER offset"
-        )
-
-    if "_tags_hash_map" not in current_schema:
-        ret.append(
-            (
-                f"ALTER TABLE {clickhouse_table} ADD COLUMN _tags_hash_map Array(UInt64) "
-                f"MATERIALIZED {TAGS_HASH_MAP_COLUMN} AFTER _tags_flattened"
-            )
-        )
-
-    if "http_method" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_method LowCardinality(Nullable(String)) AFTER sdk_version"
-        )
-
-    if "http_referer" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN http_referer Nullable(String) AFTER http_method"
-        )
-
-    return ret
-
-
 all_columns = ColumnSet(
     [
         ("org_id", UInt(64)),
         ("project_id", UInt(64)),
         ("timestamp", DateTime()),
-        ("event_id", WithCodecs(UUID(), ["NONE"])),
-        (
-            "event_hash",
-            WithCodecs(
-                Materialized(UInt(64), "cityHash64(toString(event_id))",), ["NONE"],
-            ),
-        ),
-        ("platform", LowCardinality(String())),
-        ("environment", LowCardinality(Nullable(String()))),
-        ("release", LowCardinality(Nullable(String()))),
-        ("dist", LowCardinality(Nullable(String()))),
+        ("event_id", UUID()),
+        ("event_hash", ReadOnly(UInt(64))),
+        ("platform", String()),
+        ("environment", Nullable(String())),
+        ("release", Nullable(String())),
+        ("dist", Nullable(String())),
         ("ip_address_v4", Nullable(IPv4())),
         ("ip_address_v6", Nullable(IPv6())),
-        ("user", WithDefault(String(), "''")),
-        ("user_hash", Materialized(UInt(64), "cityHash64(user)"),),
+        ("user", String()),
+        ("user_hash", ReadOnly(UInt(64))),
         ("user_id", Nullable(String())),
         ("user_name", Nullable(String())),
         ("user_email", Nullable(String())),
-        ("sdk_name", LowCardinality(Nullable(String()))),
-        ("sdk_version", LowCardinality(Nullable(String()))),
-        ("http_method", LowCardinality(Nullable(String()))),
+        ("sdk_name", Nullable(String())),
+        ("sdk_version", Nullable(String())),
+        ("http_method", Nullable(String())),
         ("http_referer", Nullable(String())),
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
-        ("_tags_hash_map", Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN)),
+        ("_tags_hash_map", ReadOnly(Array(UInt(64)))),
         ("contexts", Nested([("key", String()), ("value", String())])),
         ("_contexts_flattened", String()),
-        ("transaction_name", WithDefault(LowCardinality(String()), "''")),
-        ("transaction_hash", Materialized(UInt(64), "cityHash64(transaction_name)"),),
+        ("transaction_name", String()),
+        ("transaction_hash", ReadOnly(UInt(64))),
         ("span_id", Nullable(UInt(64))),
         ("trace_id", Nullable(UUID())),
         ("partition", UInt(16)),
-        ("offset", WithCodecs(UInt(64), ["DoubleDelta", "LZ4"])),
+        ("offset", UInt(64)),
         ("message_timestamp", DateTime()),
         ("retention_days", UInt(16)),
         ("deleted", UInt(8)),
         ("group_id", UInt(64)),
         ("primary_hash", FixedString(32)),
-        ("primary_hash_hex", Materialized(UInt(64), "hex(primary_hash)")),
-        ("event_string", WithCodecs(String(), ["NONE"])),
+        ("primary_hash_hex", ReadOnly(UInt(64))),
+        ("event_string", String()),
         ("received", DateTime()),
         ("message", String()),
         ("title", String()),
         ("culprit", String()),
-        ("level", LowCardinality(String())),
+        ("level", String()),
         ("location", Nullable(String())),
-        ("version", LowCardinality(Nullable(String()))),
-        ("type", LowCardinality(String())),
+        ("version", Nullable(String())),
+        ("type", String()),
         (
             "exception_stacks",
             Nested(
@@ -217,8 +174,7 @@ storage = WritableTableStorage(
         replacement_topic="errors-replacements",
     ),
     replacer_processor=ErrorsReplacer(
-        write_schema=schema,
-        read_schema=schema,
+        schema=schema,
         required_columns=required_columns,
         tag_column_map={"tags": promoted_tag_columns, "contexts": {}},
         promoted_tags={"tags": list(promoted_tag_columns.keys()), "contexts": []},

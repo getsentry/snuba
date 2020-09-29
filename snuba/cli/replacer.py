@@ -122,6 +122,7 @@ def replacer(
             max_batch_time=max_batch_time_ms,
             metrics=metrics,
         ),
+        metrics=metrics,
         recoverable_errors=[TransportError],
     )
 

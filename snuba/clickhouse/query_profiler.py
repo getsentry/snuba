@@ -29,9 +29,8 @@ def _get_date_range(query: Query) -> Optional[int]:
     We pick the first column that is compared with a datetime Literal.
     """
     pattern = FunctionCall(
-        None,
         Or([String(ConditionFunctions.GT), String(ConditionFunctions.GTE)]),
-        (Column(None, None, Param("col_name", Any(str))), Literal(None, Any(datetime))),
+        (Column(None, Param("col_name", Any(str))), Literal(Any(datetime))),
     )
 
     condition = query.get_condition_from_ast()

@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any, Mapping, Optional, Sequence, Union
+from typing import Mapping, Optional, Sequence
 
 from snuba.clickhouse.processors import QueryProcessor as ClickhouseProcessor
 from snuba.clusters.storage_sets import StorageSetKey
@@ -20,12 +20,9 @@ from snuba.datasets.storage import ReadableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.table_storage import TableWriter
-from snuba.query.columns import QUALIFIED_COLUMN_REGEX
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
-from snuba.query.logical import Query
-from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor as LogicalProcessor
 from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
@@ -146,43 +143,6 @@ class GroupsEntity(Entity):
             abstract_column_set=schema.get_columns(),
             writable_storage=None,
         )
-
-    def column_expr(
-        self,
-        column_name: str,
-        query: Query,
-        parsing_context: ParsingContext,
-        table_alias: str = "",
-    ) -> Union[None, Any]:
-        # Eventually joined dataset should not be represented by the same abstraction
-        # as joinable datasets. That will be easier through the TableStorage abstraction.
-        # Thus, as of now, receiving a table_alias here is not supported.
-        assert (
-            table_alias == ""
-        ), "Groups dataset cannot be referenced with table aliases. Alias provided {table_alias}"
-
-        match = QUALIFIED_COLUMN_REGEX.match(column_name)
-        if not match:
-            # anything that is not prefixed with a table alias is simply
-            # escaped and returned. It could be a literal.
-            return super().column_expr(column_name, query, parsing_context, table_alias)
-        else:
-            table_alias = match[1]
-            simple_column_name = match[2]
-            if table_alias == self.GROUPS_ALIAS:
-                return self.__grouped_message.column_expr(
-                    simple_column_name, query, parsing_context, table_alias
-                )
-            elif table_alias == self.EVENTS_ALIAS:
-                return self.__events.column_expr(
-                    simple_column_name, query, parsing_context, table_alias
-                )
-            else:
-                # This is probably an error condition. To keep consistency with the behavior
-                # in existing datasets, we let Clickhouse figure it out.
-                return super().column_expr(
-                    simple_column_name, query, parsing_context, table_alias
-                )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {

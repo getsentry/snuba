@@ -4,6 +4,7 @@ import logging
 import time
 from typing import Generic, Mapping, Optional, Sequence, Type
 
+from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.backends.abstract import Consumer, ConsumerError
 from snuba.utils.streams.processing.strategies.abstract import (
     MessageRejected,
@@ -32,10 +33,12 @@ class StreamProcessor(Generic[TPayload]):
         consumer: Consumer[TPayload],
         topic: Topic,
         processor_factory: ProcessingStrategyFactory[TPayload],
+        metrics: MetricsBackend,
         recoverable_errors: Optional[Sequence[Type[ConsumerError]]] = None,
     ) -> None:
         self.__consumer = consumer
         self.__processor_factory = processor_factory
+        self.__metrics = metrics
 
         # The types passed to the `except` clause must be a tuple, not a Sequence.
         self.__recoverable_errors = tuple(recoverable_errors or [])
@@ -43,6 +46,10 @@ class StreamProcessor(Generic[TPayload]):
         self.__processing_strategy: Optional[ProcessingStrategy[TPayload]] = None
 
         self.__message: Optional[Message[TPayload]] = None
+
+        # If the consumer is in the paused state, this is when the last call to
+        # ``pause`` occurred.
+        self.__paused_timestamp: Optional[float] = None
 
         self.__shutdown_requested = False
 
@@ -149,16 +156,24 @@ class StreamProcessor(Generic[TPayload]):
                             self.__message,
                         )
                         self.__consumer.pause([*self.__consumer.tell().keys()])
+                        self.__paused_timestamp = time.time()
                 else:
                     # If we were trying to submit a message that failed to be
                     # submitted on a previous run, we can resume accepting new
                     # messages.
                     if message_carried_over:
+                        assert self.__paused_timestamp is not None
+                        paused_duration = time.time() - self.__paused_timestamp
+                        self.__paused_timestamp = None
                         logger.debug(
-                            "Successfully submitted %r, resuming consumer...",
+                            "Successfully submitted %r, resuming consumer after %0.4f seconds...",
                             self.__message,
+                            paused_duration,
                         )
                         self.__consumer.resume([*self.__consumer.tell().keys()])
+                        self.__metrics.timing(
+                            "pause_duration_ms", paused_duration * 1000
+                        )
                     self.__message = None
         else:
             if self.__message is not None:
