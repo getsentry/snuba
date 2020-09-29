@@ -104,6 +104,7 @@ class Migration(migration.MultiStepMigration):
     - Dropped event_hash materialized column
     - Dropped primary_hash_hex materialized column
     - primary_hash type converted from FixedString32 to UUID
+    - Replaced deleted with row_version
     - Primary key is now more in line with what we have for the events table:
         - no org_id
         - cityHash64(toString(event_id)) instead of primary_hash_hex, event_hash
