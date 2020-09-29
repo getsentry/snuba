@@ -80,17 +80,14 @@ class TestTransactionsApi(BaseApiTest):
                                         ),
                                         "type": "transaction",
                                         "transaction": "/api/do_things",
-                                        # XXX(dcramer): would be nice to document why these have to be naive
                                         "start_timestamp": datetime.timestamp(
-                                            (
-                                                self.base_time + timedelta(minutes=tick)
-                                            ).replace(tzinfo=None)
+                                            (self.base_time + timedelta(minutes=tick))
                                         ),
                                         "timestamp": datetime.timestamp(
                                             (
                                                 self.base_time
                                                 + timedelta(minutes=tick, seconds=1)
-                                            ).replace(tzinfo=None)
+                                            )
                                         ),
                                         "tags": {
                                             # Sentry
