@@ -51,8 +51,9 @@ class FlattenedColumn:
         self.flattened = (
             "{}.{}".format(self.base_name, self.name) if self.base_name else self.name
         )
-        self.escaped: str = escape_identifier(self.flattened)
-        assert self.escaped is not None
+        escaped = escape_identifier(self.flattened)
+        assert escaped is not None
+        self.escaped: str = escaped
 
     def __repr__(self) -> str:
         return "FlattenedColumn({}, {}, {})".format(
@@ -425,7 +426,9 @@ class ColumnSet:
     def __len__(self) -> int:
         return len(self._flattened)
 
-    def __add__(self, other) -> ColumnSet:
+    def __add__(
+        self, other: Union[ColumnSet, Sequence[Tuple[str, ColumnType]]]
+    ) -> ColumnSet:
         if isinstance(other, ColumnSet):
             return ColumnSet([*self.columns, *other.columns])
         return ColumnSet([*self.columns, *other])
@@ -446,9 +449,6 @@ class ColumnSet:
             return self[key]
         except KeyError:
             return default
-
-    def for_schema(self) -> str:
-        return ", ".join(column.for_schema() for column in self.columns)
 
 
 class QualifiedColumnSet(ColumnSet):
