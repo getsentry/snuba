@@ -2,7 +2,7 @@ from typing import Sequence
 
 import pytest
 
-from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, NullableOld, String
+from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, String
 from snuba.query.expressions import (
     Column as ColumnExpr,
     Expression,
@@ -126,7 +126,7 @@ def test_like_validator(
             ("level", Nullable(String())),
             ("str_col", String()),
             ("timestamp", DateTime()),
-            ("received", NullableOld(DateTime())),
+            ("received", Nullable(DateTime())),
         ]
     )
 

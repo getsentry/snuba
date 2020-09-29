@@ -394,7 +394,6 @@ class DiscoverEntity(Entity):
                 ("server_name", Nullable(String())),
                 ("site", Nullable(String())),
                 ("url", Nullable(String())),
-                ("search_message", Nullable(String())),
                 ("location", Nullable(String())),
                 ("culprit", Nullable(String())),
                 ("received", Nullable(DateTime())),

@@ -7,11 +7,9 @@ from typing import (
     Iterator,
     Mapping,
     MutableMapping,
-    MutableSequence,
     List,
     Optional,
     Sequence,
-    Type,
     Tuple,
     Union,
 )
@@ -53,8 +51,9 @@ class FlattenedColumn:
         self.flattened = (
             "{}.{}".format(self.base_name, self.name) if self.base_name else self.name
         )
-        self.escaped: str = escape_identifier(self.flattened)
-        assert self.escaped is not None
+        escaped = escape_identifier(self.flattened)
+        assert escaped is not None
+        self.escaped: str = escaped
 
     def __repr__(self) -> str:
         return "FlattenedColumn({}, {}, {})".format(
@@ -82,13 +81,6 @@ class ColumnType:
     def flatten(self, name: str) -> Sequence[FlattenedColumn]:
         return [FlattenedColumn(None, name, self)]
 
-    def get_all_modifiers(self) -> MutableSequence[Type[ColumnTypeWithModifier]]:
-        """
-        Basic column types never have any modifiers, since modifiers wrap a basic
-        column type in order to modify it in some way. Deprecated.
-        """
-        return []
-
     def get_raw(self) -> ColumnType:
         return self
 
@@ -97,39 +89,8 @@ class ColumnTypeWithModifier(ABC, ColumnType):
     def __init__(self, inner_type: ColumnType) -> None:
         self.inner_type = inner_type
 
-    def get_all_modifiers(self) -> MutableSequence[Type[ColumnTypeWithModifier]]:
-        def get_nested_modifiers(
-            obj: ColumnType,
-        ) -> MutableSequence[Type[ColumnTypeWithModifier]]:
-            if not isinstance(obj, ColumnTypeWithModifier):
-                return obj.get_all_modifiers()
-            else:
-                nested_modifiers = get_nested_modifiers(obj.inner_type)
-                nested_modifiers.append(type(obj))
-                return nested_modifiers
-
-        return get_nested_modifiers(self)
-
     def get_raw(self) -> ColumnType:
         return self.inner_type.get_raw()
-
-
-class NullableOld(ColumnTypeWithModifier):
-    # Old version of Nullable that inherits from ColumnTypeWithModifier, will be
-    # removed after old migration system is gone.
-    def __init__(self, inner_type: ColumnType) -> None:
-        super().__init__(inner_type)
-
-    def __repr__(self) -> str:
-        return "Nullable({})".format(repr(self.inner_type))
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            self.__class__ == other.__class__ or isinstance(other, Nullable)
-        ) and self.inner_type == cast(NullableOld, other).inner_type
-
-    def for_schema(self) -> str:
-        return "Nullable({})".format(self.inner_type.for_schema())
 
 
 class Materialized(ColumnTypeWithModifier):
@@ -210,15 +171,15 @@ class Nullable(ColumnType):
         return "Nullable({})".format(repr(self.inner_type))
 
     def __eq__(self, other: object) -> bool:
-        return (
-            self.__class__ == other.__class__ or isinstance(other, NullableOld)
-        ) and self.inner_type == cast(Nullable, other).inner_type
+        return (self.__class__ == other.__class__) and self.inner_type == cast(
+            Nullable, other
+        ).inner_type
 
     def for_schema(self) -> str:
         return "Nullable({})".format(self.inner_type.for_schema())
 
     def get_raw(self) -> ColumnType:
-        return self.inner_type.get_raw()
+        return Nullable(self.inner_type.get_raw())
 
 
 class Array(ColumnType):
@@ -236,6 +197,9 @@ class Array(ColumnType):
 
     def for_schema(self) -> str:
         return "Array({})".format(self.inner_type.for_schema())
+
+    def get_raw(self) -> ColumnType:
+        return Array(self.inner_type.get_raw())
 
 
 class Nested(ColumnType):
@@ -441,7 +405,9 @@ class ColumnSet:
     def __len__(self) -> int:
         return len(self._flattened)
 
-    def __add__(self, other) -> ColumnSet:
+    def __add__(
+        self, other: Union[ColumnSet, Sequence[Tuple[str, ColumnType]]]
+    ) -> ColumnSet:
         if isinstance(other, ColumnSet):
             return ColumnSet([*self.columns, *other.columns])
         return ColumnSet([*self.columns, *other])
@@ -462,9 +428,6 @@ class ColumnSet:
             return self[key]
         except KeyError:
             return default
-
-    def for_schema(self) -> str:
-        return ", ".join(column.for_schema() for column in self.columns)
 
 
 class QualifiedColumnSet(ColumnSet):

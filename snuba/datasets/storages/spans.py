@@ -6,7 +6,7 @@ from snuba.clickhouse.columns import (
     LowCardinality,
     Materialized,
     Nested,
-    NullableOld as Nullable,
+    Nullable,
     String,
     UInt,
     WithDefault,

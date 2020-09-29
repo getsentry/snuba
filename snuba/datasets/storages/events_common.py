@@ -9,7 +9,7 @@ from snuba.clickhouse.columns import (
     Float,
     Materialized,
     Nested,
-    NullableOld as Nullable,
+    Nullable,
     ReadOnly,
     String,
     UInt,
