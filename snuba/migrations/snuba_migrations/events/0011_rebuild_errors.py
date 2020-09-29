@@ -180,6 +180,14 @@ class Migration(migration.MultiStepMigration):
                 old_table_name="errors_dist_new",
                 new_table_name="errors_dist",
             ),
+            operations.CreateTable(
+                storage_set=StorageSetKey.EVENTS_RO,
+                table_name="errors_dist_ro",
+                columns=columns,
+                engine=table_engines.Distributed(
+                    local_table_name="errors_local", sharding_key=sample_expr,
+                ),
+            ),
         ]
 
     def backwards_dist(self) -> Sequence[operations.Operation]:
