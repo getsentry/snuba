@@ -2,121 +2,18 @@ from __future__ import annotations
 
 import logging
 import time
-from abc import ABC, abstractmethod
-from typing import (
-    Callable,
-    Generic,
-    Mapping,
-    Optional,
-    Sequence,
-    Type,
-)
+from typing import Generic, Mapping, Optional, Sequence, Type
 
+from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.backends.abstract import Consumer, ConsumerError
+from snuba.utils.streams.processing.strategies.abstract import (
+    MessageRejected,
+    ProcessingStrategy,
+    ProcessingStrategyFactory,
+)
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
-
 logger = logging.getLogger(__name__)
-
-
-class MessageRejected(Exception):
-    pass
-
-
-class ProcessingStrategy(ABC, Generic[TPayload]):
-    """
-    A processing strategy defines how a stream processor processes messages
-    during the course of a single assignment. The processor is instantiated
-    when the assignment is received, and closed when the assignment is
-    revoked.
-
-    This interface is intentionally not prescriptive, and affords a
-    significant degree of flexibility for the various implementations.
-    """
-
-    @abstractmethod
-    def poll(self) -> None:
-        """
-        Poll the processor to check on the status of asynchronous tasks or
-        perform other scheduled work.
-
-        This method is called on each consumer loop iteration, so this method
-        should not be used to perform work that may block for a significant
-        amount of time and block the progress of the consumer or exceed the
-        consumer poll interval timeout.
-
-        This method may raise exceptions that were thrown by asynchronous
-        tasks since the previous call to ``poll``.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def submit(self, message: Message[TPayload]) -> None:
-        """
-        Submit a message for processing.
-
-        Messages may be processed synchronously or asynchronously, depending
-        on the implementation of the processing strategy. Callers of this
-        method should not assume that this method returning successfully
-        implies that the message was successfully processed.
-
-        If the processing strategy is unable to accept a message (due to it
-        being at or over capacity, for example), this method will raise a
-        ``MessageRejected`` exception.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def close(self) -> None:
-        """
-        Close this instance. No more messages should be accepted by the
-        instance after this method has been called.
-
-        This method should not block. Once this strategy instance has
-        finished processing (or discarded) all messages that were submitted
-        prior to this method being called, the strategy should commit its
-        partition offsets and release any resources that will no longer be
-        used (threads, processes, sockets, files, etc.)
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def terminate(self) -> None:
-        """
-        Close the processing strategy immediately, abandoning any work in
-        progress. No more messages should be accepted by the instance after
-        this method has been called.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def join(self, timeout: Optional[float] = None) -> None:
-        """
-        Block until the processing strategy has completed all previously
-        submitted work, or the provided timeout has been reached. This method
-        should be called after ``close`` to provide a graceful shutdown.
-
-        This method is called synchronously by the stream processor during
-        assignment revocation, and blocks the assignment from being released
-        until this function exits, allowing any work in progress to be
-        completed and committed before the continuing the rebalancing
-        process.
-        """
-        raise NotImplementedError
-
-
-class ProcessingStrategyFactory(ABC, Generic[TPayload]):
-    @abstractmethod
-    def create(
-        self, commit: Callable[[Mapping[Partition, int]], None]
-    ) -> ProcessingStrategy[TPayload]:
-        """
-        Instantiate and return a ``ProcessingStrategy`` instance.
-
-        :param commit: A function that accepts a mapping of ``Partition``
-        instances to offset values that should be committed.
-        """
-        raise NotImplementedError
 
 
 class InvalidStateError(RuntimeError):
@@ -136,10 +33,12 @@ class StreamProcessor(Generic[TPayload]):
         consumer: Consumer[TPayload],
         topic: Topic,
         processor_factory: ProcessingStrategyFactory[TPayload],
+        metrics: MetricsBackend,
         recoverable_errors: Optional[Sequence[Type[ConsumerError]]] = None,
     ) -> None:
         self.__consumer = consumer
         self.__processor_factory = processor_factory
+        self.__metrics = metrics
 
         # The types passed to the `except` clause must be a tuple, not a Sequence.
         self.__recoverable_errors = tuple(recoverable_errors or [])
@@ -147,6 +46,10 @@ class StreamProcessor(Generic[TPayload]):
         self.__processing_strategy: Optional[ProcessingStrategy[TPayload]] = None
 
         self.__message: Optional[Message[TPayload]] = None
+
+        # If the consumer is in the paused state, this is when the last call to
+        # ``pause`` occurred.
+        self.__paused_timestamp: Optional[float] = None
 
         self.__shutdown_requested = False
 
@@ -253,16 +156,24 @@ class StreamProcessor(Generic[TPayload]):
                             self.__message,
                         )
                         self.__consumer.pause([*self.__consumer.tell().keys()])
+                        self.__paused_timestamp = time.time()
                 else:
                     # If we were trying to submit a message that failed to be
                     # submitted on a previous run, we can resume accepting new
                     # messages.
                     if message_carried_over:
+                        assert self.__paused_timestamp is not None
+                        paused_duration = time.time() - self.__paused_timestamp
+                        self.__paused_timestamp = None
                         logger.debug(
-                            "Successfully submitted %r, resuming consumer...",
+                            "Successfully submitted %r, resuming consumer after %0.4f seconds...",
                             self.__message,
+                            paused_duration,
                         )
                         self.__consumer.resume([*self.__consumer.tell().keys()])
+                        self.__metrics.timing(
+                            "pause_duration_ms", paused_duration * 1000
+                        )
                     self.__message = None
         else:
             if self.__message is not None:

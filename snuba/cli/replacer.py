@@ -7,7 +7,7 @@ from snuba import environment, settings
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.environment import setup_logging, setup_sentry
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 
 @click.command()
@@ -84,8 +84,10 @@ def replacer(
         TransportError,
         build_kafka_consumer_configuration,
     )
-    from snuba.utils.streams.batching import BatchProcessingStrategyFactory
     from snuba.utils.streams.processing import StreamProcessor
+    from snuba.utils.streams.processing.strategies.batching import (
+        BatchProcessingStrategyFactory,
+    )
 
     setup_logging(log_level)
     setup_sentry()
@@ -120,6 +122,7 @@ def replacer(
             max_batch_time=max_batch_time_ms,
             metrics=metrics,
         ),
+        metrics=metrics,
         recoverable_errors=[TransportError],
     )
 

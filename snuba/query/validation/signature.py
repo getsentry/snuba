@@ -1,7 +1,7 @@
 import logging
 from abc import ABC
 from datetime import date, datetime
-from typing import Sequence, Set, Type, Union
+from typing import cast, Sequence, Set, Type, Union
 
 from snuba.clickhouse.columns import (
     UUID,
@@ -46,7 +46,7 @@ class Any(ParamType):
 
 
 COLUMN_PATTERN = ColumnMatcher(
-    alias=None, table_name=None, column_name=Param("column_name", AnyMatcher(str)),
+    table_name=None, column_name=Param("column_name", AnyMatcher(str)),
 )
 
 LITERAL_PATTERN = LiteralMatcher()
@@ -111,7 +111,12 @@ class Column(ParamType):
             return
 
         column_type = column.type.get_raw()
-        nullable = Nullable in column.type.get_all_modifiers()
+
+        nullable = isinstance(column_type, Nullable)
+
+        if nullable:
+            column_type = cast(Nullable, column_type).inner_type
+
         if not isinstance(column_type, tuple(self.__valid_types)) or (
             nullable and not self.__allow_nullable
         ):

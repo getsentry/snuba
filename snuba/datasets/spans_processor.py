@@ -14,7 +14,7 @@ from snuba.processor import (
     _ensure_valid_date,
     _unicodify,
 )
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 UNKNOWN_SPAN_STATUS = 2
 
@@ -104,11 +104,16 @@ class SpansMessageProcessor(MessageProcessor):
         processed = self.__init_span(event)
         processed["span_id"] = int(transaction_ctx["span_id"], 16)
         processed["transaction_name"] = _unicodify(data.get("transaction") or "")
-        processed["parent_span_id"] = (
-            int(transaction_ctx["parent_span_id"], 16)
-            if "parent_span_id" in transaction_ctx
-            else None
-        )
+        parent_span_id = transaction_ctx.get("parent_span_id")
+        if parent_span_id is not None and isinstance(parent_span_id, str):
+            processed["parent_span_id"] = int(parent_span_id, 16)
+        else:
+            processed["parent_span_id"] = None
+            if parent_span_id is not None:
+                metrics.increment(
+                    "invalid_parent_span_type", tags={"type": str(type(parent_span_id))}
+                )
+
         processed["description"] = _unicodify(data.get("transaction") or "")
         processed["op"] = _unicodify(transaction_ctx.get("op") or "")
         status = transaction_ctx.get("status", None)

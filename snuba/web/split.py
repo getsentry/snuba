@@ -25,7 +25,7 @@ from snuba.query.logical import SelectedExpression
 from snuba.query.matchers import AnyExpression, Column, FunctionCall, Or, Param, String
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryResult
 
 logger = logging.getLogger("snuba.query.split")
@@ -54,9 +54,8 @@ def _replace_ast_condition(
 
     def replace_condition(expression: Expression) -> Expression:
         match = FunctionCall(
-            None,
             String(OPERATOR_TO_FUNCTION[operator]),
-            (Param("column", Column(None, None, String(field))), AnyExpression()),
+            (Param("column", Column(None, String(field))), AnyExpression()),
         ).match(expression)
 
         return (
@@ -274,9 +273,8 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
 
         # Do not split if there is already a = or IN condition on an ID column
         id_column_matcher = FunctionCall(
-            None,
             Or([String(ConditionFunctions.EQ), String(ConditionFunctions.IN)]),
-            (Column(None, None, String(self.__id_column)), AnyExpression(),),
+            (Column(None, String(self.__id_column)), AnyExpression(),),
         )
 
         for expr in query.get_condition_from_ast() or []:

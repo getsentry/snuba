@@ -111,7 +111,6 @@ def get_project_ids_in_query_ast(
         conditions are found.
         """
         match = FunctionCall(
-            None,
             String(ConditionFunctions.EQ),
             (
                 Column(column_name=String(project_column)),
@@ -128,13 +127,12 @@ def get_project_ids_in_query_ast(
             projects = match.expression("tuple")
             assert isinstance(projects, FunctionCallExpr)
             return {
-                l.value
-                for l in projects.parameters
-                if isinstance(l, LiteralExpr) and isinstance(l.value, int)
+                lit.value
+                for lit in projects.parameters
+                if isinstance(lit, LiteralExpr) and isinstance(lit.value, int)
             }
 
         match = FunctionCall(
-            None,
             Param(
                 "operator",
                 Or([String(BooleanFunctions.AND), String(BooleanFunctions.OR)]),
@@ -181,7 +179,6 @@ def get_time_range(
     min_upper_bound = None
     for c in get_first_level_and_conditions(condition_clause):
         match = FunctionCall(
-            None,
             Param(
                 "operator",
                 Or(
@@ -192,8 +189,8 @@ def get_time_range(
                 ),
             ),
             (
-                Column(None, None, String(timestamp_field)),
-                Literal(None, Param("timestamp", Any(datetime))),
+                Column(None, String(timestamp_field)),
+                Literal(Param("timestamp", Any(datetime))),
             ),
         ).match(c)
 

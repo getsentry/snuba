@@ -4,7 +4,7 @@ from typing import Iterator, List, Optional
 
 from snuba.subscriptions.data import PartitionId, Subscription, SubscriptionIdentifier
 from snuba.subscriptions.store import SubscriptionDataStore
-from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.metrics import MetricsBackend
 from snuba.utils.scheduler import Scheduler, ScheduledTask
 from snuba.utils.types import Interval
 

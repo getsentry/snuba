@@ -1,20 +1,18 @@
 import logging
-from typing import Any, Mapping, Optional, Set
+from typing import Optional, Set
 
 from confluent_kafka import Producer
 
 from snuba.consumer import ConsumerWorker, KafkaMessageMetadata
+from snuba.datasets.cdc.types import Event as CDCEvent
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import MessageProcessor, ProcessedMessage
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
-from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams import Topic
 
 logger = logging.getLogger("snuba.snapshot-consumer")
-
-
-CDCEvent = Mapping[str, Any]  # TODO: Replace with ``TypedDict``
 
 
 class SnapshotProcessor(MessageProcessor):

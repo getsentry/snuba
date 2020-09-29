@@ -9,10 +9,10 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
 from snuba.replacers.replacer_processor import Replacement, ReplacementMessage
-from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams import Message
 from snuba.utils.streams.backends.kafka import KafkaPayload
-from snuba.utils.streams.batching import AbstractBatchWorker
+from snuba.utils.streams.processing.strategies.batching import AbstractBatchWorker
 
 
 logger = logging.getLogger("snuba.replacer")
@@ -50,8 +50,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         for replacement in batch:
             query_args = {
                 **replacement.query_args,
-                "dist_read_table_name": self.__replacer_processor.get_read_schema().get_table_name(),
-                "dist_write_table_name": self.__replacer_processor.get_write_schema().get_table_name(),
+                "table_name": self.__replacer_processor.get_schema().get_table_name(),
             }
             count = self.clickhouse.execute_robust(
                 replacement.count_query_template % query_args

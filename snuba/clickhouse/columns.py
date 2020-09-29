@@ -7,11 +7,9 @@ from typing import (
     Iterator,
     Mapping,
     MutableMapping,
-    MutableSequence,
     List,
     Optional,
     Sequence,
-    Type,
     Tuple,
     Union,
 )
@@ -82,13 +80,6 @@ class ColumnType:
     def flatten(self, name: str) -> Sequence[FlattenedColumn]:
         return [FlattenedColumn(None, name, self)]
 
-    def get_all_modifiers(self) -> MutableSequence[Type[ColumnTypeWithModifier]]:
-        """
-        Basic column types never have any modifiers, since modifiers wrap a basic
-        column type in order to modify it in some way.
-        """
-        return []
-
     def get_raw(self) -> ColumnType:
         return self
 
@@ -97,24 +88,13 @@ class ColumnTypeWithModifier(ABC, ColumnType):
     def __init__(self, inner_type: ColumnType) -> None:
         self.inner_type = inner_type
 
-    def get_all_modifiers(self) -> MutableSequence[Type[ColumnTypeWithModifier]]:
-        def get_nested_modifiers(
-            obj: ColumnType,
-        ) -> MutableSequence[Type[ColumnTypeWithModifier]]:
-            if not isinstance(obj, ColumnTypeWithModifier):
-                return obj.get_all_modifiers()
-            else:
-                nested_modifiers = get_nested_modifiers(obj.inner_type)
-                nested_modifiers.append(type(obj))
-                return nested_modifiers
-
-        return get_nested_modifiers(self)
-
     def get_raw(self) -> ColumnType:
         return self.inner_type.get_raw()
 
 
-class Nullable(ColumnTypeWithModifier):
+class NullableOld(ColumnTypeWithModifier):
+    # Old version of Nullable that inherits from ColumnTypeWithModifier, will be
+    # removed after old migration system is gone.
     def __init__(self, inner_type: ColumnType) -> None:
         super().__init__(inner_type)
 
@@ -123,12 +103,14 @@ class Nullable(ColumnTypeWithModifier):
 
     def __eq__(self, other: object) -> bool:
         return (
-            self.__class__ == other.__class__
-            and self.inner_type == cast(Nullable, other).inner_type
-        )
+            self.__class__ == other.__class__ or isinstance(other, Nullable)
+        ) and self.inner_type == cast(NullableOld, other).inner_type
 
     def for_schema(self) -> str:
         return "Nullable({})".format(self.inner_type.for_schema())
+
+    def get_raw(self) -> ColumnType:
+        return Nullable(self.inner_type.get_raw())
 
 
 class Materialized(ColumnTypeWithModifier):
@@ -190,6 +172,36 @@ class WithDefault(ColumnTypeWithModifier):
         return "{} DEFAULT {}".format(self.inner_type.for_schema(), self.default)
 
 
+class ReadOnly(ColumnType):
+    def __init__(self, inner_type: ColumnType) -> None:
+        self.inner_type = inner_type
+
+    def __repr__(self) -> str:
+        return "ReadOnly({})".format(repr(self.inner_type))
+
+    def get_raw(self) -> ColumnType:
+        return self.inner_type.get_raw()
+
+
+class Nullable(ColumnType):
+    def __init__(self, inner_type: ColumnType) -> None:
+        self.inner_type = inner_type
+
+    def __repr__(self) -> str:
+        return "Nullable({})".format(repr(self.inner_type))
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__ or isinstance(other, NullableOld)
+        ) and self.inner_type == cast(Nullable, other).inner_type
+
+    def for_schema(self) -> str:
+        return "Nullable({})".format(self.inner_type.for_schema())
+
+    def get_raw(self) -> ColumnType:
+        return Nullable(self.inner_type.get_raw())
+
+
 class Array(ColumnType):
     def __init__(self, inner_type: ColumnType) -> None:
         self.inner_type = inner_type
@@ -205,6 +217,9 @@ class Array(ColumnType):
 
     def for_schema(self) -> str:
         return "Array({})".format(self.inner_type.for_schema())
+
+    def get_raw(self) -> ColumnType:
+        return Array(self.inner_type.get_raw())
 
 
 class Nested(ColumnType):

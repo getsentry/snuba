@@ -18,16 +18,18 @@ from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.worker import SubscriptionWorker
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams import Topic
 from snuba.utils.streams.backends.kafka import (
     KafkaConsumer,
     KafkaProducer,
     build_kafka_consumer_configuration,
 )
-from snuba.utils.streams.batching import BatchProcessingStrategyFactory
 from snuba.utils.streams.encoding import ProducerEncodingWrapper
 from snuba.utils.streams.processing import StreamProcessor
+from snuba.utils.streams.processing.strategies.batching import (
+    BatchProcessingStrategyFactory,
+)
 from snuba.utils.streams.synchronized import SynchronizedConsumer
 
 
@@ -210,6 +212,7 @@ def subscriptions(
                 max_batch_time_ms,
                 metrics,
             ),
+            metrics=metrics,
         )
 
         def handler(signum, frame) -> None:

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Mapping, NamedTuple, Optional
 
-from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
+from snuba.datasets.schemas.tables import WritableTableSchema
 
 
 class ReplacementMessage(NamedTuple):
@@ -32,11 +32,8 @@ class ReplacerProcessor(ABC):
     instance of this class that will be used by the ReplacementWorker.
     """
 
-    def __init__(
-        self, write_schema: WritableTableSchema, read_schema: TableSchema
-    ) -> None:
-        self.__write_schema = write_schema
-        self.__read_schema = read_schema
+    def __init__(self, schema: WritableTableSchema) -> None:
+        self.__schema = schema
 
     @abstractmethod
     def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
@@ -45,11 +42,8 @@ class ReplacerProcessor(ABC):
         """
         raise NotImplementedError
 
-    def get_write_schema(self) -> WritableTableSchema:
-        return self.__write_schema
-
-    def get_read_schema(self) -> TableSchema:
-        return self.__read_schema
+    def get_schema(self) -> WritableTableSchema:
+        return self.__schema
 
     def pre_replacement(self, replacement: Replacement, matching_records: int) -> bool:
         """

@@ -1,4 +1,5 @@
 import logging
+import numbers
 import uuid
 from datetime import datetime
 from typing import Any, MutableMapping, Optional
@@ -25,7 +26,7 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify,
 )
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +138,15 @@ class TransactionsMessageProcessor(MessageProcessor):
                 (
                     processed["measurements.key"],
                     processed["measurements.value"],
-                ) = extract_nested(measurements, lambda value: float(value["value"]))
+                ) = extract_nested(
+                    measurements,
+                    lambda value: float(value["value"])
+                    if (
+                        value is not None
+                        and isinstance(value.get("value"), numbers.Number)
+                    )
+                    else None,
+                )
             except Exception:
                 # Not failing the event in this case just yet, because we are still
                 # developing this feature.

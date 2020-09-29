@@ -1,6 +1,6 @@
 import re
 from dataclasses import replace
-from typing import Any, Iterable, List, Optional, Tuple, Union
+from typing import Any, Iterable, List, Optional, Set, Tuple, Union
 
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
@@ -164,7 +164,7 @@ class ClickhouseVisitor(NodeVisitor):
 
 
 def parse_expression(
-    val: Any, dataset_columns: ColumnSet, arrayjoin: Optional[str] = ""
+    val: Any, dataset_columns: ColumnSet, arrayjoin: Set[str]
 ) -> Expression:
     """
     Parse a simple or structured expression encoded in the Snuba query language
@@ -193,6 +193,7 @@ def parse_aggregation(
     column: Any,
     alias: Optional[str],
     dataset_columns: ColumnSet,
+    array_join_cols: Set[str],
 ) -> Expression:
     """
     Aggregations, unfortunately, support both Snuba syntax and a subset
@@ -208,7 +209,9 @@ def parse_aggregation(
         columns = column
 
     columns_expr = [
-        parse_expression(column, dataset_columns) for column in columns if column
+        parse_expression(column, dataset_columns, array_join_cols)
+        for column in columns
+        if column
     ]
 
     matched = FUNCTION_NAME_RE.fullmatch(aggregation_function)
