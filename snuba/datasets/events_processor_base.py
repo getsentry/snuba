@@ -75,6 +75,12 @@ class EventsProcessorBase(MessageProcessor, ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def _extract_version(
+        self, output: MutableMapping[str, Any], event: InsertEvent,
+    ) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
     def extract_custom(
         self,
         output: MutableMapping[str, Any],
@@ -170,9 +176,10 @@ class EventsProcessorBase(MessageProcessor, ABC):
         if not self._should_process(event):
             return None
 
-        processed = {"deleted": 0}
+        processed = {}
         extract_project_id(processed, event)
         self._extract_event_id(processed, event)
+        self._extract_version(processed, event)
         processed["retention_days"] = enforce_retention(
             event,
             datetime.strptime(event["datetime"], settings.PAYLOAD_DATETIME_FORMAT),

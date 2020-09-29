@@ -50,7 +50,7 @@ columns = [
     Column("offset", WithCodecs(UInt(64), ["DoubleDelta", "LZ4"])),
     Column("message_timestamp", DateTime()),
     Column("retention_days", UInt(16)),
-    Column("deleted", UInt(8)),
+    Column("row_version", UInt(8)),
     Column("group_id", UInt(64)),
     Column("primary_hash", UUID()),
     Column("received", DateTime()),
@@ -122,7 +122,7 @@ class Migration(migration.MultiStepMigration):
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
                     storage_set=StorageSetKey.EVENTS,
-                    version_column="deleted",
+                    version_column="row_version",
                     order_by="(project_id, toStartOfDay(timestamp), %s)" % sample_expr,
                     partition_by="(retention_days, toMonday(timestamp))",
                     sample_by=sample_expr,

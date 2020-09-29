@@ -39,6 +39,11 @@ class EventsProcessor(EventsProcessorBase):
     ) -> None:
         output["event_id"] = event["event_id"]
 
+    def _extract_version(
+        self, output: MutableMapping[str, Any], event: InsertEvent,
+    ) -> None:
+        output["deleted"] = 0
+
     def extract_custom(
         self,
         output: MutableMapping[str, Any],
