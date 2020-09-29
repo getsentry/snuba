@@ -93,27 +93,6 @@ class ColumnTypeWithModifier(ABC, ColumnType):
         return self.inner_type.get_raw()
 
 
-class NullableOld(ColumnTypeWithModifier):
-    # Old version of Nullable that inherits from ColumnTypeWithModifier, will be
-    # removed after old migration system is gone.
-    def __init__(self, inner_type: ColumnType) -> None:
-        super().__init__(inner_type)
-
-    def __repr__(self) -> str:
-        return "Nullable({})".format(repr(self.inner_type))
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            self.__class__ == other.__class__ or isinstance(other, Nullable)
-        ) and self.inner_type == cast(NullableOld, other).inner_type
-
-    def for_schema(self) -> str:
-        return "Nullable({})".format(self.inner_type.for_schema())
-
-    def get_raw(self) -> ColumnType:
-        return Nullable(self.inner_type.get_raw())
-
-
 class Materialized(ColumnTypeWithModifier):
     def __init__(self, inner_type: ColumnType, expression: str) -> None:
         super().__init__(inner_type)
@@ -192,9 +171,9 @@ class Nullable(ColumnType):
         return "Nullable({})".format(repr(self.inner_type))
 
     def __eq__(self, other: object) -> bool:
-        return (
-            self.__class__ == other.__class__ or isinstance(other, NullableOld)
-        ) and self.inner_type == cast(Nullable, other).inner_type
+        return (self.__class__ == other.__class__) and self.inner_type == cast(
+            Nullable, other
+        ).inner_type
 
     def for_schema(self) -> str:
         return "Nullable({})".format(self.inner_type.for_schema())
