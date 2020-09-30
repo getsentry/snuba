@@ -47,24 +47,22 @@ test_cases = [
 ]
 
 
-@pytest.mark.parametrize(
-    "default_validators, dataset_validators, exception", test_cases
-)
+@pytest.mark.parametrize("default_validators, entity_validators, exception", test_cases)
 def test_functions(
     default_validators: Mapping[str, FunctionCallValidator],
-    dataset_validators: Mapping[str, FunctionCallValidator],
+    entity_validators: Mapping[str, FunctionCallValidator],
     exception: Optional[Type[InvalidExpressionException]],
 ) -> None:
     functions.default_validators = default_validators
-    dataset = MagicMock()
-    dataset.get_function_call_validators.return_value = dataset_validators
-    dataset.get_abstract_columnset.return_value = ColumnSet([])
+    entity = MagicMock()
+    entity.get_function_call_validators.return_value = entity_validators
+    entity.get_data_model.return_value = ColumnSet([])
 
     expression = FunctionCall(
         None, "f", (Column(alias=None, table_name=None, column_name="col"),)
     )
     if exception is None:
-        FunctionCallsValidator().validate(expression, dataset)
+        FunctionCallsValidator().validate(expression, entity)
     else:
         with pytest.raises(exception):
-            FunctionCallsValidator().validate(expression, dataset)
+            FunctionCallsValidator().validate(expression, entity)

@@ -25,7 +25,7 @@ from snuba.clickhouse.translators.snuba.allowed import (
 from snuba.clickhouse.translators.snuba.mappers import ColumnToLiteral, ColumnToMapping
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
-from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import EntityKey
 from snuba.datasets.entities.events import event_translator
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import (
