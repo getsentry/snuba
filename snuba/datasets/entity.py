@@ -1,15 +1,12 @@
 from abc import ABC, abstractmethod
-from typing import Any, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Mapping, Optional, Sequence, Tuple
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.clickhouse.escaping import escape_identifier
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
 from snuba.datasets.storage import Storage, WritableStorage, WritableTableStorage
 from snuba.query.extensions import QueryExtension
-from snuba.query.logical import Query
-from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
-from snuba.util import qualified_column
+from snuba.query.validation import FunctionCallValidator
 
 
 class Entity(ABC):
@@ -70,6 +67,14 @@ class Entity(ABC):
         """
         return self.__storages
 
+    def get_function_call_validators(self) -> Mapping[str, FunctionCallValidator]:
+        """
+        Provides a sequence of function expression validators for
+        this entity. The typical use case is the validation that
+        calls to entity specific functions are well formed.
+        """
+        return {}
+
     # TODO: I just copied this over because I haven't investigated what it does. It can
     # probably be refactored/removed but I need to dig into it.
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
@@ -80,20 +85,6 @@ class Entity(ABC):
         """
         # TODO: mypy complains here about WritableStorage vs WritableTableStorage.
         return self.__writable_storage
-
-    # DEPRECATED: Should move to translations/processors
-    def column_expr(
-        self,
-        column_name: str,
-        query: Query,
-        parsing_context: ParsingContext,
-        table_alias: str = "",
-    ) -> Union[None, Any]:
-        """
-        Return an expression for the column name. Handle special column aliases
-        that evaluate to something else.
-        """
-        return escape_identifier(qualified_column(column_name, table_alias))
 
     def process_condition(
         self, condition: Tuple[str, str, Any]

@@ -32,6 +32,8 @@ A quick way to get these services running is to set up sentry, then use:
 
     sentry devservices up --exclude=snuba
 
+Note that Snuba assumes that everything is running on UTC time. Otherwise you may experience issues with timezone mismatches.
+
 ## Install / Run (Only required if you are developing against Snuba)
 
     mkvirtualenv snuba --python=python3.7

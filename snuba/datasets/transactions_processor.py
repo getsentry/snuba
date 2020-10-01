@@ -1,4 +1,5 @@
 import logging
+import numbers
 import uuid
 from datetime import datetime
 from typing import Any, MutableMapping, Optional
@@ -44,7 +45,9 @@ class TransactionsMessageProcessor(MessageProcessor):
     }
 
     def __extract_timestamp(self, field):
-        timestamp = _ensure_valid_date(datetime.fromtimestamp(field))
+        # We are purposely using a naive datetime here to work with the rest of the codebase.
+        # We can be confident that clients are only sending UTC dates.
+        timestamp = _ensure_valid_date(datetime.utcfromtimestamp(field))
         if timestamp is None:
             timestamp = datetime.utcnow()
         milliseconds = int(timestamp.microsecond / 1000)
@@ -66,8 +69,10 @@ class TransactionsMessageProcessor(MessageProcessor):
         if event_type != "transaction":
             return None
         extract_base(processed, event)
+        # We are purposely using a naive datetime here to work with the rest of the codebase.
+        # We can be confident that clients are only sending UTC dates.
         processed["retention_days"] = enforce_retention(
-            event, datetime.fromtimestamp(data["timestamp"]),
+            event, datetime.utcfromtimestamp(data["timestamp"]),
         )
         if not data.get("contexts", {}).get("trace"):
             return None
@@ -133,7 +138,15 @@ class TransactionsMessageProcessor(MessageProcessor):
                 (
                     processed["measurements.key"],
                     processed["measurements.value"],
-                ) = extract_nested(measurements, lambda value: float(value["value"]))
+                ) = extract_nested(
+                    measurements,
+                    lambda value: float(value["value"])
+                    if (
+                        value is not None
+                        and isinstance(value.get("value"), numbers.Number)
+                    )
+                    else None,
+                )
             except Exception:
                 # Not failing the event in this case just yet, because we are still
                 # developing this feature.

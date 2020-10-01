@@ -2,7 +2,7 @@ import pytest
 
 from typing import Any, Sequence
 
-from snuba.datasets.factory import get_dataset
+from snuba.datasets.entities.factory import EntityKey, get_entity
 from snuba.query.expressions import (
     Column,
     Expression,
@@ -498,18 +498,18 @@ test_conditions = [
 
 @pytest.mark.parametrize("conditions, expected", test_conditions)
 def test_conditions_expr(conditions: Sequence[Any], expected: Expression) -> None:
-    dataset = get_dataset("events")
-    assert parse_conditions_to_expr(conditions, dataset, {"tags.key"}) == expected, str(
+    entity = get_entity(EntityKey.EVENTS)
+    assert parse_conditions_to_expr(conditions, entity, {"tags.key"}) == expected, str(
         conditions
     )
 
 
 def test_invalid_conditions() -> None:
-    dataset = get_dataset("events")
+    entity = get_entity(EntityKey.EVENTS)
     is_null = [["group_id", "IS NULL", "I am not valid"]]
     with pytest.raises(Exception):
-        parse_conditions_to_expr(is_null, dataset, set())
+        parse_conditions_to_expr(is_null, entity, set())
 
     binary = [["group_id", "=", None]]
     with pytest.raises(Exception):
-        parse_conditions_to_expr(binary, dataset, set())
+        parse_conditions_to_expr(binary, entity, set())

@@ -7,6 +7,7 @@ from snuba.utils.streams.processing.processor import InvalidStateError, StreamPr
 from snuba.utils.streams.processing.strategies.abstract import MessageRejected
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.assertions import assert_changes, assert_does_not_change
+from tests.backends.metrics import TestingMetricsBackend, Timing
 
 
 def test_stream_processor_lifecycle() -> None:
@@ -17,8 +18,12 @@ def test_stream_processor_lifecycle() -> None:
     factory = mock.Mock()
     factory.create.return_value = strategy
 
+    metrics = TestingMetricsBackend()
+
     with assert_changes(lambda: consumer.subscribe.call_count, 0, 1):
-        processor: StreamProcessor[int] = StreamProcessor(consumer, topic, factory)
+        processor: StreamProcessor[int] = StreamProcessor(
+            consumer, topic, factory, metrics
+        )
 
     # The processor should accept heartbeat messages without an assignment or
     # active processor.
@@ -78,6 +83,10 @@ def test_stream_processor_lifecycle() -> None:
         processor._run_once()
         assert strategy.submit.call_args_list[-1] == mock.call(message)
 
+    metric = metrics.calls[0]
+    assert isinstance(metric, Timing)
+    assert metric.name == "pause_duration_ms"
+
     # Assignment should fail if one already exists.
     with pytest.raises(InvalidStateError):
         assignment_callback({Partition(topic, 0): 0})
@@ -115,7 +124,9 @@ def test_stream_processor_termination_on_error() -> None:
     factory = mock.Mock()
     factory.create.return_value = strategy
 
-    processor: StreamProcessor[int] = StreamProcessor(consumer, topic, factory)
+    processor: StreamProcessor[int] = StreamProcessor(
+        consumer, topic, factory, TestingMetricsBackend()
+    )
 
     assignment_callback = consumer.subscribe.call_args.kwargs["on_assign"]
     assignment_callback({Partition(topic, 0): 0})

@@ -7,9 +7,9 @@ from snuba.clickhouse.columns import (
     DateTime,
     FixedString,
     Float,
-    Materialized,
     Nested,
     Nullable,
+    ReadOnly,
     String,
     UInt,
 )
@@ -19,7 +19,6 @@ from snuba.datasets.storages.events_column_processor import EventsColumnProcesso
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
-from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
@@ -137,7 +136,7 @@ all_columns = (
         # other tags
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
-        ("_tags_hash_map", Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN)),
+        ("_tags_hash_map", ReadOnly(Array(UInt(64)))),
         # other context
         ("contexts", Nested([("key", String()), ("value", String())])),
         # http interface

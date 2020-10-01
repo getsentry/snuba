@@ -1,14 +1,10 @@
-from typing import Any, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Mapping, Optional, Sequence, Tuple
 
-from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
 from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.query.extensions import QueryExtension
-from snuba.query.logical import Query
-from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
-from snuba.query.validation import FunctionCallValidator
 
 
 class Dataset(object):
@@ -71,21 +67,6 @@ class Dataset(object):
 
         return entity.get_query_plan_builder()
 
-    def get_abstract_columnset(self) -> ColumnSet:
-        """
-        This is just a wrapper to maintain the legacy Dataset interface. It should be removed.
-        """
-        return self.__default_entity.get_data_model()
-
-    # TODO: Entity or Dataset? Nothing seems to use this.
-    def get_function_call_validators(self) -> Mapping[str, FunctionCallValidator]:
-        """
-        Provides a sequence of function expression validators for
-        this dataset. The typical use case is the validation that
-        calls to dataset specific functions are well formed.
-        """
-        return {}
-
     # TODO: The following functions are shims to the Entity. They need to be evaluated one by one
     # to see which ones should exist at which level.
     def process_condition(
@@ -104,15 +85,3 @@ class Dataset(object):
 
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
         return self.__default_entity.get_writable_storage()
-
-    # DEPRECATED: Should move to translations/processors
-    def column_expr(
-        self,
-        column_name: str,
-        query: Query,
-        parsing_context: ParsingContext,
-        table_alias: str = "",
-    ) -> Union[None, Any]:
-        return self.__default_entity.column_expr(
-            column_name, query, parsing_context, table_alias
-        )

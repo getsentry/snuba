@@ -3,7 +3,7 @@ from collections import ChainMap
 from typing import Mapping
 
 from snuba.clickhouse.columns import Array, String
-from snuba.datasets.dataset import Dataset
+from snuba.datasets.entity import Entity
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.parser.validation import ExpressionValidator
@@ -30,27 +30,28 @@ class FunctionCallsValidator(ExpressionValidator):
     a default one applied to all queries and one a mapping per dataset.
     """
 
-    def validate(self, exp: Expression, dataset: Dataset) -> None:
+    def validate(self, exp: Expression, entity: Entity) -> None:
         if not isinstance(exp, FunctionCall):
             return
 
-        dataset_validators = dataset.get_function_call_validators()
+        entity_validators = entity.get_function_call_validators()
         common_function_validators = (
-            dataset_validators.keys() & default_validators.keys()
+            entity_validators.keys() & default_validators.keys()
         )
         if common_function_validators:
             logger.warning(
-                "Dataset validators are overlapping with default ones. Dataset: %s. Overlap %r",
-                dataset,
+                "Dataset validators are overlapping with default ones. Entity: %s. Overlap %r",
+                entity,
                 common_function_validators,
                 exc_info=True,
             )
 
-        validators = ChainMap(default_validators, dataset_validators)
+        validators = ChainMap(default_validators, entity_validators)
         try:
+            # TODO: Decide whether these validators should exist at the Dataset or Entity level
             validator = validators.get(exp.function_name)
             if validator is not None:
-                validator.validate(exp.parameters, dataset.get_abstract_columnset())
+                validator.validate(exp.parameters, entity.get_data_model())
         except InvalidFunctionCall as exception:
             raise InvalidExpressionException(
                 exp, f"Illegal call to function {exp.function_name}: {str(exception)}",
