@@ -3,15 +3,13 @@ from typing import Sequence
 from snuba.clickhouse.columns import (
     Column,
     DateTime,
-    LowCardinality,
-    Materialized,
     Nullable,
     String,
     UInt,
-    WithDefault,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
+from snuba.migrations.columns import LowCardinality, Materialized, WithDefault
 
 
 UNKNOWN_SPAN_STATUS = 2

@@ -4,13 +4,13 @@ from snuba.clickhouse.columns import (
     AggregateFunction,
     Column,
     DateTime,
-    LowCardinality,
     String,
     UInt,
     UUID,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
+from snuba.migrations.columns import LowCardinality
 from snuba.processor import MAX_UINT32, NIL_UUID
 
 
