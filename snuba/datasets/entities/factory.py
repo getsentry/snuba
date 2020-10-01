@@ -1,15 +1,34 @@
+from enum import Enum
 from typing import Callable, MutableMapping
 
 from snuba.datasets.entity import Entity
-from snuba.datasets.entities import EntityKey
 from snuba.util import with_span
-
-ENTITY_IMPL: MutableMapping[EntityKey, Entity] = {}
-ENTITY_NAME_LOOKUP: MutableMapping[Entity, EntityKey] = {}
 
 
 class InvalidEntityError(Exception):
     """Exception raised on invalid entity access."""
+
+
+class EntityKey(Enum):
+    """
+    A entity key is a unique identifier for an entity.
+    """
+
+    DISCOVER = "discover"
+    ERRORS = "errors"
+    EVENTS = "events"
+    GROUPS = "groups"
+    GROUPASSIGNEE = "groupassignee"
+    # TODO: This has an S on the end in solidarity with storages, but it's got to go
+    GROUPEDMESSAGES = "groupedmessage"
+    OUTCOMES = "outcomes"
+    OUTCOMES_RAW = "outcomes_raw"
+    SESSIONS = "sessions"
+    TRANSACTIONS = "transactions"
+
+
+ENTITY_IMPL: MutableMapping[EntityKey, Entity] = {}
+ENTITY_NAME_LOOKUP: MutableMapping[Entity, EntityKey] = {}
 
 
 @with_span()
