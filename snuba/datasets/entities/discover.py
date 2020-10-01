@@ -11,7 +11,6 @@ from snuba.clickhouse.columns import (
     DateTime,
     FixedString,
     Float,
-    LowCardinality,
     Nested,
     Nullable,
     String,
@@ -394,7 +393,6 @@ class DiscoverEntity(Entity):
                 ("server_name", Nullable(String())),
                 ("site", Nullable(String())),
                 ("url", Nullable(String())),
-                ("search_message", Nullable(String())),
                 ("location", Nullable(String())),
                 ("culprit", Nullable(String())),
                 ("received", Nullable(DateTime())),
@@ -440,10 +438,7 @@ class DiscoverEntity(Entity):
                 ("transaction_op", Nullable(String())),
                 ("transaction_status", Nullable(UInt(8))),
                 ("duration", Nullable(UInt(32))),
-                (
-                    "measurements",
-                    Nested([("key", LowCardinality(String())), ("value", Float(64))]),
-                ),
+                ("measurements", Nested([("key", String()), ("value", Float(64))]),),
             ]
         )
 

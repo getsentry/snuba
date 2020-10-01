@@ -2,7 +2,6 @@ from snuba.clickhouse.columns import (
     AggregateFunction,
     ColumnSet,
     DateTime,
-    LowCardinality,
     String,
     UInt,
     UUID,
@@ -43,8 +42,8 @@ all_columns = ColumnSet(
         ("errors", UInt(16)),
         ("received", DateTime()),
         ("started", DateTime()),
-        ("release", LowCardinality(String())),
-        ("environment", LowCardinality(String())),
+        ("release", String()),
+        ("environment", String()),
     ]
 )
 
@@ -60,8 +59,8 @@ read_columns = ColumnSet(
         ("org_id", UInt(64)),
         ("project_id", UInt(64)),
         ("started", DateTime()),
-        ("release", LowCardinality(String())),
-        ("environment", LowCardinality(String())),
+        ("release", String()),
+        ("environment", String()),
         (
             "duration_quantiles",
             AggregateFunction("quantilesIf(0.5, 0.9)", UInt(32), UInt(8)),

@@ -3,20 +3,17 @@ from snuba.clickhouse.columns import (
     Array,
     ColumnSet,
     DateTime,
-    LowCardinality,
-    Materialized,
     Nested,
-    NullableOld as Nullable,
+    Nullable,
+    ReadOnly,
     String,
     UInt,
-    WithDefault,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import WritableTableSchema
-from snuba.datasets.spans_processor import UNKNOWN_SPAN_STATUS, SpansMessageProcessor
+from snuba.datasets.spans_processor import SpansMessageProcessor
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.web.split import TimeSplitQueryStrategy
@@ -29,17 +26,17 @@ columns = ColumnSet(
         ("transaction_span_id", UInt(64)),
         ("span_id", UInt(64)),
         ("parent_span_id", Nullable(UInt(64))),
-        ("transaction_name", LowCardinality(String())),
+        ("transaction_name", String()),
         ("description", String()),  # description in span
-        ("op", LowCardinality(String())),
-        ("status", WithDefault(UInt(8), str(UNKNOWN_SPAN_STATUS)),),
+        ("op", String()),
+        ("status", UInt(8)),
         ("start_ts", DateTime()),
         ("start_ns", UInt(32)),
         ("finish_ts", DateTime()),
         ("finish_ns", UInt(32)),
         ("duration_ms", UInt(32)),
         ("tags", Nested([("key", String()), ("value", String())])),
-        ("_tags_hash_map", Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN)),
+        ("_tags_hash_map", ReadOnly(Array(UInt(64)))),
         ("retention_days", UInt(16)),
         ("deleted", UInt(8)),
     ]
