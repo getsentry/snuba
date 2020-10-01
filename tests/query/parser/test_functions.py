@@ -1,6 +1,6 @@
 import pytest
 
-from snuba.datasets.factory import get_dataset
+from snuba.datasets.entities.factory import EntityKey, get_entity
 from snuba.query.conditions import (
     binary_condition,
     BooleanFunctions,
@@ -389,10 +389,10 @@ test_data = [
 
 @pytest.mark.parametrize("actual, expected", test_data)
 def test_complex_conditions_expr(actual, expected) -> None:
-    dataset = get_dataset("events")
+    entity = get_entity(EntityKey.EVENTS)
     assert (
         parse_function_to_expr(
-            actual, dataset.get_abstract_columnset(), {"sdk_integrations", "tags.key"}
+            actual, entity.get_data_model(), {"sdk_integrations", "tags.key"}
         )
         == expected
     ), actual
