@@ -145,7 +145,7 @@ class TimeSeriesProcessor(QueryProcessor):
             return FunctionCall(
                 exp.alias,
                 exp.function_name,
-                (exp.parameters[0], Literal(literal.alias, value),),
+                (exp.parameters[0], Literal(literal.alias, value)),
             )
 
         return exp
