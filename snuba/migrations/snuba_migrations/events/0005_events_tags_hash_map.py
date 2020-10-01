@@ -1,9 +1,10 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import Array, Column, Materialized, UInt
+from snuba.clickhouse.columns import Array, Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations
+from snuba.migrations.columns import Materialized
 
 
 class Migration(migration.MultiStepMigration):

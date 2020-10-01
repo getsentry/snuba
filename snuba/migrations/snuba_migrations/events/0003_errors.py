@@ -1,6 +1,5 @@
 from typing import Sequence
 
-
 from snuba.clickhouse.columns import (
     Array,
     Column,
@@ -8,18 +7,20 @@ from snuba.clickhouse.columns import (
     FixedString,
     IPv4,
     IPv6,
-    LowCardinality,
-    Materialized,
     Nested,
     Nullable,
     String,
     UInt,
     UUID,
-    WithCodecs,
-    WithDefault,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
+from snuba.migrations.columns import (
+    LowCardinality,
+    Materialized,
+    WithCodecs,
+    WithDefault,
+)
 
 columns = [
     Column("org_id", UInt(64)),

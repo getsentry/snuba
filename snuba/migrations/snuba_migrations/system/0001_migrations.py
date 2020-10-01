@@ -1,8 +1,9 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import Column, DateTime, Enum, String, UInt, WithDefault
+from snuba.clickhouse.columns import Column, DateTime, Enum, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
+from snuba.migrations.columns import WithDefault
 from snuba.migrations.context import Context
 from snuba.migrations.status import Status
 from snuba.migrations.table_engines import Distributed, ReplacingMergeTree

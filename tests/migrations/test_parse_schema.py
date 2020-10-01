@@ -10,12 +10,14 @@ from snuba.clickhouse.columns import (
     Float,
     IPv4,
     IPv6,
-    LowCardinality,
-    Materialized,
     Nullable,
     String,
     UInt,
     UUID,
+)
+from snuba.migrations.columns import (
+    LowCardinality,
+    Materialized,
     WithCodecs,
     WithDefault,
 )

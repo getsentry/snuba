@@ -2,12 +2,12 @@ from typing import Sequence
 
 from snuba.clickhouse.columns import (
     Column,
-    LowCardinality,
     Nullable,
     String,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
+from snuba.migrations.columns import LowCardinality
 
 
 class Migration(migration.MultiStepMigration):

@@ -7,17 +7,16 @@ from snuba.clickhouse.columns import (
     Array,
     Column,
     DateTime,
-    LowCardinality,
-    Materialized,
     Nested,
     Nullable,
     String,
     UInt,
-    WithDefault,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations, table_engines
+from snuba.migrations.columns import LowCardinality, Materialized, WithDefault
+
 
 UNKNOWN_SPAN_STATUS = SPAN_STATUS_NAME_TO_CODE["unknown"]
 
