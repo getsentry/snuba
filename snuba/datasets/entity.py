@@ -70,8 +70,8 @@ class Entity(ABC):
     def get_function_call_validators(self) -> Mapping[str, FunctionCallValidator]:
         """
         Provides a sequence of function expression validators for
-        this dataset. The typical use case is the validation that
-        calls to dataset specific functions are well formed.
+        this entity. The typical use case is the validation that
+        calls to entity specific functions are well formed.
         """
         return {}
 
