@@ -19,6 +19,7 @@ from snuba.query.matchers import (
     Param,
     Pattern,
     String,
+    TransformedColumn,
 )
 
 test_cases = [
@@ -282,6 +283,54 @@ test_cases = [
                 "second_function": FunctionCallExpr(None, "second_name", tuple()),
             },
         ),
+    ),
+    (
+        "transformed column matches bare column",
+        TransformedColumn(Column(None, String("my_col"))),
+        ColumnExpr("irrelevant", "my_table", "my_col"),
+        MatchResult(),
+    ),
+    (
+        "transformed column matches wrapped column",
+        TransformedColumn(Column(None, String("my_col"))),
+        FunctionCallExpr(
+            "irrelevant", "some_fn", (ColumnExpr("irrelevant", "my_table", "my_col"),)
+        ),
+        MatchResult(),
+    ),
+    (
+        "transformed column matches multi-wrapped column",
+        TransformedColumn(Column(None, Param("the_column", String("my_col")))),
+        FunctionCallExpr(
+            "most_irrelevant",
+            "most_fn",
+            (
+                LiteralExpr(None, 2),
+                FunctionCallExpr(
+                    "irrelevant",
+                    "some_fn",
+                    (ColumnExpr("irrelevant", "my_table", "my_col"),),
+                ),
+            ),
+        ),
+        MatchResult({"the_column": "my_col"}),
+    ),
+    (
+        "transformed column does not match wrapped other column",
+        TransformedColumn(Column(None, String("my_col"))),
+        FunctionCallExpr(
+            "most_irrelevant",
+            "most_fn",
+            (
+                LiteralExpr(None, 2),
+                FunctionCallExpr(
+                    "irrelevant",
+                    "some_fn",
+                    (ColumnExpr("irrelevant", "my_table", "not_my_col"),),
+                ),
+            ),
+        ),
+        None,
     ),
 ]
 

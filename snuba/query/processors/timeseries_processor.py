@@ -13,6 +13,7 @@ from snuba.query.matchers import (
     Or,
     Param,
     String,
+    TransformedColumn,
 )
 from snuba.query.processors import QueryProcessor
 from snuba.request.request_settings import RequestSettings
@@ -35,7 +36,6 @@ class TimeSeriesProcessor(QueryProcessor):
         self.__time_grouped_columns = set(time_group_columns.values())
 
         # time_parse_columns is a list of columns that, if used in a condition, should be compared with datetimes.
-        # TODO: This handles only the simplest case, what happens if the column is wrapped in a function?
         self.condition_match = FunctionCallMatch(
             Or(
                 [
@@ -48,11 +48,14 @@ class TimeSeriesProcessor(QueryProcessor):
                 ]
             ),
             (
-                ColumnMatch(
-                    None,
-                    Param(
-                        "column_name", Or([String(tc) for tc in time_parse_columns]),
-                    ),
+                TransformedColumn(
+                    ColumnMatch(
+                        None,
+                        Param(
+                            "column_name",
+                            Or([String(tc) for tc in time_parse_columns]),
+                        ),
+                    )
                 ),
                 Param("literal", LiteralMatch(Any(str))),
             ),

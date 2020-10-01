@@ -25,13 +25,11 @@ def test_get_time_range() -> None:
 
     events = get_dataset("events")
     query = parse_query(body, events)
-    print(query.get_condition_from_ast())
     processors = events.get_query_processors()
     for processor in processors:
         if isinstance(processor, TimeSeriesProcessor):
             processor.process_query(query, HTTPRequestSettings())
 
-    print(query.get_condition_from_ast())
     from_date_ast, to_date_ast = get_time_range(ClickhouseQuery(query), "timestamp")
     assert (
         from_date_ast is not None

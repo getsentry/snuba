@@ -323,4 +323,36 @@ class FunctionCall(Pattern[FunctionCallExpr]):
         return result
 
 
+@dataclass(frozen=True)
+class TransformedColumn(Pattern[FunctionCallExpr]):
+    """
+    Matches a Column that has been wrapped in zero or more Functions. It recursively
+    checks the parameters of the FunctionCall to see if at least one of them is a Column
+    matching the provided column name.
+
+    Note that this makes no guarantees about the functions being called, it naively
+    goes through all the parameters and returns the first column match it finds.
+    """
+
+    column: Optional[Column] = None
+
+    def match(self, node: AnyType) -> Optional[MatchResult]:
+        if not isinstance(node, (ColumnExpr, FunctionCallExpr)):
+            return None
+
+        if isinstance(node, ColumnExpr) and self.column is not None:
+            return self.column.match(node)
+
+        if isinstance(node, FunctionCallExpr):
+            if len(node.parameters) == 0:
+                return None
+
+            for parameter in node.parameters:
+                partial_result = self.match(parameter)
+                if partial_result is not None:
+                    return partial_result
+
+        return None
+
+
 # TODO: Add more Patterns when needed.
