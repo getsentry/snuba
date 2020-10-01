@@ -94,9 +94,9 @@ class EventsEntity(Entity):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
+            TimeSeriesProcessor(self.__time_group_columns, self.__time_parse_columns),
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
-            TimeSeriesProcessor(self.__time_group_columns, self.__time_parse_columns),
             HandledFunctionsProcessor(
                 "exception_stacks.mechanism_handled", self.get_data_model()
             ),

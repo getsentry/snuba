@@ -471,6 +471,7 @@ class DiscoverEntity(Entity):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         columnset = self.get_data_model()
         return [
+            TimeSeriesProcessor(self.__time_group_columns, self.__time_parse_columns),
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             # Apdex and Impact seem very good candidates for
@@ -479,7 +480,6 @@ class DiscoverEntity(Entity):
             apdex_processor(columnset),
             failure_rate_processor(columnset),
             HandledFunctionsProcessor("exception_stacks.mechanism_handled", columnset),
-            TimeSeriesProcessor(self.__time_group_columns, self.__time_parse_columns),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
