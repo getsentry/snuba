@@ -239,7 +239,7 @@ class LowCardinality(ColumnTypeWithModifier):
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.inner_type == cast(Array, other).inner_type
+            and self.inner_type == cast(LowCardinality, other).inner_type
         )
 
     def for_schema(self) -> str:
