@@ -3,8 +3,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, cast, Mapping, MutableMapping, Optional, Sequence, TypedDict
 
-from jsonschema_typed import JSONSchema
-
+from schemas import EventData
 from snuba import settings
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.events_format import (
@@ -43,8 +42,6 @@ REPLACEMENT_EVENT_TYPES = frozenset(
         "end_delete_tag",
     ]
 )
-
-EventData = JSONSchema["schemas/event.schema.json"]
 
 
 class InsertEvent(TypedDict):

@@ -26,7 +26,7 @@ MarkupSafe==1.1.1
 mywsgi==1.0.3
 more-itertools==4.2.0
 mypy>=0.761
-jsonschema-typed-v2==0.8.0
+git+https://github.com/fpacifici/sentry-data-schemas.git@feat/add_package#subdirectory=pyschemas
 packaging==17.1
 parsimonious==0.8.1
 py==1.5.3
