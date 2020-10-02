@@ -17,8 +17,6 @@ class OutcomesRawEntity(Entity):
     def __init__(self) -> None:
         storage = get_storage(StorageKey.OUTCOMES_RAW)
 
-        self.__time_group_columns = {"time": "timestamp"}
-        self.__time_parse_columns = ("timestamp",)
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
@@ -42,5 +40,5 @@ class OutcomesRawEntity(Entity):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
-            TimeSeriesProcessor(self.__time_group_columns, self.__time_parse_columns),
+            TimeSeriesProcessor({"time": "timestamp"}, ("timestamp",)),
         ]

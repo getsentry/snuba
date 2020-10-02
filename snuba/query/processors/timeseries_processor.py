@@ -32,10 +32,9 @@ class TimeSeriesProcessor(QueryProcessor):
         # Column names that should be mapped to different columns.
         self.__time_replace_columns = time_group_columns
 
-        # Columns names that should be grouped based on the query granularity
-        self.__time_grouped_columns = set(time_group_columns.values())
-
         # time_parse_columns is a list of columns that, if used in a condition, should be compared with datetimes.
+        # The columns here might overlap with the columns that get replaced, so we have to search for transformed
+        # columns.
         self.condition_match = FunctionCallMatch(
             Or(
                 [
@@ -61,22 +60,16 @@ class TimeSeriesProcessor(QueryProcessor):
             ),
         )
 
-    def __replace_time_column(self, exp: Expression) -> Expression:
-        if isinstance(exp, Column):
-            if exp.column_name in self.__time_replace_columns:
-                real_column_name = self.__time_replace_columns[exp.column_name]
-                return Column(exp.alias, exp.table_name, real_column_name)
-        return exp
-
     def __group_time_column(
         self, exp: Expression, granularity: Optional[int]
     ) -> Expression:
         if isinstance(exp, Column):
-            if exp.column_name in self.__time_grouped_columns:
+            if exp.column_name in self.__time_replace_columns:
+                real_column_name = self.__time_replace_columns[exp.column_name]
                 if granularity is None:
                     granularity = 3600
                 time_column_fn = self.__group_time_function(
-                    exp.column_name, granularity, exp.alias
+                    real_column_name, granularity, exp.alias
                 )
                 return time_column_fn
 
@@ -151,18 +144,15 @@ class TimeSeriesProcessor(QueryProcessor):
         return exp
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
-        # Process the query in 3 steps:
-        # 1) Use time_group_columns to map the old column names to the new column names
-        query.transform_expressions(self.__replace_time_column)
-
-        # 2) Now that all the column names are correct, search the conditions for time based
-        # conditions and make sure the comparison is with a datetime
-        condition = query.get_condition_from_ast()
-        if condition:
-            query.set_ast_condition(condition.transform(self.__process_condition))
-
-        # 3) Map the time_group_columns into functions based on the query granularity.
+        # Use time_group_columns to map the old column names to the new column names, and
+        # map the time_group_columns into functions based on the query granularity.
         granularity = query.get_granularity()
         query.transform_expressions(
             lambda exp: self.__group_time_column(exp, granularity)
         )
+
+        # Now that all the column names are correct, search the conditions for time based
+        # conditions and make sure the comparison is with a datetime
+        condition = query.get_condition_from_ast()
+        if condition:
+            query.set_ast_condition(condition.transform(self.__process_condition))

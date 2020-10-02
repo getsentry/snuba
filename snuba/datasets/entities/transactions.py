@@ -76,10 +76,6 @@ class TransactionsEntity(Entity):
         storage = get_writable_storage(StorageKey.TRANSACTIONS)
         schema = storage.get_table_writer().get_schema()
 
-        self.__time_group_columns = {
-            "time": "finish_ts",
-        }
-        self.__time_parse_columns = ("start_ts", "finish_ts")
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(
@@ -101,7 +97,7 @@ class TransactionsEntity(Entity):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
-            TimeSeriesProcessor(self.__time_group_columns, self.__time_parse_columns),
+            TimeSeriesProcessor({"time": "finish_ts"}, ("start_ts", "finish_ts")),
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             apdex_processor(self.get_data_model()),

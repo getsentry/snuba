@@ -22,7 +22,6 @@ from snuba.query.matchers import (
     Or,
     Param,
     String,
-    TransformedColumn,
 )
 from snuba.query.types import Condition
 from snuba.util import is_condition
@@ -190,7 +189,7 @@ def get_time_range(
                 ),
             ),
             (
-                TransformedColumn(Column(None, String(timestamp_field))),
+                Column(None, String(timestamp_field)),
                 Literal(Param("timestamp", Any(datetime))),
             ),
         ).match(c)

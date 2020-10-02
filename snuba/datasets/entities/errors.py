@@ -40,8 +40,6 @@ class ErrorsEntity(Entity):
         schema = storage.get_table_writer().get_schema()
         columns = schema.get_columns()
 
-        self.__time_group_columns = {"time": "timestamp", "rtime": "received"}
-        self.__time_parse_columns = ("timestamp", "received")
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(
@@ -75,7 +73,9 @@ class ErrorsEntity(Entity):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
-            TimeSeriesProcessor(self.__time_group_columns, self.__time_parse_columns),
+            TimeSeriesProcessor(
+                {"time": "timestamp", "rtime": "received"}, ("timestamp", "received")
+            ),
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             HandledFunctionsProcessor(

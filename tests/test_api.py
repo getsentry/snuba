@@ -1358,9 +1358,7 @@ class TestApi(BaseApiTest):
             "granularity": 3600,
         }
         result = json.loads(self.app.post("/query", data=json.dumps(query)).data)
-        assert result["meta"] == [
-            {"name": "timestamp", "type": "DateTime('Universal')"}
-        ]
+        assert result["meta"] == [{"name": "timestamp", "type": "DateTime"}]
 
     def test_test_endpoints(self):
         project_id = 73
@@ -1476,7 +1474,6 @@ class TestApi(BaseApiTest):
                                 self.base_time + timedelta(minutes=self.minutes)
                             ).isoformat(),
                             "orderby": "-timestamp",
-                            "granularity": 60,
                             "selected_columns": ["tags[sentry:release]", "timestamp"],
                             "limit": 150,
                         }
@@ -1499,7 +1496,6 @@ class TestApi(BaseApiTest):
                                 self.base_time + timedelta(minutes=self.minutes)
                             ).isoformat(),
                             "orderby": "-timestamp",
-                            "granularity": 60,
                             "selected_columns": ["tags[sentry:release]", "timestamp"],
                             "limit": 150,
                             "offset": 10,
@@ -1523,7 +1519,6 @@ class TestApi(BaseApiTest):
                                 self.base_time + timedelta(minutes=self.minutes)
                             ).isoformat(),
                             "orderby": "-timestamp",
-                            "granularity": 60,
                             "selected_columns": ["tags[sentry:release]", "timestamp"],
                             "limit": 200,
                         }
@@ -1567,7 +1562,6 @@ class TestApi(BaseApiTest):
                                 self.base_time + timedelta(minutes=self.minutes)
                             ).isoformat(),
                             "orderby": "-timestamp",
-                            "granularity": 60,
                             "selected_columns": ["tags[sentry:release]", "timestamp"],
                             "limit": 10,
                             "offset": 55,
@@ -1591,7 +1585,6 @@ class TestApi(BaseApiTest):
                                 self.base_time + timedelta(minutes=self.minutes)
                             ).isoformat(),
                             "orderby": "-timestamp",
-                            "granularity": 60,
                             "selected_columns": ["tags[sentry:release]", "timestamp"],
                             "limit": 10,
                             "offset": 60,
@@ -1615,7 +1608,6 @@ class TestApi(BaseApiTest):
                                 self.base_time + timedelta(minutes=self.minutes)
                             ).isoformat(),
                             "orderby": "-timestamp",
-                            "granularity": 60,
                             "selected_columns": ["tags[sentry:release]", "timestamp"],
                             "conditions": [["message", "=", "doesnt exist"]],
                             "limit": 10,
@@ -1674,7 +1666,6 @@ class TestApi(BaseApiTest):
                                 self.base_time + timedelta(minutes=59)
                             ).isoformat(),
                             "orderby": "timestamp",
-                            "granularity": 60,
                             "selected_columns": [
                                 "event_id",
                                 "timestamp",
@@ -1707,7 +1698,6 @@ class TestApi(BaseApiTest):
                                 self.base_time - timedelta(days=99)
                             ).isoformat(),
                             "orderby": "timestamp",
-                            "granularity": 60,
                             "selected_columns": [
                                 "event_id",
                                 "timestamp",
@@ -1737,7 +1727,6 @@ class TestApi(BaseApiTest):
                                 self.base_time + timedelta(minutes=self.minutes)
                             ).isoformat(),
                             "orderby": "-timestamp",
-                            "granularity": 60,
                             "selected_columns": [
                                 "event_id",
                                 "timestamp",

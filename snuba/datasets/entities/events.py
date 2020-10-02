@@ -69,8 +69,6 @@ class EventsEntity(Entity):
         columns = schema.get_columns()
         ro_storage = get_storage(StorageKey.EVENTS_RO)
 
-        self.__time_group_columns = {"time": "timestamp", "rtime": "received"}
-        self.__time_parse_columns = ("timestamp", "received")
         super().__init__(
             storages=[storage],
             query_plan_builder=SelectedStorageQueryPlanBuilder(
@@ -94,7 +92,9 @@ class EventsEntity(Entity):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
-            TimeSeriesProcessor(self.__time_group_columns, self.__time_parse_columns),
+            TimeSeriesProcessor(
+                {"time": "timestamp", "rtime": "received"}, ("timestamp", "received")
+            ),
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             HandledFunctionsProcessor(

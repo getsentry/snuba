@@ -32,8 +32,6 @@ class SessionsEntity(Entity):
         materialized_storage = get_storage(StorageKey.SESSIONS_HOURLY)
         read_schema = materialized_storage.get_schema()
 
-        self.__time_group_columns = {"bucketed_started": "started"}
-        self.__time_parse_columns = ("started", "received")
         super().__init__(
             storages=[writable_storage, materialized_storage],
             # TODO: Once we are ready to expose the raw data model and select whether to use
@@ -82,5 +80,7 @@ class SessionsEntity(Entity):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
-            TimeSeriesProcessor(self.__time_group_columns, self.__time_parse_columns),
+            TimeSeriesProcessor(
+                {"bucketed_started": "started"}, ("started", "received")
+            ),
         ]

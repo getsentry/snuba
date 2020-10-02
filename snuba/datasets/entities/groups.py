@@ -128,14 +128,6 @@ class GroupsEntity(Entity):
 
         schema = JoinedSchema(join_structure)
         storage = JoinedStorage(StorageSetKey.EVENTS, join_structure)
-        self.__time_group_columns = {"events.time": "events.timestamp"}
-        self.__time_parse_columns = [
-            "events.timestamp",
-            "events.received",
-            "groups.last_seen",
-            "groups.first_seen",
-            "groups.active_at",
-        ]
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
@@ -156,5 +148,14 @@ class GroupsEntity(Entity):
     def get_query_processors(self) -> Sequence[LogicalProcessor]:
         return [
             TagsExpanderProcessor(),
-            TimeSeriesProcessor(self.__time_group_columns, self.__time_parse_columns),
+            TimeSeriesProcessor(
+                {"events.time": "events.timestamp"},
+                [
+                    "events.timestamp",
+                    "events.received",
+                    "groups.last_seen",
+                    "groups.first_seen",
+                    "groups.active_at",
+                ],
+            ),
         ]

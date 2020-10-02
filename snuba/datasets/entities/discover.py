@@ -446,9 +446,6 @@ class DiscoverEntity(Entity):
         events_ro_storage = get_storage(StorageKey.EVENTS_RO)
         transactions_storage = get_storage(StorageKey.TRANSACTIONS)
 
-        self.__time_group_columns: Mapping[str, str] = {"time": "timestamp"}
-        self.__time_parse_columns = ("timestamp",)
-
         super().__init__(
             storages=[events_storage, transactions_storage],
             query_plan_builder=SelectedStorageQueryPlanBuilder(
@@ -471,7 +468,7 @@ class DiscoverEntity(Entity):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         columnset = self.get_data_model()
         return [
-            TimeSeriesProcessor(self.__time_group_columns, self.__time_parse_columns),
+            TimeSeriesProcessor({"time": "timestamp"}, ("timestamp",)),
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             # Apdex and Impact seem very good candidates for

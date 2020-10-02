@@ -27,8 +27,6 @@ class OutcomesEntity(Entity):
         # The materialized view we query aggregate data from.
         materialized_storage = get_storage(StorageKey.OUTCOMES_HOURLY)
         read_schema = materialized_storage.get_schema()
-        self.__time_group_columns = {"time": "timestamp"}
-        self.__time_parse_columns = ("timestamp",)
         super().__init__(
             storages=[writable_storage, materialized_storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(
@@ -54,5 +52,5 @@ class OutcomesEntity(Entity):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
-            TimeSeriesProcessor(self.__time_group_columns, self.__time_parse_columns),
+            TimeSeriesProcessor({"time": "timestamp"}, ("timestamp",)),
         ]
