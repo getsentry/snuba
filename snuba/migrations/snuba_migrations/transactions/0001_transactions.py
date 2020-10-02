@@ -7,17 +7,14 @@ from snuba.clickhouse.columns import (
     DateTime,
     IPv4,
     IPv6,
-    LowCardinality,
-    Materialized,
     Nested,
     Nullable,
     String,
     UInt,
-    WithDefault,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
-
+from snuba.migrations.columns import LowCardinality, Materialized, WithDefault
 
 UNKNOWN_SPAN_STATUS = 2
 

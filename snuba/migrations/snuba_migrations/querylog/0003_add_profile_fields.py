@@ -3,13 +3,12 @@ from typing import Sequence
 from snuba.clickhouse.columns import (
     Array,
     Column,
-    LowCardinality,
     String,
     UInt,
-    WithDefault,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
+from snuba.migrations.columns import LowCardinality, WithDefault
 
 
 class Migration(migration.MultiStepMigration):

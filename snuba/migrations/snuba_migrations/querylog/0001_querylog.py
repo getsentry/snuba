@@ -6,7 +6,6 @@ from snuba.clickhouse.columns import (
     DateTime,
     Enum,
     Float,
-    LowCardinality,
     Nested,
     Nullable,
     String,
@@ -15,6 +14,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
+from snuba.migrations.columns import LowCardinality
 
 
 status_type = Enum([("success", 0), ("error", 1), ("rate-limited", 2)])
