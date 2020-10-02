@@ -11,6 +11,7 @@ from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression, OptionalScalarType
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
+from snuba.query.functions import BooleanFunctions, ConditionFunctions
 
 MatchType = Union[Expression, OptionalScalarType]
 
@@ -334,17 +335,24 @@ class TransformedColumn(Pattern[FunctionCallExpr]):
     goes through all the parameters and returns the first column match it finds.
     """
 
-    column: Optional[Column] = None
+    column: Column
 
     def match(self, node: AnyType) -> Optional[MatchResult]:
         if not isinstance(node, (ColumnExpr, FunctionCallExpr)):
             return None
 
-        if isinstance(node, ColumnExpr) and self.column is not None:
+        if isinstance(node, ColumnExpr):
             return self.column.match(node)
 
         if isinstance(node, FunctionCallExpr):
             if len(node.parameters) == 0:
+                return None
+
+            # Matching on these is dangerous since they are used for conditions. It's possible to match
+            # the right or left side of a condition, but not the condition as a whole.
+            if hasattr(BooleanFunctions, node.function_name) or hasattr(
+                ConditionFunctions, node.function_name
+            ):
                 return None
 
             for parameter in node.parameters:
