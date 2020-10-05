@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, Mapping, Optional, Sequence, Set, Tuple, Union
+from typing import Any, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
 from snuba import environment, state
 from snuba.clickhouse.columns import (
@@ -19,6 +19,7 @@ from snuba.clickhouse.columns import (
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.clickhouse.translators.snuba.allowed import (
     ColumnMapper,
+    FunctionCallMapper,
     SubscriptableReferenceMapper,
 )
 from snuba.clickhouse.translators.snuba.mappers import ColumnToLiteral, ColumnToMapping
@@ -40,7 +41,13 @@ from snuba.query.conditions import (
     ConditionFunctions,
     get_first_level_and_conditions,
 )
-from snuba.query.expressions import Column, Literal, SubscriptableReference
+from snuba.query.expressions import (
+    Column,
+    Expression,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.matchers import Column as ColumnMatch
@@ -252,6 +259,67 @@ class DefaultNoneColumnMapper(ColumnMapper):
 
 
 @dataclass(frozen=True)
+class DefaultNoneFunctionMapper(FunctionCallMapper):
+    """
+    If a function is being called on a column that doesn't exist, or is being
+    called on NULL, change the entire function to be NULL.
+    """
+
+    columns: ColumnSet
+
+    def attempt_map(
+        self,
+        expression: FunctionCall,
+        children_translator: SnubaClickhouseStrictTranslator,
+    ) -> Optional[FunctionCall]:
+        valid_parameters: List[Expression] = []
+        column_match = ColumnMatch(Or([StringMatch(c.flattened) for c in self.columns]))
+        # This is called recursively, so use this match to collapse ifNull calls in the case of
+        # unexpected columns being wrapped in more than one function.
+        function_match = FunctionCallMatch(
+            StringMatch("ifNull"), (LiteralMatch(), LiteralMatch())
+        )
+        for param in expression.parameters:
+            cmatch = column_match.match(param)
+            if cmatch is not None:
+                assert isinstance(param, Column)
+                valid_parameters.append(
+                    Literal(
+                        alias=param.alias
+                        or qualified_column(param.column_name, param.table_name or ""),
+                        value=None,
+                    )
+                )
+                continue
+
+            fmatch = function_match.match(param)
+            if fmatch is not None:
+                valid_parameters.append(Literal(param.alias, None))
+                continue
+
+            valid_parameters.append(param)
+
+        all_null = True
+        for param in valid_parameters:
+            if isinstance(param, Literal):
+                if param.value is not None:
+                    all_null = False
+                    break
+            else:
+                all_null = False
+                break
+
+        if all_null and len(valid_parameters) > 0:
+            # Currently function mappers require returning other functions. So return this
+            # to keep the mapper happy.
+            return FunctionCall(
+                expression.alias, "ifNull", (Literal(None, None), Literal(None, None))
+            )
+
+        return None
+
+
+@dataclass(frozen=True)
 class DefaultNoneSubscriptMapper(SubscriptableReferenceMapper):
     """
     This maps a subscriptable reference to None (NULL in SQL) as it is done
@@ -300,6 +368,9 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
                     ColumnToMapping(None, "user", None, "tags", "sentry:user"),
                     DefaultNoneColumnMapper(self.__abstract_transactions_columns),
                 ],
+                functions=[
+                    DefaultNoneFunctionMapper(self.__abstract_transactions_columns)
+                ],
                 subscriptables=[DefaultNoneSubscriptMapper({"measurements"})],
             )
         )
@@ -309,7 +380,8 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
                 columns=[
                     ColumnToLiteral(None, "group_id", 0),
                     DefaultNoneColumnMapper(self.__abstract_events_columns),
-                ]
+                ],
+                functions=[DefaultNoneFunctionMapper(self.__abstract_events_columns)],
             )
         )
 
