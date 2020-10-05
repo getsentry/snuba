@@ -4,6 +4,10 @@ import pytest
 
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
+from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.datasets.schemas.tables import WritableTableSchema
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_storage
 from snuba.environment import setup_sentry
 from snuba.utils.clock import Clock, TestingClock
 from snuba.utils.streams.backends.local.backend import LocalBroker
@@ -18,16 +22,14 @@ def pytest_configure() -> None:
     """
     setup_sentry()
 
-    # There is only one cluster in test, so fetch the host from there.
-    cluster = settings.CLUSTERS[0]
+    for cluster in settings.CLUSTERS:
+        connection = ClickhousePool(
+            cluster["host"], cluster["port"], "default", "", "default",
+        )
 
-    connection = ClickhousePool(
-        cluster["host"], cluster["port"], "default", "", "default",
-    )
-
-    database_name = cluster["database"]
-    connection.execute(f"DROP DATABASE IF EXISTS {database_name};")
-    connection.execute(f"CREATE DATABASE {database_name};")
+        database_name = cluster["database"]
+        connection.execute(f"DROP DATABASE IF EXISTS {database_name};")
+        connection.execute(f"CREATE DATABASE {database_name};")
 
 
 @pytest.fixture
@@ -38,3 +40,23 @@ def clock() -> Iterator[Clock]:
 @pytest.fixture
 def broker(clock: TestingClock) -> Iterator[LocalBroker[TPayload]]:
     yield LocalBroker(MemoryMessageStorage(), clock)
+
+
+@pytest.fixture(autouse=True)
+def run_migrations() -> Iterator[None]:
+    from snuba.migrations.runner import Runner
+
+    Runner().run_all(force=True)
+
+    yield
+
+    for storage_key in StorageKey:
+        storage = get_storage(storage_key)
+        cluster = storage.get_cluster()
+        connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+        database = cluster.get_database()
+
+        schema = storage.get_schema()
+        if isinstance(schema, WritableTableSchema):
+            table_name = schema.get_local_table_name()
+            connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
