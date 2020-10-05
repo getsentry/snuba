@@ -13,7 +13,6 @@ from snuba.query.matchers import (
     Or,
     Param,
     String,
-    TransformedColumn,
 )
 from snuba.query.processors import QueryProcessor
 from snuba.request.request_settings import RequestSettings
@@ -35,6 +34,9 @@ class TimeSeriesProcessor(QueryProcessor):
         # time_parse_columns is a list of columns that, if used in a condition, should be compared with datetimes.
         # The columns here might overlap with the columns that get replaced, so we have to search for transformed
         # columns.
+        column_match = ColumnMatch(
+            None, Param("column_name", Or([String(tc) for tc in time_parse_columns]),),
+        )
         self.condition_match = FunctionCallMatch(
             Or(
                 [
@@ -47,14 +49,41 @@ class TimeSeriesProcessor(QueryProcessor):
                 ]
             ),
             (
-                TransformedColumn(
-                    ColumnMatch(
-                        None,
-                        Param(
-                            "column_name",
-                            Or([String(tc) for tc in time_parse_columns]),
+                Or(
+                    [
+                        column_match,
+                        FunctionCallMatch(
+                            Or(
+                                [
+                                    String("toStartOfHour"),
+                                    String("toStartOfMinute"),
+                                    String("toDate"),
+                                ]
+                            ),
+                            (column_match, LiteralMatch(Any(str)),),
                         ),
-                    )
+                        FunctionCallMatch(
+                            String("toDateTime"),
+                            (
+                                FunctionCallMatch(
+                                    String("multiply"),
+                                    (
+                                        FunctionCallMatch(
+                                            String("intDiv"),
+                                            (
+                                                FunctionCallMatch(
+                                                    String("toUInt32"), (column_match,),
+                                                ),
+                                                LiteralMatch(Any(int)),
+                                            ),
+                                        ),
+                                        LiteralMatch(Any(int)),
+                                    ),
+                                ),
+                                LiteralMatch(Any(str)),
+                            ),
+                        ),
+                    ]
                 ),
                 Param("literal", LiteralMatch(Any(str))),
             ),
