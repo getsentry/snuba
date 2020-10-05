@@ -14,7 +14,6 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.processor import InsertBatch, ProcessedMessage
-from snuba.redis import redis_client
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 from tests.fixtures import raw_event
@@ -41,13 +40,9 @@ class BaseTest(object):
             self.__dataset_manager = None
             self.dataset = None
 
-        redis_client.flushdb()
-
     def teardown_method(self, test_method):
         if self.__dataset_manager:
             self.__dataset_manager.__exit__(None, None, None)
-
-        redis_client.flushdb()
 
 
 class BaseDatasetTest(BaseTest):

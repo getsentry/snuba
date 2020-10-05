@@ -7,6 +7,7 @@ from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.environment import setup_sentry
+from snuba.redis import redis_client
 from snuba.utils.clock import Clock, TestingClock
 from snuba.utils.streams.backends.local.backend import LocalBroker
 from snuba.utils.streams.backends.local.storages.memory import MemoryMessageStorage
@@ -55,3 +56,5 @@ def run_migrations() -> Iterator[None]:
         if isinstance(schema, WritableTableSchema):
             table_name = schema.get_local_table_name()
             connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
+
+    redis_client.flushdb()
