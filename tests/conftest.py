@@ -2,9 +2,7 @@ from typing import Iterator
 
 import pytest
 
-from snuba import settings
-from snuba.clickhouse.native import ClickhousePool
-from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.clusters.cluster import ClickhouseClientSettings, CLUSTERS
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
@@ -22,12 +20,9 @@ def pytest_configure() -> None:
     """
     setup_sentry()
 
-    for cluster in settings.CLUSTERS:
-        connection = ClickhousePool(
-            cluster["host"], cluster["port"], "default", "", "default",
-        )
-
-        database_name = cluster["database"]
+    for cluster in CLUSTERS:
+        connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+        database_name = cluster.get_database()
         connection.execute(f"DROP DATABASE IF EXISTS {database_name};")
         connection.execute(f"CREATE DATABASE {database_name};")
 
