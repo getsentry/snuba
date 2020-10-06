@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-from typing import Mapping, Optional, Sequence
-=======
-from typing import Any, Optional, Sequence, Tuple
->>>>>>> 60cc0ee1... move last few functions from dataset to entity
+from typing import Optional, Sequence
 
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
