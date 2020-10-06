@@ -378,9 +378,12 @@ def test_time_split_ast() -> None:
 
     events = get_dataset("events")
     query = parse_query(body, events)
+    settings = HTTPRequestSettings()
+    for p in events.get_entity(None).get_query_processors():
+        p.process_query(query, settings)
 
     splitter = TimeSplitQueryStrategy("timestamp")
-    splitter.execute(ClickhouseQuery(query), HTTPRequestSettings(), do_query)
+    splitter.execute(ClickhouseQuery(query), settings, do_query)
 
     assert found_timestamps == [
         ("2019-09-19T11:00:00", "2019-09-19T12:00:00"),
