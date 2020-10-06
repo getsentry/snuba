@@ -237,9 +237,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         }
 
         minimal_query = copy.deepcopy(query)
-        minimal_query.set_selected_columns(
-            [self.__id_column, self.__project_column, self.__timestamp_column]
-        )
+
         # TODO: provide the table alias name to this splitter if we ever use it
         # in joins.
         minimal_query.set_ast_selected_columns(
@@ -278,16 +276,6 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
 
         # Ensures the AST minimal query is actually runnable on its own.
         if not minimal_query.validate_aliases():
-            return None
-
-        legacy_references = set(minimal_query.get_all_referenced_columns())
-        ast_column_names = {
-            c.column_name for c in minimal_query.get_all_ast_referenced_columns()
-        }
-        # Ensures the legacy minimal query (which does not expand alias references)
-        # does not contain alias references we removed when creating minimal_query.
-        if legacy_references - ast_column_names:
-            metrics.increment("columns.skip_invalid_legacy_query")
             return None
 
         result = runner(minimal_query, request_settings)

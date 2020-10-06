@@ -134,18 +134,17 @@ def test_col_split(
         request_settings: RequestSettings,
         reader: Reader[SqlQuery],
     ) -> QueryResult:
-        selected_cols = query.get_selected_columns()
-        assert selected_cols == [
+        selected_col_names = [
             c.expression.column_name
             for c in query.get_selected_columns_from_ast() or []
             if isinstance(c.expression, Column)
         ]
-        if selected_cols == list(first_query_data[0].keys()):
+        if selected_col_names == list(first_query_data[0].keys()):
             return QueryResult({"data": first_query_data}, {})
-        elif selected_cols == list(second_query_data[0].keys()):
+        elif selected_col_names == list(second_query_data[0].keys()):
             return QueryResult({"data": second_query_data}, {})
         else:
-            raise ValueError(f"Unexpected selected columns: {selected_cols}")
+            raise ValueError(f"Unexpected selected columns: {selected_col_names}")
 
     events = get_dataset(dataset_name)
     query = ClickhouseQuery(
@@ -303,29 +302,6 @@ column_split_tests = [
         },
         True,
     ),  # Query with other condition on event_id - proceed with split
-    (
-        "event_id",
-        "project_id",
-        "timestamp",
-        {
-            "selected_columns": [
-                ["f", ["event_id"], "not_event_id"],
-                "level",
-                "logger",
-                "server_name",
-            ],
-            "conditions": [
-                ("timestamp", ">=", "2019-09-19T10:00:00"),
-                ("timestamp", "<", "2019-09-19T12:00:00"),
-                ("project_id", "IN", [1, 2, 3]),
-            ],
-            "orderby": ["-not_event_id"],
-            "limit": 10,
-        },
-        False,
-    ),  # Splitting by column would generate an invalid query but
-    # only for the legacy representation. This query would be
-    # ok if ran through the AST.
 ]
 
 
