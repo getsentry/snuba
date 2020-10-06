@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Mapping, Optional, Sequence, Tuple
+from typing import Mapping, Optional, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
@@ -85,13 +85,3 @@ class Entity(ABC):
         """
         # TODO: mypy complains here about WritableStorage vs WritableTableStorage.
         return self.__writable_storage
-
-    def process_condition(
-        self, condition: Tuple[str, str, Any]
-    ) -> Tuple[str, str, Any]:
-        """
-        Return a processed condition tuple.
-        This enables a dataset to do any parsing/transformations
-        a condition before it is added to the query.
-        """
-        return condition
