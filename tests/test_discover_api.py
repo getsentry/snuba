@@ -1,6 +1,5 @@
 import calendar
 import uuid
-from contextlib import ExitStack
 from datetime import datetime, timezone
 from functools import partial
 
@@ -9,19 +8,12 @@ import simplejson as json
 from snuba import settings
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.factory import enforce_table_writer, get_dataset
-from tests.base import BaseApiTest, dataset_manager
+from tests.base import BaseApiTest
 
 
 class TestDiscoverApi(BaseApiTest):
     def setup_method(self, test_method):
         super().setup_method(test_method)
-
-        # XXX: This should use the ``discover`` dataset directly, but that will
-        # require some updates to the test base classes to work correctly.
-        self.__dataset_manager = ExitStack()
-        for dataset_name in ["events", "transactions"]:
-            self.__dataset_manager.enter_context(dataset_manager(dataset_name))
-
         self.app.post = partial(self.app.post, headers={"referer": "test"})
         self.project_id = self.event["project_id"]
 
@@ -32,9 +24,6 @@ class TestDiscoverApi(BaseApiTest):
         self.span_id = "8841662216cc598b"
         self.generate_event()
         self.generate_transaction()
-
-    def teardown_method(self, test_method):
-        self.__dataset_manager.__exit__(None, None, None)
 
     def generate_event(self):
         self.dataset = get_dataset("events")
