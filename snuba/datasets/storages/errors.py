@@ -62,7 +62,7 @@ all_columns = ColumnSet(
         ("offset", UInt(64)),
         ("message_timestamp", DateTime()),
         ("retention_days", UInt(16)),
-        ("row_version", UInt(8)),
+        ("deleted", UInt(8)),
         ("group_id", UInt(64)),
         ("primary_hash", UUID()),
         ("received", DateTime()),
@@ -121,11 +121,11 @@ schema = WritableTableSchema(
     storage_set_key=StorageSetKey.EVENTS,
     mandatory_conditions=[
         MandatoryCondition(
-            ("row_version", "=", 0),
+            ("deleted", "=", 0),
             binary_condition(
                 None,
                 ConditionFunctions.EQ,
-                Column(None, None, "row_version"),
+                Column(None, None, "deleted"),
                 Literal(None, 0),
             ),
         )
@@ -145,7 +145,7 @@ required_columns = [
     "project_id",
     "group_id",
     "timestamp",
-    "row_version",
+    "deleted",
     "retention_days",
 ]
 

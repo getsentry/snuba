@@ -12,7 +12,7 @@ from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.columns import FlattenedColumn, ReadOnly
 from snuba.clickhouse.escaping import escape_identifier, escape_string
 from snuba.datasets.schemas.tables import WritableTableSchema
-from snuba.processor import InvalidMessageType, _hashify, MAX_UINT8
+from snuba.processor import InvalidMessageType, _hashify
 from snuba.redis import redis_client
 from snuba.replacers.replacer_processor import (
     Replacement,
@@ -153,20 +153,14 @@ class ErrorsReplacer(ReplacerProcessor):
         ):
             return None
         elif type_ == "end_delete_groups":
-            processed = process_delete_groups(
-                event, self.__required_columns, self.__state_name
-            )
+            processed = process_delete_groups(event, self.__required_columns)
         elif type_ == "end_merge":
-            processed = process_merge(event, self.__all_columns, self.__state_name)
+            processed = process_merge(event, self.__all_columns)
         elif type_ == "end_unmerge":
             processed = process_unmerge(event, self.__all_columns, self.__state_name)
         elif type_ == "end_delete_tag":
             processed = process_delete_tag(
-                event,
-                self.__all_columns,
-                self.__tag_column_map,
-                self.__promoted_tags,
-                self.__state_name,
+                event, self.__all_columns, self.__tag_column_map, self.__promoted_tags,
             )
         else:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
@@ -200,9 +194,7 @@ class ErrorsReplacer(ReplacerProcessor):
 
 
 def process_delete_groups(
-    message: Mapping[str, Any],
-    required_columns: Sequence[str],
-    state_name: ReplacerState,
+    message: Mapping[str, Any], required_columns: Sequence[str]
 ) -> Optional[Replacement]:
     group_ids = message["group_ids"]
     if not group_ids:
@@ -210,21 +202,13 @@ def process_delete_groups(
 
     assert all(isinstance(gid, int) for gid in group_ids)
     timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+    select_columns = map(lambda i: i if i != "deleted" else "1", required_columns)
 
-    if state_name == ReplacerState.ERRORS:
-        deleted_column = "row_version"
-        select_columns = map(
-            lambda i: i if i != "row_version" else str(MAX_UINT8), required_columns
-        )
-    else:
-        deleted_column = "deleted"
-        select_columns = map(lambda i: i if i != "deleted" else "1", required_columns)
-
-    where = f"""\
+    where = """\
         PREWHERE group_id IN (%(group_ids)s)
         WHERE project_id = %(project_id)s
         AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT {deleted_column}
+        AND NOT deleted
     """
 
     count_query_template = (
@@ -263,9 +247,7 @@ SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
 
 
 def process_merge(
-    message: Mapping[str, Any],
-    all_columns: Sequence[FlattenedColumn],
-    state_name: ReplacerState,
+    message: Mapping[str, Any], all_columns: Sequence[FlattenedColumn]
 ) -> Optional[Replacement]:
     # HACK: We were sending duplicates of the `end_merge` message from Sentry,
     # this is only for performance of the backlog.
@@ -288,16 +270,11 @@ def process_merge(
         all_column_names,
     )
 
-    if state_name == ReplacerState.ERRORS:
-        deleted_column = "row_version"
-    else:
-        deleted_column = "deleted"
-
-    where = f"""\
+    where = """\
         PREWHERE group_id IN (%(previous_group_ids)s)
         WHERE project_id = %(project_id)s
         AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT {deleted_column}
+        AND NOT deleted
     """
 
     count_query_template = (
@@ -349,17 +326,13 @@ def process_unmerge(
         lambda i: i if i != "group_id" else str(message["new_group_id"]),
         all_column_names,
     )
-    if state_name == ReplacerState.ERRORS:
-        deleted_column = "row_version"
-    else:
-        deleted_column = "deleted"
 
-    where = f"""\
+    where = """\
         PREWHERE group_id = %(previous_group_id)s
         WHERE project_id = %(project_id)s
         AND primary_hash IN (%(hashes)s)
         AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT {deleted_column}
+        AND NOT deleted
     """
 
     count_query_template = (
@@ -435,7 +408,6 @@ def process_delete_tag(
     all_columns: Sequence[FlattenedColumn],
     tag_column_map: Mapping[str, Mapping[str, str]],
     promoted_tags: Mapping[str, Sequence[str]],
-    state_name: ReplacerState,
 ) -> Optional[Replacement]:
     tag = message["tag"]
     if not tag:
@@ -446,15 +418,10 @@ def process_delete_tag(
     tag_column_name = tag_column_map["tags"].get(tag, tag)
     is_promoted = tag in promoted_tags["tags"]
 
-    if state_name == ReplacerState.ERRORS:
-        deleted_column = "row_version"
-    else:
-        deleted_column = "deleted"
-
-    where = f"""\
+    where = """\
         WHERE project_id = %(project_id)s
         AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT {deleted_column}
+        AND NOT deleted
     """
 
     if is_promoted:

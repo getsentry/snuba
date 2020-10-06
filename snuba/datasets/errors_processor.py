@@ -38,11 +38,6 @@ class ErrorsProcessor(EventsProcessorBase):
     ) -> None:
         output["event_id"] = str(uuid.UUID(event["event_id"]))
 
-    def _extract_version(
-        self, output: MutableMapping[str, Any], event: InsertEvent,
-    ) -> None:
-        output["row_version"] = 0
-
     def extract_custom(
         self,
         output: MutableMapping[str, Any],

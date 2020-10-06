@@ -271,7 +271,7 @@ def test_error_processor() -> None:
         "offset": 2,
         "message_timestamp": datetime(1970, 1, 1),
         "retention_days": 90,
-        "row_version": 0,
+        "deleted": 0,
         "group_id": 100,
         "primary_hash": str(UUID("04233d08ac90cf6fc015b1be5932e7e2")),
         "received": received_timestamp.astimezone(pytz.utc).replace(
