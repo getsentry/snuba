@@ -19,7 +19,7 @@ from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.writer import BatchWriterEncoderWrapper
 
 
-def setup_function() -> None:
+def _drop_all_tables() -> None:
     for cluster in CLUSTERS:
         connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
         database = cluster.get_database()
@@ -29,6 +29,14 @@ def setup_function() -> None:
         )
         for (table,) in data:
             connection.execute(f"DROP TABLE IF EXISTS {table}")
+
+
+def setup_function() -> None:
+    _drop_all_tables()
+
+
+def teardown_function() -> None:
+    _drop_all_tables()
 
 
 def test_get_status() -> None:
