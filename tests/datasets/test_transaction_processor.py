@@ -6,7 +6,6 @@ from typing import Any, Mapping, Optional, Tuple
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.processor import InsertBatch
-from tests.base import BaseTest
 
 
 @dataclass
@@ -223,7 +222,7 @@ class TransactionEvent:
         return ret
 
 
-class TestTransactionsProcessor(BaseTest):
+class TestTransactionsProcessor:
     def __get_timestamps(slef) -> Tuple[float, float]:
         timestamp = datetime.now(tz=timezone.utc) - timedelta(seconds=5)
         start_timestamp = timestamp - timedelta(seconds=5)

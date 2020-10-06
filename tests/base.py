@@ -17,12 +17,8 @@ from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 from tests.fixtures import raw_event
 
 
-class BaseTest(object):
+class BaseDatasetTest:
     def setup_method(self, test_method, dataset_name: Optional[str] = None):
-        assert (
-            settings.TESTING
-        ), "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
-
         self.database = os.environ.get("CLICKHOUSE_DATABASE", "default")
         self.dataset_name = dataset_name
 
@@ -31,8 +27,6 @@ class BaseTest(object):
         else:
             self.dataset = None
 
-
-class BaseDatasetTest(BaseTest):
     def write_processed_messages(self, messages: Sequence[ProcessedMessage]) -> None:
         rows: MutableSequence[WriterTableRow] = []
         for message in messages:
