@@ -377,26 +377,6 @@ def test_time_split_ast() -> None:
         assert from_date_ast is not None and isinstance(from_date_ast, datetime)
         assert to_date_ast is not None and isinstance(to_date_ast, datetime)
 
-        conditions = query.get_conditions() or []
-        from_date_str = next(
-            (
-                condition[2]
-                for condition in conditions
-                if condition[0] == "timestamp" and condition[1] == ">="
-            ),
-            None,
-        )
-        to_date_str = next(
-            (
-                condition[2]
-                for condition in conditions
-                if condition[0] == "timestamp" and condition[1] == "<"
-            ),
-            None,
-        )
-        assert from_date_str == from_date_ast.isoformat()
-        assert to_date_str == to_date_ast.isoformat()
-
         found_timestamps.append((from_date_ast.isoformat(), to_date_ast.isoformat()))
 
         return QueryResult({"data": []}, {})

@@ -3,8 +3,7 @@ import logging
 import math
 from dataclasses import replace
 from datetime import timedelta
-from typing import Any as AnyType
-from typing import List, Optional, Union
+from typing import Optional
 
 from snuba import environment, settings, state, util
 from snuba.clickhouse.query import Query
@@ -24,7 +23,6 @@ from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.logical import SelectedExpression
 from snuba.query.matchers import AnyExpression, Column, FunctionCall, Or, Param, String
 from snuba.request.request_settings import RequestSettings
-from snuba.util import is_condition
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryResult
 
@@ -36,12 +34,6 @@ metrics = MetricsWrapper(environment.metrics, "query.splitter")
 # worst case (there are 0 results in the database) would have us making 4
 # queries before hitting the 90d limit (2+20+200+2000 hours == 92 days).
 STEP_GROWTH = 10
-
-
-def _identify_condition(condition: AnyType, field: str, operator: str) -> bool:
-    return (
-        is_condition(condition) and condition[0] == field and condition[1] == operator
-    )
 
 
 def _replace_ast_condition(
@@ -76,19 +68,6 @@ def _replace_ast_condition(
                 ]
             )
         )
-
-
-def _replace_condition(
-    query: Query, field: str, operator: str, new_literal: Union[str, List[AnyType]]
-) -> None:
-    query.set_conditions(
-        [
-            cond
-            if not _identify_condition(cond, field, operator)
-            else [field, operator, new_literal]
-            for cond in query.get_conditions() or []
-        ]
-    )
 
 
 class TimeSplitQueryStrategy(QuerySplitStrategy):
@@ -145,14 +124,8 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
             # the start-end conditions on the query at each iteration of this loop.
             split_query = copy.deepcopy(query)
 
-            _replace_condition(
-                split_query, self.__timestamp_col, ">=", split_start.isoformat()
-            )
             _replace_ast_condition(
                 split_query, self.__timestamp_col, ">=", LiteralExpr(None, split_start)
-            )
-            _replace_condition(
-                split_query, self.__timestamp_col, "<", split_end.isoformat()
             )
             _replace_ast_condition(
                 split_query, self.__timestamp_col, "<", LiteralExpr(None, split_end)
