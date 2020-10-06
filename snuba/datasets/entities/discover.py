@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, Mapping, Optional, Sequence, Set, Tuple, Union
+from typing import Mapping, Optional, Sequence, Set, Union
 
 from snuba import environment, state
 from snuba.clickhouse.columns import (
@@ -56,12 +56,12 @@ from snuba.query.processors.performance_expressions import (
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.handled_functions import HandledFunctionsProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
-from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
+from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.subscripts import subscript_key_column_name
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
-from snuba.util import parse_datetime, qualified_column
+from snuba.util import qualified_column
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 EVENTS = EntityKey.EVENTS
@@ -446,9 +446,6 @@ class DiscoverEntity(Entity):
         events_ro_storage = get_storage(StorageKey.EVENTS_RO)
         transactions_storage = get_storage(StorageKey.TRANSACTIONS)
 
-        self.__time_group_columns: Mapping[str, str] = {}
-        self.__time_parse_columns = ("timestamp",)
-
         super().__init__(
             storages=[events_storage, transactions_storage],
             query_plan_builder=SelectedStorageQueryPlanBuilder(
@@ -471,6 +468,7 @@ class DiscoverEntity(Entity):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         columnset = self.get_data_model()
         return [
+            TimeSeriesProcessor({"time": "timestamp"}, ("timestamp",)),
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             # Apdex and Impact seem very good candidates for
@@ -479,7 +477,6 @@ class DiscoverEntity(Entity):
             apdex_processor(columnset),
             failure_rate_processor(columnset),
             HandledFunctionsProcessor("exception_stacks.mechanism_handled", columnset),
-            TimeSeriesColumnProcessor({"time": "timestamp"}),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
@@ -491,18 +488,3 @@ class DiscoverEntity(Entity):
                 timestamp_column="timestamp",
             ),
         }
-
-    # TODO: This needs to burned with fire, for so many reasons.
-    # It's here now to reduce the scope of the initial entity changes
-    # but can be moved to a processor if not removed entirely.
-    def process_condition(
-        self, condition: Tuple[str, str, Any]
-    ) -> Tuple[str, str, Any]:
-        lhs, op, lit = condition
-        if (
-            lhs in self.__time_parse_columns
-            and op in (">", "<", ">=", "<=", "=", "!=")
-            and isinstance(lit, str)
-        ):
-            lit = parse_datetime(lit)
-        return lhs, op, lit
