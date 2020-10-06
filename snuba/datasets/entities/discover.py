@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import List, Mapping, Optional, Sequence, Set, Union
+from typing import Mapping, Optional, Sequence, Set, Union
 
 from snuba import environment, state
 from snuba.clickhouse.columns import (
@@ -43,7 +43,6 @@ from snuba.query.conditions import (
 )
 from snuba.query.expressions import (
     Column,
-    Expression,
     FunctionCall,
     Literal,
     SubscriptableReference,
@@ -266,50 +265,31 @@ class DefaultNoneFunctionMapper(FunctionCallMapper):
     """
 
     columns: ColumnSet
+    function_match = FunctionCallMatch(
+        StringMatch("ifNull"), (LiteralMatch(), LiteralMatch())
+    )
 
     def attempt_map(
         self,
         expression: FunctionCall,
         children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[FunctionCall]:
-        valid_parameters: List[Expression] = []
-        column_match = ColumnMatch(Or([StringMatch(c.flattened) for c in self.columns]))
-        # This is called recursively, so use this match to collapse ifNull calls in the case of
-        # unexpected columns being wrapped in more than one function.
-        function_match = FunctionCallMatch(
-            StringMatch("ifNull"), (LiteralMatch(), LiteralMatch())
-        )
-        for param in expression.parameters:
-            cmatch = column_match.match(param)
-            if cmatch is not None:
-                assert isinstance(param, Column)
-                valid_parameters.append(
-                    Literal(
-                        alias=param.alias
-                        or qualified_column(param.column_name, param.table_name or ""),
-                        value=None,
-                    )
-                )
-                continue
-
-            fmatch = function_match.match(param)
-            if fmatch is not None:
-                valid_parameters.append(Literal(param.alias, None))
-                continue
-
-            valid_parameters.append(param)
+        parameters = tuple(p.accept(children_translator) for p in expression.parameters)
 
         all_null = True
-        for param in valid_parameters:
-            if isinstance(param, Literal):
-                if param.value is not None:
+        for param in parameters:
+            # Handle wrapped functions that have been converted to ifNull(NULL, NULL)
+            fmatch = self.function_match.match(param)
+            if fmatch is None:
+                if isinstance(param, Literal):
+                    if param.value is not None:
+                        all_null = False
+                        break
+                else:
                     all_null = False
                     break
-            else:
-                all_null = False
-                break
 
-        if all_null and len(valid_parameters) > 0:
+        if all_null and len(parameters) > 0:
             # Currently function mappers require returning other functions. So return this
             # to keep the mapper happy.
             return FunctionCall(
