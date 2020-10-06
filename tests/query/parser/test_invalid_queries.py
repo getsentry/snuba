@@ -17,11 +17,6 @@ test_cases = [
         {"orderby": [[[[["column"]]]]]}, ParsingException, id="Nonsensical order by",
     ),
     pytest.param(
-        {"conditions": [["timestamp", "=", ""]]},
-        ParsingException,
-        id="Invalid date in a condition",
-    ),
-    pytest.param(
         {"conditions": [["timestamp", "IS NOT NULL", "this makes no sense"]]},
         ParsingException,
         id="Binary condition with unary operator",

@@ -41,7 +41,6 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         project_ids = get_project_ids_in_query_ast(query, self.__project_column)
 
         set_final = False
-        condition_to_add = None
         if project_ids:
             final, exclude_group_ids = get_projects_query_flags(
                 list(project_ids), self.__replacer_state_name,
@@ -58,11 +57,6 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                     metrics.increment("final", tags={"cause": "max_groups"})
                     set_final = True
                 else:
-                    condition_to_add = (
-                        ["assumeNotNull", ["group_id"]],
-                        "NOT IN",
-                        exclude_group_ids,
-                    )
                     query.add_condition_to_ast(
                         not_in_condition(
                             None,
@@ -76,5 +70,3 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                 set_final = final
 
         query.set_final(set_final)
-        if condition_to_add:
-            query.add_conditions([condition_to_add])

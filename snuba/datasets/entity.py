@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
-from typing import Any, Mapping, Optional, Sequence, Tuple
+from typing import Mapping, Optional, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
 from snuba.datasets.storage import Storage, WritableStorage, WritableTableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
+from snuba.query.validation import FunctionCallValidator
 
 
 class Entity(ABC):
@@ -66,6 +67,14 @@ class Entity(ABC):
         """
         return self.__storages
 
+    def get_function_call_validators(self) -> Mapping[str, FunctionCallValidator]:
+        """
+        Provides a sequence of function expression validators for
+        this entity. The typical use case is the validation that
+        calls to entity specific functions are well formed.
+        """
+        return {}
+
     # TODO: I just copied this over because I haven't investigated what it does. It can
     # probably be refactored/removed but I need to dig into it.
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
@@ -76,13 +85,3 @@ class Entity(ABC):
         """
         # TODO: mypy complains here about WritableStorage vs WritableTableStorage.
         return self.__writable_storage
-
-    def process_condition(
-        self, condition: Tuple[str, str, Any]
-    ) -> Tuple[str, str, Any]:
-        """
-        Return a processed condition tuple.
-        This enables a dataset to do any parsing/transformations
-        a condition before it is added to the query.
-        """
-        return condition

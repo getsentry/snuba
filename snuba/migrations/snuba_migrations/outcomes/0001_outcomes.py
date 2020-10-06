@@ -2,7 +2,6 @@ from typing import Sequence
 from snuba.clickhouse.columns import (
     Column,
     DateTime,
-    LowCardinality,
     Nullable,
     String,
     UInt,
@@ -10,6 +9,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
+from snuba.migrations.columns import LowCardinality
 
 
 raw_columns = [

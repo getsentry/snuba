@@ -1,8 +1,9 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import Array, Column, Enum, LowCardinality, String
+from snuba.clickhouse.columns import Array, Column, Enum, String
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
+from snuba.migrations.columns import LowCardinality
 
 
 class Migration(migration.MultiStepMigration):

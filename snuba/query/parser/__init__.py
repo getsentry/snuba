@@ -6,6 +6,7 @@ from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 from snuba import environment
 from snuba.clickhouse.escaping import NEGATE_RE
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entity import Entity
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -65,7 +66,10 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
       processing.
       Alias references are packaged back at the end of processing.
     """
-    query = _parse_query_impl(body, dataset)
+    # TODO: Parse the entity out of the query body and select the correct one from the dataset
+    entity = dataset.get_entity(None)
+
+    query = _parse_query_impl(body, entity)
     # These are the post processing phases
     _validate_empty_table_names(query)
     _validate_aliases(query)
@@ -76,18 +80,18 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     # yet. If it is put earlier than here (unlikely), we need to adapt them.
     _deescape_aliases(query)
     _validate_arrayjoin(query)
-    validate_query(query, dataset)
+    validate_query(query, entity)
     return query
 
 
-def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
+def _parse_query_impl(body: MutableMapping[str, Any], entity: Entity) -> Query:
     def build_selected_expressions(
         raw_expressions: Sequence[Any],
     ) -> List[SelectedExpression]:
         output = []
         for raw_expression in raw_expressions:
             exp = parse_expression(
-                tuplify(raw_expression), dataset.get_abstract_columnset(), set()
+                tuplify(raw_expression), entity.get_data_model(), set()
             )
             output.append(
                 SelectedExpression(
@@ -124,7 +128,7 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
                     aggregation_function,
                     column_expr,
                     alias,
-                    dataset.get_abstract_columnset(),
+                    entity.get_data_model(),
                     set(),
                 ),
             )
@@ -146,7 +150,7 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
     if arrayjoin:
         array_join_cols.add(arrayjoin)
         array_join_expr: Optional[Expression] = parse_expression(
-            body["arrayjoin"], dataset.get_abstract_columnset(), {arrayjoin}
+            body["arrayjoin"], entity.get_data_model(), {arrayjoin}
         )
     else:
         array_join_expr = None
@@ -173,10 +177,10 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
                                 )
 
     where_expr = parse_conditions_to_expr(
-        body.get("conditions", []), dataset, array_join_cols
+        body.get("conditions", []), entity, array_join_cols
     )
     having_expr = parse_conditions_to_expr(
-        body.get("having", []), dataset, array_join_cols
+        body.get("having", []), entity, array_join_cols
     )
 
     orderby_exprs = []
@@ -211,7 +215,7 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
                 )
             )
         orderby_parsed = parse_expression(
-            tuplify(orderby), dataset.get_abstract_columnset(), set()
+            tuplify(orderby), entity.get_data_model(), set()
         )
         orderby_exprs.append(
             OrderBy(

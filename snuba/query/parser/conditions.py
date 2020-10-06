@@ -2,7 +2,7 @@ from collections import OrderedDict
 from typing import Any, Callable, Optional, Sequence, Set, TypeVar
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.dataset import Dataset
+from snuba.datasets.entity import Entity
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     binary_condition,
@@ -29,7 +29,7 @@ def parse_conditions(
     or_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     unpack_array_condition_builder: Callable[[TExpression, str, Any], TExpression],
     simple_condition_builder: Callable[[TExpression, str, Any], TExpression],
-    dataset: Dataset,
+    entity: Entity,
     conditions: Any,
     arrayjoin_cols: Set[str],
     depth: int = 0,
@@ -63,7 +63,7 @@ def parse_conditions(
                     or_builder,
                     unpack_array_condition_builder,
                     simple_condition_builder,
-                    dataset,
+                    entity,
                     cond,
                     arrayjoin_cols,
                     depth + 1,
@@ -75,7 +75,7 @@ def parse_conditions(
         return and_builder([s for s in sub.keys() if s])
     elif is_condition(conditions):
         try:
-            lhs, op, lit = dataset.process_condition(conditions)
+            lhs, op, lit = conditions
         except Exception as cause:
             raise ParsingException(
                 f"Cannot process condition {conditions}", cause
@@ -94,7 +94,7 @@ def parse_conditions(
         # (IN, =, LIKE) are looking for rows where any array value matches, and
         # exclusionary operators (NOT IN, NOT LIKE, !=) are looking for rows
         # where all elements match (eg. all NOT LIKE 'foo').
-        columns = dataset.get_abstract_columnset()
+        columns = entity.get_data_model()
         if (
             isinstance(lhs, str)
             and lhs in columns
@@ -104,15 +104,11 @@ def parse_conditions(
             and not isinstance(lit, (list, tuple))
         ):
             return unpack_array_condition_builder(
-                operand_builder(lhs, dataset.get_abstract_columnset(), arrayjoin_cols),
-                op,
-                lit,
+                operand_builder(lhs, entity.get_data_model(), arrayjoin_cols), op, lit,
             )
         else:
             return simple_condition_builder(
-                operand_builder(lhs, dataset.get_abstract_columnset(), arrayjoin_cols),
-                op,
-                lit,
+                operand_builder(lhs, entity.get_data_model(), arrayjoin_cols), op, lit,
             )
 
     elif depth == 1:
@@ -123,7 +119,7 @@ def parse_conditions(
                 or_builder,
                 unpack_array_condition_builder,
                 simple_condition_builder,
-                dataset,
+                entity,
                 cond,
                 arrayjoin_cols,
                 depth + 1,
@@ -136,7 +132,7 @@ def parse_conditions(
 
 
 def parse_conditions_to_expr(
-    expr: Sequence[Any], dataset: Dataset, arrayjoin: Set[str]
+    expr: Sequence[Any], entity: Entity, arrayjoin: Set[str]
 ) -> Optional[Expression]:
     """
     Relies on parse_conditions to parse a list of conditions into an Expression.
@@ -229,7 +225,7 @@ def parse_conditions_to_expr(
         or_builder,
         unpack_array_condition_builder,
         simple_condition_builder,
-        dataset,
+        entity,
         expr,
         arrayjoin,
         0,
