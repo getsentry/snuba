@@ -60,7 +60,7 @@ class TimeSeriesProcessor(QueryProcessor):
                                     String("toDate"),
                                 ]
                             ),
-                            (column_match, LiteralMatch(Any(str)),),
+                            (column_match, LiteralMatch(Any(str))),
                         ),
                         FunctionCallMatch(
                             String("toDateTime"),
