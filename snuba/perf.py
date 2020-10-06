@@ -46,7 +46,7 @@ def run(events_file, dataset, repeat=1, profile_process=False, profile_write=Fal
 
     Runner().run_all(force=True)
 
-    writable_storage = dataset.get_writable_storage()
+    writable_storage = dataset.get_entity().get_writable_storage()
 
     consumer = ConsumerWorker(writable_storage, metrics=DummyMetricsBackend())
 

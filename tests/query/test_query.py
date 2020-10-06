@@ -113,7 +113,7 @@ def test_edit_query():
 def test_referenced_columns():
     # a = 1 AND b = 1
     dataset = get_dataset("events")
-    source = dataset.get_all_storages()[0].get_schema().get_data_source()
+    source = dataset.get_entity().get_all_storages()[0].get_schema().get_data_source()
     body = {"conditions": [["a", "=", "1"], ["b", "=", "1"]]}
     query = Query(body, source)
     assert query.get_all_referenced_columns() == set(["a", "b"])

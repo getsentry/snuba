@@ -69,7 +69,7 @@ def bootstrap(
         topics = {}
         for name in ACTIVE_DATASET_NAMES:
             dataset = get_dataset(name)
-            writable_storage = dataset.get_writable_storage()
+            writable_storage = dataset.get_entity().get_writable_storage()
 
             if writable_storage:
                 table_writer = writable_storage.get_table_writer()

@@ -61,7 +61,9 @@ def perf(
     dataset = get_dataset(dataset_name)
 
     if not all(
-        storage.get_cluster().is_single_node() for storage in dataset.get_all_storages()
+        storage.get_cluster().is_single_node()
+        for entity in dataset.get_all_entities()
+        for storage in entity.get_all_storages()
     ):
         logger.error("The perf tool is only intended for single node environment.")
         sys.exit(1)
