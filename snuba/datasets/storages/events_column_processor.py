@@ -21,18 +21,6 @@ class EventsColumnProcessor(QueryProcessor):
                             Literal(None, 0),
                         ),
                     )
-                elif exp.column_name == "message":
-                    # Because of the rename from message->search_message without backfill,
-                    # records will have one or the other of these fields.
-                    # TODO this can be removed once all data has search_message filled in.
-                    return FunctionCall(
-                        exp.alias,
-                        "coalesce",
-                        (
-                            Column(None, exp.table_name, "search_message"),
-                            Column(None, exp.table_name, exp.column_name),
-                        ),
-                    )
 
             return exp
 
