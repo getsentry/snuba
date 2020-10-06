@@ -336,7 +336,6 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             metrics.increment("column_splitter.intermediate_results_beyond_limit")
             return None
 
-        query.add_conditions([(self.__id_column, "IN", event_ids)])
         query.add_condition_to_ast(
             in_condition(
                 None,
@@ -353,9 +352,6 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         project_ids = list(
             set([event[self.__project_column] for event in result.result["data"]])
         )
-        _replace_condition(
-            query, self.__project_column, "IN", project_ids,
-        )
         _replace_ast_condition(
             query,
             self.__project_column,
@@ -364,12 +360,6 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         )
 
         timestamps = [event[self.__timestamp_column] for event in result.result["data"]]
-        _replace_condition(
-            query,
-            self.__timestamp_column,
-            ">=",
-            util.parse_datetime(min(timestamps)).isoformat(),
-        )
         _replace_ast_condition(
             query,
             self.__timestamp_column,
@@ -378,12 +368,6 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         )
         # We add 1 second since this gets translated to ('timestamp', '<', to_date)
         # and events are stored with a granularity of 1 second.
-        _replace_condition(
-            query,
-            self.__timestamp_column,
-            "<",
-            (util.parse_datetime(max(timestamps)) + timedelta(seconds=1)).isoformat(),
-        )
         _replace_ast_condition(
             query,
             self.__timestamp_column,
