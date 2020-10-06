@@ -6,19 +6,21 @@ from snuba.clickhouse.columns import (
     DateTime,
     IPv4,
     IPv6,
-    LowCardinality,
-    Materialized,
     Nested,
     Nullable,
     String,
     UInt,
     UUID,
-    WithCodecs,
-    WithDefault,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations, table_engines
+from snuba.migrations.columns import (
+    LowCardinality,
+    Materialized,
+    WithCodecs,
+    WithDefault,
+)
 
 
 columns = [
