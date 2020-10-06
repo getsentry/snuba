@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any, Mapping, Optional, Sequence, Tuple
+from typing import Mapping, Optional, Sequence
 
 from snuba.clickhouse.processors import QueryProcessor as ClickhouseProcessor
 from snuba.clusters.storage_sets import StorageSetKey
@@ -26,10 +26,10 @@ from snuba.query.processors import QueryProcessor as LogicalProcessor
 from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
-from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
+from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
-from snuba.util import parse_datetime, qualified_column
+from snuba.util import qualified_column
 
 
 class JoinedStorage(ReadableStorage):
@@ -128,14 +128,6 @@ class GroupsEntity(Entity):
 
         schema = JoinedSchema(join_structure)
         storage = JoinedStorage(StorageSetKey.EVENTS, join_structure)
-        self.__time_group_columns = {"events.time": "events.timestamp"}
-        self.__time_parse_columns = [
-            "events.timestamp",
-            "events.received",
-            "groups.last_seen",
-            "groups.first_seen",
-            "groups.active_at",
-        ]
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
@@ -156,20 +148,14 @@ class GroupsEntity(Entity):
     def get_query_processors(self) -> Sequence[LogicalProcessor]:
         return [
             TagsExpanderProcessor(),
-            TimeSeriesColumnProcessor(self.__time_group_columns),
+            TimeSeriesProcessor(
+                {"events.time": "events.timestamp"},
+                [
+                    "events.timestamp",
+                    "events.received",
+                    "groups.last_seen",
+                    "groups.first_seen",
+                    "groups.active_at",
+                ],
+            ),
         ]
-
-    # TODO: This needs to burned with fire, for so many reasons.
-    # It's here now to reduce the scope of the initial entity changes
-    # but can be moved to a processor if not removed entirely.
-    def process_condition(
-        self, condition: Tuple[str, str, Any]
-    ) -> Tuple[str, str, Any]:
-        lhs, op, lit = condition
-        if (
-            lhs in self.__time_parse_columns
-            and op in (">", "<", ">=", "<=", "=", "!=")
-            and isinstance(lit, str)
-        ):
-            lit = parse_datetime(lit)
-        return lhs, op, lit
