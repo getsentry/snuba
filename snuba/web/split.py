@@ -125,48 +125,20 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
         if not orderby or orderby[0] != f"-{self.__timestamp_col}":
             return None
 
-        conditions = query.get_conditions() or []
-        from_date_str = next(
-            (
-                condition[2]
-                for condition in conditions
-                if _identify_condition(condition, self.__timestamp_col, ">=")
-            ),
-            None,
-        )
-
-        to_date_str = next(
-            (
-                condition[2]
-                for condition in conditions
-                if _identify_condition(condition, self.__timestamp_col, "<")
-            ),
-            None,
-        )
         from_date_ast, to_date_ast = get_time_range(query, self.__timestamp_col)
 
-        if not from_date_str or not to_date_str:
+        if from_date_ast is None or to_date_ast is None:
             return None
 
         date_align, split_step = state.get_configs(
             [("date_align_seconds", 1), ("split_step", 3600)]  # default 1 hour
         )
-        to_date = util.parse_datetime(to_date_str, date_align)
-        from_date = util.parse_datetime(from_date_str, date_align)
-
-        if from_date != from_date_ast:
-            logger.warning(
-                "Mismatch in start date on time splitter.",
-                extra={"ast": str(from_date_ast), "legacy": str(from_date)},
-                exc_info=True,
-            )
-            metrics.increment("mismatch.ast_from_date")
 
         remaining_offset = query.get_offset()
 
         overall_result = None
-        split_end = to_date
-        split_start = max(split_end - timedelta(seconds=split_step), from_date)
+        split_end = to_date_ast
+        split_start = max(split_end - timedelta(seconds=split_step), from_date_ast)
         total_results = 0
         while split_start < split_end and total_results < limit:
             # We need to make a copy to use during the query execution because we replace
@@ -225,10 +197,10 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
                 split_end = split_start
                 try:
                     split_start = max(
-                        split_end - timedelta(seconds=split_step), from_date
+                        split_end - timedelta(seconds=split_step), from_date_ast
                     )
                 except OverflowError:
-                    split_start = from_date
+                    split_start = from_date_ast
 
         return overall_result
 
