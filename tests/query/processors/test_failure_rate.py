@@ -3,6 +3,7 @@ from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.conditions import (
     binary_condition,
+    combine_and_conditions,
     ConditionFunctions,
 )
 from snuba.query.dsl import count, divide
@@ -33,19 +34,16 @@ def test_failure_rate_format_expressions() -> None:
                         None,
                         "countIf",
                         (
-                            binary_condition(
-                                None,
-                                ConditionFunctions.NOT_IN,
-                                Column(None, None, "transaction_status"),
-                                FunctionCall(
-                                    None,
-                                    "tuple",
-                                    (
-                                        Literal(alias=None, value=0),
-                                        Literal(alias=None, value=1),
-                                        Literal(alias=None, value=2),
-                                    ),
-                                ),
+                            combine_and_conditions(
+                                [
+                                    binary_condition(
+                                        None,
+                                        ConditionFunctions.NEQ,
+                                        Column(None, None, "transaction_status"),
+                                        Literal(None, code),
+                                    )
+                                    for code in [0, 1, 2]
+                                ]
                             ),
                         ),
                     ),
@@ -68,5 +66,5 @@ def test_failure_rate_format_expressions() -> None:
         ClickhouseExpressionFormatter()
     )
     assert ret == (
-        "(divide(countIf(notIn(transaction_status, tuple(0, 1, 2))), count()) AS perf)"
+        "(divide(countIf(notEquals(transaction_status, 0) AND notEquals(transaction_status, 1) AND notEquals(transaction_status, 2)), count()) AS perf)"
     )
