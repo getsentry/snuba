@@ -770,11 +770,11 @@ class TestApi(BaseApiTest):
         )
         assert (
             # legacy representation
-            "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc') != 0"
+            "PREWHERE positionCaseInsensitive(message, 'abc') != 0"
             in result["sql"]
         ) or (
             # ast representation
-            "PREWHERE notEquals(positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc'), 0)"
+            "PREWHERE notEquals(positionCaseInsensitive(message, 'abc'), 0)"
             in result["sql"]
         )
 
@@ -800,11 +800,11 @@ class TestApi(BaseApiTest):
         )
         assert (
             # legacy representation
-            "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message"
+            "PREWHERE positionCaseInsensitive(message"
             in result["sql"]
         ) or (
             # ast representation
-            "PREWHERE notEquals(positionCaseInsensitive((coalesce(search_message, message) AS message"
+            "PREWHERE notEquals(positionCaseInsensitive(message"
             in result["sql"]
         )
 
@@ -828,11 +828,11 @@ class TestApi(BaseApiTest):
         )
         assert (
             # legacy representation
-            "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc') != 0 AND project_id IN (1)"
+            "PREWHERE positionCaseInsensitive(message, 'abc') != 0 AND project_id IN (1)"
             in result["sql"]
         ) or (
             # ast representation
-            "PREWHERE notEquals(positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc'), 0) AND in(project_id, tuple(1))"
+            "PREWHERE notEquals(positionCaseInsensitive(message, 'abc'), 0) AND in(project_id, tuple(1))"
             in result["sql"]
         )
 
