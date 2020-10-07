@@ -82,7 +82,7 @@ def get_enabled_dataset_names() -> Sequence[str]:
 
 
 def enforce_table_writer(dataset: Dataset) -> TableWriter:
-    writable_storage = dataset.get_entity().get_writable_storage()
+    writable_storage = dataset.get_default_entity().get_writable_storage()
 
     assert (
         writable_storage is not None

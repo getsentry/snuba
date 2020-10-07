@@ -39,7 +39,10 @@ class Dataset(object):
         # the entity accessor methods will need to be rewritten.
         self.__default_entity = default_entity
 
-    def get_entity(self, entity_name: Optional[str] = None) -> Entity:
+    def get_entity(self, entity_name: str) -> Entity:
+        return self.__default_entity
+
+    def get_default_entity(self) -> Entity:
         return self.__default_entity
 
     def get_all_entities(self) -> Sequence[Entity]:
@@ -52,7 +55,7 @@ class Dataset(object):
         Returns the component that transforms a Snuba query in a Storage query by selecting
         the storage(s) and provides the directions on how to run the query.
         """
-        entity = self.get_entity(entity_name)
+        entity = self.get_default_entity()
 
         return entity.get_query_plan_builder()
 

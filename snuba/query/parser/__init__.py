@@ -67,7 +67,7 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
       Alias references are packaged back at the end of processing.
     """
     # TODO: Parse the entity out of the query body and select the correct one from the dataset
-    entity = dataset.get_entity()
+    entity = dataset.get_default_entity()
 
     query = _parse_query_impl(body, entity)
     # These are the post processing phases

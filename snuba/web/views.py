@@ -294,7 +294,7 @@ def unqualified_query_view(*, timer: Timer):
 def dataset_query_view(*, dataset: Dataset, timer: Timer):
     if http_request.method == "GET":
         schema = RequestSchema.build_with_extensions(
-            dataset.get_entity().get_extensions(), HTTPRequestSettings
+            dataset.get_default_entity().get_extensions(), HTTPRequestSettings
         )
         return render_template(
             "query.html",
@@ -314,7 +314,7 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build_with_extensions(
-            dataset.get_entity().get_extensions(), HTTPRequestSettings
+            dataset.get_default_entity().get_extensions(), HTTPRequestSettings
         )
 
     request = build_request(body, schema, timer, dataset, http_request.referrer)
@@ -442,7 +442,7 @@ if application.debug or application.testing:
 
         type_ = record[1]
 
-        storage = dataset.get_entity().get_writable_storage()
+        storage = dataset.get_default_entity().get_writable_storage()
         assert storage is not None
 
         if type_ == "insert":

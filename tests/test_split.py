@@ -49,7 +49,10 @@ def test_no_split(
                 "limit": 100,
                 "offset": 50,
             },
-            events.get_entity().get_all_storages()[0].get_schema().get_data_source(),
+            events.get_default_entity()
+            .get_all_storages()[0]
+            .get_schema()
+            .get_data_source(),
         )
     )
 
@@ -157,7 +160,10 @@ def test_col_split(
                 "limit": 100,
                 "offset": 50,
             },
-            events.get_entity().get_all_storages()[0].get_schema().get_data_source(),
+            events.get_default_entity()
+            .get_all_storages()[0]
+            .get_schema()
+            .get_data_source(),
             selected_columns=[
                 SelectedExpression(
                     name=col_name, expression=Column(None, None, col_name)
@@ -379,7 +385,7 @@ def test_time_split_ast() -> None:
     events = get_dataset("events")
     query = parse_query(body, events)
     settings = HTTPRequestSettings()
-    for p in events.get_entity(None).get_query_processors():
+    for p in events.get_default_entity().get_query_processors():
         p.process_query(query, settings)
 
     splitter = TimeSplitQueryStrategy("timestamp")

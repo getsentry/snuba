@@ -86,7 +86,7 @@ def _run_query_pipeline(
     ) and not request.settings.get_turbo():
         metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
 
-    extensions = dataset.get_entity().get_extensions()
+    extensions = dataset.get_default_entity().get_extensions()
     for name, extension in extensions.items():
         with sentry_sdk.start_span(
             description=type(extension.get_processor()).__name__, op="extension"

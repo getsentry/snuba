@@ -27,7 +27,7 @@ class TestReplacer(BaseEventsTest):
         self.app.post = partial(self.app.post, headers={"referer": "test"})
 
         self.replacer = replacer.ReplacerWorker(
-            self.dataset.get_entity().get_writable_storage(),
+            self.dataset.get_default_entity().get_writable_storage(),
             DummyMetricsBackend(strict=True),
         )
 
