@@ -5,12 +5,10 @@ from functools import partial
 
 from snuba import state
 from snuba.state import safe_dumps
-from tests.base import BaseEventsTest
 
 
-class TestState(BaseEventsTest):
-    def setup_method(self, test_method):
-        super(TestState, self).setup_method(test_method)
+class TestState:
+    def setup_method(self):
         from snuba.web.views import application
 
         assert application.testing == True
@@ -37,13 +35,13 @@ class TestState(BaseEventsTest):
 
     def test_memoize(self):
         @state.memoize(0.1)
-        def rand():
+        def rand() -> float:
             return random.random()
 
         assert rand() == rand()
         rand1 = rand()
         assert rand1 == rand()
-        time.sleep(0.1)
+        time.sleep(1)
         assert rand1 != rand()
 
     def test_abtest(self):
