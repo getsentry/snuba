@@ -188,31 +188,48 @@ def detect_table(
             missing_columns = ",".join(
                 sorted(event_columns if event_mismatch else transaction_columns)
             )
+            selected_table_str = (
+                str(selected_table.value)
+                if isinstance(selected_table, EntityKey)
+                else selected_table
+            )
+
             metrics.increment(
                 "query.impossible",
                 tags={
-                    "selected_table": (
-                        str(selected_table.value)
-                        if isinstance(selected_table, EntityKey)
-                        else selected_table
-                    ),
+                    "selected_table": selected_table_str,
                     "missing_columns": missing_columns,
                 },
             )
-            logger.warning("Discover generated impossible query", exc_info=True)
+            logger.warning(
+                "Discover generated impossible query",
+                extra={
+                    "selected_table": selected_table_str,
+                    "missing_columns": missing_columns,
+                },
+                exc_info=True,
+            )
 
         if selected_table == EVENTS_AND_TRANSACTIONS and (
             event_columns or transaction_columns
         ):
             # Not possible in future with merge table
+            missing_events_columns = ",".join(sorted(event_columns))
+            missing_transactions_columns = ",".join(sorted(transaction_columns))
             metrics.increment(
                 "query.impossible-merge-table",
                 tags={
-                    "missing_events_columns": ",".join(sorted(event_columns)),
-                    "missing_transactions_columns": ",".join(
-                        sorted(transaction_columns)
-                    ),
+                    "missing_events_columns": missing_events_columns,
+                    "missing_transactions_columns": missing_transactions_columns,
                 },
+            )
+            logger.warning(
+                "Discover generated impossible query - merge table",
+                extra={
+                    "missing_events_columns": missing_events_columns,
+                    "missing_transactions_columns": missing_transactions_columns,
+                },
+                exc_info=True,
             )
 
         else:
