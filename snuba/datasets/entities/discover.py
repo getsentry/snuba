@@ -188,7 +188,7 @@ def detect_table(
             missing_columns = ",".join(
                 sorted(event_columns if event_mismatch else transaction_columns)
             )
-            selected_table = (
+            selected_table_str = (
                 str(selected_table.value)
                 if isinstance(selected_table, EntityKey)
                 else selected_table
@@ -197,14 +197,14 @@ def detect_table(
             metrics.increment(
                 "query.impossible",
                 tags={
-                    "selected_table": selected_table,
+                    "selected_table": selected_table_str,
                     "missing_columns": missing_columns,
                 },
             )
             logger.warning(
                 "Discover generated impossible query",
                 extra={
-                    "selected_table": selected_table,
+                    "selected_table": selected_table_str,
                     "missing_columns": missing_columns,
                 },
                 exc_info=True,
