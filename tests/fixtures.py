@@ -1,11 +1,11 @@
 import calendar
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Mapping
 from snuba import settings
 
 
-def get_raw_event() -> Any:
+def get_raw_event() -> Mapping[str, Any]:
     now = datetime.utcnow()
 
     return {
@@ -139,7 +139,7 @@ def get_raw_event() -> Any:
     }
 
 
-def get_raw_transaction() -> Any:
+def get_raw_transaction() -> Mapping[str, Any]:
     now = datetime.utcnow().replace(
         minute=0, second=0, microsecond=0, tzinfo=timezone.utc
     )
