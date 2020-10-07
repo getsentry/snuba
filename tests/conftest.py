@@ -2,6 +2,7 @@ from typing import Iterator
 
 import pytest
 
+from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings, CLUSTERS
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages import StorageKey
@@ -19,6 +20,10 @@ def pytest_configure() -> None:
     Set up the Sentry SDK to avoid errors hidden by configuration.
     Ensure the snuba_test database exists
     """
+    assert (
+        settings.TESTING
+    ), "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
+
     setup_sentry()
 
     for cluster in CLUSTERS:

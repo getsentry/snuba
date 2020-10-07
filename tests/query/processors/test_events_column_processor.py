@@ -32,17 +32,7 @@ def test_events_column_format_expressions() -> None:
                     (Column(None, None, "group_id"), Literal(None, 0),),
                 ),
             ),
-            SelectedExpression(
-                "the_message",
-                FunctionCall(
-                    "the_message",
-                    "coalesce",
-                    (
-                        Column(None, None, "search_message"),
-                        Column(None, None, "message"),
-                    ),
-                ),
-            ),
+            SelectedExpression("the_message", Column("the_message", None, "message"),),
         ],
     )
 
@@ -54,7 +44,7 @@ def test_events_column_format_expressions() -> None:
 
     expected = (
         "(nullIf(group_id, 0) AS the_group_id)",
-        "(coalesce(search_message, message) AS the_message)",
+        "(message AS the_message)",
     )
 
     for idx, column in enumerate(unprocessed.get_selected_columns_from_ast()[1:]):

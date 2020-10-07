@@ -1,8 +1,6 @@
-import calendar
 import os
 import uuid
-from copy import deepcopy
-from datetime import datetime, timedelta
+from datetime import datetime
 from hashlib import md5
 from typing import MutableSequence, Optional, Sequence
 
@@ -14,15 +12,11 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.processor import InsertBatch, ProcessedMessage
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
-from tests.fixtures import raw_event
+from tests.fixtures import get_raw_event
 
 
-class BaseTest(object):
+class BaseDatasetTest:
     def setup_method(self, test_method, dataset_name: Optional[str] = None):
-        assert (
-            settings.TESTING
-        ), "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
-
         self.database = os.environ.get("CLICKHOUSE_DATABASE", "default")
         self.dataset_name = dataset_name
 
@@ -31,8 +25,6 @@ class BaseTest(object):
         else:
             self.dataset = None
 
-
-class BaseDatasetTest(BaseTest):
     def write_processed_messages(self, messages: Sequence[ProcessedMessage]) -> None:
         rows: MutableSequence[WriterTableRow] = []
         for message in messages:
@@ -56,17 +48,7 @@ class BaseEventsTest(BaseDatasetTest):
         self.event = self.__get_event()
 
     def __get_event(self) -> InsertEvent:
-        timestamp = datetime.utcnow()
-
-        data = {
-            "datetime": (timestamp - timedelta(seconds=2)).strftime(
-                settings.PAYLOAD_DATETIME_FORMAT,
-            ),
-            "received": int(
-                calendar.timegm((timestamp - timedelta(seconds=1)).timetuple())
-            ),
-            **deepcopy(raw_event),
-        }
+        data = get_raw_event()
 
         unique = "%s:%s" % (str(data["project"]), data["id"])
         primary_hash = md5(unique.encode("utf-8")).hexdigest()

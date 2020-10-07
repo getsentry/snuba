@@ -6,7 +6,6 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.entity import Entity
 from snuba.datasets.entities.factory import EntityKey, get_entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.schemas import MandatoryCondition
 from snuba.datasets.schemas.join import (
     JoinClause,
     JoinCondition,
@@ -69,15 +68,12 @@ class GroupsEntity(Entity):
                 table_name=groupedmessage_source.format_from(),
                 columns=groupedmessage_source.get_columns(),
                 mandatory_conditions=[
-                    MandatoryCondition(
-                        (qualified_column("record_deleted", self.GROUPS_ALIAS), "=", 0),
-                        binary_condition(
-                            None,
-                            ConditionFunctions.EQ,
-                            Column(None, self.GROUPS_ALIAS, "record_deleted"),
-                            Literal(None, 0),
-                        ),
-                    )
+                    binary_condition(
+                        None,
+                        ConditionFunctions.EQ,
+                        Column(None, self.GROUPS_ALIAS, "record_deleted"),
+                        Literal(None, 0),
+                    ),
                 ],
                 prewhere_candidates=[
                     qualified_column(col, self.GROUPS_ALIAS)
@@ -89,15 +85,12 @@ class GroupsEntity(Entity):
                 table_name=events_source.format_from(),
                 columns=events_source.get_columns(),
                 mandatory_conditions=[
-                    MandatoryCondition(
-                        (qualified_column("deleted", self.EVENTS_ALIAS), "=", 0),
-                        binary_condition(
-                            None,
-                            ConditionFunctions.EQ,
-                            Column(None, self.EVENTS_ALIAS, "deleted"),
-                            Literal(None, 0),
-                        ),
-                    )
+                    binary_condition(
+                        None,
+                        ConditionFunctions.EQ,
+                        Column(None, self.EVENTS_ALIAS, "deleted"),
+                        Literal(None, 0),
+                    ),
                 ],
                 prewhere_candidates=[
                     qualified_column(col, self.EVENTS_ALIAS)
