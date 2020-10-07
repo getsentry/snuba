@@ -17,6 +17,7 @@ from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.writer import BatchWriterEncoderWrapper
+from tests.fixtures import get_raw_transaction
 
 
 def _drop_all_tables() -> None:
@@ -240,7 +241,7 @@ def test_transactions_compatibility() -> None:
     )
 
     assert get_sampling_key() == ""
-    generate_transactions(5)
+    generate_transactions()
 
     runner = Runner()
     runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
@@ -260,99 +261,24 @@ def test_transactions_compatibility() -> None:
     assert connection.execute("SELECT count(*) FROM transactions_local;") == [(5,)]
 
 
-def generate_transactions(count: int) -> None:
-    """
-    Generate a deterministic set of events across a time range.
-    """
-    import calendar
-    import pytz
-    import uuid
-    from datetime import datetime, timedelta
+def generate_transactions() -> None:
+    from datetime import datetime
 
     table_writer = get_writable_storage(StorageKey.TRANSACTIONS).get_table_writer()
 
     rows = []
 
-    base_time = datetime.utcnow().replace(
-        minute=0, second=0, microsecond=0, tzinfo=pytz.utc
-    ) - timedelta(minutes=count)
+    for i in range(5):
+        raw_transaction = get_raw_transaction()
+        # Older versions of this table did not have measurements
+        del raw_transaction["data"]["measurements"]
 
-    for tick in range(count):
-
-        trace_id = "7400045b25c443b885914600aa83ad04"
-        span_id = "8841662216cc598b"
         processed = (
             table_writer.get_stream_loader()
             .get_processor()
             .process_message(
-                (
-                    2,
-                    "insert",
-                    {
-                        "project_id": 1,
-                        "event_id": uuid.uuid4().hex,
-                        "deleted": 0,
-                        "datetime": (base_time + timedelta(minutes=tick)).isoformat(),
-                        "platform": "javascript",
-                        "data": {
-                            # Project N sends every Nth (mod len(hashes)) hash (and platform)
-                            "received": calendar.timegm(
-                                (base_time + timedelta(minutes=tick)).timetuple()
-                            ),
-                            "type": "transaction",
-                            "transaction": f"/api/do_things/{count}",
-                            # XXX(dcramer): would be nice to document why these have to be naive
-                            "start_timestamp": datetime.timestamp(
-                                (base_time + timedelta(minutes=tick)).replace(
-                                    tzinfo=None
-                                )
-                            ),
-                            "timestamp": datetime.timestamp(
-                                (
-                                    base_time + timedelta(minutes=tick, seconds=1)
-                                ).replace(tzinfo=None)
-                            ),
-                            "contexts": {
-                                "trace": {
-                                    "trace_id": trace_id,
-                                    "span_id": span_id,
-                                    "op": "http",
-                                    "status": "0",
-                                },
-                            },
-                            "request": {
-                                "url": "http://127.0.0.1:/query",
-                                "headers": [
-                                    ["Accept-Encoding", "identity"],
-                                    ["Content-Length", "398"],
-                                    ["Host", "127.0.0.1:"],
-                                    ["Referer", "tagstore.something"],
-                                    ["Trace", "8fa73032d-1"],
-                                ],
-                                "data": "",
-                                "method": "POST",
-                                "env": {"SERVER_PORT": "1010", "SERVER_NAME": "snuba"},
-                            },
-                            "spans": [
-                                {
-                                    "op": "db",
-                                    "trace_id": trace_id,
-                                    "span_id": span_id + "1",
-                                    "parent_span_id": None,
-                                    "same_process_as_parent": True,
-                                    "description": "SELECT * FROM users",
-                                    "data": {},
-                                    "timestamp": calendar.timegm(
-                                        (
-                                            base_time + timedelta(minutes=tick)
-                                        ).timetuple()
-                                    ),
-                                }
-                            ],
-                        },
-                    },
-                ),
-                KafkaMessageMetadata(0, 0, base_time),
+                (2, "insert", raw_transaction),
+                KafkaMessageMetadata(0, 0, datetime.utcnow()),
             )
         )
         rows.extend(processed.rows)
