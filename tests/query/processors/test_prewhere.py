@@ -15,7 +15,6 @@ from snuba.query.conditions import (
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.parser import parse_query
 from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.types import Condition
 from snuba.request.request_settings import HTTPRequestSettings
 
 test_data = [
@@ -29,9 +28,7 @@ test_data = [
             "environment",
             "project_id",
         ],
-        [],
         None,
-        [[["positionCaseInsensitive", ["message", "'abc'"]], "!=", 0]],
         FunctionCall(
             None,
             OPERATOR_TO_FUNCTION["!="],
@@ -56,7 +53,6 @@ test_data = [
             ],
         },
         ["a", "b", "c"],
-        [["d", "=", "1"], ["c", "=", "3"]],
         FunctionCall(
             None,
             BooleanFunctions.AND,
@@ -73,7 +69,6 @@ test_data = [
                 ),
             ),
         ),
-        [["a", "=", "1"], ["b", "=", "2"]],
         FunctionCall(
             None,
             BooleanFunctions.AND,
@@ -95,7 +90,6 @@ test_data = [
         # Do not add conditions that are parts of an OR
         {"conditions": [[["a", "=", "1"], ["b", "=", "2"]], ["c", "=", "3"]]},
         ["a", "b", "c"],
-        [[["a", "=", "1"], ["b", "=", "2"]]],
         FunctionCall(
             None,
             BooleanFunctions.OR,
@@ -112,7 +106,6 @@ test_data = [
                 ),
             ),
         ),
-        [["c", "=", "3"]],
         FunctionCall(
             None,
             OPERATOR_TO_FUNCTION["="],
@@ -124,7 +117,6 @@ test_data = [
         # most of the dataset.
         {"conditions": [["a", "NOT IN", [1, 2, 3]], ["b", "=", "2"], ["c", "=", "3"]]},
         ["a", "b"],
-        [["a", "NOT IN", [1, 2, 3]], ["c", "=", "3"]],
         FunctionCall(
             None,
             BooleanFunctions.AND,
@@ -141,7 +133,6 @@ test_data = [
                 ),
             ),
         ),
-        [["b", "=", "2"]],
         FunctionCall(
             None,
             OPERATOR_TO_FUNCTION["="],
@@ -152,15 +143,12 @@ test_data = [
 
 
 @pytest.mark.parametrize(
-    "query_body, keys, new_conditions, new_ast_condition, prewhere_conditions, new_prewhere_ast_condition",
-    test_data,
+    "query_body, keys, new_ast_condition, new_prewhere_ast_condition", test_data,
 )
 def test_prewhere(
     query_body: MutableMapping[str, Any],
     keys: Sequence[str],
-    new_conditions: Sequence[Condition],
     new_ast_condition: Optional[Expression],
-    prewhere_conditions: Sequence[Condition],
     new_prewhere_ast_condition: Optional[Expression],
 ) -> None:
     settings.MAX_PREWHERE_CONDITIONS = 2
@@ -172,7 +160,5 @@ def test_prewhere(
     processor = PrewhereProcessor()
     processor.process_query(Query(query), request_settings)
 
-    assert query.get_conditions() == new_conditions
     assert query.get_condition_from_ast() == new_ast_condition
-    assert query.get_prewhere() == prewhere_conditions
     assert query.get_prewhere_ast() == new_prewhere_ast_condition

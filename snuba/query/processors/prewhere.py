@@ -1,7 +1,6 @@
-from abc import ABC, abstractmethod
-from typing import Generic, Iterable, Optional, Sequence, Tuple, TypeVar
+from typing import Iterable, Optional, Sequence, Tuple
 
-from snuba import settings, util
+from snuba import settings
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.accessors import get_columns_in_expression
@@ -10,8 +9,7 @@ from snuba.query.conditions import (
     combine_and_conditions,
     get_first_level_and_conditions,
 )
-from snuba.query.expressions import Column, Expression, FunctionCall
-from snuba.query.types import Condition
+from snuba.query.expressions import Column, FunctionCall
 from snuba.request.request_settings import RequestSettings
 
 ALLOWED_OPERATORS = [
@@ -50,29 +48,20 @@ class PrewhereProcessor(QueryProcessor):
         if not prewhere_keys:
             return
 
-        # While both implementations modify the query, they do not
-        # interfere with each other since one depend on the legacy
-        # representation and the other on the AST thus we can execute
-        # the two independently.
-        LegacyPrewhereProcessor().process_query(
-            query, max_prewhere_conditions, prewhere_keys
-        )
-        ASTPrewhereProcessor().process_query(
+        PrewhereProcessorDelegate().process_query(
             query, max_prewhere_conditions, prewhere_keys
         )
 
 
-TCondition = TypeVar("TCondition")
-TColumn = TypeVar("TColumn")
-
-
-class PrewhereProcessorDelegate(ABC, Generic[TCondition, TColumn]):
+class PrewhereProcessorDelegate:
     """
     Runs the prewhere generation algorithm on behalf of PrewhereProcessor.
     There are two implementation following a template method pattern. One
     for the AST and one for the legacy query representation so that the
     prewhere generation code does not have to be duplicated.
     """
+
+    allowed_ast_operators = [OPERATOR_TO_FUNCTION[o] for o in ALLOWED_OPERATORS]
 
     def process_query(
         self, query: Query, max_prewhere_conditions: int, prewhere_keys: Sequence[str]
@@ -101,78 +90,9 @@ class PrewhereProcessorDelegate(ABC, Generic[TCondition, TColumn]):
         if prewhere_conditions:
             self._update_conditions(query, prewhere_conditions)
 
-    @abstractmethod
     def _get_prewhere_candidates(
         self, query: Query, prewhere_keys: Sequence[str]
-    ) -> Sequence[Tuple[Iterable[TColumn], TCondition]]:
-        """
-        Extract the conditions from the query that could be moved to the
-        pre-where clause.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def _get_column_name(self, column: TColumn) -> str:
-        raise NotImplementedError
-
-    @abstractmethod
-    def _update_conditions(
-        self, query: Query, prewhere_conditions: Sequence[TCondition]
-    ) -> None:
-        """
-        Updates the query with the new pre-where conditions by removing them
-        from the main condition clause and adding them to the pre-where clause.
-        """
-        raise NotImplementedError
-
-
-class LegacyPrewhereProcessor(PrewhereProcessorDelegate[Condition, str]):
-    def _get_prewhere_candidates(
-        self, query: Query, prewhere_keys: Sequence[str]
-    ) -> Sequence[Tuple[Iterable[str], Condition]]:
-        # Add any condition to PREWHERE if:
-        # - It is a single top-level condition (not OR-nested), and
-        # - Any of its referenced columns are in prewhere_keys
-        conditions = query.get_conditions()
-        if not conditions:
-            return []
-        return [
-            (util.columns_in_expr(cond[0]), cond)
-            for cond in conditions
-            if util.is_condition(cond)
-            and cond[1] in ALLOWED_OPERATORS
-            and any(col in prewhere_keys for col in util.columns_in_expr(cond[0]))
-        ]
-
-    def _get_column_name(self, column: str) -> str:
-        return column
-
-    def _update_conditions(
-        self, query: Query, prewhere_conditions: Sequence[Condition]
-    ) -> None:
-        conditions = query.get_conditions()
-        # This should never ne None at this point, but for mypy this can be None.
-        assert conditions is not None
-
-        query.set_conditions(
-            [cond for cond in conditions if cond not in prewhere_conditions]
-        )
-        query.set_prewhere(prewhere_conditions)
-
-
-class ASTPrewhereProcessor(PrewhereProcessorDelegate[Expression, Column]):
-    """
-    This class MUST not depend on anything from the legacy implementation
-    because, as long as we have both ast and legacy representation
-    coexisting, this class cannot be sure whether the legacy representation
-    has already been modified to process the pre-where conditions.
-    """
-
-    allowed_ast_operators = [OPERATOR_TO_FUNCTION[o] for o in ALLOWED_OPERATORS]
-
-    def _get_prewhere_candidates(
-        self, query: Query, prewhere_keys: Sequence[str]
-    ) -> Sequence[Tuple[Iterable[Column], Expression]]:
+    ) -> Sequence[Tuple[Iterable[Column], FunctionCall]]:
         # Add any condition to PREWHERE if:
         # - It is a single top-level condition (not OR-nested), and
         # - Any of its referenced columns are in prewhere_keys
@@ -196,8 +116,12 @@ class ASTPrewhereProcessor(PrewhereProcessorDelegate[Expression, Column]):
         return column.column_name
 
     def _update_conditions(
-        self, query: Query, prewhere_conditions: Sequence[Expression]
+        self, query: Query, prewhere_conditions: Sequence[FunctionCall]
     ) -> None:
+        """
+        Updates the query with the new pre-where conditions by removing them
+        from the main condition clause and adding them to the pre-where clause.
+        """
         ast_condition = query.get_condition_from_ast()
         # This should never be None at this point, but for mypy this can be None.
         assert ast_condition is not None
