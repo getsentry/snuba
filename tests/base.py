@@ -1,8 +1,6 @@
-import calendar
 import os
 import uuid
-from copy import deepcopy
-from datetime import datetime, timedelta
+from datetime import datetime
 from hashlib import md5
 from typing import MutableSequence, Optional, Sequence
 
@@ -14,7 +12,7 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.processor import InsertBatch, ProcessedMessage
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
-from tests.fixtures import raw_event
+from tests.fixtures import get_raw_event
 
 
 class BaseDatasetTest:
@@ -50,17 +48,7 @@ class BaseEventsTest(BaseDatasetTest):
         self.event = self.__get_event()
 
     def __get_event(self) -> InsertEvent:
-        timestamp = datetime.utcnow()
-
-        data = {
-            "datetime": (timestamp - timedelta(seconds=2)).strftime(
-                settings.PAYLOAD_DATETIME_FORMAT,
-            ),
-            "received": int(
-                calendar.timegm((timestamp - timedelta(seconds=1)).timetuple())
-            ),
-            **deepcopy(raw_event),
-        }
+        data = get_raw_event()
 
         unique = "%s:%s" % (str(data["project"]), data["id"])
         primary_hash = md5(unique.encode("utf-8")).hexdigest()
