@@ -6,7 +6,6 @@ from snuba.datasets.cdc.groupedmessage_processor import (
     GroupedMessageRow,
 )
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
-from snuba.datasets.schemas import MandatoryCondition
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader
@@ -40,15 +39,12 @@ schema = WritableTableSchema(
     dist_table_name="groupedmessage_dist",
     storage_set_key=StorageSetKey.EVENTS,
     mandatory_conditions=[
-        MandatoryCondition(
-            ("record_deleted", "=", 0),
-            binary_condition(
-                None,
-                ConditionFunctions.EQ,
-                Column(None, None, "record_deleted"),
-                Literal(None, 0),
-            ),
-        )
+        binary_condition(
+            None,
+            ConditionFunctions.EQ,
+            Column(None, None, "record_deleted"),
+            Literal(None, 0),
+        ),
     ],
     prewhere_candidates=["project_id", "id"],
 )

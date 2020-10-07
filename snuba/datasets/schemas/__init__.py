@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Mapping, NamedTuple, Sequence
+from typing import List, Mapping, Sequence
 
 from snuba.clickhouse.columns import (
     ColumnSet,
@@ -9,12 +9,6 @@ from snuba.clickhouse.columns import (
     ReadOnly,
 )
 from snuba.query.expressions import FunctionCall
-from snuba.query.types import Condition
-
-
-class MandatoryCondition(NamedTuple):
-    legacy: Condition
-    ast: FunctionCall
 
 
 class RelationalSource(ABC):
@@ -46,7 +40,7 @@ class RelationalSource(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_mandatory_conditions(self) -> Sequence[MandatoryCondition]:
+    def get_mandatory_conditions(self) -> Sequence[FunctionCall]:
         """
         Returns the mandatory conditions to apply on Clickhouse when
         querying this RelationalSource, if any.
