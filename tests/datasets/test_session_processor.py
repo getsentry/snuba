@@ -1,5 +1,3 @@
-from tests.base import BaseTest
-
 from datetime import datetime, timedelta, timezone
 
 from snuba.datasets.sessions_processor import SessionsProcessor
@@ -7,7 +5,7 @@ from snuba.consumer import KafkaMessageMetadata
 from snuba.processor import InsertBatch
 
 
-class TestSessionProcessor(BaseTest):
+class TestSessionProcessor:
     def test_ingest_session_event_max_sample_rate(self):
         timestamp = datetime.now(timezone.utc)
         started = timestamp - timedelta(hours=1)
