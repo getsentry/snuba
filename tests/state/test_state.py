@@ -41,7 +41,7 @@ class TestState:
         assert rand() == rand()
         rand1 = rand()
         assert rand1 == rand()
-        time.sleep(1)
+        time.sleep(0.1)
         assert rand1 != rand()
 
     def test_abtest(self):
