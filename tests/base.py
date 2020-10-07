@@ -74,7 +74,7 @@ class BaseEventsTest(BaseDatasetTest):
         self.write_processed_messages(processed_messages)
 
 
-class BaseApiTest(BaseEventsTest):
+class BaseApiTest(BaseDatasetTest):
     def setup_method(self, test_method, dataset_name="events"):
         super().setup_method(test_method, dataset_name)
         from snuba.web.views import application
