@@ -1,7 +1,6 @@
 import os
 import uuid
 from datetime import datetime
-from hashlib import md5
 from typing import MutableSequence, Optional, Sequence
 
 from snuba import settings
@@ -45,28 +44,7 @@ class BaseEventsTest(BaseDatasetTest):
     def setup_method(self, test_method, dataset_name="events"):
         super(BaseEventsTest, self).setup_method(test_method, dataset_name)
         self.table = enforce_table_writer(self.dataset).get_schema().get_table_name()
-        self.event = self.__get_event()
-
-    def __get_event(self) -> InsertEvent:
-        data = get_raw_event()
-
-        unique = "%s:%s" % (str(data["project"]), data["id"])
-        primary_hash = md5(unique.encode("utf-8")).hexdigest()
-
-        return InsertEvent(
-            {
-                "event_id": data["id"],
-                "group_id": int(primary_hash[:16], 16),
-                "primary_hash": primary_hash,
-                "project_id": data["project"],
-                "message": data["message"],
-                "platform": data["platform"],
-                "datetime": data["datetime"],
-                "data": data,
-                "organization_id": data["organization_id"],
-                "retention_days": settings.DEFAULT_RETENTION_DAYS,
-            }
-        )
+        self.event = InsertEvent(get_raw_event())
 
     def create_event_row_for_date(
         self, dt: datetime, retention_days=settings.DEFAULT_RETENTION_DAYS
@@ -96,7 +74,7 @@ class BaseEventsTest(BaseDatasetTest):
         self.write_processed_messages(processed_messages)
 
 
-class BaseApiTest(BaseEventsTest):
+class BaseApiTest(BaseDatasetTest):
     def setup_method(self, test_method, dataset_name="events"):
         super().setup_method(test_method, dataset_name)
         from snuba.web.views import application
