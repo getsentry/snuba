@@ -141,7 +141,7 @@ class TestApi(BaseApiTest):
                             }
                         )
                     )
-        self.write_unprocessed_events(events)
+        self.write_events(events)
 
     def redis_db_size(self):
         # dbsize could be an integer for a single node cluster or a dictionary
@@ -675,7 +675,7 @@ class TestApi(BaseApiTest):
                     }
                 )
             )
-        self.write_unprocessed_events(events)
+        self.write_events(events)
 
         result = json.loads(
             self.app.post(
