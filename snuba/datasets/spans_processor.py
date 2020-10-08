@@ -111,12 +111,11 @@ class SpansMessageProcessor(MessageProcessor):
 
         # Add the transaction root span
         processed = self.__init_span(event)
-        span_id = self.__safe_extract_int(
+        processed["span_id"] = self.__safe_extract_int(
             "transaction:span_id", transaction_ctx["span_id"]
         )
-        if span_id is None:
+        if processed["span_id"] is None:
             return None
-        processed["span_id"] = span_id
         processed["transaction_name"] = _unicodify(data.get("transaction") or "")
         processed["parent_span_id"] = self.__safe_extract_int(
             "transaction:parent_span_id", transaction_ctx.get("parent_span_id")
