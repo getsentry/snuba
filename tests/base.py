@@ -27,9 +27,7 @@ class BaseDatasetTest:
         for message in messages:
             assert isinstance(message, InsertBatch)
             rows.extend(message.rows)
-        self.write_rows(rows)
 
-    def write_rows(self, rows: Sequence[WriterTableRow]) -> None:
         BatchWriterEncoderWrapper(
             enforce_table_writer(self.dataset).get_batch_writer(
                 metrics=DummyMetricsBackend(strict=True)
@@ -37,7 +35,7 @@ class BaseDatasetTest:
             JSONRowEncoder(),
         ).write(rows)
 
-    def write_events(self, events: Sequence[InsertEvent]) -> None:
+    def write_unprocessed_events(self, events: Sequence[InsertEvent]) -> None:
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )

@@ -18,7 +18,7 @@ class BaseSubscriptionTest(BaseDatasetTest):
             minute=0, second=0, microsecond=0
         ) - timedelta(minutes=self.minutes)
 
-        self.write_events(
+        self.write_unprocessed_events(
             [
                 InsertEvent(
                     {
