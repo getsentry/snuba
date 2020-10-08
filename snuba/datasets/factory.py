@@ -81,6 +81,8 @@ def get_enabled_dataset_names() -> Sequence[str]:
     return [name for name in DATASET_NAMES if name not in settings.DISABLED_DATASETS]
 
 
+# TODO: This should be removed and moved to the Entity since Datasets no longer control
+# storages.
 def enforce_table_writer(dataset: Dataset) -> TableWriter:
     writable_storage = dataset.get_default_entity().get_writable_storage()
 
