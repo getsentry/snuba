@@ -1,23 +1,11 @@
 import simplejson as json
 import pytest
 from typing import Any, MutableMapping
-from tests.base import BaseDatasetTest
 
 from snuba.datasets.factory import get_dataset
 from snuba.query.parser import parse_query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
-
-
-def get_dataset_source(dataset_name):
-    return (
-        get_dataset(dataset_name)
-        .get_default_entity()
-        .get_all_storages()[0]
-        .get_schema()
-        .get_data_source()
-    )
-
 
 test_data = [
     ({"conditions": [["type", "=", "transaction"]]}, "transactions_local"),
@@ -150,23 +138,22 @@ test_data = [
 ]
 
 
-class TestDiscover(BaseDatasetTest):
-    @pytest.mark.parametrize("query_body, expected_table", test_data)
-    def test_data_source(
-        self, query_body: MutableMapping[str, Any], expected_table: str,
-    ):
-        request_settings = HTTPRequestSettings()
-        dataset = get_dataset("discover")
-        query = parse_query(query_body, dataset)
-        request = Request("a", query, request_settings, {}, "r")
-        for processor in get_dataset("discover").get_query_processors():
-            processor.process_query(request.query, request.settings)
+@pytest.mark.parametrize("query_body, expected_table", test_data)
+def test_data_source(
+    query_body: MutableMapping[str, Any], expected_table: str,
+) -> None:
+    request_settings = HTTPRequestSettings()
+    dataset = get_dataset("discover")
+    query = parse_query(query_body, dataset)
+    request = Request("a", query, request_settings, {}, "r")
+    for processor in get_dataset("discover").get_query_processors():
+        processor.process_query(request.query, request.settings)
 
-        plan = dataset.get_query_plan_builder().build_plan(request)
+    plan = dataset.get_query_plan_builder().build_plan(request)
 
-        for physical_processor in plan.plan_processors:
-            physical_processor.process_query(plan.query, request.settings)
+    for physical_processor in plan.plan_processors:
+        physical_processor.process_query(plan.query, request.settings)
 
-        assert plan.query.get_data_source().format_from() == expected_table, json.dumps(
-            query_body
-        )
+    assert plan.query.get_data_source().format_from() == expected_table, json.dumps(
+        query_body
+    )

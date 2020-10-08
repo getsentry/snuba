@@ -13,7 +13,6 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.datasets.schemas import MandatoryCondition
 from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsProcessor
 from snuba.datasets.storages.events_column_processor import EventsColumnProcessor
 from snuba.datasets.storages.processors.replaced_groups import (
@@ -248,15 +247,9 @@ def get_promoted_tags() -> Mapping[str, Sequence[str]]:
 
 
 mandatory_conditions = [
-    MandatoryCondition(
-        ("deleted", "=", 0),
-        binary_condition(
-            None,
-            ConditionFunctions.EQ,
-            Column(None, None, "deleted"),
-            Literal(None, 0),
-        ),
-    )
+    binary_condition(
+        None, ConditionFunctions.EQ, Column(None, None, "deleted"), Literal(None, 0),
+    ),
 ]
 
 prewhere_candidates = [

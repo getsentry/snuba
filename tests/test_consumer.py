@@ -15,9 +15,8 @@ from snuba.consumer import (
     JSONRowInsertBatch,
     StreamingConsumerStrategyFactory,
 )
-from snuba.datasets.factory import enforce_table_writer
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.processor import InsertBatch, ReplacementBatch
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams import Message, Partition, Topic
@@ -25,12 +24,14 @@ from snuba.utils.streams.backends.kafka import KafkaPayload
 from tests.assertions import assert_changes
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 from tests.backends.metrics import TestingMetricsBackend, Timing
-from tests.base import BaseEventsTest
+from tests.fixtures import get_raw_event
 
 
-class TestConsumer(BaseEventsTest):
-
+class TestConsumer:
+    storage = get_writable_storage(StorageKey.EVENTS)
     metrics = DummyMetricsBackend()
+    event = get_raw_event()
+    table = storage.get_table_writer().get_schema().get_table_name()
 
     def test_offsets(self):
         event = self.event
@@ -45,10 +46,10 @@ class TestConsumer(BaseEventsTest):
         )
 
         test_worker = ConsumerWorker(
-            self.dataset.get_default_entity().get_writable_storage(),
+            self.storage,
             producer=FakeConfluentKafkaProducer(),
             replacements_topic=Topic(
-                enforce_table_writer(self.dataset)
+                self.storage.get_table_writer()
                 .get_stream_loader()
                 .get_replacement_topic_spec()
                 .topic_name
@@ -58,10 +59,8 @@ class TestConsumer(BaseEventsTest):
         batch = [test_worker.process_message(message)]
         test_worker.flush_batch(batch)
 
-        clickhouse = (
-            get_storage(StorageKey.EVENTS)
-            .get_cluster()
-            .get_query_connection(ClickhouseClientSettings.QUERY)
+        clickhouse = self.storage.get_cluster().get_query_connection(
+            ClickhouseClientSettings.QUERY
         )
 
         assert clickhouse.execute(
@@ -70,10 +69,10 @@ class TestConsumer(BaseEventsTest):
 
     def test_skip_too_old(self):
         test_worker = ConsumerWorker(
-            self.dataset.get_default_entity().get_writable_storage(),
+            self.storage,
             producer=FakeConfluentKafkaProducer(),
             replacements_topic=Topic(
-                enforce_table_writer(self.dataset)
+                self.storage.get_table_writer()
                 .get_stream_loader()
                 .get_replacement_topic_spec()
                 .topic_name
@@ -100,10 +99,10 @@ class TestConsumer(BaseEventsTest):
     def test_produce_replacement_messages(self):
         producer = FakeConfluentKafkaProducer()
         test_worker = ConsumerWorker(
-            self.dataset.get_default_entity().get_writable_storage(),
+            self.storage,
             producer=producer,
             replacements_topic=Topic(
-                enforce_table_writer(self.dataset)
+                self.storage.get_table_writer()
                 .get_stream_loader()
                 .get_replacement_topic_spec()
                 .topic_name
