@@ -1,4 +1,3 @@
-import os
 import uuid
 from datetime import datetime
 from typing import MutableSequence, Optional, Sequence
@@ -16,7 +15,6 @@ from tests.fixtures import get_raw_event
 
 class BaseDatasetTest:
     def setup_method(self, test_method, dataset_name: Optional[str] = None):
-        self.database = os.environ.get("CLICKHOUSE_DATABASE", "default")
         self.dataset_name = dataset_name
 
         if dataset_name is not None:
