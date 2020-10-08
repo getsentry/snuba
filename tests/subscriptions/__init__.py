@@ -4,10 +4,10 @@ import uuid
 
 from snuba import settings
 from snuba.datasets.events_processor_base import InsertEvent
-from tests.base import BaseEventsTest
+from tests.base import BaseDatasetTest
 
 
-class BaseSubscriptionTest(BaseEventsTest):
+class BaseSubscriptionTest(BaseDatasetTest):
     def setup_method(self, test_method, dataset_name="events"):
         super().setup_method(test_method, dataset_name)
         self.project_id = 1

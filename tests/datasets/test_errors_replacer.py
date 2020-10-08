@@ -12,10 +12,11 @@ from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.kafka import KafkaPayload
-from tests.base import BaseEventsTest
+from tests.base import BaseDatasetTest
+from tests.fixtures import get_raw_event
 
 
-class TestReplacer(BaseEventsTest):
+class TestReplacer(BaseDatasetTest):
     def setup_method(self, test_method):
         super(TestReplacer, self).setup_method(test_method, "events_migration")
 
@@ -31,6 +32,7 @@ class TestReplacer(BaseEventsTest):
         )
 
         self.project_id = 1
+        self.event = get_raw_event()
 
     def _wrap(self, msg: str) -> Message[KafkaPayload]:
         return Message(
