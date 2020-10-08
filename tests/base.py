@@ -1,9 +1,7 @@
 import os
-import uuid
 from datetime import datetime
 from typing import MutableSequence, Optional, Sequence
 
-from snuba import settings
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.events_processor_base import InsertEvent
@@ -11,7 +9,6 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.processor import InsertBatch, ProcessedMessage
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
-from tests.fixtures import get_raw_event
 
 
 class BaseDatasetTest:
@@ -53,25 +50,6 @@ class BaseDatasetTest:
             processed_messages.append(processed_message)
 
         self.write_processed_messages(processed_messages)
-
-
-class BaseEventsTest(BaseDatasetTest):
-    def setup_method(self, test_method, dataset_name="events"):
-        super(BaseEventsTest, self).setup_method(test_method, dataset_name)
-        self.table = enforce_table_writer(self.dataset).get_schema().get_table_name()
-        self.event = InsertEvent(get_raw_event())
-
-    def create_event_row_for_date(
-        self, dt: datetime, retention_days=settings.DEFAULT_RETENTION_DAYS
-    ):
-        return {
-            "event_id": uuid.uuid4().hex,
-            "project_id": 1,
-            "group_id": 1,
-            "deleted": 0,
-            "timestamp": dt,
-            "retention_days": retention_days,
-        }
 
 
 class BaseApiTest(BaseDatasetTest):
