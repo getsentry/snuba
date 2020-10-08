@@ -24,12 +24,15 @@ from snuba.processor import (
     ProcessedMessage,
     ReplacementBatch,
 )
-from tests.base import BaseEventsTest
+from tests.base import BaseDatasetTest
+from tests.fixtures import get_raw_event
 
 
-class TestEventsProcessor(BaseEventsTest):
-
-    metadata = KafkaMessageMetadata(0, 0, datetime.now())
+class TestEventsProcessor(BaseDatasetTest):
+    def setup_method(self, test_method):
+        super().setup_method(test_method, "events")
+        self.metadata = KafkaMessageMetadata(0, 0, datetime.now())
+        self.event = get_raw_event()
 
     def test_invalid_version(self) -> None:
         with pytest.raises(InvalidMessageVersion):

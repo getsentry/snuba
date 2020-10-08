@@ -39,6 +39,21 @@ class BaseDatasetTest:
             JSONRowEncoder(),
         ).write(rows)
 
+    def write_events(self, events: Sequence[InsertEvent]) -> None:
+        processor = (
+            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
+        )
+
+        processed_messages = []
+        for i, event in enumerate(events):
+            processed_message = processor.process_message(
+                (2, "insert", event, {}), KafkaMessageMetadata(i, 0, datetime.now())
+            )
+            assert processed_message is not None
+            processed_messages.append(processed_message)
+
+        self.write_processed_messages(processed_messages)
+
 
 class BaseEventsTest(BaseDatasetTest):
     def setup_method(self, test_method, dataset_name="events"):
@@ -57,21 +72,6 @@ class BaseEventsTest(BaseDatasetTest):
             "timestamp": dt,
             "retention_days": retention_days,
         }
-
-    def write_events(self, events: Sequence[InsertEvent]) -> None:
-        processor = (
-            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
-        )
-
-        processed_messages = []
-        for i, event in enumerate(events):
-            processed_message = processor.process_message(
-                (2, "insert", event, {}), KafkaMessageMetadata(i, 0, datetime.now())
-            )
-            assert processed_message is not None
-            processed_messages.append(processed_message)
-
-        self.write_processed_messages(processed_messages)
 
 
 class BaseApiTest(BaseDatasetTest):
