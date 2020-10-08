@@ -12,8 +12,10 @@ from dateutil.parser import parse as parse_datetime
 from sentry_sdk import Client, Hub
 
 from snuba import settings, state
+from snuba.consumer import KafkaMessageMetadata
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.events_processor_base import InsertEvent
+from snuba.datasets.factory import enforce_table_writer
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.redis import redis_client
@@ -38,6 +40,7 @@ class TestApi(BaseApiTest):
             minute=0, second=0, microsecond=0
         ) - timedelta(minutes=self.minutes)
         self.generate_fizzbuzz_events()
+        self.table = enforce_table_writer(self.dataset).get_schema().get_table_name()
 
     def teardown_method(self, test_method):
         # Reset rate limits
@@ -47,6 +50,21 @@ class TestApi(BaseApiTest):
         state.delete_config("project_concurrent_limit_1")
         state.delete_config("project_per_second_limit")
         state.delete_config("date_align_seconds")
+
+    def write_events(self, events):
+        processor = (
+            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
+        )
+
+        processed_messages = []
+        for i, event in enumerate(events):
+            processed_message = processor.process_message(
+                (2, "insert", event, {}), KafkaMessageMetadata(i, 0, datetime.now())
+            )
+            assert processed_message is not None
+            processed_messages.append(processed_message)
+
+        self.write_processed_messages(processed_messages)
 
     def generate_fizzbuzz_events(self) -> None:
         """
