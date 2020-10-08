@@ -17,10 +17,9 @@ from snuba.subscriptions.data import (
 from snuba.subscriptions.worker import SubscriptionTaskResult
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.scheduler import ScheduledTask
-from tests.base import BaseTest
 
 
-class TestSubscriptionCodec(BaseTest):
+class TestSubscriptionCodec:
     def build_subscription_data(self) -> SubscriptionData:
         return SubscriptionData(
             project_id=5,

@@ -2,7 +2,6 @@ import pytest
 from unittest.mock import patch
 import uuid
 
-from tests.base import BaseTest
 from snuba import state
 from snuba.state.rate_limit import (
     rate_limit,
@@ -14,7 +13,7 @@ from snuba.state.rate_limit import (
 )
 
 
-class TestRateLimit(BaseTest):
+class TestRateLimit:
     def test_concurrent_limit(self):
         # No concurrent limit should not raise
         rate_limit_params = RateLimitParameters("foo", "bar", None, None)

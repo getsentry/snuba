@@ -1,40 +1,34 @@
 import uuid
 from datetime import datetime
 from functools import partial
+from typing import Any, Mapping
 
 import simplejson as json
 
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from tests.base import BaseApiTest
-from tests.fixtures import get_raw_transaction
+from tests.fixtures import get_raw_event, get_raw_transaction
 
 
 class TestDiscoverApi(BaseApiTest):
     def setup_method(self, test_method):
         super().setup_method(test_method)
         self.app.post = partial(self.app.post, headers={"referer": "test"})
-        self.project_id = self.event["project_id"]
         self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
-        self.generate_event()
-        self.generate_transaction()
+        self.event = get_raw_event()
+        self.project_id = self.event["project_id"]
+        self.insert_event("events", self.event)
+        self.insert_event("transactions", get_raw_transaction())
 
-    def generate_event(self):
-        self.dataset = get_dataset("events")
-        self.write_events([self.event])
-
-    def generate_transaction(self):
-        self.dataset = get_dataset("transactions")
-
-        raw_transaction = get_raw_transaction()
-
+    def insert_event(self, dataset_name: str, raw_data: Mapping[str, Any]) -> None:
+        self.dataset = get_dataset(dataset_name)
         processed = (
             enforce_table_writer(self.dataset)
             .get_stream_loader()
             .get_processor()
             .process_message(
-                (2, "insert", raw_transaction),
-                KafkaMessageMetadata(0, 0, datetime.now()),
+                (2, "insert", raw_data), KafkaMessageMetadata(0, 0, datetime.now()),
             )
         )
 
