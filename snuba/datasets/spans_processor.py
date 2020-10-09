@@ -77,13 +77,20 @@ class SpansMessageProcessor(MessageProcessor):
         tags = _as_dict_safe(data.get("tags", None))
         span["tags.key"], span["tags.value"] = extract_extra_tags(tags)
 
-    def __safe_extract_int(self, field: str, value: Any) -> Optional[int]:
-        if value is not None and isinstance(value, str):
-            return int(value, 16)
-        elif value is not None:
-            metrics.increment(
-                "invalid_int_type", tags={"field": field, "type": str(type(value))}
-            )
+    def __safe_extract_int(
+        self, field: str, value: Any, nullable: bool
+    ) -> Optional[int]:
+        if value is not None:
+            if isinstance(value, str):
+                return int(value, 16)
+            elif isinstance(value, int):
+                return value
+            else:
+                metrics.increment(
+                    "invalid_int_type", tags={"field": field, "type": str(type(value))}
+                )
+        elif not nullable:
+            metrics.increment("missing_field", tags={"field": field})
         return None
 
     def process_message(self, message, metadata) -> Optional[ProcessedMessage]:
@@ -112,13 +119,13 @@ class SpansMessageProcessor(MessageProcessor):
         # Add the transaction root span
         processed = self.__init_span(event)
         processed["span_id"] = self.__safe_extract_int(
-            "transaction:span_id", transaction_ctx["span_id"]
+            "transaction:span_id", transaction_ctx["span_id"], False
         )
         if processed["span_id"] is None:
             return None
         processed["transaction_name"] = _unicodify(data.get("transaction") or "")
         processed["parent_span_id"] = self.__safe_extract_int(
-            "transaction:parent_span_id", transaction_ctx.get("parent_span_id")
+            "transaction:parent_span_id", transaction_ctx.get("parent_span_id"), True
         )
 
         processed["description"] = _unicodify(data.get("transaction") or "")
@@ -132,12 +139,12 @@ class SpansMessageProcessor(MessageProcessor):
         for span in spans:
             processed = self.__init_span(event)
             processed["span_id"] = self.__safe_extract_int(
-                "span:span_id", span["span_id"]
+                "span:span_id", span["span_id"], False
             )
             if processed["span_id"] is None:
                 return None
             processed["parent_span_id"] = self.__safe_extract_int(
-                "span:parent_span_id", span.get("parent_span_id")
+                "span:parent_span_id", span.get("parent_span_id"), True
             )
 
             processed["description"] = span.get("description", "") or ""
