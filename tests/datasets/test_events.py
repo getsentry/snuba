@@ -21,7 +21,7 @@ class TestEventsDataset(BaseDatasetTest):
         self.event = get_raw_event()
         self.event["data"]["tags"].append(["test_tag1", "value1"])
         self.event["data"]["tags"].append(["test_tag=2", "value2"])  # Requires escaping
-        self.write_events([self.event])
+        self.write_unprocessed_events([self.event])
 
         clickhouse = (
             get_storage(StorageKey.EVENTS)

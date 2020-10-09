@@ -204,7 +204,7 @@ class TestGroupassignee(BaseDatasetTest):
                 "team_id": "",
             }
         )
-        self.write_rows([row.to_clickhouse()])
+        self.write_processed_messages([InsertBatch([row.to_clickhouse()])])
         ret = (
             get_cluster(StorageSetKey.EVENTS)
             .get_query_connection(ClickhouseClientSettings.QUERY)

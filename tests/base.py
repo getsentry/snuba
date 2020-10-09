@@ -1,4 +1,3 @@
-import os
 import uuid
 from datetime import datetime
 from typing import MutableSequence, Optional, Sequence
@@ -16,7 +15,6 @@ from tests.fixtures import get_raw_event
 
 class BaseDatasetTest:
     def setup_method(self, test_method, dataset_name: Optional[str] = None):
-        self.database = os.environ.get("CLICKHOUSE_DATABASE", "default")
         self.dataset_name = dataset_name
 
         if dataset_name is not None:
@@ -29,9 +27,7 @@ class BaseDatasetTest:
         for message in messages:
             assert isinstance(message, InsertBatch)
             rows.extend(message.rows)
-        self.write_rows(rows)
 
-    def write_rows(self, rows: Sequence[WriterTableRow]) -> None:
         BatchWriterEncoderWrapper(
             enforce_table_writer(self.dataset).get_batch_writer(
                 metrics=DummyMetricsBackend(strict=True)
@@ -39,7 +35,7 @@ class BaseDatasetTest:
             JSONRowEncoder(),
         ).write(rows)
 
-    def write_events(self, events: Sequence[InsertEvent]) -> None:
+    def write_unprocessed_events(self, events: Sequence[InsertEvent]) -> None:
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )

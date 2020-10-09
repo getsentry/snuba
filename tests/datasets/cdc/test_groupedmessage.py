@@ -16,9 +16,7 @@ from tests.base import BaseDatasetTest
 
 class TestGroupedMessage(BaseDatasetTest):
     def setup_method(self, test_method):
-        super(TestGroupedMessage, self).setup_method(
-            test_method, "groupedmessage",
-        )
+        super().setup_method(test_method, "groupedmessage")
 
     UPDATE_MSG = UpdateEvent(
         {
@@ -268,7 +266,7 @@ class TestGroupedMessage(BaseDatasetTest):
                 "first_release_id": "26",
             }
         )
-        self.write_rows([row.to_clickhouse()])
+        self.write_processed_messages([InsertBatch([row.to_clickhouse()])])
         ret = (
             get_cluster(StorageSetKey.EVENTS)
             .get_query_connection(ClickhouseClientSettings.QUERY)
