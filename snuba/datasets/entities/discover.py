@@ -19,6 +19,8 @@ from snuba.clickhouse.columns import (
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.clickhouse.translators.snuba.allowed import (
     ColumnMapper,
+    CurriedFunctionCallMapper,
+    FunctionCallMapper,
     SubscriptableReferenceMapper,
 )
 from snuba.clickhouse.translators.snuba.mappers import ColumnToLiteral, ColumnToMapping
@@ -44,7 +46,13 @@ from snuba.query.conditions import (
     ConditionFunctions,
     get_first_level_and_conditions,
 )
-from snuba.query.expressions import Column, Literal, SubscriptableReference
+from snuba.query.expressions import (
+    Column,
+    CurriedFunctionCall,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.matchers import Column as ColumnMatch
@@ -283,6 +291,95 @@ class DefaultNoneColumnMapper(ColumnMapper):
 
 
 @dataclass(frozen=True)
+class DefaultNoneFunctionMapper(FunctionCallMapper):
+    """
+    If a function is being called on a column that doesn't exist, or is being
+    called on NULL, change the entire function to be NULL.
+    """
+
+    function_match = FunctionCallMatch(
+        StringMatch("ifNull"), (LiteralMatch(), LiteralMatch())
+    )
+
+    def attempt_map(
+        self,
+        expression: FunctionCall,
+        children_translator: SnubaClickhouseStrictTranslator,
+    ) -> Optional[FunctionCall]:
+        parameters = tuple(p.accept(children_translator) for p in expression.parameters)
+        all_null = True
+        for param in parameters:
+            # Handle wrapped functions that have been converted to ifNull(NULL, NULL)
+            fmatch = self.function_match.match(param)
+            if fmatch is None:
+                if isinstance(param, Literal):
+                    if param.value is not None:
+                        all_null = False
+                        break
+                else:
+                    all_null = False
+                    break
+
+        if all_null and len(parameters) > 0:
+            # Currently function mappers require returning other functions. So return this
+            # to keep the mapper happy.
+            return FunctionCall(
+                expression.alias, "ifNull", (Literal(None, None), Literal(None, None))
+            )
+
+        return None
+
+
+@dataclass(frozen=True)
+class DefaultNoneCurriedFunctionMapper(CurriedFunctionCallMapper):
+    """
+    If a curried function is being called on a column that doesn't exist, or is being
+    called on NULL, change the entire function to be NULL.
+    """
+
+    function_match = FunctionCallMatch(
+        StringMatch("ifNull"), (LiteralMatch(), LiteralMatch())
+    )
+
+    def attempt_map(
+        self,
+        expression: CurriedFunctionCall,
+        children_translator: SnubaClickhouseStrictTranslator,
+    ) -> Optional[CurriedFunctionCall]:
+        internal_function = expression.internal_function.accept(children_translator)
+        assert isinstance(internal_function, FunctionCall)  # mypy
+        parameters = tuple(p.accept(children_translator) for p in expression.parameters)
+
+        all_null = True
+        for param in parameters:
+            # Handle wrapped functions that have been converted to ifNull(NULL, NULL)
+            fmatch = self.function_match.match(param)
+            if fmatch is None:
+                if isinstance(param, Literal):
+                    if param.value is not None:
+                        all_null = False
+                        break
+                else:
+                    all_null = False
+                    break
+
+        if all_null and len(parameters) > 0:
+            # Currently curried function mappers require returning other curried functions.
+            # So return this to keep the mapper happy.
+            return CurriedFunctionCall(
+                alias=expression.alias,
+                internal_function=FunctionCall(
+                    None,
+                    f"{internal_function.function_name}OrNull",
+                    internal_function.parameters,
+                ),
+                parameters=tuple(Literal(None, None) for p in parameters),
+            )
+
+        return None
+
+
+@dataclass(frozen=True)
 class DefaultNoneSubscriptMapper(SubscriptableReferenceMapper):
     """
     This maps a subscriptable reference to None (NULL in SQL) as it is done
@@ -331,6 +428,8 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
                     ColumnToMapping(None, "user", None, "tags", "sentry:user"),
                     DefaultNoneColumnMapper(self.__abstract_transactions_columns),
                 ],
+                curried_functions=[DefaultNoneCurriedFunctionMapper()],
+                functions=[DefaultNoneFunctionMapper()],
                 subscriptables=[DefaultNoneSubscriptMapper({"measurements"})],
             )
         )
@@ -520,7 +619,9 @@ class DiscoverTransactionsEntity(TransactionsEntity):
                         columns=[
                             ColumnToLiteral(None, "group_id", 0),
                             DefaultNoneColumnMapper(EVENTS_COLUMNS),
-                        ]
+                        ],
+                        curried_functions=[DefaultNoneCurriedFunctionMapper()],
+                        functions=[DefaultNoneFunctionMapper()],
                     )
                 ),
             ),
