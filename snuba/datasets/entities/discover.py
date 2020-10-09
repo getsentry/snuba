@@ -34,7 +34,11 @@ from snuba.datasets.storage import (
 )
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.entities.transactions import transaction_translator
+from snuba.datasets.entities.transactions import (
+    transaction_translator,
+    TransactionsEntity,
+)
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.query.conditions import (
     BINARY_OPERATORS,
     ConditionFunctions,
@@ -77,6 +81,10 @@ EVENT_CONDITION = FunctionCallMatch(
         Or([ColumnMatch(None, StringMatch("type")), LiteralMatch(None)]),
         Param("event_type", Or([ColumnMatch(), LiteralMatch()])),
     ),
+)
+
+TRANSACTION_FUNCTIONS = FunctionCallMatch(
+    Or([StringMatch("apdex"), StringMatch("failure_rate")]), None
 )
 
 
@@ -142,6 +150,12 @@ def match_query_to_table(
     elif has_transaction_columns:
         return TRANSACTIONS
     else:
+        # Check for apdex or failure rate
+        for expr in query.get_all_expressions():
+            match = TRANSACTION_FUNCTIONS.match(expr)
+            if match:
+                return TRANSACTIONS
+
         return EVENTS_AND_TRANSACTIONS
 
 
@@ -321,39 +335,18 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
             )
         )
 
-        self.__transaction_translator = transaction_translator.concat(
-            TranslationMappers(
-                columns=[
-                    ColumnToLiteral(None, "group_id", 0),
-                    DefaultNoneColumnMapper(self.__abstract_events_columns),
-                ]
-            )
-        )
-
     def select_storage(
         self, query: Query, request_settings: RequestSettings
     ) -> StorageAndMappers:
-        table = detect_table(
-            query,
-            self.__abstract_events_columns,
-            self.__abstract_transactions_columns,
-            True,
+        use_readonly_storage = (
+            state.get_config("enable_events_readonly_table", False)
+            and not request_settings.get_consistent()
         )
-
-        if table == TRANSACTIONS:
-            return StorageAndMappers(
-                self.__transactions_table, self.__transaction_translator
-            )
-        else:
-            use_readonly_storage = (
-                state.get_config("enable_events_readonly_table", False)
-                and not request_settings.get_consistent()
-            )
-            return (
-                StorageAndMappers(self.__events_ro_table, self.__event_translator)
-                if use_readonly_storage
-                else StorageAndMappers(self.__events_table, self.__event_translator)
-            )
+        return (
+            StorageAndMappers(self.__events_ro_table, self.__event_translator)
+            if use_readonly_storage
+            else StorageAndMappers(self.__events_table, self.__event_translator)
+        )
 
 
 EVENTS_COLUMNS = ColumnSet(
@@ -508,3 +501,27 @@ class DiscoverEntity(Entity):
                 timestamp_column="timestamp",
             ),
         }
+
+
+class DiscoverTransactionsEntity(TransactionsEntity):
+    """
+    Identical to TransactionsEntity except it maps columns present in the events
+    entity to null. This logic will eventually move to Sentry and this entity
+    can be deleted and replaced with the TransactionsEntity directly.
+    """
+
+    def __init__(self) -> None:
+        storage = get_storage(StorageKey.TRANSACTIONS)
+        super().__init__(
+            query_plan_builder=SingleStorageQueryPlanBuilder(
+                storage=storage,
+                mappers=transaction_translator.concat(
+                    TranslationMappers(
+                        columns=[
+                            ColumnToLiteral(None, "group_id", 0),
+                            DefaultNoneColumnMapper(EVENTS_COLUMNS),
+                        ]
+                    )
+                ),
+            ),
+        )

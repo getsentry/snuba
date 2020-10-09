@@ -53,6 +53,10 @@ class Dataset(object):
     def get_entity(self, query_body: MutableMapping[str, Any]) -> Entity:
         return self.__default_entity
 
+    # TODO: Should be removed once everything is migrated to entities
+    def set_default_entity(self, entity: Entity) -> None:
+        self.__default_entity = entity
+
     def get_query_plan_builder(
         self, entity_name: Optional[str] = ""
     ) -> ClickhouseQueryPlanBuilder:

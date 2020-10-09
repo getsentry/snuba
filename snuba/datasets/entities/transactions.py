@@ -70,15 +70,21 @@ transaction_translator = TranslationMappers(
     ],
 )
 
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
+from typing import Optional
+
 
 class TransactionsEntity(Entity):
-    def __init__(self) -> None:
+    def __init__(
+        self, query_plan_builder: Optional[ClickhouseQueryPlanBuilder] = None
+    ) -> None:
         storage = get_writable_storage(StorageKey.TRANSACTIONS)
         schema = storage.get_table_writer().get_schema()
 
         super().__init__(
             storages=[storage],
-            query_plan_builder=SingleStorageQueryPlanBuilder(
+            query_plan_builder=query_plan_builder
+            or SingleStorageQueryPlanBuilder(
                 storage=storage, mappers=transaction_translator
             ),
             abstract_column_set=schema.get_columns(),
