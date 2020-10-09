@@ -74,9 +74,6 @@ class SpansMessageProcessor(MessageProcessor):
         # duration is in milliseconds
         span["duration_ms"] = max(int(duration_secs * 1000), 0)
 
-        tags = _as_dict_safe(data.get("tags", None))
-        span["tags.key"], span["tags.value"] = extract_extra_tags(tags)
-
     def __safe_extract_int(
         self, field: str, value: Any, nullable: bool
     ) -> Optional[int]:
@@ -149,6 +146,8 @@ class SpansMessageProcessor(MessageProcessor):
 
             processed["description"] = span.get("description", "") or ""
             processed["op"] = span["op"]
+            tags = _as_dict_safe(span.get("tags", None))
+            processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
 
             status = span.get("status", None)
             self.__fill_status(processed, status)

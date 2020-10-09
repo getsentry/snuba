@@ -22,12 +22,12 @@ class SpanData(NamedTuple):
             "start_timestamp": self.start_timestamp.timestamp(),
             "same_process_as_parent": None,
             "description": "GET /api/0/organizations/sentry/tags/?project=1",
-            "tags": None,
             "timestamp": self.timestamp.timestamp(),
             "parent_span_id": self.parent_span_id,
             "trace_id": self.trace_id,
             "span_id": self.span_id,
             "op": self.op,
+            "tags": [["some_tag", "some_val"]],
         }
 
 
@@ -115,8 +115,6 @@ class SpanEvent:
                 "duration_ms": int(
                     (self.timestamp - self.start_timestamp).total_seconds() * 1000
                 ),
-                "tags.key": ["sentry:release"],
-                "tags.value": ["34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a"],
                 "retention_days": 90,
             }
         ]
@@ -142,8 +140,8 @@ class SpanEvent:
                     "duration_ms": int(
                         (s.timestamp - s.start_timestamp).total_seconds() * 1000
                     ),
-                    "tags.key": [],
-                    "tags.value": [],
+                    "tags.key": ["some_tag"],
+                    "tags.value": ["some_val"],
                     "retention_days": 90,
                 }
             )
