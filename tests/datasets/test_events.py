@@ -5,19 +5,23 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.query.logical import Query
 from snuba.request.request_settings import HTTPRequestSettings
-from tests.base import BaseEventsTest
+from tests.base import BaseDatasetTest
+from tests.fixtures import get_raw_event
 
 
-class TestEventsDataset(BaseEventsTest):
+class TestEventsDataset(BaseDatasetTest):
+    def setup_method(self, test_method):
+        super().setup_method(test_method, "events")
+
     def test_tags_hash_map(self) -> None:
         """
         Adds an event and ensures the tags_hash_map is properly populated
         including escaping.
         """
-
+        self.event = get_raw_event()
         self.event["data"]["tags"].append(["test_tag1", "value1"])
         self.event["data"]["tags"].append(["test_tag=2", "value2"])  # Requires escaping
-        self.write_events([self.event])
+        self.write_unprocessed_events([self.event])
 
         clickhouse = (
             get_storage(StorageKey.EVENTS)

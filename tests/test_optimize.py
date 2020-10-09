@@ -6,6 +6,7 @@ from snuba import optimize, settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.processor import InsertBatch
 from tests.base import BaseDatasetTest
 
 
@@ -28,17 +29,17 @@ class TestOptimize(BaseDatasetTest):
         base_monday = base - timedelta(days=base.weekday())
 
         # 1 event, 0 unoptimized parts
-        self.write_rows([self.create_event_row_for_date(base)])
+        self.write_processed_messages([self.create_event_row_for_date(base)])
         parts = optimize.get_partitions_to_optimize(clickhouse, database, table)
         assert parts == []
 
         # 2 events in the same part, 1 unoptimized part
-        self.write_rows([self.create_event_row_for_date(base)])
+        self.write_processed_messages([self.create_event_row_for_date(base)])
         parts = optimize.get_partitions_to_optimize(clickhouse, database, table)
         assert parts == [(base_monday, 90)]
 
         # 3 events in the same part, 1 unoptimized part
-        self.write_rows([self.create_event_row_for_date(base)])
+        self.write_processed_messages([self.create_event_row_for_date(base)])
         parts = optimize.get_partitions_to_optimize(clickhouse, database, table)
         assert parts == [(base_monday, 90)]
 
@@ -47,8 +48,12 @@ class TestOptimize(BaseDatasetTest):
         a_month_earlier_monday = a_month_earlier - timedelta(
             days=a_month_earlier.weekday()
         )
-        self.write_rows([self.create_event_row_for_date(a_month_earlier_monday)])
-        self.write_rows([self.create_event_row_for_date(a_month_earlier_monday)])
+        self.write_processed_messages(
+            [self.create_event_row_for_date(a_month_earlier_monday)]
+        )
+        self.write_processed_messages(
+            [self.create_event_row_for_date(a_month_earlier_monday)]
+        )
         parts = optimize.get_partitions_to_optimize(clickhouse, database, table)
         assert parts == [(base_monday, 90), (a_month_earlier_monday, 90)]
 
@@ -66,11 +71,15 @@ class TestOptimize(BaseDatasetTest):
         assert parts == []
 
     def create_event_row_for_date(self, dt: datetime) -> Mapping[str, Any]:
-        return {
-            "event_id": uuid.uuid4().hex,
-            "project_id": 1,
-            "group_id": 1,
-            "deleted": 0,
-            "timestamp": dt,
-            "retention_days": settings.DEFAULT_RETENTION_DAYS,
-        }
+        return InsertBatch(
+            [
+                {
+                    "event_id": uuid.uuid4().hex,
+                    "project_id": 1,
+                    "group_id": 1,
+                    "deleted": 0,
+                    "timestamp": dt,
+                    "retention_days": settings.DEFAULT_RETENTION_DAYS,
+                }
+            ]
+        )
