@@ -7,13 +7,10 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.processor import InsertBatch
-from tests.base import BaseDatasetTest
+from tests.helpers import write_processed_messages
 
 
-class TestOptimize(BaseDatasetTest):
-    def setup_method(self, test_method):
-        super(TestOptimize, self).setup_method(test_method, "events")
-
+class TestOptimize:
     def test(self) -> None:
         storage = get_writable_storage(StorageKey.EVENTS)
         cluster = storage.get_cluster()
@@ -29,17 +26,17 @@ class TestOptimize(BaseDatasetTest):
         base_monday = base - timedelta(days=base.weekday())
 
         # 1 event, 0 unoptimized parts
-        self.write_processed_messages([self.create_event_row_for_date(base)])
+        write_processed_messages(storage, [self.create_event_row_for_date(base)])
         parts = optimize.get_partitions_to_optimize(clickhouse, database, table)
         assert parts == []
 
         # 2 events in the same part, 1 unoptimized part
-        self.write_processed_messages([self.create_event_row_for_date(base)])
+        write_processed_messages(storage, [self.create_event_row_for_date(base)])
         parts = optimize.get_partitions_to_optimize(clickhouse, database, table)
         assert parts == [(base_monday, 90)]
 
         # 3 events in the same part, 1 unoptimized part
-        self.write_processed_messages([self.create_event_row_for_date(base)])
+        write_processed_messages(storage, [self.create_event_row_for_date(base)])
         parts = optimize.get_partitions_to_optimize(clickhouse, database, table)
         assert parts == [(base_monday, 90)]
 
@@ -48,11 +45,11 @@ class TestOptimize(BaseDatasetTest):
         a_month_earlier_monday = a_month_earlier - timedelta(
             days=a_month_earlier.weekday()
         )
-        self.write_processed_messages(
-            [self.create_event_row_for_date(a_month_earlier_monday)]
+        write_processed_messages(
+            storage, [self.create_event_row_for_date(a_month_earlier_monday)]
         )
-        self.write_processed_messages(
-            [self.create_event_row_for_date(a_month_earlier_monday)]
+        write_processed_messages(
+            storage, [self.create_event_row_for_date(a_month_earlier_monday)]
         )
         parts = optimize.get_partitions_to_optimize(clickhouse, database, table)
         assert parts == [(base_monday, 90), (a_month_earlier_monday, 90)]
