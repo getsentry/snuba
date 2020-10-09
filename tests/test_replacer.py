@@ -8,34 +8,33 @@ from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.datasets.errors_replacer import FLATTENED_COLUMN_TEMPLATE, ReplacerState
 from snuba.datasets import errors_replacer
+from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.kafka import KafkaPayload
-from tests.base import BaseDatasetTest
 from tests.fixtures import get_raw_event
+from tests.helpers import write_unprocessed_events
 
 
-class TestReplacer(BaseDatasetTest):
-    def setup_method(self, test_method):
-        super(TestReplacer, self).setup_method(test_method, "events")
-
+class TestReplacer:
+    def setup_method(self):
         from snuba.web.views import application
 
         assert application.testing is True
 
         self.app = application.test_client()
         self.app.post = partial(self.app.post, headers={"referer": "test"})
-        storage = get_storage(StorageKey.EVENTS)
+        self.storage = get_storage(StorageKey.EVENTS)
 
         self.replacer = replacer.ReplacerWorker(
-            storage, DummyMetricsBackend(strict=True)
+            self.storage, DummyMetricsBackend(strict=True)
         )
 
         self.project_id = 1
-        self.event = get_raw_event()
+        self.event = InsertEvent(get_raw_event())
 
     def _wrap(self, msg: str) -> Message[KafkaPayload]:
         return Message(
@@ -241,7 +240,7 @@ class TestReplacer(BaseDatasetTest):
     def test_delete_groups_insert(self):
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
-        self.write_events([self.event])
+        write_unprocessed_events(self.storage, [self.event])
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
@@ -278,7 +277,7 @@ class TestReplacer(BaseDatasetTest):
     def test_merge_insert(self):
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
-        self.write_events([self.event])
+        write_unprocessed_events(self.storage, [self.event])
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
@@ -317,7 +316,7 @@ class TestReplacer(BaseDatasetTest):
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "a" * 32
-        self.write_events([self.event])
+        write_unprocessed_events(self.storage, [self.event])
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
@@ -358,7 +357,7 @@ class TestReplacer(BaseDatasetTest):
         self.event["group_id"] = 1
         self.event["data"]["tags"].append(["browser.name", "foo"])
         self.event["data"]["tags"].append(["notbrowser", "foo"])
-        self.write_events([self.event])
+        write_unprocessed_events(self.storage, [self.event])
 
         project_id = self.project_id
 
@@ -421,7 +420,7 @@ class TestReplacer(BaseDatasetTest):
         self.event["data"]["tags"].append(["browser|to_delete", "foo=2"])
         self.event["data"]["tags"].append(["notbrowser", "foo\\3"])
         self.event["data"]["tags"].append(["notbrowser2", "foo4"])
-        self.write_events([self.event])
+        write_unprocessed_events(self.storage, [self.event])
 
         project_id = self.project_id
 

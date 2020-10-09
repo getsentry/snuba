@@ -16,7 +16,7 @@ from snuba.datasets.events_format import (
     extract_user,
 )
 from snuba.datasets.events_processor_base import InsertEvent
-from snuba.datasets.factory import enforce_table_writer
+from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.processor import (
     InsertBatch,
     InvalidMessageType,
@@ -24,13 +24,12 @@ from snuba.processor import (
     ProcessedMessage,
     ReplacementBatch,
 )
-from tests.base import BaseDatasetTest
 from tests.fixtures import get_raw_event
 
 
-class TestEventsProcessor(BaseDatasetTest):
+class TestEventsProcessor:
     def setup_method(self, test_method):
-        super().setup_method(test_method, "events")
+        self.dataset = get_dataset("events")
         self.metadata = KafkaMessageMetadata(0, 0, datetime.now())
         self.event = get_raw_event()
 

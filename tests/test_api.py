@@ -18,6 +18,7 @@ from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import enforce_table_writer
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
+from snuba.processor import InsertBatch
 from snuba.redis import redis_client
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.base import BaseApiTest
@@ -1280,16 +1281,20 @@ class TestApi(BaseApiTest):
         }
         result1 = json.loads(self.app.post("/query", data=json.dumps(query)).data)
 
-        self.write_rows(
+        self.write_processed_messages(
             [
-                {
-                    "event_id": "9" * 32,
-                    "project_id": 1,
-                    "group_id": 1,
-                    "timestamp": self.base_time,
-                    "deleted": 1,
-                    "retention_days": settings.DEFAULT_RETENTION_DAYS,
-                }
+                InsertBatch(
+                    [
+                        {
+                            "event_id": "9" * 32,
+                            "project_id": 1,
+                            "group_id": 1,
+                            "timestamp": self.base_time,
+                            "deleted": 1,
+                            "retention_days": settings.DEFAULT_RETENTION_DAYS,
+                        }
+                    ]
+                )
             ]
         )
 
