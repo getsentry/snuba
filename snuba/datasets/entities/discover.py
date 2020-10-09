@@ -356,6 +356,66 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
             )
 
 
+EVENTS_COLUMNS = ColumnSet(
+    [
+        ("group_id", Nullable(UInt(64))),
+        ("primary_hash", Nullable(FixedString(32))),
+        # Promoted tags
+        ("level", Nullable(String())),
+        ("logger", Nullable(String())),
+        ("server_name", Nullable(String())),
+        ("site", Nullable(String())),
+        ("url", Nullable(String())),
+        ("location", Nullable(String())),
+        ("culprit", Nullable(String())),
+        ("received", Nullable(DateTime())),
+        ("sdk_integrations", Nullable(Array(String()))),
+        ("version", Nullable(String())),
+        # exception interface
+        (
+            "exception_stacks",
+            Nested(
+                [
+                    ("type", Nullable(String())),
+                    ("value", Nullable(String())),
+                    ("mechanism_type", Nullable(String())),
+                    ("mechanism_handled", Nullable(UInt(8))),
+                ]
+            ),
+        ),
+        (
+            "exception_frames",
+            Nested(
+                [
+                    ("abs_path", Nullable(String())),
+                    ("filename", Nullable(String())),
+                    ("package", Nullable(String())),
+                    ("module", Nullable(String())),
+                    ("function", Nullable(String())),
+                    ("in_app", Nullable(UInt(8))),
+                    ("colno", Nullable(UInt(32))),
+                    ("lineno", Nullable(UInt(32))),
+                    ("stack_level", UInt(16)),
+                ]
+            ),
+        ),
+        ("modules", Nested([("name", String()), ("version", String())])),
+    ]
+)
+
+TRANSACTIONS_COLUMNS = ColumnSet(
+    [
+        ("trace_id", Nullable(UUID())),
+        ("span_id", Nullable(UInt(64))),
+        ("transaction_hash", Nullable(UInt(64))),
+        ("transaction_op", Nullable(String())),
+        ("transaction_status", Nullable(UInt(8))),
+        ("duration", Nullable(UInt(32))),
+        ("measurements", Nested([("key", String()), ("value", Float(64))]),),
+    ]
+)
+
+
 class DiscoverEntity(Entity):
     """
     Entity for the Discover product that maps the columns of Events and
@@ -399,65 +459,8 @@ class DiscoverEntity(Entity):
                 ("contexts", Nested([("key", String()), ("value", String())])),
             ]
         )
-
-        self.__events_columns = ColumnSet(
-            [
-                ("group_id", Nullable(UInt(64))),
-                ("primary_hash", Nullable(FixedString(32))),
-                # Promoted tags
-                ("level", Nullable(String())),
-                ("logger", Nullable(String())),
-                ("server_name", Nullable(String())),
-                ("site", Nullable(String())),
-                ("url", Nullable(String())),
-                ("location", Nullable(String())),
-                ("culprit", Nullable(String())),
-                ("received", Nullable(DateTime())),
-                ("sdk_integrations", Nullable(Array(String()))),
-                ("version", Nullable(String())),
-                # exception interface
-                (
-                    "exception_stacks",
-                    Nested(
-                        [
-                            ("type", Nullable(String())),
-                            ("value", Nullable(String())),
-                            ("mechanism_type", Nullable(String())),
-                            ("mechanism_handled", Nullable(UInt(8))),
-                        ]
-                    ),
-                ),
-                (
-                    "exception_frames",
-                    Nested(
-                        [
-                            ("abs_path", Nullable(String())),
-                            ("filename", Nullable(String())),
-                            ("package", Nullable(String())),
-                            ("module", Nullable(String())),
-                            ("function", Nullable(String())),
-                            ("in_app", Nullable(UInt(8))),
-                            ("colno", Nullable(UInt(32))),
-                            ("lineno", Nullable(UInt(32))),
-                            ("stack_level", UInt(16)),
-                        ]
-                    ),
-                ),
-                ("modules", Nested([("name", String()), ("version", String())])),
-            ]
-        )
-
-        self.__transactions_columns = ColumnSet(
-            [
-                ("trace_id", Nullable(UUID())),
-                ("span_id", Nullable(UInt(64))),
-                ("transaction_hash", Nullable(UInt(64))),
-                ("transaction_op", Nullable(String())),
-                ("transaction_status", Nullable(UInt(8))),
-                ("duration", Nullable(UInt(32))),
-                ("measurements", Nested([("key", String()), ("value", Float(64))]),),
-            ]
-        )
+        self.__events_columns = EVENTS_COLUMNS
+        self.__transactions_columns = TRANSACTIONS_COLUMNS
 
         events_storage = get_storage(StorageKey.EVENTS)
         events_ro_storage = get_storage(StorageKey.EVENTS_RO)

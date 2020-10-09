@@ -1,4 +1,4 @@
-from typing import Mapping, Optional, Sequence
+from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
@@ -50,7 +50,7 @@ class Dataset(object):
         # migrate the datasets to proper entities.
         self.__default_entity = default_entity
 
-    def get_entity(self, entity_name: Optional[str]) -> Entity:
+    def get_entity(self, query_body: MutableMapping[str, Any]) -> Entity:
         return self.__default_entity
 
     def get_query_plan_builder(
@@ -63,9 +63,7 @@ class Dataset(object):
         # TODO: If the query is being executed on a single entity, that entity will be used to determine
         # the query plan. In cases such as a join, the dataset will something something and
         # then build the join query.
-        entity = self.get_entity(entity_name)
-
-        return entity.get_query_plan_builder()
+        return self.__default_entity.get_query_plan_builder()
 
     # TODO: The following functions are shims to the Entity. They need to be evaluated one by one
     # to see which ones should exist at which level.
