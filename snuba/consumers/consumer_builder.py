@@ -19,6 +19,7 @@ from snuba.utils.streams.backends.kafka import (
     KafkaPayload,
     TransportError,
     build_kafka_consumer_configuration,
+    build_kafka_producer_configuration,
 )
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.processing.strategies import ProcessingStrategyFactory
@@ -91,13 +92,7 @@ class ConsumerBuilder:
 
         # XXX: This can result in a producer being built in cases where it's
         # not actually required.
-        self.producer = Producer(
-            {
-                "bootstrap.servers": ",".join(self.bootstrap_servers),
-                "partitioner": "consistent",
-                "message.max.bytes": 50000000,  # 50MB, default is 1MB
-            }
-        )
+        self.producer = Producer(build_kafka_producer_configuration(bootstrap_servers))
 
         self.metrics = MetricsWrapper(
             environment.metrics,

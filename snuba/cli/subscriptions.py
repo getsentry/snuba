@@ -24,6 +24,7 @@ from snuba.utils.streams.backends.kafka import (
     KafkaConsumer,
     KafkaProducer,
     build_kafka_consumer_configuration,
+    build_kafka_producer_configuration,
 )
 from snuba.utils.streams.encoding import ProducerEncodingWrapper
 from snuba.utils.streams.processing import StreamProcessor
@@ -163,13 +164,7 @@ def subscriptions(
     )
 
     producer = ProducerEncodingWrapper(
-        KafkaProducer(
-            {
-                "bootstrap.servers": ",".join(bootstrap_servers),
-                "partitioner": "consistent",
-                "message.max.bytes": 50000000,  # 50MB, default is 1MB
-            }
-        ),
+        KafkaProducer(build_kafka_producer_configuration(bootstrap_servers)),
         SubscriptionTaskResultEncoder(),
     )
 

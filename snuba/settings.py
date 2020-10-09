@@ -69,7 +69,13 @@ SNAPSHOT_CONTROL_TOPIC_INIT_TIMEOUT = 30
 BULK_CLICKHOUSE_BUFFER = 10000
 
 # Processor/Writer Options
-DEFAULT_BROKERS = ["localhost:9092"]
+# DEFAULT_BROKERS: Sequence[Mapping[str, Any]] = [
+#     {
+#         "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092").split(","),
+#     },
+# ]
+# DEFAULT_STORAGE_BROKERS: Mapping[str, Sequence[Mapping[str, Any]]] = {}
+DEFAULT_BROKERS = [os.environ.get("DEFAULT_BROKERS", "localhost:9092").split(",")]
 DEFAULT_STORAGE_BROKERS: Mapping[str, Sequence[str]] = {}
 
 DEFAULT_MAX_BATCH_SIZE = 50000

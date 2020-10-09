@@ -637,6 +637,31 @@ def build_kafka_consumer_configuration(
     }
 
 
+def build_kafka_configuration(bootstrap_servers: Sequence[str],) -> Mapping[str, Any]:
+    return {
+        "bootstrap.servers": ",".join(bootstrap_servers),
+    }
+
+
+def build_kafka_producer_configuration(
+    bootstrap_servers: Sequence[str],
+) -> Mapping[str, Any]:
+    return {
+        "bootstrap.servers": ",".join(bootstrap_servers),
+        "partitioner": "consistent",
+        "message.max.bytes": 50000000,  # 50MB, default is 1MB
+    }
+
+
+def build_admin_client_configuration(
+    bootstrap_servers: Sequence[str],
+) -> Mapping[str, Any]:
+    return {
+        "bootstrap.servers": ",".join(bootstrap_servers),
+        "socket.timeout.ms": 1000,
+    }
+
+
 # XXX: This must be imported after `KafkaPayload` to avoid a circular import.
 from snuba.utils.streams.synchronized import Commit, commit_codec
 

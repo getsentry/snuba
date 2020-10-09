@@ -8,6 +8,7 @@ from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging
 from snuba.migrations.connect import check_clickhouse_connections
 from snuba.migrations.runner import Runner
+from snuba.utils.streams.backends.kafka import build_admin_client_configuration
 
 
 @click.command()
@@ -49,12 +50,7 @@ def bootstrap(
         while True:
             try:
                 logger.debug("Attempting to connect to Kafka (attempt %d)", attempts)
-                client = AdminClient(
-                    {
-                        "bootstrap.servers": ",".join(bootstrap_server),
-                        "socket.timeout.ms": 1000,
-                    }
-                )
+                client = AdminClient(build_admin_client_configuration(bootstrap_server))
                 client.list_topics(timeout=1)
                 break
             except Exception as e:
