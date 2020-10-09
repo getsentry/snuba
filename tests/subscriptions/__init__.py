@@ -3,22 +3,26 @@ from datetime import datetime, timedelta
 import uuid
 
 from snuba import settings
+from snuba.datasets.factory import get_dataset
 from snuba.datasets.events_processor_base import InsertEvent
-from tests.base import BaseDatasetTest
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_writable_storage
+from tests.helpers import write_unprocessed_events
 
 
-class BaseSubscriptionTest(BaseDatasetTest):
-    def setup_method(self, test_method, dataset_name="events"):
-        super().setup_method(test_method, dataset_name)
+class BaseSubscriptionTest:
+    def setup_method(self):
         self.project_id = 1
         self.platforms = ["a", "b"]
         self.minutes = 20
+        self.dataset = get_dataset("events")
 
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0
         ) - timedelta(minutes=self.minutes)
 
-        self.write_unprocessed_events(
+        write_unprocessed_events(
+            get_writable_storage(StorageKey.EVENTS),
             [
                 InsertEvent(
                     {
@@ -41,5 +45,5 @@ class BaseSubscriptionTest(BaseDatasetTest):
                     }
                 )
                 for tick in range(self.minutes)
-            ]
+            ],
         )
