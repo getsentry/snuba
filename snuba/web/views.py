@@ -445,18 +445,32 @@ if application.debug or application.testing:
         assert storage is not None
 
         if type_ == "insert":
-            from snuba.consumer import ConsumerWorker
+            from snuba.consumer import StreamingConsumerStrategyFactory
 
-            worker = ConsumerWorker(storage, metrics=metrics)
+            table_writer = storage.get_table_writer()
+            stream_loader = table_writer.get_stream_loader()
+            strategy = StreamingConsumerStrategyFactory(
+                stream_loader.get_pre_filter(),
+                stream_loader.get_processor(),
+                table_writer.get_batch_writer(metrics),
+                metrics,
+                max_batch_size=1,
+                max_batch_time=1.0,
+                processes=None,
+                input_block_size=None,
+                output_block_size=None,
+            ).create(lambda offsets: None)
+            strategy.submit(message)
+            strategy.close()
+            strategy.join()
         else:
             from snuba.replacer import ReplacerWorker
 
             worker = ReplacerWorker(storage, metrics=metrics)
-
-        processed = worker.process_message(message)
-        if processed is not None:
-            batch = [processed]
-            worker.flush_batch(batch)
+            processed = worker.process_message(message)
+            if processed is not None:
+                batch = [processed]
+                worker.flush_batch(batch)
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
