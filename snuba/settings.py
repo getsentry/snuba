@@ -74,6 +74,7 @@ DEFAULT_BROKERS: Mapping[str, Any] = {
     "sasl.mechanism": os.environ.get("SASL_MECHANISM"),
     "sasl.username": os.environ.get("SASL_PLAIN_USERNAME"),
     "sasl.password": os.environ.get("SASL_PLAIN_PASSWORD"),
+    "security.protocol": os.environ.get("SECURITY_PROTOCOL"),
 }
 DEFAULT_BROKERS = {k: v for k, v in DEFAULT_BROKERS.items() if v is not None}
 DEFAULT_STORAGE_BROKERS: Mapping[str, Mapping[str, Any]] = {}
