@@ -69,14 +69,16 @@ SNAPSHOT_CONTROL_TOPIC_INIT_TIMEOUT = 30
 BULK_CLICKHOUSE_BUFFER = 10000
 
 # Processor/Writer Options
-DEFAULT_BROKERS: Mapping[str, Any] = {
-    "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092").split(","),
+_DEFAULT_BROKERS = {
+    "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092"),
     "sasl.mechanism": os.environ.get("SASL_MECHANISM"),
     "sasl.username": os.environ.get("SASL_PLAIN_USERNAME"),
     "sasl.password": os.environ.get("SASL_PLAIN_PASSWORD"),
     "security.protocol": os.environ.get("SECURITY_PROTOCOL"),
 }
-DEFAULT_BROKERS = {k: v for k, v in DEFAULT_BROKERS.items() if v is not None}
+DEFAULT_BROKERS: Mapping[str, Any] = {
+    k: v for k, v in _DEFAULT_BROKERS.items() if v is not None
+}
 DEFAULT_STORAGE_BROKERS: Mapping[str, Mapping[str, Any]] = {}
 
 DEFAULT_MAX_BATCH_SIZE = 50000
