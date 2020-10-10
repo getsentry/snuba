@@ -8,15 +8,15 @@ from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging
 from snuba.migrations.connect import check_clickhouse_connections
 from snuba.migrations.runner import Runner
-from snuba.utils.streams.backends.kafka import build_admin_client_configuration
+from snuba.utils.streams.backends.kafka import (
+    build_admin_client_configuration,
+    get_broker_config,
+)
 
 
 @click.command()
 @click.option(
-    "--bootstrap-server",
-    default=settings.DEFAULT_BROKERS,
-    multiple=True,
-    help="Kafka bootstrap server to use.",
+    "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
 )
 @click.option("--kafka/--no-kafka", default=True)
 @click.option("--migrate/--no-migrate", default=True)
@@ -46,11 +46,15 @@ def bootstrap(
         logger.debug("Using Kafka with %r", bootstrap_server)
         from confluent_kafka.admin import AdminClient, NewTopic
 
+        if not bootstrap_server:
+            broker_config = settings.DEFAULT_BROKERS
+        else:
+            broker_config = get_broker_config(bootstrap_server)
         attempts = 0
         while True:
             try:
                 logger.debug("Attempting to connect to Kafka (attempt %d)", attempts)
-                client = AdminClient(build_admin_client_configuration(bootstrap_server))
+                client = AdminClient(build_admin_client_configuration(broker_config))
                 client.list_topics(timeout=1)
                 break
             except Exception as e:

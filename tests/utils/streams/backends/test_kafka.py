@@ -18,7 +18,6 @@ from snuba.utils.streams.backends.kafka import (
     KafkaPayload,
     KafkaProducer,
     as_kafka_configuration_bool,
-    build_kafka_configuration,
 )
 from snuba.utils.streams.synchronized import Commit, commit_codec
 from snuba.utils.streams.types import Message, Partition, Topic
@@ -53,7 +52,7 @@ def test_payload_pickle_out_of_band() -> None:
 
 class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
 
-    configuration = build_kafka_configuration(settings.DEFAULT_BROKERS)
+    configuration = settings.DEFAULT_BROKERS
 
     @contextlib.contextmanager
     def get_topic(self, partitions: int = 1) -> Iterator[Topic]:

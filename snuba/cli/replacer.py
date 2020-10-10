@@ -8,6 +8,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.streams.backends.kafka import get_broker_config
 
 
 @click.command()
@@ -20,10 +21,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
     help="Consumer group use for consuming the replacements topic.",
 )
 @click.option(
-    "--bootstrap-server",
-    default=settings.DEFAULT_BROKERS,
-    multiple=True,
-    help="Kafka bootstrap server to use.",
+    "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
 )
 @click.option(
     "--storage",
@@ -105,10 +103,15 @@ def replacer(
 
     metrics = MetricsWrapper(environment.metrics, "replacer", tags=metrics_tags,)
 
+    if not bootstrap_server:
+        broker_config = settings.DEFAULT_BROKERS
+    else:
+        broker_config = get_broker_config(bootstrap_server)
+
     replacer = StreamProcessor(
         KafkaConsumer(
             build_kafka_consumer_configuration(
-                bootstrap_servers=bootstrap_server,
+                broker_config,
                 group_id=consumer_group,
                 auto_offset_reset=auto_offset_reset,
                 queued_max_messages_kbytes=queued_max_messages_kbytes,

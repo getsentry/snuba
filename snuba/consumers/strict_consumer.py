@@ -1,6 +1,6 @@
 from confluent_kafka import Consumer, KafkaError, Message, TopicPartition
 from enum import Enum
-from typing import Callable, Mapping, Optional, Sequence, Tuple
+from typing import Callable, Mapping, Optional, Sequence, Tuple, Any
 
 import logging
 
@@ -41,7 +41,7 @@ class StrictConsumer:
     def __init__(
         self,
         topic: str,
-        bootstrap_servers: Sequence[str],
+        broker_config: Mapping[str, Any],
         group_id: str,
         initial_auto_offset_reset: str,
         partition_assignment_timeout: int,
@@ -62,8 +62,8 @@ class StrictConsumer:
         self.__consuming = False
 
         consumer_config = {
+            **broker_config,
             "enable.auto.commit": False,
-            "bootstrap.servers": ",".join(bootstrap_servers),
             "group.id": group_id,
             "enable.partition.eof": "true",
             "auto.offset.reset": initial_auto_offset_reset,
@@ -93,9 +93,9 @@ class StrictConsumer:
                 self.__on_partitions_revoked(consumer, partitions)
 
         logger.debug(
-            "Subscribing strict consuemr to topic %s on broker %r",
+            "Subscribing strict consumer to topic %s on broker %r",
             topic,
-            bootstrap_servers,
+            broker_config.get("bootstrap.servers"),
         )
         self.__consumer.subscribe(
             [topic],

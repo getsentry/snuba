@@ -11,7 +11,10 @@ from snuba.datasets.storages.factory import get_cdc_storage, CDC_STORAGES
 from snuba.environment import setup_logging, setup_sentry
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
 from snuba.stateful_consumer.control_protocol import SnapshotLoaded, TransactionData
-from snuba.utils.streams.backends.kafka import build_kafka_producer_configuration
+from snuba.utils.streams.backends.kafka import (
+    build_kafka_producer_configuration,
+    get_broker_config,
+)
 
 
 @click.command()
@@ -65,11 +68,13 @@ def confirm_load(
 
     if not bootstrap_server:
         storage_key = storage.get_storage_key().value
-        bootstrap_server = settings.DEFAULT_STORAGE_BROKERS.get(
+        broker_config = settings.DEFAULT_STORAGE_BROKERS.get(
             storage_key, settings.DEFAULT_BROKERS,
         )
+    else:
+        broker_config = get_broker_config(bootstrap_server)
 
-    producer = Producer(build_kafka_producer_configuration(bootstrap_server))
+    producer = Producer(build_kafka_producer_configuration(broker_config))
 
     msg = SnapshotLoaded(
         id=descriptor.id,

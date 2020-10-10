@@ -9,6 +9,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_cdc_storage, WRITABLE_STORAGES
 from snuba.environment import setup_logging, setup_sentry
 from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
+from snuba.utils.streams.backends.kafka import get_broker_config
 
 
 @click.command()
@@ -114,9 +115,11 @@ def consumer(
 ) -> None:
 
     if not bootstrap_server:
-        bootstrap_server = settings.DEFAULT_STORAGE_BROKERS.get(
+        broker_config = settings.DEFAULT_STORAGE_BROKERS.get(
             storage_name, settings.DEFAULT_BROKERS,
         )
+    else:
+        broker_config = get_broker_config(bootstrap_server)
 
     setup_logging(log_level)
     setup_sentry()
@@ -129,7 +132,7 @@ def consumer(
         replacements_topic=replacements_topic,
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
-        bootstrap_servers=bootstrap_server,
+        broker_config=broker_config,
         group_id=consumer_group,
         commit_log_topic=commit_log_topic,
         auto_offset_reset=auto_offset_reset,

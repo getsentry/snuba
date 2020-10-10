@@ -1,7 +1,7 @@
 import json
 import logging
 
-from typing import Optional, Sequence, Set, Tuple
+from typing import Optional, Set, Tuple, Mapping, Any
 from confluent_kafka import Message
 
 from snuba import settings
@@ -189,13 +189,13 @@ class BootstrapState(State[ConsumerStateCompletionEvent, Optional[ConsumerStateD
     def __init__(
         self,
         topic: str,
-        bootstrap_servers: Sequence[str],
+        broker_config: Mapping[str, Any],
         group_id: str,
         storage: CdcStorage,
     ):
         self.__consumer = StrictConsumer(
             topic=topic,
-            bootstrap_servers=bootstrap_servers,
+            broker_config=broker_config,
             group_id=group_id,
             initial_auto_offset_reset="earliest",
             partition_assignment_timeout=settings.SNAPSHOT_CONTROL_TOPIC_INIT_TIMEOUT,

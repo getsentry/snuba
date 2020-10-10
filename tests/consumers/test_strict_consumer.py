@@ -9,6 +9,7 @@ from snuba.consumers.strict_consumer import (
     NoPartitionAssigned,
     StrictConsumer,
 )
+from snuba.utils.streams.backends.kafka import get_broker_config
 from tests.backends.confluent_kafka import (
     FakeConfluentKafkaConsumer,
     build_confluent_kafka_message,
@@ -16,10 +17,12 @@ from tests.backends.confluent_kafka import (
 
 
 class TestStrictConsumer:
+    broker_config = get_broker_config(["somewhere"])
+
     def __consumer(self, on_message) -> StrictConsumer:
         return StrictConsumer(
             topic="my_topic",
-            bootstrap_servers="somewhere",
+            broker_config=self.broker_config,
             group_id="something",
             initial_auto_offset_reset="earliest",
             partition_assignment_timeout=1,

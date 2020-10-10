@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Optional, Sequence
+from typing import Optional, Mapping, Any
 
 from confluent_kafka import KafkaError, KafkaException, Producer
 
@@ -46,7 +46,7 @@ class ConsumerBuilder:
         replacements_topic: Optional[str],
         max_batch_size: int,
         max_batch_time_ms: int,
-        bootstrap_servers: Sequence[str],
+        broker_config: Mapping[str, Any],
         group_id: str,
         commit_log_topic: Optional[str],
         auto_offset_reset: str,
@@ -60,7 +60,7 @@ class ConsumerBuilder:
         profile_path: Optional[str] = None,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
-        self.bootstrap_servers = bootstrap_servers
+        self.broker_config = broker_config
 
         stream_loader = self.storage.get_table_writer().get_stream_loader()
 
@@ -92,7 +92,7 @@ class ConsumerBuilder:
 
         # XXX: This can result in a producer being built in cases where it's
         # not actually required.
-        self.producer = Producer(build_kafka_producer_configuration(bootstrap_servers))
+        self.producer = Producer(build_kafka_producer_configuration(broker_config))
 
         self.metrics = MetricsWrapper(
             environment.metrics,
@@ -139,7 +139,7 @@ class ConsumerBuilder:
         self, strategy_factory: ProcessingStrategyFactory[KafkaPayload]
     ) -> StreamProcessor[KafkaPayload]:
         configuration = build_kafka_consumer_configuration(
-            bootstrap_servers=self.bootstrap_servers,
+            self.broker_config,
             group_id=self.group_id,
             auto_offset_reset=self.auto_offset_reset,
             queued_max_messages_kbytes=self.queued_max_messages_kbytes,
