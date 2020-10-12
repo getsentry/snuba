@@ -8,13 +8,15 @@ import simplejson as json
 
 from snuba import settings, state
 from snuba.consumer import KafkaMessageMetadata
-from snuba.datasets.factory import enforce_table_writer
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
+from tests.helpers import write_processed_messages
 
 
 class TestTransactionsApi(BaseApiTest):
-    def setup_method(self, test_method, dataset_name="transactions"):
-        super().setup_method(test_method, dataset_name)
+    def setup_method(self, test_method):
+        super().setup_method(test_method)
         self.app.post = partial(self.app.post, headers={"referer": "test"})
 
         # values for test data
@@ -29,6 +31,7 @@ class TestTransactionsApi(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         ) - timedelta(minutes=self.minutes)
+        self.storage = get_writable_storage(StorageKey.TRANSACTIONS)
         self.generate_fizzbuzz_events()
 
     def teardown_method(self, test_method):
@@ -53,7 +56,7 @@ class TestTransactionsApi(BaseApiTest):
                     trace_id = "7400045b25c443b885914600aa83ad04"
                     span_id = "8841662216cc598b"
                     processed = (
-                        enforce_table_writer(self.dataset)
+                        self.storage.get_table_writer()
                         .get_stream_loader()
                         .get_processor()
                         .process_message(
@@ -141,7 +144,7 @@ class TestTransactionsApi(BaseApiTest):
                         )
                     )
                     events.append(processed)
-        self.write_processed_messages(events)
+        write_processed_messages(self.storage, events)
 
     def test_read_ip(self):
         response = self.app.post(
