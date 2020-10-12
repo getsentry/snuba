@@ -113,6 +113,7 @@ class Query:
         groupby: Optional[Sequence[Expression]] = None,
         having: Optional[Expression] = None,
         order_by: Optional[Sequence[OrderBy]] = None,
+        entity_name: Optional[str] = None,
     ):
         """
         Expects an already parsed query body.
@@ -649,3 +650,10 @@ class Query:
 
         declared_symbols |= {c.flattened for c in self.get_data_source().get_columns()}
         return not referenced_symbols - declared_symbols
+
+    def set_entity_name(self, entity_name: str) -> None:
+        self.__entity_name = entity_name
+
+    def get_entity_name(self) -> Optional[str]:
+        assert self.__entity_name is not None
+        return self.__entity_name

@@ -5,6 +5,7 @@ import pytest
 from snuba.clickhouse.astquery import AstSqlQuery
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.datasets.entities.factory import EntityKey, get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -320,9 +321,10 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     dataset = get_dataset("transactions")
     query = parse_query(query_body, dataset)
     request = Request("a", query, HTTPRequestSettings(), {}, "r")
-    for p in dataset.get_query_processors():
+    entity = get_entity(EntityKey(query.get_entity_name()))
+    for p in entity.get_query_processors():
         p.process_query(query, request.settings)
-    plan = dataset.get_query_plan_builder().build_plan(request)
+    plan = entity.get_query_plan_builder().build_plan(request)
 
     ArrayJoinKeyValueOptimizer("tags").process_query(plan.query, request.settings)
     return plan.query

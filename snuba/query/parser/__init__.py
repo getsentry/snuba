@@ -67,7 +67,7 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
       Alias references are packaged back at the end of processing.
     """
     # TODO: Parse the entity out of the query body and select the correct one from the dataset
-    entity = dataset.get_entity(None)
+    entity = dataset.get_default_entity()
 
     query = _parse_query_impl(body, entity)
     # These are the post processing phases
@@ -81,6 +81,12 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     _deescape_aliases(query)
     _validate_arrayjoin(query)
     validate_query(query, entity)
+
+    # XXX: Select the entity to be used for the query. This step is temporary. Eventually
+    # entity selection will be moved to Sentry and specified for all SnQL queries.
+    selected_entity = dataset.select_entity(query)
+    query.set_entity_name(selected_entity.value)
+
     return query
 
 

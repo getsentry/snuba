@@ -1,8 +1,7 @@
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.factory import EntityKey, get_entity
+from snuba.datasets.entities.factory import EntityKey
 
 
 class GroupedMessageDataset(Dataset):
     def __init__(self) -> None:
-        groupedmessages_entity = get_entity(EntityKey.GROUPEDMESSAGES)
-        super().__init__(default_entity=groupedmessages_entity)
+        super().__init__(default_entity=EntityKey.GROUPEDMESSAGES)
