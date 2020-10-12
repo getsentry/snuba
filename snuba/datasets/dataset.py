@@ -1,10 +1,12 @@
-from typing import Any, Mapping, MutableMapping, Optional, Sequence
+from typing import Mapping, Optional, Sequence
 
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
 from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.query.extensions import QueryExtension
+from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
+from snuba.datasets.entities.factory import get_entity, EntityKey
 
 
 class Dataset(object):
@@ -44,21 +46,22 @@ class Dataset(object):
 
     # TODO: Still not sure if the Dataset class really needs the actual Entity object
     # or just the name.
-    def __init__(self, *, default_entity: Entity) -> None:
+    def __init__(self, *, default_entity: EntityKey) -> None:
         # TODO: This is a convenience while we slowly migrate everything to Entities. This way
         # every dataset can have a default entity which acts as a passthrough until we can
         # migrate the datasets to proper entities.
-        self.__default_entity = default_entity
+        self.default_entity_key = default_entity
+        self.__default_entity = get_entity(default_entity)
 
-    def get_entity(self, query_body: MutableMapping[str, Any]) -> Entity:
+    def get_entity(self, entity_name: Optional[str]) -> Entity:
         return self.__default_entity
 
-    # TODO: Should be removed once everything is migrated to entities
-    def set_default_entity(self, entity: Entity) -> None:
-        self.__default_entity = entity
+    # TODO: Remove once entity selection moves to Sentry
+    def select_entity(self, query: Query) -> EntityKey:
+        return self.default_entity_key
 
     def get_query_plan_builder(
-        self, entity_name: Optional[str] = ""
+        self, entity_name: Optional[str] = None
     ) -> ClickhouseQueryPlanBuilder:
         """
         Returns the component that transforms a Snuba query in a Storage query by selecting
@@ -67,7 +70,9 @@ class Dataset(object):
         # TODO: If the query is being executed on a single entity, that entity will be used to determine
         # the query plan. In cases such as a join, the dataset will something something and
         # then build the join query.
-        return self.__default_entity.get_query_plan_builder()
+        entity = self.get_entity(entity_name)
+
+        return entity.get_query_plan_builder()
 
     # TODO: The following functions are shims to the Entity. They need to be evaluated one by one
     # to see which ones should exist at which level.

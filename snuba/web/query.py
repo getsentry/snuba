@@ -10,6 +10,7 @@ from snuba.clickhouse.astquery import AstSqlQuery
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities.factory import EntityKey, get_entity
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.timeseries_extension import TimeSeriesExtensionProcessor
 from snuba.querylog import record_query
@@ -75,6 +76,7 @@ def _run_query_pipeline(
     - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
       to the QueryExecutionStrategy to actually run the DB Query.
     """
+    entity = get_entity(EntityKey(request.query.get_entity_name()))
 
     # TODO: this will work perfectly with datasets that are not time series. Remove it.
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
@@ -86,7 +88,7 @@ def _run_query_pipeline(
     ) and not request.settings.get_turbo():
         metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
 
-    extensions = dataset.get_extensions()
+    extensions = entity.get_extensions()
     for name, extension in extensions.items():
         with sentry_sdk.start_span(
             description=type(extension.get_processor()).__name__, op="extension"
@@ -100,13 +102,13 @@ def _run_query_pipeline(
     if request.settings.get_turbo():
         request.query.set_final(False)
 
-    for processor in dataset.get_query_processors():
+    for processor in entity.get_query_processors():
         with sentry_sdk.start_span(
             description=type(processor).__name__, op="processor"
         ):
             processor.process_query(request.query, request.settings)
 
-    query_plan = dataset.get_query_plan_builder().build_plan(request)
+    query_plan = entity.get_query_plan_builder().build_plan(request)
     # From this point on. The logical query should not be used anymore by anyone.
     # The Clickhouse Query is the one to be used to run the rest of the query pipeline.
 

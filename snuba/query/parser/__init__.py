@@ -7,6 +7,7 @@ from snuba import environment
 from snuba.clickhouse.escaping import NEGATE_RE
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entity import Entity
+from snuba.datasets.entities.factory import get_entity_key
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -67,11 +68,7 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
       Alias references are packaged back at the end of processing.
     """
     # TODO: Parse the entity out of the query body and select the correct one from the dataset
-    entity = dataset.get_entity(body)
-    return parse_query_from_entity(body, entity)
-
-
-def parse_query_from_entity(body: MutableMapping[str, Any], entity: Entity) -> Query:
+    entity = dataset.get_entity(None)
     query = _parse_query_impl(body, entity)
     # These are the post processing phases
     _validate_empty_table_names(query)
@@ -84,6 +81,11 @@ def parse_query_from_entity(body: MutableMapping[str, Any], entity: Entity) -> Q
     _deescape_aliases(query)
     _validate_arrayjoin(query)
     validate_query(query, entity)
+
+    # XXX: Update the entity from the parsed query
+    selected_entity = dataset.select_entity(query)
+    query.set_entity_name(selected_entity.value)
+
     return query
 
 
@@ -236,6 +238,7 @@ def _parse_query_impl(body: MutableMapping[str, Any], entity: Entity) -> Query:
         groupby=[g.expression for g in groupby_clause],
         having=having_expr,
         order_by=orderby_exprs,
+        entity_name=get_entity_key(entity).value,
     )
 
 
