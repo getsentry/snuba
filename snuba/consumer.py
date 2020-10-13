@@ -356,3 +356,150 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             strategy = FilterStep(self.__should_accept, strategy)
 
         return strategy
+
+
+from typing import Tuple
+from snuba.utils.streams.types import TPayload
+from snuba.datasets.storage import WritableStorage
+
+
+def find_storage_routings(
+    storages: Sequence[WritableStorage], message: Message[KafkaPayload],
+) -> Tuple[Sequence[WritableStorage], KafkaPayload]:
+    use_storages = []
+
+    for storage in storages:
+        prefilter = storage.get_table_writer().get_stream_loader().get_pre_filter()
+        if prefilter is not None:
+            if not prefilter.should_drop(message):
+                use_storages.append(storage)
+        else:
+            use_storages.append(storage)
+
+    return (use_storages, message.payload)
+
+
+def has_storage_routings(
+    message: Message[Tuple[Sequence[WritableStorage], KafkaPayload]]
+) -> bool:
+    return bool(message.payload[0])
+
+
+def process_message_with_routings(
+    message: Message[Tuple[Sequence[WritableStorage], KafkaPayload]],
+) -> Sequence[
+    Tuple[WritableStorage, Union[None, JSONRowInsertBatch, ReplacementBatch]]
+]:
+    unwrapped_message = Message(
+        message.partition,
+        message.offset,
+        message.payload[1],
+        message.timestamp,
+        message.next_offset,
+    )
+
+    results = []
+    for storage in message.payload[0]:
+        results.append(
+            (
+                storage,
+                process_message(
+                    storage.get_table_writer().get_stream_loader().get_processor(),
+                    unwrapped_message,
+                ),
+            )
+        )
+
+    return results
+
+
+class RoutingStep(ProcessingStep[Sequence[Tuple[WritableStorage, TPayload]]]):
+    def __init__(
+        self, steps: Mapping[WritableStorage, ProcessingStep[TPayload]],
+    ) -> None:
+        self.__steps = steps
+
+    def poll(self) -> None:
+        for step in self.__steps.values():
+            step.poll()
+
+    def submit(
+        self, message: Message[Sequence[Tuple[WritableStorage, TPayload]]]
+    ) -> None:
+        for key, payload in message.payload:
+            self.__steps[key].submit(
+                Message(
+                    message.partition,
+                    message.offset,
+                    payload,
+                    message.timestamp,
+                    message.next_offset,
+                )
+            )
+
+    def close(self) -> None:
+        for step in self.__steps.values():
+            step.close()
+
+    def terminate(self) -> None:
+        for step in self.__steps.values():
+            step.terminate()
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        start = time.time()
+
+        remaining_timeout: Optional[float] = None
+        for step in self.__steps.values():
+            if timeout is not None:
+                remaining_timeout = max(timeout - (time.time() - start), 0)
+
+            step.join(remaining_timeout)
+
+
+class MultipleStorageConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
+    def __init__(
+        self,
+        storages: Sequence[WritableStorage],
+        metrics: MetricsBackend,
+        max_batch_size: int,
+        max_batch_time: float,
+    ) -> None:
+        self.__storages = storages
+        self.__metrics = metrics
+        self.__max_batch_size = max_batch_size
+        self.__max_batch_time = max_batch_time
+
+    def __build_routing_batch_writer(
+        self,
+    ) -> RoutingStep[Union[None, JSONRowInsertBatch, ReplacementBatch]]:
+        # TODO: This does not support replacements yet.
+        return RoutingStep(
+            {
+                storage: ProcessedMessageBatchWriter(
+                    InsertBatchWriter(
+                        storage.get_table_writer().get_batch_writer(self.__metrics),
+                        self.__metrics,
+                    ),
+                )
+                for storage in self.__storages
+            }
+        )
+
+    def create(
+        self, commit: Callable[[Mapping[Partition, int]], None]
+    ) -> ProcessingStrategy[KafkaPayload]:
+        return TransformStep(
+            functools.partial(find_storage_routings, self.__storages),
+            FilterStep(
+                has_storage_routings,
+                TransformStep(
+                    process_message_with_routings,
+                    CollectStep(
+                        self.__build_routing_batch_writer,
+                        commit,
+                        self.__max_batch_size,
+                        self.__max_batch_time,
+                    ),
+                ),
+            ),
+        )
