@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence
+from typing import Mapping, Optional, Sequence
 
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToFunction,
@@ -11,6 +11,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -69,9 +70,6 @@ transaction_translator = TranslationMappers(
         SubscriptableMapper(None, "measurements", None, "measurements", nullable=True),
     ],
 )
-
-from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
-from typing import Optional
 
 
 class TransactionsEntity(Entity):
