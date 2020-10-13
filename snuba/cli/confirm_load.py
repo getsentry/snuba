@@ -68,9 +68,14 @@ def confirm_load(
 
     if not bootstrap_server:
         storage_key = storage.get_storage_key().value
-        broker_config = settings.DEFAULT_STORAGE_BROKERS.get(
-            storage_key, settings.DEFAULT_BROKERS,
-        )
+        if storage_key in settings.DEFAULT_STORAGE_BROKERS:
+            broker_config = get_broker_config(
+                settings.DEFAULT_STORAGE_BROKERS[storage_key]
+            )
+        else:
+            broker_config = settings.STORAGE_BROKER_CONFIG.get(
+                storage_key, settings.BROKER_CONFIG
+            )
     else:
         broker_config = get_broker_config(bootstrap_server)
 

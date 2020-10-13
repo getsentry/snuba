@@ -124,9 +124,14 @@ def subscriptions(
         storage = dataset.get_writable_storage()
         assert storage is not None
         storage_key = storage.get_storage_key().value
-        broker_config = settings.DEFAULT_STORAGE_BROKERS.get(
-            storage_key, settings.DEFAULT_BROKERS
-        )
+        if storage_key in settings.DEFAULT_STORAGE_BROKERS:
+            broker_config = get_broker_config(
+                settings.DEFAULT_STORAGE_BROKERS[storage_key]
+            )
+        else:
+            broker_config = settings.STORAGE_BROKER_CONFIG.get(
+                storage_key, settings.BROKER_CONFIG
+            )
     else:
         broker_config = get_broker_config(bootstrap_servers)
 
@@ -142,7 +147,7 @@ def subscriptions(
         SynchronizedConsumer(
             KafkaConsumer(
                 build_kafka_consumer_configuration(
-                    broker_config, consumer_group, auto_offset_reset=auto_offset_reset,
+                    broker_config, consumer_group, auto_offset_reset=auto_offset_reset
                 ),
             ),
             KafkaConsumer(

@@ -115,9 +115,12 @@ def consumer(
 ) -> None:
 
     if not bootstrap_server:
-        broker_config = settings.DEFAULT_STORAGE_BROKERS.get(
-            storage_name, settings.DEFAULT_BROKERS,
-        )
+        if storage_name in settings.DEFAULT_STORAGE_BROKERS:
+            broker_config = get_broker_config(settings.DEFAULT_STORAGE_BROKERS)
+        else:
+            broker_config = settings.STORAGE_BROKER_CONFIG.get(
+                storage_name, settings.BROKER_CONFIG
+            )
     else:
         broker_config = get_broker_config(bootstrap_server)
 

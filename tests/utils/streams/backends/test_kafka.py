@@ -52,7 +52,7 @@ def test_payload_pickle_out_of_band() -> None:
 
 class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
 
-    configuration = settings.DEFAULT_BROKERS
+    configuration = settings.BROKER_CONFIG
 
     @contextlib.contextmanager
     def get_topic(self, partitions: int = 1) -> Iterator[Topic]:

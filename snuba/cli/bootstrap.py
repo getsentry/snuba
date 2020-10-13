@@ -47,7 +47,7 @@ def bootstrap(
         from confluent_kafka.admin import AdminClient, NewTopic
 
         if not bootstrap_server:
-            broker_config = settings.DEFAULT_BROKERS
+            broker_config = settings.BROKER_CONFIG
         else:
             broker_config = get_broker_config(bootstrap_server)
         attempts = 0

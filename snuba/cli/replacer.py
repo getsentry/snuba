@@ -104,7 +104,7 @@ def replacer(
     metrics = MetricsWrapper(environment.metrics, "replacer", tags=metrics_tags,)
 
     if not bootstrap_server:
-        broker_config = settings.DEFAULT_BROKERS
+        broker_config = settings.BROKER_CONFIG
     else:
         broker_config = get_broker_config(bootstrap_server)
 
