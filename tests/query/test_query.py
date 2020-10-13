@@ -23,7 +23,7 @@ def test_empty_query():
     assert query.get_data_source().format_from() == "my_table"
 
 
-def test_full_query():
+def test_query_parameters():
     query = Query(
         {
             "arrayjoin": "tags",
