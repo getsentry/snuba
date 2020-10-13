@@ -16,7 +16,7 @@ def test_empty_query():
     assert query.get_data_source().format_from() == "my_table"
 
 
-def test_full_query():
+def test_query_parameters():
     query = Query(
         {
             "arrayjoin": "tags",
@@ -30,6 +30,7 @@ def test_full_query():
         TableSource("my_table", ColumnSet([])),
     )
 
+    assert query.get_arrayjoin() == "tags"
     assert query.get_limitby() == (100, "environment")
     assert query.get_sample() == 10
     assert query.get_limit() == 100

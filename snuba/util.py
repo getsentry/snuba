@@ -2,15 +2,12 @@ import inspect
 import logging
 import numbers
 import re
-from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from functools import partial, wraps
 from typing import (
     Any,
     Callable,
-    Iterator,
     List,
-    Mapping,
     NamedTuple,
     Optional,
     Sequence,
@@ -218,20 +215,6 @@ def force_bytes(s: Union[bytes, str]) -> bytes:
         return s.encode("utf-8", "replace")
     else:
         raise TypeError(f"cannot convert {type(s).__name__} to bytes")
-
-
-@contextmanager
-def settings_override(overrides: Mapping[str, Any]) -> Iterator[None]:
-    previous = {}
-    for k, v in overrides.items():
-        previous[k] = getattr(settings, k, None)
-        setattr(settings, k, v)
-
-    try:
-        yield
-    finally:
-        for k, v in previous.items():
-            setattr(settings, k, v)
 
 
 def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
