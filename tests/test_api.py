@@ -15,17 +15,19 @@ from snuba import settings, state
 from snuba.consumer import KafkaMessageMetadata
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.events_processor_base import InsertEvent
-from snuba.datasets.factory import enforce_table_writer
+from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.processor import InsertBatch
 from snuba.redis import redis_client
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.base import BaseApiTest
+from tests.helpers import write_processed_messages
 
 
 class TestApi(BaseApiTest):
-    def setup_method(self, test_method, dataset_name="events"):
-        super().setup_method(test_method, dataset_name)
+    def setup_method(self, test_method):
+        super().setup_method(test_method)
         self.app.post = partial(self.app.post, headers={"referer": "test"})
 
         # values for test data
@@ -39,8 +41,9 @@ class TestApi(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0
         ) - timedelta(minutes=self.minutes)
+        self.storage = get_writable_storage(StorageKey.EVENTS)
+        self.table = self.storage.get_table_writer().get_schema().get_table_name()
         self.generate_fizzbuzz_events()
-        self.table = enforce_table_writer(self.dataset).get_schema().get_table_name()
 
     def teardown_method(self, test_method):
         # Reset rate limits
@@ -52,9 +55,7 @@ class TestApi(BaseApiTest):
         state.delete_config("date_align_seconds")
 
     def write_events(self, events):
-        processor = (
-            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
-        )
+        processor = self.storage.get_table_writer().get_stream_loader().get_processor()
 
         processed_messages = []
         for i, event in enumerate(events):
@@ -64,7 +65,7 @@ class TestApi(BaseApiTest):
             assert processed_message is not None
             processed_messages.append(processed_message)
 
-        self.write_processed_messages(processed_messages)
+        write_processed_messages(self.storage, processed_messages)
 
     def generate_fizzbuzz_events(self) -> None:
         """
@@ -1280,17 +1281,22 @@ class TestApi(BaseApiTest):
         }
         result1 = json.loads(self.app.post("/query", data=json.dumps(query)).data)
 
-        self.write_rows(
+        write_processed_messages(
+            self.storage,
             [
-                {
-                    "event_id": "9" * 32,
-                    "project_id": 1,
-                    "group_id": 1,
-                    "timestamp": self.base_time,
-                    "deleted": 1,
-                    "retention_days": settings.DEFAULT_RETENTION_DAYS,
-                }
-            ]
+                InsertBatch(
+                    [
+                        {
+                            "event_id": "9" * 32,
+                            "project_id": 1,
+                            "group_id": 1,
+                            "timestamp": self.base_time,
+                            "deleted": 1,
+                            "retention_days": settings.DEFAULT_RETENTION_DAYS,
+                        }
+                    ]
+                )
+            ],
         )
 
         result2 = json.loads(self.app.post("/query", data=json.dumps(query)).data)
@@ -1849,6 +1855,8 @@ class TestApi(BaseApiTest):
 
 
 class TestCreateSubscriptionApi(BaseApiTest):
+    dataset_name = "events"
+
     def test(self):
         expected_uuid = uuid.uuid1()
 
@@ -1898,6 +1906,9 @@ class TestCreateSubscriptionApi(BaseApiTest):
 
 
 class TestDeleteSubscriptionApi(BaseApiTest):
+    dataset_name = "events"
+    dataset = get_dataset(dataset_name)
+
     def test(self):
         resp = self.app.post(
             "{}/subscriptions".format(self.dataset_name),
