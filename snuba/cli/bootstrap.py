@@ -54,7 +54,9 @@ def bootstrap(
         while True:
             try:
                 logger.debug("Attempting to connect to Kafka (attempt %d)", attempts)
-                client = AdminClient(build_admin_client_configuration(broker_config))
+                client = AdminClient(
+                    build_admin_client_configuration(broker_config).config
+                )
                 client.list_topics(timeout=1)
                 break
             except Exception as e:

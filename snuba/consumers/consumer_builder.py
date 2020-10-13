@@ -92,7 +92,9 @@ class ConsumerBuilder:
 
         # XXX: This can result in a producer being built in cases where it's
         # not actually required.
-        self.producer = Producer(build_kafka_producer_configuration(broker_config))
+        self.producer = Producer(
+            build_kafka_producer_configuration(broker_config).config
+        )
 
         self.metrics = MetricsWrapper(
             environment.metrics,

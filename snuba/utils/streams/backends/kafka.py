@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from concurrent.futures import Future
 from datetime import datetime
 from enum import Enum
@@ -44,7 +45,6 @@ from snuba.utils.streams.backends.abstract import (
     Producer,
 )
 from snuba.utils.streams.types import Message, Partition, Topic
-
 
 logger = logging.getLogger(__name__)
 
@@ -147,14 +147,14 @@ class KafkaConsumer(Consumer[KafkaPayload]):
 
     def __init__(
         self,
-        configuration: Mapping[str, Any],
+        configuration: KafkaBrokerConfig,
         *,
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
         if commit_retry_policy is None:
             commit_retry_policy = NoRetryPolicy()
 
-        auto_offset_reset = configuration.get("auto.offset.reset", "largest")
+        auto_offset_reset = configuration.config.get("auto.offset.reset", "largest")
         if auto_offset_reset in {"smallest", "earliest", "beginning"}:
             self.__resolve_partition_starting_offset = (
                 self.__resolve_partition_offset_earliest
@@ -171,14 +171,16 @@ class KafkaConsumer(Consumer[KafkaPayload]):
             raise ValueError("invalid value for 'auto.offset.reset' configuration")
 
         if (
-            as_kafka_configuration_bool(configuration.get("enable.auto.commit", "true"))
+            as_kafka_configuration_bool(
+                configuration.config.get("enable.auto.commit", "true")
+            )
             is not False
         ):
             raise ValueError("invalid value for 'enable.auto.commit' configuration")
 
         if (
             as_kafka_configuration_bool(
-                configuration.get("enable.auto.offset.store", "true")
+                configuration.config.get("enable.auto.offset.store", "true")
             )
             is not False
         ):
@@ -189,7 +191,7 @@ class KafkaConsumer(Consumer[KafkaPayload]):
         # NOTE: Offsets are explicitly managed as part of the assignment
         # callback, so preemptively resetting offsets is not enabled.
         self.__consumer = ConfluentConsumer(
-            {**configuration, "auto.offset.reset": "error"}
+            {**configuration.config, "auto.offset.reset": "error"}
         )
 
         self.__offsets: MutableMapping[Partition, int] = {}
@@ -617,6 +619,11 @@ DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
 DEFAULT_QUEUED_MIN_MESSAGES = 10000
 
 
+@dataclass
+class KafkaBrokerConfig:
+    config: Mapping[str, Any]
+
+
 def get_broker_config(bootstrap_servers: Sequence[str]) -> Mapping[str, Any]:
     return {
         "bootstrap.servers": ",".join(bootstrap_servers),
@@ -629,37 +636,38 @@ def build_kafka_consumer_configuration(
     auto_offset_reset: str = "error",
     queued_max_messages_kbytes: int = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
     queued_min_messages: int = DEFAULT_QUEUED_MIN_MESSAGES,
-) -> Mapping[str, Any]:
-    return {
-        **broker_config,
-        "enable.auto.commit": False,
-        "enable.auto.offset.store": False,
-        "group.id": group_id,
-        "auto.offset.reset": auto_offset_reset,
-        # overridden to reduce memory usage when there's a large backlog
-        "queued.max.messages.kbytes": queued_max_messages_kbytes,
-        "queued.min.messages": queued_min_messages,
-        "enable.partition.eof": False,
-    }
+) -> KafkaBrokerConfig:
+    return KafkaBrokerConfig(
+        {
+            **broker_config,
+            "enable.auto.commit": False,
+            "enable.auto.offset.store": False,
+            "group.id": group_id,
+            "auto.offset.reset": auto_offset_reset,
+            # overridden to reduce memory usage when there's a large backlog
+            "queued.max.messages.kbytes": queued_max_messages_kbytes,
+            "queued.min.messages": queued_min_messages,
+            "enable.partition.eof": False,
+        }
+    )
 
 
 def build_kafka_producer_configuration(
     broker_config: Mapping[str, Any],
-) -> Mapping[str, Any]:
-    return {
-        **broker_config,
-        "partitioner": "consistent",
-        "message.max.bytes": 50000000,  # 50MB, default is 1MB
-    }
+) -> KafkaBrokerConfig:
+    return KafkaBrokerConfig(
+        {
+            **broker_config,
+            "partitioner": "consistent",
+            "message.max.bytes": 50000000,  # 50MB, default is 1MB
+        }
+    )
 
 
 def build_admin_client_configuration(
     broker_config: Mapping[str, Any],
-) -> Mapping[str, Any]:
-    return {
-        **broker_config,
-        "socket.timeout.ms": 1000,
-    }
+) -> KafkaBrokerConfig:
+    return KafkaBrokerConfig({**broker_config, "socket.timeout.ms": 1000})
 
 
 # XXX: This must be imported after `KafkaPayload` to avoid a circular import.
@@ -669,7 +677,7 @@ from snuba.utils.streams.synchronized import Commit, commit_codec
 class KafkaConsumerWithCommitLog(KafkaConsumer):
     def __init__(
         self,
-        configuration: Mapping[str, Any],
+        configuration: KafkaBrokerConfig,
         *,
         producer: ConfluentProducer,
         commit_log_topic: Topic,
@@ -678,7 +686,7 @@ class KafkaConsumerWithCommitLog(KafkaConsumer):
         super().__init__(configuration, commit_retry_policy=commit_retry_policy)
         self.__producer = producer
         self.__commit_log_topic = commit_log_topic
-        self.__group_id = configuration["group.id"]
+        self.__group_id = configuration.config["group.id"]
 
     def poll(self, timeout: Optional[float] = None) -> Optional[Message[KafkaPayload]]:
         self.__producer.poll(0.0)
@@ -713,10 +721,10 @@ class KafkaConsumerWithCommitLog(KafkaConsumer):
 
 
 class KafkaProducer(Producer[KafkaPayload]):
-    def __init__(self, configuration: Mapping[str, Any]) -> None:
-        self.__configuration = configuration
+    def __init__(self, configuration: KafkaBrokerConfig) -> None:
+        self.__configuration = configuration.config
 
-        self.__producer = ConfluentProducer(configuration)
+        self.__producer = ConfluentProducer(configuration.config)
         self.__shutdown_requested = Event()
 
         # The worker must execute in a separate thread to ensure that callbacks
