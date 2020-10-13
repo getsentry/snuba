@@ -30,7 +30,6 @@ def test_query_parameters():
         TableSource("my_table", ColumnSet([])),
     )
 
-    assert query.get_arrayjoin() == "tags"
     assert query.get_limitby() == (100, "environment")
     assert query.get_sample() == 10
     assert query.get_limit() == 100
