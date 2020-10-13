@@ -75,17 +75,17 @@ def check_clickhouse() -> bool:
     try:
         for name in get_enabled_dataset_names():
             dataset = get_dataset(name)
-
-            for storage in dataset.get_all_storages():
-                clickhouse = storage.get_cluster().get_query_connection(
-                    ClickhouseClientSettings.QUERY
-                )
-                clickhouse_tables = clickhouse.execute("show tables")
-                source = storage.get_schema()
-                if isinstance(source, TableSchema):
-                    table_name = source.get_table_name()
-                    if (table_name,) not in clickhouse_tables:
-                        return False
+            for entity in dataset.get_all_entities():
+                for storage in entity.get_all_storages():
+                    clickhouse = storage.get_cluster().get_query_connection(
+                        ClickhouseClientSettings.QUERY
+                    )
+                    clickhouse_tables = clickhouse.execute("show tables")
+                    source = storage.get_schema()
+                    if isinstance(source, TableSchema):
+                        table_name = source.get_table_name()
+                        if (table_name,) not in clickhouse_tables:
+                            return False
 
         return True
 
@@ -94,19 +94,20 @@ def check_clickhouse() -> bool:
 
 
 def truncate_dataset(dataset: Dataset) -> None:
-    for storage in dataset.get_all_storages():
-        cluster = storage.get_cluster()
-        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
-        database = cluster.get_database()
+    for entity in dataset.get_all_entities():
+        for storage in entity.get_all_storages():
+            cluster = storage.get_cluster()
+            clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+            database = cluster.get_database()
 
-        schema = storage.get_schema()
+            schema = storage.get_schema()
 
-        if not isinstance(schema, TableSchema):
-            return
+            if not isinstance(schema, TableSchema):
+                return
 
-        table = schema.get_local_table_name()
+            table = schema.get_local_table_name()
 
-        clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
+            clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
 
 
 application = Flask(__name__, static_url_path="")
@@ -293,7 +294,7 @@ def unqualified_query_view(*, timer: Timer):
 def dataset_query_view(*, dataset: Dataset, timer: Timer):
     if http_request.method == "GET":
         schema = RequestSchema.build_with_extensions(
-            dataset.get_extensions(), HTTPRequestSettings
+            dataset.get_default_entity().get_extensions(), HTTPRequestSettings
         )
         return render_template(
             "query.html",
@@ -313,7 +314,7 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build_with_extensions(
-            dataset.get_extensions(), HTTPRequestSettings
+            dataset.get_default_entity().get_extensions(), HTTPRequestSettings
         )
 
     request = build_request(body, schema, timer, dataset, http_request.referrer)
@@ -441,7 +442,7 @@ if application.debug or application.testing:
 
         type_ = record[1]
 
-        storage = dataset.get_writable_storage()
+        storage = dataset.get_default_entity().get_writable_storage()
         assert storage is not None
 
         if type_ == "insert":
