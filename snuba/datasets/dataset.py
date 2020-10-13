@@ -35,9 +35,6 @@ class Dataset(object):
     """
 
     def __init__(self, *, default_entity: EntityKey) -> None:
-        # TODO: This is a convenience while we slowly migrate everything to Entities. This way
-        # every dataset can have a default entity which acts as a passthrough until we can
-        # migrate the datasets to proper entities.
         self.__default_entity = default_entity
 
     # TODO: Remove once entity selection moves to Sentry
