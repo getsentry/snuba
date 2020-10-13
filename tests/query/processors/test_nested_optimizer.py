@@ -229,7 +229,9 @@ def test_nested_optimizer(query_body, expected_condition) -> None:
     request_settings = HTTPRequestSettings()
     request = Request("", query, request_settings, {}, "")
 
-    query_plan = transactions.get_query_plan_builder().build_plan(request)
+    query_plan = (
+        transactions.get_default_entity().get_query_plan_builder().build_plan(request)
+    )
     processor = NestedFieldConditionOptimizer(
         nested_col="tags",
         flattened_col="tags_map",

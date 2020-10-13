@@ -20,7 +20,7 @@ from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
 from snuba.query.expressions import Literal as LiteralExpr
-from snuba.query.logical import SelectedExpression
+from snuba.query.logical import OrderByDirection, SelectedExpression
 from snuba.query.matchers import AnyExpression, Column, FunctionCall, Or, Param, String
 from snuba.request.request_settings import RequestSettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -94,14 +94,19 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
         avoid querying the entire range.
         """
         limit = query.get_limit()
-        if limit is None or query.get_groupby():
+        if limit is None or query.get_groupby_from_ast():
             return None
 
         if query.get_offset() >= 1000:
             return None
 
-        orderby = query.get_orderby()
-        if not orderby or orderby[0] != f"-{self.__timestamp_col}":
+        orderby = query.get_orderby_from_ast()
+        if (
+            not orderby
+            or orderby[0].direction != OrderByDirection.DESC
+            or not isinstance(orderby[0].expression, ColumnExpr)
+            or not orderby[0].expression.column_name == self.__timestamp_col
+        ):
             return None
 
         from_date_ast, to_date_ast = get_time_range(query, self.__timestamp_col)
@@ -206,9 +211,8 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         if (
             limit is None
             or limit == 0
-            or query.get_groupby()
-            or query.get_aggregations()
-            or not query.get_selected_columns()
+            or query.get_groupby_from_ast()
+            or not query.get_selected_columns_from_ast()
         ):
             return None
 

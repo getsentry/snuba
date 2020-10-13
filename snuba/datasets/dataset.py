@@ -1,11 +1,9 @@
 from typing import Mapping, Optional, Sequence
 
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
 from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
-from snuba.query.processors import QueryProcessor
 from snuba.datasets.entities.factory import get_entity, EntityKey
 
 
@@ -44,46 +42,26 @@ class Dataset(object):
     manipulate the lower layer objects.
     """
 
-    # TODO: Still not sure if the Dataset class really needs the actual Entity object
-    # or just the name.
     def __init__(self, *, default_entity: EntityKey) -> None:
         # TODO: This is a convenience while we slowly migrate everything to Entities. This way
         # every dataset can have a default entity which acts as a passthrough until we can
         # migrate the datasets to proper entities.
-        self.default_entity_key = default_entity
-        self.__default_entity = get_entity(default_entity)
+        self.__default_entity = default_entity
 
-    def get_entity(self, entity_name: Optional[str]) -> Entity:
-        return self.__default_entity
+    def get_default_entity(self) -> Entity:
+        return get_entity(self.__default_entity)
 
     # TODO: Remove once entity selection moves to Sentry
     def select_entity(self, query: Query) -> EntityKey:
-        return self.default_entity_key
-
-    def get_query_plan_builder(
-        self, entity_name: Optional[str] = None
-    ) -> ClickhouseQueryPlanBuilder:
-        """
-        Returns the component that transforms a Snuba query in a Storage query by selecting
-        the storage and provides the directions on how to run the query.
-        """
-        # TODO: If the query is being executed on a single entity, that entity will be used to determine
-        # the query plan. In cases such as a join, the dataset will something something and
-        # then build the join query.
-        entity = self.get_entity(entity_name)
-
-        return entity.get_query_plan_builder()
+        return self.__default_entity
 
     # TODO: The following functions are shims to the Entity. They need to be evaluated one by one
     # to see which ones should exist at which level.
     def get_extensions(self) -> Mapping[str, QueryExtension]:
-        return self.__default_entity.get_extensions()
-
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return self.__default_entity.get_query_processors()
+        return self.get_default_entity().get_extensions()
 
     def get_all_storages(self) -> Sequence[Storage]:
-        return self.__default_entity.get_all_storages()
+        return self.get_default_entity().get_all_storages()
 
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
-        return self.__default_entity.get_writable_storage()
+        return self.get_default_entity().get_writable_storage()
