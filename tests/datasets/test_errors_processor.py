@@ -252,7 +252,6 @@ def test_error_processor() -> None:
             "this_is_me",
             "snuba",
         ],
-        "_tags_flattened": "",
         "contexts.key": [
             "runtime.version",
             "runtime.name",
@@ -269,7 +268,6 @@ def test_error_processor() -> None:
             "fake_region",
             "fake_city",
         ],
-        "_contexts_flattened": "",
         "partition": 1,
         "offset": 2,
         "message_timestamp": datetime(1970, 1, 1),

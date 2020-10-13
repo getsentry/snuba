@@ -15,7 +15,6 @@ from snuba.datasets.events_format import (
     extract_http,
     extract_nested,
     extract_user,
-    flatten_nested_field,
 )
 from snuba.processor import (
     InsertBatch,
@@ -115,9 +114,6 @@ class TransactionsMessageProcessor(MessageProcessor):
 
         tags = _as_dict_safe(data.get("tags", None))
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
-        processed["_tags_flattened"] = flatten_nested_field(
-            processed["tags.key"], processed["tags.value"]
-        )
 
         promoted_tags = {col: tags[col] for col in self.PROMOTED_TAGS if col in tags}
         processed["release"] = promoted_tags.get(
@@ -163,9 +159,6 @@ class TransactionsMessageProcessor(MessageProcessor):
 
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             contexts
-        )
-        processed["_contexts_flattened"] = flatten_nested_field(
-            processed["contexts.key"], processed["contexts.value"]
         )
 
         processed["dist"] = _unicodify(

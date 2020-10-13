@@ -1,44 +1,30 @@
 import uuid
-from datetime import datetime
 from functools import partial
 
 import simplejson as json
 
-from snuba.consumer import KafkaMessageMetadata
-from snuba.datasets.factory import enforce_table_writer, get_dataset
+from snuba.datasets.events_processor_base import InsertEvent
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
-from tests.fixtures import get_raw_transaction
+from tests.fixtures import get_raw_event, get_raw_transaction
+from tests.helpers import write_unprocessed_events
 
 
 class TestDiscoverApi(BaseApiTest):
     def setup_method(self, test_method):
         super().setup_method(test_method)
         self.app.post = partial(self.app.post, headers={"referer": "test"})
-        self.project_id = self.event["project_id"]
         self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
-        self.generate_event()
-        self.generate_transaction()
-
-    def generate_event(self):
-        self.dataset = get_dataset("events")
-        self.write_events([self.event])
-
-    def generate_transaction(self):
-        self.dataset = get_dataset("transactions")
-
-        raw_transaction = get_raw_transaction()
-
-        processed = (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message(
-                (2, "insert", raw_transaction),
-                KafkaMessageMetadata(0, 0, datetime.now()),
-            )
+        self.event = get_raw_event()
+        self.project_id = self.event["project_id"]
+        write_unprocessed_events(
+            get_writable_storage(StorageKey.EVENTS), [InsertEvent(self.event)]
         )
-
-        self.write_processed_messages([processed])
+        write_unprocessed_events(
+            get_writable_storage(StorageKey.TRANSACTIONS),
+            [InsertEvent(get_raw_transaction())],
+        )
 
     def test_raw_data(self):
         response = self.app.post(
@@ -845,3 +831,48 @@ class TestDiscoverApi(BaseApiTest):
         assert len(data["data"]) == 1, data
         assert "measurements[lcp]" in data["data"][0]
         assert data["data"][0]["measurements[lcp]"] is None
+
+    def test_functions_called_on_null(self) -> None:
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["group_id"],
+                    "aggregations": [["sum", "duration", "sum_transaction_duration"]],
+                    "conditions": [["type", "=", "error"]],
+                    "groupby": ["group_id"],
+                    "limit": 1,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert data["data"][0]["sum_transaction_duration"] is None
+
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["group_id"],
+                    "aggregations": [
+                        [
+                            "quantile(0.95)",
+                            "duration",
+                            "quantile_0_95_transaction_duration",
+                        ]
+                    ],
+                    "conditions": [["type", "=", "error"]],
+                    "groupby": ["group_id"],
+                    "limit": 1,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert data["data"][0]["quantile_0_95_transaction_duration"] is None
