@@ -275,9 +275,6 @@ class Query:
     def set_groupby(self, groupby: Sequence[Aggregation],) -> None:
         self.__body["groupby"] = groupby
 
-    def add_groupby(self, groupby: Sequence[Groupby],) -> None:
-        self.__extend_sequence("groupby", groupby)
-
     def get_conditions(self) -> Optional[Sequence[Condition]]:
         return self.__body.get("conditions")
 
@@ -289,9 +286,6 @@ class Query:
 
     def set_conditions(self, conditions: Sequence[Condition]) -> None:
         self.__body["conditions"] = conditions
-
-    def add_conditions(self, conditions: Sequence[Condition],) -> None:
-        self.__extend_sequence("conditions", conditions)
 
     def add_condition_to_ast(self, condition: Expression) -> None:
         if not self.__condition:
@@ -315,12 +309,6 @@ class Query:
 
     def set_prewhere_ast_condition(self, condition: Optional[Expression]) -> None:
         self.__prewhere = condition
-
-    def set_prewhere(self, conditions: Sequence[Condition]) -> None:
-        """
-        Temporary method until pre where management is moved to Clickhouse query
-        """
-        self.__prewhere_conditions = conditions
 
     def set_arrayjoin(self, arrayjoin: str) -> None:
         self.__body["arrayjoin"] = arrayjoin
