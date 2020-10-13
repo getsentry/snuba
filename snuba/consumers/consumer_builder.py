@@ -1,5 +1,4 @@
-from enum import Enum
-from typing import Callable, Optional, Sequence, Mapping, Any
+from typing import Callable, Optional, Mapping, Any
 
 from confluent_kafka import KafkaError, KafkaException, Producer
 
