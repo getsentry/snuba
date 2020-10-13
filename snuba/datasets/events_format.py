@@ -112,20 +112,5 @@ def escape_field(field: str) -> str:
     return field.translate(ESCAPE_TRANSLATION)
 
 
-def flatten_nested_field(keys: Sequence[str], values: Sequence[str]) -> str:
-    # We need to guarantee the content of the merged string is sorted otherwise we
-    # will not be able to run a LIKE operation over multiple fields at the same time.
-    # Tags are pre sorted, but it seems contexts are not, so to make this generic
-    # we ensure the invariant is respected here.
-    pairs = sorted(zip(keys, values))
-    str_pairs = [f"|{escape_field(k)}={escape_field(v)}|" for k, v in pairs]
-    # The result is going to be:
-    # |tag:val||tag:val|
-    # This gives the guarantee we will always have a delimiter on both side of the
-    # tag pair, thus we can unequivocally identify a tag with a LIKE expression even if
-    # the value or the tag name in the query is a substring of a real tag.
-    return "".join(str_pairs)
-
-
 class EventTooOld(Exception):
     pass

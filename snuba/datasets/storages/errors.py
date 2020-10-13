@@ -14,7 +14,6 @@ from snuba.clickhouse.columns import (
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
-from snuba.datasets.schemas import MandatoryCondition
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -29,7 +28,6 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 )
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
-
 
 all_columns = ColumnSet(
     [
@@ -120,15 +118,12 @@ schema = WritableTableSchema(
     dist_table_name="errors_dist",
     storage_set_key=StorageSetKey.EVENTS,
     mandatory_conditions=[
-        MandatoryCondition(
-            ("deleted", "=", 0),
-            binary_condition(
-                None,
-                ConditionFunctions.EQ,
-                Column(None, None, "deleted"),
-                Literal(None, 0),
-            ),
-        )
+        binary_condition(
+            None,
+            ConditionFunctions.EQ,
+            Column(None, None, "deleted"),
+            Literal(None, 0),
+        ),
     ],
     prewhere_candidates=[
         "event_id",

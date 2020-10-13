@@ -374,35 +374,6 @@ def process_unmerge(
     )
 
 
-# This obnoxious amount backslashes is sadly required.
-# replaceRegexpAll(tuple.1, '(\\\\||\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1')
-# means running this on Clickhouse:
-# replaceRegexpAll(tuple.1, '(\\||\\=|\\\\)', '\\\\\\1')
-# The (\\||\\=|\\\\) pattern should be actually this: (\||\=|\\). The additional
-# backslashes are because of Clickhouse escaping.
-FLATTENED_COLUMN_TEMPLATE = """
-concat(
-    '|',
-    arrayStringConcat(
-        arrayMap(tuple -> concat(
-                replaceRegexpAll(tuple.1, '(\\\\||\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1'),
-                '=',
-                replaceRegexpAll(tuple.2, '(\\\\||\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1')
-            ),
-            arraySort(
-                arrayFilter(
-                    tuple -> tuple.1 != %s,
-                    arrayMap((k, v) -> tuple(k, v), `tags.key`, `tags.value`)
-                )
-            )
-        ),
-        '||'
-    ),
-    '|'
-)
-"""
-
-
 def process_delete_tag(
     message: Mapping[str, Any],
     all_columns: Sequence[FlattenedColumn],
@@ -453,8 +424,6 @@ def process_delete_tag(
                 "arrayMap(x -> arrayElement(`tags.value`, x), arrayFilter(x -> x != indexOf(`tags.key`, %s), arrayEnumerate(`tags.value`)))"
                 % escape_string(tag)
             )
-        elif col.flattened == "_tags_flattened":
-            select_columns.append(FLATTENED_COLUMN_TEMPLATE % escape_string(tag))
         else:
             select_columns.append(col.escaped)
 

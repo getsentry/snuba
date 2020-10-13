@@ -1,134 +1,30 @@
-import calendar
 import uuid
-from datetime import datetime, timezone
 from functools import partial
 
 import simplejson as json
 
-from snuba import settings
-from snuba.consumer import KafkaMessageMetadata
-from snuba.datasets.factory import enforce_table_writer, get_dataset
+from snuba.datasets.events_processor_base import InsertEvent
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
+from tests.fixtures import get_raw_event, get_raw_transaction
+from tests.helpers import write_unprocessed_events
 
 
 class TestDiscoverApi(BaseApiTest):
     def setup_method(self, test_method):
         super().setup_method(test_method)
         self.app.post = partial(self.app.post, headers={"referer": "test"})
-        self.project_id = self.event["project_id"]
-
-        self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0, tzinfo=timezone.utc
-        )
         self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
-        self.span_id = "8841662216cc598b"
-        self.generate_event()
-        self.generate_transaction()
-
-    def generate_event(self):
-        self.dataset = get_dataset("events")
-        self.write_events([self.event])
-
-    def generate_transaction(self):
-        self.dataset = get_dataset("transactions")
-
-        processed = (
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_processor()
-            .process_message(
-                (
-                    2,
-                    "insert",
-                    {
-                        "project_id": self.project_id,
-                        "event_id": uuid.uuid4().hex,
-                        "deleted": 0,
-                        "datetime": (self.base_time).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-                        "platform": "python",
-                        "retention_days": settings.DEFAULT_RETENTION_DAYS,
-                        "data": {
-                            "received": calendar.timegm((self.base_time).timetuple()),
-                            "type": "transaction",
-                            "transaction": "/api/do_things",
-                            "start_timestamp": datetime.timestamp(self.base_time),
-                            "timestamp": datetime.timestamp(self.base_time),
-                            "tags": {
-                                # Sentry
-                                "environment": u"prød",
-                                "sentry:release": "1",
-                                "sentry:dist": "dist1",
-                                "url": "http://127.0.0.1:/query",
-                                # User
-                                "foo": "baz",
-                                "foo.bar": "qux",
-                                "os_name": "linux",
-                            },
-                            "user": {
-                                "email": "sally@example.org",
-                                "ip_address": "8.8.8.8",
-                                "geo": {
-                                    "city": "San Francisco",
-                                    "region": "CA",
-                                    "country_code": "US",
-                                },
-                            },
-                            "contexts": {
-                                "trace": {
-                                    "trace_id": self.trace_id.hex,
-                                    "span_id": self.span_id,
-                                    "op": "http",
-                                },
-                                "device": {
-                                    "online": True,
-                                    "charging": True,
-                                    "model_id": "Galaxy",
-                                },
-                            },
-                            "measurements": {
-                                "lcp": {"value": 32.129},
-                                "lcp.elementSize": {"value": 4242},
-                            },
-                            "sdk": {
-                                "name": "sentry.python",
-                                "version": "0.13.4",
-                                "integrations": ["django"],
-                            },
-                            "request": {
-                                "url": "http://127.0.0.1:/query",
-                                "headers": [
-                                    ["Accept-Encoding", "identity"],
-                                    ["Content-Length", "398"],
-                                    ["Host", "127.0.0.1:"],
-                                    ["Referer", "tagstore.something"],
-                                    ["Trace", "8fa73032d-1"],
-                                ],
-                                "data": "",
-                                "method": "POST",
-                                "env": {"SERVER_PORT": "1010", "SERVER_NAME": "snuba"},
-                            },
-                            "spans": [
-                                {
-                                    "op": "db",
-                                    "trace_id": self.trace_id.hex,
-                                    "span_id": self.span_id + "1",
-                                    "parent_span_id": None,
-                                    "same_process_as_parent": True,
-                                    "description": "SELECT * FROM users",
-                                    "data": {},
-                                    "timestamp": calendar.timegm(
-                                        (self.base_time).timetuple()
-                                    ),
-                                }
-                            ],
-                        },
-                    },
-                ),
-                KafkaMessageMetadata(0, 0, self.base_time),
-            )
+        self.event = get_raw_event()
+        self.project_id = self.event["project_id"]
+        write_unprocessed_events(
+            get_writable_storage(StorageKey.EVENTS), [InsertEvent(self.event)]
         )
-
-        self.write_processed_messages([processed])
+        write_unprocessed_events(
+            get_writable_storage(StorageKey.TRANSACTIONS),
+            [InsertEvent(get_raw_transaction())],
+        )
 
     def test_raw_data(self):
         response = self.app.post(
@@ -842,7 +738,11 @@ class TestDiscoverApi(BaseApiTest):
 
         assert response.status_code == 200
         assert data["data"] == [
-            {"apdex_duration_300": 1, "tags[foo]": "baz", "project_id": self.project_id}
+            {
+                "apdex_duration_300": 0.5,
+                "tags[foo]": "baz",
+                "project_id": self.project_id,
+            }
         ]
 
     def test_count_null_user_consistency(self):
@@ -931,3 +831,48 @@ class TestDiscoverApi(BaseApiTest):
         assert len(data["data"]) == 1, data
         assert "measurements[lcp]" in data["data"][0]
         assert data["data"][0]["measurements[lcp]"] is None
+
+    def test_functions_called_on_null(self) -> None:
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["group_id"],
+                    "aggregations": [["sum", "duration", "sum_transaction_duration"]],
+                    "conditions": [["type", "=", "error"]],
+                    "groupby": ["group_id"],
+                    "limit": 1,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert data["data"][0]["sum_transaction_duration"] is None
+
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["group_id"],
+                    "aggregations": [
+                        [
+                            "quantile(0.95)",
+                            "duration",
+                            "quantile_0_95_transaction_duration",
+                        ]
+                    ],
+                    "conditions": [["type", "=", "error"]],
+                    "groupby": ["group_id"],
+                    "limit": 1,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert data["data"][0]["quantile_0_95_transaction_duration"] is None

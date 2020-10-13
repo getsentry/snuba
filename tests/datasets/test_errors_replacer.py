@@ -7,17 +7,20 @@ import simplejson as json
 from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.datasets import errors_replacer
+from snuba.datasets.events_processor_base import InsertEvent
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.kafka import KafkaPayload
-from tests.base import BaseEventsTest
+
+from tests.fixtures import get_raw_event
+from tests.helpers import write_unprocessed_events
 
 
-class TestReplacer(BaseEventsTest):
-    def setup_method(self, test_method):
-        super(TestReplacer, self).setup_method(test_method, "events_migration")
-
+class TestReplacer:
+    def setup_method(self):
         from snuba.web.views import application
 
         assert application.testing is True
@@ -25,11 +28,13 @@ class TestReplacer(BaseEventsTest):
         self.app = application.test_client()
         self.app.post = partial(self.app.post, headers={"referer": "test"})
 
+        self.storage = get_writable_storage(StorageKey.ERRORS)
         self.replacer = replacer.ReplacerWorker(
-            self.dataset.get_writable_storage(), DummyMetricsBackend(strict=True)
+            self.storage, DummyMetricsBackend(strict=True)
         )
 
         self.project_id = 1
+        self.event = InsertEvent(get_raw_event())
 
     def _wrap(self, msg: str) -> Message[KafkaPayload]:
         return Message(
@@ -236,7 +241,7 @@ class TestReplacer(BaseEventsTest):
     def test_delete_groups_insert(self):
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
-        self.write_events([self.event])
+        write_unprocessed_events(self.storage, [self.event])
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
@@ -273,7 +278,7 @@ class TestReplacer(BaseEventsTest):
     def test_merge_insert(self):
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
-        self.write_events([self.event])
+        write_unprocessed_events(self.storage, [self.event])
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
@@ -312,7 +317,7 @@ class TestReplacer(BaseEventsTest):
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "a" * 32
-        self.write_events([self.event])
+        write_unprocessed_events(self.storage, [self.event])
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 

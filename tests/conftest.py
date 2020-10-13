@@ -2,11 +2,13 @@ from typing import Iterator
 
 import pytest
 
+from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings, CLUSTERS
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.environment import setup_sentry
+from snuba.redis import redis_client
 from snuba.utils.clock import Clock, TestingClock
 from snuba.utils.streams.backends.local.backend import LocalBroker
 from snuba.utils.streams.backends.local.storages.memory import MemoryMessageStorage
@@ -18,6 +20,10 @@ def pytest_configure() -> None:
     Set up the Sentry SDK to avoid errors hidden by configuration.
     Ensure the snuba_test database exists
     """
+    assert (
+        settings.TESTING
+    ), "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
+
     setup_sentry()
 
     for cluster in CLUSTERS:
@@ -55,3 +61,5 @@ def run_migrations() -> Iterator[None]:
         if isinstance(schema, WritableTableSchema):
             table_name = schema.get_local_table_name()
             connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
+
+    redis_client.flushdb()

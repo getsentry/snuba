@@ -5,7 +5,8 @@ from typing import Optional, Sequence
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clusters.cluster import get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.schemas import MandatoryCondition, RelationalSource, Schema
+from snuba.datasets.schemas import RelationalSource, Schema
+from snuba.query.expressions import FunctionCall
 
 
 class TableSource(RelationalSource):
@@ -18,7 +19,7 @@ class TableSource(RelationalSource):
         self,
         table_name: str,
         columns: ColumnSet,
-        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
+        mandatory_conditions: Optional[Sequence[FunctionCall]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
     ) -> None:
         self.__table_name = table_name
@@ -32,7 +33,7 @@ class TableSource(RelationalSource):
     def get_columns(self) -> ColumnSet:
         return self.__columns
 
-    def get_mandatory_conditions(self) -> Sequence[MandatoryCondition]:
+    def get_mandatory_conditions(self) -> Sequence[FunctionCall]:
         return self.__mandatory_conditions
 
     def get_prewhere_candidates(self) -> Sequence[str]:
@@ -52,7 +53,7 @@ class TableSchema(Schema):
         local_table_name: str,
         dist_table_name: str,
         storage_set_key: StorageSetKey,
-        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
+        mandatory_conditions: Optional[Sequence[FunctionCall]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
     ):
         self.__local_table_name = local_table_name

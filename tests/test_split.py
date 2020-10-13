@@ -49,7 +49,10 @@ def test_no_split(
                 "limit": 100,
                 "offset": 50,
             },
-            events.get_all_storages()[0].get_schema().get_data_source(),
+            events.get_default_entity()
+            .get_all_storages()[0]
+            .get_schema()
+            .get_data_source(),
         )
     )
 
@@ -134,18 +137,17 @@ def test_col_split(
         request_settings: RequestSettings,
         reader: Reader[SqlQuery],
     ) -> QueryResult:
-        selected_cols = query.get_selected_columns()
-        assert selected_cols == [
+        selected_col_names = [
             c.expression.column_name
             for c in query.get_selected_columns_from_ast() or []
             if isinstance(c.expression, Column)
         ]
-        if selected_cols == list(first_query_data[0].keys()):
+        if selected_col_names == list(first_query_data[0].keys()):
             return QueryResult({"data": first_query_data}, {})
-        elif selected_cols == list(second_query_data[0].keys()):
+        elif selected_col_names == list(second_query_data[0].keys()):
             return QueryResult({"data": second_query_data}, {})
         else:
-            raise ValueError(f"Unexpected selected columns: {selected_cols}")
+            raise ValueError(f"Unexpected selected columns: {selected_col_names}")
 
     events = get_dataset(dataset_name)
     query = ClickhouseQuery(
@@ -158,7 +160,10 @@ def test_col_split(
                 "limit": 100,
                 "offset": 50,
             },
-            events.get_all_storages()[0].get_schema().get_data_source(),
+            events.get_default_entity()
+            .get_all_storages()[0]
+            .get_schema()
+            .get_data_source(),
             selected_columns=[
                 SelectedExpression(
                     name=col_name, expression=Column(None, None, col_name)
@@ -303,29 +308,6 @@ column_split_tests = [
         },
         True,
     ),  # Query with other condition on event_id - proceed with split
-    (
-        "event_id",
-        "project_id",
-        "timestamp",
-        {
-            "selected_columns": [
-                ["f", ["event_id"], "not_event_id"],
-                "level",
-                "logger",
-                "server_name",
-            ],
-            "conditions": [
-                ("timestamp", ">=", "2019-09-19T10:00:00"),
-                ("timestamp", "<", "2019-09-19T12:00:00"),
-                ("project_id", "IN", [1, 2, 3]),
-            ],
-            "orderby": ["-not_event_id"],
-            "limit": 10,
-        },
-        False,
-    ),  # Splitting by column would generate an invalid query but
-    # only for the legacy representation. This query would be
-    # ok if ran through the AST.
 ]
 
 
@@ -377,26 +359,6 @@ def test_time_split_ast() -> None:
         assert from_date_ast is not None and isinstance(from_date_ast, datetime)
         assert to_date_ast is not None and isinstance(to_date_ast, datetime)
 
-        conditions = query.get_conditions() or []
-        from_date_str = next(
-            (
-                condition[2]
-                for condition in conditions
-                if condition[0] == "timestamp" and condition[1] == ">="
-            ),
-            None,
-        )
-        to_date_str = next(
-            (
-                condition[2]
-                for condition in conditions
-                if condition[0] == "timestamp" and condition[1] == "<"
-            ),
-            None,
-        )
-        assert from_date_str == from_date_ast.isoformat()
-        assert to_date_str == to_date_ast.isoformat()
-
         found_timestamps.append((from_date_ast.isoformat(), to_date_ast.isoformat()))
 
         return QueryResult({"data": []}, {})
@@ -422,9 +384,12 @@ def test_time_split_ast() -> None:
 
     events = get_dataset("events")
     query = parse_query(body, events)
+    settings = HTTPRequestSettings()
+    for p in events.get_default_entity().get_query_processors():
+        p.process_query(query, settings)
 
     splitter = TimeSplitQueryStrategy("timestamp")
-    splitter.execute(ClickhouseQuery(query), HTTPRequestSettings(), do_query)
+    splitter.execute(ClickhouseQuery(query), settings, do_query)
 
     assert found_timestamps == [
         ("2019-09-19T11:00:00", "2019-09-19T12:00:00"),

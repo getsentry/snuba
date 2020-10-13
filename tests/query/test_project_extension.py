@@ -49,8 +49,6 @@ def test_project_extension_query_processing(
     request_settings = HTTPRequestSettings()
 
     extension.get_processor().process_query(query, valid_data, request_settings)
-
-    assert query.get_conditions() == expected_conditions
     assert query.get_condition_from_ast() == expected_ast_conditions
 
 

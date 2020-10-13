@@ -2,13 +2,12 @@ import pytest
 import rapidjson
 
 from snuba.clickhouse.errors import ClickhouseWriterError
-from snuba.datasets.factory import enforce_table_writer
+from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from tests.base import BaseEventsTest
 
 
-class TestHTTPBatchWriter(BaseEventsTest):
-
+class TestHTTPBatchWriter:
+    dataset = get_dataset("events")
     metrics = DummyMetricsBackend(strict=True)
 
     def test_empty_batch(self) -> None:
