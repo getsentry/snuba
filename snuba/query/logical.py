@@ -653,7 +653,9 @@ class Query:
         return not referenced_symbols - declared_symbols
 
     def set_entity_name(self, entity_name: str) -> None:
+        assert self.__entity_name is None
         self.__entity_name = entity_name
 
     def get_entity_name(self) -> Optional[str]:
+        assert self.__entity_name is not None
         return self.__entity_name

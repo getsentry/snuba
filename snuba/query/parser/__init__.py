@@ -7,7 +7,6 @@ from snuba import environment
 from snuba.clickhouse.escaping import NEGATE_RE
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entity import Entity
-from snuba.datasets.entities.factory import get_entity_key
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -238,7 +237,6 @@ def _parse_query_impl(body: MutableMapping[str, Any], entity: Entity) -> Query:
         groupby=[g.expression for g in groupby_clause],
         having=having_expr,
         order_by=orderby_exprs,
-        entity_name=get_entity_key(entity).value,
     )
 
 
