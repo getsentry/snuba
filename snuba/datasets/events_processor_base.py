@@ -54,7 +54,7 @@ class InsertEvent(TypedDict):
     message: str
     platform: str
     datetime: str  # snuba.settings.PAYLOAD_DATETIME_FORMAT
-    data: Mapping[str, Any]
+    data: MutableMapping[str, Any]
     primary_hash: str  # empty string represents None
     retention_days: int
 
@@ -170,7 +170,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         if not self._should_process(event):
             return None
 
-        processed = {"deleted": 0}
+        processed: MutableMapping[str, Any] = {"deleted": 0}
         extract_project_id(processed, event)
         self._extract_event_id(processed, event)
         processed["retention_days"] = enforce_retention(
