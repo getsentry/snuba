@@ -656,6 +656,6 @@ class Query:
         assert self.__entity_name is None
         self.__entity_name = entity_name
 
-    def get_entity_name(self) -> Optional[str]:
+    def get_entity_name(self) -> str:
         assert self.__entity_name is not None
         return self.__entity_name

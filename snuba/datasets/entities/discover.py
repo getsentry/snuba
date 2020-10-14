@@ -34,11 +34,7 @@ from snuba.datasets.storage import (
 )
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.entities.transactions import (
-    transaction_translator,
-    TransactionsEntity,
-)
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.entities.transactions import TransactionsEntity
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -412,19 +408,13 @@ class DiscoverTransactionsEntity(TransactionsEntity):
     """
 
     def __init__(self) -> None:
-        storage = get_storage(StorageKey.TRANSACTIONS)
         super().__init__(
-            query_plan_builder=SingleStorageQueryPlanBuilder(
-                storage=storage,
-                mappers=transaction_translator.concat(
-                    TranslationMappers(
-                        columns=[
-                            ColumnToLiteral(None, "group_id", 0),
-                            DefaultNoneColumnMapper(EVENTS_COLUMNS),
-                        ],
-                        curried_functions=[DefaultNoneCurriedFunctionMapper()],
-                        functions=[DefaultNoneFunctionMapper()],
-                    )
-                ),
-            ),
+            custom_mappers=TranslationMappers(
+                columns=[
+                    ColumnToLiteral(None, "group_id", 0),
+                    DefaultNoneColumnMapper(EVENTS_COLUMNS),
+                ],
+                curried_functions=[DefaultNoneCurriedFunctionMapper()],
+                functions=[DefaultNoneFunctionMapper()],
+            )
         )
