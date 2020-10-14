@@ -9,7 +9,6 @@ from typing import (
     Iterable,
     Mapping,
     MutableMapping,
-    MutableSequence,
     Optional,
     Sequence,
     Set,
@@ -30,13 +29,10 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.types import Condition
-from snuba.util import columns_in_expr, is_condition, to_list
 
 Aggregation = Union[
     Tuple[Any, Any, Any], Sequence[Any],
 ]
-
-Groupby = Sequence[Any]
 
 Limitby = Tuple[int, str]
 
@@ -112,6 +108,7 @@ class Query:
         groupby: Optional[Sequence[Expression]] = None,
         having: Optional[Expression] = None,
         order_by: Optional[Sequence[OrderBy]] = None,
+        entity_name: Optional[str] = None,
     ):
         """
         Expects an already parsed query body.
@@ -121,7 +118,6 @@ class Query:
         self.__body = body
         self.__final = False
         self.__data_source = data_source
-        self.__prewhere_conditions: Sequence[Condition] = []
 
         self.__selected_columns = selected_columns or []
         self.__array_join = array_join
@@ -130,6 +126,7 @@ class Query:
         self.__groupby = groupby or []
         self.__having = having
         self.__order_by = order_by or []
+        self.__entity_name = entity_name
 
     def get_all_expressions(self) -> Iterable[Expression]:
         """
@@ -240,14 +237,6 @@ class Query:
     def set_data_source(self, data_source: RelationalSource) -> None:
         self.__data_source = data_source
 
-    def __extend_sequence(self, field: str, content: Sequence[TElement],) -> None:
-        if field not in self.__body:
-            self.__body[field] = []
-        self.__body[field].extend(content)
-
-    def get_selected_columns(self) -> Optional[Sequence[Any]]:
-        return self.__body.get("selected_columns")
-
     def get_selected_columns_from_ast(self) -> Sequence[SelectedExpression]:
         return self.__selected_columns
 
@@ -255,12 +244,6 @@ class Query:
         self, selected_columns: Sequence[SelectedExpression]
     ) -> None:
         self.__selected_columns = selected_columns
-
-    def get_aggregations(self) -> Optional[Sequence[Aggregation]]:
-        return self.__body.get("aggregations")
-
-    def get_groupby(self) -> Optional[Sequence[Groupby]]:
-        return self.__body.get("groupby")
 
     def get_groupby_from_ast(self) -> Sequence[Expression]:
         return self.__groupby
@@ -285,12 +268,6 @@ class Query:
                 None, BooleanFunctions.AND, condition, self.__condition
             )
 
-    def get_prewhere(self) -> Sequence[Condition]:
-        """
-        Temporary method until pre where management is moved to Clickhouse query
-        """
-        return self.__prewhere_conditions
-
     def get_prewhere_ast(self) -> Optional[Expression]:
         """
         Temporary method until pre where management is moved to Clickhouse query
@@ -300,23 +277,14 @@ class Query:
     def set_prewhere_ast_condition(self, condition: Optional[Expression]) -> None:
         self.__prewhere = condition
 
-    def get_arrayjoin(self) -> Optional[str]:
-        return self.__body.get("arrayjoin", None)
-
     def get_arrayjoin_from_ast(self) -> Optional[Expression]:
         return self.__array_join
-
-    def get_having(self) -> Sequence[Condition]:
-        return self.__body.get("having", [])
 
     def get_having_from_ast(self) -> Optional[Expression]:
         return self.__having
 
     def set_ast_having(self, condition: Optional[Expression]) -> None:
         self.__having = condition
-
-    def get_orderby(self) -> Optional[Sequence[Any]]:
-        return self.__body.get("orderby")
 
     def get_orderby_from_ast(self) -> Sequence[OrderBy]:
         return self.__order_by
@@ -370,40 +338,6 @@ class Query:
     def get_body(self) -> Mapping[str, Any]:
         return self.__body
 
-    def get_all_referenced_columns(self) -> Sequence[Any]:
-        """
-        Return the set of all columns that are used by a query.
-
-        TODO: This does not actually return all columns referenced in the query since
-        there are some corner cases left out:
-        - functions expressed in the form f(column) in aggregations.
-
-        Will fix both when adding a better column abstraction.
-        Also the replace_column method behave consistently with this one. Any change to
-        this method should be reflected there.
-        """
-        col_exprs: MutableSequence[Any] = []
-
-        if self.get_arrayjoin():
-            col_exprs.extend(to_list(self.get_arrayjoin()))
-        if self.get_groupby():
-            col_exprs.extend(to_list(self.get_groupby()))
-        if self.get_orderby():
-            col_exprs.extend(to_list(self.get_orderby()))
-        if self.get_selected_columns():
-            col_exprs.extend(to_list(self.get_selected_columns()))
-
-        # Conditions need flattening as they can be nested as AND/OR
-        self.__add_flat_conditions(col_exprs, self.get_conditions())
-        self.__add_flat_conditions(col_exprs, self.get_having())
-        self.__add_flat_conditions(col_exprs, self.get_prewhere())
-
-        if self.get_aggregations():
-            col_exprs.extend([a[1] for a in self.get_aggregations()])
-
-        # Return the set of all columns referenced in any expression
-        return self.__get_referenced_columns(col_exprs)
-
     def __get_all_ast_referenced_expressions(
         self, expressions: Iterable[Expression], exp_type: Type[TExp]
     ) -> Set[TExp]:
@@ -426,20 +360,6 @@ class Query:
         return self.__get_all_ast_referenced_expressions(
             [self.__condition] if self.__condition is not None else [], Column
         )
-
-    def __add_flat_conditions(
-        self, col_exprs: MutableSequence[Any], conditions=Optional[Sequence[Condition]]
-    ) -> None:
-        if conditions:
-            flat_conditions = list(
-                chain(*[[c] if is_condition(c) else c for c in conditions])
-            )
-            col_exprs.extend([c[0] for c in flat_conditions])
-
-    def __get_referenced_columns(
-        self, col_exprs: MutableSequence[Any]
-    ) -> Sequence[Any]:
-        return set(chain(*[columns_in_expr(ex) for ex in col_exprs]))
 
     def validate_aliases(self) -> bool:
         """
@@ -475,3 +395,11 @@ class Query:
 
         declared_symbols |= {c.flattened for c in self.get_data_source().get_columns()}
         return not referenced_symbols - declared_symbols
+
+    def set_entity_name(self, entity_name: str) -> None:
+        assert self.__entity_name is None
+        self.__entity_name = entity_name
+
+    def get_entity_name(self) -> str:
+        assert self.__entity_name is not None
+        return self.__entity_name

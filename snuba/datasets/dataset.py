@@ -1,8 +1,8 @@
-from typing import Optional, Sequence
+from typing import Sequence
 
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
-from snuba.query.processors import QueryProcessor
+from snuba.query.logical import Query
+from snuba.datasets.entities.factory import get_entity, EntityKey
 
 
 class Dataset(object):
@@ -34,34 +34,15 @@ class Dataset(object):
     manipulate the lower layer objects.
     """
 
-    def __init__(self, *, default_entity: Entity) -> None:
-        # TODO: Right now there are no Datasets with more than one Entity. Once that changes,
-        # the entity accessor methods will need to be rewritten.
+    def __init__(self, *, default_entity: EntityKey) -> None:
         self.__default_entity = default_entity
 
-    def get_entity(self, entity_name: str) -> Entity:
+    # TODO: Remove once entity selection moves to Sentry
+    def select_entity(self, query: Query) -> EntityKey:
         return self.__default_entity
 
     def get_default_entity(self) -> Entity:
-        return self.__default_entity
+        return get_entity(self.__default_entity)
 
     def get_all_entities(self) -> Sequence[Entity]:
-        return [self.__default_entity]
-
-    def get_query_plan_builder(
-        self, entity_name: Optional[str] = ""
-    ) -> ClickhouseQueryPlanBuilder:
-        """
-        Returns the component that transforms a Snuba query in a Storage query by selecting
-        the storage(s) and provides the directions on how to run the query.
-        """
-        entity = self.get_default_entity()
-
-        return entity.get_query_plan_builder()
-
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
-        """
-        Return the query processors for this dataset. By default that will
-        be the processors for the entity associated with the dataset.
-        """
-        return self.__default_entity.get_query_processors()
+        return [self.get_default_entity()]

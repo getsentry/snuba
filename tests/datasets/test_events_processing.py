@@ -17,7 +17,9 @@ def test_events_processing() -> None:
     query = parse_query(query_body, events)
     request = Request("", query, HTTPRequestSettings(), {}, "")
 
-    query_plan = events.get_query_plan_builder().build_plan(request)
+    query_plan = (
+        events.get_default_entity().get_query_plan_builder().build_plan(request)
+    )
     for clickhouse_processor in query_plan.plan_processors:
         clickhouse_processor.process_query(query_plan.query, request.settings)
 
