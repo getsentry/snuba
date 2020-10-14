@@ -97,7 +97,9 @@ class TransactionsEntity(Entity):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
-            TimeSeriesProcessor({"time": "finish_ts"}, ("start_ts", "finish_ts")),
+            TimeSeriesProcessor(
+                {"time": "finish_ts"}, ("start_ts", "finish_ts", "timestamp")
+            ),
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             apdex_processor(self.get_data_model()),
