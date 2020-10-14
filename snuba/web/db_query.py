@@ -89,7 +89,18 @@ def execute_query(
     # Experiment, if we are going to grab more than X columns worth of data,
     # don't use uncompressed_cache in ClickHouse.
     uc_max = state.get_config("uncompressed_cache_max_cols", 5)
-    if len(clickhouse_query.get_all_referenced_columns()) > uc_max:
+    if (
+        len(
+            set(
+                (
+                    # Skip aliases when counting columns
+                    (c.table_name, c.column_name)
+                    for c in clickhouse_query.get_all_ast_referenced_columns()
+                )
+            )
+        )
+        > uc_max
+    ):
         query_settings["use_uncompressed_cache"] = 0
 
     # Force query to use the first shard replica, which
@@ -176,7 +187,18 @@ def execute_query_with_caching(
         [("use_cache", settings.USE_RESULT_CACHE), ("uncompressed_cache_max_cols", 5)]
     )
 
-    if len(clickhouse_query.get_all_referenced_columns()) > uc_max:
+    if (
+        len(
+            set(
+                (
+                    # Skip aliases when counting columns
+                    (c.table_name, c.column_name)
+                    for c in clickhouse_query.get_all_ast_referenced_columns()
+                )
+            )
+        )
+        > uc_max
+    ):
         use_cache = False
 
     execute = partial(
