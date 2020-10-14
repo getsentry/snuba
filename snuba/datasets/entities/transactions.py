@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence
+from typing import Mapping, Optional, Sequence
 
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToFunction,
@@ -26,9 +26,6 @@ from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 
-# TODO: This will be a property of the relationship between entity and
-# storage. Now we do not have entities so it is between dataset and
-# storage.
 transaction_translator = TranslationMappers(
     columns=[
         ColumnToFunction(
@@ -72,14 +69,17 @@ transaction_translator = TranslationMappers(
 
 
 class TransactionsEntity(Entity):
-    def __init__(self) -> None:
+    def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
         storage = get_writable_storage(StorageKey.TRANSACTIONS)
         schema = storage.get_table_writer().get_schema()
 
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(
-                storage=storage, mappers=transaction_translator
+                storage=storage,
+                mappers=transaction_translator
+                if custom_mappers is None
+                else transaction_translator.concat(custom_mappers),
             ),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,

@@ -1,8 +1,7 @@
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.factory import EntityKey, get_entity
+from snuba.datasets.entities.factory import EntityKey
 
 
 class SessionsDataset(Dataset):
     def __init__(self) -> None:
-        sessions_entity = get_entity(EntityKey.SESSIONS)
-        super().__init__(default_entity=sessions_entity)
+        super().__init__(default_entity=EntityKey.SESSIONS)

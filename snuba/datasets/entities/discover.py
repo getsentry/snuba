@@ -36,7 +36,7 @@ from snuba.datasets.storage import (
 )
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.entities.transactions import transaction_translator
+from snuba.datasets.entities.transactions import TransactionsEntity
 from snuba.query.conditions import (
     BINARY_OPERATORS,
     ConditionFunctions,
@@ -85,6 +85,10 @@ EVENT_CONDITION = FunctionCallMatch(
         Or([ColumnMatch(None, StringMatch("type")), LiteralMatch(None)]),
         Param("event_type", Or([ColumnMatch(), LiteralMatch()])),
     ),
+)
+
+TRANSACTION_FUNCTIONS = FunctionCallMatch(
+    Or([StringMatch("apdex"), StringMatch("failure_rate")]), None
 )
 
 
@@ -150,6 +154,12 @@ def match_query_to_table(
     elif has_transaction_columns:
         return TRANSACTIONS
     else:
+        # Check for apdex or failure rate
+        for expr in query.get_all_expressions():
+            match = TRANSACTION_FUNCTIONS.match(expr)
+            if match:
+                return TRANSACTIONS
+
         return EVENTS_AND_TRANSACTIONS
 
 
@@ -420,41 +430,78 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
             )
         )
 
-        self.__transaction_translator = transaction_translator.concat(
-            TranslationMappers(
-                columns=[
-                    ColumnToLiteral(None, "group_id", 0),
-                    DefaultNoneColumnMapper(self.__abstract_events_columns),
-                ],
-                curried_functions=[DefaultNoneCurriedFunctionMapper()],
-                functions=[DefaultNoneFunctionMapper()],
-            )
-        )
-
     def select_storage(
         self, query: Query, request_settings: RequestSettings
     ) -> StorageAndMappers:
-        table = detect_table(
-            query,
-            self.__abstract_events_columns,
-            self.__abstract_transactions_columns,
-            True,
+        use_readonly_storage = (
+            state.get_config("enable_events_readonly_table", False)
+            and not request_settings.get_consistent()
+        )
+        return (
+            StorageAndMappers(self.__events_ro_table, self.__event_translator)
+            if use_readonly_storage
+            else StorageAndMappers(self.__events_table, self.__event_translator)
         )
 
-        if table == TRANSACTIONS:
-            return StorageAndMappers(
-                self.__transactions_table, self.__transaction_translator
-            )
-        else:
-            use_readonly_storage = (
-                state.get_config("enable_events_readonly_table", False)
-                and not request_settings.get_consistent()
-            )
-            return (
-                StorageAndMappers(self.__events_ro_table, self.__event_translator)
-                if use_readonly_storage
-                else StorageAndMappers(self.__events_table, self.__event_translator)
-            )
+
+EVENTS_COLUMNS = ColumnSet(
+    [
+        ("group_id", Nullable(UInt(64))),
+        ("primary_hash", Nullable(FixedString(32))),
+        # Promoted tags
+        ("level", Nullable(String())),
+        ("logger", Nullable(String())),
+        ("server_name", Nullable(String())),
+        ("site", Nullable(String())),
+        ("url", Nullable(String())),
+        ("location", Nullable(String())),
+        ("culprit", Nullable(String())),
+        ("received", Nullable(DateTime())),
+        ("sdk_integrations", Nullable(Array(String()))),
+        ("version", Nullable(String())),
+        # exception interface
+        (
+            "exception_stacks",
+            Nested(
+                [
+                    ("type", Nullable(String())),
+                    ("value", Nullable(String())),
+                    ("mechanism_type", Nullable(String())),
+                    ("mechanism_handled", Nullable(UInt(8))),
+                ]
+            ),
+        ),
+        (
+            "exception_frames",
+            Nested(
+                [
+                    ("abs_path", Nullable(String())),
+                    ("filename", Nullable(String())),
+                    ("package", Nullable(String())),
+                    ("module", Nullable(String())),
+                    ("function", Nullable(String())),
+                    ("in_app", Nullable(UInt(8))),
+                    ("colno", Nullable(UInt(32))),
+                    ("lineno", Nullable(UInt(32))),
+                    ("stack_level", UInt(16)),
+                ]
+            ),
+        ),
+        ("modules", Nested([("name", String()), ("version", String())])),
+    ]
+)
+
+TRANSACTIONS_COLUMNS = ColumnSet(
+    [
+        ("trace_id", Nullable(UUID())),
+        ("span_id", Nullable(UInt(64))),
+        ("transaction_hash", Nullable(UInt(64))),
+        ("transaction_op", Nullable(String())),
+        ("transaction_status", Nullable(UInt(8))),
+        ("duration", Nullable(UInt(32))),
+        ("measurements", Nested([("key", String()), ("value", Float(64))]),),
+    ]
+)
 
 
 class DiscoverEntity(Entity):
@@ -500,65 +547,8 @@ class DiscoverEntity(Entity):
                 ("contexts", Nested([("key", String()), ("value", String())])),
             ]
         )
-
-        self.__events_columns = ColumnSet(
-            [
-                ("group_id", Nullable(UInt(64))),
-                ("primary_hash", Nullable(FixedString(32))),
-                # Promoted tags
-                ("level", Nullable(String())),
-                ("logger", Nullable(String())),
-                ("server_name", Nullable(String())),
-                ("site", Nullable(String())),
-                ("url", Nullable(String())),
-                ("location", Nullable(String())),
-                ("culprit", Nullable(String())),
-                ("received", Nullable(DateTime())),
-                ("sdk_integrations", Nullable(Array(String()))),
-                ("version", Nullable(String())),
-                # exception interface
-                (
-                    "exception_stacks",
-                    Nested(
-                        [
-                            ("type", Nullable(String())),
-                            ("value", Nullable(String())),
-                            ("mechanism_type", Nullable(String())),
-                            ("mechanism_handled", Nullable(UInt(8))),
-                        ]
-                    ),
-                ),
-                (
-                    "exception_frames",
-                    Nested(
-                        [
-                            ("abs_path", Nullable(String())),
-                            ("filename", Nullable(String())),
-                            ("package", Nullable(String())),
-                            ("module", Nullable(String())),
-                            ("function", Nullable(String())),
-                            ("in_app", Nullable(UInt(8))),
-                            ("colno", Nullable(UInt(32))),
-                            ("lineno", Nullable(UInt(32))),
-                            ("stack_level", UInt(16)),
-                        ]
-                    ),
-                ),
-                ("modules", Nested([("name", String()), ("version", String())])),
-            ]
-        )
-
-        self.__transactions_columns = ColumnSet(
-            [
-                ("trace_id", Nullable(UUID())),
-                ("span_id", Nullable(UInt(64))),
-                ("transaction_hash", Nullable(UInt(64))),
-                ("transaction_op", Nullable(String())),
-                ("transaction_status", Nullable(UInt(8))),
-                ("duration", Nullable(UInt(32))),
-                ("measurements", Nested([("key", String()), ("value", Float(64))]),),
-            ]
-        )
+        self.__events_columns = EVENTS_COLUMNS
+        self.__transactions_columns = TRANSACTIONS_COLUMNS
 
         events_storage = get_storage(StorageKey.EVENTS)
         events_ro_storage = get_storage(StorageKey.EVENTS_RO)
@@ -606,3 +596,23 @@ class DiscoverEntity(Entity):
                 timestamp_column="timestamp",
             ),
         }
+
+
+class DiscoverTransactionsEntity(TransactionsEntity):
+    """
+    Identical to TransactionsEntity except it maps columns present in the events
+    entity to null. This logic will eventually move to Sentry and this entity
+    can be deleted and replaced with the TransactionsEntity directly.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            custom_mappers=TranslationMappers(
+                columns=[
+                    ColumnToLiteral(None, "group_id", 0),
+                    DefaultNoneColumnMapper(EVENTS_COLUMNS),
+                ],
+                curried_functions=[DefaultNoneCurriedFunctionMapper()],
+                functions=[DefaultNoneFunctionMapper()],
+            )
+        )

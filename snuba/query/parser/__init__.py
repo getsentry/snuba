@@ -81,6 +81,12 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     _deescape_aliases(query)
     _validate_arrayjoin(query)
     validate_query(query, entity)
+
+    # XXX: Select the entity to be used for the query. This step is temporary. Eventually
+    # entity selection will be moved to Sentry and specified for all SnQL queries.
+    selected_entity = dataset.select_entity(query)
+    query.set_entity_name(selected_entity.value)
+
     return query
 
 
