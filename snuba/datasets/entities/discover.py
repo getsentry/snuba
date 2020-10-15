@@ -33,6 +33,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.entities.events import EventsEntity
 from snuba.datasets.entities.transactions import TransactionsEntity
+from snuba.query.dsl import identity
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -97,9 +98,9 @@ class DefaultNoneFunctionMapper(FunctionCallMapper):
         self,
         expression: FunctionCall,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[Literal]:
+    ) -> Optional[FunctionCall]:
         if self.function_match.match(expression):
-            return Literal(expression.alias, None)
+            return identity(Literal(None, None), expression.alias)
 
         return None
 
@@ -119,7 +120,7 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
         self,
         expression: FunctionCall,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[Literal]:
+    ) -> Optional[FunctionCall]:
         parameters = tuple(p.accept(children_translator) for p in expression.parameters)
         all_null = True
         for param in parameters:
@@ -135,7 +136,7 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
                     break
 
         if all_null and len(parameters) > 0:
-            return Literal(expression.alias, None)
+            return identity(Literal(None, None), expression.alias)
 
         return None
 

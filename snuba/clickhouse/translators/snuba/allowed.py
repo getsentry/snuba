@@ -50,9 +50,7 @@ class ColumnMapper(SnubaClickhouseMapper[Column, ValidColumnMappings]):
     pass
 
 
-class FunctionCallMapper(
-    SnubaClickhouseMapper[FunctionCall, Union[FunctionCall, Literal]]
-):
+class FunctionCallMapper(SnubaClickhouseMapper[FunctionCall, FunctionCall]):
     """
     Functions are only allowed to become Functions so that we can ensure
     CurriedFunctions internal functions can be successfully translated.
