@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to release
+        description: Version to release (optional)
         required: false
       skip_prepare:
         description: Skip preparation step (assume a release branch is ready)
