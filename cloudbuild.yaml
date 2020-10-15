@@ -3,14 +3,14 @@ steps:
   entrypoint: 'bash'
   args: [
     '-c',
-    'docker pull us.gcr.io/$PROJECT_ID/$REPO_NAME:latest || true',
+    'docker pull us.gcr.io/$PROJECT_ID/$REPO_NAME:nightly || true',
   ]
 - name: 'gcr.io/cloud-builders/docker'
   args: [
             'build',
             '-t', 'us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA',
             '--build-arg', 'SNUBA_VERSION_SHA=$COMMIT_SHA',
-            '--cache-from', 'us.gcr.io/$PROJECT_ID/$REPO_NAME:latest',
+            '--cache-from', 'us.gcr.io/$PROJECT_ID/$REPO_NAME:nightly',
             '.'
         ]
 # Snuba tests
@@ -60,15 +60,15 @@ steps:
   - '-e'
   - '-c'
   - |
-    # Only tag :latest and push to Docker Hub from master
+    # Only tag :nightly and push to Docker Hub from master
     [ "$BRANCH_NAME" != "master" ] && exit 0
-    docker tag us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA us.gcr.io/$PROJECT_ID/$REPO_NAME:latest
-    docker push us.gcr.io/$PROJECT_ID/$REPO_NAME:latest
+    docker tag us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA us.gcr.io/$PROJECT_ID/$REPO_NAME:nightly
+    docker push us.gcr.io/$PROJECT_ID/$REPO_NAME:nightly
     echo "$$DOCKER_PASSWORD" | docker login --username=sentrybuilder --password-stdin
     docker tag us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA getsentry/snuba:$COMMIT_SHA
     docker push getsentry/snuba:$COMMIT_SHA
-    docker tag us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA getsentry/snuba:latest
-    docker push getsentry/snuba:latest
+    docker tag us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA getsentry/snuba:nightly
+    docker push getsentry/snuba:nightly
 images: [
   'us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA',
   ]
