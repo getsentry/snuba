@@ -19,7 +19,6 @@ from typing import (
 )
 
 from deprecation import deprecated
-
 from snuba.datasets.schemas import RelationalSource
 from snuba.query.conditions import BooleanFunctions, binary_condition
 from snuba.query.expressions import (
