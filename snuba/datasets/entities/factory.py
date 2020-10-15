@@ -26,6 +26,7 @@ class EntityKey(Enum):
     SESSIONS = "sessions"
     TRANSACTIONS = "transactions"
     DISCOVER_TRANSACTIONS = "discover_transactions"
+    DISCOVER_EVENTS = "discover_events"
 
 
 ENTITY_IMPL: MutableMapping[EntityKey, Entity] = {}
@@ -41,6 +42,7 @@ def get_entity(name: EntityKey) -> Entity:
     from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
     from snuba.datasets.entities.discover import (
         DiscoverEntity,
+        DiscoverEventsEntity,
         DiscoverTransactionsEntity,
     )
     from snuba.datasets.entities.errors import ErrorsEntity
@@ -63,6 +65,7 @@ def get_entity(name: EntityKey) -> Entity:
         EntityKey.SESSIONS: SessionsEntity,
         EntityKey.TRANSACTIONS: TransactionsEntity,
         EntityKey.DISCOVER_TRANSACTIONS: DiscoverTransactionsEntity,
+        EntityKey.DISCOVER_EVENTS: DiscoverEventsEntity,
     }
 
     try:
