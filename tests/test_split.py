@@ -9,7 +9,6 @@ from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.cluster import ClickhouseCluster
-from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
@@ -324,7 +323,7 @@ def test_col_split_conditions(
     query = parse_query(query, dataset)
     splitter = ColumnSplitQueryStrategy(id_column, project_column, timestamp_column)
     request = Request("a", query, HTTPRequestSettings(), {}, "r")
-    entity = get_entity(EntityKey(query.get_entity_name()))
+    entity = get_entity(query.get_entity().key)
     plan = entity.get_query_plan_builder().build_plan(request)
 
     def do_query(
@@ -386,7 +385,7 @@ def test_time_split_ast() -> None:
     }
 
     query = parse_query(body, get_dataset("events"))
-    entity = get_entity(EntityKey(query.get_entity_name()))
+    entity = get_entity(query.get_entity().key)
     settings = HTTPRequestSettings()
     for p in entity.get_query_processors():
         p.process_query(query, settings)

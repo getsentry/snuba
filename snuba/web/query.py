@@ -9,7 +9,6 @@ from snuba.clickhouse.astquery import AstSqlQuery
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.timeseries_extension import TimeSeriesExtensionProcessor
@@ -73,7 +72,9 @@ def _run_query_pipeline(
     - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
       to the QueryExecutionStrategy to actually run the DB Query.
     """
-    entity = get_entity(EntityKey(request.query.get_entity_name()))
+    query_entity = request.query.get_entity()
+    assert query_entity is not None
+    entity = get_entity(query_entity.key)
 
     # TODO: this will work perfectly with datasets that are not time series. Remove it.
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
