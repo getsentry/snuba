@@ -176,6 +176,10 @@ all_columns = (
         ("culprit", Nullable(String())),
         ("sdk_integrations", Array(String())),
         ("modules", Nested([("name", String()), ("version", String())])),
+        # Aliases
+        ("release", Nullable(String())),
+        ("dist", Nullable(String())),
+        ("user", Nullable(String())),
     ]
 )
 
