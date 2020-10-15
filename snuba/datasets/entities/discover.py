@@ -22,7 +22,7 @@ from snuba.clickhouse.translators.snuba.allowed import (
     FunctionCallMapper,
     SubscriptableReferenceMapper,
 )
-from snuba.clickhouse.translators.snuba.mappers import ColumnToLiteral, ColumnToMapping
+from snuba.clickhouse.translators.snuba.mappers import ColumnToLiteral
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
 from snuba.datasets.entities.events import event_translator
@@ -220,12 +220,7 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
 
         self.__event_translator = event_translator.concat(
             TranslationMappers(
-                columns=[
-                    ColumnToMapping(None, "release", None, "tags", "sentry:release"),
-                    ColumnToMapping(None, "dist", None, "tags", "sentry:dist"),
-                    ColumnToMapping(None, "user", None, "tags", "sentry:user"),
-                    DefaultNoneColumnMapper(self.__abstract_transactions_columns),
-                ],
+                columns=[DefaultNoneColumnMapper(self.__abstract_transactions_columns)],
                 curried_functions=[DefaultNoneCurriedFunctionMapper()],
                 functions=[DefaultNoneFunctionMapper()],
                 subscriptables=[DefaultNoneSubscriptMapper({"measurements"})],
