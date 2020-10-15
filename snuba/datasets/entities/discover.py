@@ -414,7 +414,5 @@ class DiscoverTransactionsEntity(TransactionsEntity):
                     ColumnToLiteral(None, "group_id", 0),
                     DefaultNoneColumnMapper(EVENTS_COLUMNS),
                 ],
-                curried_functions=[DefaultNoneCurriedFunctionMapper()],
-                functions=[DefaultNoneFunctionMapper()],
             )
         )
