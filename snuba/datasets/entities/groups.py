@@ -22,7 +22,6 @@ from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor as LogicalProcessor
-from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
@@ -42,7 +41,7 @@ class JoinedStorage(ReadableStorage):
         return None
 
     def get_query_processors(self) -> Sequence[ClickhouseProcessor]:
-        return [SimpleJoinOptimizer(), PrewhereProcessor()]
+        return [PrewhereProcessor()]
 
 
 class GroupsEntity(Entity):

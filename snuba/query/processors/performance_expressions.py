@@ -26,7 +26,9 @@ def failure_rate_processor(columns: ColumnSet) -> CustomFunction:
         "failure_rate",
         [],
         partial_function(
-            "divide(countIf(notIn(transaction_status, tuple(ok, cancelled, unknown))), count())",
+            # We use and(notEquals...) here instead of in(tuple(...)) because it's possible to get an impossible query that sets transaction_status to NULL.
+            # Clickhouse returns an error if an expression such as NULL in (0, 1, 2) appears.
+            "divide(countIf(and(notEquals(transaction_status, ok), and(notEquals(transaction_status, cancelled), notEquals(transaction_status, unknown)))), count())",
             [
                 (code, SPAN_STATUS_NAME_TO_CODE[code])
                 for code in ("ok", "cancelled", "unknown")

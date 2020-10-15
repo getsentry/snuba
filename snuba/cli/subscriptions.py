@@ -121,7 +121,7 @@ def subscriptions(
     dataset = get_dataset(dataset_name)
 
     if not bootstrap_servers:
-        storage = dataset.get_writable_storage()
+        storage = dataset.get_default_entity().get_writable_storage()
         assert storage is not None
         storage_key = storage.get_storage_key().value
         if storage_key in settings.DEFAULT_STORAGE_BROKERS:

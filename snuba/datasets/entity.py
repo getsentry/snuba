@@ -10,6 +10,11 @@ from snuba.query.validation import FunctionCallValidator
 
 
 class Entity(ABC):
+    """
+    The Entity has access to multiple Storage objects, which represent the physical
+    data model. Each one represents a table/view on the DB we can query.
+    """
+
     def __init__(
         self,
         *,
@@ -21,7 +26,6 @@ class Entity(ABC):
         self.__storages = storages
         self.__query_plan_builder = query_plan_builder
         self.__writable_storage = writable_storage
-        # TODO: This data model will change as we add more functionality
         self.__data_model = abstract_column_set
 
     @abstractmethod
@@ -75,13 +79,10 @@ class Entity(ABC):
         """
         return {}
 
-    # TODO: I just copied this over because I haven't investigated what it does. It can
-    # probably be refactored/removed but I need to dig into it.
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
         """
         Temporarily support getting the writable storage from an entity.
         Once consumers/replacers no longer reference entity, this can be removed
         and entity can have more than one writable storage.
         """
-        # TODO: mypy complains here about WritableStorage vs WritableTableStorage.
         return self.__writable_storage
