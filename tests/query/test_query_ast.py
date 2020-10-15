@@ -215,8 +215,10 @@ def test_alias_validation(
 ) -> None:
     events = get_dataset("events")
     query = parse_query(query_body, events)
-    query_plan = events.get_query_plan_builder().build_plan(
-        Request("", query, HTTPRequestSettings(), {}, "")
+    query_plan = (
+        events.get_default_entity()
+        .get_query_plan_builder()
+        .build_plan(Request("", query, HTTPRequestSettings(), {}, ""))
     )
 
     assert query_plan.query.validate_aliases() == expected_result

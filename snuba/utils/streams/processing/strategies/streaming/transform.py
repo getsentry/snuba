@@ -4,9 +4,8 @@ import pickle
 import signal
 import time
 from collections import deque
-from multiprocessing import Pool
 from multiprocessing.managers import SharedMemoryManager
-from multiprocessing.pool import AsyncResult
+from multiprocessing.pool import AsyncResult, Pool
 from multiprocessing.shared_memory import SharedMemory
 from pickle import PickleBuffer
 from typing import (
@@ -270,7 +269,11 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         self.__shared_memory_manager = SharedMemoryManager()
         self.__shared_memory_manager.start()
 
-        self.__pool = Pool(processes, initializer=parallel_transform_worker_initializer)
+        self.__pool = Pool(
+            processes,
+            initializer=parallel_transform_worker_initializer,
+            context=multiprocessing.get_context("spawn"),
+        )
 
         self.__input_blocks = [
             self.__shared_memory_manager.SharedMemory(input_block_size)
