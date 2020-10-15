@@ -1,12 +1,7 @@
 import pytest
-
-from snuba.datasets.entities.factory import get_entity, EntityKey
-from snuba.query.expressions import (
-    Column,
-    CurriedFunctionCall,
-    FunctionCall,
-    Literal,
-)
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import get_entity
+from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
 from snuba.query.parser.expressions import parse_aggregation
 
 test_data = [

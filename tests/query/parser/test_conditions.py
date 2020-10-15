@@ -2,7 +2,8 @@ import pytest
 
 from typing import Any, Sequence
 
-from snuba.datasets.entities.factory import EntityKey, get_entity
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.query.expressions import (
     Column,
     Expression,

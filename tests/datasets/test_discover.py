@@ -3,7 +3,8 @@ import pytest
 from typing import Any, MutableMapping
 
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.entities.factory import EntityKey, get_entity
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.query.parser import parse_query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
