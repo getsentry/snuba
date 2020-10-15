@@ -55,7 +55,7 @@ def _as_dict_safe(value):
         return value
     rv = {}
     for item in value:
-        if item is not None:
+        if item is not None and item[0] is not None:
             rv[item[0]] = item[1]
     return rv
 
