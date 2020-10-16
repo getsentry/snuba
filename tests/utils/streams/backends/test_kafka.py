@@ -18,8 +18,6 @@ from snuba.utils.streams.backends.kafka import (
     KafkaPayload,
     KafkaProducer,
     as_kafka_configuration_bool,
-    build_kafka_producer_configuration,
-    KafkaBrokerConfig,
 )
 from snuba.utils.streams.synchronized import Commit, commit_codec
 from snuba.utils.streams.types import Message, Partition, Topic
@@ -79,21 +77,19 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
         auto_offset_reset: str = "earliest",
     ) -> KafkaConsumer:
         return KafkaConsumer(
-            KafkaBrokerConfig(
-                {
-                    **self.configuration,
-                    "auto.offset.reset": auto_offset_reset,
-                    "enable.auto.commit": "false",
-                    "enable.auto.offset.store": "false",
-                    "enable.partition.eof": enable_end_of_partition,
-                    "group.id": group if group is not None else uuid.uuid1().hex,
-                    "session.timeout.ms": 10000,
-                }
-            )
+            {
+                **self.configuration,
+                "auto.offset.reset": auto_offset_reset,
+                "enable.auto.commit": "false",
+                "enable.auto.offset.store": "false",
+                "enable.partition.eof": enable_end_of_partition,
+                "group.id": group if group is not None else uuid.uuid1().hex,
+                "session.timeout.ms": 10000,
+            },
         )
 
     def get_producer(self) -> KafkaProducer:
-        return KafkaProducer(build_kafka_producer_configuration(self.configuration))
+        return KafkaProducer(self.configuration)
 
     def get_payloads(self) -> Iterator[KafkaPayload]:
         for i in itertools.count():
@@ -145,17 +141,15 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
         commit_log_producer = FakeConfluentKafkaProducer()
 
         consumer: KafkaConsumer = KafkaConsumerWithCommitLog(
-            KafkaBrokerConfig(
-                {
-                    **self.configuration,
-                    "auto.offset.reset": "earliest",
-                    "enable.auto.commit": "false",
-                    "enable.auto.offset.store": "false",
-                    "enable.partition.eof": "true",
-                    "group.id": "test",
-                    "session.timeout.ms": 10000,
-                }
-            ),
+            {
+                **self.configuration,
+                "auto.offset.reset": "earliest",
+                "enable.auto.commit": "false",
+                "enable.auto.offset.store": "false",
+                "enable.partition.eof": "true",
+                "group.id": "test",
+                "session.timeout.ms": 10000,
+            },
             producer=commit_log_producer,
             commit_log_topic=Topic("commit-log"),
         )
