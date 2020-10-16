@@ -14,10 +14,15 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
     os.environ["PYTHONUNBUFFERED"] = "1"
 
     if bootstrap:
-        cmd = ["snuba", "bootstrap", "--force"]
+        cmd = ["snuba", "bootstrap", "--force", "--no-migrate"]
         if not workers:
             cmd.append("--no-kafka")
         returncode = call(cmd)
+        if returncode > 0:
+            sys.exit(returncode)
+
+        # Run migrations
+        returncode = call(["snuba", "migrations", "migrate", "--force"])
         if returncode > 0:
             sys.exit(returncode)
 

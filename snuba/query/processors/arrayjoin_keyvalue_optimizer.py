@@ -5,12 +5,12 @@ from snuba.clickhouse.query import Query
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
-    get_first_level_conditions,
+    get_first_level_and_conditions,
     in_condition,
     is_binary_condition,
     is_in_condition_pattern,
 )
-from snuba.query.dsl import arrayElement, arrayJoin
+from snuba.query.dsl import arrayJoin, tupleElement
 from snuba.query.expressions import Argument
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
@@ -31,9 +31,7 @@ def val_column(col_name: str) -> str:
 
 def array_join_pattern(column_name: str) -> FunctionCall:
     return FunctionCall(
-        None,
-        String("arrayJoin"),
-        (Column(column_name=String(key_column(column_name))),),
+        String("arrayJoin"), (Column(column_name=String(key_column(column_name))),),
     )
 
 
@@ -57,15 +55,14 @@ def _get_mapping_keys_in_condition(
     """
     keys_found = set()
 
-    conditions = get_first_level_conditions(condition)
+    conditions = get_first_level_and_conditions(condition)
     for c in conditions:
         if is_binary_condition(c, BooleanFunctions.OR):
             return None
 
         match = FunctionCall(
-            None,
             String(ConditionFunctions.EQ),
-            (array_join_pattern(column_name), Literal(None, Param("key", Any(str)))),
+            (array_join_pattern(column_name), Literal(Param("key", Any(str)))),
         ).match(c)
         if match is not None:
             keys_found.add(match.string("key"))
@@ -75,9 +72,9 @@ def _get_mapping_keys_in_condition(
             function = match.expression("tuple")
             assert isinstance(function, FunctionCallExpr)
             keys_found |= {
-                l.value
-                for l in function.parameters
-                if isinstance(l, LiteralExpr) and isinstance(l.value, str)
+                lit.value
+                for lit in function.parameters
+                if isinstance(lit, LiteralExpr) and isinstance(lit.value, str)
             }
 
     return keys_found
@@ -93,8 +90,8 @@ def get_filtered_mapping_keys(query: Query, column_name: str) -> Set[str]:
     """
     array_join_found = any(
         array_join_pattern(column_name).match(f) is not None
-        for expression in query.get_selected_columns_from_ast() or []
-        for f in expression
+        for selected in query.get_selected_columns_from_ast() or []
+        for f in selected.expression
     )
 
     if not array_join_found:
@@ -143,7 +140,6 @@ class ArrayJoinKeyValueOptimizer(QueryProcessor):
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         arrayjoin_pattern = FunctionCall(
-            None,
             String("arrayJoin"),
             (
                 Column(
@@ -229,12 +225,12 @@ class ArrayJoinKeyValueOptimizer(QueryProcessor):
 
 
 def _unfiltered_mapping_pairs(
-    alias: Optional[str], column_name: str, pair_alias: str, array_index: LiteralExpr
+    alias: Optional[str], column_name: str, pair_alias: str, tuple_index: LiteralExpr
 ) -> Expression:
     # (arrayJoin(
-    #   arrayMap((x,y) -> [x,y], tags.key, tags.value)
-    #  as all_tags)[1]
-    return arrayElement(
+    #   arrayMap((x,y) -> (x,y), tags.key, tags.value)
+    #  as all_tags).1
+    return tupleElement(
         alias,
         arrayJoin(
             pair_alias,
@@ -243,7 +239,7 @@ def _unfiltered_mapping_pairs(
                 ColumnExpr(None, None, val_column(column_name)),
             ),
         ),
-        array_index,
+        tuple_index,
     )
 
 
@@ -255,10 +251,10 @@ def _filtered_mapping_pairs(
     array_index: LiteralExpr,
 ) -> Expression:
     # (arrayJoin(arrayFilter(
-    #       pair -> arrayElement(pair, 1) IN (tags),
-    #       arrayMap((x,y) -> [x,y], tags.key, tags.value)
-    #  )) as all_tags)[1]
-    return arrayElement(
+    #       pair -> tupleElement(pair, 1) IN (tags),
+    #       arrayMap((x,y) -> (x,y), tags.key, tags.value)
+    #  )) as all_tags).1
+    return tupleElement(
         alias,
         arrayJoin(
             pair_alias,
@@ -299,7 +295,7 @@ def zip_columns(column1: ColumnExpr, column2: ColumnExpr) -> Expression:
                 None,
                 ("x", "y"),
                 FunctionCallExpr(
-                    None, "array", (Argument(None, "x"), Argument(None, "y"),),
+                    None, "tuple", (Argument(None, "x"), Argument(None, "y"),),
                 ),
             ),
             column1,
@@ -324,10 +320,10 @@ def filter_key_values(
                 ("pair",),
                 in_condition(
                     None,
-                    # A pair here is an array with two elements (key
+                    # A pair here is a tuple with two elements (key
                     # and value) and the index of the first element in
                     # Clickhouse is 1 instead of 0.
-                    arrayElement(None, Argument(None, "pair"), LiteralExpr(None, 1),),
+                    tupleElement(None, Argument(None, "pair"), LiteralExpr(None, 1),),
                     keys,
                 ),
             ),

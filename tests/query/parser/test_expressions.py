@@ -1,5 +1,6 @@
 import pytest
 
+from snuba.datasets.entities.factory import get_entity, EntityKey
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -9,6 +10,124 @@ from snuba.query.expressions import (
 from snuba.query.parser.expressions import parse_aggregation
 
 test_data = [
+    (
+        ["f('2020/07/16')", None, None],
+        FunctionCall(None, "f", (Literal(None, "2020/07/16"),),),
+    ),  # String (that looks like arithmetic) nested in function call
+    (
+        ["f(a/b, g(c*3))", None, None],
+        FunctionCall(
+            None,
+            "f",
+            (
+                FunctionCall(
+                    None, "divide", (Column(None, None, "a"), Column(None, None, "b"))
+                ),
+                FunctionCall(
+                    None,
+                    "g",
+                    (
+                        FunctionCall(
+                            None,
+                            "multiply",
+                            (Column(None, None, "c"), Literal(None, 3)),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    ),  # Arithmetic expressions nested inside function calls
+    (
+        ["f(a,b)-3*g(c)", None, None],
+        FunctionCall(
+            None,
+            "minus",
+            (
+                FunctionCall(
+                    None, "f", (Column(None, None, "a"), Column(None, None, "b"))
+                ),
+                FunctionCall(
+                    None,
+                    "multiply",
+                    (
+                        Literal(None, 3),
+                        FunctionCall(None, "g", (Column(None, None, "c"),)),
+                    ),
+                ),
+            ),
+        ),
+    ),  # Arithmetic expressions involving function calls
+    (
+        ["a+b", None, None],
+        FunctionCall(None, "plus", (Column(None, None, "a"), Column(None, None, "b"))),
+    ),  # Simple addition with Columns
+    (
+        ["1+2-3", None, None],
+        FunctionCall(
+            None,
+            "minus",
+            (
+                FunctionCall(None, "plus", (Literal(None, 1), Literal(None, 2))),
+                Literal(None, 3),
+            ),
+        ),
+    ),  # Addition with more than 2 terms
+    (
+        [" 5 +4 * 3/6  ", None, None],
+        FunctionCall(
+            None,
+            "plus",
+            (
+                Literal(None, 5),
+                FunctionCall(
+                    None,
+                    "divide",
+                    (
+                        FunctionCall(
+                            None, "multiply", (Literal(None, 4), Literal(None, 3))
+                        ),
+                        Literal(None, 6),
+                    ),
+                ),
+            ),
+        ),
+    ),  # Combination of multiplication, addition
+    (
+        [" 3  +6 * 2 /5*7- 4/1   ", None, None],
+        FunctionCall(
+            None,
+            "minus",
+            (
+                FunctionCall(
+                    None,
+                    "plus",
+                    (
+                        Literal(None, 3),
+                        FunctionCall(
+                            None,
+                            "multiply",
+                            (
+                                FunctionCall(
+                                    None,
+                                    "divide",
+                                    (
+                                        FunctionCall(
+                                            None,
+                                            "multiply",
+                                            (Literal(None, 6), Literal(None, 2)),
+                                        ),
+                                        Literal(None, 5),
+                                    ),
+                                ),
+                                Literal(None, 7),
+                            ),
+                        ),
+                    ),
+                ),
+                FunctionCall(None, "divide", (Literal(None, 4), Literal(None, 1))),
+            ),
+        ),
+    ),  # More complicated Combination of operators
     (
         ["count", "event_id", None],
         FunctionCall(None, "count", (Column(None, None, "event_id"),)),
@@ -110,5 +229,8 @@ test_data = [
 
 @pytest.mark.parametrize("aggregation, expected_function", test_data)
 def test_aggregation_parsing(aggregation, expected_function):
-    function = parse_aggregation(aggregation[0], aggregation[1], aggregation[2])
-    assert function == expected_function
+    entity = get_entity(EntityKey.EVENTS)
+    function = parse_aggregation(
+        aggregation[0], aggregation[1], aggregation[2], entity.get_data_model(), set(),
+    )
+    assert function == expected_function, expected_function

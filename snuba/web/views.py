@@ -2,7 +2,7 @@ import logging
 import os
 import time
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping
+from typing import Any, Mapping, MutableMapping, MutableSequence, Tuple
 from uuid import UUID
 
 import jsonschema
@@ -11,38 +11,40 @@ import simplejson as json
 from flask import Flask, Response, redirect, render_template
 from flask import request as http_request
 from markdown import markdown
-from werkzeug.exceptions import BadRequest
 
 from snuba import environment, settings, state, util
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
     InvalidDatasetError,
     enforce_table_writer,
-    ensure_not_internal,
     get_dataset,
     get_dataset_name,
     get_enabled_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
+from snuba.query.exceptions import InvalidQueryException
 from snuba.redis import redis_client
+from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.request.schema import RequestSchema
-from snuba.request.validation import validate_request_content
+from snuba.request.validation import build_request
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import InvalidSubscriptionError, PartitionId
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.util import with_span
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.streams.kafka import KafkaPayload
-from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.streams import Message, Partition, Topic
+from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.web import QueryException
 from snuba.web.converters import DatasetConverter
 from snuba.web.query import parse_and_run_query
+from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 metrics = MetricsWrapper(environment.metrics, "api")
 
@@ -73,22 +75,39 @@ def check_clickhouse() -> bool:
     try:
         for name in get_enabled_dataset_names():
             dataset = get_dataset(name)
-
-            for storage in dataset.get_all_storages():
-                clickhouse = storage.get_cluster().get_query_connection(
-                    ClickhouseClientSettings.QUERY
-                )
-                clickhouse_tables = clickhouse.execute("show tables")
-                source = storage.get_schemas().get_read_schema()
-                if isinstance(source, TableSchema):
-                    table_name = source.get_table_name()
-                    if (table_name,) not in clickhouse_tables:
-                        return False
+            for entity in dataset.get_all_entities():
+                for storage in entity.get_all_storages():
+                    clickhouse = storage.get_cluster().get_query_connection(
+                        ClickhouseClientSettings.QUERY
+                    )
+                    clickhouse_tables = clickhouse.execute("show tables")
+                    source = storage.get_schema()
+                    if isinstance(source, TableSchema):
+                        table_name = source.get_table_name()
+                        if (table_name,) not in clickhouse_tables:
+                            return False
 
         return True
 
     except Exception:
         return False
+
+
+def truncate_dataset(dataset: Dataset) -> None:
+    for entity in dataset.get_all_entities():
+        for storage in entity.get_all_storages():
+            cluster = storage.get_cluster()
+            clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+            database = cluster.get_database()
+
+            schema = storage.get_schema()
+
+            if not isinstance(schema, TableSchema):
+                return
+
+            table = schema.get_local_table_name()
+
+            clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
 
 
 application = Flask(__name__, static_url_path="")
@@ -97,10 +116,10 @@ application.debug = settings.DEBUG
 application.url_map.converters["dataset"] = DatasetConverter
 
 
-@application.errorhandler(BadRequest)
-def handle_bad_request(exception: BadRequest):
+@application.errorhandler(InvalidJsonRequestException)
+def handle_invalid_json(exception: InvalidJsonRequestException) -> Response:
     cause = getattr(exception, "__cause__", None)
-    if isinstance(cause, json.errors.JSONDecodeError):
+    if isinstance(cause, json.JSONDecodeError):
         data = {"error": {"type": "json", "message": str(cause)}}
     elif isinstance(cause, jsonschema.ValidationError):
         data = {
@@ -122,7 +141,7 @@ def handle_bad_request(exception: BadRequest):
         else:
             raise TypeError()
 
-    return (
+    return Response(
         json.dumps(data, indent=4, default=default_encode),
         400,
         {"Content-Type": "application/json"},
@@ -130,11 +149,28 @@ def handle_bad_request(exception: BadRequest):
 
 
 @application.errorhandler(InvalidDatasetError)
-def handle_invalid_dataset(exception: InvalidDatasetError):
+def handle_invalid_dataset(exception: InvalidDatasetError) -> Response:
     data = {"error": {"type": "dataset", "message": str(exception)}}
-    return (
+    return Response(
         json.dumps(data, sort_keys=True, indent=4),
         404,
+        {"Content-Type": "application/json"},
+    )
+
+
+@application.errorhandler(InvalidQueryException)
+def handle_invalid_query(exception: InvalidQueryException) -> Response:
+    # TODO: Remove this logging as soon as the query validation code is
+    # mature enough that we can trust it.
+    logger.warning("Invalid query", exc_info=True)
+
+    # TODO: Add special cases with more structure for specific exceptions
+    # if needed.
+    return Response(
+        json.dumps(
+            {"error": {"type": "invalid_query", "message": str(exception)}}, indent=4
+        ),
+        400,
         {"Content-Type": "application/json"},
     )
 
@@ -204,7 +240,7 @@ def config_changes():
 
 
 @application.route("/health")
-def health():
+def health() -> Response:
     down_file_exists = check_down_file_exists()
     thorough = http_request.args.get("thorough", False)
     clickhouse_health = check_clickhouse() if thorough else True
@@ -220,7 +256,7 @@ def health():
             body["clickhouse_ok"] = clickhouse_health
         status = 502
 
-    return (json.dumps(body), status, {"Content-Type": "application/json"})
+    return Response(json.dumps(body), status, {"Content-Type": "application/json"})
 
 
 def parse_request_body(http_request):
@@ -228,8 +264,8 @@ def parse_request_body(http_request):
         metrics.timing("http_request_body_length", len(http_request.data))
         try:
             return json.loads(http_request.data)
-        except json.errors.JSONDecodeError as error:
-            raise BadRequest(str(error)) from error
+        except json.JSONDecodeError as error:
+            raise JsonDecodeException(str(error)) from error
 
 
 def _trace_transaction(dataset: Dataset) -> None:
@@ -258,7 +294,7 @@ def unqualified_query_view(*, timer: Timer):
 def dataset_query_view(*, dataset: Dataset, timer: Timer):
     if http_request.method == "GET":
         schema = RequestSchema.build_with_extensions(
-            dataset.get_extensions(), HTTPRequestSettings
+            dataset.get_default_entity().get_extensions(), HTTPRequestSettings
         )
         return render_template(
             "query.html",
@@ -276,18 +312,12 @@ def dataset_query_view(*, dataset: Dataset, timer: Timer):
 def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     assert http_request.method == "POST"
 
-    with sentry_sdk.start_span(description="ensure_dataset", op="validate"):
-        ensure_not_internal(dataset)
-        ensure_tables_migrated()
-
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build_with_extensions(
-            dataset.get_extensions(), HTTPRequestSettings
+            dataset.get_default_entity().get_extensions(), HTTPRequestSettings
         )
 
-    request = validate_request_content(
-        body, schema, timer, dataset, http_request.referrer,
-    )
+    request = build_request(body, schema, timer, dataset, http_request.referrer)
 
     try:
         result = parse_and_run_query(dataset, request, timer)
@@ -333,19 +363,16 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
 
 
 @application.errorhandler(InvalidSubscriptionError)
-def handle_subscription_error(exception: InvalidSubscriptionError):
+def handle_subscription_error(exception: InvalidSubscriptionError) -> Response:
     data = {"error": {"type": "subscription", "message": str(exception)}}
-    return (
-        json.dumps(data, indent=4),
-        400,
-        {"Content-Type": "application/json"},
+    return Response(
+        json.dumps(data, indent=4), 400, {"Content-Type": "application/json"},
     )
 
 
 @application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
 @util.time_request("subscription")
 def create_subscription(*, dataset: Dataset, timer: Timer):
-    ensure_not_internal(dataset)
     subscription = SubscriptionDataCodec().decode(http_request.data)
     # TODO: Check for valid queries with fields that are invalid for subscriptions. For
     # example date fields and aggregates.
@@ -361,7 +388,6 @@ def create_subscription(*, dataset: Dataset, timer: Timer):
     "/<dataset:dataset>/subscriptions/<int:partition>/<key>", methods=["DELETE"]
 )
 def delete_subscription(*, dataset: Dataset, partition: int, key: str):
-    ensure_not_internal(dataset)
     SubscriptionDeleter(dataset, PartitionId(partition)).delete(UUID(key))
     return "ok", 202, {"Content-Type": "text/plain"}
 
@@ -370,26 +396,11 @@ if application.debug or application.testing:
     # These should only be used for testing/debugging. Note that the database name
     # is checked to avoid scary production mishaps.
 
-    _ensured = False
-
-    def ensure_tables_migrated(force: bool = False) -> None:
-        global _ensured
-        if not force and _ensured:
-            return
-
-        from snuba.migrations import migrate
-
-        migrate.run()
-
-        _ensured = True
-
     @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
     def write(*, dataset: Dataset):
-        from snuba.processor import ProcessorAction
+        from snuba.processor import InsertBatch
 
-        ensure_tables_migrated()
-
-        rows = []
+        rows: MutableSequence[WriterTableRow] = []
         offset_base = int(round(time.time() * 1000))
         for index, message in enumerate(json.loads(http_request.data)):
             offset = offset_base + index
@@ -405,16 +416,17 @@ if application.debug or application.testing:
                 )
             )
             if processed_message:
-                assert processed_message.action is ProcessorAction.INSERT
-                rows.extend(processed_message.data)
+                assert isinstance(processed_message, InsertBatch)
+                rows.extend(processed_message.rows)
 
-        enforce_table_writer(dataset).get_writer().write(rows)
+        BatchWriterEncoderWrapper(
+            enforce_table_writer(dataset).get_batch_writer(metrics), JSONRowEncoder(),
+        ).write(rows)
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
     @application.route("/tests/<dataset:dataset>/eventstream", methods=["POST"])
     def eventstream(*, dataset: Dataset):
-        ensure_tables_migrated()
         record = json.loads(http_request.data)
 
         version = record[0]
@@ -424,50 +436,52 @@ if application.debug or application.testing:
         message: Message[KafkaPayload] = Message(
             Partition(Topic("topic"), 0),
             0,
-            KafkaPayload(None, http_request.data),
+            KafkaPayload(None, http_request.data, []),
             datetime.now(),
         )
 
         type_ = record[1]
 
-        storage = dataset.get_writable_storage()
+        storage = dataset.get_default_entity().get_writable_storage()
         assert storage is not None
 
         if type_ == "insert":
-            from snuba.consumer import ConsumerWorker
+            from snuba.consumer import StreamingConsumerStrategyFactory
 
-            worker = ConsumerWorker(storage, metrics=metrics)
+            table_writer = storage.get_table_writer()
+            stream_loader = table_writer.get_stream_loader()
+            strategy = StreamingConsumerStrategyFactory(
+                stream_loader.get_pre_filter(),
+                stream_loader.get_processor(),
+                table_writer.get_batch_writer(metrics),
+                metrics,
+                max_batch_size=1,
+                max_batch_time=1.0,
+                processes=None,
+                input_block_size=None,
+                output_block_size=None,
+            ).create(lambda offsets: None)
+            strategy.submit(message)
+            strategy.close()
+            strategy.join()
         else:
             from snuba.replacer import ReplacerWorker
 
             worker = ReplacerWorker(storage, metrics=metrics)
-
-        processed = worker.process_message(message)
-        if processed is not None:
-            batch = [processed]
-            worker.flush_batch(batch)
+            processed = worker.process_message(message)
+            if processed is not None:
+                batch = [processed]
+                worker.flush_batch(batch)
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
     @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
-    def drop(*, dataset: Dataset):
-        for storage in dataset.get_all_storages():
-            clickhouse = storage.get_cluster().get_query_connection(
-                ClickhouseClientSettings.MIGRATE
-            )
-            for statement in storage.get_schemas().get_drop_statements():
-                clickhouse.execute(statement.statement)
-
-        ensure_tables_migrated(force=True)
+    def drop(*, dataset: Dataset) -> Tuple[str, int, Mapping[str, str]]:
+        truncate_dataset(dataset)
         redis_client.flushdb()
+
         return ("ok", 200, {"Content-Type": "text/plain"})
 
     @application.route("/tests/error")
     def error():
         1 / 0
-
-
-else:
-
-    def ensure_tables_migrated(force: bool = False) -> None:
-        pass

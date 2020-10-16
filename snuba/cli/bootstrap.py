@@ -4,10 +4,10 @@ from typing import Optional, Sequence
 import click
 
 from snuba import settings
-from snuba.clusters.cluster import ClickhouseClientSettings, CLUSTERS
 from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging
-from snuba.migrations import migrate
+from snuba.migrations.connect import check_clickhouse_connections
+from snuba.migrations.runner import Runner
 
 
 @click.command()
@@ -18,12 +18,14 @@ from snuba.migrations import migrate
     help="Kafka bootstrap server to use.",
 )
 @click.option("--kafka/--no-kafka", default=True)
+@click.option("--migrate/--no-migrate", default=True)
 @click.option("--force", is_flag=True)
 @click.option("--log-level", help="Logging level to use.")
 def bootstrap(
     *,
     bootstrap_server: Sequence[str],
     kafka: bool,
+    migrate: bool,
     force: bool,
     log_level: Optional[str] = None,
 ) -> None:
@@ -67,22 +69,22 @@ def bootstrap(
         topics = {}
         for name in ACTIVE_DATASET_NAMES:
             dataset = get_dataset(name)
-            writable_storage = dataset.get_writable_storage()
-
-            if writable_storage:
-                table_writer = writable_storage.get_table_writer()
-                stream_loader = table_writer.get_stream_loader()
-                for topic_spec in stream_loader.get_all_topic_specs():
-                    if topic_spec.topic_name in topics:
-                        continue
-                    logger.debug(
-                        "Adding topic %s to creation list", topic_spec.topic_name
-                    )
-                    topics[topic_spec.topic_name] = NewTopic(
-                        topic_spec.topic_name,
-                        num_partitions=topic_spec.partitions_number,
-                        replication_factor=topic_spec.replication_factor,
-                    )
+            for entity in dataset.get_all_entities():
+                writable_storage = entity.get_writable_storage()
+                if writable_storage:
+                    table_writer = writable_storage.get_table_writer()
+                    stream_loader = table_writer.get_stream_loader()
+                    for topic_spec in stream_loader.get_all_topic_specs():
+                        if topic_spec.topic_name in topics:
+                            continue
+                        logger.debug(
+                            "Adding topic %s to creation list", topic_spec.topic_name
+                        )
+                        topics[topic_spec.topic_name] = NewTopic(
+                            topic_spec.topic_name,
+                            num_partitions=topic_spec.partitions_number,
+                            replication_factor=topic_spec.replication_factor,
+                        )
 
         logger.debug("Initiating topic creation")
         for topic, future in client.create_topics(
@@ -94,31 +96,6 @@ def bootstrap(
             except Exception as e:
                 logger.error("Failed to create topic %s", topic, exc_info=e)
 
-    attempts = 0
-
-    # Attempt to connect with every cluster
-    for cluster in CLUSTERS:
-        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
-
-        while True:
-            try:
-                logger.debug(
-                    "Attempting to connect to Clickhouse cluster %s (attempt %d)",
-                    cluster,
-                    attempts,
-                )
-                clickhouse.execute("SELECT 1")
-                break
-            except Exception as e:
-                logger.error(
-                    "Connection to Clickhouse cluster %s failed (attempt %d)",
-                    cluster,
-                    attempts,
-                    exc_info=e,
-                )
-                attempts += 1
-                if attempts == 60:
-                    raise
-                time.sleep(1)
-
-    migrate.run()
+    if migrate:
+        check_clickhouse_connections()
+        Runner().run_all(force=True)

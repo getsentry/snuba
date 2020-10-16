@@ -1,16 +1,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Mapping, NamedTuple, Sequence
+from typing import List, Mapping, Sequence
 
-from snuba.clickhouse.columns import ColumnSet, ColumnType
+from snuba.clickhouse.columns import (
+    ColumnSet,
+    ColumnType,
+    ReadOnly,
+)
 from snuba.query.expressions import FunctionCall
-from snuba.query.types import Condition
-
-
-class MandatoryCondition(NamedTuple):
-    legacy: Condition
-    ast: FunctionCall
 
 
 class RelationalSource(ABC):
@@ -42,7 +40,7 @@ class RelationalSource(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_mandatory_conditions(self) -> Sequence[MandatoryCondition]:
+    def get_mandatory_conditions(self) -> Sequence[FunctionCall]:
         """
         Returns the mandatory conditions to apply on Clickhouse when
         querying this RelationalSource, if any.
@@ -116,7 +114,10 @@ class Schema(ABC):
 
             expected_type = self.get_columns()[column_name].type
 
-            if column != expected_type:
+            if isinstance(expected_type, ReadOnly):
+                expected_type = expected_type.inner_type
+
+            if column.get_raw() != expected_type.get_raw():
                 errors.append(
                     "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)"
                     % (column_name, expected_type, column)

@@ -5,7 +5,7 @@ from snuba.datasets.storages.transaction_column_processor import (
     TransactionColumnProcessor,
 )
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.logical import Query
+from snuba.query.logical import Query, SelectedExpression
 from snuba.request.request_settings import HTTPRequestSettings
 
 
@@ -14,22 +14,33 @@ def test_transaction_column_format_expressions() -> None:
         {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
-            Column("transaction.duration", None, "duration"),
-            Column("the_event_id", None, "event_id"),
+            SelectedExpression(
+                "transaction.duration", Column("transaction.duration", None, "duration")
+            ),
+            SelectedExpression(
+                "the_event_id", Column("the_event_id", None, "event_id")
+            ),
         ],
     )
     expected = Query(
         {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
-            Column("transaction.duration", None, "duration"),
-            FunctionCall(
+            SelectedExpression(
+                "transaction.duration", Column("transaction.duration", None, "duration")
+            ),
+            SelectedExpression(
                 "the_event_id",
-                "replaceAll",
-                (
-                    FunctionCall(None, "toString", (Column(None, None, "event_id"),),),
-                    Literal(None, "-"),
-                    Literal(None, ""),
+                FunctionCall(
+                    "the_event_id",
+                    "replaceAll",
+                    (
+                        FunctionCall(
+                            None, "toString", (Column(None, None, "event_id"),),
+                        ),
+                        Literal(None, "-"),
+                        Literal(None, ""),
+                    ),
                 ),
             ),
         ],
@@ -41,7 +52,7 @@ def test_transaction_column_format_expressions() -> None:
         == unprocessed.get_selected_columns_from_ast()
     )
 
-    formatted = unprocessed.get_selected_columns_from_ast()[1].accept(
+    formatted = unprocessed.get_selected_columns_from_ast()[1].expression.accept(
         ClickhouseExpressionFormatter()
     )
     assert formatted == "(replaceAll(toString(event_id), '-', '') AS the_event_id)"

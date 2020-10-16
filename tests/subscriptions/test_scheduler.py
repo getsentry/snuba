@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Collection, Tuple
 
+from snuba.datasets.factory import get_dataset
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
     PartitionId,
@@ -9,18 +10,18 @@ from snuba.subscriptions.data import (
     SubscriptionData,
     SubscriptionIdentifier,
 )
-from snuba.subscriptions.scheduler import ScheduledTask, SubscriptionScheduler
+from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+from snuba.utils.scheduler import ScheduledTask
 from snuba.utils.types import Interval
-from tests.base import BaseTest
 
 
-class TestSubscriptionScheduler(BaseTest):
-    def setup_method(self, test_method, dataset_name="events") -> None:
-        super().setup_method(test_method, dataset_name)
+class TestSubscriptionScheduler:
+    def setup_method(self) -> None:
         self.now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
         self.partition_id = PartitionId(1)
+        self.dataset = get_dataset("events")
 
     def build_subscription(self, resolution: timedelta) -> Subscription:
         return Subscription(

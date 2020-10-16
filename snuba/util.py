@@ -2,15 +2,12 @@ import inspect
 import logging
 import numbers
 import re
-from contextlib import contextmanager
 from datetime import date, datetime, timedelta
-from functools import wraps
+from functools import partial, wraps
 from typing import (
     Any,
     Callable,
-    Iterator,
     List,
-    Mapping,
     NamedTuple,
     Optional,
     Sequence,
@@ -28,7 +25,7 @@ from snuba import settings
 from snuba.clickhouse.escaping import escape_string
 from snuba.query.parsing import ParsingContext
 from snuba.query.schema import CONDITION_OPERATORS
-from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.types import Tags
 
@@ -40,7 +37,7 @@ T = TypeVar("T")
 
 # example partition name: "('2018-03-13 00:00:00', 90)"
 PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})',\s*(\d+)\)")
-QUOTED_LITERAL_RE = re.compile(r"^'.*'$")
+QUOTED_LITERAL_RE = re.compile(r"^'[\s\S]*'$")
 SAFE_FUNCTION_RE = re.compile(r"-?[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
@@ -220,20 +217,6 @@ def force_bytes(s: Union[bytes, str]) -> bytes:
         raise TypeError(f"cannot convert {type(s).__name__} to bytes")
 
 
-@contextmanager
-def settings_override(overrides: Mapping[str, Any]) -> Iterator[None]:
-    previous = {}
-    for k, v in overrides.items():
-        previous[k] = getattr(settings, k, None)
-        setattr(settings, k, v)
-
-    try:
-        yield
-    finally:
-        for k, v in previous.items():
-            setattr(settings, k, v)
-
-
 def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
     """Create a DogStatsd object if DOGSTATSD_HOST and DOGSTATSD_PORT are defined,
     with the specified prefix and tags. Return a DummyMetricsBackend otherwise.
@@ -255,7 +238,8 @@ def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
     from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend
 
     return DatadogMetricsBackend(
-        DogStatsd(
+        partial(
+            DogStatsd,
             host=host,
             port=port,
             namespace=prefix,

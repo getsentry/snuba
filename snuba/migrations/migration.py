@@ -39,6 +39,10 @@ class Migration(ABC):
     def forwards(self, context: Context) -> None:
         raise NotImplementedError
 
+    @abstractmethod
+    def backwards(self, context: Context) -> None:
+        raise NotImplementedError
+
 
 class MultiStepMigration(Migration, ABC):
     """
@@ -58,9 +62,6 @@ class MultiStepMigration(Migration, ABC):
     each. Generally if the intermediate state between operations is not considered to
     be valid, they should be put into the same migration. If the operations are
     completely unrelated, they are probably better as separate migrations.
-
-    TODO: This class should be extended to also run the forwards and backwards distributed
-    operations where relevant.
     """
 
     @abstractmethod
@@ -71,11 +72,32 @@ class MultiStepMigration(Migration, ABC):
     def backwards_local(self) -> Sequence[Operation]:
         raise NotImplementedError
 
+    @abstractmethod
+    def forwards_dist(self) -> Sequence[Operation]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def backwards_dist(self) -> Sequence[Operation]:
+        raise NotImplementedError
+
     def forwards(self, context: Context) -> None:
         migration_id, logger, update_status = context
         logger.info(f"Running migration: {migration_id}")
         update_status(Status.IN_PROGRESS)
         for op in self.forwards_local():
-            op.execute()
+            op.execute(local=True)
+        for op in self.forwards_dist():
+            op.execute(local=False)
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
+
+    def backwards(self, context: Context) -> None:
+        migration_id, logger, update_status = context
+        logger.info(f"Reversing migration: {migration_id}")
+        update_status(Status.IN_PROGRESS)
+        for op in self.backwards_dist():
+            op.execute(local=False)
+        for op in self.backwards_local():
+            op.execute(local=True)
+        logger.info(f"Finished reversing: {migration_id}")
+        update_status(Status.NOT_STARTED)

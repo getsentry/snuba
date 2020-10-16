@@ -1,8 +1,9 @@
 import logging
 import re
 
-from parsimonious.grammar import Grammar  # type: ignore
-from parsimonious.nodes import Node, NodeVisitor  # type: ignore
+from clickhouse_driver import Client
+from parsimonious.grammar import Grammar
+from parsimonious.nodes import Node, NodeVisitor
 from typing import Any, Iterable, Mapping, Sequence, Tuple
 
 from snuba.clickhouse.columns import (
@@ -16,12 +17,14 @@ from snuba.clickhouse.columns import (
     Float,
     IPv4,
     IPv6,
-    LowCardinality,
-    Materialized,
     Nullable,
     String,
     UInt,
     UUID,
+)
+from snuba.migrations.columns import (
+    LowCardinality,
+    Materialized,
     WithCodecs,
     WithDefault,
 )
@@ -50,7 +53,7 @@ grammar = Grammar(
     agg              = "AggregateFunction" open_paren space* agg_func space* comma space* agg_types space* close_paren
     agg_func         = ~r"[a-zA-Z]+\([a-zA-Z0-9\,\.\s]+\)|[a-zA-Z]+"
     agg_types        = (primitive (space* comma space*)?)*
-    array            = "Array" open_paren space* (primitive / lowcardinality / nullable) space* close_paren
+    array            = "Array" open_paren space* (array / primitive / lowcardinality / nullable) space* close_paren
     lowcardinality   = "LowCardinality" open_paren space* (primitive / nullable) space* close_paren
     nullable         = "Nullable" open_paren space* (primitive / basic_type) space* close_paren
     open_paren       = "("
@@ -169,7 +172,7 @@ def _strip_cast(default_expr: str) -> str:
 def _get_column(
     column_type: str, default_type: str, default_expr: str, codec_expr: str
 ) -> ColumnType:
-    column = Visitor().visit(grammar.parse(column_type))
+    column: ColumnType = Visitor().visit(grammar.parse(column_type))
 
     if default_type == "MATERIALIZED":
         column = Materialized(column, _strip_cast(default_expr))
@@ -182,7 +185,7 @@ def _get_column(
     return column
 
 
-def get_local_schema(conn, table_name) -> Mapping[str, ColumnType]:
+def get_local_schema(conn: Client, table_name: str) -> Mapping[str, ColumnType]:
     return {
         column_name: _get_column(column_type, default_type, default_expr, codec_expr)
         for column_name, column_type, default_type, default_expr, _comment, codec_expr in [

@@ -3,18 +3,16 @@ import queue
 import re
 import time
 from datetime import date, datetime
-from typing import Iterable, Mapping, Optional
+from typing import Mapping, Optional
 from uuid import UUID
 
 from clickhouse_driver import Client, errors
 from dateutil.tz import tz
 
 from snuba import settings
-from snuba.clickhouse.columns import Array
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.sql import SqlQuery
 from snuba.reader import Reader, Result, build_result_transformer
-from snuba.writer import BatchWriter, WriterTableRow
 
 
 logger = logging.getLogger("snuba.clickhouse")
@@ -229,10 +227,6 @@ class NativeDriverReader(Reader[SqlQuery]):
 
     def execute(
         self,
-        # TODO: After we remove DictSqlQuery (that does all query processing for the
-        # legacy query representation) we should pass the Clickhouse Query here. and the reader
-        # should rely on the formatter to get a SQL string and, thus, be able to provide parameters
-        # to the formatter (like the format clause itself).
         query: SqlQuery,
         # TODO: move Clickhouse specific arguments into clickhouse.query.Query
         settings: Optional[Mapping[str, str]] = None,
@@ -249,31 +243,4 @@ class NativeDriverReader(Reader[SqlQuery]):
                 query.format_sql(), with_column_types=True, settings=settings, **kwargs
             ),
             with_totals=with_totals,
-        )
-
-
-class NativeDriverBatchWriter(BatchWriter):
-    def __init__(self, schema, connection):
-        self.__schema = schema
-        self.__connection = connection
-
-    def __row_to_column_list(self, columns, row):
-        values = []
-        for col in columns:
-            value = row.get(col.flattened, None)
-            if value is None and isinstance(col.type, Array):
-                value = []
-            values.append(value)
-        return values
-
-    def write(self, rows: Iterable[WriterTableRow]):
-        columns = self.__schema.get_columns()
-        self.__connection.execute_robust(
-            "INSERT INTO %(table)s (%(colnames)s) VALUES"
-            % {
-                "colnames": ", ".join(col.escaped for col in columns),
-                "table": self.__schema.get_table_name(),
-            },
-            [self.__row_to_column_list(columns, row) for row in rows],
-            types_check=False,
         )

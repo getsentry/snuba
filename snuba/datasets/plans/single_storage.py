@@ -26,6 +26,8 @@ from snuba.request.request_settings import RequestSettings
 from snuba.util import with_span
 from snuba.web import QueryResult
 
+from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
+
 
 class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
     def __init__(
@@ -97,9 +99,7 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     @with_span()
     def build_plan(self, request: Request) -> ClickhouseQueryPlan:
         clickhouse_query = QueryTranslator(self.__mappers).translate(request.query)
-        clickhouse_query.set_data_source(
-            self.__storage.get_schemas().get_read_schema().get_data_source()
-        )
+        clickhouse_query.set_data_source(self.__storage.get_schema().get_data_source())
 
         cluster = self.__storage.get_cluster()
 
@@ -111,6 +111,7 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                 db_query_processors=[
                     *self.__storage.get_query_processors(),
                     *self.__post_processors,
+                    MandatoryConditionApplier(),
                 ],
                 splitters=self.__storage.get_query_splitters(),
             ),
@@ -136,9 +137,7 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             request.query, request.settings
         )
         clickhouse_query = QueryTranslator(mappers).translate(request.query)
-        clickhouse_query.set_data_source(
-            storage.get_schemas().get_read_schema().get_data_source()
-        )
+        clickhouse_query.set_data_source(storage.get_schema().get_data_source())
 
         cluster = storage.get_cluster()
 
@@ -150,6 +149,7 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                 db_query_processors=[
                     *storage.get_query_processors(),
                     *self.__post_processors,
+                    MandatoryConditionApplier(),
                 ],
                 splitters=storage.get_query_splitters(),
             ),

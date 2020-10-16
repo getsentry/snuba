@@ -1,14 +1,13 @@
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping
 
 import logging
 import _strptime  # NOQA fixes _strptime deferred import issue
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.consumer import KafkaMessageMetadata
-from snuba.datasets.events_format import extract_user
-from snuba.datasets.events_processor_base import EventsProcessorBase
+from snuba.datasets.events_format import extract_http, extract_user
+from snuba.datasets.events_processor_base import EventsProcessorBase, InsertEvent
 from snuba.processor import (
-    _as_dict_safe,
     _boolify,
     _floatify,
     _unicodify,
@@ -32,45 +31,23 @@ class EventsProcessor(EventsProcessorBase):
             }
         )
 
-    def _should_process(self, event: Mapping[str, Any]) -> bool:
+    def _should_process(self, event: InsertEvent) -> bool:
         return True
 
     def _extract_event_id(
-        self, output: MutableMapping[str, Any], event: Mapping[str, Any],
+        self, output: MutableMapping[str, Any], event: InsertEvent,
     ) -> None:
         output["event_id"] = event["event_id"]
 
     def extract_custom(
         self,
         output: MutableMapping[str, Any],
-        event: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
+        event: InsertEvent,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         data = event.get("data", {})
-        # The following concerns the change to message/search_message
-        # There are 2 Scenarios:
-        #   Pre-rename:
-        #        - Payload contains:
-        #             "message": "a long search message"
-        #        - Does NOT contain a `search_message` property
-        #        - "message" value saved in `message` column
-        #        - `search_message` column nonexistent or Null
-        #   Post-rename:
-        #        - Payload contains:
-        #             "search_message": "a long search message"
-        #        - Optionally the payload's "data" dict (event body) contains:
-        #             "message": "short message"
-        #        - "search_message" value stored in `search_message` column
-        #        - "message" value stored in `message` column
-        #
-        output["search_message"] = _unicodify(event.get("search_message", None))
-        if output["search_message"] is None:
-            # Pre-rename scenario, we expect to find "message" at the top level
-            output["message"] = _unicodify(event["message"])
-        else:
-            # Post-rename scenario, we check in case we have the optional
-            # "message" in the event body.
-            output["message"] = _unicodify(data.get("message", None))
+
+        output["message"] = _unicodify(event["message"])
 
         # USER REQUEST GEO
         user = data.get("user", data.get("sentry.interfaces.User", None)) or {}
@@ -79,15 +56,18 @@ class EventsProcessor(EventsProcessorBase):
         geo = user.get("geo", None) or {}
         self.extract_geo(output, geo)
 
-        http = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
-        self.extract_http(output, http)
+        request = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
+        http_data: MutableMapping[str, Any] = {}
+        extract_http(http_data, request)
+        output["http_method"] = http_data["http_method"]
+        output["http_referer"] = http_data["http_referer"]
 
     def extract_tags_custom(
         self,
         output: MutableMapping[str, Any],
-        event: Mapping[str, Any],
+        event: InsertEvent,
         tags: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         pass
 
@@ -142,21 +122,7 @@ class EventsProcessor(EventsProcessorBase):
         output["device_online"] = _boolify(device_ctx.pop("online", None))
         output["device_charging"] = _boolify(device_ctx.pop("charging", None))
 
-    def extract_contexts_custom(
-        self,
-        output: MutableMapping[str, Any],
-        event: Mapping[str, Any],
-        tags: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
-    ) -> None:
-        pass
-
     def extract_geo(self, output, geo):
         output["geo_country_code"] = _unicodify(geo.get("country_code", None))
         output["geo_region"] = _unicodify(geo.get("region", None))
         output["geo_city"] = _unicodify(geo.get("city", None))
-
-    def extract_http(self, output, http):
-        output["http_method"] = _unicodify(http.get("method", None))
-        http_headers = _as_dict_safe(http.get("headers", None))
-        output["http_referer"] = _unicodify(http_headers.get("Referer", None))

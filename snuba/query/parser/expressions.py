@@ -1,10 +1,11 @@
+import re
 from dataclasses import replace
-from typing import List, Tuple, Union
+from typing import Any, Iterable, List, Optional, Set, Tuple, Union
 
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
-from typing import Any, Iterable, Optional
 
+from snuba.clickhouse.columns import ColumnSet
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -12,31 +13,67 @@ from snuba.query.expressions import (
     FunctionCall,
     Literal,
 )
+from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.functions import parse_function_to_expr
 from snuba.query.parser.strings import parse_string_to_expr
+from snuba.query.snql.expression_visitor import (
+    HighPriArithmetic,
+    HighPriOperator,
+    HighPriTuple,
+    LowPriArithmetic,
+    LowPriOperator,
+    LowPriTuple,
+    generic_visit,
+    visit_arithmetic_term,
+    visit_column_name,
+    visit_function_call,
+    visit_function_name,
+    visit_high_pri_arithmetic,
+    visit_high_pri_op,
+    visit_high_pri_tuple,
+    visit_low_pri_arithmetic,
+    visit_low_pri_op,
+    visit_low_pri_tuple,
+    visit_numeric_literal,
+    visit_parameter,
+    visit_parameters_list,
+    visit_quoted_literal,
+)
 from snuba.util import is_function
 
+FUNCTION_NAME_REGEX = r"[a-zA-Z_][a-zA-Z0-9_]*"
+FUNCTION_NAME_RE = re.compile(FUNCTION_NAME_REGEX)
+
+
 minimal_clickhouse_grammar = Grammar(
-    r"""
+    fr"""
 # This root element is needed because of the ambiguity of the aggregation
 # function field which can mean a clickhouse function expression or the simple
 # name of a clickhouse function.
-root_element    = function_call / function_name
-expression      = function_call / simple_term
-parameters_list = parameter* (expression)
-parameter       = expression space* comma space*
-function_call   = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)?
-simple_term     = quoted_literal / numeric_literal / column_name
-literal         = ~r"[a-zA-Z0-9_\.:-]+"
-quoted_literal  = "'" string_literal "'"
-string_literal  = ~r"[a-zA-Z0-9_\.:-]*"
-numeric_literal = ~r"-?[0-9]+(\.[0-9]+)?(e[\+\-][0-9]+)?"
-column_name     = ~r"[a-zA-Z_][a-zA-Z0-9_\.]*"
-function_name   = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
-open_paren      = "("
-close_paren     = ")"
-space           = " "
-comma           = ","
+
+root_element          = low_pri_arithmetic
+low_pri_arithmetic    = space* high_pri_arithmetic space* (low_pri_tuple)*
+high_pri_arithmetic   = space* arithmetic_term space* (high_pri_tuple)*
+low_pri_tuple         = low_pri_op high_pri_arithmetic
+high_pri_tuple        = high_pri_op arithmetic_term
+arithmetic_term       = (space*) (function_call / numeric_literal / column_name) (space*)
+low_pri_op            = "+" / "-"
+high_pri_op           = "/" / "*"
+param_expression      = low_pri_arithmetic / quoted_literal
+parameters_list       = parameter* (param_expression)
+parameter             = param_expression space* comma space*
+function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)?
+simple_term           = quoted_literal / numeric_literal / column_name
+literal               = ~r"[a-zA-Z0-9_\.:-]+"
+quoted_literal        = "'" string_literal "'"
+string_literal        = ~r"[a-zA-Z0-9_\.\+\*\/:-]*"
+numeric_literal       = ~r"-?[0-9]+(\.[0-9]+)?(e[\+\-][0-9]+)?"
+column_name           = ~r"[a-zA-Z_][a-zA-Z0-9_\.]*"
+function_name         = ~r"{FUNCTION_NAME_REGEX}"
+open_paren            = "("
+close_paren           = ")"
+space                 = " "
+comma                 = ","
 """
 )
 
@@ -47,49 +84,71 @@ class ClickhouseVisitor(NodeVisitor):
     """
 
     def visit_function_name(self, node: Node, visited_children: Iterable[Any]) -> str:
-        return str(node.text)
+        return visit_function_name(node, visited_children)
 
     def visit_column_name(self, node: Node, visited_children: Iterable[Any]) -> Column:
-        return Column(None, None, node.text)
+        return visit_column_name(node, visited_children)
+
+    def visit_low_pri_tuple(
+        self, node: Node, visited_children: Tuple[LowPriOperator, Expression]
+    ) -> LowPriTuple:
+        return visit_low_pri_tuple(node, visited_children)
+
+    def visit_high_pri_tuple(
+        self, node: Node, visited_children: Tuple[HighPriOperator, Expression]
+    ) -> HighPriTuple:
+        return visit_high_pri_tuple(node, visited_children)
+
+    def visit_low_pri_op(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> LowPriOperator:
+        return visit_low_pri_op(node, visited_children)
+
+    def visit_high_pri_op(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> HighPriOperator:
+        return visit_high_pri_op(node, visited_children)
+
+    def visit_arithmetic_term(
+        self, node: Node, visited_children: Tuple[Any, Expression, Any]
+    ) -> Expression:
+        return visit_arithmetic_term(node, visited_children)
+
+    def visit_low_pri_arithmetic(
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Expression, Any, LowPriArithmetic],
+    ) -> Expression:
+        return visit_low_pri_arithmetic(node, visited_children)
+
+    def visit_high_pri_arithmetic(
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Expression, Any, HighPriArithmetic],
+    ) -> Expression:
+        return visit_high_pri_arithmetic(node, visited_children)
 
     def visit_numeric_literal(
         self, node: Node, visited_children: Iterable[Any]
     ) -> Literal:
-        try:
-            return Literal(None, int(node.text))
-        except Exception:
-            return Literal(None, float(node.text))
+        return visit_numeric_literal(node, visited_children)
 
     def visit_quoted_literal(
         self, node: Node, visited_children: Tuple[Any, Node, Any]
     ) -> Literal:
-        _, val, _ = visited_children
-        return Literal(None, val.text)
+        return visit_quoted_literal(node, visited_children)
 
     def visit_parameter(
         self, node: Node, visited_children: Tuple[Expression, Any, Any, Any]
     ) -> Expression:
-        param, _, _, _, = visited_children
-        return param
+        return visit_parameter(node, visited_children)
 
     def visit_parameters_list(
         self,
         node: Node,
         visited_children: Tuple[Union[Expression, List[Expression]], Expression],
     ) -> List[Expression]:
-        left_section, right_section = visited_children
-        ret: List[Expression] = []
-        if not isinstance(left_section, Node):
-            # We get a Node when the parameter rule is empty. Thus
-            # no parameters
-            if not isinstance(left_section, (list, tuple)):
-                # This can happen when there is one parameter only
-                # thus the generic visitor method removes the list.
-                ret = [left_section]
-            else:
-                ret = [p for p in left_section]
-        ret.append(right_section)
-        return ret
+        return visit_parameters_list(node, visited_children)
 
     def visit_function_call(
         self,
@@ -98,49 +157,43 @@ class ClickhouseVisitor(NodeVisitor):
             str, Any, List[Expression], Any, Union[Node, List[Expression]]
         ],
     ) -> Expression:
-        name, _, params1, _, params2 = visited_children
-        param_list1 = tuple(params1)
-        internal_f = FunctionCall(None, name, param_list1)
-        if isinstance(params2, Node) and params2.text == "":
-            # params2.text == "" means empty node.
-            return internal_f
-
-        _, param_list2, _ = params2
-        if isinstance(param_list2, (list, tuple)) and len(param_list2) > 0:
-            param_list2 = tuple(param_list2)
-        else:
-            # This happens when the second parameter list is empty. Somehow
-            # it does not turn into an empty list.
-            param_list2 = ()
-        return CurriedFunctionCall(None, internal_f, param_list2)
+        return visit_function_call(node, visited_children)
 
     def generic_visit(self, node: Node, visited_children: Any) -> Any:
-        if isinstance(visited_children, list) and len(visited_children) == 1:
-            # This is to remove the dependency of the visitor correctness on the
-            # structure of the grammar. Every rule that does not have a visitor method
-            # (not all are needed) wraps the children into a list before returning
-            # to the parent. The result is that the function call rule needs to unpack
-            # a very nested list to get to columns. Which makes the visitor very fragile.
-            # This way the nesting simply does not happen  and the visitor works
-            # even if we add nesting levels.
-            return visited_children[0]
-        return visited_children or node
+        return generic_visit(node, visited_children)
 
 
-def parse_expression(val: Any) -> Expression:
+def parse_expression(
+    val: Any, dataset_columns: ColumnSet, arrayjoin: Set[str]
+) -> Expression:
     """
     Parse a simple or structured expression encoded in the Snuba query language
     into an AST Expression.
     """
     if is_function(val, 0):
-        return parse_function_to_expr(val)
+        return parse_function_to_expr(val, dataset_columns, arrayjoin)
     if isinstance(val, str):
         return parse_string_to_expr(val)
-    raise ValueError(f"Expression to parse can only be a function or a string: {val}")
+    raise ParsingException(
+        f"Expression to parse can only be a function or a string: {val}"
+    )
+
+
+def parse_clickhouse_function(function: str) -> Expression:
+    try:
+        expression_tree = minimal_clickhouse_grammar.parse(function)
+    except Exception as cause:
+        raise ParsingException(f"Cannot parse aggregation {function}", cause) from cause
+
+    return ClickhouseVisitor().visit(expression_tree)
 
 
 def parse_aggregation(
-    aggregation_function: str, column: Any, alias: Optional[str]
+    aggregation_function: str,
+    column: Any,
+    alias: Optional[str],
+    dataset_columns: ColumnSet,
+    array_join_cols: Set[str],
 ) -> Expression:
     """
     Aggregations, unfortunately, support both Snuba syntax and a subset
@@ -149,29 +202,39 @@ def parse_aggregation(
     the clickhouse expression. (not that we should support this, but it is
     used in production).
     """
-    expression_tree = minimal_clickhouse_grammar.parse(aggregation_function)
-    parsed_expression = ClickhouseVisitor().visit(expression_tree)
 
     if not isinstance(column, (list, tuple)):
         columns: Iterable[Any] = (column,)
     else:
         columns = column
 
-    columns_expr = [parse_expression(column) for column in columns if column]
+    columns_expr = [
+        parse_expression(column, dataset_columns, array_join_cols)
+        for column in columns
+        if column
+    ]
 
-    if isinstance(parsed_expression, str):
-        # Simple aggregation with snuba syntax ["count", ["c1", "c2"]]
-        return FunctionCall(alias, parsed_expression, tuple(columns_expr))
-    elif (
+    matched = FUNCTION_NAME_RE.fullmatch(aggregation_function)
+
+    if matched is not None:
+        return FunctionCall(alias, aggregation_function, tuple(columns_expr))
+
+    parsed_expression = parse_clickhouse_function(aggregation_function)
+
+    if (
         # Simple Clickhouse expression with no snuba syntax
         # ["ifNull(count(somthing), something)", None, None]
         isinstance(parsed_expression, (FunctionCall, CurriedFunctionCall))
         and not columns_expr
     ):
         return replace(parsed_expression, alias=alias)
+
     elif isinstance(parsed_expression, FunctionCall) and columns_expr:
         # Mix of clickhouse syntax and snuba syntax that generates a CurriedFunction
         # ["f(a)", "b", None]
         return CurriedFunctionCall(alias, parsed_expression, tuple(columns_expr),)
+
     else:
-        raise ValueError(f"Invalid aggregation format {aggregation_function} {column}")
+        raise ParsingException(
+            f"Invalid aggregation format {aggregation_function} {column}"
+        )

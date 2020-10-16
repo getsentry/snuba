@@ -34,11 +34,9 @@ class EventsBooleanContextsProcessor(QueryProcessor):
         # We care only of promoted contexts, so we do not need to match
         # the original nested expression.
         matcher = FunctionCall(
-            None,
             String("toString"),
             (
                 Column(
-                    None,
                     None,
                     Or(
                         [

@@ -6,8 +6,14 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.conditions import ConditionFunctions, binary_condition
-from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.logical import OrderBy, OrderByDirection, Query
+from snuba.query.expressions import (
+    Column,
+    Expression,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
+from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
 from snuba.query.parser import parse_query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
@@ -31,7 +37,7 @@ def test_iterate_over_query():
     query = Query(
         {},
         TableSource("my_table", ColumnSet([])),
-        selected_columns=[function_1],
+        selected_columns=[SelectedExpression("alias", function_1)],
         array_join=None,
         condition=condition,
         groupby=[function_1],
@@ -79,7 +85,7 @@ def test_replace_expression():
     query = Query(
         {},
         TableSource("my_table", ColumnSet([])),
-        selected_columns=[function_1],
+        selected_columns=[SelectedExpression("alias", function_1)],
         array_join=None,
         condition=condition,
         groupby=[function_1],
@@ -97,7 +103,11 @@ def test_replace_expression():
     expected_query = Query(
         {},
         TableSource("my_table", ColumnSet([])),
-        selected_columns=[FunctionCall("alias", "tag", (Literal(None, "f1"),))],
+        selected_columns=[
+            SelectedExpression(
+                "alias", FunctionCall("alias", "tag", (Literal(None, "f1"),))
+            )
+        ],
         array_join=None,
         condition=binary_condition(
             None,
@@ -154,6 +164,14 @@ def test_get_all_columns() -> None:
         Column("timestamp", None, "timestamp"),
     }
 
+    assert query.get_all_ast_referenced_subscripts() == {
+        SubscriptableReference(
+            "tags[sentry:dist]",
+            Column("tags", None, "tags"),
+            Literal(None, "sentry:dist"),
+        )
+    }
+
 
 VALIDATION_TESTS = [
     pytest.param(
@@ -197,8 +215,10 @@ def test_alias_validation(
 ) -> None:
     events = get_dataset("events")
     query = parse_query(query_body, events)
-    query_plan = events.get_query_plan_builder().build_plan(
-        Request("", query, HTTPRequestSettings(), {}, "")
+    query_plan = (
+        events.get_default_entity()
+        .get_query_plan_builder()
+        .build_plan(Request("", query, HTTPRequestSettings(), {}, ""))
     )
 
     assert query_plan.query.validate_aliases() == expected_result

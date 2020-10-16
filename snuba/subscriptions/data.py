@@ -11,7 +11,7 @@ from snuba.query.types import Condition
 from snuba.request import Request
 from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
-from snuba.request.validation import validate_request_content
+from snuba.request.validation import build_request
 from snuba.utils.metrics.timer import Timer
 
 SUBSCRIPTION_REFERRER = "subscription"
@@ -78,12 +78,12 @@ class SubscriptionData:
         :param offset: Maximum offset we should query for
         """
         schema = RequestSchema.build_with_extensions(
-            dataset.get_extensions(), SubscriptionRequestSettings,
+            dataset.get_default_entity().get_extensions(), SubscriptionRequestSettings,
         )
         extra_conditions: Sequence[Condition] = []
         if offset is not None:
             extra_conditions = [[["ifnull", ["offset", 0]], "<=", offset]]
-        return validate_request_content(
+        return build_request(
             {
                 "project": self.project_id,
                 "conditions": [*self.conditions, *extra_conditions],

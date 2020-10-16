@@ -4,23 +4,22 @@ from datetime import datetime, timedelta
 
 from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
-from snuba.subscriptions.codecs import SubscriptionDataCodec
+from snuba.subscriptions.codecs import (
+    SubscriptionDataCodec,
+    SubscriptionTaskResultEncoder,
+)
 from snuba.subscriptions.data import (
     PartitionId,
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
 )
-from snuba.subscriptions.worker import (
-    SubscriptionTaskResult,
-    SubscriptionTaskResultCodec,
-)
-from snuba.subscriptions.scheduler import ScheduledTask
+from snuba.subscriptions.worker import SubscriptionTaskResult
 from snuba.utils.metrics.timer import Timer
-from tests.base import BaseTest
+from snuba.utils.scheduler import ScheduledTask
 
 
-class TestSubscriptionCodec(BaseTest):
+class TestSubscriptionCodec:
     def build_subscription_data(self) -> SubscriptionData:
         return SubscriptionData(
             project_id=5,
@@ -61,45 +60,40 @@ class TestSubscriptionCodec(BaseTest):
         assert codec.decode(payload) == subscription
 
 
-class TestSubcriptionTaskResultCodec(BaseTest):
-    def test_encode(self):
-        timestamp = datetime.now()
+def test_subscription_task_result_encoder() -> None:
+    codec = SubscriptionTaskResultEncoder()
 
-        subscription_data = SubscriptionData(
-            1,
-            [],
-            [["count()", "", "count"]],
-            timedelta(minutes=1),
-            timedelta(minutes=1),
-        )
+    timestamp = datetime.now()
 
-        # XXX: This seems way too coupled to the dataset.
-        request = subscription_data.build_request(
-            get_dataset("events"), timestamp, None, Timer("timer")
-        )
-        result: Result = {
-            "meta": [{"type": "UInt64", "name": "count"}],
-            "data": [{"count": 1}],
-        }
+    subscription_data = SubscriptionData(
+        1, [], [["count()", "", "count"]], timedelta(minutes=1), timedelta(minutes=1),
+    )
 
-        task_result = SubscriptionTaskResult(
-            ScheduledTask(
-                timestamp,
-                Subscription(
-                    SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
-                    subscription_data,
-                ),
+    # XXX: This seems way too coupled to the dataset.
+    request = subscription_data.build_request(
+        get_dataset("events"), timestamp, None, Timer("timer")
+    )
+    result: Result = {
+        "meta": [{"type": "UInt64", "name": "count"}],
+        "data": [{"count": 1}],
+    }
+
+    task_result = SubscriptionTaskResult(
+        ScheduledTask(
+            timestamp,
+            Subscription(
+                SubscriptionIdentifier(PartitionId(1), uuid.uuid1()), subscription_data,
             ),
-            (request, result),
-        )
+        ),
+        (request, result),
+    )
 
-        codec = SubscriptionTaskResultCodec()
-        message = codec.encode(task_result)
-        data = json.loads(message.value.decode("utf-8"))
-        assert data["version"] == 2
-        payload = data["payload"]
+    message = codec.encode(task_result)
+    data = json.loads(message.value.decode("utf-8"))
+    assert data["version"] == 2
+    payload = data["payload"]
 
-        assert payload["subscription_id"] == str(task_result.task.task.identifier)
-        assert payload["request"] == request.body
-        assert payload["result"] == result
-        assert payload["timestamp"] == task_result.task.timestamp.isoformat()
+    assert payload["subscription_id"] == str(task_result.task.task.identifier)
+    assert payload["request"] == request.body
+    assert payload["result"] == result
+    assert payload["timestamp"] == task_result.task.timestamp.isoformat()

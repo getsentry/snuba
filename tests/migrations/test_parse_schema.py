@@ -10,12 +10,14 @@ from snuba.clickhouse.columns import (
     Float,
     IPv4,
     IPv6,
-    LowCardinality,
-    Materialized,
     Nullable,
     String,
     UInt,
     UUID,
+)
+from snuba.migrations.columns import (
+    LowCardinality,
+    Materialized,
     WithCodecs,
     WithDefault,
 )
@@ -55,6 +57,7 @@ test_data = [
     (("Array(DateTime)", "", "", ""), Array(DateTime())),
     (("Array(UInt64)", "", "", ""), Array(UInt(64))),
     (("Array(Nullable(UUID))", "", "", ""), Array(Nullable(UUID()))),
+    (("Array(Array(Nullable(UUID)))", "", "", ""), Array(Array(Nullable(UUID())))),
     # Nullable
     (("Nullable(String)", "", "", ""), Nullable(String())),
     (("Nullable(FixedString(8))", "", "", ""), Nullable(FixedString(8))),

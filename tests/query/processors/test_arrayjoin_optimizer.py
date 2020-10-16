@@ -5,6 +5,7 @@ import pytest
 from snuba.clickhouse.astquery import AstSqlQuery
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.datasets.entities.factory import EntityKey, get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -12,9 +13,10 @@ from snuba.query.conditions import (
     binary_condition,
     in_condition,
 )
-from snuba.query.dsl import arrayElement, arrayJoin
+from snuba.query.dsl import arrayJoin, tupleElement
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query as SnubaQuery
+from snuba.query.logical import SelectedExpression
 from snuba.query.parser import parse_query
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
@@ -36,7 +38,10 @@ def build_query(
         SnubaQuery(
             {},
             None,
-            selected_columns=selected_columns,
+            selected_columns=[
+                SelectedExpression(name=s.alias, expression=s)
+                for s in selected_columns or []
+            ],
             condition=condition,
             having=having,
         )
@@ -193,7 +198,7 @@ test_data = [
         },
         build_query(
             selected_columns=[
-                arrayElement(
+                tupleElement(
                     "tags_key",
                     arrayJoin(
                         "snuba_all_tags",
@@ -204,7 +209,7 @@ test_data = [
                     ),
                     Literal(None, 1),
                 ),
-                arrayElement(
+                tupleElement(
                     "tags_value",
                     arrayJoin(
                         "snuba_all_tags",
@@ -258,7 +263,7 @@ test_data = [
         },
         build_query(
             selected_columns=[
-                arrayElement(
+                tupleElement(
                     "tags_key",
                     arrayJoin(
                         "snuba_all_tags",
@@ -272,7 +277,7 @@ test_data = [
                     ),
                     Literal(None, 1),
                 ),
-                arrayElement(
+                tupleElement(
                     "tags_value",
                     arrayJoin(
                         "snuba_all_tags",
@@ -289,7 +294,7 @@ test_data = [
             ],
             condition=in_condition(
                 None,
-                arrayElement(
+                tupleElement(
                     "tags_key",
                     arrayJoin(
                         "snuba_all_tags",
@@ -316,9 +321,10 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     dataset = get_dataset("transactions")
     query = parse_query(query_body, dataset)
     request = Request("a", query, HTTPRequestSettings(), {}, "r")
-    for p in dataset.get_query_processors():
+    entity = get_entity(EntityKey(query.get_entity_name()))
+    for p in entity.get_query_processors():
         p.process_query(query, request.settings)
-    plan = dataset.get_query_plan_builder().build_plan(request)
+    plan = entity.get_query_plan_builder().build_plan(request)
 
     ArrayJoinKeyValueOptimizer("tags").process_query(plan.query, request.settings)
     return plan.query
@@ -344,7 +350,7 @@ def test_formatting() -> None:
     """
     Validates the formatting of the arrayFilter expressions.
     """
-    assert arrayElement(
+    assert tupleElement(
         "tags_key",
         arrayJoin(
             "snuba_all_tags",
@@ -354,11 +360,11 @@ def test_formatting() -> None:
         ),
         Literal(None, 1),
     ).accept(ClickhouseExpressionFormatter()) == (
-        "(arrayElement((arrayJoin(arrayMap((x, y -> [x, y]), "
+        "(tupleElement((arrayJoin(arrayMap((x, y -> tuple(x, y)), "
         "tags.key, tags.value)) AS snuba_all_tags), 1) AS tags_key)"
     )
 
-    assert arrayElement(
+    assert tupleElement(
         "tags_key",
         arrayJoin(
             "snuba_all_tags",
@@ -371,9 +377,9 @@ def test_formatting() -> None:
         ),
         Literal(None, 1),
     ).accept(ClickhouseExpressionFormatter()) == (
-        "(arrayElement((arrayJoin(arrayFilter((pair -> in("
-        "arrayElement(pair, 1), tuple('t1', 't2'))), "
-        "arrayMap((x, y -> [x, y]), tags.key, tags.value))) AS snuba_all_tags), 1) AS tags_key)"
+        "(tupleElement((arrayJoin(arrayFilter((pair -> in("
+        "tupleElement(pair, 1), tuple('t1', 't2'))), "
+        "arrayMap((x, y -> tuple(x, y)), tags.key, tags.value))) AS snuba_all_tags), 1) AS tags_key)"
     )
 
 
@@ -393,8 +399,8 @@ def test_aliasing() -> None:
     sql = AstSqlQuery(processed, HTTPRequestSettings()).format_sql()
 
     assert sql == (
-        "SELECT (arrayElement((arrayJoin(arrayMap((x, y -> [x, y]), "
+        "SELECT (tupleElement((arrayJoin(arrayMap((x, y -> tuple(x, y)), "
         "tags.key, tags.value)) AS snuba_all_tags), 2) AS tags_value) "
         "FROM transactions_local "
-        "WHERE in((arrayElement(snuba_all_tags, 1) AS tags_key), tuple('t1', 't2'))"
+        "WHERE in((tupleElement(snuba_all_tags, 1) AS tags_key), tuple('t1', 't2'))"
     )

@@ -1,9 +1,5 @@
-FROM python:3.7-slim
-
-RUN groupadd -r snuba && useradd -r -g snuba snuba
-
-RUN mkdir -p /usr/src/snuba
-WORKDIR /usr/src/snuba
+ARG PYTHON_VERSION=3.8
+FROM python:${PYTHON_VERSION}-slim
 
 # these are required all the way through, and removing them will cause bad things
 RUN set -ex; \
@@ -24,9 +20,9 @@ RUN set -x \
         gnupg \
         wget \
     " \
-    && apt-get update && apt-get install -y --no-install-recommends $fetchDeps && rm -rf /var/lib/apt/lists/* \
-    && wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture)" \
-    && wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture).asc" \
+    && apt-get update && apt-get install -y --no-install-recommends $fetchDeps \
+    && wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64" \
+    && wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64.asc" \
     && export GNUPGHOME="$(mktemp -d)" \
     && for key in \
       B42F6819007F00F88E364FD4036A9C25BF357DD4 \
@@ -40,19 +36,19 @@ RUN set -x \
     && rm -r "$GNUPGHOME" /usr/local/bin/gosu.asc \
     && chmod +x /usr/local/bin/gosu \
     && gosu nobody true \
-    && apt-get purge -y --auto-remove $fetchDeps
+    && apt-get purge -y --auto-remove $fetchDeps \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY . /usr/src/snuba
-
-RUN chown -R snuba:snuba /usr/src/snuba/
+WORKDIR /usr/src/snuba
 
 ENV PIP_NO_CACHE_DIR=off \
     PIP_DISABLE_PIP_VERSION_CHECK=on
 
+# Install dependencies first because requirements.txt is way less likely to be changed.
+COPY requirements.txt ./
 RUN set -ex; \
     \
     buildDeps=' \
-        git \
         gcc \
         libc6-dev \
         liblz4-dev \
@@ -61,9 +57,9 @@ RUN set -ex; \
     '; \
     apt-get update; \
     apt-get install -y $buildDeps --no-install-recommends; \
-    rm -rf /var/lib/apt/lists/*; \
     \
-    pip install -e .; \
+    pip install -r requirements.txt; \
+    \
     mkdir /tmp/uwsgi-dogstatsd; \
     wget -O - https://github.com/DataDog/uwsgi-dogstatsd/archive/bc56a1b5e7ee9e955b7a2e60213fc61323597a78.tar.gz \
         | tar -xvz -C /tmp/uwsgi-dogstatsd --strip-components=1; \
@@ -72,9 +68,19 @@ RUN set -ex; \
     mkdir -p /var/lib/uwsgi; \
     mv dogstatsd_plugin.so /var/lib/uwsgi/; \
     uwsgi --need-plugin=/var/lib/uwsgi/dogstatsd --help > /dev/null; \
-    snuba --help; \
     \
-    apt-get purge -y --auto-remove $buildDeps
+    apt-get purge -y --auto-remove $buildDeps; \
+    rm -rf /var/lib/apt/lists/*;
+
+# Layer cache is pretty much invalidated here all the time,
+# so try not to do anything heavy beyond here.
+COPY . ./
+RUN set -ex; \
+    groupadd -r snuba; \
+    useradd -r -g snuba snuba; \
+    chown -R snuba:snuba ./; \
+    pip install -e .; \
+    snuba --help;
 
 ARG SNUBA_VERSION_SHA
 ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA \
@@ -87,7 +93,5 @@ ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA \
     UWSGI_DOGSTATSD_EXTRA_TAGS=service:snuba
 
 EXPOSE 1218
-
-COPY docker_entrypoint.sh ./
 ENTRYPOINT [ "./docker_entrypoint.sh" ]
 CMD [ "api" ]

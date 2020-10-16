@@ -12,7 +12,6 @@ from snuba.datasets.errors_replacer import (
 )
 from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storages.processors.replaced_groups import (
-    CONSISTENCY_ENFORCER_PROCESSOR_ENABLED,
     PostReplacementConsistencyEnforcer,
 )
 from snuba.query.conditions import BooleanFunctions
@@ -37,15 +36,11 @@ def build_in(project_column: str, projects: Sequence[int]) -> Expression:
 def query() -> ClickhouseQuery:
     return ClickhouseQuery(
         LogicalQuery(
-            {"conditions": [("project_id", "IN", [2])]},
+            {},
             TableSource("my_table", ColumnSet([])),
             condition=build_in("project_id", [2]),
         )
     )
-
-
-def setup_function() -> None:
-    state.set_config(CONSISTENCY_ENFORCER_PROCESSOR_ENABLED, 1)
 
 
 def teardown_function() -> None:
@@ -57,7 +52,6 @@ def test_with_turbo(query: ClickhouseQuery) -> None:
         query, HTTPRequestSettings(turbo=True)
     )
 
-    assert query.get_conditions() == [("project_id", "IN", [2])]
     assert query.get_condition_from_ast() == build_in("project_id", [2])
 
 
@@ -68,7 +62,6 @@ def test_without_turbo_with_projects_needing_final(query: ClickhouseQuery) -> No
         "project_id", ReplacerState.EVENTS
     ).process_query(query, HTTPRequestSettings())
 
-    assert query.get_conditions() == [("project_id", "IN", [2])]
     assert query.get_condition_from_ast() == build_in("project_id", [2])
     assert query.get_final()
 
@@ -78,7 +71,6 @@ def test_without_turbo_without_projects_needing_final(query: ClickhouseQuery) ->
         query, HTTPRequestSettings()
     )
 
-    assert query.get_conditions() == [("project_id", "IN", [2])]
     assert query.get_condition_from_ast() == build_in("project_id", [2])
     assert not query.get_final()
 
@@ -91,11 +83,6 @@ def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
         "project_id", ReplacerState.EVENTS
     ).process_query(query, HTTPRequestSettings())
 
-    expected = [
-        ("project_id", "IN", [2]),
-        (["assumeNotNull", ["group_id"]], "NOT IN", [100, 101, 102]),
-    ]
-    assert query.get_conditions() == expected
     assert query.get_condition_from_ast() == FunctionCall(
         None,
         BooleanFunctions.AND,
@@ -128,6 +115,5 @@ def test_too_many_groups_to_exclude(query: ClickhouseQuery) -> None:
         "project_id", ReplacerState.EVENTS
     ).process_query(query, HTTPRequestSettings())
 
-    assert query.get_conditions() == [("project_id", "IN", [2])]
     assert query.get_condition_from_ast() == build_in("project_id", [2])
     assert query.get_final()

@@ -74,16 +74,16 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
     help="Runs a stateful consumer (that manages snapshots) instead of a basic one.",
 )
 @click.option(
-    "--rapidjson-deserialize",
-    default=True,
-    type=bool,
-    help="Uses rapidjson to deserialize messages",
+    "--processes", type=int,
 )
 @click.option(
-    "--rapidjson-serialize",
-    default=True,
-    type=bool,
-    help="Uses rapidjson to serialize messages",
+    "--input-block-size", type=int,
+)
+@click.option(
+    "--output-block-size", type=int,
+)
+@click.option(
+    "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
 )
 def consumer(
     *,
@@ -100,9 +100,11 @@ def consumer(
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
     stateful_consumer: bool,
-    rapidjson_deserialize: bool,
-    rapidjson_serialize: bool,
+    processes: Optional[int],
+    input_block_size: Optional[int],
+    output_block_size: Optional[int],
     log_level: Optional[str] = None,
+    profile_path: Optional[str] = None,
 ) -> None:
 
     if not bootstrap_server:
@@ -127,8 +129,10 @@ def consumer(
         auto_offset_reset=auto_offset_reset,
         queued_max_messages_kbytes=queued_max_messages_kbytes,
         queued_min_messages=queued_min_messages,
-        rapidjson_deserialize=rapidjson_deserialize,
-        rapidjson_serialize=rapidjson_serialize,
+        processes=processes,
+        input_block_size=input_block_size,
+        output_block_size=output_block_size,
+        profile_path=profile_path,
     )
 
     if stateful_consumer:

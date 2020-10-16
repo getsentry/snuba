@@ -2,13 +2,14 @@ import ipaddress
 import re
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from enum import Enum
 from hashlib import md5
 from typing import Any, NamedTuple, Optional, Sequence, Union
 
 import simplejson as json
 
 from snuba.util import force_bytes
+from snuba.writer import WriterTableRow
+
 
 HASH_RE = re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE)
 MAX_UINT16 = 2 ** 16 - 1
@@ -16,14 +17,16 @@ MAX_UINT32 = 2 ** 32 - 1
 NIL_UUID = "00000000-0000-0000-0000-000000000000"
 
 
-class ProcessorAction(Enum):
-    INSERT = 0
-    REPLACE = 1
+class InsertBatch(NamedTuple):
+    rows: Sequence[WriterTableRow]
 
 
-class ProcessedMessage(NamedTuple):
-    action: ProcessorAction
-    data: Sequence[Any]
+class ReplacementBatch(NamedTuple):
+    key: str
+    values: Sequence[Any]
+
+
+ProcessedMessage = Union[InsertBatch, ReplacementBatch]
 
 
 class MessageProcessor(ABC):
@@ -33,7 +36,7 @@ class MessageProcessor(ABC):
     """
 
     @abstractmethod
-    def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
+    def process_message(self, message, metadata) -> Optional[ProcessedMessage]:
         raise NotImplementedError
 
 
@@ -52,7 +55,7 @@ def _as_dict_safe(value):
         return value
     rv = {}
     for item in value:
-        if item is not None:
+        if item is not None and item[0] is not None:
             rv[item[0]] = item[1]
     return rv
 

@@ -1,17 +1,14 @@
 from __future__ import annotations
 
 from itertools import chain
-from abc import ABC
 from typing import (
     cast,
     Iterator,
     Mapping,
     MutableMapping,
-    MutableSequence,
     List,
     Optional,
     Sequence,
-    Type,
     Tuple,
     Union,
 )
@@ -53,8 +50,9 @@ class FlattenedColumn:
         self.flattened = (
             "{}.{}".format(self.base_name, self.name) if self.base_name else self.name
         )
-        self.escaped: str = escape_identifier(self.flattened)
-        assert self.escaped is not None
+        escaped = escape_identifier(self.flattened)
+        assert escaped is not None
+        self.escaped: str = escaped
 
     def __repr__(self) -> str:
         return "FlattenedColumn({}, {}, {})".format(
@@ -82,106 +80,38 @@ class ColumnType:
     def flatten(self, name: str) -> Sequence[FlattenedColumn]:
         return [FlattenedColumn(None, name, self)]
 
-    def get_all_modifiers(self) -> MutableSequence[Type[ColumnTypeWithModifier]]:
-        """
-        Basic column types never have any modifiers, since modifiers wrap a basic
-        column type in order to modify it in some way.
-        """
-        return []
+    def get_raw(self) -> ColumnType:
+        return self
 
 
-class ColumnTypeWithModifier(ABC, ColumnType):
+class ReadOnly(ColumnType):
     def __init__(self, inner_type: ColumnType) -> None:
         self.inner_type = inner_type
 
-    def get_all_modifiers(self) -> MutableSequence[Type[ColumnTypeWithModifier]]:
-        def get_nested_modifiers(
-            obj: ColumnType,
-        ) -> MutableSequence[Type[ColumnTypeWithModifier]]:
-            if not isinstance(obj, ColumnTypeWithModifier):
-                return obj.get_all_modifiers()
-            else:
-                nested_modifiers = get_nested_modifiers(obj.inner_type)
-                nested_modifiers.append(type(obj))
-                return nested_modifiers
+    def __repr__(self) -> str:
+        return "ReadOnly({})".format(repr(self.inner_type))
 
-        return get_nested_modifiers(self)
+    def get_raw(self) -> ColumnType:
+        return self.inner_type.get_raw()
 
 
-class Nullable(ColumnTypeWithModifier):
+class Nullable(ColumnType):
     def __init__(self, inner_type: ColumnType) -> None:
-        super().__init__(inner_type)
+        self.inner_type = inner_type
 
     def __repr__(self) -> str:
         return "Nullable({})".format(repr(self.inner_type))
 
     def __eq__(self, other: object) -> bool:
-        return (
-            self.__class__ == other.__class__
-            and self.inner_type == cast(Nullable, other).inner_type
-        )
+        return (self.__class__ == other.__class__) and self.inner_type == cast(
+            Nullable, other
+        ).inner_type
 
     def for_schema(self) -> str:
         return "Nullable({})".format(self.inner_type.for_schema())
 
-
-class Materialized(ColumnTypeWithModifier):
-    def __init__(self, inner_type: ColumnType, expression: str) -> None:
-        super().__init__(inner_type)
-        self.expression = expression
-
-    def __repr__(self) -> str:
-        return "Materialized({}, {})".format(repr(self.inner_type), self.expression)
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            self.__class__ == other.__class__
-            and self.expression == cast(Materialized, other).expression
-            and self.inner_type == cast(Materialized, other).inner_type
-        )
-
-    def for_schema(self) -> str:
-        return "{} MATERIALIZED {}".format(
-            self.inner_type.for_schema(), self.expression,
-        )
-
-
-class WithCodecs(ColumnTypeWithModifier):
-    def __init__(self, inner_type: ColumnType, codecs: Sequence[str]) -> None:
-        super().__init__(inner_type)
-        self.__codecs = codecs
-
-    def __repr__(self) -> str:
-        return f"WithCodecs({repr(self.inner_type)}, {', '.join(self.__codecs)})"
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            self.__class__ == other.__class__
-            and self.__codecs == cast(WithCodecs, other).__codecs
-            and self.inner_type == cast(WithCodecs, other).inner_type
-        )
-
-    def for_schema(self) -> str:
-        return f"{self.inner_type.for_schema()} CODEC ({', '.join(self.__codecs)})"
-
-
-class WithDefault(ColumnTypeWithModifier):
-    def __init__(self, inner_type: ColumnType, default: str) -> None:
-        super().__init__(inner_type)
-        self.default = default
-
-    def __repr__(self) -> str:
-        return "WithDefault({}, {})".format(repr(self.inner_type), self.default)
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            self.__class__ == other.__class__
-            and self.default == cast(WithDefault, other).default
-            and self.inner_type == cast(WithDefault, other).inner_type
-        )
-
-    def for_schema(self) -> str:
-        return "{} DEFAULT {}".format(self.inner_type.for_schema(), self.default)
+    def get_raw(self) -> ColumnType:
+        return Nullable(self.inner_type.get_raw())
 
 
 class Array(ColumnType):
@@ -199,6 +129,9 @@ class Array(ColumnType):
 
     def for_schema(self) -> str:
         return "Array({})".format(self.inner_type.for_schema())
+
+    def get_raw(self) -> ColumnType:
+        return Array(self.inner_type.get_raw())
 
 
 class Nested(ColumnType):
@@ -226,23 +159,6 @@ class Nested(ColumnType):
             FlattenedColumn(name, column.name, Array(column.type))
             for column in self.nested_columns
         ]
-
-
-class LowCardinality(ColumnTypeWithModifier):
-    def __init__(self, inner_type: ColumnType) -> None:
-        super().__init__(inner_type)
-
-    def __repr__(self) -> str:
-        return "LowCardinality({})".format(repr(self.inner_type))
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            self.__class__ == other.__class__
-            and self.inner_type == cast(Array, other).inner_type
-        )
-
-    def for_schema(self) -> str:
-        return "LowCardinality({})".format(self.inner_type.for_schema())
 
 
 class AggregateFunction(ColumnType):
@@ -404,7 +320,9 @@ class ColumnSet:
     def __len__(self) -> int:
         return len(self._flattened)
 
-    def __add__(self, other) -> ColumnSet:
+    def __add__(
+        self, other: Union[ColumnSet, Sequence[Tuple[str, ColumnType]]]
+    ) -> ColumnSet:
         if isinstance(other, ColumnSet):
             return ColumnSet([*self.columns, *other.columns])
         return ColumnSet([*self.columns, *other])
@@ -425,9 +343,6 @@ class ColumnSet:
             return self[key]
         except KeyError:
             return default
-
-    def for_schema(self) -> str:
-        return ", ".join(column.for_schema() for column in self.columns)
 
 
 class QualifiedColumnSet(ColumnSet):

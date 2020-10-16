@@ -3,49 +3,47 @@ from datetime import datetime, timedelta
 import uuid
 
 from snuba import settings
-from snuba.datasets.factory import enforce_table_writer
-from tests.base import BaseEventsTest
+from snuba.datasets.factory import get_dataset
+from snuba.datasets.events_processor_base import InsertEvent
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_writable_storage
+from tests.helpers import write_unprocessed_events
 
 
-class BaseSubscriptionTest(BaseEventsTest):
-    def setup_method(self, test_method, dataset_name="events"):
-        super().setup_method(test_method, dataset_name)
+class BaseSubscriptionTest:
+    def setup_method(self):
         self.project_id = 1
         self.platforms = ["a", "b"]
         self.minutes = 20
+        self.dataset = get_dataset("events")
 
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0
         ) - timedelta(minutes=self.minutes)
-        self.generate_events()
 
-    def generate_events(self):
-        events = []
-        for tick in range(self.minutes):
-            # project N sends an event every Nth minute
-            events.append(
-                enforce_table_writer(self.dataset)
-                .get_stream_loader()
-                .get_processor()
-                .process_insert(
+        write_unprocessed_events(
+            get_writable_storage(StorageKey.EVENTS),
+            [
+                InsertEvent(
                     {
-                        "project_id": self.project_id,
                         "event_id": uuid.uuid4().hex,
-                        "deleted": 0,
-                        "datetime": (self.base_time + timedelta(minutes=tick)).strftime(
-                            "%Y-%m-%dT%H:%M:%S.%fZ"
-                        ),
+                        "group_id": tick,
+                        "primary_hash": uuid.uuid4().hex,
+                        "project_id": self.project_id,
                         "message": "a message",
                         "platform": self.platforms[tick % len(self.platforms)],
-                        "primary_hash": uuid.uuid4().hex,
-                        "group_id": tick,
-                        "retention_days": settings.DEFAULT_RETENTION_DAYS,
+                        "datetime": (self.base_time + timedelta(minutes=tick)).strftime(
+                            settings.PAYLOAD_DATETIME_FORMAT
+                        ),
                         "data": {
                             "received": calendar.timegm(
                                 (self.base_time + timedelta(minutes=tick)).timetuple()
                             ),
                         },
+                        "organization_id": 1,
+                        "retention_days": settings.DEFAULT_RETENTION_DAYS,
                     }
                 )
-            )
-        self.write_processed_records(events)
+                for tick in range(self.minutes)
+            ],
+        )

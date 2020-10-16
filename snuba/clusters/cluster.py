@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import (
     Any,
-    Callable,
     Generic,
     Mapping,
     MutableMapping,
@@ -17,12 +16,13 @@ from typing import (
 
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
-from snuba.clickhouse.http import HTTPBatchWriter
+from snuba.clickhouse.http import HTTPBatchWriter, JSONRow
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.reader import Reader, TQuery
-from snuba.writer import BatchWriter, WriterTableRow
+from snuba.utils.metrics import MetricsBackend
+from snuba.writer import BatchWriter
 
 
 class ClickhouseClientSettingsType(NamedTuple):
@@ -33,7 +33,7 @@ class ClickhouseClientSettingsType(NamedTuple):
 class ClickhouseClientSettings(Enum):
     CLEANUP = ClickhouseClientSettingsType({}, None)
     INSERT = ClickhouseClientSettingsType({}, None)
-    MIGRATE = ClickhouseClientSettingsType({"load_balancing": "in_order"}, None)
+    MIGRATE = ClickhouseClientSettingsType({"load_balancing": "in_order"}, 10000)
     OPTIMIZE = ClickhouseClientSettingsType({}, 10000)
     QUERY = ClickhouseClientSettingsType({"readonly": True}, None)
     REPLACE = ClickhouseClientSettingsType(
@@ -106,13 +106,13 @@ class Cluster(ABC, Generic[TQuery, TWriterOptions]):
         raise NotImplementedError
 
     @abstractmethod
-    def get_writer(
+    def get_batch_writer(
         self,
         table_name: str,
-        encoder: Callable[[WriterTableRow], bytes],
+        metrics: MetricsBackend,
         options: TWriterOptions,
         chunk_size: Optional[int],
-    ) -> BatchWriter:
+    ) -> BatchWriter[JSONRow]:
         raise NotImplementedError
 
 
@@ -214,23 +214,23 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
             )
         return self.__reader
 
-    def get_writer(
+    def get_batch_writer(
         self,
         table_name: str,
-        encoder: Callable[[WriterTableRow], bytes],
+        metrics: MetricsBackend,
         options: ClickhouseWriterOptions,
         chunk_size: Optional[int],
-    ) -> BatchWriter:
+    ) -> BatchWriter[JSONRow]:
         return HTTPBatchWriter(
             table_name,
-            self.__query_node.host_name,
-            self.__http_port,
-            self.__user,
-            self.__password,
-            self.__database,
-            encoder,
-            options,
-            chunk_size,
+            host=self.__query_node.host_name,
+            port=self.__http_port,
+            user=self.__user,
+            password=self.__password,
+            database=self.__database,
+            metrics=metrics,
+            options=options,
+            chunk_size=chunk_size,
         )
 
     def is_single_node(self) -> bool:
@@ -240,6 +240,12 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         - Differences in the query - such as whether the _local or _dist table is picked
         """
         return self.__single_node
+
+    def get_clickhouse_cluster_name(self) -> Optional[str]:
+        return self.__cluster_name
+
+    def get_database(self) -> str:
+        return self.__database
 
     def get_local_nodes(self) -> Sequence[ClickhouseNode]:
         if self.__single_node:

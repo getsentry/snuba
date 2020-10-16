@@ -1,6 +1,18 @@
+name: release
 on:
-  repository_dispatch:
-    types: [release]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release (optional)
+        required: false
+      skip_prepare:
+        description: Skip preparation step (assume a release branch is ready)
+        required: false
+        default: false
+      dry_run:
+        description: Do not actually cut the release
+        required: false
+        default: false
   schedule:
     # We want the release to be at 9-10am Pacific Time
     # We also want it to be 1 hour before the on-prem release
@@ -10,28 +22,44 @@ jobs:
     runs-on: ubuntu-latest
     name: "Release a new version"
     steps:
-        - id: calver
-          if: ${{ !github.event.client_payload.version }}
-          run: echo "::set-output name=version::$(date +'%y.%-m.0')"
+        - id: killswitch
+          if: ${{ !github.event.inputs.force }}
+          run: |
+            if curl -s "https://api.github.com/repos/$GITHUB_REPOSITORY/issues?state=open&labels=release-blocker" | grep -Pzvo '\[[\s\n\r]*\]'; then
+              echo "Open release-blocking issues found, cancelling release...";
+              curl -sf -X POST -H 'Accept: application/vnd.github.v3+json' -H 'Authorization: token ${{ secrets.GITHUB_TOKEN }}' https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/${{ github.run_id }}/cancel;
+            fi
+        - id: set-version
+          run: |
+            if [[ -n '${{ github.event.inputs.version }}' ]]; then
+              echo 'RELEASE_VERSION=${{ github.event.inputs.version }}' >> $GITHUB_ENV;
+            else
+              DATE_PART=$(date +'%y.%-m')
+              declare -i PATCH_VERSION=0
+              while curl -sf -o /dev/null "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/tags/$DATE_PART.$PATCH_VERSION"; do
+                PATCH_VERSION+=1
+              done
+              echo "RELEASE_VERSION=${DATE_PART}.${PATCH_VERSION}" >> $GITHUB_ENV;
+            fi
         - uses: actions/checkout@v2
+          with:
+            token: ${{ secrets.GH_SENTRY_BOT_PAT }}
+        - id: set-git-user
+          run: |
+            git config user.name getsentry-bot
+            git config user.email bot@getsentry.com
         - uses: getsentry/craft@master
-          if: ${{ !github.event.client_payload.skip_prepare }}
+          if: ${{ !github.event.inputs.skip_prepare }}
           with:
             action: prepare
-            version: ${{ github.event.client_payload.version || steps.calver.outputs.version }}
+            version: ${{ env.RELEASE_VERSION }}
           env:
-            DRY_RUN: ${{ github.event.client_payload.dry_run }}
-            GIT_COMMITTER_NAME: getsentry-bot
-            GIT_AUTHOR_NAME: getsentry-bot
-            EMAIL: bot@getsentry.com
+            DRY_RUN: ${{ github.event.inputs.dry_run }}
         - uses: getsentry/craft@master
           with:
             action: publish
-            version: ${{ github.event.client_payload.version || steps.calver.outputs.version }}
+            version: ${{ env.RELEASE_VERSION }}
           env:
-            DRY_RUN: ${{ github.event.client_payload.dry_run }}
-            GIT_COMMITTER_NAME: getsentry-bot
-            GIT_AUTHOR_NAME: getsentry-bot
-            EMAIL: bot@getsentry.com
+            DRY_RUN: ${{ github.event.inputs.dry_run }}
             DOCKER_USERNAME: 'sentrybuilder'
             DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}

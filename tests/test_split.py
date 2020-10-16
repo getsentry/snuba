@@ -6,22 +6,21 @@ import pytest
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet, String
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.cluster import ClickhouseCluster
+from snuba.datasets.entities.factory import EntityKey, get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
 from snuba.query.expressions import Column
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.logical import SelectedExpression
 from snuba.query.parser import parse_query
 from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.web import QueryResult
-from snuba.web.split import (
-    ColumnSplitQueryStrategy,
-    TimeSplitQueryStrategy,
-    _get_time_range,
-)
+from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 
 def setup_function(function) -> None:
@@ -51,9 +50,9 @@ def test_no_split(
                 "limit": 100,
                 "offset": 50,
             },
-            events.get_all_storages()[0]
-            .get_schemas()
-            .get_read_schema()
+            events.get_default_entity()
+            .get_all_storages()[0]
+            .get_schema()
             .get_data_source(),
         )
     )
@@ -139,18 +138,17 @@ def test_col_split(
         request_settings: RequestSettings,
         reader: Reader[SqlQuery],
     ) -> QueryResult:
-        selected_cols = query.get_selected_columns()
-        assert selected_cols == [
-            c.column_name
+        selected_col_names = [
+            c.expression.column_name
             for c in query.get_selected_columns_from_ast() or []
-            if isinstance(c, Column)
+            if isinstance(c.expression, Column)
         ]
-        if selected_cols == list(first_query_data[0].keys()):
+        if selected_col_names == list(first_query_data[0].keys()):
             return QueryResult({"data": first_query_data}, {})
-        elif selected_cols == list(second_query_data[0].keys()):
+        elif selected_col_names == list(second_query_data[0].keys()):
             return QueryResult({"data": second_query_data}, {})
         else:
-            raise ValueError(f"Unexpected selected columns: {selected_cols}")
+            raise ValueError(f"Unexpected selected columns: {selected_col_names}")
 
     events = get_dataset(dataset_name)
     query = ClickhouseQuery(
@@ -163,12 +161,15 @@ def test_col_split(
                 "limit": 100,
                 "offset": 50,
             },
-            events.get_all_storages()[0]
-            .get_schemas()
-            .get_read_schema()
+            events.get_default_entity()
+            .get_all_storages()[0]
+            .get_schema()
             .get_data_source(),
             selected_columns=[
-                Column(None, None, col_name) for col_name in second_query_data[0].keys()
+                SelectedExpression(
+                    name=col_name, expression=Column(None, None, col_name)
+                )
+                for col_name in second_query_data[0].keys()
             ],
         )
     )
@@ -260,6 +261,54 @@ column_split_tests = [
         },
         False,
     ),  # Valid query but not enough columns to split.
+    (
+        "event_id",
+        "project_id",
+        "timestamp",
+        {
+            "selected_columns": ["group_id"],
+            "conditions": [
+                ("timestamp", ">=", "2019-09-19T10:00:00"),
+                ("timestamp", "<", "2019-09-19T12:00:00"),
+                ("project_id", "IN", [1, 2, 3]),
+                ("event_id", "=", "a" * 32),
+            ],
+            "limit": 10,
+        },
+        False,
+    ),  # Query with = on event_id, not split
+    (
+        "event_id",
+        "project_id",
+        "timestamp",
+        {
+            "selected_columns": ["group_id"],
+            "conditions": [
+                ("timestamp", ">=", "2019-09-19T10:00:00"),
+                ("timestamp", "<", "2019-09-19T12:00:00"),
+                ("project_id", "IN", [1, 2, 3]),
+                ("event_id", "IN", ["a" * 32, "b" * 32]),
+            ],
+            "limit": 10,
+        },
+        False,
+    ),  # Query with IN on event_id - do not split
+    (
+        "event_id",
+        "project_id",
+        "timestamp",
+        {
+            "selected_columns": ["group_id"],
+            "conditions": [
+                ("timestamp", ">=", "2019-09-19T10:00:00"),
+                ("timestamp", "<", "2019-09-19T12:00:00"),
+                ("project_id", "IN", [1, 2, 3]),
+                ("event_id", ">", "a" * 32),
+            ],
+            "limit": 10,
+        },
+        True,
+    ),  # Query with other condition on event_id - proceed with split
 ]
 
 
@@ -274,7 +323,8 @@ def test_col_split_conditions(
     query = parse_query(query, dataset)
     splitter = ColumnSplitQueryStrategy(id_column, project_column, timestamp_column)
     request = Request("a", query, HTTPRequestSettings(), {}, "r")
-    plan = dataset.get_query_plan_builder().build_plan(request)
+    entity = get_entity(EntityKey(query.get_entity_name()))
+    plan = entity.get_query_plan_builder().build_plan(request)
 
     def do_query(
         query: ClickhouseQuery, request_settings: RequestSettings,
@@ -307,29 +357,9 @@ def test_time_split_ast() -> None:
     def do_query(
         query: ClickhouseQuery, request_settings: RequestSettings,
     ) -> QueryResult:
-        from_date_ast, to_date_ast = _get_time_range(query, "timestamp")
+        from_date_ast, to_date_ast = get_time_range(query, "timestamp")
         assert from_date_ast is not None and isinstance(from_date_ast, datetime)
         assert to_date_ast is not None and isinstance(to_date_ast, datetime)
-
-        conditions = query.get_conditions() or []
-        from_date_str = next(
-            (
-                condition[2]
-                for condition in conditions
-                if condition[0] == "timestamp" and condition[1] == ">="
-            ),
-            None,
-        )
-        to_date_str = next(
-            (
-                condition[2]
-                for condition in conditions
-                if condition[0] == "timestamp" and condition[1] == "<"
-            ),
-            None,
-        )
-        assert from_date_str == from_date_ast.isoformat()
-        assert to_date_str == to_date_ast.isoformat()
 
         found_timestamps.append((from_date_ast.isoformat(), to_date_ast.isoformat()))
 
@@ -354,45 +384,17 @@ def test_time_split_ast() -> None:
         "orderby": ["-timestamp"],
     }
 
-    events = get_dataset("events")
-    query = parse_query(body, events)
+    query = parse_query(body, get_dataset("events"))
+    entity = get_entity(EntityKey(query.get_entity_name()))
+    settings = HTTPRequestSettings()
+    for p in entity.get_query_processors():
+        p.process_query(query, settings)
 
     splitter = TimeSplitQueryStrategy("timestamp")
-    splitter.execute(ClickhouseQuery(query), HTTPRequestSettings(), do_query)
+    splitter.execute(ClickhouseQuery(query), settings, do_query)
 
     assert found_timestamps == [
         ("2019-09-19T11:00:00", "2019-09-19T12:00:00"),
         ("2019-09-19T01:00:00", "2019-09-19T11:00:00"),
         ("2019-09-18T10:00:00", "2019-09-19T01:00:00"),
     ]
-
-
-def test_get_time_range() -> None:
-    """
-    Test finding the time range of a query.
-    """
-    body = {
-        "selected_columns": ["event_id"],
-        "conditions": [
-            ("timestamp", ">=", "2019-09-18T10:00:00"),
-            ("timestamp", ">=", "2000-09-18T10:00:00"),
-            ("timestamp", "<", "2019-09-19T12:00:00"),
-            [("timestamp", "<", "2019-09-18T12:00:00"), ("project_id", "IN", [1])],
-            ("project_id", "IN", [1]),
-        ],
-    }
-
-    events = get_dataset("events")
-    query = parse_query(body, events)
-
-    from_date_ast, to_date_ast = _get_time_range(ClickhouseQuery(query), "timestamp")
-    assert (
-        from_date_ast is not None
-        and isinstance(from_date_ast, datetime)
-        and from_date_ast.isoformat() == "2019-09-18T10:00:00"
-    )
-    assert (
-        to_date_ast is not None
-        and isinstance(to_date_ast, datetime)
-        and to_date_ast.isoformat() == "2019-09-19T12:00:00"
-    )

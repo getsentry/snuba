@@ -1,22 +1,28 @@
+import uuid
 from datetime import datetime
 from typing import Optional
-import uuid
+
+from sentry_relay import DataCategory
 
 from snuba import settings
 from snuba.processor import (
-    _ensure_valid_date,
+    InsertBatch,
     MessageProcessor,
-    ProcessorAction,
     ProcessedMessage,
+    _ensure_valid_date,
     _unicodify,
 )
 
 
 class OutcomesProcessor(MessageProcessor):
-    def process_message(self, value, metadata=None) -> Optional[ProcessedMessage]:
+    def process_message(self, value, metadata) -> Optional[ProcessedMessage]:
         assert isinstance(value, dict)
 
-        if value.get("category") in ("transaction", "attachment", "session"):
+        # Only record outcomes from traditional error tracking events, which
+        # excludes transactions, attachments and sessions. Once TSDB defines
+        # models for these, we can start recording again.
+        category = value.get("category")
+        if category is not None and category not in DataCategory.error_categories():
             return None
 
         v_uuid = value.get("event_id")
@@ -32,4 +38,4 @@ class OutcomesProcessor(MessageProcessor):
             "event_id": str(uuid.UUID(v_uuid)) if v_uuid is not None else None,
         }
 
-        return ProcessedMessage(action=ProcessorAction.INSERT, data=[message],)
+        return InsertBatch([message])

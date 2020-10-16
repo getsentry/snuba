@@ -62,6 +62,14 @@ class MatchResult:
         assert isinstance(ret, str)
         return ret
 
+    def optional_string(self, name: str) -> Optional[str]:
+        """
+        Returns a string present in the result or it is None.
+        """
+        ret = self.results[name]
+        assert ret is None or isinstance(ret, str)
+        return ret
+
     def integer(self, name: str) -> int:
         """
         Returns a int present in the result, guaranteeing the int is there
@@ -228,7 +236,6 @@ class Column(Pattern[ColumnExpr]):
     (equivalent to Any, but less verbose).
     """
 
-    alias: Optional[Pattern[Optional[str]]] = None
     table_name: Optional[Pattern[Optional[str]]] = None
     column_name: Optional[Pattern[str]] = None
 
@@ -238,7 +245,6 @@ class Column(Pattern[ColumnExpr]):
 
         result = MatchResult()
         for pattern, value in (
-            (self.alias, node.alias),
             (self.table_name, node.table_name),
             (self.column_name, node.column_name),
         ):
@@ -253,25 +259,16 @@ class Column(Pattern[ColumnExpr]):
 
 @dataclass(frozen=True)
 class Literal(Pattern[LiteralExpr]):
-    alias: Optional[Pattern[Optional[str]]] = None
     value: Optional[Pattern[OptionalScalarType]] = None
 
     def match(self, node: AnyType) -> Optional[MatchResult]:
         if not isinstance(node, LiteralExpr):
             return None
 
-        result = MatchResult()
-        for pattern, value in (
-            (self.alias, node.alias),
-            (self.value, node.value),
-        ):
-            if pattern is not None:
-                partial_result = pattern.match(value)
-                if partial_result is None:
-                    return None
-                result = result.merge(partial_result)
-
-        return result
+        if self.value is not None:
+            return self.value.match(node.value)
+        else:
+            return MatchResult()
 
 
 @dataclass(frozen=True)
@@ -282,7 +279,6 @@ class FunctionCall(Pattern[FunctionCallExpr]):
     are provided, they have to match, otherwise they are ignored.
     """
 
-    alias: Optional[Pattern[Optional[str]]] = None
     function_name: Optional[Pattern[str]] = None
     # This is a tuple instead of a sequence to match the data structure
     # we use in the actual FunctionCall class. There it has to be a tuple
@@ -302,15 +298,12 @@ class FunctionCall(Pattern[FunctionCallExpr]):
             return None
 
         result = MatchResult()
-        for pattern, value in (
-            (self.alias, node.alias),
-            (self.function_name, node.function_name),
-        ):
-            if pattern is not None:
-                partial_result = pattern.match(value)
-                if partial_result is None:
-                    return None
-                result = result.merge(partial_result)
+
+        if self.function_name is not None:
+            partial_result = self.function_name.match(node.function_name)
+            if partial_result is None:
+                return None
+            result = result.merge(partial_result)
 
         if self.parameters:
             if not self.with_optionals:

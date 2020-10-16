@@ -31,7 +31,7 @@ class StrictConsumer:
     It waits for a partition to be assigned before actually consuming. If no
     partition is assigned within a timeout it fails.
     It also moves the responsibility of deciding what to commit to the user
-    compared to the BatchingConsumer
+    compared to other stream processing implementations.
 
     This is not supposed to be used for continuously consume a topic but to
     catch up on a topic from the beginning to the state it is at the time we start.
