@@ -79,7 +79,7 @@ def confirm_load(
     else:
         broker_config = get_broker_config(bootstrap_server)
 
-    producer = Producer(build_kafka_producer_configuration(broker_config).config)
+    producer = Producer(build_kafka_producer_configuration(broker_config))
 
     msg = SnapshotLoaded(
         id=descriptor.id,

@@ -215,9 +215,7 @@ def record_query(query_metadata: Mapping[str, Any]) -> None:
         ).execute()
 
         if kfk is None:
-            kfk = Producer(
-                build_kafka_producer_configuration(settings.BROKER_CONFIG).config
-            )
+            kfk = Producer(build_kafka_producer_configuration(settings.BROKER_CONFIG))
 
         kfk.poll(0)  # trigger queued delivery callbacks
         kfk.produce(
