@@ -11,7 +11,8 @@ from snuba.query.conditions import (
     binary_condition,
 )
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
-from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.logical import Query
 from snuba.request.request_settings import HTTPRequestSettings
 
 test_cases = [

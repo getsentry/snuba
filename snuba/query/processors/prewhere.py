@@ -44,7 +44,7 @@ class PrewhereProcessor(QueryProcessor):
         max_prewhere_conditions: int = (
             self.__max_prewhere_conditions or settings.MAX_PREWHERE_CONDITIONS
         )
-        prewhere_keys = query.get_data_source().get_prewhere_candidates()
+        prewhere_keys = query.get_from_clause().get_prewhere_candidates()
         if not prewhere_keys:
             return
 

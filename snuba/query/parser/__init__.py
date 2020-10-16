@@ -8,6 +8,7 @@ from snuba.clickhouse.escaping import NEGATE_RE
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity import Entity
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
     Argument,
@@ -20,7 +21,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
+from snuba.query.logical import Query
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import String as StringMatch
 from snuba.query.parser.conditions import parse_conditions_to_expr

@@ -22,4 +22,4 @@ def test_query_parameters():
     assert query.has_totals() is True
     assert query.get_granularity() == 60
 
-    assert query.get_data_source().format_from() == "my_table"
+    assert query.get_from_clause().format_from() == "my_table"

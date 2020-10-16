@@ -4,7 +4,8 @@ from snuba import state
 from snuba.datasets.factory import get_dataset
 from snuba.query.conditions import binary_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.logical import Query
 from snuba.query.snql.parser import parse_snql_query
 
 
