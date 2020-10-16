@@ -73,7 +73,6 @@ def _run_query_pipeline(
       to the QueryExecutionStrategy to actually run the DB Query.
     """
     query_entity = request.query.get_entity()
-    assert query_entity is not None
     entity = get_entity(query_entity.key)
 
     # TODO: this will work perfectly with datasets that are not time series. Remove it.
