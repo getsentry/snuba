@@ -32,6 +32,10 @@ def test_iterate_over_query():
         None, ConditionFunctions.EQ, column1, Literal(None, "1")
     )
 
+    prewhere = binary_condition(
+        None, ConditionFunctions.EQ, column2, Literal(None, "2")
+    )
+
     orderby = OrderBy(OrderByDirection.ASC, function_2)
 
     query = Query(
@@ -41,6 +45,7 @@ def test_iterate_over_query():
         array_join=None,
         condition=condition,
         groupby=[function_1],
+        prewhere=prewhere,
         having=None,
         order_by=[orderby],
     )
@@ -61,6 +66,10 @@ def test_iterate_over_query():
         # order by
         column2,
         function_2,
+        # prewhere
+        column2,
+        Literal(None, "2"),
+        prewhere,
     ]
 
     assert list(query.get_all_expressions()) == expected_expressions
@@ -80,6 +89,10 @@ def test_replace_expression():
         None, ConditionFunctions.EQ, function_1, Literal(None, "1")
     )
 
+    prewhere = binary_condition(
+        None, ConditionFunctions.EQ, function_1, Literal(None, "2")
+    )
+
     orderby = OrderBy(OrderByDirection.ASC, function_2)
 
     query = Query(
@@ -90,6 +103,7 @@ def test_replace_expression():
         condition=condition,
         groupby=[function_1],
         having=None,
+        prewhere=prewhere,
         order_by=[orderby],
     )
 
@@ -116,6 +130,12 @@ def test_replace_expression():
             Literal(None, "1"),
         ),
         groupby=[FunctionCall("alias", "tag", (Literal(None, "f1"),))],
+        prewhere=binary_condition(
+            None,
+            ConditionFunctions.EQ,
+            FunctionCall("alias", "tag", (Literal(None, "f1"),)),
+            Literal(None, "2"),
+        ),
         having=None,
         order_by=[orderby],
     )

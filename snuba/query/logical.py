@@ -83,12 +83,12 @@ class Query(AbstractQuery[RelationalSource]):
         )
 
     def _get_expressions_impl(self) -> Iterable[Expression]:
-        return []
+        return self.__prewhere or []
 
     def _transform_expressions_impl(
         self, func: Callable[[Expression], Expression]
     ) -> None:
-        return
+        self.__prewhere = self.__prewhere.transform(func) if self.__prewhere else None
 
     def _transform_impl(self, visitor: ExpressionVisitor[Expression]) -> None:
         if self.__prewhere is not None:
