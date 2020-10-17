@@ -34,6 +34,7 @@ from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
+from snuba import settings
 from snuba.utils.concurrent import execute
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
 from snuba.utils.streams.backends.abstract import (
@@ -45,7 +46,6 @@ from snuba.utils.streams.backends.abstract import (
 )
 from snuba.utils.streams.types import Message, Partition, Topic
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -56,6 +56,8 @@ class TransportError(ConsumerError):
 KafkaConsumerState = Enum(
     "KafkaConsumerState", ["CONSUMING", "ERROR", "CLOSED", "ASSIGNING", "REVOKING"]
 )
+
+KafkaBrokerConfig = Mapping[str, Any]
 
 
 class InvalidState(RuntimeError):
@@ -615,51 +617,76 @@ class KafkaConsumer(Consumer[KafkaPayload]):
 
 DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
 DEFAULT_QUEUED_MIN_MESSAGES = 10000
+DEFAULT_PARTITIONER = "consistent"
+DEFAULT_MAX_MESSAGE_BYTES = 50000000  # 50MB, default is 1MB
 
 
-def get_broker_config(bootstrap_servers: Sequence[str]) -> Mapping[str, Any]:
-    return {
-        "bootstrap.servers": ",".join(bootstrap_servers),
-    }
+def get_broker_config(bootstrap_servers: Optional[Sequence[str]]) -> KafkaBrokerConfig:
+    if bootstrap_servers:
+        return {
+            "bootstrap.servers": ",".join(bootstrap_servers),
+        }
+    else:
+        return {}
+
+
+def build_default_kafka_configuration(
+    storage_name: str, override_params: Optional[Mapping[str, Any]]
+) -> KafkaBrokerConfig:
+    if storage_name in settings.DEFAULT_STORAGE_BROKERS:
+        # this is now deprecated
+        broker_config = get_broker_config(
+            settings.DEFAULT_STORAGE_BROKERS[storage_name]
+        )
+    else:
+        broker_config = settings.STORAGE_BROKER_CONFIG.get(
+            storage_name, settings.BROKER_CONFIG
+        )
+    broker_config = broker_config.copy()
+    if override_params:
+        broker_config.update(override_params)
+    return broker_config
 
 
 def build_kafka_consumer_configuration(
-    broker_config: Mapping[str, Any],
+    storage_name: str,
     group_id: str,
     auto_offset_reset: str = "error",
     queued_max_messages_kbytes: int = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
     queued_min_messages: int = DEFAULT_QUEUED_MIN_MESSAGES,
-) -> Mapping[str, Any]:
-    return {
-        **broker_config,
-        "enable.auto.commit": False,
-        "enable.auto.offset.store": False,
-        "group.id": group_id,
-        "auto.offset.reset": auto_offset_reset,
-        # overridden to reduce memory usage when there's a large backlog
-        "queued.max.messages.kbytes": queued_max_messages_kbytes,
-        "queued.min.messages": queued_min_messages,
-        "enable.partition.eof": False,
-    }
+    override_params: Optional[Mapping[str, Any]] = None,
+) -> KafkaBrokerConfig:
+    broker_config = build_default_kafka_configuration(storage_name, override_params)
+    broker_config.update(
+        {
+            "enable.auto.commit": False,
+            "enable.auto.offset.store": False,
+            "group.id": group_id,
+            "auto.offset.reset": auto_offset_reset,
+            # overridden to reduce memory usage when there's a large backlog
+            "queued.max.messages.kbytes": queued_max_messages_kbytes,
+            "queued.min.messages": queued_min_messages,
+            "enable.partition.eof": False,
+        }
+    )
+    return broker_config
 
 
 def build_kafka_producer_configuration(
-    broker_config: Mapping[str, Any],
-) -> Mapping[str, Any]:
-    return {
-        **broker_config,
-        "partitioner": "consistent",
-        "message.max.bytes": 50000000,  # 50MB, default is 1MB
-    }
+    storage_name: str,
+    partitioner: str = DEFAULT_PARTITIONER,
+    message_max_bytes: int = DEFAULT_MAX_MESSAGE_BYTES,
+    override_params: Optional[Mapping[str, Any]] = None,
+) -> KafkaBrokerConfig:
+    broker_config = build_default_kafka_configuration(storage_name, override_params)
+    broker_config.update(
+        {"partitioner": partitioner, "message.max.bytes": message_max_bytes}
+    )
+    return broker_config
 
 
-def build_admin_client_configuration(
-    broker_config: Mapping[str, Any],
-) -> Mapping[str, Any]:
-    return {
-        **broker_config,
-        "socket.timeout.ms": 1000,
-    }
+def build_kafka_admin_configuration(override_params: Mapping[str, Any]):
+    return build_default_kafka_configuration("", override_params)
 
 
 # XXX: This must be imported after `KafkaPayload` to avoid a circular import.

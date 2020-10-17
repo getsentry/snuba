@@ -85,7 +85,12 @@ class ConsumerBuilder:
 
         # XXX: This can result in a producer being built in cases where it's
         # not actually required.
-        self.producer = Producer(build_kafka_producer_configuration(broker_config))
+        storage_name = self.storage.get_storage_key().value
+        self.producer = Producer(
+            build_kafka_producer_configuration(
+                storage_name, override_params=broker_config
+            )
+        )
 
         self.metrics = MetricsWrapper(
             environment.metrics,
@@ -122,12 +127,14 @@ class ConsumerBuilder:
     def __build_consumer(
         self, strategy_factory: ProcessingStrategyFactory[KafkaPayload]
     ) -> StreamProcessor[KafkaPayload]:
+        storage_name = self.storage.get_storage_key().value
         configuration = build_kafka_consumer_configuration(
-            self.broker_config,
+            storage_name,
             group_id=self.group_id,
             auto_offset_reset=self.auto_offset_reset,
             queued_max_messages_kbytes=self.queued_max_messages_kbytes,
             queued_min_messages=self.queued_min_messages,
+            override_params=self.broker_config,
         )
 
         if self.commit_log_topic is None:

@@ -120,20 +120,9 @@ def subscriptions(
 
     dataset = get_dataset(dataset_name)
 
-    if not bootstrap_servers:
-        storage = dataset.get_default_entity().get_writable_storage()
-        assert storage is not None
-        storage_key = storage.get_storage_key().value
-        if storage_key in settings.DEFAULT_STORAGE_BROKERS:
-            broker_config = get_broker_config(
-                settings.DEFAULT_STORAGE_BROKERS[storage_key]
-            )
-        else:
-            broker_config = settings.STORAGE_BROKER_CONFIG.get(
-                storage_key, settings.BROKER_CONFIG
-            )
-    else:
-        broker_config = get_broker_config(bootstrap_servers)
+    storage = dataset.get_default_entity().get_writable_storage()
+    storage_name = storage.get_storage_key().value
+    broker_config = get_broker_config(bootstrap_servers)
 
     loader = enforce_table_writer(dataset).get_stream_loader()
 
@@ -147,14 +136,18 @@ def subscriptions(
         SynchronizedConsumer(
             KafkaConsumer(
                 build_kafka_consumer_configuration(
-                    broker_config, consumer_group, auto_offset_reset=auto_offset_reset
+                    storage_name,
+                    consumer_group,
+                    auto_offset_reset=auto_offset_reset,
+                    override_params=broker_config,
                 ),
             ),
             KafkaConsumer(
                 build_kafka_consumer_configuration(
-                    broker_config,
+                    storage_name,
                     f"subscriptions-commit-log-{uuid.uuid1().hex}",
                     auto_offset_reset="earliest",
+                    override_params=broker_config,
                 ),
             ),
             (
@@ -170,7 +163,7 @@ def subscriptions(
     )
 
     producer = ProducerEncodingWrapper(
-        KafkaProducer(build_kafka_producer_configuration(broker_config)),
+        KafkaProducer(build_kafka_producer_configuration(storage_name, broker_config)),
         SubscriptionTaskResultEncoder(),
     )
 

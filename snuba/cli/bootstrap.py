@@ -3,14 +3,13 @@ from typing import Optional, Sequence
 
 import click
 
-from snuba import settings
 from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging
 from snuba.migrations.connect import check_clickhouse_connections
 from snuba.migrations.runner import Runner
 from snuba.utils.streams.backends.kafka import (
-    build_admin_client_configuration,
     get_broker_config,
+    build_kafka_admin_configuration,
 )
 
 
@@ -46,15 +45,13 @@ def bootstrap(
         logger.debug("Using Kafka with %r", bootstrap_server)
         from confluent_kafka.admin import AdminClient, NewTopic
 
-        if not bootstrap_server:
-            broker_config = settings.BROKER_CONFIG
-        else:
-            broker_config = get_broker_config(bootstrap_server)
+        broker_config = get_broker_config(bootstrap_server)
+        broker_config["socket.timeout.ms"] = 1000
         attempts = 0
         while True:
             try:
                 logger.debug("Attempting to connect to Kafka (attempt %d)", attempts)
-                client = AdminClient(build_admin_client_configuration(broker_config))
+                client = AdminClient(build_kafka_admin_configuration(broker_config))
                 client.list_topics(timeout=1)
                 break
             except Exception as e:

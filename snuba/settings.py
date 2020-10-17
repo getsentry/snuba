@@ -69,20 +69,19 @@ SNAPSHOT_CONTROL_TOPIC_INIT_TIMEOUT = 30
 BULK_CLICKHOUSE_BUFFER = 10000
 
 # Processor/Writer Options
-DEFAULT_BROKERS: Sequence[str] = os.environ.get(
-    "DEFAULT_BROKERS", "localhost:9092"
-).split(",")
+# DEPRECATED, please use BROKER_CONFIG instead
+DEFAULT_BROKERS: Sequence[str] = []
+# DEPRECATED, please use STORAGE_BROKER_CONFIG instead
 DEFAULT_STORAGE_BROKERS: Mapping[str, Sequence[str]] = {}
 
-_BROKER_CONFIG: Mapping[str, Any] = {
-    "bootstrap.servers": ",".join(DEFAULT_BROKERS),
+BROKER_CONFIG: Mapping[str, Any] = {
+    # Check https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+    # for the full list of available options
+    "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092"),
     "sasl.mechanism": os.environ.get("SASL_MECHANISM"),
     "sasl.username": os.environ.get("SASL_PLAIN_USERNAME"),
     "sasl.password": os.environ.get("SASL_PLAIN_PASSWORD"),
     "security.protocol": os.environ.get("SECURITY_PROTOCOL"),
-}
-BROKER_CONFIG: Mapping[str, Any] = {
-    k: v for k, v in _BROKER_CONFIG.items() if v is not None
 }
 STORAGE_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
 

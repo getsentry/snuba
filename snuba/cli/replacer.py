@@ -103,19 +103,17 @@ def replacer(
 
     metrics = MetricsWrapper(environment.metrics, "replacer", tags=metrics_tags,)
 
-    if not bootstrap_server:
-        broker_config = settings.BROKER_CONFIG
-    else:
-        broker_config = get_broker_config(bootstrap_server)
+    broker_config = get_broker_config(bootstrap_server)
 
     replacer = StreamProcessor(
         KafkaConsumer(
             build_kafka_consumer_configuration(
-                broker_config,
+                storage_name,
                 group_id=consumer_group,
                 auto_offset_reset=auto_offset_reset,
                 queued_max_messages_kbytes=queued_max_messages_kbytes,
                 queued_min_messages=queued_min_messages,
+                override_params=broker_config,
             ),
         ),
         Topic(replacements_topic),

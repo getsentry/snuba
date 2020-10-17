@@ -66,20 +66,11 @@ def confirm_load(
 
     descriptor = snapshot_source.get_descriptor()
 
-    if not bootstrap_server:
-        storage_key = storage.get_storage_key().value
-        if storage_key in settings.DEFAULT_STORAGE_BROKERS:
-            broker_config = get_broker_config(
-                settings.DEFAULT_STORAGE_BROKERS[storage_key]
-            )
-        else:
-            broker_config = settings.STORAGE_BROKER_CONFIG.get(
-                storage_key, settings.BROKER_CONFIG
-            )
-    else:
-        broker_config = get_broker_config(bootstrap_server)
+    broker_config = get_broker_config(bootstrap_server)
 
-    producer = Producer(build_kafka_producer_configuration(broker_config))
+    producer = Producer(
+        build_kafka_producer_configuration(storage_name, override_params=broker_config)
+    )
 
     msg = SnapshotLoaded(
         id=descriptor.id,
