@@ -115,7 +115,7 @@ class ConsumerBuilder:
                 and e.args[0].code()
                 in (
                     KafkaError.REQUEST_TIMED_OUT,
-                    KafkaError.NOT_COORDINATOR_FOR_GROUP,
+                    KafkaError.NOT_COORDINATOR,
                     KafkaError._WAIT_COORD,
                 ),
             )
