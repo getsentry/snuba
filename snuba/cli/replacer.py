@@ -106,11 +106,11 @@ def replacer(
         KafkaConsumer(
             build_kafka_consumer_configuration(
                 storage_name,
+                bootstrap_servers=bootstrap_server,
                 group_id=consumer_group,
                 auto_offset_reset=auto_offset_reset,
                 queued_max_messages_kbytes=queued_max_messages_kbytes,
                 queued_min_messages=queued_min_messages,
-                bootstrap_servers=bootstrap_server,
             ),
         ),
         Topic(replacements_topic),
