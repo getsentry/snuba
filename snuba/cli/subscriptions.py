@@ -25,7 +25,6 @@ from snuba.utils.streams.backends.kafka import (
     KafkaProducer,
     build_kafka_consumer_configuration,
     build_kafka_producer_configuration,
-    get_broker_config,
 )
 from snuba.utils.streams.encoding import ProducerEncodingWrapper
 from snuba.utils.streams.processing import StreamProcessor
@@ -122,7 +121,6 @@ def subscriptions(
 
     storage = dataset.get_default_entity().get_writable_storage()
     storage_name = storage.get_storage_key().value
-    broker_config = get_broker_config(bootstrap_servers)
 
     loader = enforce_table_writer(dataset).get_stream_loader()
 
@@ -139,7 +137,7 @@ def subscriptions(
                     storage_name,
                     consumer_group,
                     auto_offset_reset=auto_offset_reset,
-                    override_params=broker_config,
+                    bootstrap_servers=bootstrap_servers,
                 ),
             ),
             KafkaConsumer(
@@ -147,7 +145,7 @@ def subscriptions(
                     storage_name,
                     f"subscriptions-commit-log-{uuid.uuid1().hex}",
                     auto_offset_reset="earliest",
-                    override_params=broker_config,
+                    bootstrap_servers=bootstrap_servers,
                 ),
             ),
             (
@@ -163,7 +161,11 @@ def subscriptions(
     )
 
     producer = ProducerEncodingWrapper(
-        KafkaProducer(build_kafka_producer_configuration(storage_name, broker_config)),
+        KafkaProducer(
+            build_kafka_producer_configuration(
+                storage_name, bootstrap_servers=bootstrap_servers
+            )
+        ),
         SubscriptionTaskResultEncoder(),
     )
 

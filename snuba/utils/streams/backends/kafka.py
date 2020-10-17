@@ -619,30 +619,44 @@ DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
 DEFAULT_QUEUED_MIN_MESSAGES = 10000
 DEFAULT_PARTITIONER = "consistent"
 DEFAULT_MAX_MESSAGE_BYTES = 50000000  # 50MB, default is 1MB
+SUPPORTED_KAFKA_CONFIGURATION = (
+    # Check https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+    # for the full list of available options
+    "bootstrap.servers",
+    "sasl.mechanism",
+    "sasl.username",
+    "sasl.password",
+    "security.protocol",
+)
+DEFAULT_STORAGE_NAME = ""
 
 
-def get_broker_config(bootstrap_servers: Optional[Sequence[str]]) -> KafkaBrokerConfig:
-    if bootstrap_servers:
-        return {
-            "bootstrap.servers": ",".join(bootstrap_servers),
-        }
-    else:
-        return {}
-
-
-def build_default_kafka_configuration(
-    storage_name: str, override_params: Optional[Mapping[str, Any]]
+def get_default_kafka_configuration(
+    storage_name: Optional[str] = None,
+    bootstrap_servers: Optional[Sequence[str]] = None,
+    override_params: Optional[Mapping[str, Any]] = None,
 ) -> KafkaBrokerConfig:
     if storage_name in settings.DEFAULT_STORAGE_BROKERS:
         # this is now deprecated
-        broker_config = get_broker_config(
-            settings.DEFAULT_STORAGE_BROKERS[storage_name]
+        logger.warning(
+            "DEPRECATED: DEFAULT_STORAGE_BROKERS is defined. Please use STORAGE_BROKER_CONFIG instead"
         )
+        default_config = {}
+        bootstrap_servers = ",".join(settings.DEFAULT_STORAGE_BROKERS[storage_name])
     else:
-        broker_config = settings.STORAGE_BROKER_CONFIG.get(
+        default_config = settings.STORAGE_BROKER_CONFIG.get(
             storage_name, settings.BROKER_CONFIG
         )
-    broker_config = broker_config.copy()
+    broker_config = default_config.copy()
+    if bootstrap_servers:
+        broker_config["bootstrap.servers"] = bootstrap_servers
+    broker_config = {k: v for k, v in broker_config.items() if v is not None}
+    for configuration_key in broker_config:
+        if configuration_key not in SUPPORTED_KAFKA_CONFIGURATION:
+            raise RuntimeError(
+                f"The `{configuration_key}` configuration key is not supported."
+            )
+
     if override_params:
         broker_config.update(override_params)
     return broker_config
@@ -654,9 +668,14 @@ def build_kafka_consumer_configuration(
     auto_offset_reset: str = "error",
     queued_max_messages_kbytes: int = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
     queued_min_messages: int = DEFAULT_QUEUED_MIN_MESSAGES,
+    bootstrap_servers: Optional[Sequence[str]] = None,
     override_params: Optional[Mapping[str, Any]] = None,
 ) -> KafkaBrokerConfig:
-    broker_config = build_default_kafka_configuration(storage_name, override_params)
+    broker_config = get_default_kafka_configuration(
+        storage_name,
+        bootstrap_servers=bootstrap_servers,
+        override_params=override_params,
+    )
     broker_config.update(
         {
             "enable.auto.commit": False,
@@ -676,17 +695,32 @@ def build_kafka_producer_configuration(
     storage_name: str,
     partitioner: str = DEFAULT_PARTITIONER,
     message_max_bytes: int = DEFAULT_MAX_MESSAGE_BYTES,
+    bootstrap_servers: Optional[Sequence[str]] = None,
     override_params: Optional[Mapping[str, Any]] = None,
 ) -> KafkaBrokerConfig:
-    broker_config = build_default_kafka_configuration(storage_name, override_params)
+    broker_config = get_default_kafka_configuration(
+        storage_name,
+        bootstrap_servers=bootstrap_servers,
+        override_params=override_params,
+    )
     broker_config.update(
         {"partitioner": partitioner, "message.max.bytes": message_max_bytes}
     )
     return broker_config
 
 
-def build_kafka_admin_configuration(override_params: Mapping[str, Any]):
-    return build_default_kafka_configuration("", override_params)
+def build_default_kafka_producer_configuration() -> KafkaBrokerConfig:
+    return build_kafka_producer_configuration(DEFAULT_STORAGE_NAME)
+
+
+def build_kafka_admin_configuration(
+    bootstrap_servers: Optional[str], override_params: Optional[Mapping[str, Any]]
+) -> KafkaBrokerConfig:
+    return get_default_kafka_configuration(
+        DEFAULT_STORAGE_NAME,
+        bootstrap_servers=bootstrap_servers,
+        override_params=override_params,
+    )
 
 
 # XXX: This must be imported after `KafkaPayload` to avoid a circular import.

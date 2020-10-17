@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Mapping, Any
+from typing import Callable, Optional
 
 from confluent_kafka import KafkaError, KafkaException, Producer
 
@@ -19,7 +19,7 @@ from snuba.utils.streams.backends.kafka import (
     KafkaPayload,
     TransportError,
     build_kafka_consumer_configuration,
-    build_kafka_producer_configuration,
+    get_default_kafka_configuration,
 )
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.processing.strategies import ProcessingStrategyFactory
@@ -40,7 +40,7 @@ class ConsumerBuilder:
         replacements_topic: Optional[str],
         max_batch_size: int,
         max_batch_time_ms: int,
-        broker_config: Mapping[str, Any],
+        bootstrap_servers: Optional[str],
         group_id: str,
         commit_log_topic: Optional[str],
         auto_offset_reset: str,
@@ -53,7 +53,10 @@ class ConsumerBuilder:
         profile_path: Optional[str] = None,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
-        self.broker_config = broker_config
+        self.bootstrap_servers = bootstrap_servers
+        self.broker_config = get_default_kafka_configuration(
+            self.storage.get_storage_key().value, bootstrap_servers=bootstrap_servers
+        )
 
         stream_loader = self.storage.get_table_writer().get_stream_loader()
 
@@ -85,12 +88,7 @@ class ConsumerBuilder:
 
         # XXX: This can result in a producer being built in cases where it's
         # not actually required.
-        storage_name = self.storage.get_storage_key().value
-        self.producer = Producer(
-            build_kafka_producer_configuration(
-                storage_name, override_params=broker_config
-            )
-        )
+        self.producer = Producer(self.broker_config)
 
         self.metrics = MetricsWrapper(
             environment.metrics,
@@ -130,11 +128,11 @@ class ConsumerBuilder:
         storage_name = self.storage.get_storage_key().value
         configuration = build_kafka_consumer_configuration(
             storage_name,
+            bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
             auto_offset_reset=self.auto_offset_reset,
             queued_max_messages_kbytes=self.queued_max_messages_kbytes,
             queued_min_messages=self.queued_min_messages,
-            override_params=self.broker_config,
         )
 
         if self.commit_log_topic is None:

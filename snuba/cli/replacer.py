@@ -8,7 +8,6 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.streams.backends.kafka import get_broker_config
 
 
 @click.command()
@@ -103,8 +102,6 @@ def replacer(
 
     metrics = MetricsWrapper(environment.metrics, "replacer", tags=metrics_tags,)
 
-    broker_config = get_broker_config(bootstrap_server)
-
     replacer = StreamProcessor(
         KafkaConsumer(
             build_kafka_consumer_configuration(
@@ -113,7 +110,7 @@ def replacer(
                 auto_offset_reset=auto_offset_reset,
                 queued_max_messages_kbytes=queued_max_messages_kbytes,
                 queued_min_messages=queued_min_messages,
-                override_params=broker_config,
+                bootstrap_servers=bootstrap_server,
             ),
         ),
         Topic(replacements_topic),
