@@ -713,16 +713,6 @@ def build_default_kafka_producer_configuration() -> KafkaBrokerConfig:
     return build_kafka_producer_configuration(DEFAULT_STORAGE_NAME)
 
 
-def build_kafka_admin_configuration(
-    bootstrap_servers: Optional[str], override_params: Optional[Mapping[str, Any]]
-) -> KafkaBrokerConfig:
-    return get_default_kafka_configuration(
-        DEFAULT_STORAGE_NAME,
-        bootstrap_servers=bootstrap_servers,
-        override_params=override_params,
-    )
-
-
 # XXX: This must be imported after `KafkaPayload` to avoid a circular import.
 from snuba.utils.streams.synchronized import Commit, commit_codec
 
