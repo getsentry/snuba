@@ -1,10 +1,9 @@
 from typing import Any, MutableMapping, Set
 
 import pytest
-
-from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.query_dsl.accessors import get_project_ids_in_query_ast
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.plans.translator.query import identity_translate
 from snuba.query.parser import parse_query
 
 test_cases = [
@@ -138,8 +137,6 @@ def test_find_projects(
     query_body: MutableMapping[str, Any], expected_projects: Set[int]
 ) -> None:
     events = get_dataset("events")
-    query = parse_query(query_body, events)
-
-    query = ClickhouseQuery(query)
+    query = identity_translate(parse_query(query_body, events))
     project_ids_ast = get_project_ids_in_query_ast(query, "project_id")
     assert project_ids_ast == expected_projects

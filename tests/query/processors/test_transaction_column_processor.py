@@ -4,8 +4,9 @@ from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storages.transaction_column_processor import (
     TransactionColumnProcessor,
 )
+from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.logical import Query, SelectedExpression
+from snuba.query.logical import Query
 from snuba.request.request_settings import HTTPRequestSettings
 
 

@@ -1,19 +1,20 @@
-import pytest
 from typing import Optional
 
+import pytest
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
-from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.entities.transactions import TransactionsEntity
+from snuba.datasets.schemas.tables import TableSource
+from snuba.query import SelectedExpression
 from snuba.query.conditions import (
-    binary_condition,
     BooleanFunctions,
     ConditionFunctions,
+    binary_condition,
 )
 from snuba.query.dsl import multiply
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.logical import Query, SelectedExpression
+from snuba.query.logical import Query
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.util import parse_datetime
