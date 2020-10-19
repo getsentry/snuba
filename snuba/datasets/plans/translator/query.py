@@ -18,7 +18,6 @@ def identity_translate(query: LogicalQuery) -> ClickhouseQuery:
         selected_columns=query.get_selected_columns_from_ast(),
         array_join=query.get_arrayjoin_from_ast(),
         condition=query.get_condition_from_ast(),
-        prewhere=query.get_prewhere_ast(),
         groupby=query.get_groupby_from_ast(),
         having=query.get_having_from_ast(),
         order_by=query.get_orderby_from_ast(),
@@ -28,6 +27,7 @@ def identity_translate(query: LogicalQuery) -> ClickhouseQuery:
         offset=query.get_offset(),
         totals=query.has_totals(),
         granularity=query.get_granularity(),
+        final=query.get_final(),
     )
 
 

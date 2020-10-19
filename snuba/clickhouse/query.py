@@ -30,10 +30,9 @@ class Query(AbstractQuery[RelationalSource]):
         offset: int = 0,
         totals: bool = False,
         granularity: Optional[int] = None,
+        final: bool = False,
     ) -> None:
-        self.__final = False
-        # Temporary, these will only be in the logical query and not
-        # in the physical one.
+        self.__final = final
         self.__prewhere = prewhere
 
         super().__init__(

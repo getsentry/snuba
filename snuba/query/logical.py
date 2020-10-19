@@ -61,9 +61,6 @@ class Query(AbstractQuery[RelationalSource]):
         # in order not to expose the internal representation.
         self.__body = body
         self.__final = False
-        # Temporary, these will only be in the logical query and not
-        # in the physical one.
-        self.__prewhere = prewhere
         self.__entity = entity
 
         super().__init__(
@@ -83,25 +80,15 @@ class Query(AbstractQuery[RelationalSource]):
         )
 
     def _get_expressions_impl(self) -> Iterable[Expression]:
-        return self.__prewhere or []
+        return []
 
     def _transform_expressions_impl(
         self, func: Callable[[Expression], Expression]
     ) -> None:
-        self.__prewhere = self.__prewhere.transform(func) if self.__prewhere else None
+        pass
 
     def _transform_impl(self, visitor: ExpressionVisitor[Expression]) -> None:
-        if self.__prewhere is not None:
-            self.__prewhere = self.__prewhere.accept(visitor)
-
-    def get_prewhere_ast(self) -> Optional[Expression]:
-        """
-        Temporary method until pre where management is moved to Clickhouse query
-        """
-        return self.__prewhere
-
-    def set_prewhere_ast_condition(self, condition: Optional[Expression]) -> None:
-        self.__prewhere = condition
+        pass
 
     def get_final(self) -> bool:
         return self.__final
