@@ -77,6 +77,8 @@ class ErrorsProcessor(EventsProcessorBase):
 
         output["message"] = _unicodify(event["message"])
 
+        output["primary_hash"] = str(uuid.UUID(event["primary_hash"]))
+
     def extract_tags_custom(
         self,
         output: MutableMapping[str, Any],
