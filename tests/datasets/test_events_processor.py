@@ -651,3 +651,13 @@ class TestEventsProcessor:
         )
 
         self.__process_insert_event(event)
+
+    def test_none_tags_dont_throw(self) -> None:
+        self.event["tags"] = [
+            [None, "no-key"],
+            ["no-value", None],
+            None,
+        ]
+
+        processed = self.__process_insert_event(self.event)
+        assert isinstance(processed, InsertBatch)

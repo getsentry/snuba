@@ -1,9 +1,8 @@
-import logging
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Mapping, Optional, Sequence, Set, Union
+from typing import Mapping, Optional, Sequence, Set
 
-from snuba import environment, state
+from snuba import state
 from snuba.clickhouse.columns import (
     UUID,
     Array,
@@ -23,10 +22,9 @@ from snuba.clickhouse.translators.snuba.allowed import (
     FunctionCallMapper,
     SubscriptableReferenceMapper,
 )
-from snuba.clickhouse.translators.snuba.mappers import ColumnToLiteral, ColumnToMapping
+from snuba.clickhouse.translators.snuba.mappers import ColumnToLiteral
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
-from snuba.datasets.entities.factory import EntityKey
 from snuba.datasets.entities.events import event_translator
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import (
@@ -36,12 +34,7 @@ from snuba.datasets.storage import (
 )
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.entities.transactions import transaction_translator
-from snuba.query.conditions import (
-    BINARY_OPERATORS,
-    ConditionFunctions,
-    get_first_level_and_conditions,
-)
+from snuba.datasets.entities.transactions import TransactionsEntity
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -51,11 +44,9 @@ from snuba.query.expressions import (
 )
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
-from snuba.query.matchers import Column as ColumnMatch
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import String as StringMatch
-from snuba.query.matchers import Or, Param
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.performance_expressions import (
     apdex_processor,
@@ -66,188 +57,9 @@ from snuba.query.processors.handled_functions import HandledFunctionsProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
-from snuba.query.subscripts import subscript_key_column_name
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import qualified_column
-from snuba.utils.metrics.wrapper import MetricsWrapper
-
-EVENTS = EntityKey.EVENTS
-TRANSACTIONS = EntityKey.TRANSACTIONS
-EVENTS_AND_TRANSACTIONS = "events_and_transactions"
-
-metrics = MetricsWrapper(environment.metrics, "api.discover")
-logger = logging.getLogger(__name__)
-
-EVENT_CONDITION = FunctionCallMatch(
-    Param("function", Or([StringMatch(op) for op in BINARY_OPERATORS])),
-    (
-        Or([ColumnMatch(None, StringMatch("type")), LiteralMatch(None)]),
-        Param("event_type", Or([ColumnMatch(), LiteralMatch()])),
-    ),
-)
-
-
-def match_query_to_table(
-    query: Query, events_only_columns: ColumnSet, transactions_only_columns: ColumnSet
-) -> Union[EntityKey, str]:
-    # First check for a top level condition on the event type
-    condition = query.get_condition_from_ast()
-    event_types = set()
-    if condition:
-        top_level_condition = get_first_level_and_conditions(condition)
-
-        for cond in top_level_condition:
-            result = EVENT_CONDITION.match(cond)
-            if not result:
-                continue
-
-            event_type_param = result.expression("event_type")
-
-            if isinstance(event_type_param, Column):
-                event_type = event_type_param.column_name
-            elif isinstance(event_type_param, Literal):
-                event_type = str(event_type_param.value)
-            if result:
-                if result.string("function") == ConditionFunctions.EQ:
-                    event_types.add(event_type)
-                elif result.string("function") == ConditionFunctions.NEQ:
-                    if event_type == "transaction":
-                        return EVENTS
-
-    if len(event_types) == 1 and "transaction" in event_types:
-        return TRANSACTIONS
-
-    if len(event_types) > 0 and "transaction" not in event_types:
-        return EVENTS
-
-    # If we cannot clearly pick a table from the top level conditions, then
-    # inspect the columns requested to infer a selection.
-    has_event_columns = False
-    has_transaction_columns = False
-    for col in query.get_all_ast_referenced_columns():
-        if events_only_columns.get(col.column_name):
-            has_event_columns = True
-        elif transactions_only_columns.get(col.column_name):
-            has_transaction_columns = True
-
-    for subscript in query.get_all_ast_referenced_subscripts():
-        # Subscriptable references will not be properly recognized above
-        # through get_all_ast_referenced_columns since the columns that
-        # method will find will look like `tags` or `measurements`, while
-        # the column sets contains `tags.key` and `tags.value`.
-        schema_col_name = subscript_key_column_name(subscript)
-        if events_only_columns.get(schema_col_name):
-            has_event_columns = True
-        if transactions_only_columns.get(schema_col_name):
-            has_transaction_columns = True
-
-    if has_event_columns and has_transaction_columns:
-        # Impossible query, use the merge table
-        return EVENTS_AND_TRANSACTIONS
-    elif has_event_columns:
-        return EVENTS
-    elif has_transaction_columns:
-        return TRANSACTIONS
-    else:
-        return EVENTS_AND_TRANSACTIONS
-
-
-def detect_table(
-    query: Query,
-    events_only_columns: ColumnSet,
-    transactions_only_columns: ColumnSet,
-    track_bad_queries: bool,
-) -> EntityKey:
-    """
-    Given a query, we attempt to guess whether it is better to fetch data from the
-    "events", "transactions" or future merged storage.
-
-    The merged storage resolves to the events storage until errors and transactions
-    are split into separate physical tables.
-    """
-    selected_table = match_query_to_table(
-        query, events_only_columns, transactions_only_columns
-    )
-
-    if track_bad_queries:
-        event_columns = set()
-        transaction_columns = set()
-        for col in query.get_all_ast_referenced_columns():
-            if events_only_columns.get(col.column_name):
-                event_columns.add(col.column_name)
-            elif transactions_only_columns.get(col.column_name):
-                transaction_columns.add(col.column_name)
-
-        for subscript in query.get_all_ast_referenced_subscripts():
-            schema_col_name = subscript_key_column_name(subscript)
-            if events_only_columns.get(schema_col_name):
-                event_columns.add(schema_col_name)
-            if transactions_only_columns.get(schema_col_name):
-                transaction_columns.add(schema_col_name)
-
-        event_mismatch = event_columns and selected_table == TRANSACTIONS
-        transaction_mismatch = transaction_columns and selected_table in [
-            EVENTS,
-            EVENTS_AND_TRANSACTIONS,
-        ]
-
-        if event_mismatch or transaction_mismatch:
-            missing_columns = ",".join(
-                sorted(event_columns if event_mismatch else transaction_columns)
-            )
-            selected_table_str = (
-                str(selected_table.value)
-                if isinstance(selected_table, EntityKey)
-                else selected_table
-            )
-
-            metrics.increment(
-                "query.impossible",
-                tags={
-                    "selected_table": selected_table_str,
-                    "missing_columns": missing_columns,
-                },
-            )
-            logger.warning(
-                "Discover generated impossible query",
-                extra={
-                    "selected_table": selected_table_str,
-                    "missing_columns": missing_columns,
-                },
-                exc_info=True,
-            )
-
-        if selected_table == EVENTS_AND_TRANSACTIONS and (
-            event_columns or transaction_columns
-        ):
-            # Not possible in future with merge table
-            missing_events_columns = ",".join(sorted(event_columns))
-            missing_transactions_columns = ",".join(sorted(transaction_columns))
-            metrics.increment(
-                "query.impossible-merge-table",
-                tags={
-                    "missing_events_columns": missing_events_columns,
-                    "missing_transactions_columns": missing_transactions_columns,
-                },
-            )
-            logger.warning(
-                "Discover generated impossible query - merge table",
-                extra={
-                    "missing_events_columns": missing_events_columns,
-                    "missing_transactions_columns": missing_transactions_columns,
-                },
-                exc_info=True,
-            )
-
-        else:
-            metrics.increment("query.success")
-
-    # Default for events and transactions is events
-    final_table = (
-        EntityKey.EVENTS if selected_table != TRANSACTIONS else EntityKey.TRANSACTIONS
-    )
-    return final_table
 
 
 @dataclass(frozen=True)
@@ -408,53 +220,85 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
 
         self.__event_translator = event_translator.concat(
             TranslationMappers(
-                columns=[
-                    ColumnToMapping(None, "release", None, "tags", "sentry:release"),
-                    ColumnToMapping(None, "dist", None, "tags", "sentry:dist"),
-                    ColumnToMapping(None, "user", None, "tags", "sentry:user"),
-                    DefaultNoneColumnMapper(self.__abstract_transactions_columns),
-                ],
+                columns=[DefaultNoneColumnMapper(self.__abstract_transactions_columns)],
                 curried_functions=[DefaultNoneCurriedFunctionMapper()],
                 functions=[DefaultNoneFunctionMapper()],
                 subscriptables=[DefaultNoneSubscriptMapper({"measurements"})],
             )
         )
 
-        self.__transaction_translator = transaction_translator.concat(
-            TranslationMappers(
-                columns=[
-                    ColumnToLiteral(None, "group_id", 0),
-                    DefaultNoneColumnMapper(self.__abstract_events_columns),
-                ],
-                curried_functions=[DefaultNoneCurriedFunctionMapper()],
-                functions=[DefaultNoneFunctionMapper()],
-            )
-        )
-
     def select_storage(
         self, query: Query, request_settings: RequestSettings
     ) -> StorageAndMappers:
-        table = detect_table(
-            query,
-            self.__abstract_events_columns,
-            self.__abstract_transactions_columns,
-            True,
+        use_readonly_storage = (
+            state.get_config("enable_events_readonly_table", False)
+            and not request_settings.get_consistent()
+        )
+        return (
+            StorageAndMappers(self.__events_ro_table, self.__event_translator)
+            if use_readonly_storage
+            else StorageAndMappers(self.__events_table, self.__event_translator)
         )
 
-        if table == TRANSACTIONS:
-            return StorageAndMappers(
-                self.__transactions_table, self.__transaction_translator
-            )
-        else:
-            use_readonly_storage = (
-                state.get_config("enable_events_readonly_table", False)
-                and not request_settings.get_consistent()
-            )
-            return (
-                StorageAndMappers(self.__events_ro_table, self.__event_translator)
-                if use_readonly_storage
-                else StorageAndMappers(self.__events_table, self.__event_translator)
-            )
+
+EVENTS_COLUMNS = ColumnSet(
+    [
+        ("group_id", Nullable(UInt(64))),
+        ("primary_hash", Nullable(FixedString(32))),
+        # Promoted tags
+        ("level", Nullable(String())),
+        ("logger", Nullable(String())),
+        ("server_name", Nullable(String())),
+        ("site", Nullable(String())),
+        ("url", Nullable(String())),
+        ("location", Nullable(String())),
+        ("culprit", Nullable(String())),
+        ("received", Nullable(DateTime())),
+        ("sdk_integrations", Nullable(Array(String()))),
+        ("version", Nullable(String())),
+        # exception interface
+        (
+            "exception_stacks",
+            Nested(
+                [
+                    ("type", Nullable(String())),
+                    ("value", Nullable(String())),
+                    ("mechanism_type", Nullable(String())),
+                    ("mechanism_handled", Nullable(UInt(8))),
+                ]
+            ),
+        ),
+        (
+            "exception_frames",
+            Nested(
+                [
+                    ("abs_path", Nullable(String())),
+                    ("filename", Nullable(String())),
+                    ("package", Nullable(String())),
+                    ("module", Nullable(String())),
+                    ("function", Nullable(String())),
+                    ("in_app", Nullable(UInt(8))),
+                    ("colno", Nullable(UInt(32))),
+                    ("lineno", Nullable(UInt(32))),
+                    ("stack_level", UInt(16)),
+                ]
+            ),
+        ),
+        ("modules", Nested([("name", String()), ("version", String())])),
+    ]
+)
+
+TRANSACTIONS_COLUMNS = ColumnSet(
+    [
+        ("trace_id", Nullable(UUID())),
+        ("span_id", Nullable(UInt(64))),
+        ("transaction_hash", Nullable(UInt(64))),
+        ("transaction_op", Nullable(String())),
+        ("transaction_status", Nullable(UInt(8))),
+        ("duration", Nullable(UInt(32))),
+        ("measurements", Nested([("key", String()), ("value", Float(64))]),),
+    ]
+)
 
 
 class DiscoverEntity(Entity):
@@ -500,65 +344,8 @@ class DiscoverEntity(Entity):
                 ("contexts", Nested([("key", String()), ("value", String())])),
             ]
         )
-
-        self.__events_columns = ColumnSet(
-            [
-                ("group_id", Nullable(UInt(64))),
-                ("primary_hash", Nullable(FixedString(32))),
-                # Promoted tags
-                ("level", Nullable(String())),
-                ("logger", Nullable(String())),
-                ("server_name", Nullable(String())),
-                ("site", Nullable(String())),
-                ("url", Nullable(String())),
-                ("location", Nullable(String())),
-                ("culprit", Nullable(String())),
-                ("received", Nullable(DateTime())),
-                ("sdk_integrations", Nullable(Array(String()))),
-                ("version", Nullable(String())),
-                # exception interface
-                (
-                    "exception_stacks",
-                    Nested(
-                        [
-                            ("type", Nullable(String())),
-                            ("value", Nullable(String())),
-                            ("mechanism_type", Nullable(String())),
-                            ("mechanism_handled", Nullable(UInt(8))),
-                        ]
-                    ),
-                ),
-                (
-                    "exception_frames",
-                    Nested(
-                        [
-                            ("abs_path", Nullable(String())),
-                            ("filename", Nullable(String())),
-                            ("package", Nullable(String())),
-                            ("module", Nullable(String())),
-                            ("function", Nullable(String())),
-                            ("in_app", Nullable(UInt(8))),
-                            ("colno", Nullable(UInt(32))),
-                            ("lineno", Nullable(UInt(32))),
-                            ("stack_level", UInt(16)),
-                        ]
-                    ),
-                ),
-                ("modules", Nested([("name", String()), ("version", String())])),
-            ]
-        )
-
-        self.__transactions_columns = ColumnSet(
-            [
-                ("trace_id", Nullable(UUID())),
-                ("span_id", Nullable(UInt(64))),
-                ("transaction_hash", Nullable(UInt(64))),
-                ("transaction_op", Nullable(String())),
-                ("transaction_status", Nullable(UInt(8))),
-                ("duration", Nullable(UInt(32))),
-                ("measurements", Nested([("key", String()), ("value", Float(64))]),),
-            ]
-        )
+        self.__events_columns = EVENTS_COLUMNS
+        self.__transactions_columns = TRANSACTIONS_COLUMNS
 
         events_storage = get_storage(StorageKey.EVENTS)
         events_ro_storage = get_storage(StorageKey.EVENTS_RO)
@@ -606,3 +393,23 @@ class DiscoverEntity(Entity):
                 timestamp_column="timestamp",
             ),
         }
+
+
+class DiscoverTransactionsEntity(TransactionsEntity):
+    """
+    Identical to TransactionsEntity except it maps columns present in the events
+    entity to null. This logic will eventually move to Sentry and this entity
+    can be deleted and replaced with the TransactionsEntity directly.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            custom_mappers=TranslationMappers(
+                columns=[
+                    ColumnToLiteral(None, "group_id", 0),
+                    DefaultNoneColumnMapper(EVENTS_COLUMNS),
+                ],
+                curried_functions=[DefaultNoneCurriedFunctionMapper()],
+                functions=[DefaultNoneFunctionMapper()],
+            )
+        )
