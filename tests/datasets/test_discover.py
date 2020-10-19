@@ -147,7 +147,7 @@ def test_data_source(
     dataset = get_dataset("discover")
     query = parse_query(query_body, dataset)
     request = Request("a", query, request_settings, {}, "r")
-    entity = get_entity(query.get_entity().key)
+    entity = get_entity(query.get_from_clause().key)
     for processor in entity.get_query_processors():
         processor.process_query(request.query, request.settings)
 

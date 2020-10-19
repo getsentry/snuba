@@ -13,7 +13,6 @@ from typing import (
 )
 
 from deprecation import deprecated
-from snuba.datasets.schemas import RelationalSource
 from snuba.query import Limitby, OrderBy
 from snuba.query import Query as AbstractQuery
 from snuba.query import SelectedExpression
@@ -25,7 +24,7 @@ Aggregation = Union[
 ]
 
 
-class Query(AbstractQuery[RelationalSource]):
+class Query(AbstractQuery[Entity]):
     """
     Represents the logical query during query processing.
     This means the query class used between parsing and query translation.
@@ -37,7 +36,7 @@ class Query(AbstractQuery[RelationalSource]):
     def __init__(
         self,
         body: MutableMapping[str, Any],  # Temporary
-        data_source: Optional[RelationalSource],
+        data_source: Optional[Entity],
         # New data model to replace the one based on the dictionary
         selected_columns: Optional[Sequence[SelectedExpression]] = None,
         array_join: Optional[Expression] = None,
@@ -46,7 +45,6 @@ class Query(AbstractQuery[RelationalSource]):
         groupby: Optional[Sequence[Expression]] = None,
         having: Optional[Expression] = None,
         order_by: Optional[Sequence[OrderBy]] = None,
-        entity: Optional[Entity] = None,
         limitby: Optional[Limitby] = None,
         sample: Optional[float] = None,
         limit: Optional[int] = None,
@@ -61,7 +59,6 @@ class Query(AbstractQuery[RelationalSource]):
         # in order not to expose the internal representation.
         self.__body = body
         self.__final = False
-        self.__entity = entity
 
         super().__init__(
             from_clause=data_source,
@@ -102,11 +99,3 @@ class Query(AbstractQuery[RelationalSource]):
     )
     def get_body(self) -> Mapping[str, Any]:
         return self.__body
-
-    def set_entity(self, entity: Entity) -> None:
-        assert self.__entity is None
-        self.__entity = entity
-
-    def get_entity(self) -> Entity:
-        assert self.__entity is not None
-        return self.__entity

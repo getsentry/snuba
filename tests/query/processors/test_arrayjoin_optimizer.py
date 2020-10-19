@@ -316,7 +316,7 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     dataset = get_dataset("transactions")
     query = parse_query(query_body, dataset)
     request = Request("a", query, HTTPRequestSettings(), {}, "r")
-    entity = get_entity(query.get_entity().key)
+    entity = get_entity(query.get_from_clause().key)
     for p in entity.get_query_processors():
         p.process_query(query, request.settings)
     plan = entity.get_query_plan_builder().build_plan(request)

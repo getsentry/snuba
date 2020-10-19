@@ -300,7 +300,7 @@ def test_col_split_conditions(
     query = parse_query(query, dataset)
     splitter = ColumnSplitQueryStrategy(id_column, project_column, timestamp_column)
     request = Request("a", query, HTTPRequestSettings(), {}, "r")
-    entity = get_entity(query.get_entity().key)
+    entity = get_entity(query.get_from_clause().key)
     plan = entity.get_query_plan_builder().build_plan(request)
 
     def do_query(
@@ -362,7 +362,7 @@ def test_time_split_ast() -> None:
     }
 
     query = parse_query(body, get_dataset("events"))
-    entity = get_entity(query.get_entity().key)
+    entity = get_entity(query.get_from_clause().key)
     settings = HTTPRequestSettings()
     for p in entity.get_query_processors():
         p.process_query(query, settings)

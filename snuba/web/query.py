@@ -72,7 +72,7 @@ def _run_query_pipeline(
     - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
       to the QueryExecutionStrategy to actually run the DB Query.
     """
-    query_entity = request.query.get_entity()
+    query_entity = request.query.get_from_clause()
     entity = get_entity(query_entity.key)
 
     # TODO: this will work perfectly with datasets that are not time series. Remove it.
