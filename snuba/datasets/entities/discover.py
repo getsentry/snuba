@@ -136,7 +136,11 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
                     break
 
         if all_null and len(parameters) > 0:
-            return identity(Literal(None, None), expression.alias)
+            # Currently function mappers require returning other functions. So return this
+            # to keep the mapper happy.
+            return FunctionCall(
+                expression.alias, "ifNull", (Literal(None, None), Literal(None, None))
+            )
 
         return None
 
