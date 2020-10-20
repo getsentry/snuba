@@ -20,7 +20,7 @@ from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
 from snuba.query.expressions import Literal as LiteralExpr
-from snuba.query.logical import OrderByDirection, SelectedExpression
+from snuba.query import OrderByDirection, SelectedExpression
 from snuba.query.matchers import AnyExpression, Column, FunctionCall, Or, Param, String
 from snuba.request.request_settings import RequestSettings
 from snuba.utils.metrics.wrapper import MetricsWrapper

@@ -154,7 +154,7 @@ def _format_storage_query_and_run(
     # object in the query to ensure the fields in the QueryResult have
     # the same name the user expects.
 
-    source = clickhouse_query.get_data_source().format_from()
+    source = clickhouse_query.get_from_clause().format_from()
     with sentry_sdk.start_span(description="create_query", op="db") as span:
         formatted_query = AstSqlQuery(clickhouse_query, request_settings)
         span.set_data("query", formatted_query.sql_data())

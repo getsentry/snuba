@@ -156,6 +156,6 @@ def test_data_source(
     for physical_processor in plan.plan_processors:
         physical_processor.process_query(plan.query, request.settings)
 
-    assert plan.query.get_data_source().format_from() == expected_table, json.dumps(
+    assert plan.query.get_from_clause().format_from() == expected_table, json.dumps(
         query_body
     )

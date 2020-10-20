@@ -10,7 +10,8 @@ from snuba.query.conditions import (
     combine_or_conditions,
 )
 from snuba.query.expressions import Column, Expression, Literal
-from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.logical import Query
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
     HighPriOperator,
@@ -36,7 +37,7 @@ from snuba.query.snql.expression_visitor import (
 )
 
 snql_grammar = Grammar(
-    fr"""
+    r"""
     query_exp             = match_clause where_clause? collect_clause? group_by_clause? having_clause? order_by_clause?
 
     match_clause          = space* "MATCH" space* open_paren clause close_paren space*

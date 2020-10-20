@@ -24,7 +24,7 @@ class AstSqlQuery(SqlQuery):
         self.__groupby = query.get_groupby_from_ast()
         self.__having = query.get_having_from_ast()
         self.__orderby = query.get_orderby_from_ast()
-        self.__data_source = query.get_data_source()
+        self.__data_source = query.get_from_clause()
         self.__arrayjoin = query.get_arrayjoin_from_ast()
         self.__granularity = query.get_granularity()
         self.__limit = query.get_limit()

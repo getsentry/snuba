@@ -15,7 +15,8 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.logical import Query
 from snuba.query.parser import parse_query
 from snuba.query.parser.exceptions import AliasShadowingException, CyclicAliasException
 
