@@ -225,14 +225,26 @@ def parallel_transform_worker_apply(
     i = start_index
     while i < len(input_batch):
         message = input_batch[i]
+
+        try:
+            result = function(message)
+        except Exception:
+            # The remote traceback thrown when retrieving the result from the
+            # pool elides a lot of useful data (and usually includes a
+            # truncated traceback), logging it here allows us to get this
+            # information at the expense of sending duplicate events to Sentry
+            # (one from the child and one from the parent.)
+            logger.warning(
+                "Caught exception while applying %r to %r!",
+                function,
+                message,
+                exc_info=True,
+            )
+            raise
+
         try:
             output_batch.append(
-                Message(
-                    message.partition,
-                    message.offset,
-                    function(message),
-                    message.timestamp,
-                )
+                Message(message.partition, message.offset, result, message.timestamp)
             )
         except ValueTooLarge:
             # If the output batch cannot accept the transformed message when
