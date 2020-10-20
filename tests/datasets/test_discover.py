@@ -3,7 +3,7 @@ import pytest
 from typing import Any, MutableMapping
 
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.entities.factory import EntityKey, get_entity
+from snuba.datasets.entities.factory import get_entity
 from snuba.query.parser import parse_query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
@@ -147,7 +147,7 @@ def test_data_source(
     dataset = get_dataset("discover")
     query = parse_query(query_body, dataset)
     request = Request("a", query, request_settings, {}, "r")
-    entity = get_entity(EntityKey(query.get_entity_name()))
+    entity = get_entity(query.get_entity().key)
     for processor in entity.get_query_processors():
         processor.process_query(request.query, request.settings)
 

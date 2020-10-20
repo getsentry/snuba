@@ -4,13 +4,12 @@ from datetime import datetime
 from functools import partial
 
 import sentry_sdk
-
 from snuba import environment
 from snuba.clickhouse.astquery import AstSqlQuery
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.factory import EntityKey, get_entity
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.timeseries_extension import TimeSeriesExtensionProcessor
 from snuba.querylog import record_query
@@ -73,7 +72,8 @@ def _run_query_pipeline(
     - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
       to the QueryExecutionStrategy to actually run the DB Query.
     """
-    entity = get_entity(EntityKey(request.query.get_entity_name()))
+    query_entity = request.query.get_entity()
+    entity = get_entity(query_entity.key)
 
     # TODO: this will work perfectly with datasets that are not time series. Remove it.
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(

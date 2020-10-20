@@ -19,9 +19,9 @@ from typing import (
 )
 
 from deprecation import deprecated
-
 from snuba.datasets.schemas import RelationalSource
 from snuba.query.conditions import BooleanFunctions, binary_condition
+from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import (
     Column,
     Expression,
@@ -108,7 +108,7 @@ class Query:
         groupby: Optional[Sequence[Expression]] = None,
         having: Optional[Expression] = None,
         order_by: Optional[Sequence[OrderBy]] = None,
-        entity_name: Optional[str] = None,
+        entity: Optional[Entity] = None,
     ):
         """
         Expects an already parsed query body.
@@ -126,7 +126,9 @@ class Query:
         self.__groupby = groupby or []
         self.__having = having
         self.__order_by = order_by or []
-        self.__entity_name = entity_name
+        # Temporary, this will only be in the logical query and not
+        # in the physical one.
+        self.__entity = entity
 
     def get_all_expressions(self) -> Iterable[Expression]:
         """
@@ -396,10 +398,10 @@ class Query:
         declared_symbols |= {c.flattened for c in self.get_data_source().get_columns()}
         return not referenced_symbols - declared_symbols
 
-    def set_entity_name(self, entity_name: str) -> None:
-        assert self.__entity_name is None
-        self.__entity_name = entity_name
+    def set_entity(self, entity: Entity) -> None:
+        assert self.__entity is None
+        self.__entity = entity
 
-    def get_entity_name(self) -> str:
-        assert self.__entity_name is not None
-        return self.__entity_name
+    def get_entity(self) -> Entity:
+        assert self.__entity is not None
+        return self.__entity

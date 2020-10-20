@@ -1,8 +1,9 @@
 from typing import Sequence
 
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity import Entity
 from snuba.query.logical import Query
-from snuba.datasets.entities.factory import get_entity, EntityKey
 
 
 class Dataset(object):

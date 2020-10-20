@@ -6,7 +6,9 @@ from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 from snuba import environment
 from snuba.clickhouse.escaping import NEGATE_RE
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity import Entity
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -19,10 +21,8 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
-from snuba.query.matchers import (
-    FunctionCall as FunctionCallMatch,
-    String as StringMatch,
-)
+from snuba.query.matchers import FunctionCall as FunctionCallMatch
+from snuba.query.matchers import String as StringMatch
 from snuba.query.parser.conditions import parse_conditions_to_expr
 from snuba.query.parser.exceptions import (
     AliasShadowingException,
@@ -85,7 +85,10 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     # XXX: Select the entity to be used for the query. This step is temporary. Eventually
     # entity selection will be moved to Sentry and specified for all SnQL queries.
     selected_entity = dataset.select_entity(query)
-    query.set_entity_name(selected_entity.value)
+    query_entity = QueryEntity(
+        selected_entity, get_entity(selected_entity).get_data_model()
+    )
+    query.set_entity(query_entity)
 
     return query
 
