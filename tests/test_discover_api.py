@@ -3,7 +3,6 @@ from functools import partial
 
 import simplejson as json
 
-from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
@@ -18,12 +17,9 @@ class TestDiscoverApi(BaseApiTest):
         self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
         self.event = get_raw_event()
         self.project_id = self.event["project_id"]
+        write_unprocessed_events(get_writable_storage(StorageKey.EVENTS), [self.event])
         write_unprocessed_events(
-            get_writable_storage(StorageKey.EVENTS), [InsertEvent(self.event)]
-        )
-        write_unprocessed_events(
-            get_writable_storage(StorageKey.TRANSACTIONS),
-            [InsertEvent(get_raw_transaction())],
+            get_writable_storage(StorageKey.TRANSACTIONS), [get_raw_transaction()],
         )
 
     def test_raw_data(self):
