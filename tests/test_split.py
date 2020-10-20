@@ -2,7 +2,6 @@ from datetime import datetime
 from typing import Any, MutableMapping, Sequence
 
 import pytest
-
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet, String
 from snuba.clickhouse.query import Query as ClickhouseQuery
@@ -12,9 +11,9 @@ from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
+from snuba.datasets.plans.translator.query import identity_translate
+from snuba.query import SelectedExpression
 from snuba.query.expressions import Column
-from snuba.query.logical import Query as LogicalQuery
-from snuba.query.logical import SelectedExpression
 from snuba.query.parser import parse_query
 from snuba.reader import Reader
 from snuba.request import Request
@@ -41,20 +40,10 @@ def test_no_split(
 ) -> None:
     events = get_dataset(dataset_name)
     query = ClickhouseQuery(
-        LogicalQuery(
-            {
-                "selected_columns": ["event_id"],
-                "conditions": [""],
-                "orderby": "event_id",
-                "sample": 10,
-                "limit": 100,
-                "offset": 50,
-            },
-            events.get_default_entity()
-            .get_all_storages()[0]
-            .get_schema()
-            .get_data_source(),
-        )
+        events.get_default_entity()
+        .get_all_storages()[0]
+        .get_schema()
+        .get_data_source(),
     )
 
     def do_query(
@@ -152,26 +141,14 @@ def test_col_split(
 
     events = get_dataset(dataset_name)
     query = ClickhouseQuery(
-        LogicalQuery(
-            {
-                "selected_columns": list(second_query_data[0].keys()),
-                "conditions": [""],
-                "orderby": "events.event_id",
-                "sample": 10,
-                "limit": 100,
-                "offset": 50,
-            },
-            events.get_default_entity()
-            .get_all_storages()[0]
-            .get_schema()
-            .get_data_source(),
-            selected_columns=[
-                SelectedExpression(
-                    name=col_name, expression=Column(None, None, col_name)
-                )
-                for col_name in second_query_data[0].keys()
-            ],
-        )
+        events.get_default_entity()
+        .get_all_storages()[0]
+        .get_schema()
+        .get_data_source(),
+        selected_columns=[
+            SelectedExpression(name=col_name, expression=Column(None, None, col_name))
+            for col_name in second_query_data[0].keys()
+        ],
     )
 
     strategy = SimpleQueryPlanExecutionStrategy(
@@ -323,7 +300,7 @@ def test_col_split_conditions(
     query = parse_query(query, dataset)
     splitter = ColumnSplitQueryStrategy(id_column, project_column, timestamp_column)
     request = Request("a", query, HTTPRequestSettings(), {}, "r")
-    entity = get_entity(query.get_entity().key)
+    entity = get_entity(query.get_from_clause().key)
     plan = entity.get_query_plan_builder().build_plan(request)
 
     def do_query(
@@ -385,13 +362,14 @@ def test_time_split_ast() -> None:
     }
 
     query = parse_query(body, get_dataset("events"))
-    entity = get_entity(query.get_entity().key)
+    entity = get_entity(query.get_from_clause().key)
     settings = HTTPRequestSettings()
     for p in entity.get_query_processors():
         p.process_query(query, settings)
 
+    clickhouse_query = identity_translate(query)
     splitter = TimeSplitQueryStrategy("timestamp")
-    splitter.execute(ClickhouseQuery(query), settings, do_query)
+    splitter.execute(clickhouse_query, settings, do_query)
 
     assert found_timestamps == [
         ("2019-09-19T11:00:00", "2019-09-19T12:00:00"),

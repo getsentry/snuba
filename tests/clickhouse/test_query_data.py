@@ -1,25 +1,23 @@
 from typing import List, Tuple
 
 import pytest
-
 from snuba.clickhouse.astquery import AstSqlQuery
 from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.schemas.tables import TableSource
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
     binary_condition,
 )
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
-from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.logical import Query
 from snuba.request.request_settings import HTTPRequestSettings
 
 test_cases = [
     pytest.param(
         # Simple query with aliases and multiple tables
-        Query(
-            {},
+        ClickhouseQuery(
             TableSource("my_table", ColumnSet([])),
             selected_columns=[
                 SelectedExpression("column1", Column(None, None, "column1")),
@@ -58,8 +56,7 @@ test_cases = [
     ),
     pytest.param(
         # Query with complex functions
-        Query(
-            {},
+        ClickhouseQuery(
             TableSource("my_table", ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
@@ -129,8 +126,7 @@ test_cases = [
     ),
     pytest.param(
         # Query with escaping
-        Query(
-            {},
+        ClickhouseQuery(
             TableSource("my_table", ColumnSet([])),
             selected_columns=[
                 SelectedExpression("field_##$$%", Column("al1", None, "field_##$$%")),
@@ -151,8 +147,7 @@ test_cases = [
         id="query_with_escaping",
     ),
     pytest.param(
-        Query(
-            {},
+        ClickhouseQuery(
             TableSource("my_table", ColumnSet([])),
             selected_columns=[
                 SelectedExpression("al", Column("al", None, "column3")),
@@ -209,7 +204,9 @@ test_cases = [
 
 
 @pytest.mark.parametrize("query, data", test_cases)
-def test_format_expressions(query: Query, data: List[Tuple[str, str]]) -> None:
+def test_format_expressions(
+    query: ClickhouseQuery, data: List[Tuple[str, str]]
+) -> None:
     request_settings = HTTPRequestSettings()
     clickhouse_query = AstSqlQuery(query, request_settings)
     assert clickhouse_query.sql_data() == data
@@ -220,8 +217,7 @@ def test_format_clickhouse_specific_query() -> None:
     Adds a few of the Clickhosue specific fields to the query.
     """
 
-    query = Query(
-        {},
+    query = ClickhouseQuery(
         TableSource("my_table", ColumnSet([])),
         selected_columns=[
             SelectedExpression("column1", Column(None, None, "column1")),
