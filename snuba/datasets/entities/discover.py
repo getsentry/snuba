@@ -28,10 +28,10 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.entities.events import EventsEntity
+from snuba.datasets.entities.events import EventsEntity, EventsQueryStorageSelector
 from snuba.datasets.entities.transactions import TransactionsEntity
 from snuba.query.dsl import identity
 from snuba.query.expressions import (
@@ -342,28 +342,33 @@ class DiscoverEntity(Entity):
 
         super().__init__(
             storages=[events_storage],
-            query_plan_builder=SingleStorageQueryPlanBuilder(
-                storage=events_storage,
-                mappers=events_translation_mappers.concat(
-                    transaction_translation_mappers
-                )
-                .concat(null_function_translation_mappers)
-                .concat(
-                    TranslationMappers(
-                        # XXX: Remove once we are using errors
-                        columns=[
-                            ColumnToMapping(
-                                None, "release", None, "tags", "sentry:release"
-                            ),
-                            ColumnToMapping(None, "dist", None, "tags", "sentry:dist"),
-                            ColumnToMapping(None, "user", None, "tags", "sentry:user"),
-                        ],
-                        subscriptables=[
-                            SubscriptableMapper(None, "tags", None, "tags"),
-                            SubscriptableMapper(None, "contexts", None, "contexts"),
-                        ],
+            query_plan_builder=SelectedStorageQueryPlanBuilder(
+                selector=EventsQueryStorageSelector(
+                    mappers=events_translation_mappers.concat(
+                        transaction_translation_mappers
                     )
-                ),
+                    .concat(null_function_translation_mappers)
+                    .concat(
+                        TranslationMappers(
+                            # XXX: Remove once we are using errors
+                            columns=[
+                                ColumnToMapping(
+                                    None, "release", None, "tags", "sentry:release"
+                                ),
+                                ColumnToMapping(
+                                    None, "dist", None, "tags", "sentry:dist"
+                                ),
+                                ColumnToMapping(
+                                    None, "user", None, "tags", "sentry:user"
+                                ),
+                            ],
+                            subscriptables=[
+                                SubscriptableMapper(None, "tags", None, "tags"),
+                                SubscriptableMapper(None, "contexts", None, "contexts"),
+                            ],
+                        )
+                    )
+                )
             ),
             abstract_column_set=(
                 self.__common_columns
