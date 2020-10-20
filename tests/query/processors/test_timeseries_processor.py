@@ -150,7 +150,7 @@ def test_timeseries_format_expressions(
     formatted_condition: str,
 ) -> None:
     unprocessed = Query(
-        {"granularity": granularity},
+        {},
         TableSource("transactions", ColumnSet([])),
         selected_columns=[
             SelectedExpression(
@@ -159,6 +159,7 @@ def test_timeseries_format_expressions(
             SelectedExpression("my_time", Column("my_time", None, "time")),
         ],
         condition=condition,
+        granularity=granularity,
     )
     expected = Query(
         {"granularity": granularity},

@@ -11,7 +11,8 @@ from snuba.query.conditions import (
     binary_condition,
 )
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
-from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.logical import Query
 from snuba.request.request_settings import HTTPRequestSettings
 
 test_cases = [
@@ -220,7 +221,7 @@ def test_format_clickhouse_specific_query() -> None:
     """
 
     query = Query(
-        {"sample": 0.1, "totals": True, "limitby": (10, "environment")},
+        {},
         TableSource("my_table", ColumnSet([])),
         selected_columns=[
             SelectedExpression("column1", Column(None, None, "column1")),
@@ -235,6 +236,9 @@ def test_format_clickhouse_specific_query() -> None:
         ),
         order_by=[OrderBy(OrderByDirection.ASC, Column(None, None, "column1"))],
         array_join=Column(None, None, "column1"),
+        sample=0.1,
+        totals=True,
+        limitby=(10, "environment"),
     )
 
     query.set_final(True)
