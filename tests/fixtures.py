@@ -2,13 +2,13 @@ import calendar
 import uuid
 from datetime import datetime, timedelta, timezone
 from hashlib import md5
-from typing import Any, Mapping
 from snuba import settings
+from snuba.datasets.events_processor_base import InsertEvent
 
 PROJECT_ID = 70156
 
 
-def get_raw_event() -> Mapping[str, Any]:
+def get_raw_event() -> InsertEvent:
     now = datetime.utcnow()
 
     event_id = str(uuid.uuid4().hex)
@@ -159,7 +159,7 @@ def get_raw_event() -> Mapping[str, Any]:
     }
 
 
-def get_raw_transaction() -> Mapping[str, Any]:
+def get_raw_transaction() -> InsertEvent:
     now = datetime.utcnow().replace(
         minute=0, second=0, microsecond=0, tzinfo=timezone.utc
     )

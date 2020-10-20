@@ -19,7 +19,6 @@ def test_error_processor() -> None:
         {
             "event_id": "dcb9d002cac548c795d1c9adbfc68040",
             "group_id": 100,
-            "organization_id": 3,
             "project_id": 300688,
             "release": None,
             "dist": None,
@@ -274,7 +273,7 @@ def test_error_processor() -> None:
         "retention_days": 90,
         "deleted": 0,
         "group_id": 100,
-        "primary_hash": "04233d08ac90cf6fc015b1be5932e7e2",
+        "primary_hash": str(UUID("04233d08ac90cf6fc015b1be5932e7e2")),
         "received": received_timestamp.astimezone(pytz.utc).replace(
             tzinfo=None, microsecond=0
         ),

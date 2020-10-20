@@ -8,7 +8,6 @@ from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets import errors_replacer
-from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
@@ -34,7 +33,7 @@ class TestReplacer:
         )
 
         self.project_id = 1
-        self.event = InsertEvent(get_raw_event())
+        self.event = get_raw_event()
 
     def _wrap(self, msg: str) -> Message[KafkaPayload]:
         return Message(
