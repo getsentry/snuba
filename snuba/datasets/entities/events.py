@@ -2,7 +2,10 @@ from datetime import timedelta
 from typing import Mapping, Sequence
 
 from snuba import state
-from snuba.clickhouse.translators.snuba.mappers import SubscriptableMapper
+from snuba.clickhouse.translators.snuba.mappers import (
+    ColumnToMapping,
+    SubscriptableMapper,
+)
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
@@ -29,6 +32,11 @@ from snuba.request.request_settings import RequestSettings
 # storage. Now we do not have entities so it is between dataset and
 # storage.
 event_translator = TranslationMappers(
+    columns=[
+        ColumnToMapping(None, "release", None, "tags", "sentry:release"),
+        ColumnToMapping(None, "dist", None, "tags", "sentry:dist"),
+        ColumnToMapping(None, "user", None, "tags", "sentry:user"),
+    ],
     subscriptables=[
         SubscriptableMapper(None, "tags", None, "tags"),
         SubscriptableMapper(None, "contexts", None, "contexts"),

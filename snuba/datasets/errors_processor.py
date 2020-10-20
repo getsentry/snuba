@@ -10,6 +10,7 @@ from snuba.datasets.events_processor_base import EventsProcessorBase, InsertEven
 from snuba.processor import (
     _as_dict_safe,
     _ensure_valid_ip,
+    _hashify,
     _unicodify,
 )
 
@@ -76,6 +77,8 @@ class ErrorsProcessor(EventsProcessorBase):
         data["contexts"] = contexts
 
         output["message"] = _unicodify(event["message"])
+
+        output["primary_hash"] = str(uuid.UUID(_hashify(event["primary_hash"])))
 
     def extract_tags_custom(
         self,
