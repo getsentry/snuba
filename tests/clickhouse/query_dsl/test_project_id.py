@@ -3,10 +3,7 @@ from typing import Any, MutableMapping, Set
 import pytest
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.clickhouse.query_dsl.accessors import (
-    get_project_ids_in_query,
-    get_project_ids_in_query_ast,
-)
+from snuba.clickhouse.query_dsl.accessors import get_project_ids_in_query_ast
 from snuba.datasets.factory import get_dataset
 from snuba.query.parser import parse_query
 
@@ -144,8 +141,5 @@ def test_find_projects(
     query = parse_query(query_body, events)
 
     query = ClickhouseQuery(query)
-    project_ids = get_project_ids_in_query(query, "project_id")
-    assert project_ids == expected_projects
-
     project_ids_ast = get_project_ids_in_query_ast(query, "project_id")
     assert project_ids_ast == expected_projects

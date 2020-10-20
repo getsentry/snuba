@@ -28,7 +28,6 @@ from snuba.query.expressions import (
     ExpressionVisitor,
     SubscriptableReference,
 )
-from snuba.query.types import Condition
 
 Aggregation = Union[
     Tuple[Any, Any, Any], Sequence[Any],
@@ -109,6 +108,12 @@ class Query:
         having: Optional[Expression] = None,
         order_by: Optional[Sequence[OrderBy]] = None,
         entity: Optional[Entity] = None,
+        limitby: Optional[Limitby] = None,
+        sample: Optional[float] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        totals: bool = False,
+        granularity: Optional[int] = None,
     ):
         """
         Expects an already parsed query body.
@@ -129,6 +134,12 @@ class Query:
         # Temporary, this will only be in the logical query and not
         # in the physical one.
         self.__entity = entity
+        self.__limitby = limitby
+        self.__sample = sample
+        self.__limit = limit
+        self.__offset = offset
+        self.__totals = totals
+        self.__granularity = granularity
 
     def get_all_expressions(self) -> Iterable[Expression]:
         """
@@ -250,17 +261,11 @@ class Query:
     def get_groupby_from_ast(self) -> Sequence[Expression]:
         return self.__groupby
 
-    def get_conditions(self) -> Optional[Sequence[Condition]]:
-        return self.__body.get("conditions")
-
     def get_condition_from_ast(self) -> Optional[Expression]:
         return self.__condition
 
     def set_ast_condition(self, condition: Optional[Expression]) -> None:
         self.__condition = condition
-
-    def set_conditions(self, conditions: Sequence[Condition]) -> None:
-        self.__body["conditions"] = conditions
 
     def add_condition_to_ast(self, condition: Expression) -> None:
         if not self.__condition:
@@ -292,25 +297,25 @@ class Query:
         return self.__order_by
 
     def get_limitby(self) -> Optional[Limitby]:
-        return self.__body.get("limitby")
+        return self.__limitby
 
     def get_sample(self) -> Optional[float]:
-        return self.__body.get("sample")
+        return self.__sample
 
     def get_limit(self) -> Optional[int]:
-        return self.__body.get("limit", None)
+        return self.__limit
 
     def set_limit(self, limit: int) -> None:
-        self.__body["limit"] = limit
+        self.__limit = limit
 
     def get_offset(self) -> int:
-        return self.__body.get("offset", 0)
+        return self.__offset
 
     def set_offset(self, offset: int) -> None:
-        self.__body["offset"] = offset
+        self.__offset = offset
 
     def has_totals(self) -> bool:
-        return self.__body.get("totals", False)
+        return self.__totals
 
     def get_final(self) -> bool:
         return self.__final
@@ -319,19 +324,10 @@ class Query:
         self.__final = final
 
     def set_granularity(self, granularity: int) -> None:
-        """
-        Temporary method to move the management of granularity
-        out of the body. This is the only usage left of the body
-        during the query column processing. That processing is
-        going to move to a place where this object is being built.
-        But in order to do that we need first to decouple it from
-        the query body, thus we need to move the granularity out of
-        the body even if it does not really belong here.
-        """
-        self.__body["granularity"] = granularity
+        self.__granularity = granularity
 
     def get_granularity(self) -> Optional[int]:
-        return self.__body.get("granularity")
+        return self.__granularity
 
     @deprecated(
         details="Do not access the internal query representation "

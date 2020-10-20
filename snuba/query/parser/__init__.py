@@ -242,6 +242,12 @@ def _parse_query_impl(body: MutableMapping[str, Any], entity: Entity) -> Query:
         groupby=[g.expression for g in groupby_clause],
         having=having_expr,
         order_by=orderby_exprs,
+        limitby=body.get("limitby"),
+        sample=body.get("sample"),
+        limit=body.get("limit", None),
+        offset=body.get("offset", 0),
+        totals=body.get("totals", False),
+        granularity=body.get("granularity"),
     )
 
 
