@@ -116,14 +116,14 @@ def match_query_to_entity(
         if transactions_only_columns.get(schema_col_name):
             has_transaction_columns = True
 
-    # Check for apdex or failure rate
+    # Check for isHandled/notHandled
     if has_event_columns is False:
         for expr in query.get_all_expressions():
             match = EVENT_FUNCTIONS.match(expr)
             if match:
                 has_event_columns = True
 
-    # Check for isHandled/notHandled
+    # Check for apdex or failure rate
     if has_transaction_columns is False:
         for expr in query.get_all_expressions():
             match = TRANSACTION_FUNCTIONS.match(expr)
