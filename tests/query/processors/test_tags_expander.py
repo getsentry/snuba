@@ -1,7 +1,7 @@
 from snuba.datasets.factory import get_dataset
+from snuba.query import SelectedExpression
 from snuba.query.conditions import OPERATOR_TO_FUNCTION, binary_condition, in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.logical import SelectedExpression
 from snuba.query.parser import parse_query
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.request.request_settings import HTTPRequestSettings

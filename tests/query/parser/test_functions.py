@@ -1,15 +1,15 @@
 import pytest
 
-from snuba.datasets.entities.factory import EntityKey, get_entity
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.query.conditions import (
-    binary_condition,
     BooleanFunctions,
     ConditionFunctions,
+    binary_condition,
 )
-from snuba.query.expressions import Argument, Column, Lambda, Literal, FunctionCall
+from snuba.query.expressions import Argument, Column, FunctionCall, Lambda, Literal
 from snuba.query.parser.functions import parse_function_to_expr
 from snuba.util import tuplify
-
 
 test_data = [
     (tuplify(["count", []]), FunctionCall(None, "count", ())),

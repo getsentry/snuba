@@ -49,7 +49,7 @@ def _get_date_range(query: Query) -> Optional[int]:
 
 
 def _get_table(query: Query) -> str:
-    source = query.get_data_source()
+    source = query.get_from_clause()
     if source is None:
         # Should never happen at this point.
         return ""

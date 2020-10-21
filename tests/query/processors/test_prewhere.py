@@ -1,11 +1,10 @@
 from typing import Any, MutableMapping, Optional, Sequence
 
 import pytest
-
 from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
-from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.plans.translator.query import identity_translate
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
@@ -153,12 +152,12 @@ def test_prewhere(
 ) -> None:
     settings.MAX_PREWHERE_CONDITIONS = 2
     events = get_dataset("events")
-    query = parse_query(query_body, events)
-    query.set_data_source(TableSource("my_table", ColumnSet([]), None, keys))
+    query = identity_translate(parse_query(query_body, events))
+    query.set_from_clause(TableSource("my_table", ColumnSet([]), None, keys))
 
     request_settings = HTTPRequestSettings()
     processor = PrewhereProcessor()
-    processor.process_query(Query(query), request_settings)
+    processor.process_query(query, request_settings)
 
     assert query.get_condition_from_ast() == new_ast_condition
     assert query.get_prewhere_ast() == new_prewhere_ast_condition

@@ -1,14 +1,15 @@
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.datasets.schemas.tables import TableSource
+from snuba.query import SelectedExpression
 from snuba.query.conditions import (
+    ConditionFunctions,
     binary_condition,
     combine_and_conditions,
-    ConditionFunctions,
 )
 from snuba.query.dsl import count, divide
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.logical import Query, SelectedExpression
+from snuba.query.logical import Query
 from snuba.query.processors.performance_expressions import failure_rate_processor
 from snuba.request.request_settings import HTTPRequestSettings
 

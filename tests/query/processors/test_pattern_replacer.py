@@ -1,15 +1,12 @@
 import pytest
-
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
+from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.logical import Query, SelectedExpression
-from snuba.query.matchers import (
-    Column as ColumnMatch,
-    String as StringMatch,
-    MatchResult,
-    Param,
-)
+from snuba.query.logical import Query
+from snuba.query.matchers import Column as ColumnMatch
+from snuba.query.matchers import MatchResult, Param
+from snuba.query.matchers import String as StringMatch
 from snuba.query.processors.pattern_replacer import PatternReplacer
 from snuba.request.request_settings import HTTPRequestSettings
 

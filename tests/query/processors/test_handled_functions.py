@@ -1,16 +1,16 @@
 import pytest
-
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.datasets.schemas.tables import TableSource
+from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
     binary_condition,
 )
 from snuba.query.exceptions import InvalidExpressionException
-from snuba.query.expressions import Column, FunctionCall, Lambda, Literal, Argument
-from snuba.query.logical import Query, SelectedExpression
+from snuba.query.expressions import Argument, Column, FunctionCall, Lambda, Literal
+from snuba.query.logical import Query
 from snuba.query.processors import handled_functions
 from snuba.request.request_settings import HTTPRequestSettings
 

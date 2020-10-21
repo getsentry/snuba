@@ -3,11 +3,8 @@ import logging
 from snuba import environment
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.factory import EntityKey
-from snuba.datasets.entities.discover import (
-    EVENTS_COLUMNS,
-    TRANSACTIONS_COLUMNS,
-)
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.discover import EVENTS_COLUMNS, TRANSACTIONS_COLUMNS
 from snuba.query.conditions import (
     BINARY_OPERATORS,
     ConditionFunctions,
@@ -18,13 +15,12 @@ from snuba.query.logical import Query
 from snuba.query.matchers import Column as ColumnMatch
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
-from snuba.query.matchers import String as StringMatch
 from snuba.query.matchers import Or, Param
+from snuba.query.matchers import String as StringMatch
 from snuba.query.subscripts import subscript_key_column_name
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
-
-EVENTS = EntityKey.EVENTS
+EVENTS = EntityKey.DISCOVER_EVENTS
 TRANSACTIONS = EntityKey.DISCOVER_TRANSACTIONS
 EVENTS_AND_TRANSACTIONS = EntityKey.DISCOVER
 
@@ -41,10 +37,6 @@ class DiscoverDataset(Dataset):
         )
 
         track_bad_query(query, selected_entity, EVENTS_COLUMNS, TRANSACTIONS_COLUMNS)
-
-        # For now we resolve the events entity to Discover.
-        if selected_entity == EVENTS:
-            return EVENTS_AND_TRANSACTIONS
 
         return selected_entity
 

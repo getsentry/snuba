@@ -1,17 +1,15 @@
 from typing import Optional, Sequence
 
 import pytest
-
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
+from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
     binary_condition,
 )
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.logical import Query as SnubaQuery
-from snuba.query.logical import SelectedExpression
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.state import set_config
@@ -23,16 +21,13 @@ def build_query(
     having: Optional[Expression] = None,
 ) -> ClickhouseQuery:
     return ClickhouseQuery(
-        SnubaQuery(
-            {},
-            None,
-            selected_columns=[
-                SelectedExpression(name=s.alias, expression=s)
-                for s in selected_columns or []
-            ],
-            condition=condition,
-            having=having,
-        )
+        None,
+        selected_columns=[
+            SelectedExpression(name=s.alias, expression=s)
+            for s in selected_columns or []
+        ],
+        condition=condition,
+        having=having,
     )
 
 
