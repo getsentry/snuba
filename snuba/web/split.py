@@ -247,14 +247,16 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         minimal_query.set_ast_selected_columns(
             [
                 SelectedExpression(
-                    self.__id_column, ColumnExpr(None, None, self.__id_column)
+                    self.__id_column,
+                    ColumnExpr(self.__id_column, None, self.__id_column),
                 ),
                 SelectedExpression(
-                    self.__project_column, ColumnExpr(None, None, self.__project_column)
+                    self.__project_column,
+                    ColumnExpr(self.__project_column, None, self.__project_column),
                 ),
                 SelectedExpression(
                     self.__timestamp_column,
-                    ColumnExpr(None, None, self.__timestamp_column),
+                    ColumnExpr(self.__timestamp_column, None, self.__timestamp_column),
                 ),
             ]
         )
