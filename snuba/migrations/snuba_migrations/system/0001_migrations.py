@@ -1,8 +1,9 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import Column, DateTime, Enum, String, UInt, WithDefault
+from snuba.clickhouse.columns import Column, DateTime, Enum, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
+from snuba.migrations.columns import WithDefault
 from snuba.migrations.context import Context
 from snuba.migrations.status import Status
 from snuba.migrations.table_engines import Distributed, ReplacingMergeTree
@@ -35,7 +36,9 @@ class Migration(migration.Migration):
                 table_name="migrations_local",
                 columns=columns,
                 engine=ReplacingMergeTree(
-                    version_column="version", order_by="(group, migration_id)"
+                    storage_set=StorageSetKey.MIGRATIONS,
+                    version_column="version",
+                    order_by="(group, migration_id)",
                 ),
             ),
         ]
@@ -70,16 +73,18 @@ class Migration(migration.Migration):
         migration_id, logger, update_status = context
         logger.info(f"Running migration: {migration_id}")
         for op in self.__forwards_local():
-            op.execute()
-        # TODO: Run the forwards_dist operations here when multi node clusters are supported
+            op.execute(local=True)
+        for op in self.__forwards_dist():
+            op.execute(local=False)
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
 
     def backwards(self, context: Context) -> None:
         migration_id, logger, update_status = context
         logger.info(f"Reversing migration: {migration_id}")
+        update_status(Status.IN_PROGRESS)
+        for op in self.__backwards_dist():
+            op.execute(local=False)
         for op in self.__backwards_local():
-            op.execute()
-        # TODO: Run the backwards_dist operations here when multi node clusters are supported
+            op.execute(local=True)
         logger.info(f"Finished reversing: {migration_id}")
-        update_status(Status.NOT_STARTED)

@@ -1,7 +1,8 @@
 from collections import OrderedDict
-from typing import Any, Callable, Optional, Sequence, TypeVar
+from typing import Any, Callable, Optional, Sequence, Set, TypeVar
 
-from snuba.datasets.dataset import Dataset
+from snuba.clickhouse.columns import ColumnSet
+from snuba.datasets.entity import Entity
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     binary_condition,
@@ -10,6 +11,7 @@ from snuba.query.conditions import (
     unary_condition,
 )
 from snuba.query.expressions import Argument, Expression, FunctionCall, Lambda, Literal
+from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.expressions import parse_expression
 from snuba.query.schema import POSITIVE_OPERATORS, UNARY_OPERATORS
 from snuba.util import is_condition
@@ -22,14 +24,14 @@ class InvalidConditionException(Exception):
 
 
 def parse_conditions(
-    operand_builder: Callable[[Any], TExpression],
+    operand_builder: Callable[[Any, ColumnSet, Set[str]], TExpression],
     and_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     or_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     unpack_array_condition_builder: Callable[[TExpression, str, Any], TExpression],
     simple_condition_builder: Callable[[TExpression, str, Any], TExpression],
-    dataset: Dataset,
+    entity: Entity,
     conditions: Any,
-    array_join: Optional[str],
+    arrayjoin_cols: Set[str],
     depth: int = 0,
 ) -> Optional[TExpression]:
     """
@@ -61,9 +63,9 @@ def parse_conditions(
                     or_builder,
                     unpack_array_condition_builder,
                     simple_condition_builder,
-                    dataset,
+                    entity,
                     cond,
-                    array_join,
+                    arrayjoin_cols,
                     depth + 1,
                 ),
                 None,
@@ -72,7 +74,12 @@ def parse_conditions(
         )
         return and_builder([s for s in sub.keys() if s])
     elif is_condition(conditions):
-        lhs, op, lit = dataset.process_condition(conditions)
+        try:
+            lhs, op, lit = conditions
+        except Exception as cause:
+            raise ParsingException(
+                f"Cannot process condition {conditions}", cause
+            ) from cause
 
         # facilitate deduping IN conditions by sorting them.
         if op in ("IN", "NOT IN") and isinstance(lit, tuple):
@@ -87,17 +94,22 @@ def parse_conditions(
         # (IN, =, LIKE) are looking for rows where any array value matches, and
         # exclusionary operators (NOT IN, NOT LIKE, !=) are looking for rows
         # where all elements match (eg. all NOT LIKE 'foo').
-        columns = dataset.get_abstract_columnset()
+        columns = entity.get_data_model()
         if (
             isinstance(lhs, str)
             and lhs in columns
             and isinstance(columns[lhs].type, Array)
-            and columns[lhs].base_name != array_join
+            and columns[lhs].base_name not in arrayjoin_cols
+            and columns[lhs].flattened not in arrayjoin_cols
             and not isinstance(lit, (list, tuple))
         ):
-            return unpack_array_condition_builder(operand_builder(lhs), op, lit)
+            return unpack_array_condition_builder(
+                operand_builder(lhs, entity.get_data_model(), arrayjoin_cols), op, lit,
+            )
         else:
-            return simple_condition_builder(operand_builder(lhs), op, lit)
+            return simple_condition_builder(
+                operand_builder(lhs, entity.get_data_model(), arrayjoin_cols), op, lit,
+            )
 
     elif depth == 1:
         sub_expression = (
@@ -107,9 +119,9 @@ def parse_conditions(
                 or_builder,
                 unpack_array_condition_builder,
                 simple_condition_builder,
-                dataset,
+                entity,
                 cond,
-                array_join,
+                arrayjoin_cols,
                 depth + 1,
             )
             for cond in conditions
@@ -120,7 +132,7 @@ def parse_conditions(
 
 
 def parse_conditions_to_expr(
-    expr: Sequence[Any], dataset: Dataset, arrayjoin: Optional[str]
+    expr: Sequence[Any], entity: Entity, arrayjoin: Set[str]
 ) -> Optional[Expression]:
     """
     Relies on parse_conditions to parse a list of conditions into an Expression.
@@ -141,11 +153,23 @@ def parse_conditions_to_expr(
         Replaces lists with a function call to tuple.
         """
         if isinstance(literal, (list, tuple)):
-            assert op in ["IN", "NOT IN"]
-            literals = tuple([Literal(None, l) for l in literal])
+            if op not in ["IN", "NOT IN"]:
+                raise ParsingException(
+                    (
+                        f"Invalid operator {op} for literal {literal}. Literal is a sequence. "
+                        "Operator must be IN/NOT IN"
+                    )
+                )
+            literals = tuple([Literal(None, lit) for lit in literal])
             return FunctionCall(None, "tuple", literals)
         else:
-            assert op not in ["IN", "NOT IN"]
+            if op in ["IN", "NOT IN"]:
+                raise ParsingException(
+                    (
+                        f"Invalid operator {op} for literal {literal}. Literal is not a sequence. "
+                        "Operator cannot be IN/NOT IN"
+                    )
+                )
             return Literal(None, literal)
 
     def unpack_array_condition_builder(
@@ -153,7 +177,7 @@ def parse_conditions_to_expr(
     ) -> Expression:
         function_name = "arrayExists" if op in POSITIVE_OPERATORS else "arrayAll"
 
-        # This is an expresison like:
+        # This is an expression like:
         # arrayExists(x -> assumeNotNull(notLike(x, rhs)), lhs)
         return FunctionCall(
             None,
@@ -180,15 +204,17 @@ def parse_conditions_to_expr(
 
     def simple_condition_builder(lhs: Expression, op: str, literal: Any) -> Expression:
         if op in UNARY_OPERATORS:
-            assert (
-                literal is None
-            ), f"Right hand side operand {literal} provided to unary operator {op}"
+            if literal is not None:
+                raise ParsingException(
+                    f"Right hand side operand {literal} provided to unary operator {op}"
+                )
             return unary_condition(None, OPERATOR_TO_FUNCTION[op], lhs)
 
         else:
-            assert (
-                literal is not None
-            ), f"Missing right hand side operand for binary operator {op}"
+            if literal is None:
+                raise ParsingException(
+                    f"Missing right hand side operand for binary operator {op}"
+                )
             return binary_condition(
                 None, OPERATOR_TO_FUNCTION[op], lhs, preprocess_literal(op, literal)
             )
@@ -199,7 +225,7 @@ def parse_conditions_to_expr(
         or_builder,
         unpack_array_condition_builder,
         simple_condition_builder,
-        dataset,
+        entity,
         expr,
         arrayjoin,
         0,

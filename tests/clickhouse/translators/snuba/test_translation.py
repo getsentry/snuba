@@ -95,6 +95,48 @@ def test_tag_translation() -> None:
     )
 
 
+def _get_nullable_expr(alias: str) -> FunctionCall:
+    return FunctionCall(
+        alias,
+        "if",
+        (
+            FunctionCall(
+                None,
+                "has",
+                (Column(None, None, "measurements.key"), Literal(None, "lcp")),
+            ),
+            FunctionCall(
+                None,
+                "arrayElement",
+                (
+                    Column(None, None, "measurements.value"),
+                    FunctionCall(
+                        None,
+                        "indexOf",
+                        (Column(None, None, "measurements.key"), Literal(None, "lcp")),
+                    ),
+                ),
+            ),
+            Literal(None, None),
+        ),
+    )
+
+
+def test_nullable_nested_translation() -> None:
+    translated = SubscriptableMapper(
+        None, "measurements", None, "measurements", nullable=True
+    ).attempt_map(
+        SubscriptableReference(
+            "measurements[lcp]",
+            Column(None, None, "measurements"),
+            Literal(None, "lcp"),
+        ),
+        SnubaClickhouseMappingTranslator(TranslationMappers()),
+    )
+
+    assert translated == _get_nullable_expr("measurements[lcp]")
+
+
 def test_col_tag_translation() -> None:
     translated = ColumnToMapping(
         None, "geo_country_code", None, "contexts", "geo.country_code"
@@ -115,6 +157,17 @@ def test_col_tag_translation() -> None:
             ),
         ),
     )
+
+
+def test_col_nullable_measurements_translation() -> None:
+    translated = ColumnToMapping(
+        None, "lcp", None, "measurements", "lcp", nullable=True
+    ).attempt_map(
+        Column("lcp", None, "lcp"),
+        SnubaClickhouseMappingTranslator(TranslationMappers()),
+    )
+
+    assert translated == _get_nullable_expr("lcp")
 
 
 test_data = [

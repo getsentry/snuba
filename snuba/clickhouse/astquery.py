@@ -12,9 +12,6 @@ class AstSqlQuery(SqlQuery):
     """
     SqlQuery implementation that builds the SQL query out of the
     AST representation present in the Clickhouse Query object.
-
-    This implementation does not depend on the legacy dictionary based query
-    representation.
     """
 
     def __init__(self, query: Query, settings: RequestSettings,) -> None:
@@ -27,7 +24,7 @@ class AstSqlQuery(SqlQuery):
         self.__groupby = query.get_groupby_from_ast()
         self.__having = query.get_having_from_ast()
         self.__orderby = query.get_orderby_from_ast()
-        self.__data_source = query.get_data_source()
+        self.__data_source = query.get_from_clause()
         self.__arrayjoin = query.get_arrayjoin_from_ast()
         self.__granularity = query.get_granularity()
         self.__limit = query.get_limit()
@@ -46,7 +43,7 @@ class AstSqlQuery(SqlQuery):
         self.__settings = settings
         self.__sql_data_list: Optional[Sequence[Tuple[str, str]]] = None
         self.__formatted_query: Optional[str] = None
-        self.__sql_data: Optional[Sequence[str, str]] = None
+        self.__sql_data: Optional[Mapping[str, str]] = None
 
     def _sql_data_list(self) -> Sequence[Tuple[str, str]]:
         if self.__sql_data_list:
@@ -140,13 +137,17 @@ class AstSqlQuery(SqlQuery):
 
         return self.__sql_data_list
 
-    def _format_query_impl(self) -> str:
-        if self.__formatted_query:
-            return self.__formatted_query
+    def format_sql(self, format: Optional[str] = None) -> str:
+        if self.__formatted_query is None:
+            query = " ".join([c for _, c in self._sql_data_list()])
+            self.__formatted_query = query
+        else:
+            query = self.__formatted_query
 
-        self.__formatted_query = " ".join([c for _, c in self._sql_data_list()])
+        if format is not None:
+            query = f"{query} FORMAT {format}"
 
-        return self.__formatted_query
+        return query
 
     def sql_data(self) -> Mapping[str, str]:
         if self.__sql_data:

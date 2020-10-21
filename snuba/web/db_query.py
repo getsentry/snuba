@@ -1,14 +1,8 @@
 import logging
-
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from hashlib import md5
-from typing import (
-    Any,
-    Mapping,
-    MutableMapping,
-    Optional,
-)
+from typing import Any, Mapping, MutableMapping, Optional
 
 import sentry_sdk
 from sentry_sdk.api import configure_scope
@@ -16,7 +10,13 @@ from sentry_sdk.api import configure_scope
 from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.query_profiler import generate_profile
 from snuba.clickhouse.sql import SqlQuery
+from snuba.querylog.query_metadata import (
+    ClickhouseQueryMetadata,
+    QueryStatus,
+    SnubaQueryMetadata,
+)
 from snuba.reader import Reader, Result
 from snuba.redis import redis_client
 from snuba.request.request_settings import RequestSettings
@@ -31,8 +31,6 @@ from snuba.util import force_bytes, with_span
 from snuba.utils.codecs import JSONCodec, JSONData
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
-from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
-
 
 cache: Cache[JSONData] = RedisCache(
     redis_client, "snuba-query-cache:", JSONCodec(), ThreadPoolExecutor()
@@ -42,13 +40,14 @@ logger = logging.getLogger("snuba.query")
 
 
 def update_query_metadata_and_stats(
+    query: Query,
     sql: str,
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_metadata: SnubaQueryMetadata,
     query_settings: Mapping[str, Any],
     trace_id: Optional[str],
-    status: str,
+    status: QueryStatus,
 ) -> MutableMapping[str, Any]:
     """
     If query logging is enabled then logs details about the query and its status, as
@@ -58,7 +57,13 @@ def update_query_metadata_and_stats(
     stats.update(query_settings)
 
     query_metadata.query_list.append(
-        ClickhouseQueryMetadata(sql=sql, stats=stats, status=status, trace_id=trace_id)
+        ClickhouseQueryMetadata(
+            sql=sql,
+            stats=stats,
+            status=status,
+            profile=generate_profile(query),
+            trace_id=trace_id,
+        )
     )
 
     return stats
@@ -66,11 +71,12 @@ def update_query_metadata_and_stats(
 
 @with_span(op="db")
 def execute_query(
+    # TODO: Passing the whole clickhouse query here is needed as long
+    # as the execute method depends on it. Otherwise we can make this
+    # file rely either entirely on clickhouse query or entirely on
+    # the formatter.
     clickhouse_query: Query,
     request_settings: RequestSettings,
-    # TODO: Passing the SqlQuery (which basically wraps the query and formats it)
-    # will be needed as long as the legacy query representation will be around.
-    # See DictSqlQuery.
     formatted_query: SqlQuery,
     reader: Reader[SqlQuery],
     timer: Timer,
@@ -83,7 +89,18 @@ def execute_query(
     # Experiment, if we are going to grab more than X columns worth of data,
     # don't use uncompressed_cache in ClickHouse.
     uc_max = state.get_config("uncompressed_cache_max_cols", 5)
-    if len(clickhouse_query.get_all_referenced_columns()) > uc_max:
+    if (
+        len(
+            set(
+                (
+                    # Skip aliases when counting columns
+                    (c.table_name, c.column_name)
+                    for c in clickhouse_query.get_all_ast_referenced_columns()
+                )
+            )
+        )
+        > uc_max
+    ):
         query_settings["use_uncompressed_cache"] = 0
 
     # Force query to use the first shard replica, which
@@ -170,7 +187,18 @@ def execute_query_with_caching(
         [("use_cache", settings.USE_RESULT_CACHE), ("uncompressed_cache_max_cols", 5)]
     )
 
-    if len(clickhouse_query.get_all_referenced_columns()) > uc_max:
+    if (
+        len(
+            set(
+                (
+                    # Skip aliases when counting columns
+                    (c.table_name, c.column_name)
+                    for c in clickhouse_query.get_all_ast_referenced_columns()
+                )
+            )
+        )
+        > uc_max
+    ):
         use_cache = False
 
     execute = partial(
@@ -233,11 +261,12 @@ def execute_query_with_readthrough_caching(
 
 
 def raw_query(
+    # TODO: Passing the whole clickhouse query here is needed as long
+    # as the execute method depends on it. Otherwise we can make this
+    # file rely either entirely on clickhouse query or entirely on
+    # the formatter.
     clickhouse_query: Query,
     request_settings: RequestSettings,
-    # TODO: Passing the SqlQuery (which basically wraps the query and formats it)
-    # will be needed as long as the legacy query representation will be around.
-    # See DictSqlQuery.
     formatted_query: SqlQuery,
     reader: Reader[SqlQuery],
     timer: Timer,
@@ -264,6 +293,7 @@ def raw_query(
 
     update_with_status = partial(
         update_query_metadata_and_stats,
+        clickhouse_query,
         sql,
         timer,
         stats,
@@ -290,14 +320,14 @@ def raw_query(
         )
     except Exception as cause:
         if isinstance(cause, RateLimitExceeded):
-            stats = update_with_status("rate-limited")
+            stats = update_with_status(QueryStatus.RATE_LIMITED)
         else:
             with configure_scope() as scope:
                 if isinstance(cause, ClickhouseError):
                     scope.fingerprint = ["{{default}}", str(cause.code)]
                 logger.exception("Error running query: %s\n%s", sql, cause)
-            stats = update_with_status("error")
+            stats = update_with_status(QueryStatus.ERROR)
         raise QueryException({"stats": stats, "sql": sql}) from cause
     else:
-        stats = update_with_status("success")
+        stats = update_with_status(QueryStatus.SUCCESS)
         return QueryResult(result, {"stats": stats, "sql": sql})

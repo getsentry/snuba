@@ -17,12 +17,14 @@ from snuba.clickhouse.columns import (
     Float,
     IPv4,
     IPv6,
-    LowCardinality,
-    Materialized,
     Nullable,
     String,
     UInt,
     UUID,
+)
+from snuba.migrations.columns import (
+    LowCardinality,
+    Materialized,
     WithCodecs,
     WithDefault,
 )
@@ -51,7 +53,7 @@ grammar = Grammar(
     agg              = "AggregateFunction" open_paren space* agg_func space* comma space* agg_types space* close_paren
     agg_func         = ~r"[a-zA-Z]+\([a-zA-Z0-9\,\.\s]+\)|[a-zA-Z]+"
     agg_types        = (primitive (space* comma space*)?)*
-    array            = "Array" open_paren space* (primitive / lowcardinality / nullable) space* close_paren
+    array            = "Array" open_paren space* (array / primitive / lowcardinality / nullable) space* close_paren
     lowcardinality   = "LowCardinality" open_paren space* (primitive / nullable) space* close_paren
     nullable         = "Nullable" open_paren space* (primitive / basic_type) space* close_paren
     open_paren       = "("

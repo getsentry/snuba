@@ -2,7 +2,6 @@ from typing import Sequence
 from snuba.clickhouse.columns import (
     Column,
     DateTime,
-    LowCardinality,
     Nullable,
     String,
     UInt,
@@ -10,6 +9,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
+from snuba.migrations.columns import LowCardinality
 
 
 raw_columns = [
@@ -53,6 +53,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="outcomes_raw_local",
                 columns=raw_columns,
                 engine=table_engines.MergeTree(
+                    storage_set=StorageSetKey.OUTCOMES,
                     order_by="(org_id, project_id, timestamp)",
                     partition_by="(toMonday(timestamp))",
                     settings={"index_granularity": "16384"},
@@ -63,6 +64,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="outcomes_hourly_local",
                 columns=hourly_columns,
                 engine=table_engines.SummingMergeTree(
+                    storage_set=StorageSetKey.OUTCOMES,
                     order_by="(org_id, project_id, key_id, outcome, reason, timestamp)",
                     partition_by="(toMonday(timestamp))",
                     settings={"index_granularity": "256"},

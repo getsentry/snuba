@@ -6,15 +6,17 @@ from typing import Optional
 import pytest
 
 from snuba import settings
+from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.events_format import (
     enforce_retention,
     extract_base,
     extract_extra_contexts,
     extract_extra_tags,
+    extract_http,
     extract_user,
 )
 from snuba.datasets.events_processor_base import InsertEvent
-from snuba.datasets.factory import enforce_table_writer
+from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.processor import (
     InsertBatch,
     InvalidMessageType,
@@ -22,16 +24,21 @@ from snuba.processor import (
     ProcessedMessage,
     ReplacementBatch,
 )
-from tests.base import BaseEventsTest
+from tests.fixtures import get_raw_event
 
 
-class TestEventsProcessor(BaseEventsTest):
+class TestEventsProcessor:
+    def setup_method(self, test_method):
+        self.dataset = get_dataset("events")
+        self.metadata = KafkaMessageMetadata(0, 0, datetime.now())
+        self.event = get_raw_event()
+
     def test_invalid_version(self) -> None:
         with pytest.raises(InvalidMessageVersion):
             enforce_table_writer(
                 self.dataset
             ).get_stream_loader().get_processor().process_message(
-                (2 ** 32 - 1, "insert", self.event)
+                (2 ** 32 - 1, "insert", self.event), self.metadata,
             )
 
     def test_invalid_format(self) -> None:
@@ -39,7 +46,7 @@ class TestEventsProcessor(BaseEventsTest):
             enforce_table_writer(
                 self.dataset
             ).get_stream_loader().get_processor().process_message(
-                (-1, "insert", self.event)
+                (-1, "insert", self.event), self.metadata,
             )
 
     def __process_insert_event(self, event: InsertEvent) -> Optional[ProcessedMessage]:
@@ -47,7 +54,7 @@ class TestEventsProcessor(BaseEventsTest):
             enforce_table_writer(self.dataset)
             .get_stream_loader()
             .get_processor()
-            .process_message((2, "insert", event, {}))
+            .process_message((2, "insert", event, {}), self.metadata)
         )
 
     def test_unexpected_obj(self) -> None:
@@ -111,7 +118,9 @@ class TestEventsProcessor(BaseEventsTest):
 
         enforce_table_writer(
             self.dataset
-        ).get_stream_loader().get_processor().extract_common(output, event)
+        ).get_stream_loader().get_processor().extract_common(
+            output, event, self.metadata
+        )
         assert output == {
             "platform": u"the_platform",
             "primary_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -131,7 +140,7 @@ class TestEventsProcessor(BaseEventsTest):
                 enforce_table_writer(self.dataset)
                 .get_stream_loader()
                 .get_processor()
-                .process_message((2, "__invalid__", {}))
+                .process_message((2, "__invalid__", {}), self.metadata)
                 == 1
             )
 
@@ -141,7 +150,7 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ReplacementBatch(
+        assert processor.process_message(message, self.metadata) == ReplacementBatch(
             str(project_id), [message]
         )
 
@@ -151,7 +160,7 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ReplacementBatch(
+        assert processor.process_message(message, self.metadata) == ReplacementBatch(
             str(project_id), [message]
         )
 
@@ -161,7 +170,7 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ReplacementBatch(
+        assert processor.process_message(message, self.metadata) == ReplacementBatch(
             str(project_id), [message]
         )
 
@@ -171,7 +180,7 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ReplacementBatch(
+        assert processor.process_message(message, self.metadata) == ReplacementBatch(
             str(project_id), [message]
         )
 
@@ -181,7 +190,7 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ReplacementBatch(
+        assert processor.process_message(message, self.metadata) == ReplacementBatch(
             str(project_id), [message]
         )
 
@@ -191,7 +200,7 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ReplacementBatch(
+        assert processor.process_message(message, self.metadata) == ReplacementBatch(
             str(project_id), [message]
         )
 
@@ -201,7 +210,7 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ReplacementBatch(
+        assert processor.process_message(message, self.metadata) == ReplacementBatch(
             str(project_id), [message]
         )
 
@@ -211,7 +220,7 @@ class TestEventsProcessor(BaseEventsTest):
         processor = (
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
-        assert processor.process_message(message) == ReplacementBatch(
+        assert processor.process_message(message, self.metadata) == ReplacementBatch(
             str(project_id), [message]
         )
 
@@ -443,20 +452,23 @@ class TestEventsProcessor(BaseEventsTest):
         }
 
     def test_extract_http(self):
-        http = {
+        request = {
             "method": "GET",
             "headers": [
                 ["Referer", "https://sentry.io"],
                 ["Host", "https://google.com"],
             ],
+            "url": "the_url",
         }
         output = {}
 
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().extract_http(output, http)
+        extract_http(output, request)
 
-        assert output == {"http_method": u"GET", "http_referer": u"https://sentry.io"}
+        assert output == {
+            "http_method": u"GET",
+            "http_referer": u"https://sentry.io",
+            "http_url": "the_url",
+        }
 
     def test_extract_stacktraces(self):
         stacks = [
@@ -639,3 +651,13 @@ class TestEventsProcessor(BaseEventsTest):
         )
 
         self.__process_insert_event(event)
+
+    def test_none_tags_dont_throw(self) -> None:
+        self.event["tags"] = [
+            [None, "no-key"],
+            ["no-value", None],
+            None,
+        ]
+
+        processed = self.__process_insert_event(self.event)
+        assert isinstance(processed, InsertBatch)

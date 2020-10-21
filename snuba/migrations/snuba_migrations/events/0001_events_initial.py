@@ -126,6 +126,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="sentry_local",
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
+                    storage_set=StorageSetKey.EVENTS,
                     version_column="deleted",
                     order_by="(project_id, toStartOfDay(timestamp), %s)" % sample_expr,
                     partition_by="(toMonday(timestamp), if(equals(retention_days, 30), 30, 90))",
@@ -149,7 +150,7 @@ class Migration(migration.MultiStepMigration):
                 columns=columns,
                 engine=table_engines.Distributed(
                     local_table_name="sentry_local",
-                    sharding_key="cityHash64(toString(event_id)))",
+                    sharding_key="cityHash64(toString(event_id))",
                 ),
             ),
             operations.CreateTable(
@@ -158,7 +159,7 @@ class Migration(migration.MultiStepMigration):
                 columns=columns,
                 engine=table_engines.Distributed(
                     local_table_name="sentry_local",
-                    sharding_key="cityHash64(toString(event_id)))",
+                    sharding_key="cityHash64(toString(event_id))",
                 ),
             ),
         ]

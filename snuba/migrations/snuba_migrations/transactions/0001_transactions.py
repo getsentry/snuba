@@ -7,17 +7,14 @@ from snuba.clickhouse.columns import (
     DateTime,
     IPv4,
     IPv6,
-    LowCardinality,
-    Materialized,
     Nested,
     Nullable,
     String,
     UInt,
-    WithDefault,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
-
+from snuba.migrations.columns import LowCardinality, Materialized, WithDefault
 
 UNKNOWN_SPAN_STATUS = 2
 
@@ -70,6 +67,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="transactions_local",
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
+                    storage_set=StorageSetKey.TRANSACTIONS,
                     version_column="deleted",
                     order_by="(project_id, toStartOfDay(finish_ts), transaction_name, cityHash64(span_id))",
                     partition_by="(retention_days, toMonday(finish_ts))",

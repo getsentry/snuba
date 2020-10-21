@@ -1,15 +1,16 @@
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.datasets.schemas.tables import TableSource
+from snuba.query import SelectedExpression
 from snuba.query.conditions import (
+    ConditionFunctions,
     binary_condition,
     combine_and_conditions,
-    ConditionFunctions,
 )
 from snuba.query.dsl import count, divide
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.logical import Query, SelectedExpression
-from snuba.query.processors.failure_rate_processor import FailureRateProcessor
+from snuba.query.logical import Query
+from snuba.query.processors.performance_expressions import failure_rate_processor
 from snuba.request.request_settings import HTTPRequestSettings
 
 
@@ -42,7 +43,7 @@ def test_failure_rate_format_expressions() -> None:
                                         Column(None, None, "transaction_status"),
                                         Literal(None, code),
                                     )
-                                    for code in (0, 1, 2)
+                                    for code in [0, 1, 2]
                                 ]
                             ),
                         ),
@@ -54,7 +55,9 @@ def test_failure_rate_format_expressions() -> None:
         ],
     )
 
-    FailureRateProcessor().process_query(unprocessed, HTTPRequestSettings())
+    failure_rate_processor(ColumnSet([])).process_query(
+        unprocessed, HTTPRequestSettings()
+    )
     assert (
         expected.get_selected_columns_from_ast()
         == unprocessed.get_selected_columns_from_ast()

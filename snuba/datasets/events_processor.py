@@ -1,14 +1,13 @@
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping
 
 import logging
 import _strptime  # NOQA fixes _strptime deferred import issue
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.consumer import KafkaMessageMetadata
-from snuba.datasets.events_format import extract_user
+from snuba.datasets.events_format import extract_http, extract_user
 from snuba.datasets.events_processor_base import EventsProcessorBase, InsertEvent
 from snuba.processor import (
-    _as_dict_safe,
     _boolify,
     _floatify,
     _unicodify,
@@ -44,7 +43,7 @@ class EventsProcessor(EventsProcessorBase):
         self,
         output: MutableMapping[str, Any],
         event: InsertEvent,
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         data = event.get("data", {})
 
@@ -57,15 +56,18 @@ class EventsProcessor(EventsProcessorBase):
         geo = user.get("geo", None) or {}
         self.extract_geo(output, geo)
 
-        http = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
-        self.extract_http(output, http)
+        request = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
+        http_data: MutableMapping[str, Any] = {}
+        extract_http(http_data, request)
+        output["http_method"] = http_data["http_method"]
+        output["http_referer"] = http_data["http_referer"]
 
     def extract_tags_custom(
         self,
         output: MutableMapping[str, Any],
         event: InsertEvent,
         tags: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         pass
 
@@ -120,21 +122,7 @@ class EventsProcessor(EventsProcessorBase):
         output["device_online"] = _boolify(device_ctx.pop("online", None))
         output["device_charging"] = _boolify(device_ctx.pop("charging", None))
 
-    def extract_contexts_custom(
-        self,
-        output: MutableMapping[str, Any],
-        event: InsertEvent,
-        tags: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
-    ) -> None:
-        pass
-
     def extract_geo(self, output, geo):
         output["geo_country_code"] = _unicodify(geo.get("country_code", None))
         output["geo_region"] = _unicodify(geo.get("region", None))
         output["geo_city"] = _unicodify(geo.get("city", None))
-
-    def extract_http(self, output, http):
-        output["http_method"] = _unicodify(http.get("method", None))
-        http_headers = _as_dict_safe(http.get("headers", None))
-        output["http_referer"] = _unicodify(http_headers.get("Referer", None))

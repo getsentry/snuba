@@ -1,12 +1,11 @@
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Optional, Tuple
 
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.processor import InsertBatch
-from tests.base import BaseTest
 
 
 @dataclass
@@ -29,6 +28,8 @@ class TransactionEvent:
     release: str
     sdk_name: Optional[str]
     sdk_version: Optional[str]
+    http_method: Optional[str]
+    http_referer: Optional[str]
     geo: Mapping[str, str]
     status: str
 
@@ -99,6 +100,13 @@ class TransactionEvent:
                     "datetime": "2019-08-08T22:29:53.917000Z",
                     "timestamp": self.timestamp,
                     "start_timestamp": self.start_timestamp,
+                    "measurements": {
+                        "lcp": {"value": 32.129},
+                        "lcp.elementSize": {"value": 4242},
+                        "fid": {"value": None},
+                        "invalid": None,
+                        "invalid2": {},
+                    },
                     "contexts": {
                         "trace": {
                             "sampled": True,
@@ -107,7 +115,7 @@ class TransactionEvent:
                             "type": "trace",
                             "span_id": self.span_id,
                             "status": self.status,
-                        }
+                        },
                     },
                     "tags": [
                         ["sentry:release", self.release],
@@ -122,14 +130,27 @@ class TransactionEvent:
                         "email": self.user_email,
                         "geo": self.geo,
                     },
+                    "request": {
+                        "url": "http://127.0.0.1:/query",
+                        "headers": [
+                            ["Accept-Encoding", "identity"],
+                            ["Content-Length", "398"],
+                            ["Host", "127.0.0.1:"],
+                            ["Referer", self.http_referer],
+                            ["Trace", "8fa73032d-1"],
+                        ],
+                        "data": "",
+                        "method": self.http_method,
+                        "env": {"SERVER_PORT": "1010", "SERVER_NAME": "snuba"},
+                    },
                     "transaction": self.transaction_name,
                 },
             },
         )
 
     def build_result(self, meta: KafkaMessageMetadata) -> Mapping[str, Any]:
-        start_timestamp = datetime.fromtimestamp(self.start_timestamp)
-        finish_timestamp = datetime.fromtimestamp(self.timestamp)
+        start_timestamp = datetime.utcfromtimestamp(self.start_timestamp)
+        finish_timestamp = datetime.utcfromtimestamp(self.timestamp)
 
         ret = {
             "deleted": 0,
@@ -179,15 +200,13 @@ class TransactionEvent:
             ],
             "sdk_name": "sentry.python",
             "sdk_version": "0.9.0",
+            "http_method": self.http_method,
+            "http_referer": self.http_referer,
             "offset": meta.offset,
             "partition": meta.partition,
             "retention_days": 90,
-            "_tags_flattened": f"|environment={self.environment}||sentry:release={self.release}||sentry:user={self.user_id}||we\\|r\\=d=tag|",
-            "_contexts_flattened": (
-                f"|geo.city={self.geo['city']}||geo.country_code={self.geo['country_code']}||geo.region={self.geo['region']}|"
-                f"|trace.op={self.op}||trace.sampled=True||trace.span_id={self.span_id}||trace.status={str(self.status)}|"
-                f"|trace.trace_id={self.trace_id}|"
-            ),
+            "measurements.key": ["lcp", "lcp.elementSize"],
+            "measurements.value": [32.129, 4242.0],
         }
 
         if self.ipv4:
@@ -197,9 +216,9 @@ class TransactionEvent:
         return ret
 
 
-class TestTransactionsProcessor(BaseTest):
+class TestTransactionsProcessor:
     def __get_timestamps(slef) -> Tuple[float, float]:
-        timestamp = datetime.utcnow() - timedelta(seconds=5)
+        timestamp = datetime.now(tz=timezone.utc) - timedelta(seconds=5)
         start_timestamp = timestamp - timedelta(seconds=5)
         return (start_timestamp.timestamp(), timestamp.timestamp())
 
@@ -225,6 +244,8 @@ class TestTransactionsProcessor(BaseTest):
             release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
             sdk_name="sentry.python",
             sdk_version="0.9.0",
+            http_method="POST",
+            http_referer="tagstore.something",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
         )
         payload = message.serialize()
@@ -259,6 +280,8 @@ class TestTransactionsProcessor(BaseTest):
             release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
             sdk_name="sentry.python",
             sdk_version="0.9.0",
+            http_method="POST",
+            http_referer="tagstore.something",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
         )
         payload = message.serialize()
@@ -293,6 +316,8 @@ class TestTransactionsProcessor(BaseTest):
             release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
             sdk_name="sentry.python",
             sdk_version="0.9.0",
+            http_method="POST",
+            http_referer="tagstore.something",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
         )
         meta = KafkaMessageMetadata(

@@ -1,8 +1,8 @@
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.factory import get_dataset
+from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
-from snuba.query.logical import SelectedExpression
 from snuba.query.parser import parse_query
 from snuba.reader import Reader
 from snuba.request import Request
@@ -17,7 +17,9 @@ def test_sessions_processing() -> None:
     query = parse_query(query_body, sessions)
     request = Request("", query, HTTPRequestSettings(), {}, "")
 
-    query_plan = sessions.get_query_plan_builder().build_plan(request)
+    query_plan = (
+        sessions.get_default_entity().get_query_plan_builder().build_plan(request)
+    )
     for clickhouse_processor in query_plan.plan_processors:
         clickhouse_processor.process_query(query_plan.query, request.settings)
 

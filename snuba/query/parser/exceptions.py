@@ -1,6 +1,13 @@
-class ParsingException(Exception):
+from snuba.query.exceptions import InvalidQueryException, ValidationException
+
+
+class ParsingException(InvalidQueryException):
     pass
 
 
-class CyclicAliasException(ParsingException):
+class CyclicAliasException(ValidationException):
+    pass
+
+
+class AliasShadowingException(ValidationException):
     pass

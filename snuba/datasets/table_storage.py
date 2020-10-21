@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence
 
 from snuba import settings
+from snuba.clickhouse.http import JSONRow
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,
@@ -14,8 +15,9 @@ from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.snapshots import BulkLoadSource
 from snuba.snapshots.loaders import BulkLoader
 from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
-from snuba.utils.streams.kafka import KafkaPayload
-from snuba.writer import BatchWriter, WriterTableRow
+from snuba.utils.metrics import MetricsBackend
+from snuba.utils.streams.backends.kafka import KafkaPayload
+from snuba.writer import BatchWriter
 
 
 @dataclass(frozen=True)
@@ -126,32 +128,19 @@ class TableWriter:
     def get_schema(self) -> WritableTableSchema:
         return self.__table_schema
 
-    def get_writer(self, options=None, table_name=None) -> BatchWriter[WriterTableRow]:
-        from snuba import settings
-
+    def get_batch_writer(
+        self,
+        metrics: MetricsBackend,
+        options=None,
+        table_name=None,
+        chunk_size: int = settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
+    ) -> BatchWriter[JSONRow]:
         table_name = table_name or self.__table_schema.get_table_name()
 
         options = self.__update_writer_options(options)
 
-        return self.__cluster.get_writer(
-            table_name, options, chunk_size=settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
-        )
-
-    def get_bulk_writer(
-        self, options=None, table_name=None
-    ) -> BatchWriter[WriterTableRow]:
-        """
-        This is a stripped down verison of the writer designed
-        for better performance when loading data in bulk.
-        """
-        from snuba import settings
-
-        table_name = table_name or self.__table_schema.get_table_name()
-
-        options = self.__update_writer_options(options)
-
-        return self.__cluster.get_writer(
-            table_name, options, chunk_size=settings.BULK_CLICKHOUSE_BUFFER,
+        return self.__cluster.get_batch_writer(
+            table_name, metrics, options, chunk_size=chunk_size,
         )
 
     def get_bulk_loader(

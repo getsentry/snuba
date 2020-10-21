@@ -1,33 +1,35 @@
-from typing import Optional, Sequence
+from typing import Callable, Optional, Sequence
 
 from confluent_kafka import KafkaError, KafkaException, Producer
 
 from snuba import environment
-from snuba.consumer import ConsumerWorker
-from snuba.consumers.snapshot_worker import SnapshotAwareWorker
+from snuba.consumer import StreamingConsumerStrategyFactory
+from snuba.consumers.snapshot_worker import SnapshotProcessor
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.processor import MessageProcessor
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
-from snuba.utils.streams.batching import BatchingConsumer
-from snuba.utils.streams.kafka import (
+from snuba.utils.streams import Topic
+from snuba.utils.streams.backends.kafka import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
     KafkaPayload,
     TransportError,
     build_kafka_consumer_configuration,
 )
-from snuba.utils.streams.types import Topic
+from snuba.utils.streams.processing import StreamProcessor
+from snuba.utils.streams.processing.strategies import ProcessingStrategyFactory
+from snuba.utils.streams.profiler import ProcessingStrategyProfilerWrapperFactory
 
 
 class ConsumerBuilder:
     """
-    Simplifies the initialization of a batching consumer by merging
-    parameters that generally come from the command line with defaults
-    that come from the dataset class and defaults that come from the
-    settings file.
+    Simplifies the initialization of a consumer by merging parameters that
+    generally come from the command line with defaults that come from the
+    dataset class and defaults that come from the settings file.
     """
 
     def __init__(
@@ -43,7 +45,11 @@ class ConsumerBuilder:
         auto_offset_reset: str,
         queued_max_messages_kbytes: int,
         queued_min_messages: int,
+        processes: Optional[int],
+        input_block_size: Optional[int],
+        output_block_size: Optional[int],
         commit_retry_policy: Optional[RetryPolicy] = None,
+        profile_path: Optional[str] = None,
     ) -> None:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = bootstrap_servers
@@ -98,6 +104,10 @@ class ConsumerBuilder:
         self.auto_offset_reset = auto_offset_reset
         self.queued_max_messages_kbytes = queued_max_messages_kbytes
         self.queued_min_messages = queued_min_messages
+        self.processes = processes
+        self.input_block_size = input_block_size
+        self.output_block_size = output_block_size
+        self.__profile_path = profile_path
 
         if commit_retry_policy is None:
             commit_retry_policy = BasicRetryPolicy(
@@ -107,7 +117,7 @@ class ConsumerBuilder:
                 and e.args[0].code()
                 in (
                     KafkaError.REQUEST_TIMED_OUT,
-                    KafkaError.NOT_COORDINATOR_FOR_GROUP,
+                    KafkaError.NOT_COORDINATOR,
                     KafkaError._WAIT_COORD,
                 ),
             )
@@ -115,8 +125,8 @@ class ConsumerBuilder:
         self.__commit_retry_policy = commit_retry_policy
 
     def __build_consumer(
-        self, worker: ConsumerWorker
-    ) -> BatchingConsumer[KafkaPayload]:
+        self, strategy_factory: ProcessingStrategyFactory[KafkaPayload]
+    ) -> StreamProcessor[KafkaPayload]:
         configuration = build_kafka_consumer_configuration(
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
@@ -137,41 +147,71 @@ class ConsumerBuilder:
                 commit_retry_policy=self.__commit_retry_policy,
             )
 
-        return BatchingConsumer(
+        return StreamProcessor(
             consumer,
             self.raw_topic,
-            worker=worker,
-            max_batch_size=self.max_batch_size,
-            max_batch_time=self.max_batch_time_ms,
+            strategy_factory,
             metrics=self.metrics,
             recoverable_errors=[TransportError],
         )
 
-    def build_base_consumer(self) -> BatchingConsumer[KafkaPayload]:
-        """
-        Builds the consumer with a ConsumerWorker.
-        """
-        return self.__build_consumer(
-            ConsumerWorker(
-                storage=self.storage,
-                producer=self.producer,
-                replacements_topic=self.replacements_topic,
-                metrics=self.metrics,
-            )
+    def __build_streaming_strategy_factory(
+        self,
+        processor_wrapper: Optional[
+            Callable[[MessageProcessor], MessageProcessor]
+        ] = None,
+    ) -> ProcessingStrategyFactory[KafkaPayload]:
+        table_writer = self.storage.get_table_writer()
+        stream_loader = table_writer.get_stream_loader()
+
+        processor = stream_loader.get_processor()
+        if processor_wrapper is not None:
+            processor = processor_wrapper(processor)
+
+        strategy_factory: ProcessingStrategyFactory[
+            KafkaPayload
+        ] = StreamingConsumerStrategyFactory(
+            stream_loader.get_pre_filter(),
+            processor,
+            table_writer.get_batch_writer(
+                self.metrics,
+                {"load_balancing": "in_order", "insert_distributed_sync": 1},
+            ),
+            self.metrics,
+            max_batch_size=self.max_batch_size,
+            max_batch_time=self.max_batch_time_ms / 1000.0,
+            processes=self.processes,
+            input_block_size=self.input_block_size,
+            output_block_size=self.output_block_size,
+            replacements_producer=(
+                self.producer if self.replacements_topic is not None else None
+            ),
+            replacements_topic=self.replacements_topic,
         )
+
+        if self.__profile_path is not None:
+            strategy_factory = ProcessingStrategyProfilerWrapperFactory(
+                strategy_factory, self.__profile_path,
+            )
+
+        return strategy_factory
+
+    def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
+        """
+        Builds the consumer.
+        """
+        return self.__build_consumer(self.__build_streaming_strategy_factory())
 
     def build_snapshot_aware_consumer(
         self, snapshot_id: SnapshotId, transaction_data: TransactionData,
-    ) -> BatchingConsumer[KafkaPayload]:
+    ) -> StreamProcessor[KafkaPayload]:
         """
-        Builds the consumer with a ConsumerWorker able to handle snapshots.
+        Builds the consumer with a processor that is able to handle snapshots.
         """
-        worker = SnapshotAwareWorker(
-            storage=self.storage,
-            producer=self.producer,
-            snapshot_id=snapshot_id,
-            transaction_data=transaction_data,
-            metrics=self.metrics,
-            replacements_topic=self.replacements_topic,
+        return self.__build_consumer(
+            self.__build_streaming_strategy_factory(
+                lambda processor: SnapshotProcessor(
+                    processor, snapshot_id, transaction_data
+                )
+            )
         )
-        return self.__build_consumer(worker)

@@ -1,6 +1,8 @@
+import logging
+import numbers
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Any, MutableMapping, Optional
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
@@ -10,8 +12,9 @@ from snuba.datasets.events_format import (
     extract_base,
     extract_extra_contexts,
     extract_extra_tags,
+    extract_http,
+    extract_nested,
     extract_user,
-    flatten_nested_field,
 )
 from snuba.processor import (
     InsertBatch,
@@ -22,7 +25,9 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify,
 )
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
+
+logger = logging.getLogger(__name__)
 
 metrics = MetricsWrapper(environment.metrics, "transactions.processor")
 
@@ -39,13 +44,15 @@ class TransactionsMessageProcessor(MessageProcessor):
     }
 
     def __extract_timestamp(self, field):
-        timestamp = _ensure_valid_date(datetime.fromtimestamp(field))
+        # We are purposely using a naive datetime here to work with the rest of the codebase.
+        # We can be confident that clients are only sending UTC dates.
+        timestamp = _ensure_valid_date(datetime.utcfromtimestamp(field))
         if timestamp is None:
             timestamp = datetime.utcnow()
         milliseconds = int(timestamp.microsecond / 1000)
         return (timestamp, milliseconds)
 
-    def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
+    def process_message(self, message, metadata) -> Optional[ProcessedMessage]:
         processed = {"deleted": 0}
         if not (isinstance(message, (list, tuple)) and len(message) >= 2):
             return None
@@ -61,8 +68,10 @@ class TransactionsMessageProcessor(MessageProcessor):
         if event_type != "transaction":
             return None
         extract_base(processed, event)
+        # We are purposely using a naive datetime here to work with the rest of the codebase.
+        # We can be confident that clients are only sending UTC dates.
         processed["retention_days"] = enforce_retention(
-            event, datetime.fromtimestamp(data["timestamp"]),
+            event, datetime.utcfromtimestamp(data["timestamp"]),
         )
         if not data.get("contexts", {}).get("trace"):
             return None
@@ -105,9 +114,6 @@ class TransactionsMessageProcessor(MessageProcessor):
 
         tags = _as_dict_safe(data.get("tags", None))
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
-        processed["_tags_flattened"] = flatten_nested_field(
-            processed["tags.key"], processed["tags.value"]
-        )
 
         promoted_tags = {col: tags[col] for col in self.PROMOTED_TAGS if col in tags}
         processed["release"] = promoted_tags.get(
@@ -122,11 +128,37 @@ class TransactionsMessageProcessor(MessageProcessor):
         if "geo" not in contexts and isinstance(geo, dict):
             contexts["geo"] = geo
 
+        measurements = data.get("measurements")
+        if measurements is not None:
+            try:
+                (
+                    processed["measurements.key"],
+                    processed["measurements.value"],
+                ) = extract_nested(
+                    measurements,
+                    lambda value: float(value["value"])
+                    if (
+                        value is not None
+                        and isinstance(value.get("value"), numbers.Number)
+                    )
+                    else None,
+                )
+            except Exception:
+                # Not failing the event in this case just yet, because we are still
+                # developing this feature.
+                logger.error(
+                    "Invalid measurements field.",
+                    extra={"measurements": measurements},
+                    exc_info=True,
+                )
+        request = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
+        http_data: MutableMapping[str, Any] = {}
+        extract_http(http_data, request)
+        processed["http_method"] = http_data["http_method"]
+        processed["http_referer"] = http_data["http_referer"]
+
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             contexts
-        )
-        processed["_contexts_flattened"] = flatten_nested_field(
-            processed["contexts.key"], processed["contexts.value"]
         )
 
         processed["dist"] = _unicodify(
@@ -147,9 +179,8 @@ class TransactionsMessageProcessor(MessageProcessor):
             elif ip_address.version == 6:
                 processed["ip_address_v6"] = str(ip_address)
 
-        if metadata is not None:
-            processed["partition"] = metadata.partition
-            processed["offset"] = metadata.offset
+        processed["partition"] = metadata.partition
+        processed["offset"] = metadata.offset
 
         sdk = data.get("sdk", None) or {}
         processed["sdk_name"] = _unicodify(sdk.get("name") or "")

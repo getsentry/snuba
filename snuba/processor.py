@@ -36,7 +36,7 @@ class MessageProcessor(ABC):
     """
 
     @abstractmethod
-    def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
+    def process_message(self, message, metadata) -> Optional[ProcessedMessage]:
         raise NotImplementedError
 
 
@@ -55,7 +55,7 @@ def _as_dict_safe(value):
         return value
     rv = {}
     for item in value:
-        if item is not None:
+        if item is not None and item[0] is not None:
             rv[item[0]] = item[1]
     return rv
 

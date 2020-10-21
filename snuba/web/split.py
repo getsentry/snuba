@@ -1,15 +1,17 @@
 import copy
+import logging
 import math
 from dataclasses import replace
-from datetime import datetime, timedelta
-from typing import Any as AnyType
-from typing import List, Optional, Tuple, Union, cast
+from datetime import timedelta
+from typing import Optional
 
 from snuba import environment, settings, state, util
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy, SplitQueryRunner
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
+    ConditionFunctions,
     combine_and_conditions,
     get_first_level_and_conditions,
     in_condition,
@@ -18,22 +20,13 @@ from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
 from snuba.query.expressions import Literal as LiteralExpr
-from snuba.query.logical import SelectedExpression
-from snuba.query.matchers import (
-    Any,
-    AnyExpression,
-    Column,
-    FunctionCall,
-    Literal,
-    Or,
-    Param,
-    String,
-)
+from snuba.query import OrderByDirection, SelectedExpression
+from snuba.query.matchers import AnyExpression, Column, FunctionCall, Or, Param, String
 from snuba.request.request_settings import RequestSettings
-from snuba.util import is_condition
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryResult
 
+logger = logging.getLogger("snuba.query.split")
 metrics = MetricsWrapper(environment.metrics, "query.splitter")
 
 # Every time we find zero results for a given step, expand the search window by
@@ -41,64 +34,6 @@ metrics = MetricsWrapper(environment.metrics, "query.splitter")
 # worst case (there are 0 results in the database) would have us making 4
 # queries before hitting the 90d limit (2+20+200+2000 hours == 92 days).
 STEP_GROWTH = 10
-
-
-def _identify_condition(condition: AnyType, field: str, operator: str) -> bool:
-    return (
-        is_condition(condition) and condition[0] == field and condition[1] == operator
-    )
-
-
-def _get_time_range(
-    query: Query, timestamp_field: str
-) -> Tuple[Optional[datetime], Optional[datetime]]:
-    """
-    Finds the minimal time range for this query. Which means, it finds
-    the >= timestamp condition with the highest datetime literal and
-    the < timestamp condition with the smallest and returns the interval
-    in the form of a tuple of Literals. It only looks into first level
-    AND conditions since, if the timestamp is nested in an OR we cannot
-    say anything on how that compares to the other timestamp conditions.
-
-    TODO: Consider making this part of the AST api if there are more use
-    cases. It would require managing a few more corner cases for being part
-    of the api.
-    """
-
-    condition_clause = query.get_condition_from_ast()
-    if not condition_clause:
-        return (None, None)
-
-    max_lower_bound = None
-    min_upper_bound = None
-    for c in get_first_level_and_conditions(condition_clause):
-        match = FunctionCall(
-            None,
-            Param(
-                "operator",
-                Or(
-                    [
-                        String(OPERATOR_TO_FUNCTION[">="]),
-                        String(OPERATOR_TO_FUNCTION["<"]),
-                    ]
-                ),
-            ),
-            (
-                Column(None, None, String(timestamp_field)),
-                Literal(None, Param("timestamp", Any(datetime))),
-            ),
-        ).match(c)
-
-        if match is not None:
-            timestamp = cast(datetime, match.scalar("timestamp"))
-            if match.string("operator") == OPERATOR_TO_FUNCTION[">="]:
-                if not max_lower_bound or timestamp > max_lower_bound:
-                    max_lower_bound = timestamp
-            else:
-                if not min_upper_bound or timestamp < min_upper_bound:
-                    min_upper_bound = timestamp
-
-    return (max_lower_bound, min_upper_bound)
 
 
 def _replace_ast_condition(
@@ -111,9 +46,8 @@ def _replace_ast_condition(
 
     def replace_condition(expression: Expression) -> Expression:
         match = FunctionCall(
-            None,
             String(OPERATOR_TO_FUNCTION[operator]),
-            (Param("column", Column(None, None, String(field))), AnyExpression()),
+            (Param("column", Column(None, String(field))), AnyExpression()),
         ).match(expression)
 
         return (
@@ -134,19 +68,6 @@ def _replace_ast_condition(
                 ]
             )
         )
-
-
-def _replace_condition(
-    query: Query, field: str, operator: str, new_literal: Union[str, List[AnyType]]
-) -> None:
-    query.set_conditions(
-        [
-            cond
-            if not _identify_condition(cond, field, operator)
-            else [field, operator, new_literal]
-            for cond in query.get_conditions() or []
-        ]
-    )
 
 
 class TimeSplitQueryStrategy(QuerySplitStrategy):
@@ -173,69 +94,43 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
         avoid querying the entire range.
         """
         limit = query.get_limit()
-        if limit is None or query.get_groupby():
+        if limit is None or query.get_groupby_from_ast():
             return None
 
         if query.get_offset() >= 1000:
             return None
 
-        orderby = query.get_orderby()
-        if not orderby or orderby[0] != f"-{self.__timestamp_col}":
+        orderby = query.get_orderby_from_ast()
+        if (
+            not orderby
+            or orderby[0].direction != OrderByDirection.DESC
+            or not isinstance(orderby[0].expression, ColumnExpr)
+            or not orderby[0].expression.column_name == self.__timestamp_col
+        ):
             return None
 
-        conditions = query.get_conditions() or []
-        from_date_str = next(
-            (
-                condition[2]
-                for condition in conditions
-                if _identify_condition(condition, self.__timestamp_col, ">=")
-            ),
-            None,
-        )
+        from_date_ast, to_date_ast = get_time_range(query, self.__timestamp_col)
 
-        to_date_str = next(
-            (
-                condition[2]
-                for condition in conditions
-                if _identify_condition(condition, self.__timestamp_col, "<")
-            ),
-            None,
-        )
-        from_date_ast, to_date_ast = _get_time_range(query, self.__timestamp_col)
-
-        if not from_date_str or not to_date_str:
+        if from_date_ast is None or to_date_ast is None:
             return None
 
         date_align, split_step = state.get_configs(
             [("date_align_seconds", 1), ("split_step", 3600)]  # default 1 hour
         )
-        to_date = util.parse_datetime(to_date_str, date_align)
-        from_date = util.parse_datetime(from_date_str, date_align)
-
-        if from_date != from_date_ast:
-            metrics.increment("mismatch.ast_from_date")
-        if to_date != to_date_ast:
-            metrics.increment("mismatch.ast_to_date")
 
         remaining_offset = query.get_offset()
 
         overall_result = None
-        split_end = to_date
-        split_start = max(split_end - timedelta(seconds=split_step), from_date)
+        split_end = to_date_ast
+        split_start = max(split_end - timedelta(seconds=split_step), from_date_ast)
         total_results = 0
         while split_start < split_end and total_results < limit:
             # We need to make a copy to use during the query execution because we replace
             # the start-end conditions on the query at each iteration of this loop.
             split_query = copy.deepcopy(query)
 
-            _replace_condition(
-                split_query, self.__timestamp_col, ">=", split_start.isoformat()
-            )
             _replace_ast_condition(
                 split_query, self.__timestamp_col, ">=", LiteralExpr(None, split_start)
-            )
-            _replace_condition(
-                split_query, self.__timestamp_col, "<", split_end.isoformat()
             )
             _replace_ast_condition(
                 split_query, self.__timestamp_col, "<", LiteralExpr(None, split_end)
@@ -280,10 +175,10 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
                 split_end = split_start
                 try:
                     split_start = max(
-                        split_end - timedelta(seconds=split_step), from_date
+                        split_end - timedelta(seconds=split_step), from_date_ast
                     )
                 except OverflowError:
-                    split_start = from_date
+                    split_start = from_date_ast
 
         return overall_result
 
@@ -316,9 +211,8 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         if (
             limit is None
             or limit == 0
-            or query.get_groupby()
-            or query.get_aggregations()
-            or not query.get_selected_columns()
+            or query.get_groupby_from_ast()
+            or not query.get_selected_columns_from_ast()
         ):
             return None
 
@@ -326,23 +220,28 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             metrics.increment("column_splitter.query_above_limit")
             return None
 
-        total_col_count = len(query.get_all_referenced_columns())
-        total_ast_count = len(
-            # We need to count the number of table/column name pairs
-            # not the number of distinct Column objects in the query
-            # so to avoid counting aliased columns multiple times.
-            {
-                (col.table_name, col.column_name)
-                for col in query.get_all_ast_referenced_columns()
-            }
+        # Do not split if there is already a = or IN condition on an ID column
+        id_column_matcher = FunctionCall(
+            Or([String(ConditionFunctions.EQ), String(ConditionFunctions.IN)]),
+            (Column(None, String(self.__id_column)), AnyExpression(),),
         )
-        if total_col_count != total_ast_count:
-            metrics.increment("mismatch.total_referenced_columns")
+
+        for expr in query.get_condition_from_ast() or []:
+            match = id_column_matcher.match(expr)
+
+            if match:
+                return None
+
+        # We need to count the number of table/column name pairs
+        # not the number of distinct Column objects in the query
+        # so to avoid counting aliased columns multiple times.
+        total_columns = {
+            (col.table_name, col.column_name)
+            for col in query.get_all_ast_referenced_columns()
+        }
 
         minimal_query = copy.deepcopy(query)
-        minimal_query.set_selected_columns(
-            [self.__id_column, self.__project_column, self.__timestamp_column]
-        )
+
         # TODO: provide the table alias name to this splitter if we ever use it
         # in joins.
         minimal_query.set_ast_selected_columns(
@@ -360,31 +259,27 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             ]
         )
 
-        minimal_ast_count = len(
-            {
-                (col.table_name, col.column_name)
-                for col in minimal_query.get_all_ast_referenced_columns()
-            }
-        )
-        minimal_count = len(minimal_query.get_all_referenced_columns())
-        if minimal_count != minimal_ast_count:
-            metrics.increment("mismatch.minimaL_query_referenced_columns")
+        for exp in minimal_query.get_all_expressions():
+            if exp.alias in (
+                self.__id_column,
+                self.__project_column,
+                self.__timestamp_column,
+            ) and not (isinstance(exp, ColumnExpr) and exp.column_name == exp.alias):
+                logger.warning(
+                    "Potential alias shadowing due to column splitter",
+                    extra={"expression": exp},
+                    exc_info=True,
+                )
 
-        if total_col_count <= minimal_count:
+        minimal_columns = {
+            (col.table_name, col.column_name)
+            for col in minimal_query.get_all_ast_referenced_columns()
+        }
+        if len(total_columns) <= len(minimal_columns):
             return None
 
         # Ensures the AST minimal query is actually runnable on its own.
         if not minimal_query.validate_aliases():
-            return None
-
-        legacy_references = set(minimal_query.get_all_referenced_columns())
-        ast_column_names = {
-            c.column_name for c in minimal_query.get_all_ast_referenced_columns()
-        }
-        # Ensures the legacy minimal query (which does not expand alias references)
-        # does not contain alias references we removed when creating minimal_query.
-        if legacy_references - ast_column_names:
-            metrics.increment("columns.skip_invalid_legacy_query")
             return None
 
         result = runner(minimal_query, request_settings)
@@ -406,7 +301,6 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             metrics.increment("column_splitter.intermediate_results_beyond_limit")
             return None
 
-        query.add_conditions([(self.__id_column, "IN", event_ids)])
         query.add_condition_to_ast(
             in_condition(
                 None,
@@ -423,9 +317,6 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         project_ids = list(
             set([event[self.__project_column] for event in result.result["data"]])
         )
-        _replace_condition(
-            query, self.__project_column, "IN", project_ids,
-        )
         _replace_ast_condition(
             query,
             self.__project_column,
@@ -434,12 +325,6 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         )
 
         timestamps = [event[self.__timestamp_column] for event in result.result["data"]]
-        _replace_condition(
-            query,
-            self.__timestamp_column,
-            ">=",
-            util.parse_datetime(min(timestamps)).isoformat(),
-        )
         _replace_ast_condition(
             query,
             self.__timestamp_column,
@@ -448,12 +333,6 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         )
         # We add 1 second since this gets translated to ('timestamp', '<', to_date)
         # and events are stored with a granularity of 1 second.
-        _replace_condition(
-            query,
-            self.__timestamp_column,
-            "<",
-            (util.parse_datetime(max(timestamps)) + timedelta(seconds=1)).isoformat(),
-        )
         _replace_ast_condition(
             query,
             self.__timestamp_column,

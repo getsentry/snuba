@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta
-from typing import Any, Mapping, MutableMapping, Sequence, Tuple
+from typing import Any, Callable, Mapping, MutableMapping, Sequence, Tuple, TypeVar
 
 from snuba import settings
 from snuba.processor import (
+    _as_dict_safe,
     _ensure_valid_date,
     _ensure_valid_ip,
     _unicodify,
@@ -29,16 +30,34 @@ def extract_user(output: MutableMapping[str, Any], user: Mapping[str, Any]) -> N
     output["ip_address"] = str(ip_addr) if ip_addr is not None else None
 
 
-def extract_extra_tags(tags) -> Tuple[Sequence[str], Sequence[str]]:
-    tag_keys = []
-    tag_values = []
-    for tag_key, tag_value in sorted(tags.items()):
-        value = _unicodify(tag_value)
-        if value:
-            tag_keys.append(_unicodify(tag_key))
-            tag_values.append(value)
+TVal = TypeVar("TVal")
 
-    return (tag_keys, tag_values)
+
+def extract_http(output: MutableMapping[str, Any], request: Mapping[str, Any]) -> None:
+    http_headers = _as_dict_safe(request.get("headers", None))
+    output["http_method"] = _unicodify(request.get("method", None))
+    output["http_referer"] = _unicodify(http_headers.get("Referer", None))
+    output["http_url"] = _unicodify(request.get("url", None))
+
+
+def extract_extra_tags(
+    nested_col: Mapping[str, Any],
+) -> Tuple[Sequence[str], Sequence[str]]:
+    return extract_nested(nested_col, lambda s: _unicodify(s) or None)
+
+
+def extract_nested(
+    nested_col: Mapping[str, Any], val_processor: Callable[[Any], TVal]
+) -> Tuple[Sequence[str], Sequence[TVal]]:
+    keys = []
+    values = []
+    for key, value in sorted(nested_col.items()):
+        value = val_processor(value)
+        if value is not None:
+            keys.append(_unicodify(key))
+            values.append(value)
+
+    return (keys, values)
 
 
 def extract_extra_contexts(contexts) -> Tuple[Sequence[str], Sequence[str]]:
@@ -91,21 +110,6 @@ def escape_field(field: str) -> str:
     there should be no issue. But there may be other cases.
     """
     return field.translate(ESCAPE_TRANSLATION)
-
-
-def flatten_nested_field(keys: Sequence[str], values: Sequence[str]) -> str:
-    # We need to guarantee the content of the merged string is sorted otherwise we
-    # will not be able to run a LIKE operation over multiple fields at the same time.
-    # Tags are pre sorted, but it seems contexts are not, so to make this generic
-    # we ensure the invariant is respected here.
-    pairs = sorted(zip(keys, values))
-    str_pairs = [f"|{escape_field(k)}={escape_field(v)}|" for k, v in pairs]
-    # The result is going to be:
-    # |tag:val||tag:val|
-    # This gives the guarantee we will always have a delimiter on both side of the
-    # tag pair, thus we can unequivocally identify a tag with a LIKE expression even if
-    # the value or the tag name in the query is a substring of a real tag.
-    return "".join(str_pairs)
 
 
 class EventTooOld(Exception):

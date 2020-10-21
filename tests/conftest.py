@@ -3,13 +3,16 @@ from typing import Iterator
 import pytest
 
 from snuba import settings
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clusters.cluster import ClickhouseClientSettings, CLUSTERS
+from snuba.datasets.schemas.tables import WritableTableSchema
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_storage
 from snuba.environment import setup_sentry
-from snuba.state import delete_config, set_config
+from snuba.redis import redis_client
 from snuba.utils.clock import Clock, TestingClock
-from snuba.utils.streams.dummy import DummyBroker
+from snuba.utils.streams.backends.local.backend import LocalBroker
+from snuba.utils.streams.backends.local.storages.memory import MemoryMessageStorage
 from snuba.utils.streams.types import TPayload
-from snuba.web.ast_rollout import ROLLOUT_RATE_CONFIG
 
 
 def pytest_configure() -> None:
@@ -17,25 +20,17 @@ def pytest_configure() -> None:
     Set up the Sentry SDK to avoid errors hidden by configuration.
     Ensure the snuba_test database exists
     """
+    assert (
+        settings.TESTING
+    ), "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
+
     setup_sentry()
 
-    # There is only one cluster in test, so fetch the host from there.
-    cluster = settings.CLUSTERS[0]
-
-    connection = ClickhousePool(
-        cluster["host"], cluster["port"], "default", "", "default",
-    )
-
-    database_name = cluster["database"]
-    connection.execute(f"DROP DATABASE IF EXISTS {database_name};")
-    connection.execute(f"CREATE DATABASE {database_name};")
-
-
-@pytest.fixture(params=[0, 100], ids=["legacy", "ast"])
-def query_type(request) -> None:
-    set_config(ROLLOUT_RATE_CONFIG, request.param)
-    yield
-    delete_config(ROLLOUT_RATE_CONFIG)
+    for cluster in CLUSTERS:
+        connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+        database_name = cluster.get_database()
+        connection.execute(f"DROP DATABASE IF EXISTS {database_name};")
+        connection.execute(f"CREATE DATABASE {database_name};")
 
 
 @pytest.fixture
@@ -44,5 +39,27 @@ def clock() -> Iterator[Clock]:
 
 
 @pytest.fixture
-def broker(clock: TestingClock) -> Iterator[DummyBroker[TPayload]]:
-    yield DummyBroker(clock)
+def broker(clock: TestingClock) -> Iterator[LocalBroker[TPayload]]:
+    yield LocalBroker(MemoryMessageStorage(), clock)
+
+
+@pytest.fixture(autouse=True)
+def run_migrations() -> Iterator[None]:
+    from snuba.migrations.runner import Runner
+
+    Runner().run_all(force=True)
+
+    yield
+
+    for storage_key in StorageKey:
+        storage = get_storage(storage_key)
+        cluster = storage.get_cluster()
+        connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+        database = cluster.get_database()
+
+        schema = storage.get_schema()
+        if isinstance(schema, WritableTableSchema):
+            table_name = schema.get_local_table_name()
+            connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
+
+    redis_client.flushdb()

@@ -54,7 +54,7 @@ class InsertEvent(TypedDict):
     message: str
     platform: str
     datetime: str  # snuba.settings.PAYLOAD_DATETIME_FORMAT
-    data: Mapping[str, Any]
+    data: MutableMapping[str, Any]
     primary_hash: str  # empty string represents None
     retention_days: int
 
@@ -79,7 +79,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         self,
         output: MutableMapping[str, Any],
         event: InsertEvent,
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         raise NotImplementedError
 
@@ -95,7 +95,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         output: MutableMapping[str, Any],
         event: InsertEvent,
         tags: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         raise NotImplementedError
 
@@ -105,16 +105,6 @@ class EventsProcessorBase(MessageProcessor, ABC):
         output: MutableMapping[str, Any],
         contexts: Mapping[str, Any],
         tags: Mapping[str, Any],
-    ) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    def extract_contexts_custom(
-        self,
-        output: MutableMapping[str, Any],
-        event: InsertEvent,
-        contexts: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
     ) -> None:
         raise NotImplementedError
 
@@ -146,7 +136,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         output["sdk_integrations"] = sdk_integrations
 
     def process_message(
-        self, message, metadata: Optional[KafkaMessageMetadata] = None
+        self, message, metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         """\
         Process a raw message into an insertion or replacement batch. Returns
@@ -175,12 +165,12 @@ class EventsProcessorBase(MessageProcessor, ABC):
             raise InvalidMessageType(f"Invalid message type: {type_}")
 
     def process_insert(
-        self, event: InsertEvent, metadata: Optional[KafkaMessageMetadata] = None
+        self, event: InsertEvent, metadata: KafkaMessageMetadata
     ) -> Optional[Mapping[str, Any]]:
         if not self._should_process(event):
             return None
 
-        processed = {"deleted": 0}
+        processed: MutableMapping[str, Any] = {"deleted": 0}
         extract_project_id(processed, event)
         self._extract_event_id(processed, event)
         processed["retention_days"] = enforce_retention(
@@ -207,13 +197,11 @@ class EventsProcessorBase(MessageProcessor, ABC):
 
         contexts = data.get("contexts", None) or {}
         self.extract_promoted_contexts(processed, contexts, tags)
-        self.extract_contexts_custom(processed, event, contexts, metadata)
 
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             contexts
         )
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
-        processed["_tags_flattened"] = ""
 
         exception = (
             data.get("exception", data.get("sentry.interfaces.Exception", None)) or {}
@@ -221,10 +209,9 @@ class EventsProcessorBase(MessageProcessor, ABC):
         stacks = exception.get("values", None) or []
         self.extract_stacktraces(processed, stacks)
 
-        if metadata is not None:
-            processed["offset"] = metadata.offset
-            processed["partition"] = metadata.partition
-            processed["message_timestamp"] = metadata.timestamp
+        processed["offset"] = metadata.offset
+        processed["partition"] = metadata.partition
+        processed["message_timestamp"] = metadata.timestamp
 
         return processed
 
@@ -232,7 +219,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         self,
         output: MutableMapping[str, Any],
         event: InsertEvent,
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         # Properties we get from the top level of the message payload
         output["platform"] = _unicodify(event["platform"])

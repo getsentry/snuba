@@ -6,7 +6,6 @@ from snuba.clickhouse.columns import (
     DateTime,
     Enum,
     Float,
-    LowCardinality,
     Nested,
     Nullable,
     String,
@@ -15,6 +14,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
+from snuba.migrations.columns import LowCardinality
 
 
 status_type = Enum([("success", 0), ("error", 1), ("rate-limited", 2)])
@@ -63,6 +63,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="querylog_local",
                 columns=columns,
                 engine=table_engines.MergeTree(
+                    storage_set=StorageSetKey.QUERYLOG,
                     order_by="(toStartOfDay(timestamp), request_id)",
                     partition_by="(toMonday(timestamp))",
                     sample_by="request_id",

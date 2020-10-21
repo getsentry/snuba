@@ -13,8 +13,8 @@ from snuba.query.logical import Query
 from snuba.query.processors import ExtensionData, ExtensionQueryProcessor
 from snuba.request.request_settings import RequestSettings
 from snuba.util import parse_datetime
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.decorators import track_calls
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 
 timeseries_metrics = MetricsWrapper(environment.metrics, "extensions.timeseries")
@@ -85,12 +85,6 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
     ) -> None:
         from_date, to_date = self.get_time_limit(extension_data)
         query.set_granularity(extension_data["granularity"])
-        query.add_conditions(
-            [
-                (self.__timestamp_column, ">=", from_date.isoformat()),
-                (self.__timestamp_column, "<", to_date.isoformat()),
-            ]
-        )
         query.add_condition_to_ast(
             binary_condition(
                 None,

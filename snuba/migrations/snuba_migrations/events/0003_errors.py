@@ -1,6 +1,5 @@
 from typing import Sequence
 
-
 from snuba.clickhouse.columns import (
     Array,
     Column,
@@ -8,18 +7,20 @@ from snuba.clickhouse.columns import (
     FixedString,
     IPv4,
     IPv6,
-    LowCardinality,
-    Materialized,
     Nested,
     Nullable,
     String,
     UInt,
     UUID,
-    WithCodecs,
-    WithDefault,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
+from snuba.migrations.columns import (
+    LowCardinality,
+    Materialized,
+    WithCodecs,
+    WithDefault,
+)
 
 columns = [
     Column("org_id", UInt(64)),
@@ -112,6 +113,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="errors_local",
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
+                    storage_set=StorageSetKey.EVENTS,
                     version_column="deleted",
                     order_by="(org_id, project_id, toStartOfDay(timestamp), primary_hash_hex, event_hash)",
                     partition_by="(toMonday(timestamp), if(retention_days = 30, 30, 90))",

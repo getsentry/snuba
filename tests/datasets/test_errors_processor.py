@@ -19,7 +19,6 @@ def test_error_processor() -> None:
         {
             "event_id": "dcb9d002cac548c795d1c9adbfc68040",
             "group_id": 100,
-            "organization_id": 3,
             "project_id": 300688,
             "release": None,
             "dist": None,
@@ -214,7 +213,6 @@ def test_error_processor() -> None:
     )
 
     expected_result = {
-        "org_id": 3,
         "project_id": 300688,
         "timestamp": error_timestamp,
         "event_id": str(UUID("dcb9d002cac548c795d1c9adbfc68040")),
@@ -229,6 +227,8 @@ def test_error_processor() -> None:
         "user_email": "me@myself.org",
         "sdk_name": "sentry.python",
         "sdk_version": "0.0.0.0.1",
+        "http_method": "POST",
+        "http_referer": "tagstore.something",
         "tags.key": [
             "environment",
             "handled",
@@ -251,7 +251,6 @@ def test_error_processor() -> None:
             "this_is_me",
             "snuba",
         ],
-        "_tags_flattened": "",
         "contexts.key": [
             "runtime.version",
             "runtime.name",
@@ -259,8 +258,6 @@ def test_error_processor() -> None:
             "geo.country_code",
             "geo.region",
             "geo.city",
-            "request.http_method",
-            "request.http_referer",
         ],
         "contexts.value": [
             "3.7.6",
@@ -269,18 +266,14 @@ def test_error_processor() -> None:
             "XY",
             "fake_region",
             "fake_city",
-            "POST",
-            "tagstore.something",
         ],
-        "_contexts_flattened": "",
         "partition": 1,
         "offset": 2,
         "message_timestamp": datetime(1970, 1, 1),
         "retention_days": 90,
         "deleted": 0,
         "group_id": 100,
-        "primary_hash": "04233d08ac90cf6fc015b1be5932e7e2",
-        "event_string": "dcb9d002cac548c795d1c9adbfc68040",
+        "primary_hash": str(UUID("04233d08ac90cf6fc015b1be5932e7e2")),
         "received": received_timestamp.astimezone(pytz.utc).replace(
             tzinfo=None, microsecond=0
         ),

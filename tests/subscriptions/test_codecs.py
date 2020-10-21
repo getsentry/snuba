@@ -4,23 +4,22 @@ from datetime import datetime, timedelta
 
 from snuba.datasets.factory import get_dataset
 from snuba.reader import Result
-from snuba.subscriptions.codecs import SubscriptionDataCodec
+from snuba.subscriptions.codecs import (
+    SubscriptionDataCodec,
+    SubscriptionTaskResultEncoder,
+)
 from snuba.subscriptions.data import (
     PartitionId,
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
 )
-from snuba.subscriptions.worker import (
-    SubscriptionTaskResult,
-    subscription_task_result_encoder,
-)
-from snuba.subscriptions.scheduler import ScheduledTask
+from snuba.subscriptions.worker import SubscriptionTaskResult
 from snuba.utils.metrics.timer import Timer
-from tests.base import BaseTest
+from snuba.utils.scheduler import ScheduledTask
 
 
-class TestSubscriptionCodec(BaseTest):
+class TestSubscriptionCodec:
     def build_subscription_data(self) -> SubscriptionData:
         return SubscriptionData(
             project_id=5,
@@ -62,6 +61,8 @@ class TestSubscriptionCodec(BaseTest):
 
 
 def test_subscription_task_result_encoder() -> None:
+    codec = SubscriptionTaskResultEncoder()
+
     timestamp = datetime.now()
 
     subscription_data = SubscriptionData(
@@ -87,7 +88,7 @@ def test_subscription_task_result_encoder() -> None:
         (request, result),
     )
 
-    message = subscription_task_result_encoder.encode(task_result)
+    message = codec.encode(task_result)
     data = json.loads(message.value.decode("utf-8"))
     assert data["version"] == 2
     payload = data["payload"]

@@ -1,17 +1,25 @@
 import uuid
+from datetime import datetime
 
+from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.processor import InsertBatch
 from snuba.query.logical import Query
+from snuba.querylog.query_metadata import (
+    ClickhouseQueryMetadata,
+    ClickhouseQueryProfile,
+    FilterProfile,
+    QueryStatus,
+    SnubaQueryMetadata,
+)
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.utils.clock import TestingClock
 from snuba.utils.metrics.timer import Timer
-from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
 
 
-def test_simple():
+def test_simple() -> None:
     request_body = {
         "selected_columns": ["event_id"],
         "orderby": "event_id",
@@ -22,11 +30,7 @@ def test_simple():
     }
 
     query = Query(
-        request_body,
-        get_storage(StorageKey.EVENTS)
-        .get_schemas()
-        .get_read_schema()
-        .get_data_source(),
+        request_body, get_storage(StorageKey.EVENTS).get_schema().get_data_source(),
     )
 
     request = Request(
@@ -46,7 +50,18 @@ def test_simple():
             ClickhouseQueryMetadata(
                 sql="select event_id from sentry_dist sample 0.1 prewhere project_id in (1) limit 50, 100",
                 stats={"sample": 10},
-                status="success",
+                status=QueryStatus.SUCCESS,
+                profile=ClickhouseQueryProfile(
+                    time_range=10,
+                    table="events",
+                    all_columns={"timestamp", "tags"},
+                    multi_level_condition=False,
+                    where_profile=FilterProfile(
+                        columns={"timestamp"}, mapping_cols={"tags"},
+                    ),
+                    groupby_cols=set(),
+                    array_join_cols=set(),
+                ),
                 trace_id="b" * 32,
             )
         ],
@@ -59,7 +74,9 @@ def test_simple():
         .get_processor()
     )
 
-    assert processor.process_message(message) == InsertBatch(
+    assert processor.process_message(
+        message, KafkaMessageMetadata(0, 0, datetime.now())
+    ) == InsertBatch(
         [
             {
                 "request_id": str(uuid.UUID("a" * 32)),
@@ -82,11 +99,17 @@ def test_simple():
                 "clickhouse_queries.cache_hit": [0],
                 "clickhouse_queries.sample": [10.0],
                 "clickhouse_queries.max_threads": [0],
-                "clickhouse_queries.num_days": [0],
+                "clickhouse_queries.num_days": [10],
                 "clickhouse_queries.clickhouse_table": [""],
                 "clickhouse_queries.query_id": [""],
                 "clickhouse_queries.is_duplicate": [0],
                 "clickhouse_queries.consistent": [0],
+                "clickhouse_queries.all_columns": [["tags", "timestamp"]],
+                "clickhouse_queries.or_conditions": [False],
+                "clickhouse_queries.where_columns": [["timestamp"]],
+                "clickhouse_queries.where_mapping_columns": [["tags"]],
+                "clickhouse_queries.groupby_columns": [[]],
+                "clickhouse_queries.array_join_columns": [[]],
             }
         ],
     )

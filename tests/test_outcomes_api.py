@@ -1,24 +1,25 @@
 import uuid
 from datetime import datetime, timedelta
 
-import pytest
 import pytz
 import simplejson as json
 
-from snuba.datasets.factory import enforce_table_writer
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
+from tests.helpers import write_processed_messages
 
 
-@pytest.mark.usefixtures("query_type")
 class TestOutcomesApi(BaseApiTest):
-    def setup_method(self, test_method, dataset_name="outcomes"):
-        super().setup_method(test_method, dataset_name)
+    def setup_method(self, test_method):
+        super().setup_method(test_method)
 
         self.skew_minutes = 180
         self.skew = timedelta(minutes=self.skew_minutes)
         self.base_time = (
             datetime.utcnow().replace(minute=0, second=0, microsecond=0) - self.skew
         )
+        self.storage = get_writable_storage(StorageKey.OUTCOMES_RAW)
 
     def generate_outcomes(
         self,
@@ -31,7 +32,7 @@ class TestOutcomesApi(BaseApiTest):
         outcomes = []
         for _ in range(num_outcomes):
             processed = (
-                enforce_table_writer(self.dataset)
+                self.storage.get_table_writer()
                 .get_stream_loader()
                 .get_processor()
                 .process_message(
@@ -52,7 +53,7 @@ class TestOutcomesApi(BaseApiTest):
 
             outcomes.append(processed)
 
-        self.write_processed_messages(outcomes)
+        write_processed_messages(self.storage, outcomes)
 
     def format_time(self, time: datetime) -> str:
         return time.replace(tzinfo=pytz.utc).isoformat()

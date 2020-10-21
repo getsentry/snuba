@@ -131,6 +131,7 @@ class SubscriptableMapper(SubscriptableReferenceMapper):
     from_column_name: str
     to_nested_col_table: Optional[str]
     to_nested_col_name: str
+    nullable: bool = False
 
     def attempt_map(
         self,
@@ -141,11 +142,21 @@ class SubscriptableMapper(SubscriptableReferenceMapper):
             expression.column.table_name == self.from_column_table
             and expression.column.column_name == self.from_column_name
         ):
-            return build_mapping_expr(
-                expression.alias,
-                self.to_nested_col_table,
-                self.to_nested_col_name,
-                expression.key.accept(children_translator),
+            key = expression.key.accept(children_translator)
+            return (
+                build_mapping_expr(
+                    expression.alias,
+                    self.to_nested_col_table,
+                    self.to_nested_col_name,
+                    key,
+                )
+                if not self.nullable
+                else build_nullable_mapping_expr(
+                    expression.alias,
+                    self.to_nested_col_table,
+                    self.to_nested_col_name,
+                    key,
+                )
             )
         else:
             return None
@@ -161,14 +172,23 @@ class ColumnToMapping(ColumnToExpression):
     to_nested_col_table_name: Optional[str]
     to_nested_col_name: str
     to_nested_mapping_key: str
+    nullable: bool = False
 
     def _produce_output(self, expression: ColumnExpr) -> FunctionCallExpr:
-        return build_mapping_expr(
-            expression.alias,
-            self.to_nested_col_table_name,
-            self.to_nested_col_name,
-            LiteralExpr(None, self.to_nested_mapping_key),
-        )
+        if not self.nullable:
+            return build_mapping_expr(
+                expression.alias,
+                self.to_nested_col_table_name,
+                self.to_nested_col_name,
+                LiteralExpr(None, self.to_nested_mapping_key),
+            )
+        else:
+            return build_nullable_mapping_expr(
+                expression.alias,
+                self.to_nested_col_table_name,
+                self.to_nested_col_name,
+                LiteralExpr(None, self.to_nested_mapping_key),
+            )
 
 
 def build_mapping_expr(
@@ -188,25 +208,44 @@ def build_mapping_expr(
     )
 
 
+def build_nullable_mapping_expr(
+    alias: Optional[str],
+    table_name: Optional[str],
+    col_name: str,
+    mapping_key: Expression,
+) -> FunctionCallExpr:
+    # TODO: Add a pattern for this expression if we need it.
+    return FunctionCallExpr(
+        alias,
+        "if",
+        (
+            FunctionCallExpr(
+                None,
+                "has",
+                (ColumnExpr(None, table_name, f"{col_name}.key"), mapping_key),
+            ),
+            build_mapping_expr(None, table_name, col_name, mapping_key),
+            LiteralExpr(None, None),
+        ),
+    )
+
+
 TABLE_MAPPING_PARAM = "table_name"
 VALUE_COL_MAPPING_PARAM = "value_column"
 KEY_COL_MAPPING_PARAM = "key_column"
 KEY_MAPPING_PARAM = "key"
 mapping_pattern = FunctionCall(
-    None,
     String("arrayElement"),
     (
         Column(
-            None,
             Param(TABLE_MAPPING_PARAM, AnyOptionalString()),
             Param(VALUE_COL_MAPPING_PARAM, Any(str)),
         ),
         FunctionCall(
-            None,
             String("indexOf"),
             (
-                Column(None, None, Param(KEY_COL_MAPPING_PARAM, Any(str))),
-                Literal(None, Param(KEY_MAPPING_PARAM, Any(str))),
+                Column(None, Param(KEY_COL_MAPPING_PARAM, Any(str))),
+                Literal(Param(KEY_MAPPING_PARAM, Any(str))),
             ),
         ),
     ),

@@ -9,10 +9,10 @@ from snuba.clickhouse.columns import (
     Float,
     Nested,
     Nullable,
+    ReadOnly,
     String,
     UInt,
 )
-from snuba.datasets.schemas import MandatoryCondition
 from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsProcessor
 from snuba.datasets.storages.events_column_processor import EventsColumnProcessor
 from snuba.datasets.storages.processors.replaced_groups import (
@@ -23,6 +23,7 @@ from snuba.query.expressions import Column, Literal
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
+from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
@@ -134,6 +135,7 @@ all_columns = (
         # other tags
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
+        ("_tags_hash_map", ReadOnly(Array(UInt(64)))),
         # other context
         ("contexts", Nested([("key", String()), ("value", String())])),
         # http interface
@@ -174,6 +176,9 @@ all_columns = (
         ("culprit", Nullable(String())),
         ("sdk_integrations", Array(String())),
         ("modules", Nested([("name", String()), ("version", String())])),
+        ("release", ReadOnly(Nullable(String()))),
+        ("dist", ReadOnly(Nullable(String()))),
+        ("user", ReadOnly(Nullable(String()))),
     ]
 )
 
@@ -245,15 +250,9 @@ def get_promoted_tags() -> Mapping[str, Sequence[str]]:
 
 
 mandatory_conditions = [
-    MandatoryCondition(
-        ("deleted", "=", 0),
-        binary_condition(
-            None,
-            ConditionFunctions.EQ,
-            Column(None, None, "deleted"),
-            Literal(None, 0),
-        ),
-    )
+    binary_condition(
+        None, ConditionFunctions.EQ, Column(None, None, "deleted"), Literal(None, 0),
+    ),
 ]
 
 prewhere_candidates = [
@@ -292,6 +291,7 @@ query_processors = [
     # boolean promoted tags/contexts so this constraint will be easy
     # to enforce.
     EventsBooleanContextsProcessor(),
+    MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
     PrewhereProcessor(),
 ]

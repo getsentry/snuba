@@ -3,19 +3,20 @@ import uuid
 from datetime import datetime, timedelta
 from functools import partial
 
-import pytest
 import pytz
 import simplejson as json
 
 from snuba import settings, state
-from snuba.datasets.factory import enforce_table_writer
+from snuba.consumer import KafkaMessageMetadata
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
+from tests.helpers import write_processed_messages
 
 
-@pytest.mark.usefixtures("query_type")
 class TestTransactionsApi(BaseApiTest):
-    def setup_method(self, test_method, dataset_name="transactions"):
-        super().setup_method(test_method, dataset_name)
+    def setup_method(self, test_method):
+        super().setup_method(test_method)
         self.app.post = partial(self.app.post, headers={"referer": "test"})
 
         # values for test data
@@ -30,6 +31,7 @@ class TestTransactionsApi(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         ) - timedelta(minutes=self.minutes)
+        self.storage = get_writable_storage(StorageKey.TRANSACTIONS)
         self.generate_fizzbuzz_events()
 
     def teardown_method(self, test_method):
@@ -54,7 +56,7 @@ class TestTransactionsApi(BaseApiTest):
                     trace_id = "7400045b25c443b885914600aa83ad04"
                     span_id = "8841662216cc598b"
                     processed = (
-                        enforce_table_writer(self.dataset)
+                        self.storage.get_table_writer()
                         .get_stream_loader()
                         .get_processor()
                         .process_message(
@@ -81,17 +83,14 @@ class TestTransactionsApi(BaseApiTest):
                                         ),
                                         "type": "transaction",
                                         "transaction": "/api/do_things",
-                                        # XXX(dcramer): would be nice to document why these have to be naive
                                         "start_timestamp": datetime.timestamp(
-                                            (
-                                                self.base_time + timedelta(minutes=tick)
-                                            ).replace(tzinfo=None)
+                                            (self.base_time + timedelta(minutes=tick))
                                         ),
                                         "timestamp": datetime.timestamp(
                                             (
                                                 self.base_time
                                                 + timedelta(minutes=tick, seconds=1)
-                                            ).replace(tzinfo=None)
+                                            )
                                         ),
                                         "tags": {
                                             # Sentry
@@ -117,6 +116,10 @@ class TestTransactionsApi(BaseApiTest):
                                                 "status": "0",
                                             },
                                         },
+                                        "measurements": {
+                                            "lcp": {"value": 32.129},
+                                            "lcp.elementSize": {"value": 4242},
+                                        },
                                         "spans": [
                                             {
                                                 "op": "db",
@@ -136,11 +139,12 @@ class TestTransactionsApi(BaseApiTest):
                                         ],
                                     },
                                 },
-                            )
+                            ),
+                            KafkaMessageMetadata(0, 0, self.base_time),
                         )
                     )
                     events.append(processed)
-        self.write_processed_messages(events)
+        write_processed_messages(self.storage, events)
 
     def test_read_ip(self):
         response = self.app.post(
@@ -331,3 +335,55 @@ class TestTransactionsApi(BaseApiTest):
             # we select duration to make debugging easier on failure
             "duration": 1000,
         }
+
+    def test_individual_measurement(self) -> None:
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": [
+                        "event_id",
+                        "measurements[lcp]",
+                        "measurements[asd]",
+                    ],
+                    "limit": 1,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert "measurements[lcp]" in data["data"][0]
+        assert data["data"][0]["measurements[lcp]"] == 32.129
+        assert data["data"][0]["measurements[asd]"] is None
+
+    def test_arrayjoin_measurements(self) -> None:
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": [
+                        "event_id",
+                        ["arrayJoin", ["measurements.key"], "key"],
+                        ["arrayJoin", ["measurements.value"], "value"],
+                    ],
+                    "limit": 4,
+                    "orderby": ["event_id", "key"],
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 4, data
+        assert data["data"][0]["key"] == "lcp"
+        assert data["data"][0]["value"] == 32.129
+        assert data["data"][1]["key"] == "lcp.elementSize"
+        assert data["data"][1]["value"] == 4242
+        assert data["data"][2]["key"] == "lcp"
+        assert data["data"][2]["value"] == 32.129
+        assert data["data"][3]["key"] == "lcp.elementSize"
+        assert data["data"][3]["value"] == 4242

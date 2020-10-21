@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import Callable, Mapping, NamedTuple, Optional, Sequence, Set
+from typing import Optional, Sequence
 
-from snuba.clickhouse.columns import ColumnSet, ColumnType
+from snuba.clickhouse.columns import ColumnSet
 from snuba.clusters.cluster import get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.schemas import MandatoryCondition, RelationalSource, Schema
+from snuba.datasets.schemas import RelationalSource, Schema
+from snuba.query.expressions import FunctionCall
 
 
 class TableSource(RelationalSource):
@@ -19,7 +19,7 @@ class TableSource(RelationalSource):
         self,
         table_name: str,
         columns: ColumnSet,
-        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
+        mandatory_conditions: Optional[Sequence[FunctionCall]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
     ) -> None:
         self.__table_name = table_name
@@ -33,16 +33,11 @@ class TableSource(RelationalSource):
     def get_columns(self) -> ColumnSet:
         return self.__columns
 
-    def get_mandatory_conditions(self) -> Sequence[MandatoryCondition]:
+    def get_mandatory_conditions(self) -> Sequence[FunctionCall]:
         return self.__mandatory_conditions
 
     def get_prewhere_candidates(self) -> Sequence[str]:
         return self.__prewhere_candidates
-
-
-class DDLStatement(NamedTuple):
-    table_name: str
-    statement: str
 
 
 class TableSchema(Schema):
@@ -58,7 +53,7 @@ class TableSchema(Schema):
         local_table_name: str,
         dist_table_name: str,
         storage_set_key: StorageSetKey,
-        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
+        mandatory_conditions: Optional[Sequence[FunctionCall]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
     ):
         self.__local_table_name = local_table_name
@@ -93,81 +88,6 @@ class TableSchema(Schema):
         return self.__table_name
 
 
-class TableSchemaWithDDL(TableSchema, ABC):
-    """
-    Extends TableSchema with DDL support. This is used in the old migration system.
-    Once we move to the new system, this will be removed.
-    """
-
-    def __init__(
-        self,
-        columns: ColumnSet,
-        *,
-        local_table_name: str,
-        dist_table_name: str,
-        storage_set_key: StorageSetKey,
-        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
-        prewhere_candidates: Optional[Sequence[str]] = None,
-        migration_function: Optional[
-            Callable[[str, Mapping[str, ColumnType]], Sequence[str]]
-        ] = None,
-        skipped_cols_on_creation: Optional[Set[str]] = None,
-    ):
-        super().__init__(
-            columns,
-            local_table_name=local_table_name,
-            dist_table_name=dist_table_name,
-            storage_set_key=storage_set_key,
-            mandatory_conditions=mandatory_conditions,
-            prewhere_candidates=prewhere_candidates,
-        )
-        self.__migration_function = (
-            migration_function if migration_function else lambda table, schema: []
-        )
-        self.__local_table_name = local_table_name
-        # Clickhouse has some restrictions on materialized columns during
-        # table creation. For example a materialized column cannot
-        # reference a nested column
-        # (https://github.com/ClickHouse/ClickHouse/issues/12586).
-        # Those columns have to be skipped on table creation and added with
-        # an ALTER statement instead.
-        # This field marks the columns to skip during creation. They have to
-        # be in a migration statement.
-        # The new migration framework will not need this work around since
-        # the current schema and the CREATE statement for a storage are separate.
-        self.__skipped_cols_on_creation = skipped_cols_on_creation or set()
-
-    def get_local_drop_table_statement(self) -> DDLStatement:
-        return DDLStatement(
-            self.get_local_table_name(),
-            "DROP TABLE IF EXISTS %s" % self.get_local_table_name(),
-        )
-
-    def _get_columnset_to_create(self) -> ColumnSet:
-        """
-        Returns the ColumnSet to be created.
-        """
-        return ColumnSet(
-            [
-                c
-                for c in self.get_columns().columns
-                if c.name not in self.__skipped_cols_on_creation
-            ]
-        )
-
-    @abstractmethod
-    def get_local_table_definition(self) -> DDLStatement:
-        """
-        Returns the DDL statement to create the local table.
-        """
-        raise NotImplementedError
-
-    def get_migration_statements(
-        self,
-    ) -> Callable[[str, Mapping[str, ColumnType]], Sequence[str]]:
-        return self.__migration_function
-
-
 class WritableTableSchema(TableSchema):
     """
     This class identifies a subset of TableSchemas we can write onto.
@@ -177,202 +97,3 @@ class WritableTableSchema(TableSchema):
     """
 
     pass
-
-
-class MergeTreeSchema(WritableTableSchema, TableSchemaWithDDL):
-    def __init__(
-        self,
-        columns: ColumnSet,
-        *,
-        local_table_name: str,
-        dist_table_name: str,
-        storage_set_key: StorageSetKey,
-        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
-        prewhere_candidates: Optional[Sequence[str]] = None,
-        order_by: str,
-        partition_by: Optional[str],
-        sample_expr: Optional[str] = None,
-        ttl_expr: Optional[str] = None,
-        settings: Optional[Mapping[str, str]] = None,
-        migration_function: Optional[
-            Callable[[str, Mapping[str, ColumnType]], Sequence[str]]
-        ] = None,
-        skipped_cols_on_creation: Optional[Set[str]] = None,
-    ):
-        super(MergeTreeSchema, self).__init__(
-            columns=columns,
-            local_table_name=local_table_name,
-            dist_table_name=dist_table_name,
-            storage_set_key=storage_set_key,
-            mandatory_conditions=mandatory_conditions,
-            prewhere_candidates=prewhere_candidates,
-            migration_function=migration_function,
-            skipped_cols_on_creation=skipped_cols_on_creation,
-        )
-        self.__order_by = order_by
-        self.__partition_by = partition_by
-        self.__sample_expr = sample_expr
-        self.__ttl_expr = ttl_expr
-        self.__settings = settings
-
-    def _get_engine_type(self) -> str:
-        return "MergeTree()"
-
-    def __get_local_engine(self) -> str:
-        partition_by_clause = (
-            f"PARTITION BY {self.__partition_by}" if self.__partition_by else ""
-        )
-        sample_clause = f"SAMPLE BY {self.__sample_expr}" if self.__sample_expr else ""
-        ttl_clause = f"TTL {self.__ttl_expr}" if self.__ttl_expr else ""
-
-        if self.__settings:
-            settings_list = ["%s=%s" % (k, v) for k, v in self.__settings.items()]
-            settings_clause = "SETTINGS %s" % ", ".join(settings_list)
-        else:
-            settings_clause = ""
-
-        return f"""
-            {self._get_engine_type()}
-            {partition_by_clause}
-            ORDER BY {self.__order_by}
-            {sample_clause}
-            {ttl_clause}
-            {settings_clause};"""
-
-    def __get_table_definition(self, name: str, engine: str) -> str:
-        return """
-        CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
-            "columns": self._get_columnset_to_create().for_schema(),
-            "engine": engine,
-            "name": name,
-        }
-
-    def get_local_table_definition(self) -> DDLStatement:
-        return DDLStatement(
-            self.get_local_table_name(),
-            self.__get_table_definition(
-                self.get_local_table_name(), self.__get_local_engine()
-            ),
-        )
-
-
-class ReplacingMergeTreeSchema(MergeTreeSchema):
-    def __init__(
-        self,
-        columns: ColumnSet,
-        *,
-        local_table_name: str,
-        dist_table_name: str,
-        storage_set_key: StorageSetKey,
-        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
-        prewhere_candidates: Optional[Sequence[str]] = None,
-        order_by: str,
-        partition_by: Optional[str],
-        version_column: str,
-        sample_expr: Optional[str] = None,
-        ttl_expr: Optional[str] = None,
-        settings: Optional[Mapping[str, str]] = None,
-        migration_function: Optional[
-            Callable[[str, Mapping[str, ColumnType]], Sequence[str]]
-        ] = None,
-        skipped_cols_on_creation: Optional[Set[str]] = None,
-    ) -> None:
-        super(ReplacingMergeTreeSchema, self).__init__(
-            columns=columns,
-            local_table_name=local_table_name,
-            dist_table_name=dist_table_name,
-            storage_set_key=storage_set_key,
-            mandatory_conditions=mandatory_conditions,
-            prewhere_candidates=prewhere_candidates,
-            order_by=order_by,
-            partition_by=partition_by,
-            sample_expr=sample_expr,
-            ttl_expr=ttl_expr,
-            settings=settings,
-            migration_function=migration_function,
-            skipped_cols_on_creation=skipped_cols_on_creation,
-        )
-        self.__version_column = version_column
-
-    def _get_engine_type(self) -> str:
-        return "ReplacingMergeTree(%s)" % self.__version_column
-
-
-class SummingMergeTreeSchema(MergeTreeSchema):
-    def _get_engine_type(self) -> str:
-        return "SummingMergeTree()"
-
-
-class AggregatingMergeTreeSchema(MergeTreeSchema):
-    def _get_engine_type(self) -> str:
-        return "AggregatingMergeTree()"
-
-
-class MaterializedViewSchema(TableSchemaWithDDL):
-    def __init__(
-        self,
-        columns: ColumnSet,
-        *,
-        local_materialized_view_name: str,
-        dist_materialized_view_name: str,
-        storage_set_key: StorageSetKey,
-        mandatory_conditions: Optional[Sequence[MandatoryCondition]] = None,
-        prewhere_candidates: Optional[Sequence[str]] = None,
-        query: str,
-        local_source_table_name: str,
-        local_destination_table_name: str,
-        dist_source_table_name: str,
-        dist_destination_table_name: str,
-        migration_function: Optional[
-            Callable[[str, Mapping[str, ColumnType]], Sequence[str]]
-        ] = None,
-    ) -> None:
-        super().__init__(
-            columns=columns,
-            local_table_name=local_materialized_view_name,
-            dist_table_name=dist_materialized_view_name,
-            storage_set_key=storage_set_key,
-            mandatory_conditions=mandatory_conditions,
-            prewhere_candidates=prewhere_candidates,
-            migration_function=migration_function,
-        )
-
-        # Make sure the caller has provided a source_table_name in the query
-        assert query % {"source_table_name": local_source_table_name} != query
-
-        self.__query = query
-        self.__local_source_table_name = local_source_table_name
-        self.__local_destination_table_name = local_destination_table_name
-        self.__dist_source_table_name = dist_source_table_name
-        self.__dist_destination_table_name = dist_destination_table_name
-
-    def __get_local_source_table_name(self) -> str:
-        return self.__local_source_table_name
-
-    def __get_local_destination_table_name(self) -> str:
-        return self.__local_destination_table_name
-
-    def __get_table_definition(
-        self, name: str, source_table_name: str, destination_table_name: str
-    ) -> str:
-        return (
-            """
-        CREATE MATERIALIZED VIEW IF NOT EXISTS %(name)s TO %(destination_table_name)s (%(columns)s) AS %(query)s"""
-            % {
-                "name": name,
-                "destination_table_name": destination_table_name,
-                "columns": self._get_columnset_to_create().for_schema(),
-                "query": self.__query,
-            }
-            % {"source_table_name": source_table_name}
-        )
-
-    def get_local_table_definition(self) -> DDLStatement:
-        return DDLStatement(
-            self.get_local_table_name(),
-            self.__get_table_definition(
-                self.get_local_table_name(),
-                self.__get_local_source_table_name(),
-                self.__get_local_destination_table_name(),
-            ),
-        )

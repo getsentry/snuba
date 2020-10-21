@@ -10,13 +10,30 @@ cache:
 
 stages: [pre_commit, test]
 
+test_base: &test_base
+    stage: test
+    language: node_js
+    node_js: 10
+    services:
+      - docker
+    before_install:
+      - docker pull getsentry/snuba:latest || true
+      - docker build --build-arg PYTHON_VERSION=$PYTHON_VERSION -t getsentry/snuba . --cache-from getsentry/snuba:latest
+      - docker network create --attachable cloudbuild
+    script:
+      - SNUBA_IMAGE=getsentry/snuba docker-compose -f docker-compose.gcb.yml run --rm snuba-test
+    after_script:
+      - npm install -g @zeus-ci/cli
+      - $(npm bin -g)/zeus upload -t "application/x-junit+xml" .artifacts/*.junit.xml
+      - $(npm bin -g)/zeus upload -t "application/x-cobertura+xml" .artifacts/coverage.xml
+
 matrix:
   fast_finish: true
   include:
     - name: 'pre-commit hooks (includes python formatting + linting)'
       stage: pre_commit
       language: python
-      python: 3.7
+      python: 3.8
       install:
         - make setup-git
       script:
@@ -24,22 +41,9 @@ matrix:
         # XXX: there is a very small chance that it'll expand to exceed Linux's limits
         #      `getconf ARG_MAX` - max # bytes of args + environ for exec()
         - pre-commit run --files $(git diff --diff-filter=d --name-only master)
-    - name: 'Test'
-      stage: test
-      language: node_js
-      node_js: 10
-      services:
-        - docker
-      before_install:
-        - docker pull getsentry/snuba:latest || true
-        - docker build -t getsentry/snuba . --cache-from getsentry/snuba:latest
-        - docker network create --attachable cloudbuild
-      script:
-        - SNUBA_IMAGE=getsentry/snuba docker-compose -f docker-compose.gcb.yml run --rm snuba-test
-      after_script:
-        - npm install -g @zeus-ci/cli
-        - $(npm bin -g)/zeus upload -t "application/x-junit+xml" .artifacts/*.junit.xml
-        - $(npm bin -g)/zeus upload -t "application/x-cobertura+xml" .artifacts/coverage.xml
+    - <<: *test_base
+      name: 'Test (3.8)'
+      env: PYTHON_VERSION=3.8
 
 notifications:
   webhooks:

@@ -13,7 +13,7 @@ from snuba.processor import (
     _collapse_uint32,
     _ensure_valid_date,
 )
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 STATUS_MAPPING = {
     "ok": 0,
@@ -26,7 +26,7 @@ metrics = MetricsWrapper(environment.metrics, "sessions.processor")
 
 
 class SessionsProcessor(MessageProcessor):
-    def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
+    def process_message(self, message, metadata) -> Optional[ProcessedMessage]:
         # some old relays accidentally emit rows without release
         if message["release"] is None:
             return None

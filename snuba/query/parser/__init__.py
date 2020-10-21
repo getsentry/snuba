@@ -6,6 +6,10 @@ from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 from snuba import environment
 from snuba.clickhouse.escaping import NEGATE_RE
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entity import Entity
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -17,12 +21,19 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
+from snuba.query.logical import Query
+from snuba.query.matchers import FunctionCall as FunctionCallMatch
+from snuba.query.matchers import String as StringMatch
 from snuba.query.parser.conditions import parse_conditions_to_expr
-from snuba.query.parser.exceptions import CyclicAliasException
+from snuba.query.parser.exceptions import (
+    AliasShadowingException,
+    CyclicAliasException,
+    ParsingException,
+)
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
+from snuba.query.parser.validation import validate_query
 from snuba.util import is_function, to_list, tuplify
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +67,10 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
       processing.
       Alias references are packaged back at the end of processing.
     """
-    query = _parse_query_impl(body, dataset)
+    # TODO: Parse the entity out of the query body and select the correct one from the dataset
+    entity = dataset.get_default_entity()
+
+    query = _parse_query_impl(body, entity)
     # These are the post processing phases
     _validate_empty_table_names(query)
     _validate_aliases(query)
@@ -66,16 +80,29 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     # WARNING: These steps above assume table resolution did not happen
     # yet. If it is put earlier than here (unlikely), we need to adapt them.
     _deescape_aliases(query)
+    _validate_arrayjoin(query)
+    validate_query(query, entity)
+
+    # XXX: Select the entity to be used for the query. This step is temporary. Eventually
+    # entity selection will be moved to Sentry and specified for all SnQL queries.
+    selected_entity = dataset.select_entity(query)
+    query_entity = QueryEntity(
+        selected_entity, get_entity(selected_entity).get_data_model()
+    )
+    query.set_from_clause(query_entity)
+
     return query
 
 
-def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
+def _parse_query_impl(body: MutableMapping[str, Any], entity: Entity) -> Query:
     def build_selected_expressions(
         raw_expressions: Sequence[Any],
     ) -> List[SelectedExpression]:
         output = []
         for raw_expression in raw_expressions:
-            exp = parse_expression(tuplify(raw_expression))
+            exp = parse_expression(
+                tuplify(raw_expression), entity.get_data_model(), set()
+            )
             output.append(
                 SelectedExpression(
                     # An expression in the query can be a string or a
@@ -91,7 +118,13 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
 
     aggregations = []
     for aggregation in body.get("aggregations", []):
-        assert isinstance(aggregation, (list, tuple))
+        if not isinstance(aggregation, Sequence):
+            raise ParsingException(
+                (
+                    f"Invalid aggregation structure {aggregation}. "
+                    "It must be a sequence containing expression, column and alias."
+                )
+            )
         aggregation_function = aggregation[0]
         column_expr = aggregation[1]
         column_expr = column_expr if column_expr else []
@@ -101,7 +134,13 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
         aggregations.append(
             SelectedExpression(
                 name=alias,
-                expression=parse_aggregation(aggregation_function, column_expr, alias),
+                expression=parse_aggregation(
+                    aggregation_function,
+                    column_expr,
+                    alias,
+                    entity.get_data_model(),
+                    set(),
+                ),
             )
         )
 
@@ -113,32 +152,81 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
         + build_selected_expressions(body.get("selected_columns", []))
     )
 
+    array_join_cols = set()
     arrayjoin = body.get("arrayjoin")
+    # TODO: Properly detect all array join columns in all clauses of the query.
+    # This is missing an arrayJoin in condition with an alias that is then
+    # used in the select.
     if arrayjoin:
-        array_join_expr: Optional[Expression] = parse_expression(body["arrayjoin"])
+        array_join_cols.add(arrayjoin)
+        array_join_expr: Optional[Expression] = parse_expression(
+            body["arrayjoin"], entity.get_data_model(), {arrayjoin}
+        )
     else:
         array_join_expr = None
+        for select_expr in select_clause:
+            if isinstance(select_expr.expression, FunctionCall):
+                if select_expr.expression.function_name == "arrayJoin":
+                    parameters = select_expr.expression.parameters
+                    if len(parameters) != 1:
+                        raise ParsingException(
+                            "arrayJoin(...) only accepts a single parameter."
+                        )
+                    if isinstance(parameters[0], Column):
+                        array_join_cols.add(parameters[0].column_name)
+                    else:
+                        # We only accepts columns or functions that do not
+                        # reference columns. We could not say whether we are
+                        # actually arrayjoining on the values of the column
+                        # if it is nested in an arbitrary function. But
+                        # functions of literals are fine.
+                        for e in parameters[0]:
+                            if isinstance(e, Column):
+                                raise ParsingException(
+                                    "arrayJoin(...) cannot contain columns nested in functions."
+                                )
 
     where_expr = parse_conditions_to_expr(
-        body.get("conditions", []), dataset, arrayjoin
+        body.get("conditions", []), entity, array_join_cols
     )
-    having_expr = parse_conditions_to_expr(body.get("having", []), dataset, arrayjoin)
+    having_expr = parse_conditions_to_expr(
+        body.get("having", []), entity, array_join_cols
+    )
 
     orderby_exprs = []
     for orderby in to_list(body.get("orderby", [])):
         if isinstance(orderby, str):
             match = NEGATE_RE.match(orderby)
-            assert match is not None, f"Invalid Order By clause {orderby}"
+            if match is None:
+                raise ParsingException(
+                    (
+                        f"Invalid Order By clause {orderby}. If the Order By is a string, "
+                        "it must respect the format `[-]column`"
+                    )
+                )
             direction, col = match.groups()
             orderby = col
         elif is_function(orderby):
             match = NEGATE_RE.match(orderby[0])
-            assert match is not None, f"Invalid Order By clause {orderby}"
+            if match is None:
+                raise ParsingException(
+                    (
+                        f"Invalid Order By clause {orderby}. If the Order By is an expression, "
+                        "the function name must respect the format `[-]func_name`"
+                    )
+                )
             direction, col = match.groups()
             orderby = [col] + orderby[1:]
         else:
-            raise ValueError(f"Invalid Order By clause {orderby}")
-        orderby_parsed = parse_expression(tuplify(orderby))
+            raise ParsingException(
+                (
+                    f"Invalid Order By clause {orderby}. The Clause was neither "
+                    "a string nor a function call."
+                )
+            )
+        orderby_parsed = parse_expression(
+            tuplify(orderby), entity.get_data_model(), set()
+        )
         orderby_exprs.append(
             OrderBy(
                 OrderByDirection.DESC if direction == "-" else OrderByDirection.ASC,
@@ -155,6 +243,12 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
         groupby=[g.expression for g in groupby_clause],
         having=having_expr,
         order_by=orderby_exprs,
+        limitby=body.get("limitby"),
+        sample=body.get("sample"),
+        limit=body.get("limit", None),
+        offset=body.get("offset", 0),
+        totals=body.get("totals", False),
+        granularity=body.get("granularity"),
     )
 
 
@@ -188,7 +282,7 @@ def _validate_aliases(query: Query) -> None:
                 exp.alias in all_declared_aliases
                 and exp != all_declared_aliases[exp.alias]
             ):
-                raise ValueError(
+                raise AliasShadowingException(
                     (
                         f"Shadowing aliases detected for alias: {exp.alias}. "
                         + f"Expressions: {all_declared_aliases[exp.alias]}"
@@ -274,6 +368,37 @@ def _expand_aliases(query: Query) -> None:
 
     visitor = AliasExpanderVisitor(fully_resolved_aliases, [])
     query.transform(visitor)
+
+
+ARRAYJOIN_FUNCTION_MATCH = FunctionCallMatch(StringMatch("arrayJoin"), None)
+
+
+def _validate_arrayjoin(query: Query) -> None:
+    # TODO: Actually validate arrayjoin. For now log how it is used.
+    body_arrayjoin = ""
+    arrayjoin = query.get_arrayjoin_from_ast()
+    if arrayjoin is not None:
+        if isinstance(arrayjoin, Column):
+            body_arrayjoin = arrayjoin.column_name
+
+    array_joins = set()
+    if body_arrayjoin:
+        array_joins.add(body_arrayjoin)
+    for exp in query.get_all_expressions():
+        match = ARRAYJOIN_FUNCTION_MATCH.match(exp)
+        if match is not None:
+            if isinstance(exp, Column):
+                array_joins.add(exp.column_name)
+            else:
+                array_joins.add(f"{type(exp)}")
+
+    if len(array_joins) > 0:
+        join_type = "body" if body_arrayjoin else "function"
+        suffix = "gt1" if len(array_joins) > 1 else "eq1"
+        key = f"arrayjoin.{join_type}.{suffix}"
+        metrics.increment(
+            key, tags={"arrayjoin": ",".join(array_joins)},
+        )
 
 
 DEESCAPER_RE = re.compile(r"^`(.+)`$")

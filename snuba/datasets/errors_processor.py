@@ -1,15 +1,16 @@
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping
 
 import logging
 import _strptime  # NOQA fixes _strptime deferred import issue
 import uuid
 
 from snuba.consumer import KafkaMessageMetadata
-from snuba.datasets.events_format import extract_user
+from snuba.datasets.events_format import extract_http, extract_user
 from snuba.datasets.events_processor_base import EventsProcessorBase, InsertEvent
 from snuba.processor import (
     _as_dict_safe,
     _ensure_valid_ip,
+    _hashify,
     _unicodify,
 )
 
@@ -37,13 +38,12 @@ class ErrorsProcessor(EventsProcessorBase):
         self, output: MutableMapping[str, Any], event: InsertEvent,
     ) -> None:
         output["event_id"] = str(uuid.UUID(event["event_id"]))
-        output["event_string"] = event["event_id"]
 
     def extract_custom(
         self,
         output: MutableMapping[str, Any],
         event: InsertEvent,
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         data = event.get("data", {})
         user_dict = data.get("user", data.get("sentry.interfaces.User", None)) or {}
@@ -67,26 +67,25 @@ class ErrorsProcessor(EventsProcessorBase):
             contexts["geo"] = geo
 
         request = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
-        if "request" not in contexts and isinstance(request, dict):
-            http = {}
-            http["http_method"] = _unicodify(request.get("method", None))
-            http_headers = _as_dict_safe(request.get("headers", None))
-            http["http_referer"] = _unicodify(http_headers.get("Referer", None))
-            contexts["request"] = http
+        http_data: MutableMapping[str, Any] = {}
+        extract_http(http_data, request)
+        output["http_method"] = http_data["http_method"]
+        output["http_referer"] = http_data["http_referer"]
 
         # _as_dict_safe may not return a reference to the entry in the data
         # dictionary in some cases.
         data["contexts"] = contexts
 
         output["message"] = _unicodify(event["message"])
-        output["org_id"] = event["organization_id"]
+
+        output["primary_hash"] = str(uuid.UUID(_hashify(event["primary_hash"])))
 
     def extract_tags_custom(
         self,
         output: MutableMapping[str, Any],
         event: InsertEvent,
         tags: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
+        metadata: KafkaMessageMetadata,
     ) -> None:
         output["release"] = tags.get("sentry:release")
         output["dist"] = tags.get("sentry:dist")
@@ -95,15 +94,6 @@ class ErrorsProcessor(EventsProcessorBase):
         # often have transaction_name set to NULL, so we need to replace that with
         # an empty string.
         output["transaction_name"] = tags.get("transaction", "") or ""
-
-    def extract_contexts_custom(
-        self,
-        output: MutableMapping[str, Any],
-        event: InsertEvent,
-        contexts: Mapping[str, Any],
-        metadata: Optional[KafkaMessageMetadata] = None,
-    ) -> None:
-        output["_contexts_flattened"] = ""
 
     def extract_promoted_contexts(
         self,
