@@ -89,7 +89,7 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     query_entity = QueryEntity(
         selected_entity, get_entity(selected_entity).get_data_model()
     )
-    query.set_entity(query_entity)
+    query.set_from_clause(query_entity)
 
     return query
 

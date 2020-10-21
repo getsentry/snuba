@@ -16,7 +16,6 @@ from snuba.datasets.storages.processors.replaced_groups import (
 )
 from snuba.query.conditions import BooleanFunctions
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.logical import Query as LogicalQuery
 from snuba.redis import redis_client
 from snuba.request.request_settings import HTTPRequestSettings
 
@@ -35,11 +34,7 @@ def build_in(project_column: str, projects: Sequence[int]) -> Expression:
 @pytest.fixture
 def query() -> ClickhouseQuery:
     return ClickhouseQuery(
-        LogicalQuery(
-            {},
-            TableSource("my_table", ColumnSet([])),
-            condition=build_in("project_id", [2]),
-        )
+        TableSource("my_table", ColumnSet([])), condition=build_in("project_id", [2]),
     )
 
 
