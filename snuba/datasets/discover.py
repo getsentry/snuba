@@ -57,6 +57,10 @@ TRANSACTION_FUNCTIONS = FunctionCallMatch(
     Or([StringMatch("apdex"), StringMatch("failure_rate")]), None
 )
 
+EVENT_FUNCTIONS = FunctionCallMatch(
+    Or([StringMatch("isHandled"), StringMatch("notHandled")]), None
+)
+
 
 def match_query_to_entity(
     query: Query, events_only_columns: ColumnSet, transactions_only_columns: ColumnSet
@@ -112,6 +116,20 @@ def match_query_to_entity(
         if transactions_only_columns.get(schema_col_name):
             has_transaction_columns = True
 
+    # Check for isHandled/notHandled
+    if has_event_columns is False:
+        for expr in query.get_all_expressions():
+            match = EVENT_FUNCTIONS.match(expr)
+            if match:
+                has_event_columns = True
+
+    # Check for apdex or failure rate
+    if has_transaction_columns is False:
+        for expr in query.get_all_expressions():
+            match = TRANSACTION_FUNCTIONS.match(expr)
+            if match:
+                has_transaction_columns = True
+
     if has_event_columns and has_transaction_columns:
         # Impossible query, use the merge table
         return EVENTS_AND_TRANSACTIONS
@@ -120,12 +138,6 @@ def match_query_to_entity(
     elif has_transaction_columns:
         return TRANSACTIONS
     else:
-        # Check for apdex or failure rate
-        for expr in query.get_all_expressions():
-            match = TRANSACTION_FUNCTIONS.match(expr)
-            if match:
-                return TRANSACTIONS
-
         return EVENTS_AND_TRANSACTIONS
 
 

@@ -286,7 +286,8 @@ transaction_translation_mappers = TranslationMappers(
     columns=[
         ColumnToLiteral(None, "group_id", 0),
         DefaultNoneColumnMapper(EVENTS_COLUMNS),
-    ]
+    ],
+    functions=[DefaultNoneFunctionMapper({"isHandled", "notHandled"})],
 )
 
 null_function_translation_mappers = TranslationMappers(
