@@ -20,7 +20,7 @@ from snuba.query.matchers import String as StringMatch
 from snuba.query.subscripts import subscript_key_column_name
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
-EVENTS = EntityKey.EVENTS
+EVENTS = EntityKey.DISCOVER_EVENTS
 TRANSACTIONS = EntityKey.DISCOVER_TRANSACTIONS
 EVENTS_AND_TRANSACTIONS = EntityKey.DISCOVER
 
@@ -37,10 +37,6 @@ class DiscoverDataset(Dataset):
         )
 
         track_bad_query(query, selected_entity, EVENTS_COLUMNS, TRANSACTIONS_COLUMNS)
-
-        # For now we resolve the events entity to Discover.
-        if selected_entity == EVENTS:
-            return EVENTS_AND_TRANSACTIONS
 
         return selected_entity
 
