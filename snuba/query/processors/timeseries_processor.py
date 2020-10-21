@@ -85,7 +85,19 @@ class TimeSeriesProcessor(QueryProcessor):
                         ),
                     ]
                 ),
-                Param("literal", LiteralMatch(Any(str))),
+                Param(
+                    "literal",
+                    Or(
+                        [
+                            LiteralMatch(Any(str)),
+                            # The second argument may be passed as an unquoted
+                            # datetime string, and thus be parsed as a Column
+                            # rather than a Literal. We want to process it as
+                            # if it was a datetime string literal.
+                            ColumnMatch(None, Any(str)),
+                        ]
+                    ),
+                ),
             ),
         )
 
@@ -155,14 +167,23 @@ class TimeSeriesProcessor(QueryProcessor):
         if result is not None:
             literal = result.expression("literal")
             assert isinstance(exp, FunctionCall)  # mypy
-            assert isinstance(literal, Literal)  # mypy
-            try:
-                value = parse_datetime(str(literal.value))
-            except ValueError as err:
-                column_name = result.string("column_name")
-                raise InvalidQueryException(
-                    f"Illegal datetime in condition on column {column_name}: '{literal.value}''"
-                ) from err
+            if isinstance(literal, Column):
+                try:
+                    value = parse_datetime(str(literal.column_name))
+                except ValueError:
+                    # If the column name is not in the form of a datetime,
+                    # then it might really be a column, so do not perform
+                    # any transforms here.
+                    return exp
+            else:
+                assert isinstance(literal, Literal)  # mypy
+                try:
+                    value = parse_datetime(str(literal.value))
+                except ValueError as err:
+                    column_name = result.string("column_name")
+                    raise InvalidQueryException(
+                        f"Illegal datetime in condition on column {column_name}: '{literal.value}''"
+                    ) from err
 
             return FunctionCall(
                 exp.alias,

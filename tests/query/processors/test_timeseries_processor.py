@@ -134,6 +134,67 @@ tests = [
         "",
         id="granularity-1440",
     ),
+    pytest.param(
+        60,
+        binary_condition(
+            None,
+            ConditionFunctions.GTE,
+            Column("my_time", None, "time"),
+            Column("2020-01-01T00:00:00.000000Z", None, "2020-01-01T00:00:00.000000Z"),
+        ),
+        FunctionCall(
+            "my_time",
+            "toStartOfMinute",
+            (Column(None, None, "finish_ts"), Literal(None, "Universal")),
+        ),
+        binary_condition(
+            None,
+            ConditionFunctions.GTE,
+            FunctionCall(
+                "my_time",
+                "toStartOfMinute",
+                (Column(None, None, "finish_ts"), Literal(None, "Universal")),
+            ),
+            Literal(
+                "2020-01-01T00:00:00.000000Z",
+                parse_datetime("2020-01-01T00:00:00.000000Z"),
+            ),
+        ),
+        "(toStartOfMinute(finish_ts, 'Universal') AS my_time)",
+        "greaterOrEquals((toStartOfMinute(finish_ts, 'Universal') AS my_time), (toDateTime('2020-01-01T00:00:00', 'Universal') AS `2020-01-01T00:00:00.000000Z`))",
+        id="granularity-60-datetime-literal-column",
+    ),
+    pytest.param(
+        60,
+        binary_condition(
+            None,
+            ConditionFunctions.GTE,
+            Column("my_time", None, "time"),
+            Column("my_time", None, "time"),
+        ),
+        FunctionCall(
+            "my_time",
+            "toStartOfMinute",
+            (Column(None, None, "finish_ts"), Literal(None, "Universal")),
+        ),
+        binary_condition(
+            None,
+            ConditionFunctions.GTE,
+            FunctionCall(
+                "my_time",
+                "toStartOfMinute",
+                (Column(None, None, "finish_ts"), Literal(None, "Universal")),
+            ),
+            FunctionCall(
+                "my_time",
+                "toStartOfMinute",
+                (Column(None, None, "finish_ts"), Literal(None, "Universal")),
+            ),
+        ),
+        "(toStartOfMinute(finish_ts, 'Universal') AS my_time)",
+        "greaterOrEquals((toStartOfMinute(finish_ts, 'Universal') AS my_time), my_time)",
+        id="granularity-60-column-column",
+    ),
 ]
 
 
