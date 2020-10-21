@@ -1,6 +1,6 @@
 from snuba import state
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.datasets.entities.events import EventsQueryStorageSelector
+from snuba.datasets.entities.events import EventsQueryStorageSelector, event_translator
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.query.logical import Query
@@ -48,7 +48,7 @@ def test_storage_selector() -> None:
 
     query = Query({}, storage.get_schema().get_data_source())
 
-    storage_selector = EventsQueryStorageSelector(storage, storage_ro)
+    storage_selector = EventsQueryStorageSelector(mappers=event_translator)
     assert (
         storage_selector.select_storage(
             query, HTTPRequestSettings(consistent=False)

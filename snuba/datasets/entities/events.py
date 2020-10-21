@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence
+from typing import Mapping, Optional, Sequence
 
 from snuba import state
 from snuba.clickhouse.translators.snuba.mappers import (
@@ -11,7 +11,6 @@ from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import (
     QueryStorageSelector,
-    ReadableStorage,
     StorageAndMappers,
 )
 from snuba.datasets.storages import StorageKey
@@ -28,9 +27,6 @@ from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 
 
-# TODO: This will be a property of the relationship between entity and
-# storage. Now we do not have entities so it is between dataset and
-# storage.
 event_translator = TranslationMappers(
     columns=[
         ColumnToMapping(None, "release", None, "tags", "sentry:release"),
@@ -45,11 +41,10 @@ event_translator = TranslationMappers(
 
 
 class EventsQueryStorageSelector(QueryStorageSelector):
-    def __init__(
-        self, events_table: ReadableStorage, events_ro_table: ReadableStorage,
-    ) -> None:
-        self.__events_table = events_table
-        self.__events_ro_table = events_ro_table
+    def __init__(self, mappers: TranslationMappers) -> None:
+        self.__events_table = get_writable_storage(StorageKey.EVENTS)
+        self.__events_ro_table = get_storage(StorageKey.EVENTS_RO)
+        self.__mappers = mappers
 
     def select_storage(
         self, query: Query, request_settings: RequestSettings
@@ -62,7 +57,7 @@ class EventsQueryStorageSelector(QueryStorageSelector):
         storage = (
             self.__events_ro_table if use_readonly_storage else self.__events_table
         )
-        return StorageAndMappers(storage, event_translator)
+        return StorageAndMappers(storage, self.__mappers)
 
 
 class EventsEntity(Entity):
@@ -71,17 +66,18 @@ class EventsEntity(Entity):
     and the particular quirks of storing and querying them.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
         storage = get_writable_storage(StorageKey.EVENTS)
         schema = storage.get_table_writer().get_schema()
         columns = schema.get_columns()
-        ro_storage = get_storage(StorageKey.EVENTS_RO)
 
         super().__init__(
             storages=[storage],
             query_plan_builder=SelectedStorageQueryPlanBuilder(
                 selector=EventsQueryStorageSelector(
-                    events_table=storage, events_ro_table=ro_storage,
+                    mappers=event_translator
+                    if custom_mappers is None
+                    else event_translator.concat(custom_mappers)
                 )
             ),
             abstract_column_set=columns,

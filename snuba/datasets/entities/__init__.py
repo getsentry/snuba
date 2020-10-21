@@ -18,3 +18,4 @@ class EntityKey(Enum):
     SESSIONS = "sessions"
     TRANSACTIONS = "transactions"
     DISCOVER_TRANSACTIONS = "discover_transactions"
+    DISCOVER_EVENTS = "discover_events"
