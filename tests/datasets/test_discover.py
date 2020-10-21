@@ -135,6 +135,8 @@ test_data = [
         {"aggregations": [["failure_rate()", None, "failure_rate"]]},
         "transactions_local",
     ),
+    ({"aggregations": [["isHandled()", None, "handled"]]}, "sentry_local",),
+    ({"aggregations": [["notHandled()", None, "handled"]]}, "sentry_local",),
     ({"selected_columns": ["measurements[lcp.elementSize]"]}, "transactions_local"),
 ]
 
