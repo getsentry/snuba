@@ -146,7 +146,7 @@ def _run_and_apply_column_names(
     reader: Reader[SqlQuery],
 ) -> QueryResult:
     """
-    Executes the query and, after that, replaces the column names in in
+    Executes the query and, after that, replaces the column names in
     QueryResult with the names the user expects and that are stored in
     the SelectedExpression objects in the Query.
     This happens so that we can remove aliases from the Query AST since
