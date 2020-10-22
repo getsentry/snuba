@@ -35,14 +35,16 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column("sdk_name", WithDefault(LowCardinality(String()), "''")),
+                column=Column(
+                    "sdk_name", String([LowCardinality(), WithDefault("''")])
+                ),
                 after="user_email",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
                 column=Column(
-                    "sdk_version", WithDefault(LowCardinality(String()), "''")
+                    "sdk_version", String([LowCardinality(), WithDefault("''")])
                 ),
                 after="sdk_name",
             ),
@@ -50,7 +52,8 @@ class Migration(migration.MultiStepMigration):
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
                 column=Column(
-                    "transaction_status", WithDefault(UInt(8), str(UNKNOWN_SPAN_STATUS))
+                    "transaction_status",
+                    UInt(8, [WithDefault(str(UNKNOWN_SPAN_STATUS))]),
                 ),
                 after="transaction_op",
             ),
@@ -69,41 +72,45 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column("user_hash", Materialized(UInt(64), "cityHash64(user)")),
+                column=Column(
+                    "user_hash", UInt(64, [Materialized("cityHash64(user)")])
+                ),
                 after="user",
             ),
             # The following columns were originally created as non low cardinality strings
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column("transaction_name", LowCardinality(String())),
+                column=Column("transaction_name", String([LowCardinality()])),
             ),
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column("release", LowCardinality(Nullable(String()))),
+                column=Column("release", String([Nullable(), LowCardinality()])),
             ),
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column("dist", LowCardinality(Nullable(String()))),
-            ),
-            operations.ModifyColumn(
-                storage_set=StorageSetKey.TRANSACTIONS,
-                table_name="transactions_local",
-                column=Column("sdk_name", WithDefault(LowCardinality(String()), "''")),
+                column=Column("dist", String([Nullable(), LowCardinality()])),
             ),
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
                 column=Column(
-                    "sdk_version", WithDefault(LowCardinality(String()), "''")
+                    "sdk_name", String([LowCardinality(), WithDefault("''")])
                 ),
             ),
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column("environment", LowCardinality(Nullable(String()))),
+                column=Column(
+                    "sdk_version", String([LowCardinality(), WithDefault("''")])
+                ),
+            ),
+            operations.ModifyColumn(
+                storage_set=StorageSetKey.TRANSACTIONS,
+                table_name="transactions_local",
+                column=Column("environment", String([Nullable(), LowCardinality()])),
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,

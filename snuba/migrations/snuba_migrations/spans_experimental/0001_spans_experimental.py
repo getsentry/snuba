@@ -28,11 +28,11 @@ columns = [
     Column("trace_id", UUID()),
     Column("transaction_span_id", UInt(64)),
     Column("span_id", UInt(64)),
-    Column("parent_span_id", Nullable(UInt(64))),
-    Column("transaction_name", LowCardinality(String())),
+    Column("parent_span_id", UInt(64, [Nullable()])),
+    Column("transaction_name", String([LowCardinality()])),
     Column("description", String()),  # description in span
-    Column("op", LowCardinality(String())),
-    Column("status", WithDefault(UInt(8), str(UNKNOWN_SPAN_STATUS)),),
+    Column("op", String([LowCardinality()])),
+    Column("status", UInt(8, [WithDefault(str(UNKNOWN_SPAN_STATUS))])),
     Column("start_ts", DateTime()),
     Column("start_ns", UInt(32)),
     Column("finish_ts", DateTime()),
@@ -72,7 +72,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="spans_experimental_local",
                 column=Column(
                     "_tags_hash_map",
-                    Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN),
+                    Array(UInt(64), [Materialized(TAGS_HASH_MAP_COLUMN)]),
                 ),
                 after="tags.value",
             ),
@@ -102,7 +102,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="spans_experimental_dist",
                 column=Column(
                     "_tags_hash_map",
-                    Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN),
+                    Array(UInt(64), [Materialized(TAGS_HASH_MAP_COLUMN)]),
                 ),
                 after="tags.value",
             ),

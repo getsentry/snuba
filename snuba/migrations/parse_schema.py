@@ -140,14 +140,18 @@ class Visitor(NodeVisitor):
         return [c[0] for c in visited_children]
 
     def visit_lowcardinality(
-        self, node: Node, visited_children: Iterable[Any]
+        self, node: Node, visited_children: Tuple[Any, Any, Any, ColumnType, Any, Any]
     ) -> ColumnType:
         (_lc, _paren, _sp, inner_type, _sp, _paren) = visited_children
-        return LowCardinality(inner_type)
+        inner_type.add_modifier(LowCardinality())
+        return inner_type
 
-    def visit_nullable(self, node: Node, visited_children: Iterable[Any]) -> ColumnType:
+    def visit_nullable(
+        self, node: Node, visited_children: Tuple[Any, Any, Any, ColumnType, Any, Any]
+    ) -> ColumnType:
         (_null, _paren, _sp, inner_type, _sp, _paren) = visited_children
-        return Nullable(inner_type)
+        inner_type.add_modifier(Nullable())
+        return inner_type
 
     def visit_array(self, node: Node, visited_children: Iterable[Any]) -> ColumnType:
         (_arr, _paren, _sp, inner_type, _sp, _paren) = visited_children
@@ -175,12 +179,12 @@ def _get_column(
     column: ColumnType = Visitor().visit(grammar.parse(column_type))
 
     if default_type == "MATERIALIZED":
-        column = Materialized(column, _strip_cast(default_expr))
+        column.add_modifier(Materialized(_strip_cast(default_expr)))
     elif default_type == "DEFAULT":
-        column = WithDefault(column, _strip_cast(default_expr))
+        column.add_modifier(WithDefault(_strip_cast(default_expr)))
 
     if codec_expr:
-        column = WithCodecs(column, codec_expr.split(", "))
+        column.add_modifier(WithCodecs(codec_expr.split(", ")))
 
     return column
 

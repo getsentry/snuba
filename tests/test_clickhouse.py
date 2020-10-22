@@ -22,7 +22,7 @@ def test_flattened() -> None:
     assert columns["group_id"].base_name is None
     assert columns["group_id"].flattened == "group_id"
 
-    assert columns["exception_frames.in_app"].type == Array(Nullable(UInt(8)))
+    assert columns["exception_frames.in_app"].type == Array(UInt(8, [Nullable()]))
     assert columns["exception_frames.in_app"].name == "in_app"
     assert columns["exception_frames.in_app"].base_name == "exception_frames"
     assert columns["exception_frames.in_app"].flattened == "exception_frames.in_app"

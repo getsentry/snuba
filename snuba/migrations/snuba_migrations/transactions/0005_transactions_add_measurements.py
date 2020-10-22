@@ -20,7 +20,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="transactions_local",
                 column=Column(
                     "measurements",
-                    Nested([("key", LowCardinality(String())), ("value", Float(64))]),
+                    Nested([("key", String([LowCardinality()])), ("value", Float(64))]),
                 ),
                 after="_contexts_flattened",
             ),
@@ -40,7 +40,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="transactions_dist",
                 column=Column(
                     "measurements",
-                    Nested([("key", LowCardinality(String())), ("value", Float(64))]),
+                    Nested([("key", String([LowCardinality()])), ("value", Float(64))]),
                 ),
                 after="_contexts_flattened",
             ),

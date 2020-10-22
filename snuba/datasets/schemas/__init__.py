@@ -6,7 +6,6 @@ from typing import List, Mapping, Sequence
 from snuba.clickhouse.columns import (
     ColumnSet,
     ColumnType,
-    ReadOnly,
 )
 from snuba.query.expressions import FunctionCall
 from snuba.query.data_source import DataSource
@@ -114,9 +113,6 @@ class Schema(ABC):
                 continue
 
             expected_type = self.get_columns()[column_name].type
-
-            if isinstance(expected_type, ReadOnly):
-                expected_type = expected_type.inner_type
 
             if column.get_raw() != expected_type.get_raw():
                 errors.append(

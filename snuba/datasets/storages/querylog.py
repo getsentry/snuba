@@ -23,7 +23,7 @@ columns = ColumnSet(
         ("referrer", String()),
         ("dataset", String()),
         ("projects", Array(UInt(64))),
-        ("organization", Nullable(UInt(64))),
+        ("organization", UInt(64, [Nullable()])),
         ("timestamp", DateTime()),
         ("duration_ms", UInt(32)),
         ("status", String()),
@@ -38,7 +38,7 @@ columns = ColumnSet(
         # by the migration framework (or by any ALTER statement).
         ("clickhouse_queries.sql", Array(String())),
         ("clickhouse_queries.status", Array(String())),
-        ("clickhouse_queries.trace_id", Array(Nullable(UUID()))),
+        ("clickhouse_queries.trace_id", Array(UUID([Nullable()]))),
         ("clickhouse_queries.duration_ms", Array(UInt(32))),
         ("clickhouse_queries.stats", Array(String())),
         ("clickhouse_queries.final", Array(UInt(8))),

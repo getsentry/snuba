@@ -123,10 +123,10 @@ def test_like_validator(
     schema = ColumnSet(
         [
             ("event_id", String()),
-            ("level", Nullable(String())),
+            ("level", String([Nullable()])),
             ("str_col", String()),
             ("timestamp", DateTime()),
-            ("received", Nullable(DateTime())),
+            ("received", DateTime([Nullable()])),
         ]
     )
 

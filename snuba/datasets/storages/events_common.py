@@ -31,8 +31,8 @@ from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 metadata_columns = ColumnSet(
     [
         # optional stream related data
-        ("offset", Nullable(UInt(64))),
-        ("partition", Nullable(UInt(16))),
+        ("offset", UInt(64, [Nullable()])),
+        ("partition", UInt(16, [Nullable()])),
         ("message_timestamp", DateTime()),
     ]
 )
@@ -41,16 +41,16 @@ promoted_tag_columns = ColumnSet(
     [
         # These are the classic tags, they are saved in Snuba exactly as they
         # appear in the event body.
-        ("level", Nullable(String())),
-        ("logger", Nullable(String())),
-        ("server_name", Nullable(String())),  # future name: device_id?
-        ("transaction", Nullable(String())),
-        ("environment", Nullable(String())),
-        ("sentry:release", Nullable(String())),
-        ("sentry:dist", Nullable(String())),
-        ("sentry:user", Nullable(String())),
-        ("site", Nullable(String())),
-        ("url", Nullable(String())),
+        ("level", String([Nullable()])),
+        ("logger", String([Nullable()])),
+        ("server_name", String([Nullable()])),  # future name: device_id?
+        ("transaction", String([Nullable()])),
+        ("environment", String([Nullable()])),
+        ("sentry:release", String([Nullable()])),
+        ("sentry:dist", String([Nullable()])),
+        ("sentry:user", String([Nullable()])),
+        ("site", String([Nullable()])),
+        ("url", String([Nullable()])),
     ]
 )
 
@@ -60,34 +60,34 @@ promoted_context_tag_columns = ColumnSet(
         # related to contexts.  To avoid naming confusion with Clickhouse nested
         # columns, they are stored in the database with s/./_/
         # promoted tags
-        ("app_device", Nullable(String())),
-        ("device", Nullable(String())),
-        ("device_family", Nullable(String())),
-        ("runtime", Nullable(String())),
-        ("runtime_name", Nullable(String())),
-        ("browser", Nullable(String())),
-        ("browser_name", Nullable(String())),
-        ("os", Nullable(String())),
-        ("os_name", Nullable(String())),
-        ("os_rooted", Nullable(UInt(8))),
+        ("app_device", String([Nullable()])),
+        ("device", String([Nullable()])),
+        ("device_family", String([Nullable()])),
+        ("runtime", String([Nullable()])),
+        ("runtime_name", String([Nullable()])),
+        ("browser", String([Nullable()])),
+        ("browser_name", String([Nullable()])),
+        ("os", String([Nullable()])),
+        ("os_name", String([Nullable()])),
+        ("os_rooted", UInt(8, [Nullable()])),
     ]
 )
 
 promoted_context_columns = ColumnSet(
     [
-        ("os_build", Nullable(String())),
-        ("os_kernel_version", Nullable(String())),
-        ("device_name", Nullable(String())),
-        ("device_brand", Nullable(String())),
-        ("device_locale", Nullable(String())),
-        ("device_uuid", Nullable(String())),
-        ("device_model_id", Nullable(String())),
-        ("device_arch", Nullable(String())),
-        ("device_battery_level", Nullable(Float(32))),
-        ("device_orientation", Nullable(String())),
-        ("device_simulator", Nullable(UInt(8))),
-        ("device_online", Nullable(UInt(8))),
-        ("device_charging", Nullable(UInt(8))),
+        ("os_build", String([Nullable()])),
+        ("os_kernel_version", String([Nullable()])),
+        ("device_name", String([Nullable()])),
+        ("device_brand", String([Nullable()])),
+        ("device_locale", String([Nullable()])),
+        ("device_uuid", String([Nullable()])),
+        ("device_model_id", String([Nullable()])),
+        ("device_arch", String([Nullable()])),
+        ("device_battery_level", Float(32, [Nullable()])),
+        ("device_orientation", String([Nullable()])),
+        ("device_simulator", UInt(8, [Nullable()])),
+        ("device_online", UInt(8, [Nullable()])),
+        ("device_charging", UInt(8, [Nullable()])),
     ]
 )
 
@@ -106,26 +106,26 @@ all_columns = (
     required_columns
     + [
         # required for non-deleted
-        ("platform", Nullable(String())),
-        ("message", Nullable(String())),
-        ("primary_hash", Nullable(FixedString(32))),
-        ("received", Nullable(DateTime())),
-        ("search_message", Nullable(String())),
-        ("title", Nullable(String())),
-        ("location", Nullable(String())),
+        ("platform", String([Nullable()])),
+        ("message", String([Nullable()])),
+        ("primary_hash", FixedString(32, [Nullable()])),
+        ("received", DateTime([Nullable()])),
+        ("search_message", String([Nullable()])),
+        ("title", String([Nullable()])),
+        ("location", String([Nullable()])),
         # optional user
-        ("user_id", Nullable(String())),
-        ("username", Nullable(String())),
-        ("email", Nullable(String())),
-        ("ip_address", Nullable(String())),
+        ("user_id", String([Nullable()])),
+        ("username", String([Nullable()])),
+        ("email", String([Nullable()])),
+        ("ip_address", String([Nullable()])),
         # optional geo
-        ("geo_country_code", Nullable(String())),
-        ("geo_region", Nullable(String())),
-        ("geo_city", Nullable(String())),
-        ("sdk_name", Nullable(String())),
-        ("sdk_version", Nullable(String())),
-        ("type", Nullable(String())),
-        ("version", Nullable(String())),
+        ("geo_country_code", String([Nullable()])),
+        ("geo_region", String([Nullable()])),
+        ("geo_city", String([Nullable()])),
+        ("sdk_name", String([Nullable()])),
+        ("sdk_version", String([Nullable()])),
+        ("type", String([Nullable()])),
+        ("version", String([Nullable()])),
     ]
     + metadata_columns
     + promoted_context_columns
@@ -135,21 +135,21 @@ all_columns = (
         # other tags
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
-        ("_tags_hash_map", ReadOnly(Array(UInt(64)))),
+        ("_tags_hash_map", Array(UInt(64), [ReadOnly()])),
         # other context
         ("contexts", Nested([("key", String()), ("value", String())])),
         # http interface
-        ("http_method", Nullable(String())),
-        ("http_referer", Nullable(String())),
+        ("http_method", String([Nullable()])),
+        ("http_referer", String([Nullable()])),
         # exception interface
         (
             "exception_stacks",
             Nested(
                 [
-                    ("type", Nullable(String())),
-                    ("value", Nullable(String())),
-                    ("mechanism_type", Nullable(String())),
-                    ("mechanism_handled", Nullable(UInt(8))),
+                    ("type", String([Nullable()])),
+                    ("value", String([Nullable()])),
+                    ("mechanism_type", String([Nullable()])),
+                    ("mechanism_handled", UInt(8, [Nullable()])),
                 ]
             ),
         ),
@@ -157,14 +157,14 @@ all_columns = (
             "exception_frames",
             Nested(
                 [
-                    ("abs_path", Nullable(String())),
-                    ("filename", Nullable(String())),
-                    ("package", Nullable(String())),
-                    ("module", Nullable(String())),
-                    ("function", Nullable(String())),
-                    ("in_app", Nullable(UInt(8))),
-                    ("colno", Nullable(UInt(32))),
-                    ("lineno", Nullable(UInt(32))),
+                    ("abs_path", String([Nullable()])),
+                    ("filename", String([Nullable()])),
+                    ("package", String([Nullable()])),
+                    ("module", String([Nullable()])),
+                    ("function", String([Nullable()])),
+                    ("in_app", UInt(8, [Nullable()])),
+                    ("colno", UInt(32, [Nullable()])),
+                    ("lineno", UInt(32, [Nullable()])),
                     ("stack_level", UInt(16)),
                 ]
             ),
@@ -173,12 +173,12 @@ all_columns = (
         # database. They don't necessarily belong here in a logical/readability sense
         # but they are here to match the order of columns in production becase
         # `insert_distributed_sync` is very sensitive to column existence and ordering.
-        ("culprit", Nullable(String())),
+        ("culprit", String([Nullable()])),
         ("sdk_integrations", Array(String())),
         ("modules", Nested([("name", String()), ("version", String())])),
-        ("release", ReadOnly(Nullable(String()))),
-        ("dist", ReadOnly(Nullable(String()))),
-        ("user", ReadOnly(Nullable(String()))),
+        ("release", (String([Nullable(), ReadOnly()]))),
+        ("dist", (String([Nullable(), ReadOnly()]))),
+        ("user", (String([Nullable(), ReadOnly()]))),
     ]
 )
 

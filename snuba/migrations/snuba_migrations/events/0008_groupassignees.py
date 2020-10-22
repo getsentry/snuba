@@ -17,9 +17,9 @@ columns = [
     # PG columns
     Column("project_id", UInt(64)),
     Column("group_id", UInt(64)),
-    Column("date_added", Nullable(DateTime())),
-    Column("user_id", Nullable(UInt(64))),
-    Column("team_id", Nullable(UInt(64))),
+    Column("date_added", DateTime([Nullable()])),
+    Column("user_id", UInt(64, [Nullable()])),
+    Column("team_id", UInt(64, [Nullable()])),
 ]
 
 

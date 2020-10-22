@@ -23,13 +23,13 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_local",
-                column=Column("http_method", LowCardinality(Nullable(String()))),
+                column=Column("http_method", String([Nullable(), LowCardinality()])),
                 after="sdk_version",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_local",
-                column=Column("http_referer", Nullable(String())),
+                column=Column("http_referer", String([Nullable()])),
                 after="http_method",
             ),
         ]
@@ -45,13 +45,13 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_dist",
-                column=Column("http_method", LowCardinality(Nullable(String()))),
+                column=Column("http_method", String([Nullable(), LowCardinality()])),
                 after="sdk_version",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_dist",
-                column=Column("http_referer", Nullable(String())),
+                column=Column("http_referer", String([Nullable()])),
                 after="http_method",
             ),
         ]

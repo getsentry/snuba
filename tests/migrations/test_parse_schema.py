@@ -56,38 +56,38 @@ test_data = [
     (("Array(String)", "", "", ""), Array(String())),
     (("Array(DateTime)", "", "", ""), Array(DateTime())),
     (("Array(UInt64)", "", "", ""), Array(UInt(64))),
-    (("Array(Nullable(UUID))", "", "", ""), Array(Nullable(UUID()))),
-    (("Array(Array(Nullable(UUID)))", "", "", ""), Array(Array(Nullable(UUID())))),
+    (("Array(Nullable(UUID))", "", "", ""), Array(UUID([Nullable()]))),
+    (("Array(Array(Nullable(UUID)))", "", "", ""), Array(Array(UUID([Nullable()])))),
     # Nullable
-    (("Nullable(String)", "", "", ""), Nullable(String())),
-    (("Nullable(FixedString(8))", "", "", ""), Nullable(FixedString(8))),
-    (("Nullable(Date)", "", "", ""), Nullable(Date())),
+    (("Nullable(String)", "", "", ""), String([Nullable()])),
+    (("Nullable(FixedString(8))", "", "", ""), FixedString(8, [Nullable()])),
+    (("Nullable(Date)", "", "", ""), Date([Nullable()])),
     # Low cardinality
-    (("LowCardinality(String)", "", "", ""), LowCardinality(String())),
+    (("LowCardinality(String)", "", "", ""), String([LowCardinality()])),
     (
         ("LowCardinality(Nullable(String))", "", "", ""),
-        LowCardinality(Nullable(String())),
+        String([Nullable(), LowCardinality()]),
     ),
     # Materialized
     (
         ("Date", "MATERIALIZED", "toDate(col1)", ""),
-        Materialized(Date(), "toDate(col1)"),
+        (Date([Materialized("toDate(col1)")])),
     ),
     (
         ("UInt64", "MATERIALIZED", "CAST(cityHash64(col1), 'UInt64')", ""),
-        Materialized(UInt(64), "cityHash64(col1)"),
+        (UInt(64, [Materialized("cityHash64(col1)")])),
     ),
     # Default value
     (
         ("LowCardinality(String)", "DEFAULT", "a", ""),
-        WithDefault(LowCardinality(String()), "a"),
+        (String([LowCardinality(), WithDefault("a")])),
     ),
-    (("UInt8", "DEFAULT", "2", ""), WithDefault(UInt(8), "2")),
+    (("UInt8", "DEFAULT", "2", ""), (UInt(8, [WithDefault("2")]))),
     # With codecs
-    (("UUID", "", "", "NONE"), WithCodecs(UUID(), ["NONE"])),
+    (("UUID", "", "", "NONE"), (UUID([WithCodecs(["NONE"])]))),
     (
         ("DateTime", "", "", "DoubleDelta, LZ4"),
-        WithCodecs(DateTime(), ["DoubleDelta", "LZ4"]),
+        (DateTime([WithCodecs(["DoubleDelta", "LZ4"])])),
     ),
 ]
 

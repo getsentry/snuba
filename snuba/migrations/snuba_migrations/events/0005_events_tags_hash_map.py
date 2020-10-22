@@ -27,7 +27,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="sentry_local",
                 column=Column(
                     "_tags_hash_map",
-                    Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN),
+                    Array(UInt(64), [Materialized(TAGS_HASH_MAP_COLUMN)]),
                 ),
                 after="_tags_flattened",
             ),

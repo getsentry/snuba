@@ -14,7 +14,7 @@ columns = [
     Column("migration_id", String()),
     Column("timestamp", DateTime()),
     Column("status", Enum([("completed", 0), ("in_progress", 1), ("not_started", 2)]),),
-    Column("version", WithDefault(UInt(64), "1")),
+    Column("version", UInt(64, [WithDefault("1")])),
 ]
 
 

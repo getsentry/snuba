@@ -134,7 +134,7 @@ class ErrorsReplacer(ReplacerProcessor):
         super().__init__(schema=schema)
         self.__required_columns = required_columns
         self.__all_columns = [
-            col for col in schema.get_columns() if not isinstance(col.type, ReadOnly)
+            col for col in schema.get_columns() if not col.type.has_modifier(ReadOnly)
         ]
 
         self.__tag_column_map = tag_column_map

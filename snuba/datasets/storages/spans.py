@@ -25,7 +25,7 @@ columns = ColumnSet(
         ("trace_id", UUID()),
         ("transaction_span_id", UInt(64)),
         ("span_id", UInt(64)),
-        ("parent_span_id", Nullable(UInt(64))),
+        ("parent_span_id", UInt(64, [Nullable()])),
         ("transaction_name", String()),
         ("description", String()),  # description in span
         ("op", String()),
@@ -36,7 +36,7 @@ columns = ColumnSet(
         ("finish_ns", UInt(32)),
         ("duration_ms", UInt(32)),
         ("tags", Nested([("key", String()), ("value", String())])),
-        ("_tags_hash_map", ReadOnly(Array(UInt(64)))),
+        ("_tags_hash_map", Array(UInt(64), [ReadOnly()])),
         ("retention_days", UInt(16)),
         ("deleted", UInt(8)),
     ]

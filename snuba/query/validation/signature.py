@@ -1,7 +1,7 @@
 import logging
 from abc import ABC
 from datetime import date, datetime
-from typing import cast, Sequence, Set, Type, Union
+from typing import Sequence, Set, Type, Union
 
 from snuba.clickhouse.columns import (
     UUID,
@@ -112,10 +112,7 @@ class Column(ParamType):
 
         column_type = column.type.get_raw()
 
-        nullable = isinstance(column_type, Nullable)
-
-        if nullable:
-            column_type = cast(Nullable, column_type).inner_type
+        nullable = column_type.has_modifier(Nullable)
 
         if not isinstance(column_type, tuple(self.__valid_types)) or (
             nullable and not self.__allow_nullable

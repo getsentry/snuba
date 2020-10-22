@@ -19,12 +19,12 @@ class Migration(migration.MultiStepMigration):
             operations.ModifyColumn(
                 StorageSetKey.QUERYLOG,
                 table_name,
-                Column("status", LowCardinality(String())),
+                Column("status", String([LowCardinality()])),
             ),
             operations.ModifyColumn(
                 StorageSetKey.QUERYLOG,
                 table_name,
-                Column("clickhouse_queries.status", Array(LowCardinality(String()))),
+                Column("clickhouse_queries.status", Array(String([LowCardinality()]))),
             ),
         ]
 
