@@ -164,8 +164,8 @@ storage = WritableTableStorage(
     replacer_processor=ErrorsReplacer(
         schema=schema,
         required_columns=required_columns,
-        tag_column_map={"tags": {}, "contexts": {}},
-        promoted_tags={"tags": [], "contexts": []},
+        tag_column_map={"tags": promoted_tag_columns, "contexts": {}},
+        promoted_tags={"tags": list(promoted_tag_columns.keys()), "contexts": []},
         state_name=ReplacerState.ERRORS,
     ),
 )

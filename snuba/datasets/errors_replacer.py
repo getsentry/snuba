@@ -160,7 +160,11 @@ class ErrorsReplacer(ReplacerProcessor):
             processed = process_unmerge(event, self.__all_columns, self.__state_name)
         elif type_ == "end_delete_tag":
             processed = process_delete_tag(
-                event, self.__all_columns, self.__tag_column_map, self.__promoted_tags,
+                event,
+                self.__all_columns,
+                self.__tag_column_map,
+                self.__promoted_tags,
+                self.__state_name,
             )
         else:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
@@ -379,6 +383,7 @@ def process_delete_tag(
     all_columns: Sequence[FlattenedColumn],
     tag_column_map: Mapping[str, Mapping[str, str]],
     promoted_tags: Mapping[str, Sequence[str]],
+    state_name: Optional[ReplacerState],
 ) -> Optional[Replacement]:
     tag = message["tag"]
     if not tag:
@@ -395,7 +400,7 @@ def process_delete_tag(
         AND NOT deleted
     """
 
-    if is_promoted:
+    if is_promoted and state_name == ReplacerState.EVENTS:
         prewhere = " PREWHERE %(tag_column)s IS NOT NULL "
     else:
         prewhere = " PREWHERE has(`tags.key`, %(tag_str)s) "
