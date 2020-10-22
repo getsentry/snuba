@@ -166,42 +166,7 @@ class TestReplacer:
             self.project_id,
         )
 
-    def test_delete_promoted_tag_process(self):
-        timestamp = datetime.now(tz=pytz.utc)
-        message = (
-            2,
-            "end_delete_tag",
-            {
-                "project_id": self.project_id,
-                "tag": "sentry:user",
-                "datetime": timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            },
-        )
-
-        replacement = self.replacer.process_message(self._wrap(message))
-
-        assert (
-            re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == "SELECT count() FROM %(table_name)s FINAL PREWHERE %(tag_column)s IS NOT NULL WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
-        )
-        assert (
-            re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == "INSERT INTO %(table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE %(tag_column)s IS NOT NULL WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
-        )
-        assert replacement.query_args == {
-            "all_columns": "project_id, timestamp, event_id, platform, environment, release, dist, ip_address_v4, ip_address_v6, user, user_id, user_name, user_email, sdk_name, sdk_version, http_method, http_referer, tags.key, tags.value, contexts.key, contexts.value, transaction_name, span_id, trace_id, partition, offset, message_timestamp, retention_days, deleted, group_id, primary_hash, received, message, title, culprit, level, location, version, type, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.colno, exception_frames.filename, exception_frames.function, exception_frames.lineno, exception_frames.in_app, exception_frames.package, exception_frames.module, exception_frames.stack_level, sdk_integrations, modules.name, modules.version",
-            "select_columns": "project_id, timestamp, event_id, platform, environment, release, dist, ip_address_v4, ip_address_v6, NULL, user_id, user_name, user_email, sdk_name, sdk_version, http_method, http_referer, arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, 'sentry:user')), `tags.key`), arrayMap(x -> arrayElement(`tags.value`, x), arrayFilter(x -> x != indexOf(`tags.key`, 'sentry:user'), arrayEnumerate(`tags.value`))), contexts.key, contexts.value, transaction_name, span_id, trace_id, partition, offset, message_timestamp, retention_days, deleted, group_id, primary_hash, received, message, title, culprit, level, location, version, type, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.colno, exception_frames.filename, exception_frames.function, exception_frames.lineno, exception_frames.in_app, exception_frames.package, exception_frames.module, exception_frames.stack_level, sdk_integrations, modules.name, modules.version",
-            "tag_column": "user",
-            "tag_str": "'sentry:user'",
-            "project_id": self.project_id,
-            "timestamp": timestamp.strftime(DATETIME_FORMAT),
-        }
-        assert replacement.query_time_flags == (
-            errors_replacer.NEEDS_FINAL,
-            self.project_id,
-        )
-
-    def test_delete_unpromoted_tag_process(self):
+    def test_delete_tag_process(self):
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
