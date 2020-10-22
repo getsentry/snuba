@@ -19,13 +19,30 @@ from snuba.clickhouse.escaping import escape_identifier
 
 
 class TypeModifier(ABC):
+    """
+    Changes the semantics of a ColumnType. Usual modifiers are
+    Nullable, WithDefault, or similar.
+    """
+
     @abstractmethod
     def for_schema(self, content: str) -> str:
+        """
+        Formats the modifier for DDL statements.
+        The content parameter is the serialized type the modifier
+        applies to.
+        """
         raise NotImplementedError
 
 
 class ColumnType:
     def __init__(self, modifiers: Optional[List[TypeModifier]] = None):
+        """
+        The modifiers list to apply to this type. Modifiers are applied
+        to the type in the same order they appear in the list.
+        `String([LowCardinality(), Nullable()])`
+        means
+        `LowCardinality(Nullable(String))`
+        """
         self.__modifiers = modifiers or []
 
     def __repr__(self) -> str:
@@ -46,6 +63,7 @@ class ColumnType:
     def flatten(self, name: str) -> Sequence[FlattenedColumn]:
         return [FlattenedColumn(None, name, self)]
 
+    # TODO: Remove this method entirely.
     def get_raw(self) -> ColumnType:
         return self
 
