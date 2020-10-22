@@ -68,7 +68,7 @@ transaction_translator = TranslationMappers(
 )
 
 
-class TransactionsEntity(Entity):
+class BaseTransactionsEntity(Entity):
     def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
         storage = get_writable_storage(StorageKey.TRANSACTIONS)
         schema = storage.get_table_writer().get_schema()
@@ -105,3 +105,7 @@ class TransactionsEntity(Entity):
             apdex_processor(self.get_data_model()),
             failure_rate_processor(self.get_data_model()),
         ]
+
+
+class TransactionsEntity(BaseTransactionsEntity):
+    pass

@@ -60,7 +60,7 @@ class EventsQueryStorageSelector(QueryStorageSelector):
         return StorageAndMappers(storage, self.__mappers)
 
 
-class EventsEntity(Entity):
+class BaseEventsEntity(Entity):
     """
     Represents the collection of classic sentry "error" type events
     and the particular quirks of storing and querying them.
@@ -105,3 +105,7 @@ class EventsEntity(Entity):
                 "exception_stacks.mechanism_handled", self.get_data_model()
             ),
         ]
+
+
+class EventsEntity(BaseEventsEntity):
+    pass
