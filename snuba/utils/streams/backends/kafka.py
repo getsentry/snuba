@@ -636,8 +636,9 @@ def get_default_kafka_configuration(
     bootstrap_servers: Optional[Sequence[str]] = None,
     override_params: Optional[Mapping[str, Any]] = None,
 ) -> KafkaBrokerConfig:
-    storage_name = storage_key.value
-    if storage_name is not None:
+    default_bootstrap_servers = None
+    if storage_key is not None:
+        storage_name = storage_key.value
         if storage_name in settings.DEFAULT_STORAGE_BROKERS:
             # this is now deprecated
             logger.warning(
