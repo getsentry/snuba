@@ -15,6 +15,10 @@ def lowcardinality() -> MigrationModifiers:
 
 @dataclass(frozen=True)
 class MigrationModifiers(TypeModifiers):
+    """
+    Modifiers to be used in migrations.
+    """
+
     nullable: bool = False
     low_cardinality: bool = False
     default: Optional[str] = None

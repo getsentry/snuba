@@ -36,7 +36,19 @@ class TypeModifier(ABC):
 
 
 class TypeModifiers(ABC):
+    """
+    Contains all the modifiers to apply to a type in a schema.
+    An instance of this class is associated to a an instance of a
+    ColumnType and provides the method to format the modifiers.
+
+    The way instances of this class are initialized and the order
+    in which modifiers are applied are up to the subclasses.
+    """
+
     def for_schema(self, serialized_type: str) -> str:
+        """
+        Formats the modifiers around the pre-formatted ColumnType.
+        """
         ret = serialized_type
         for c in self._get_modifiers():
             ret = c.for_schema(ret)
@@ -44,28 +56,29 @@ class TypeModifiers(ABC):
 
     @abstractmethod
     def _get_modifiers(self) -> Sequence[TypeModifier]:
+        """
+        Establishes the order to follow when applying modifiers.
+        """
         raise NotImplementedError
 
     def has_modifier(self, modifier: Type[TypeModifier]) -> bool:
+        """
+        Returns true is a modifier of the type provided is present in
+        this container.
+        """
         return any(t for t in self._get_modifiers() if isinstance(t, modifier))
 
 
 # Unfortunately we cannot easy make these classes dataclasses (which
 # would provide a convenient default implementation for all __repr__
-# and __eq__ methods) while keeping the schemas and migration concise.
+# and __eq__ methods and allow for immutability) while keeping the
+# schemas and migration concise.
 # Making this a dataclass would mean `modifiers` would have to be the
 # first argument of the constructor meaning that an empty list would
 # have to be provided everytime we define a column in a migration or
 # in a schema.
 class ColumnType:
     def __init__(self, modifiers: Optional[TypeModifiers] = None):
-        """
-        The modifiers list to apply to this type. Modifiers are applied
-        to the type in the same order they appear in the list.
-        `String([LowCardinality(), Nullable()])`
-        means
-        `LowCardinality(Nullable(String))`
-        """
         self.__modifiers = modifiers
 
     def __repr__(self) -> str:
@@ -100,13 +113,13 @@ class ColumnType:
     def get_modifiers(self) -> Optional[TypeModifiers]:
         return self.__modifiers
 
+    def set_modifiers(self, modifiers: Optional[TypeModifiers]) -> None:
+        self.__modifiers = modifiers
+
     def has_modifier(self, modifier: Type[TypeModifier]) -> bool:
         if self.__modifiers is None:
             return False
         return self.__modifiers.has_modifier(modifier)
-
-    def set_modifiers(self, modifiers: Optional[TypeModifiers]) -> None:
-        self.__modifiers = modifiers
 
 
 class Column:
@@ -162,6 +175,10 @@ class FlattenedColumn:
 
 @dataclass(frozen=True)
 class SchemaModifiers(TypeModifiers):
+    """
+    Modifiers for the schemas we use during query processing.
+    """
+
     nullable: bool = False
     readonly: bool = False
 
