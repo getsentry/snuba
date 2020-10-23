@@ -26,7 +26,7 @@ class Migration(migration.MultiStepMigration):
                 column=Column(
                     "clickhouse_queries.all_columns",
                     Array(
-                        Array((String([LowCardinality()]))),
+                        Array((String(lowcardinality()))),
                         [
                             WithDefault(
                                 "arrayResize([['']], length(clickhouse_queries.sql))"
@@ -58,7 +58,7 @@ class Migration(migration.MultiStepMigration):
                 column=Column(
                     "clickhouse_queries.where_columns",
                     Array(
-                        Array(String([LowCardinality()])),
+                        Array(String(lowcardinality())),
                         [
                             WithDefault(
                                 "arrayResize([['']], length(clickhouse_queries.sql))"
@@ -74,7 +74,7 @@ class Migration(migration.MultiStepMigration):
                 column=Column(
                     "clickhouse_queries.where_mapping_columns",
                     Array(
-                        Array(String([LowCardinality()])),
+                        Array(String(lowcardinality())),
                         [
                             WithDefault(
                                 "arrayResize([['']], length(clickhouse_queries.sql))"
@@ -90,7 +90,7 @@ class Migration(migration.MultiStepMigration):
                 column=Column(
                     "clickhouse_queries.groupby_columns",
                     Array(
-                        Array(String([LowCardinality()])),
+                        Array(String(lowcardinality())),
                         [
                             WithDefault(
                                 "arrayResize([['']], length(clickhouse_queries.sql))"
@@ -106,7 +106,7 @@ class Migration(migration.MultiStepMigration):
                 column=Column(
                     "clickhouse_queries.array_join_columns",
                     Array(
-                        Array(String([LowCardinality()])),
+                        Array(String(lowcardinality())),
                         [
                             WithDefault(
                                 "arrayResize([['']], length(clickhouse_queries.sql))"

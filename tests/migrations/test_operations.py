@@ -18,7 +18,7 @@ from snuba.migrations.table_engines import ReplacingMergeTree
 def test_create_table() -> None:
     columns = [
         Column("id", String()),
-        Column("name", String([Nullable()])),
+        Column("name", String(nullable())),
         Column("version", UInt(64)),
     ]
 
@@ -70,7 +70,7 @@ def test_add_column() -> None:
         AddColumn(
             StorageSetKey.EVENTS,
             "test_table",
-            Column("test", String([Nullable()])),
+            Column("test", String(nullable())),
             after="id",
         ).format_sql()
         == "ALTER TABLE test_table ADD COLUMN IF NOT EXISTS test Nullable(String) AFTER id;"

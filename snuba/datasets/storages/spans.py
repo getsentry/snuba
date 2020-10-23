@@ -25,7 +25,7 @@ columns = ColumnSet(
         ("trace_id", UUID()),
         ("transaction_span_id", UInt(64)),
         ("span_id", UInt(64)),
-        ("parent_span_id", UInt(64, [Nullable()])),
+        ("parent_span_id", UInt(64, nullable())),
         ("transaction_name", String()),
         ("description", String()),  # description in span
         ("op", String()),

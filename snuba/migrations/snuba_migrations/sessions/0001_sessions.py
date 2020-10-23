@@ -26,8 +26,8 @@ raw_columns = [
     Column("errors", UInt(16)),
     Column("received", DateTime()),
     Column("started", DateTime()),
-    Column("release", String([LowCardinality()])),
-    Column("environment", String([LowCardinality()])),
+    Column("release", String(lowcardinality())),
+    Column("environment", String(lowcardinality())),
 ]
 
 
@@ -35,8 +35,8 @@ aggregate_columns = [
     Column("org_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("started", DateTime()),
-    Column("release", String([LowCardinality()])),
-    Column("environment", String([LowCardinality()])),
+    Column("release", String(lowcardinality())),
+    Column("environment", String(lowcardinality())),
     Column(
         "duration_quantiles",
         AggregateFunction("quantilesIf(0.5, 0.9)", UInt(32), UInt(8)),

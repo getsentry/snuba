@@ -30,11 +30,11 @@ write_columns = ColumnSet(
     [
         ("org_id", UInt(64)),
         ("project_id", UInt(64)),
-        ("key_id", UInt(64, [Nullable()])),
+        ("key_id", UInt(64, nullable())),
         ("timestamp", DateTime()),
         ("outcome", UInt(8)),
-        ("reason", String([Nullable()])),
-        ("event_id", UUID([Nullable()])),
+        ("reason", String(nullable())),
+        ("event_id", UUID(nullable())),
     ]
 )
 

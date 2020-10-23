@@ -21,9 +21,9 @@ columns = ColumnSet(
         # PG columns
         ("project_id", UInt(64)),
         ("group_id", UInt(64)),
-        ("date_added", DateTime([Nullable()])),
-        ("user_id", UInt(64, [Nullable()])),
-        ("team_id", UInt(64, [Nullable()])),
+        ("date_added", DateTime(nullable())),
+        ("user_id", UInt(64, nullable())),
+        ("team_id", UInt(64, nullable())),
     ]
 )
 

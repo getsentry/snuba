@@ -28,10 +28,10 @@ columns = [
     Column("trace_id", UUID()),
     Column("transaction_span_id", UInt(64)),
     Column("span_id", UInt(64)),
-    Column("parent_span_id", UInt(64, [Nullable()])),
-    Column("transaction_name", String([LowCardinality()])),
+    Column("parent_span_id", UInt(64, nullable())),
+    Column("transaction_name", String(lowcardinality())),
     Column("description", String()),  # description in span
-    Column("op", String([LowCardinality()])),
+    Column("op", String(lowcardinality())),
     Column("status", UInt(8, [WithDefault(str(UNKNOWN_SPAN_STATUS))])),
     Column("start_ts", DateTime()),
     Column("start_ns", UInt(32)),

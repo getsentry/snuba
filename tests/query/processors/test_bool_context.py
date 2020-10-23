@@ -13,7 +13,7 @@ from snuba.request.request_settings import HTTPRequestSettings
 def test_events_boolean_context() -> None:
     columns = ColumnSet(
         [
-            ("device_charging", UInt(8, [Nullable()])),
+            ("device_charging", UInt(8, nullable())),
             ("contexts", Nested([("key", String()), ("value", String())])),
         ]
     )

@@ -56,17 +56,17 @@ test_data = [
     (("Array(String)", "", "", ""), Array(String())),
     (("Array(DateTime)", "", "", ""), Array(DateTime())),
     (("Array(UInt64)", "", "", ""), Array(UInt(64))),
-    (("Array(Nullable(UUID))", "", "", ""), Array(UUID([Nullable()]))),
-    (("Array(Array(Nullable(UUID)))", "", "", ""), Array(Array(UUID([Nullable()])))),
+    (("Array(Nullable(UUID))", "", "", ""), Array(UUID(nullable()))),
+    (("Array(Array(Nullable(UUID)))", "", "", ""), Array(Array(UUID(nullable())))),
     # Nullable
-    (("Nullable(String)", "", "", ""), String([Nullable()])),
-    (("Nullable(FixedString(8))", "", "", ""), FixedString(8, [Nullable()])),
-    (("Nullable(Date)", "", "", ""), Date([Nullable()])),
+    (("Nullable(String)", "", "", ""), String(nullable())),
+    (("Nullable(FixedString(8))", "", "", ""), FixedString(8, nullable())),
+    (("Nullable(Date)", "", "", ""), Date(nullable())),
     # Low cardinality
-    (("LowCardinality(String)", "", "", ""), String([LowCardinality()])),
+    (("LowCardinality(String)", "", "", ""), String(lowcardinality())),
     (
         ("LowCardinality(Nullable(String))", "", "", ""),
-        String([Nullable(), LowCardinality()]),
+        String(Modifiers(nullable=True, low_cardinality=True)),
     ),
     # Materialized
     (
@@ -84,7 +84,7 @@ test_data = [
     ),
     (("UInt8", "DEFAULT", "2", ""), (UInt(8, [WithDefault("2")]))),
     # With codecs
-    (("UUID", "", "", "NONE"), (UUID([WithCodecs(["NONE"])]))),
+    (("UUID", "", "", "NONE"), (UUID(Modifiers(codecs=["NONE"])))),
     (
         ("DateTime", "", "", "DoubleDelta, LZ4"),
         (DateTime([WithCodecs(["DoubleDelta", "LZ4"])])),

@@ -25,11 +25,11 @@ columns = ColumnSet(
         # PG columns
         ("project_id", UInt(64)),
         ("id", UInt(64)),
-        ("status", UInt(8, [Nullable()])),
-        ("last_seen", DateTime([Nullable()])),
-        ("first_seen", DateTime([Nullable()])),
-        ("active_at", DateTime([Nullable()])),
-        ("first_release_id", UInt(64, [Nullable()])),
+        ("status", UInt(8, nullable())),
+        ("last_seen", DateTime(nullable())),
+        ("first_seen", DateTime(nullable())),
+        ("active_at", DateTime(nullable())),
+        ("first_release_id", UInt(64, nullable())),
     ]
 )
 

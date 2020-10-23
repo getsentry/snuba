@@ -9,7 +9,7 @@ from snuba.request.request_settings import HTTPRequestSettings
 
 columns = ColumnSet(
     [
-        ("promoted", UInt(8, [Nullable()])),
+        ("promoted", UInt(8, nullable())),
         ("tags", Nested([("key", String()), ("value", String())])),
     ]
 )

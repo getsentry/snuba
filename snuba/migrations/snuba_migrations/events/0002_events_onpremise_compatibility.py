@@ -52,25 +52,25 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="sentry_local",
-                column=Column("culprit", String([Nullable()])),
+                column=Column("culprit", String(nullable())),
                 after="sdk_integrations",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="sentry_local",
-                column=Column("search_message", String([Nullable()])),
+                column=Column("search_message", String(nullable())),
                 after="received",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="sentry_local",
-                column=Column("title", String([Nullable()])),
+                column=Column("title", String(nullable())),
                 after="search_message",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="sentry_local",
-                column=Column("location", String([Nullable()])),
+                column=Column("location", String(nullable())),
                 after="title",
             ),
             operations.AddColumn(

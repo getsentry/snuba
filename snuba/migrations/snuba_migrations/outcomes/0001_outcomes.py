@@ -15,11 +15,11 @@ from snuba.migrations.columns import LowCardinality
 raw_columns = [
     Column("org_id", UInt(64)),
     Column("project_id", UInt(64)),
-    Column("key_id", UInt(64, [Nullable()])),
+    Column("key_id", UInt(64, nullable())),
     Column("timestamp", DateTime()),
     Column("outcome", UInt(8)),
-    Column("reason", String([Nullable(), LowCardinality()])),
-    Column("event_id", UUID([Nullable()])),
+    Column("reason", String(Modifiers(nullable=True, low_cardinality=True))),
+    Column("event_id", UUID(nullable())),
 ]
 
 hourly_columns = [
@@ -28,7 +28,7 @@ hourly_columns = [
     Column("key_id", UInt(64)),
     Column("timestamp", DateTime()),
     Column("outcome", UInt(8)),
-    Column("reason", String([LowCardinality()])),
+    Column("reason", String(lowcardinality())),
     Column("times_seen", UInt(64)),
 ]
 

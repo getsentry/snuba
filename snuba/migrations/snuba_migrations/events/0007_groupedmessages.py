@@ -21,11 +21,11 @@ columns = [
     # PG columns
     Column("project_id", UInt(64)),
     Column("id", UInt(64)),
-    Column("status", UInt(8, [Nullable()])),
-    Column("last_seen", DateTime([Nullable()])),
-    Column("first_seen", DateTime([Nullable()])),
-    Column("active_at", DateTime([Nullable()])),
-    Column("first_release_id", UInt(64, [Nullable()])),
+    Column("status", UInt(8, nullable())),
+    Column("last_seen", DateTime(nullable())),
+    Column("first_seen", DateTime(nullable())),
+    Column("active_at", DateTime(nullable())),
+    Column("first_release_id", UInt(64, nullable())),
 ]
 
 
