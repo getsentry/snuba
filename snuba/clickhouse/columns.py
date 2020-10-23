@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from itertools import chain
 from typing import (
@@ -34,6 +35,13 @@ class TypeModifier(ABC):
         raise NotImplementedError
 
 
+# Unfortunately we cannot easy make these classes dataclasses (which
+# would provide a convenient default implementation for all __repr__
+# and __eq__ methods) while keeping the schemas and migration concise.
+# Making this a dataclass would mean `modifiers` would have to be the
+# first argument of the constructor meaning that an empty list would
+# have to be provided everytime we define a column in a migration or
+# in a schema.
 class ColumnType:
     def __init__(self, modifiers: Optional[List[TypeModifier]] = None):
         """
@@ -46,10 +54,16 @@ class ColumnType:
         self.__modifiers = modifiers or []
 
     def __repr__(self) -> str:
-        return self.__class__.__name__ + "()"
+        return f"{self.__class__.__name__}({self._repr_content()})[{self.__modifiers}]"
+
+    def _repr_content(self) -> str:
+        return self.__class__.__name__
 
     def __eq__(self, other: object) -> bool:
-        return self.__class__ == other.__class__
+        return (
+            self.__class__ == other.__class__
+            and self.__modifiers == cast(ColumnType, other).get_modifiers()
+        )
 
     def for_schema(self) -> str:
         ret = self._for_schema_impl()
@@ -128,11 +142,13 @@ class FlattenedColumn:
         )
 
 
+@dataclass(frozen=True)
 class ReadOnly(TypeModifier):
     def for_schema(self, content: str) -> str:
         return content
 
 
+@dataclass(frozen=True)
 class Nullable(TypeModifier):
     def for_schema(self, content: str) -> str:
         return "Nullable({})".format(content)
@@ -145,13 +161,14 @@ class Array(ColumnType):
         super().__init__(modifiers)
         self.inner_type = inner_type
 
-    def __repr__(self) -> str:
-        return "Array({})".format(repr(self.inner_type))
+    def _repr_content(self) -> str:
+        return repr(self.inner_type)
 
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.inner_type == cast(Array, other).inner_type
+            and self.get_modifiers() == cast(AggregateFunction, other).get_modifiers()
+            and self.__modifiers == cast(ColumnType, other).get_modifiers()
         )
 
     def _for_schema_impl(self) -> str:
@@ -170,12 +187,13 @@ class Nested(ColumnType):
         super().__init__(modifiers)
         self.nested_columns = Column.to_columns(nested_columns)
 
-    def __repr__(self) -> str:
-        return "Nested({})".format(repr(self.nested_columns))
+    def _repr_content(self) -> str:
+        return repr(self.nested_columns)
 
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
+            and self.get_modifiers() == cast(AggregateFunction, other).get_modifiers()
             and self.nested_columns == cast(Nested, other).nested_columns
         )
 
@@ -202,14 +220,13 @@ class AggregateFunction(ColumnType):
         self.func = func
         self.arg_types = arg_types
 
-    def __repr__(self) -> str:
-        return "AggregateFunction({})".format(
-            ", ".join(repr(x) for x in chain([self.func], self.arg_types)),
-        )
+    def _repr_content(self) -> str:
+        return ", ".join(repr(x) for x in chain([self.func], self.arg_types))
 
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
+            and self.get_modifiers() == cast(AggregateFunction, other).get_modifiers()
             and self.func == cast(AggregateFunction, other).func
             and self.arg_types == cast(AggregateFunction, other).arg_types
         )
@@ -243,12 +260,13 @@ class FixedString(ColumnType):
         super().__init__(modifiers)
         self.length = length
 
-    def __repr__(self) -> str:
-        return "FixedString({})".format(self.length)
+    def _repr_content(self) -> str:
+        return str(self.length)
 
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
+            and self.get_modifiers() == cast(AggregateFunction, other).get_modifiers()
             and self.length == cast(FixedString, other).length
         )
 
@@ -264,11 +282,15 @@ class UInt(ColumnType):
         assert size in (8, 16, 32, 64)
         self.size = size
 
-    def __repr__(self) -> str:
-        return "UInt({})".format(self.size)
+    def _repr_content(self) -> str:
+        return str(self.size)
 
     def __eq__(self, other: object) -> bool:
-        return self.__class__ == other.__class__ and self.size == cast(UInt, other).size
+        return (
+            self.__class__ == other.__class__
+            and self.get_modifiers() == cast(AggregateFunction, other).get_modifiers()
+            and self.size == cast(UInt, other).size
+        )
 
     def _for_schema_impl(self) -> str:
         return "UInt{}".format(self.size)
@@ -282,12 +304,14 @@ class Float(ColumnType):
         assert size in (32, 64)
         self.size = size
 
-    def __repr__(self) -> str:
-        return "Float({})".format(self.size)
+    def _repr_content(self) -> str:
+        return str(self.size)
 
     def __eq__(self, other: object) -> bool:
         return (
-            self.__class__ == other.__class__ and self.size == cast(Float, other).size
+            self.__class__ == other.__class__
+            and self.get_modifiers() == cast(AggregateFunction, other).get_modifiers()
+            and self.size == cast(Float, other).size
         )
 
     def _for_schema_impl(self) -> str:
@@ -311,14 +335,13 @@ class Enum(ColumnType):
         super().__init__(modifiers)
         self.values = values
 
-    def __repr__(self) -> str:
-        return "Enum({})".format(
-            ", ".join("'{}' = {}".format(v[0], v[1]) for v in self.values)
-        )
+    def _repr_content(self) -> str:
+        return ", ".join("'{}' = {}".format(v[0], v[1]) for v in self.values)
 
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
+            and self.get_modifiers() == cast(AggregateFunction, other).get_modifiers()
             and self.values == cast(Enum, other).values
         )
 
