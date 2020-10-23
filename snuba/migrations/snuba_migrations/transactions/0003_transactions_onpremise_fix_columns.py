@@ -1,16 +1,10 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import (
-    Column,
-    DateTime,
-    Nullable,
-    String,
-    UInt,
-)
+from snuba.clickhouse.columns import Column, DateTime, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
-from snuba.migrations.columns import LowCardinality, Materialized, WithDefault
-
+from snuba.migrations.columns import MigrationModifiers as Modifiers
+from snuba.migrations.columns import lowcardinality
 
 UNKNOWN_SPAN_STATUS = 2
 
@@ -36,7 +30,7 @@ class Migration(migration.MultiStepMigration):
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
                 column=Column(
-                    "sdk_name", String([LowCardinality(), WithDefault("''")])
+                    "sdk_name", String(Modifiers(low_cardinality=True, default="''"))
                 ),
                 after="user_email",
             ),
@@ -44,7 +38,7 @@ class Migration(migration.MultiStepMigration):
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
                 column=Column(
-                    "sdk_version", String([LowCardinality(), WithDefault("''")])
+                    "sdk_version", String(Modifiers(low_cardinality=True, default="''"))
                 ),
                 after="sdk_name",
             ),
@@ -53,7 +47,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="transactions_local",
                 column=Column(
                     "transaction_status",
-                    UInt(8, [WithDefault(str(UNKNOWN_SPAN_STATUS))]),
+                    UInt(8, Modifiers(default=str(UNKNOWN_SPAN_STATUS))),
                 ),
                 after="transaction_op",
             ),
@@ -73,7 +67,7 @@ class Migration(migration.MultiStepMigration):
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
                 column=Column(
-                    "user_hash", UInt(64, [Materialized("cityHash64(user)")])
+                    "user_hash", UInt(64, Modifiers(materialized="cityHash64(user)"))
                 ),
                 after="user",
             ),
@@ -101,14 +95,14 @@ class Migration(migration.MultiStepMigration):
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
                 column=Column(
-                    "sdk_name", String([LowCardinality(), WithDefault("''")])
+                    "sdk_name", String(Modifiers(low_cardinality=True, default="''"))
                 ),
             ),
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
                 column=Column(
-                    "sdk_version", String([LowCardinality(), WithDefault("''")])
+                    "sdk_version", String(Modifiers(low_cardinality=True, default="''"))
                 ),
             ),
             operations.ModifyColumn(

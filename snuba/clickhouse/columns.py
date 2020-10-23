@@ -99,6 +99,11 @@ class ColumnType:
     def get_modifiers(self) -> Optional[TypeModifiers]:
         return self.__modifiers
 
+    def has_modifier(self, modifier: Type[TypeModifier]) -> bool:
+        if self.__modifiers is None:
+            return False
+        return self.__modifiers.has_modifier(modifier)
+
     def set_modifiers(self, modifiers: TypeModifiers) -> None:
         self.__modifiers = modifiers
 

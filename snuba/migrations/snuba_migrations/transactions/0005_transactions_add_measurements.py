@@ -3,7 +3,7 @@ from typing import Sequence
 from snuba.clickhouse.columns import Column, Float, Nested, String
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
-from snuba.migrations.columns import LowCardinality
+from snuba.migrations.columns import lowcardinality
 
 
 class Migration(migration.MultiStepMigration):

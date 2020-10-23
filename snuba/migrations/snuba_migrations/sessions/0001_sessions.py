@@ -10,7 +10,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
-from snuba.migrations.columns import LowCardinality
+from snuba.migrations.columns import lowcardinality
 from snuba.processor import MAX_UINT32, NIL_UUID
 
 

@@ -1,21 +1,19 @@
 from typing import Sequence
 
 from snuba.clickhouse.columns import (
+    UUID,
     Array,
     Column,
     DateTime,
     Enum,
     Float,
     Nested,
-    Nullable,
     String,
     UInt,
-    UUID,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
-from snuba.migrations.columns import LowCardinality
-
+from snuba.migrations.columns import lowcardinality, nullable
 
 status_type = Enum([("success", 0), ("error", 1), ("rate-limited", 2)])
 

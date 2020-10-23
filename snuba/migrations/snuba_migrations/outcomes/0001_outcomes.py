@@ -1,16 +1,10 @@
 from typing import Sequence
-from snuba.clickhouse.columns import (
-    Column,
-    DateTime,
-    Nullable,
-    String,
-    UInt,
-    UUID,
-)
+
+from snuba.clickhouse.columns import UUID, Column, DateTime, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
-from snuba.migrations.columns import LowCardinality
-
+from snuba.migrations.columns import MigrationModifiers as Modifiers
+from snuba.migrations.columns import lowcardinality, nullable
 
 raw_columns = [
     Column("org_id", UInt(64)),

@@ -1,4 +1,5 @@
 from copy import deepcopy
+from dataclasses import replace
 from typing import Sequence
 
 from snuba.clickhouse.columns import (
@@ -8,13 +9,14 @@ from snuba.clickhouse.columns import (
     IPv4,
     IPv6,
     Nested,
-    Nullable,
     String,
     UInt,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
-from snuba.migrations.columns import LowCardinality, Materialized, WithDefault
+from snuba.migrations.columns import Materialized
+from snuba.migrations.columns import MigrationModifiers as Modifiers
+from snuba.migrations.columns import lowcardinality, nullable
 
 UNKNOWN_SPAN_STATUS = 2
 
@@ -25,10 +27,11 @@ columns = [
     Column("span_id", UInt(64)),
     Column("transaction_name", String(lowcardinality())),
     Column(
-        "transaction_hash", UInt(64, [Materialized("cityHash64(transaction_name)")])
+        "transaction_hash",
+        UInt(64, Modifiers(materialized="cityHash64(transaction_name)")),
     ),
     Column("transaction_op", String(lowcardinality())),
-    Column("transaction_status", UInt(8, [WithDefault(str(UNKNOWN_SPAN_STATUS))])),
+    Column("transaction_status", UInt(8, Modifiers(default=str(UNKNOWN_SPAN_STATUS)))),
     Column("start_ts", DateTime()),
     Column("start_ms", UInt(16)),
     Column("finish_ts", DateTime()),
@@ -40,13 +43,13 @@ columns = [
     Column("dist", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("ip_address_v4", IPv4(nullable())),
     Column("ip_address_v6", IPv6(nullable())),
-    Column("user", String([WithDefault("''")])),
-    Column("user_hash", UInt(64, [Materialized("cityHash64(user)")])),
+    Column("user", String(Modifiers(default="''"))),
+    Column("user_hash", UInt(64, Modifiers(materialized="cityHash64(user)"))),
     Column("user_id", String(nullable())),
     Column("user_name", String(nullable())),
     Column("user_email", String(nullable())),
-    Column("sdk_name", String([LowCardinality(), WithDefault("''")])),
-    Column("sdk_version", String([LowCardinality(), WithDefault("''")])),
+    Column("sdk_name", String(Modifiers(low_cardinality=True, default="''"))),
+    Column("sdk_version", String(Modifiers(low_cardinality=True, default="''"))),
     Column("tags", Nested([("key", String()), ("value", String())])),
     Column("_tags_flattened", String()),
     Column("contexts", Nested([("key", String()), ("value", String())])),
@@ -91,8 +94,10 @@ class Migration(migration.MultiStepMigration):
         # We removed the materialized for the dist table DDL.
         def strip_materialized(columns: Sequence[Column]) -> None:
             for col in columns:
-                if isinstance(col.type, Materialized):
-                    col.type = col.type.inner_type
+                if col.type.has_modifier(Materialized):
+                    modifiers = col.type.get_modifiers()
+                    assert modifiers is not None
+                    col.type.set_modifiers(replace(modifiers, materialized=None))
 
         dist_columns = deepcopy(columns)
         strip_materialized(dist_columns)

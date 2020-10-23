@@ -1,22 +1,12 @@
 from typing import Sequence
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
-
-from snuba.clickhouse.columns import (
-    UUID,
-    Array,
-    Column,
-    DateTime,
-    Nested,
-    Nullable,
-    String,
-    UInt,
-)
+from snuba.clickhouse.columns import UUID, Array, Column, DateTime, Nested, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations, table_engines
-from snuba.migrations.columns import LowCardinality, Materialized, WithDefault
-
+from snuba.migrations.columns import MigrationModifiers as Modifiers
+from snuba.migrations.columns import lowcardinality, nullable
 
 UNKNOWN_SPAN_STATUS = SPAN_STATUS_NAME_TO_CODE["unknown"]
 
@@ -32,7 +22,7 @@ columns = [
     Column("transaction_name", String(lowcardinality())),
     Column("description", String()),  # description in span
     Column("op", String(lowcardinality())),
-    Column("status", UInt(8, [WithDefault(str(UNKNOWN_SPAN_STATUS))])),
+    Column("status", UInt(8, Modifiers(default=str(UNKNOWN_SPAN_STATUS)))),
     Column("start_ts", DateTime()),
     Column("start_ns", UInt(32)),
     Column("finish_ts", DateTime()),
