@@ -105,7 +105,7 @@ class ColumnType:
             return False
         return self.__modifiers.has_modifier(modifier)
 
-    def set_modifiers(self, modifiers: TypeModifiers) -> None:
+    def set_modifiers(self, modifiers: Optional[TypeModifiers]) -> None:
         self.__modifiers = modifiers
 
 

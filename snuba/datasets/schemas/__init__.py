@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from typing import List, Mapping, Sequence
 
-from snuba.clickhouse.columns import (
-    ColumnSet,
-    ColumnType,
-)
-from snuba.query.expressions import FunctionCall
+from snuba.clickhouse.columns import ColumnSet, ColumnType
 from snuba.query.data_source import DataSource
+from snuba.query.expressions import FunctionCall
 
 
 class RelationalSource(DataSource, ABC):
@@ -114,7 +112,11 @@ class Schema(ABC):
 
             expected_type = self.get_columns()[column_name].type
 
-            if column.get_raw() != expected_type.get_raw():
+            raw_col = deepcopy(column)
+            raw_col.set_modifiers(None)
+            raw_expected = deepcopy(expected_type)
+            raw_expected.set_modifiers(None)
+            if raw_col != raw_expected:
                 errors.append(
                     "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)"
                     % (column_name, expected_type, column)
