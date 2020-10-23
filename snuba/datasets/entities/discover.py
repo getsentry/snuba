@@ -10,7 +10,7 @@ from snuba.clickhouse.columns import (
     FixedString,
     Float,
     Nested,
-    Nullable,
+    nullable,
     String,
     UInt,
 )

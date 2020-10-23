@@ -1,4 +1,4 @@
-from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
+from snuba.clickhouse.columns import ColumnSet, DateTime, nullable, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.cdc.groupedmessage_processor import (

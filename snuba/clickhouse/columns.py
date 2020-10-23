@@ -37,8 +37,9 @@ class TypeModifier(ABC):
 
 class TypeModifiers(ABC):
     def for_schema(self, serialized_type: str) -> str:
+        ret = serialized_type
         for c in self._get_modifiers():
-            ret = c.for_schema(serialized_type)
+            ret = c.for_schema(ret)
         return ret
 
     @abstractmethod
@@ -71,7 +72,7 @@ class ColumnType:
         return f"{self.__class__.__name__}({self._repr_content()})[{self.__modifiers}]"
 
     def _repr_content(self) -> str:
-        return self.__class__.__name__
+        return ""
 
     def __eq__(self, other: object) -> bool:
         return (
@@ -207,7 +208,6 @@ class Array(ColumnType):
         return (
             self.__class__ == other.__class__
             and self.get_modifiers() == cast(AggregateFunction, other).get_modifiers()
-            and self.__modifiers == cast(ColumnType, other).get_modifiers()
         )
 
     def _for_schema_impl(self) -> str:

@@ -1,7 +1,7 @@
 from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
-    Nullable,
+    nullable,
     String,
     UInt,
     UUID,

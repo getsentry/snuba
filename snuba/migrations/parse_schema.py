@@ -1,12 +1,12 @@
 import logging
 import re
+from typing import Any, Iterable, Mapping, Sequence, Tuple
 
 from clickhouse_driver import Client
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
-from typing import Any, Iterable, Mapping, Sequence, Tuple
-
 from snuba.clickhouse.columns import (
+    UUID,
     AggregateFunction,
     Array,
     ColumnType,
@@ -17,17 +17,10 @@ from snuba.clickhouse.columns import (
     Float,
     IPv4,
     IPv6,
-    Nullable,
     String,
     UInt,
-    UUID,
 )
-from snuba.migrations.columns import (
-    LowCardinality,
-    Materialized,
-    WithCodecs,
-    WithDefault,
-)
+from snuba.migrations.columns import MigrationModifiers, lowcardinality, nullable
 
 logger = logging.getLogger("snuba.migrate")
 
@@ -64,6 +57,16 @@ grammar = Grammar(
     quote            = "'"
     """
 )
+
+
+def merge_modifiers(col_type: ColumnType, modifiers: MigrationModifiers) -> None:
+    # TODO: Remove these assertions when ColumnType will be generic
+    existing_modifiers = col_type.get_modifiers()
+    if existing_modifiers is None:
+        col_type.set_modifiers(modifiers)
+    else:
+        assert isinstance(existing_modifiers, MigrationModifiers)
+        col_type.set_modifiers(existing_modifiers.merge(modifiers))
 
 
 class Visitor(NodeVisitor):
@@ -143,14 +146,15 @@ class Visitor(NodeVisitor):
         self, node: Node, visited_children: Tuple[Any, Any, Any, ColumnType, Any, Any]
     ) -> ColumnType:
         (_lc, _paren, _sp, inner_type, _sp, _paren) = visited_children
-        inner_type.add_modifier(LowCardinality())
+        merge_modifiers(inner_type, lowcardinality())
         return inner_type
 
     def visit_nullable(
         self, node: Node, visited_children: Tuple[Any, Any, Any, ColumnType, Any, Any]
     ) -> ColumnType:
         (_null, _paren, _sp, inner_type, _sp, _paren) = visited_children
-        inner_type.add_modifier(Nullable())
+        # TODO: Remove these assertions when ColumnType will be generic
+        merge_modifiers(inner_type, nullable())
         return inner_type
 
     def visit_array(self, node: Node, visited_children: Iterable[Any]) -> ColumnType:
@@ -179,12 +183,14 @@ def _get_column(
     column: ColumnType = Visitor().visit(grammar.parse(column_type))
 
     if default_type == "MATERIALIZED":
-        column.add_modifier(Materialized(_strip_cast(default_expr)))
+        merge_modifiers(
+            column, MigrationModifiers(materialized=_strip_cast(default_expr))
+        )
     elif default_type == "DEFAULT":
-        column.add_modifier(WithDefault(_strip_cast(default_expr)))
+        merge_modifiers(column, MigrationModifiers(default=_strip_cast(default_expr)))
 
     if codec_expr:
-        column.add_modifier(WithCodecs(codec_expr.split(", ")))
+        merge_modifiers(column, MigrationModifiers(codecs=codec_expr.split(", ")))
 
     return column
 

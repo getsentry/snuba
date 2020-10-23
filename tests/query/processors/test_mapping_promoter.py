@@ -1,5 +1,5 @@
 import pytest
-from snuba.clickhouse.columns import ColumnSet, Nested, Nullable, String, UInt
+from snuba.clickhouse.columns import ColumnSet, Nested, nullable, String, UInt
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query import SelectedExpression

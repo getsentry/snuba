@@ -2,7 +2,7 @@ from unittest.mock import call, patch
 
 from clickhouse_driver import errors
 
-from snuba.clickhouse.columns import Array, Nullable, UInt
+from snuba.clickhouse.columns import Array, nullable, UInt
 from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage

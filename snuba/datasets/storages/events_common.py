@@ -8,11 +8,9 @@ from snuba.clickhouse.columns import (
     FixedString,
     Float,
     Nested,
-    Nullable,
-    ReadOnly,
-    String,
-    UInt,
 )
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt, nullable, readonly
 from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsProcessor
 from snuba.datasets.storages.events_column_processor import EventsColumnProcessor
 from snuba.datasets.storages.processors.replaced_groups import (
@@ -135,7 +133,7 @@ all_columns = (
         # other tags
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
-        ("_tags_hash_map", Array(UInt(64), [ReadOnly()])),
+        ("_tags_hash_map", Array(UInt(64), readonly())),
         # other context
         ("contexts", Nested([("key", String()), ("value", String())])),
         # http interface
@@ -176,9 +174,9 @@ all_columns = (
         ("culprit", String(nullable())),
         ("sdk_integrations", Array(String())),
         ("modules", Nested([("name", String()), ("version", String())])),
-        ("release", (String([Nullable(), ReadOnly()]))),
-        ("dist", (String([Nullable(), ReadOnly()]))),
-        ("user", (String([Nullable(), ReadOnly()]))),
+        ("release", (String(Modifiers(nullable=True, readonly=True)))),
+        ("dist", (String(Modifiers(nullable=True, readonly=True)))),
+        ("user", (String(Modifiers(nullable=True, readonly=True)))),
     ]
 )
 

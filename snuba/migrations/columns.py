@@ -35,29 +35,37 @@ class MigrationModifiers(TypeModifiers):
             ret.append(WithCodecs(self.codecs))
         return ret
 
+    def merge(self, other: MigrationModifiers) -> MigrationModifiers:
+        return MigrationModifiers(
+            nullable=self.nullable | other.nullable,
+            low_cardinality=self.low_cardinality | other.low_cardinality,
+            default=self.default if other.default is None else other.default,
+            materialized=self.materialized
+            if other.materialized is None
+            else other.materialized,
+            codecs=self.codecs if other.codecs is None else other.codecs,
+        )
+
 
 @dataclass(frozen=True)
 class Materialized(TypeModifier):
-    def __init__(self, expression: str) -> None:
-        self.expression = expression
+    expression: str
 
     def for_schema(self, content: str) -> str:
-        return "{} MATERIALIZED {}".format(content, self.expression,)
+        return "{} MATERIALIZED {}".format(content, self.expression)
 
 
 @dataclass(frozen=True)
 class WithCodecs(TypeModifier):
-    def __init__(self, codecs: Sequence[str]) -> None:
-        self.__codecs = codecs
+    codecs: Sequence[str]
 
     def for_schema(self, content: str) -> str:
-        return f"{content} CODEC ({', '.join(self.__codecs)})"
+        return f"{content} CODEC ({', '.join(self.codecs)})"
 
 
 @dataclass(frozen=True)
 class WithDefault(TypeModifier):
-    def __init__(self, default: str) -> None:
-        self.default = default
+    default: str
 
     def for_schema(self, content: str) -> str:
         return "{} DEFAULT {}".format(content, self.default)

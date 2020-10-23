@@ -2,7 +2,7 @@ from typing import Sequence
 
 import pytest
 
-from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, String
+from snuba.clickhouse.columns import ColumnSet, DateTime, nullable, String
 from snuba.query.expressions import (
     Column as ColumnExpr,
     Expression,

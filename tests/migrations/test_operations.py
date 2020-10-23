@@ -1,5 +1,6 @@
-from snuba.clickhouse.columns import Column, Nullable, String, UInt
+from snuba.clickhouse.columns import Column, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.migrations.columns import nullable
 from snuba.migrations.operations import (
     AddColumn,
     AddIndex,

@@ -4,8 +4,8 @@ from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
     Nested,
-    Nullable,
-    ReadOnly,
+    nullable,
+    readonly,
     String,
     UInt,
 )
@@ -36,7 +36,7 @@ columns = ColumnSet(
         ("finish_ns", UInt(32)),
         ("duration_ms", UInt(32)),
         ("tags", Nested([("key", String()), ("value", String())])),
-        ("_tags_hash_map", Array(UInt(64), [ReadOnly()])),
+        ("_tags_hash_map", Array(UInt(64), readonly())),
         ("retention_days", UInt(16)),
         ("deleted", UInt(8)),
     ]

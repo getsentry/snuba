@@ -1,6 +1,6 @@
 import pytest
-
 from snuba.clickhouse.columns import (
+    UUID,
     AggregateFunction,
     Array,
     Date,
@@ -10,19 +10,12 @@ from snuba.clickhouse.columns import (
     Float,
     IPv4,
     IPv6,
-    Nullable,
     String,
     UInt,
-    UUID,
 )
-from snuba.migrations.columns import (
-    LowCardinality,
-    Materialized,
-    WithCodecs,
-    WithDefault,
-)
+from snuba.migrations.columns import MigrationModifiers as Modifiers
+from snuba.migrations.columns import lowcardinality, nullable
 from snuba.migrations.parse_schema import _get_column
-
 
 test_data = [
     # Basic types
@@ -71,23 +64,23 @@ test_data = [
     # Materialized
     (
         ("Date", "MATERIALIZED", "toDate(col1)", ""),
-        (Date([Materialized("toDate(col1)")])),
+        (Date(Modifiers(materialized="toDate(col1)"))),
     ),
     (
         ("UInt64", "MATERIALIZED", "CAST(cityHash64(col1), 'UInt64')", ""),
-        (UInt(64, [Materialized("cityHash64(col1)")])),
+        (UInt(64, Modifiers(materialized="cityHash64(col1)"))),
     ),
     # Default value
     (
         ("LowCardinality(String)", "DEFAULT", "a", ""),
-        (String([LowCardinality(), WithDefault("a")])),
+        (String(Modifiers(low_cardinality=True, default="a"))),
     ),
-    (("UInt8", "DEFAULT", "2", ""), (UInt(8, [WithDefault("2")]))),
+    (("UInt8", "DEFAULT", "2", ""), (UInt(8, Modifiers(default="2")))),
     # With codecs
     (("UUID", "", "", "NONE"), (UUID(Modifiers(codecs=["NONE"])))),
     (
         ("DateTime", "", "", "DoubleDelta, LZ4"),
-        (DateTime([WithCodecs(["DoubleDelta", "LZ4"])])),
+        (DateTime(Modifiers(codecs=["DoubleDelta", "LZ4"]))),
     ),
 ]
 
