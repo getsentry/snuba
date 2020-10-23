@@ -1,10 +1,10 @@
 from typing import Any, MutableMapping
 
 import pytest
-
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.tables import TableSource
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import (
     Column,
@@ -13,7 +13,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
+from snuba.clickhouse.query import Query
 from snuba.query.parser import parse_query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
@@ -32,15 +32,19 @@ def test_iterate_over_query():
         None, ConditionFunctions.EQ, column1, Literal(None, "1")
     )
 
+    prewhere = binary_condition(
+        None, ConditionFunctions.EQ, column2, Literal(None, "2")
+    )
+
     orderby = OrderBy(OrderByDirection.ASC, function_2)
 
     query = Query(
-        {},
         TableSource("my_table", ColumnSet([])),
         selected_columns=[SelectedExpression("alias", function_1)],
         array_join=None,
         condition=condition,
         groupby=[function_1],
+        prewhere=prewhere,
         having=None,
         order_by=[orderby],
     )
@@ -61,6 +65,10 @@ def test_iterate_over_query():
         # order by
         column2,
         function_2,
+        # prewhere
+        column2,
+        Literal(None, "2"),
+        prewhere,
     ]
 
     assert list(query.get_all_expressions()) == expected_expressions
@@ -80,16 +88,20 @@ def test_replace_expression():
         None, ConditionFunctions.EQ, function_1, Literal(None, "1")
     )
 
+    prewhere = binary_condition(
+        None, ConditionFunctions.EQ, function_1, Literal(None, "2")
+    )
+
     orderby = OrderBy(OrderByDirection.ASC, function_2)
 
     query = Query(
-        {},
         TableSource("my_table", ColumnSet([])),
         selected_columns=[SelectedExpression("alias", function_1)],
         array_join=None,
         condition=condition,
         groupby=[function_1],
         having=None,
+        prewhere=prewhere,
         order_by=[orderby],
     )
 
@@ -101,7 +113,6 @@ def test_replace_expression():
     query.transform_expressions(replace)
 
     expected_query = Query(
-        {},
         TableSource("my_table", ColumnSet([])),
         selected_columns=[
             SelectedExpression(
@@ -116,6 +127,12 @@ def test_replace_expression():
             Literal(None, "1"),
         ),
         groupby=[FunctionCall("alias", "tag", (Literal(None, "f1"),))],
+        prewhere=binary_condition(
+            None,
+            ConditionFunctions.EQ,
+            FunctionCall("alias", "tag", (Literal(None, "f1"),)),
+            Literal(None, "2"),
+        ),
         having=None,
         order_by=[orderby],
     )

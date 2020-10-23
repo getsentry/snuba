@@ -20,7 +20,7 @@ from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
 from snuba.query.expressions import Literal as LiteralExpr
-from snuba.query.logical import OrderByDirection, SelectedExpression
+from snuba.query import OrderByDirection, SelectedExpression
 from snuba.query.matchers import AnyExpression, Column, FunctionCall, Or, Param, String
 from snuba.request.request_settings import RequestSettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -247,14 +247,16 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         minimal_query.set_ast_selected_columns(
             [
                 SelectedExpression(
-                    self.__id_column, ColumnExpr(None, None, self.__id_column)
+                    self.__id_column,
+                    ColumnExpr(self.__id_column, None, self.__id_column),
                 ),
                 SelectedExpression(
-                    self.__project_column, ColumnExpr(None, None, self.__project_column)
+                    self.__project_column,
+                    ColumnExpr(self.__project_column, None, self.__project_column),
                 ),
                 SelectedExpression(
                     self.__timestamp_column,
-                    ColumnExpr(None, None, self.__timestamp_column),
+                    ColumnExpr(self.__timestamp_column, None, self.__timestamp_column),
                 ),
             ]
         )

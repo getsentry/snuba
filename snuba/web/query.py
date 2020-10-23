@@ -4,13 +4,12 @@ from datetime import datetime
 from functools import partial
 
 import sentry_sdk
-
 from snuba import environment
 from snuba.clickhouse.astquery import AstSqlQuery
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.factory import EntityKey, get_entity
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.timeseries_extension import TimeSeriesExtensionProcessor
 from snuba.querylog import record_query
@@ -73,7 +72,8 @@ def _run_query_pipeline(
     - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
       to the QueryExecutionStrategy to actually run the DB Query.
     """
-    entity = get_entity(EntityKey(request.query.get_entity_name()))
+    query_entity = request.query.get_from_clause()
+    entity = get_entity(query_entity.key)
 
     # TODO: this will work perfectly with datasets that are not time series. Remove it.
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
@@ -122,7 +122,7 @@ def _run_query_pipeline(
             clickhouse_processor.process_query(query_plan.query, request.settings)
 
     query_runner = partial(
-        _format_storage_query_and_run,
+        _run_and_apply_column_names,
         timer,
         query_metadata,
         from_date,
@@ -133,6 +133,60 @@ def _run_query_pipeline(
     return query_plan.execution_strategy.execute(
         query_plan.query, request.settings, query_runner
     )
+
+
+def _run_and_apply_column_names(
+    timer: Timer,
+    query_metadata: SnubaQueryMetadata,
+    from_date: datetime,
+    to_date: datetime,
+    referrer: str,
+    clickhouse_query: Query,
+    request_settings: RequestSettings,
+    reader: Reader[SqlQuery],
+) -> QueryResult:
+    """
+    Executes the query and, after that, replaces the column names in
+    QueryResult with the names the user expects and that are stored in
+    the SelectedExpression objects in the Query.
+    This happens so that we can remove aliases from the Query AST since
+    those aliases now are needed to produce the names the user expects
+    in the output.
+    """
+
+    result = _format_storage_query_and_run(
+        timer,
+        query_metadata,
+        from_date,
+        to_date,
+        referrer,
+        clickhouse_query,
+        request_settings,
+        reader,
+    )
+
+    name_alias_mappings = [
+        (select.name, select.expression.alias)
+        for select in clickhouse_query.get_selected_columns_from_ast()
+    ]
+    discrepancies = [
+        (name, alias) for name, alias in name_alias_mappings if name != alias
+    ]
+    if discrepancies:
+        logger.warning(
+            "Discrepancies between select clause names and aliases",
+            extra={"mappings": discrepancies},
+            exc_info=True,
+        )
+
+    # TODO actually replace the column names in the result (data and
+    # meta) with the names the user expects from the SelectedExpression
+    # objects.
+    # As of now, to ensure the column names are what the user expects,
+    # we rely on the aliases assigned to the AST expressions after parsing.
+    # That's why we should not have the discrepancies logged above.
+
+    return result
 
 
 def _format_storage_query_and_run(
@@ -148,13 +202,7 @@ def _format_storage_query_and_run(
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
     """
-
-    # TODO: This function (well, it will be a wrapper of this function)
-    # where we will transform the result according to the SelectedExpression
-    # object in the query to ensure the fields in the QueryResult have
-    # the same name the user expects.
-
-    source = clickhouse_query.get_data_source().format_from()
+    source = clickhouse_query.get_from_clause().format_from()
     with sentry_sdk.start_span(description="create_query", op="db") as span:
         formatted_query = AstSqlQuery(clickhouse_query, request_settings)
         span.set_data("query", formatted_query.sql_data())

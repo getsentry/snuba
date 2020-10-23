@@ -1,12 +1,12 @@
 from typing import Any, MutableMapping, Optional, Sequence, Set
 
 import pytest
-
 from snuba.clickhouse.astquery import AstSqlQuery
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.datasets.entities.factory import EntityKey, get_entity
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
+from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
@@ -15,8 +15,6 @@ from snuba.query.conditions import (
 )
 from snuba.query.dsl import arrayJoin, tupleElement
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.logical import Query as SnubaQuery
-from snuba.query.logical import SelectedExpression
 from snuba.query.parser import parse_query
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
@@ -35,16 +33,13 @@ def build_query(
     having: Optional[Expression] = None,
 ) -> ClickhouseQuery:
     return ClickhouseQuery(
-        SnubaQuery(
-            {},
-            None,
-            selected_columns=[
-                SelectedExpression(name=s.alias, expression=s)
-                for s in selected_columns or []
-            ],
-            condition=condition,
-            having=having,
-        )
+        None,
+        selected_columns=[
+            SelectedExpression(name=s.alias, expression=s)
+            for s in selected_columns or []
+        ],
+        condition=condition,
+        having=having,
     )
 
 
@@ -321,7 +316,7 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     dataset = get_dataset("transactions")
     query = parse_query(query_body, dataset)
     request = Request("a", query, HTTPRequestSettings(), {}, "r")
-    entity = get_entity(EntityKey(query.get_entity_name()))
+    entity = get_entity(query.get_from_clause().key)
     for p in entity.get_query_processors():
         p.process_query(query, request.settings)
     plan = entity.get_query_plan_builder().build_plan(request)

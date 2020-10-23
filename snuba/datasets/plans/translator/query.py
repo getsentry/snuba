@@ -1,11 +1,34 @@
-import copy
-
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mapping import (
     SnubaClickhouseMappingTranslator,
     TranslationMappers,
 )
 from snuba.query.logical import Query as LogicalQuery
+
+
+def identity_translate(query: LogicalQuery) -> ClickhouseQuery:
+    """
+    Utility method to build a Clickhouse Query from a Logical Query
+    without transforming anything.
+
+    It is exposed by this module because it is often useful in tests.
+    """
+    return ClickhouseQuery(
+        data_source=None,
+        selected_columns=query.get_selected_columns_from_ast(),
+        array_join=query.get_arrayjoin_from_ast(),
+        condition=query.get_condition_from_ast(),
+        groupby=query.get_groupby_from_ast(),
+        having=query.get_having_from_ast(),
+        order_by=query.get_orderby_from_ast(),
+        limitby=query.get_limitby(),
+        sample=query.get_sample(),
+        limit=query.get_limit(),
+        offset=query.get_offset(),
+        totals=query.has_totals(),
+        granularity=query.get_granularity(),
+        final=query.get_final(),
+    )
 
 
 class QueryTranslator:
@@ -25,6 +48,7 @@ class QueryTranslator:
         self.__expression_translator = SnubaClickhouseMappingTranslator(mappers)
 
     def translate(self, query: LogicalQuery) -> ClickhouseQuery:
-        translated = ClickhouseQuery(copy.deepcopy(query))
+        translated = identity_translate(query)
+
         translated.transform(self.__expression_translator)
         return translated

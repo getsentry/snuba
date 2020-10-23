@@ -99,7 +99,7 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     @with_span()
     def build_plan(self, request: Request) -> ClickhouseQueryPlan:
         clickhouse_query = QueryTranslator(self.__mappers).translate(request.query)
-        clickhouse_query.set_data_source(self.__storage.get_schema().get_data_source())
+        clickhouse_query.set_from_clause(self.__storage.get_schema().get_data_source())
 
         cluster = self.__storage.get_cluster()
 
@@ -137,7 +137,7 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             request.query, request.settings
         )
         clickhouse_query = QueryTranslator(mappers).translate(request.query)
-        clickhouse_query.set_data_source(storage.get_schema().get_data_source())
+        clickhouse_query.set_from_clause(storage.get_schema().get_data_source())
 
         cluster = storage.get_cluster()
 
