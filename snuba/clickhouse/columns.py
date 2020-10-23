@@ -35,6 +35,20 @@ class TypeModifier(ABC):
         raise NotImplementedError
 
 
+class TypeModifiers(ABC):
+    def for_schema(self, serialized_type: str) -> str:
+        for c in self._get_modifiers():
+            ret = c.for_schema(serialized_type)
+        return ret
+
+    @abstractmethod
+    def _get_modifiers(self) -> Sequence[TypeModifier]:
+        raise NotImplementedError
+
+    def has_modifier(self, modifier: Type[TypeModifier]) -> bool:
+        return any(t for t in self._get_modifiers() if isinstance(t, modifier))
+
+
 # Unfortunately we cannot easy make these classes dataclasses (which
 # would provide a convenient default implementation for all __repr__
 # and __eq__ methods) while keeping the schemas and migration concise.
@@ -43,7 +57,7 @@ class TypeModifier(ABC):
 # have to be provided everytime we define a column in a migration or
 # in a schema.
 class ColumnType:
-    def __init__(self, modifiers: Optional[List[TypeModifier]] = None):
+    def __init__(self, modifiers: Optional[TypeModifiers] = None):
         """
         The modifiers list to apply to this type. Modifiers are applied
         to the type in the same order they appear in the list.
@@ -51,7 +65,7 @@ class ColumnType:
         means
         `LowCardinality(Nullable(String))`
         """
-        self.__modifiers = modifiers or []
+        self.__modifiers = modifiers
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._repr_content()})[{self.__modifiers}]"
@@ -66,10 +80,11 @@ class ColumnType:
         )
 
     def for_schema(self) -> str:
-        ret = self._for_schema_impl()
-        for c in self.__modifiers:
-            ret = c.for_schema(ret)
-        return ret
+        return (
+            self.__modifiers.for_schema(self._for_schema_impl())
+            if self.__modifiers is not None
+            else self._for_schema_impl()
+        )
 
     def _for_schema_impl(self) -> str:
         return self.__class__.__name__
@@ -81,14 +96,11 @@ class ColumnType:
     def get_raw(self) -> ColumnType:
         return self
 
-    def get_modifiers(self) -> Sequence[TypeModifier]:
+    def get_modifiers(self) -> Optional[TypeModifiers]:
         return self.__modifiers
 
-    def add_modifier(self, modifier: TypeModifier) -> None:
-        self.__modifiers.append(modifier)
-
-    def has_modifier(self, modifier: Type[TypeModifier]) -> bool:
-        return any(t for t in self.__modifiers if isinstance(t, modifier))
+    def set_modifiers(self, modifiers: TypeModifiers) -> None:
+        self.__modifiers = modifiers
 
 
 class Column:
@@ -143,6 +155,20 @@ class FlattenedColumn:
 
 
 @dataclass(frozen=True)
+class SchemaModifiers(TypeModifiers):
+    nullable: bool = False
+    readonly: bool = False
+
+    def _get_modifiers(self) -> Sequence[TypeModifier]:
+        ret: List[TypeModifier] = []
+        if self.nullable:
+            ret.append(Nullable())
+        if self.readonly:
+            ret.append(ReadOnly())
+        return ret
+
+
+@dataclass(frozen=True)
 class ReadOnly(TypeModifier):
     def for_schema(self, content: str) -> str:
         return content
@@ -154,9 +180,17 @@ class Nullable(TypeModifier):
         return "Nullable({})".format(content)
 
 
+def nullable() -> SchemaModifiers:
+    return SchemaModifiers(nullable=True)
+
+
+def readonly() -> SchemaModifiers:
+    return SchemaModifiers(readonly=True)
+
+
 class Array(ColumnType):
     def __init__(
-        self, inner_type: ColumnType, modifiers: Optional[List[TypeModifier]] = None
+        self, inner_type: ColumnType, modifiers: Optional[TypeModifiers] = None
     ) -> None:
         super().__init__(modifiers)
         self.inner_type = inner_type
@@ -182,7 +216,7 @@ class Nested(ColumnType):
     def __init__(
         self,
         nested_columns: Sequence[Union[Column, Tuple[str, ColumnType]]],
-        modifiers: Optional[List[TypeModifier]] = None,
+        modifiers: Optional[TypeModifiers] = None,
     ) -> None:
         super().__init__(modifiers)
         self.nested_columns = Column.to_columns(nested_columns)
@@ -214,7 +248,7 @@ class AggregateFunction(ColumnType):
         self,
         func: str,
         *arg_types: ColumnType,
-        modifiers: Optional[List[TypeModifier]] = None,
+        modifiers: Optional[TypeModifiers] = None,
     ) -> None:
         super().__init__(modifiers)
         self.func = func
@@ -254,9 +288,7 @@ class IPv6(ColumnType):
 
 
 class FixedString(ColumnType):
-    def __init__(
-        self, length: int, modifiers: Optional[List[TypeModifier]] = None
-    ) -> None:
+    def __init__(self, length: int, modifiers: Optional[TypeModifiers] = None) -> None:
         super().__init__(modifiers)
         self.length = length
 
@@ -275,9 +307,7 @@ class FixedString(ColumnType):
 
 
 class UInt(ColumnType):
-    def __init__(
-        self, size: int, modifiers: Optional[List[TypeModifier]] = None
-    ) -> None:
+    def __init__(self, size: int, modifiers: Optional[TypeModifiers] = None) -> None:
         super().__init__(modifiers)
         assert size in (8, 16, 32, 64)
         self.size = size
@@ -297,9 +327,7 @@ class UInt(ColumnType):
 
 
 class Float(ColumnType):
-    def __init__(
-        self, size: int, modifiers: Optional[List[TypeModifier]] = None,
-    ) -> None:
+    def __init__(self, size: int, modifiers: Optional[TypeModifiers] = None,) -> None:
         super().__init__(modifiers)
         assert size in (32, 64)
         self.size = size
@@ -330,7 +358,7 @@ class Enum(ColumnType):
     def __init__(
         self,
         values: Sequence[Tuple[str, int]],
-        modifiers: Optional[List[TypeModifier]] = None,
+        modifiers: Optional[TypeModifiers] = None,
     ) -> None:
         super().__init__(modifiers)
         self.values = values
