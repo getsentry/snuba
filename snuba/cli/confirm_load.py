@@ -53,7 +53,8 @@ def confirm_load(
         source,
     )
 
-    storage = get_cdc_storage(StorageKey(storage_name))
+    storage_key = StorageKey(storage_name)
+    storage = get_cdc_storage(storage_key)
 
     control_topic = control_topic or storage.get_default_control_topic()
 
@@ -65,7 +66,7 @@ def confirm_load(
 
     producer = Producer(
         build_kafka_producer_configuration(
-            storage_name, bootstrap_servers=bootstrap_server
+            storage_key, bootstrap_servers=bootstrap_server
         )
     )
 

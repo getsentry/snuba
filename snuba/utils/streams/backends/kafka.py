@@ -35,6 +35,7 @@ from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
 from snuba import settings
+from snuba.datasets.storages import StorageKey
 from snuba.utils.concurrent import execute
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
 from snuba.utils.streams.backends.abstract import (
@@ -628,26 +629,45 @@ SUPPORTED_KAFKA_CONFIGURATION = (
     "sasl.password",
     "security.protocol",
 )
-DEFAULT_STORAGE_NAME = ""
 
 
 def get_default_kafka_configuration(
-    storage_name: Optional[str] = None,
+    storage_key: Optional[StorageKey] = None,
     bootstrap_servers: Optional[Sequence[str]] = None,
     override_params: Optional[Mapping[str, Any]] = None,
 ) -> KafkaBrokerConfig:
-    if storage_name in settings.DEFAULT_STORAGE_BROKERS:
-        # this is now deprecated
-        logger.warning(
-            "DEPRECATED: DEFAULT_STORAGE_BROKERS is defined. Please use STORAGE_BROKER_CONFIG instead"
-        )
-        default_config = {}
-        bootstrap_servers = ",".join(settings.DEFAULT_STORAGE_BROKERS[storage_name])
+    storage_name = storage_key.value
+    if storage_name is not None:
+        if storage_name in settings.DEFAULT_STORAGE_BROKERS:
+            # this is now deprecated
+            logger.warning(
+                "DEPRECATED: DEFAULT_STORAGE_BROKERS is defined. Please use STORAGE_BROKER_CONFIG instead"
+            )
+            default_config = {}
+            default_bootstrap_servers = ",".join(
+                settings.DEFAULT_STORAGE_BROKERS[storage_name]
+            )
+        elif settings.DEFAULT_BROKERS:
+            logger.warning(
+                "DEPRECATED: DEFAULT_BROKERS is defined. Please use BROKER_CONFIG instead"
+            )
+            default_config = {}
+            default_bootstrap_servers = ",".join(settings.DEFAULT_BROKERS)
+        else:
+            default_config = settings.STORAGE_BROKER_CONFIG.get(
+                storage_name, settings.BROKER_CONFIG
+            )
     else:
-        default_config = settings.STORAGE_BROKER_CONFIG.get(
-            storage_name, settings.BROKER_CONFIG
-        )
+        if settings.DEFAULT_BROKERS:
+            logger.warning(
+                "DEPRECATED: DEFAULT_BROKERS is defined. Please use BROKER_CONFIG instead"
+            )
+            default_config = {}
+            default_bootstrap_servers = ",".join(settings.DEFAULT_BROKERS)
+        else:
+            default_config = settings.BROKER_CONFIG
     broker_config = default_config.copy()
+    bootstrap_servers = bootstrap_servers or default_bootstrap_servers
     if bootstrap_servers:
         broker_config["bootstrap.servers"] = bootstrap_servers
     broker_config = {k: v for k, v in broker_config.items() if v is not None}
@@ -663,7 +683,7 @@ def get_default_kafka_configuration(
 
 
 def build_kafka_consumer_configuration(
-    storage_name: str,
+    storage_key: Optional[StorageKey],
     group_id: str,
     auto_offset_reset: str = "error",
     queued_max_messages_kbytes: int = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
@@ -672,7 +692,7 @@ def build_kafka_consumer_configuration(
     override_params: Optional[Mapping[str, Any]] = None,
 ) -> KafkaBrokerConfig:
     broker_config = get_default_kafka_configuration(
-        storage_name,
+        storage_key,
         bootstrap_servers=bootstrap_servers,
         override_params=override_params,
     )
@@ -692,14 +712,14 @@ def build_kafka_consumer_configuration(
 
 
 def build_kafka_producer_configuration(
-    storage_name: str,
+    storage_key: Optional[StorageKey],
     partitioner: str = DEFAULT_PARTITIONER,
     message_max_bytes: int = DEFAULT_MAX_MESSAGE_BYTES,
     bootstrap_servers: Optional[Sequence[str]] = None,
     override_params: Optional[Mapping[str, Any]] = None,
 ) -> KafkaBrokerConfig:
     broker_config = get_default_kafka_configuration(
-        storage_name,
+        storage_key,
         bootstrap_servers=bootstrap_servers,
         override_params=override_params,
     )
@@ -710,7 +730,7 @@ def build_kafka_producer_configuration(
 
 
 def build_default_kafka_producer_configuration() -> KafkaBrokerConfig:
-    return build_kafka_producer_configuration(DEFAULT_STORAGE_NAME)
+    return build_kafka_producer_configuration(None)
 
 
 # XXX: This must be imported after `KafkaPayload` to avoid a circular import.

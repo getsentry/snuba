@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from typing import Callable, Optional, Sequence
 
 from confluent_kafka import KafkaError, KafkaException, Producer
 
@@ -40,7 +40,7 @@ class ConsumerBuilder:
         replacements_topic: Optional[str],
         max_batch_size: int,
         max_batch_time_ms: int,
-        bootstrap_servers: Optional[str],
+        bootstrap_servers: Sequence[str],
         group_id: str,
         commit_log_topic: Optional[str],
         auto_offset_reset: str,
@@ -55,7 +55,7 @@ class ConsumerBuilder:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = bootstrap_servers
         self.broker_config = get_default_kafka_configuration(
-            self.storage.get_storage_key().value, bootstrap_servers=bootstrap_servers
+            self.storage.get_storage_key(), bootstrap_servers=bootstrap_servers
         )
 
         stream_loader = self.storage.get_table_writer().get_stream_loader()
@@ -125,9 +125,9 @@ class ConsumerBuilder:
     def __build_consumer(
         self, strategy_factory: ProcessingStrategyFactory[KafkaPayload]
     ) -> StreamProcessor[KafkaPayload]:
-        storage_name = self.storage.get_storage_key().value
+        storage_key = self.storage.get_storage_key()
         configuration = build_kafka_consumer_configuration(
-            storage_name,
+            storage_key,
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
             auto_offset_reset=self.auto_offset_reset,

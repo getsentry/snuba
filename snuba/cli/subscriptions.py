@@ -120,7 +120,7 @@ def subscriptions(
     dataset = get_dataset(dataset_name)
 
     storage = dataset.get_default_entity().get_writable_storage()
-    storage_name = storage.get_storage_key().value
+    storage_key = storage.get_storage_key()
 
     loader = enforce_table_writer(dataset).get_stream_loader()
 
@@ -134,7 +134,7 @@ def subscriptions(
         SynchronizedConsumer(
             KafkaConsumer(
                 build_kafka_consumer_configuration(
-                    storage_name,
+                    storage_key,
                     consumer_group,
                     auto_offset_reset=auto_offset_reset,
                     bootstrap_servers=bootstrap_servers,
@@ -142,7 +142,7 @@ def subscriptions(
             ),
             KafkaConsumer(
                 build_kafka_consumer_configuration(
-                    storage_name,
+                    storage_key,
                     f"subscriptions-commit-log-{uuid.uuid1().hex}",
                     auto_offset_reset="earliest",
                     bootstrap_servers=bootstrap_servers,
@@ -163,7 +163,7 @@ def subscriptions(
     producer = ProducerEncodingWrapper(
         KafkaProducer(
             build_kafka_producer_configuration(
-                storage_name, bootstrap_servers=bootstrap_servers
+                storage_key, bootstrap_servers=bootstrap_servers
             )
         ),
         SubscriptionTaskResultEncoder(),

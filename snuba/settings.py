@@ -77,10 +77,6 @@ DEFAULT_STORAGE_BROKERS: Mapping[str, Sequence[str]] = {}
 BROKER_CONFIG: Mapping[str, Any] = {
     # See snuba/utils/streams/backends/kafka.py for the supported options
     "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092"),
-    "sasl.mechanism": os.environ.get("SASL_MECHANISM"),
-    "sasl.username": os.environ.get("SASL_PLAIN_USERNAME"),
-    "sasl.password": os.environ.get("SASL_PLAIN_PASSWORD"),
-    "security.protocol": os.environ.get("SECURITY_PROTOCOL"),
 }
 STORAGE_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
 
