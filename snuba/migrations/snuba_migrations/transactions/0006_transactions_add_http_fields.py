@@ -22,7 +22,10 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column("http_method", String(Modifiers(nullable=True, low_cardinality=True))),
+                column=Column(
+                    "http_method",
+                    String(Modifiers(nullable=True, low_cardinality=True)),
+                ),
                 after="sdk_version",
             ),
             operations.AddColumn(
@@ -48,7 +51,10 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_dist",
-                column=Column("http_method", String(Modifiers(nullable=True, low_cardinality=True))),
+                column=Column(
+                    "http_method",
+                    String(Modifiers(nullable=True, low_cardinality=True)),
+                ),
                 after="sdk_version",
             ),
             operations.AddColumn(

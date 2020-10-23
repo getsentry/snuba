@@ -1,13 +1,10 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import (
-    Column,
-    Nullable,
-    String,
-)
+from snuba.clickhouse.columns import Column, String
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
-from snuba.migrations.columns import LowCardinality
+from snuba.migrations.columns import nullable
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
 class Migration(migration.MultiStepMigration):
@@ -23,7 +20,10 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_local",
-                column=Column("http_method", String(Modifiers(nullable=True, low_cardinality=True))),
+                column=Column(
+                    "http_method",
+                    String(Modifiers(nullable=True, low_cardinality=True)),
+                ),
                 after="sdk_version",
             ),
             operations.AddColumn(
@@ -45,7 +45,10 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_dist",
-                column=Column("http_method", String(Modifiers(nullable=True, low_cardinality=True))),
+                column=Column(
+                    "http_method",
+                    String(Modifiers(nullable=True, low_cardinality=True)),
+                ),
                 after="sdk_version",
             ),
             operations.AddColumn(

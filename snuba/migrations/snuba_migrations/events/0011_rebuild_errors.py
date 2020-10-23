@@ -1,27 +1,22 @@
 from typing import Sequence
 
 from snuba.clickhouse.columns import (
+    UUID,
     Array,
     Column,
     DateTime,
     IPv4,
     IPv6,
     Nested,
-    Nullable,
     String,
     UInt,
-    UUID,
+    nullable,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations, table_engines
-from snuba.migrations.columns import (
-    LowCardinality,
-    Materialized,
-    WithCodecs,
-    WithDefault,
-)
-
+from snuba.migrations.columns import MigrationModifiers as Modifiers
+from snuba.migrations.columns import lowcardinality
 
 columns = [
     Column("project_id", UInt(64)),
@@ -33,8 +28,8 @@ columns = [
     Column("dist", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("ip_address_v4", IPv4(nullable())),
     Column("ip_address_v6", IPv6(nullable())),
-    Column("user", String([WithDefault("''")])),
-    Column("user_hash", UInt(64, [Materialized("cityHash64(user)")])),
+    Column("user", String(Modifiers(default="''"))),
+    Column("user_hash", UInt(64, Modifiers(materialized="cityHash64(user)"))),
     Column("user_id", String(nullable())),
     Column("user_name", String(nullable())),
     Column("user_email", String(nullable())),
@@ -44,14 +39,15 @@ columns = [
     Column("http_referer", String(nullable())),
     Column("tags", Nested([("key", String()), ("value", String())])),
     Column("contexts", Nested([("key", String()), ("value", String())])),
-    Column("transaction_name", String([LowCardinality(), WithDefault("''")])),
+    Column("transaction_name", String(Modifiers(low_cardinality=True, default="''"))),
     Column(
-        "transaction_hash", UInt(64, [Materialized("cityHash64(transaction_name)")])
+        "transaction_hash",
+        UInt(64, Modifiers(materialized="cityHash64(transaction_name)")),
     ),
     Column("span_id", UInt(64, nullable())),
     Column("trace_id", UUID(nullable())),
     Column("partition", UInt(16)),
-    Column("offset", UInt(64, [WithCodecs(["DoubleDelta", "LZ4"])])),
+    Column("offset", UInt(64, Modifiers(codecs=["DoubleDelta", "LZ4"]))),
     Column("message_timestamp", DateTime()),
     Column("retention_days", UInt(16)),
     Column("deleted", UInt(8)),
@@ -142,7 +138,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="errors_local_new",
                 column=Column(
                     "_tags_hash_map",
-                    Array(UInt(64), [Materialized(TAGS_HASH_MAP_COLUMN)]),
+                    Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN)),
                 ),
                 after="tags",
             ),

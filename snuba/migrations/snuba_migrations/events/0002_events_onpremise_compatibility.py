@@ -5,9 +5,9 @@ from snuba.clickhouse.columns import (
     Column,
     DateTime,
     Nested,
-    Nullable,
     String,
     UInt,
+    nullable,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations

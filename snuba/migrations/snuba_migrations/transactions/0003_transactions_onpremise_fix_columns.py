@@ -86,12 +86,16 @@ class Migration(migration.MultiStepMigration):
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column("release", String(Modifiers(nullable=True, low_cardinality=True))),
+                column=Column(
+                    "release", String(Modifiers(nullable=True, low_cardinality=True))
+                ),
             ),
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column("dist", String(Modifiers(nullable=True, low_cardinality=True))),
+                column=Column(
+                    "dist", String(Modifiers(nullable=True, low_cardinality=True))
+                ),
             ),
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
@@ -110,7 +114,10 @@ class Migration(migration.MultiStepMigration):
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column("environment", String(Modifiers(nullable=True, low_cardinality=True))),
+                column=Column(
+                    "environment",
+                    String(Modifiers(nullable=True, low_cardinality=True)),
+                ),
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,

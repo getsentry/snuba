@@ -72,7 +72,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="spans_experimental_local",
                 column=Column(
                     "_tags_hash_map",
-                    Array(UInt(64), [Materialized(TAGS_HASH_MAP_COLUMN)]),
+                    Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN)),
                 ),
                 after="tags.value",
             ),
@@ -102,7 +102,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="spans_experimental_dist",
                 column=Column(
                     "_tags_hash_map",
-                    Array(UInt(64), [Materialized(TAGS_HASH_MAP_COLUMN)]),
+                    Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN)),
                 ),
                 after="tags.value",
             ),

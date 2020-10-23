@@ -7,11 +7,10 @@ from snuba.clickhouse.columns import (
     FixedString,
     Float,
     Nested,
-    Nullable,
     String,
     UInt,
+    nullable,
 )
-
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 

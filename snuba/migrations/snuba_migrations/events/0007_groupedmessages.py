@@ -1,14 +1,8 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import (
-    Column,
-    DateTime,
-    Nullable,
-    UInt,
-)
+from snuba.clickhouse.columns import Column, DateTime, UInt, nullable
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
-
 
 columns = [
     # Kafka topic offset
