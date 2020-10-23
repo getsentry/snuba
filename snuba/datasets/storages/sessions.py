@@ -33,6 +33,7 @@ all_columns = ColumnSet(
     [
         ("session_id", UUID()),
         ("distinct_id", UUID()),
+        ("quantity", UInt(32)),
         ("seq", UInt(64)),
         ("org_id", UInt(64)),
         ("project_id", UInt(64)),
@@ -63,13 +64,17 @@ read_columns = ColumnSet(
         ("environment", String()),
         (
             "duration_quantiles",
-            AggregateFunction("quantilesIf(0.5, 0.9)", UInt(32), UInt(8)),
+            AggregateFunction(
+                "quantilesIf(0.5, 0.75, 0.9, 0.95, 0.99)", UInt(32), UInt(8)
+            ),
         ),
-        ("sessions", AggregateFunction("countIf", UUID(), UInt(8))),
+        ("duration_avg", AggregateFunction("avgIf", UInt(32), UInt(8))),
+        ("sessions", AggregateFunction("sumIf", UInt(32), UInt(8))),
+        ("sessions_crashed", AggregateFunction("sumIf", UInt(32), UInt(8))),
+        ("sessions_abnormal", AggregateFunction("sumIf", UInt(32), UInt(8))),
+        ("sessions_errored_sum", AggregateFunction("sumIf", UInt(32), UInt(8))),
+        ("sessions_errored_uniq", AggregateFunction("uniqIf", UUID(), UInt(8))),
         ("users", AggregateFunction("uniqIf", UUID(), UInt(8))),
-        ("sessions_crashed", AggregateFunction("countIf", UUID(), UInt(8)),),
-        ("sessions_abnormal", AggregateFunction("countIf", UUID(), UInt(8)),),
-        ("sessions_errored", AggregateFunction("uniqIf", UUID(), UInt(8))),
         ("users_crashed", AggregateFunction("uniqIf", UUID(), UInt(8))),
         ("users_abnormal", AggregateFunction("uniqIf", UUID(), UInt(8))),
         ("users_errored", AggregateFunction("uniqIf", UUID(), UInt(8))),

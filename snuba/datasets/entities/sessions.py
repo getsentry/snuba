@@ -31,6 +31,9 @@ class SessionsEntity(Entity):
         writable_storage = get_writable_storage(StorageKey.SESSIONS_RAW)
         materialized_storage = get_storage(StorageKey.SESSIONS_HOURLY)
         read_schema = materialized_storage.get_schema()
+        quantiles = tuple(
+            Literal(None, quant) for quant in [0.5, 0.75, 0.9, 0.95, 0.99]
+        )
 
         super().__init__(
             storages=[writable_storage, materialized_storage],
@@ -44,18 +47,16 @@ class SessionsEntity(Entity):
                         ColumnToCurriedFunction(
                             None,
                             "duration_quantiles",
-                            FunctionCall(
-                                None,
-                                "quantilesIfMerge",
-                                (Literal(None, 0.5), Literal(None, 0.9)),
-                            ),
+                            FunctionCall(None, "quantilesIfMerge", quantiles,),
                             (Column(None, None, "duration_quantiles"),),
                         ),
-                        function_rule("sessions", "countIfMerge"),
-                        function_rule("sessions_crashed", "countIfMerge"),
-                        function_rule("sessions_abnormal", "countIfMerge"),
+                        function_rule("duration_avg", "avgIfMerge"),
+                        function_rule("sessions", "sumIfMerge"),
+                        function_rule("sessions_crashed", "sumIfMerge"),
+                        function_rule("sessions_abnormal", "sumIfMerge"),
+                        function_rule("sessions_errored_sum", "sumIfMerge"),
+                        function_rule("sessions_errored_uniq", "uniqIfMerge"),
                         function_rule("users", "uniqIfMerge"),
-                        function_rule("sessions_errored", "uniqIfMerge"),
                         function_rule("users_crashed", "uniqIfMerge"),
                         function_rule("users_abnormal", "uniqIfMerge"),
                         function_rule("users_errored", "uniqIfMerge"),
