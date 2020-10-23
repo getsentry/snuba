@@ -39,16 +39,16 @@ aggregate_columns = [
     Column("environment", String(lowcardinality())),
     Column(
         "duration_quantiles",
-        AggregateFunction("quantilesIf(0.5, 0.9)", UInt(32), UInt(8)),
+        AggregateFunction("quantilesIf(0.5, 0.9)", [UInt(32), UInt(8)]),
     ),
-    Column("sessions", AggregateFunction("countIf", UUID(), UInt(8))),
-    Column("users", AggregateFunction("uniqIf", UUID(), UInt(8))),
-    Column("sessions_crashed", AggregateFunction("countIf", UUID(), UInt(8)),),
-    Column("sessions_abnormal", AggregateFunction("countIf", UUID(), UInt(8)),),
-    Column("sessions_errored", AggregateFunction("uniqIf", UUID(), UInt(8))),
-    Column("users_crashed", AggregateFunction("uniqIf", UUID(), UInt(8))),
-    Column("users_abnormal", AggregateFunction("uniqIf", UUID(), UInt(8))),
-    Column("users_errored", AggregateFunction("uniqIf", UUID(), UInt(8))),
+    Column("sessions", AggregateFunction("countIf", [UUID(), UInt(8)])),
+    Column("users", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
+    Column("sessions_crashed", AggregateFunction("countIf", [UUID(), UInt(8)]),),
+    Column("sessions_abnormal", AggregateFunction("countIf", [UUID(), UInt(8)]),),
+    Column("sessions_errored", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
+    Column("users_crashed", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
+    Column("users_abnormal", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
+    Column("users_errored", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
 ]
 
 

@@ -97,7 +97,9 @@ class Migration(migration.MultiStepMigration):
                 if col.type.has_modifier(Materialized):
                     modifiers = col.type.get_modifiers()
                     assert modifiers is not None
-                    col.type.set_modifiers(replace(modifiers, materialized=None))
+                    col.type = col.type.set_modifiers(
+                        replace(modifiers, materialized=None)
+                    )
 
         dist_columns = deepcopy(columns)
         strip_materialized(dist_columns)

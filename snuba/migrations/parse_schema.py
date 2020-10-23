@@ -59,14 +59,14 @@ grammar = Grammar(
 )
 
 
-def merge_modifiers(col_type: ColumnType, modifiers: MigrationModifiers) -> None:
+def merge_modifiers(col_type: ColumnType, modifiers: MigrationModifiers) -> ColumnType:
     # TODO: Remove these assertions when ColumnType will be generic
     existing_modifiers = col_type.get_modifiers()
     if existing_modifiers is None:
-        col_type.set_modifiers(modifiers)
+        return col_type.set_modifiers(modifiers)
     else:
         assert isinstance(existing_modifiers, MigrationModifiers)
-        col_type.set_modifiers(existing_modifiers.merge(modifiers))
+        return col_type.set_modifiers(existing_modifiers.merge(modifiers))
 
 
 class Visitor(NodeVisitor):
@@ -132,7 +132,7 @@ class Visitor(NodeVisitor):
             _sp,
             _paren,
         ) = visited_children
-        return AggregateFunction(agg_func, *agg_types)
+        return AggregateFunction(agg_func, [*agg_types])
 
     def visit_agg_func(self, node: Node, visited_children: Iterable[Any]) -> str:
         return str(node.text)
@@ -146,16 +146,14 @@ class Visitor(NodeVisitor):
         self, node: Node, visited_children: Tuple[Any, Any, Any, ColumnType, Any, Any]
     ) -> ColumnType:
         (_lc, _paren, _sp, inner_type, _sp, _paren) = visited_children
-        merge_modifiers(inner_type, lowcardinality())
-        return inner_type
+        return merge_modifiers(inner_type, lowcardinality())
 
     def visit_nullable(
         self, node: Node, visited_children: Tuple[Any, Any, Any, ColumnType, Any, Any]
     ) -> ColumnType:
         (_null, _paren, _sp, inner_type, _sp, _paren) = visited_children
         # TODO: Remove these assertions when ColumnType will be generic
-        merge_modifiers(inner_type, nullable())
-        return inner_type
+        return merge_modifiers(inner_type, nullable())
 
     def visit_array(self, node: Node, visited_children: Iterable[Any]) -> ColumnType:
         (_arr, _paren, _sp, inner_type, _sp, _paren) = visited_children
@@ -183,14 +181,18 @@ def _get_column(
     column: ColumnType = Visitor().visit(grammar.parse(column_type))
 
     if default_type == "MATERIALIZED":
-        merge_modifiers(
+        column = merge_modifiers(
             column, MigrationModifiers(materialized=_strip_cast(default_expr))
         )
     elif default_type == "DEFAULT":
-        merge_modifiers(column, MigrationModifiers(default=_strip_cast(default_expr)))
+        column = merge_modifiers(
+            column, MigrationModifiers(default=_strip_cast(default_expr))
+        )
 
     if codec_expr:
-        merge_modifiers(column, MigrationModifiers(codecs=codec_expr.split(", ")))
+        column = merge_modifiers(
+            column, MigrationModifiers(codecs=codec_expr.split(", "))
+        )
 
     return column
 

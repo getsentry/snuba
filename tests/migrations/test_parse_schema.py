@@ -35,15 +35,15 @@ test_data = [
     # Aggregate functions
     (
         ("AggregateFunction(uniq, UInt8)", "", "", ""),
-        AggregateFunction("uniq", UInt(8)),
+        AggregateFunction("uniq", [UInt(8)]),
     ),
     (
         ("AggregateFunction(countIf, UUID, UInt8)", "", "", ""),
-        AggregateFunction("countIf", UUID(), UInt(8)),
+        AggregateFunction("countIf", [UUID(), UInt(8)]),
     ),
     (
         ("AggregateFunction(quantileIf(0.5, 0.9), UInt32, UInt8)", "", "", ""),
-        AggregateFunction("quantileIf(0.5, 0.9)", UInt(32), UInt(8)),
+        AggregateFunction("quantileIf(0.5, 0.9)", [UInt(32), UInt(8)]),
     ),
     # Array
     (("Array(String)", "", "", ""), Array(String())),

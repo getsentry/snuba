@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from copy import deepcopy
 from typing import List, Mapping, Sequence
 
 from snuba.clickhouse.columns import ColumnSet, ColumnType
@@ -112,10 +111,8 @@ class Schema(ABC):
 
             expected_type = self.get_columns()[column_name].type
 
-            raw_col = deepcopy(column)
-            raw_col.set_modifiers(None)
-            raw_expected = deepcopy(expected_type)
-            raw_expected.set_modifiers(None)
+            raw_col = column.set_modifiers(None)
+            raw_expected = expected_type.set_modifiers(None)
             if raw_col != raw_expected:
                 errors.append(
                     "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)"
