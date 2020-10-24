@@ -1,22 +1,16 @@
 from snuba.clickhouse.columns import (
+    UUID,
     ColumnSet,
     DateTime,
-    nullable,
+    SchemaModifiers,
     String,
     UInt,
-    UUID,
+    nullable,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.outcomes_processor import OutcomesProcessor
-from snuba.datasets.storage import (
-    ReadableTableStorage,
-    WritableTableStorage,
-)
-
-from snuba.datasets.schemas.tables import (
-    TableSchema,
-    WritableTableSchema,
-)
+from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
+from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
@@ -26,7 +20,7 @@ WRITE_DIST_TABLE_NAME = "outcomes_raw_dist"
 READ_LOCAL_TABLE_NAME = "outcomes_hourly_local"
 READ_DIST_TABLE_NAME = "outcomes_hourly_dist"
 
-write_columns = ColumnSet(
+write_columns = ColumnSet[SchemaModifiers](
     [
         ("org_id", UInt(64)),
         ("project_id", UInt(64)),
@@ -46,7 +40,7 @@ raw_schema = WritableTableSchema(
     storage_set_key=StorageSetKey.OUTCOMES,
 )
 
-read_columns = ColumnSet(
+read_columns = ColumnSet[SchemaModifiers](
     [
         ("org_id", UInt(64)),
         ("project_id", UInt(64)),
@@ -65,7 +59,7 @@ read_schema = TableSchema(
     storage_set_key=StorageSetKey.OUTCOMES,
 )
 
-materialized_view_columns = ColumnSet(
+materialized_view_columns = ColumnSet[SchemaModifiers](
     [
         ("org_id", UInt(64)),
         ("project_id", UInt(64)),

@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Mapping, Sequence
 
-from snuba.clickhouse.columns import ColumnSet, ColumnType
+from snuba.clickhouse.columns import ColumnSet, ColumnType, SchemaModifiers, TModifiers
 from snuba.query.data_source import DataSource
 from snuba.query.expressions import FunctionCall
 
@@ -33,7 +33,7 @@ class RelationalSource(DataSource, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_columns(self) -> ColumnSet:
+    def get_columns(self) -> ColumnSet[SchemaModifiers]:
         raise NotImplementedError
 
     @abstractmethod
@@ -90,11 +90,11 @@ class Schema(ABC):
         """
         raise NotImplementedError
 
-    def get_columns(self) -> ColumnSet:
+    def get_columns(self) -> ColumnSet[SchemaModifiers]:
         return self.get_data_source().get_columns()
 
     def get_column_differences(
-        self, expected_columns: Mapping[str, ColumnType]
+        self, expected_columns: Mapping[str, ColumnType[TModifiers]]
     ) -> List[str]:
         """
         Returns a list of differences between the expected_columns and the columns described in the schema.

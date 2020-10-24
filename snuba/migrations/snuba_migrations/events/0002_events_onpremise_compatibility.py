@@ -1,16 +1,9 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import (
-    Array,
-    Column,
-    DateTime,
-    Nested,
-    String,
-    UInt,
-    nullable,
-)
+from snuba.clickhouse.columns import Array, Column, DateTime, Nested, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
+from snuba.migrations.columns import nullable
 
 
 class Migration(migration.MultiStepMigration):

@@ -1,4 +1,10 @@
-from snuba.clickhouse.columns import ColumnSet, DateTime, nullable, UInt
+from snuba.clickhouse.columns import (
+    ColumnSet,
+    DateTime,
+    SchemaModifiers,
+    UInt,
+    nullable,
+)
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.cdc.groupedmessage_processor import (
@@ -12,7 +18,7 @@ from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 
-columns = ColumnSet(
+columns = ColumnSet[SchemaModifiers](
     [
         # columns to maintain the dataset
         # Kafka topic offset

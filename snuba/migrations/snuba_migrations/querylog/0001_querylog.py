@@ -13,11 +13,13 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
-from snuba.migrations.columns import lowcardinality, nullable
+from snuba.migrations.columns import lowcardinality, MigrationModifiers, nullable
 
-status_type = Enum([("success", 0), ("error", 1), ("rate-limited", 2)])
+status_type = Enum[MigrationModifiers](
+    [("success", 0), ("error", 1), ("rate-limited", 2)]
+)
 
-columns = [
+columns: Sequence[Column[MigrationModifiers]] = [
     Column("request_id", UUID()),
     Column("request_body", String()),
     Column("referrer", String(lowcardinality())),

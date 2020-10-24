@@ -5,9 +5,10 @@ from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
     Float,
-    nullable,
+    SchemaModifiers,
     String,
     UInt,
+    nullable,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.querylog_processor import QuerylogProcessor
@@ -16,7 +17,7 @@ from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader
 
-columns = ColumnSet(
+columns = ColumnSet[SchemaModifiers](
     [
         ("request_id", UUID()),
         ("request_body", String()),

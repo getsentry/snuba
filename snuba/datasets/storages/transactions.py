@@ -7,10 +7,11 @@ from snuba.clickhouse.columns import (
     IPv4,
     IPv6,
     Nested,
-    nullable,
-    readonly,
+    SchemaModifiers,
     String,
     UInt,
+    nullable,
+    readonly,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import WritableTableSchema
@@ -24,12 +25,11 @@ from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
-from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
+from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.web.split import TimeSplitQueryStrategy
 
-
-columns = ColumnSet(
+columns = ColumnSet[SchemaModifiers](
     [
         ("project_id", UInt(64)),
         ("event_id", UUID()),

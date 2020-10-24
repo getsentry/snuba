@@ -6,6 +6,7 @@ from snuba.clickhouse.columns import (
     IPv4,
     IPv6,
     Nested,
+    SchemaModifiers,
     String,
     UInt,
     nullable,
@@ -29,7 +30,7 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 
-all_columns = ColumnSet(
+all_columns = ColumnSet[SchemaModifiers](
     [
         ("project_id", UInt(64)),
         ("timestamp", DateTime()),

@@ -6,7 +6,7 @@ from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.columns import lowcardinality, nullable
 
-raw_columns = [
+raw_columns: Sequence[Column[Modifiers]] = [
     Column("org_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("key_id", UInt(64, nullable())),
@@ -16,7 +16,7 @@ raw_columns = [
     Column("event_id", UUID(nullable())),
 ]
 
-hourly_columns = [
+hourly_columns: Sequence[Column[Modifiers]] = [
     Column("org_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("key_id", UInt(64)),
@@ -26,7 +26,7 @@ hourly_columns = [
     Column("times_seen", UInt(64)),
 ]
 
-materialized_view_columns = [
+materialized_view_columns: Sequence[Column[Modifiers]] = [
     Column("org_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("key_id", UInt(64)),

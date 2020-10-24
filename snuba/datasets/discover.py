@@ -1,7 +1,7 @@
 import logging
 
 from snuba import environment
-from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.columns import ColumnSet, SchemaModifiers
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.discover import EVENTS_COLUMNS, TRANSACTIONS_COLUMNS
@@ -63,7 +63,9 @@ EVENT_FUNCTIONS = FunctionCallMatch(
 
 
 def match_query_to_entity(
-    query: Query, events_only_columns: ColumnSet, transactions_only_columns: ColumnSet
+    query: Query,
+    events_only_columns: ColumnSet[SchemaModifiers],
+    transactions_only_columns: ColumnSet[SchemaModifiers],
 ) -> EntityKey:
     # First check for a top level condition on the event type
     condition = query.get_condition_from_ast()
@@ -144,8 +146,8 @@ def match_query_to_entity(
 def track_bad_query(
     query: Query,
     selected_entity: EntityKey,
-    events_only_columns: ColumnSet,
-    transactions_only_columns: ColumnSet,
+    events_only_columns: ColumnSet[SchemaModifiers],
+    transactions_only_columns: ColumnSet[SchemaModifiers],
 ) -> None:
     event_columns = set()
     transaction_columns = set()

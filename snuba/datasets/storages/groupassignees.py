@@ -1,18 +1,23 @@
-from snuba.clickhouse.columns import ColumnSet, DateTime, nullable, UInt
+from snuba.clickhouse.columns import (
+    ColumnSet,
+    DateTime,
+    SchemaModifiers,
+    UInt,
+    nullable,
+)
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.cdc.groupassignee_processor import (
     GroupAssigneeProcessor,
     GroupAssigneeRow,
 )
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
-from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
 
-
-columns = ColumnSet(
+columns = ColumnSet[SchemaModifiers](
     [
         # columns to maintain the dataset
         # Kafka topic offset

@@ -10,9 +10,10 @@ from snuba.clickhouse.columns import (
     FixedString,
     Float,
     Nested,
-    nullable,
+    SchemaModifiers,
     String,
     UInt,
+    nullable,
 )
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.clickhouse.translators.snuba.allowed import (
@@ -27,12 +28,12 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities.events import EventsEntity, EventsQueryStorageSelector
+from snuba.datasets.entities.transactions import TransactionsEntity
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.entities.events import EventsEntity, EventsQueryStorageSelector
-from snuba.datasets.entities.transactions import TransactionsEntity
 from snuba.query.dsl import identity
 from snuba.query.expressions import (
     Column,
@@ -64,7 +65,7 @@ class DefaultNoneColumnMapper(ColumnMapper):
     the discover dataset file.
     """
 
-    columns: ColumnSet
+    columns: ColumnSet[SchemaModifiers]
 
     def attempt_map(
         self, expression: Column, children_translator: SnubaClickhouseStrictTranslator,
@@ -263,7 +264,7 @@ EVENTS_COLUMNS = ColumnSet(
     ]
 )
 
-TRANSACTIONS_COLUMNS = ColumnSet(
+TRANSACTIONS_COLUMNS = ColumnSet[SchemaModifiers](
     [
         ("trace_id", UUID(nullable())),
         ("span_id", UInt(64, nullable())),
@@ -303,7 +304,7 @@ class DiscoverEntity(Entity):
     """
 
     def __init__(self) -> None:
-        self.__common_columns = ColumnSet(
+        self.__common_columns = ColumnSet[SchemaModifiers](
             [
                 ("event_id", FixedString(32)),
                 ("project_id", UInt(64)),

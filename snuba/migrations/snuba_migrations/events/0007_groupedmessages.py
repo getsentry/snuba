@@ -1,10 +1,11 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import Column, DateTime, UInt, nullable
+from snuba.clickhouse.columns import Column, DateTime, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
+from snuba.migrations.columns import MigrationModifiers, nullable
 
-columns = [
+columns: Sequence[Column[MigrationModifiers]] = [
     # Kafka topic offset
     Column("offset", UInt(64)),
     # GroupStatus in Sentry does not have a 'DELETED' state that reflects the deletion
