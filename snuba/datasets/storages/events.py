@@ -46,5 +46,6 @@ storage = WritableTableStorage(
         tag_column_map=get_tag_column_map(),
         promoted_tags=get_promoted_tags(),
         state_name=ReplacerState.EVENTS,
+        use_promoted_prewhere=True,
     ),
 )
