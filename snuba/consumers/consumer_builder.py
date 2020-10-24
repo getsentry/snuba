@@ -20,6 +20,7 @@ from snuba.utils.streams.backends.kafka import (
     TransportError,
     build_kafka_consumer_configuration,
     get_default_kafka_configuration,
+    build_kafka_producer_configuration,
 )
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.processing.strategies import ProcessingStrategyFactory
@@ -55,7 +56,10 @@ class ConsumerBuilder:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = bootstrap_servers
         self.broker_config = get_default_kafka_configuration(
-            self.storage.get_storage_key(), bootstrap_servers=bootstrap_servers
+            storage_key, bootstrap_servers=bootstrap_servers
+        )
+        self.producer_broker_config = build_kafka_producer_configuration(
+            storage_key, bootstrap_servers=bootstrap_servers
         )
 
         stream_loader = self.storage.get_table_writer().get_stream_loader()
@@ -88,7 +92,7 @@ class ConsumerBuilder:
 
         # XXX: This can result in a producer being built in cases where it's
         # not actually required.
-        self.producer = Producer(self.broker_config)
+        self.producer = Producer(self.producer_broker_config)
 
         self.metrics = MetricsWrapper(
             environment.metrics,

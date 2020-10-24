@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import logging
 from concurrent.futures import Future
 from datetime import datetime
@@ -649,9 +650,6 @@ def get_default_kafka_configuration(
                 settings.DEFAULT_STORAGE_BROKERS[storage_name]
             )
         elif settings.DEFAULT_BROKERS:
-            logger.warning(
-                "DEPRECATED: DEFAULT_BROKERS is defined. Please use BROKER_CONFIG instead"
-            )
             default_config = {}
             default_bootstrap_servers = ",".join(settings.DEFAULT_BROKERS)
         else:
@@ -660,21 +658,18 @@ def get_default_kafka_configuration(
             )
     else:
         if settings.DEFAULT_BROKERS:
-            logger.warning(
-                "DEPRECATED: DEFAULT_BROKERS is defined. Please use BROKER_CONFIG instead"
-            )
             default_config = {}
             default_bootstrap_servers = ",".join(settings.DEFAULT_BROKERS)
         else:
             default_config = settings.BROKER_CONFIG
-    broker_config = default_config.copy()
+    broker_config = copy.deepcopy(default_config)
     bootstrap_servers = bootstrap_servers or default_bootstrap_servers
     if bootstrap_servers:
         broker_config["bootstrap.servers"] = bootstrap_servers
     broker_config = {k: v for k, v in broker_config.items() if v is not None}
     for configuration_key in broker_config:
         if configuration_key not in SUPPORTED_KAFKA_CONFIGURATION:
-            raise RuntimeError(
+            raise ValueError(
                 f"The `{configuration_key}` configuration key is not supported."
             )
 
