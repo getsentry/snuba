@@ -114,10 +114,6 @@ class ColumnType:
     def flatten(self, name: str) -> Sequence[FlattenedColumn]:
         return [FlattenedColumn(None, name, self)]
 
-    # TODO: Remove this method entirely.
-    def get_raw(self) -> ColumnType:
-        return self
-
     def get_modifiers(self) -> Optional[TypeModifiers]:
         return self.__modifiers
 
@@ -127,6 +123,9 @@ class ColumnType:
         modifiers.
         """
         return type(self)(modifiers=modifiers)
+
+    def get_raw(self) -> ColumnType:
+        return type(self)()
 
     def has_modifier(self, modifier: Type[TypeModifier]) -> bool:
         if self.__modifiers is None:
@@ -236,17 +235,18 @@ class Array(ColumnType):
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
+            and self.inner_type == cast(Array, other).inner_type
             and self.get_modifiers() == cast(Array, other).get_modifiers()
         )
 
     def _for_schema_impl(self) -> str:
         return "Array({})".format(self.inner_type.for_schema())
 
-    def get_raw(self) -> ColumnType:
-        return Array(self.inner_type.get_raw())
-
     def set_modifiers(self, modifiers: Optional[TypeModifiers]) -> Array:
         return Array(inner_type=self.inner_type, modifiers=modifiers)
+
+    def get_raw(self) -> Array:
+        return Array(inner_type=self.inner_type.get_raw())
 
 
 class Nested(ColumnType):
@@ -282,6 +282,10 @@ class Nested(ColumnType):
     def set_modifiers(self, modifiers: Optional[TypeModifiers]) -> Nested:
         return Nested(nested_columns=self.nested_columns, modifiers=modifiers)
 
+    def get_raw(self) -> Nested:
+        raw_columns = [Column(c.name, c.type.get_raw()) for c in self.nested_columns]
+        return Nested(nested_columns=raw_columns)
+
 
 class AggregateFunction(ColumnType):
     def __init__(
@@ -312,6 +316,9 @@ class AggregateFunction(ColumnType):
 
     def set_modifiers(self, modifiers: Optional[TypeModifiers]) -> AggregateFunction:
         return AggregateFunction(self.func, self.arg_types, modifiers)
+
+    def get_raw(self) -> AggregateFunction:
+        return AggregateFunction(self.func, [t.get_raw() for t in self.arg_types])
 
 
 class String(ColumnType):
@@ -351,6 +358,9 @@ class FixedString(ColumnType):
     def set_modifiers(self, modifiers: Optional[TypeModifiers]) -> FixedString:
         return FixedString(length=self.length, modifiers=modifiers)
 
+    def get_raw(self) -> FixedString:
+        return FixedString(self.length)
+
 
 class UInt(ColumnType):
     def __init__(self, size: int, modifiers: Optional[TypeModifiers] = None) -> None:
@@ -374,6 +384,9 @@ class UInt(ColumnType):
     def set_modifiers(self, modifiers: Optional[TypeModifiers]) -> UInt:
         return UInt(size=self.size, modifiers=modifiers)
 
+    def get_raw(self) -> UInt:
+        return UInt(self.size)
+
 
 class Float(ColumnType):
     def __init__(self, size: int, modifiers: Optional[TypeModifiers] = None,) -> None:
@@ -396,6 +409,9 @@ class Float(ColumnType):
 
     def set_modifiers(self, modifiers: Optional[TypeModifiers]) -> Float:
         return Float(size=self.size, modifiers=modifiers)
+
+    def get_raw(self) -> Float:
+        return Float(self.size)
 
 
 class Date(ColumnType):
@@ -432,6 +448,9 @@ class Enum(ColumnType):
 
     def set_modifiers(self, modifiers: Optional[TypeModifiers]) -> Enum:
         return Enum(values=self.values, modifiers=modifiers)
+
+    def get_raw(self) -> Enum:
+        return Enum(self.values)
 
 
 class ColumnSet:

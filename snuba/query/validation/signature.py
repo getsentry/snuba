@@ -110,16 +110,14 @@ class Column(ParamType):
             # case.
             return
 
-        column_type = column.type.get_raw()
+        nullable = column.type.has_modifier(Nullable)
 
-        nullable = column_type.has_modifier(Nullable)
-
-        if not isinstance(column_type, tuple(self.__valid_types)) or (
+        if not isinstance(column.type, tuple(self.__valid_types)) or (
             nullable and not self.__allow_nullable
         ):
             raise InvalidFunctionCall(
                 (
-                    f"Illegal type {'Nullable ' if nullable else ''}{str(column_type)} "
+                    f"Illegal type {'Nullable ' if nullable else ''}{str(column.type)} "
                     f"of argument `{column_name}`. Required types {self.__valid_types}"
                 )
             )

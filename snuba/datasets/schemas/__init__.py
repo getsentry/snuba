@@ -111,9 +111,7 @@ class Schema(ABC):
 
             expected_type = self.get_columns()[column_name].type
 
-            raw_col = column.set_modifiers(None)
-            raw_expected = expected_type.set_modifiers(None)
-            if raw_col != raw_expected:
+            if column.get_raw() != expected_type.get_raw():
                 errors.append(
                     "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)"
                     % (column_name, expected_type, column)
