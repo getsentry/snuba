@@ -65,6 +65,10 @@ class Query(DataSource, Generic[TDataSource]):
     Each of the node is an AST expression or a sequence of AST
     expressions.
 
+    This class can represent either a query on a simple data source
+    (entity or relational source) or a composite query with nested
+    queries, joins, or a combination of them.
+
     There are three ways to manipulate the query:
     - direct access methods to individual nodes.
     - iterate and transform over all the expressions. This is useful
