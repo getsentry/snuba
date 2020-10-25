@@ -228,6 +228,20 @@ def readonly() -> SchemaModifiers:
     return SchemaModifiers(readonly=True)
 
 
+class Any(ColumnType[SchemaModifiers]):
+    """
+    Special type to be used in ColumnSets that represent the select
+    statement of a subquery since that is the schema the subquery
+    provides to the query that contains it.
+
+    Of course this cannot be used for migrations since this type does
+    not exist in Clickhouse.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(None)
+
+
 class Array(ColumnType[TModifiers]):
     def __init__(
         self, inner_type: ColumnType[TModifiers], modifiers: Optional[TModifiers] = None
