@@ -16,6 +16,7 @@ from typing import (
     TypeVar,
 )
 
+from snuba.clickhouse.columns import Any, ColumnSet, SchemaModifiers
 from snuba.query.conditions import BooleanFunctions, binary_condition
 from snuba.query.data_source import DataSource
 from snuba.query.expressions import (
@@ -44,6 +45,7 @@ class OrderBy:
 @dataclass(frozen=True)
 class SelectedExpression:
     # The name of this column in the resultset.
+    # TODO: Make this non nullable
     name: Optional[str]
     expression: Expression
 
@@ -51,7 +53,7 @@ class SelectedExpression:
 TExp = TypeVar("TExp", bound=Expression)
 
 
-class Query(ABC, Generic[TDataSource]):
+class Query(DataSource, ABC, Generic[TDataSource]):
     """
     The abstract representation of a query in Snuba.
     This class can be extended to support either the logical query which
@@ -106,6 +108,25 @@ class Query(ABC, Generic[TDataSource]):
         self.__offset = offset
         self.__totals = totals
         self.__granularity = granularity
+
+    def get_columns(self) -> ColumnSet[SchemaModifiers]:
+        ret = []
+        for index, selected_col in enumerate(self.__selected_columns):
+            name = selected_col.name
+            # TODO: Make the type of the columns precise onn the type
+            # when possible. It may become useful for query validation
+            # but it would be best effort because we cannot infer the
+            # type of complex expressions.
+            ret.append(
+                (name, Any())
+                if name is not None
+                # This should never happen with SnQL, for nested queries
+                # But the type of the name oof a selected column is still
+                # optional soo we need to fix that first.
+                else (f"_invalid_alias_{index}", Any())
+            )
+
+        return ColumnSet(ret)
 
     def get_from_clause(self) -> TDataSource:
         assert self.__from_clause is not None, "Data source has not been provided yet."
