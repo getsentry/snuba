@@ -1,11 +1,12 @@
-from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.columns import Any, ColumnSet
+from snuba.clickhouse.query import Query
 from snuba.datasets.schemas.tables import TableSource
-from snuba.query.logical import Query
+from snuba.query import SelectedExpression
+from snuba.query.expressions import Column, FunctionCall
 
 
-def test_query_parameters():
+def test_query_parameters() -> None:
     query = Query(
-        {},
         TableSource("my_table", ColumnSet([])),
         limitby=(100, "environment"),
         sample=10,
@@ -23,3 +24,32 @@ def test_query_parameters():
     assert query.get_granularity() == 60
 
     assert query.get_from_clause().format_from() == "my_table"
+
+
+def test_query_data_source() -> None:
+    """
+    Tests using the Query as a data source
+    """
+
+    query = Query(
+        TableSource("my_table", ColumnSet([])),
+        selected_columns=[
+            SelectedExpression(
+                "col1", Column(alias="col1", table_name=None, column_name="col1")
+            ),
+            SelectedExpression(
+                "some_func",
+                FunctionCall(
+                    "some_func",
+                    "f",
+                    (Column(alias="col1", table_name=None, column_name="col1"),),
+                ),
+            ),
+            SelectedExpression(
+                None, Column(alias="col2", table_name=None, column_name="col2")
+            ),
+        ],
+    )
+    assert query.get_columns() == ColumnSet(
+        [("col1", Any()), ("some_func", Any()), ("_invalid_alias_2", Any())]
+    )

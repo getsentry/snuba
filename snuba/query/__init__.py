@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from enum import Enum
 from itertools import chain
@@ -19,6 +18,7 @@ from typing import (
 from snuba.clickhouse.columns import Any, ColumnSet, SchemaModifiers
 from snuba.query.conditions import BooleanFunctions, binary_condition
 from snuba.query.data_source import DataSource
+from snuba.query.data_source.simple import SimpleDataSource
 from snuba.query.expressions import (
     Column,
     Expression,
@@ -53,9 +53,9 @@ class SelectedExpression:
 TExp = TypeVar("TExp", bound=Expression)
 
 
-class Query(DataSource, ABC, Generic[TDataSource]):
+class Query(DataSource, Generic[TDataSource]):
     """
-    The abstract representation of a query in Snuba.
+    The representation of a query in Snuba.
     This class can be extended to support either the logical query which
     is based on a concept of graph or a physical query which is
     relational or any nested structure.
@@ -110,6 +110,10 @@ class Query(DataSource, ABC, Generic[TDataSource]):
         self.__granularity = granularity
 
     def get_columns(self) -> ColumnSet[SchemaModifiers]:
+        """
+        From the DataSource class. It returns the schema exposed by this
+        query when used as a Data Source for another query.
+        """
         ret = []
         for index, selected_col in enumerate(self.__selected_columns):
             name = selected_col.name
@@ -204,13 +208,12 @@ class Query(DataSource, ABC, Generic[TDataSource]):
     def get_granularity(self) -> Optional[int]:
         return self.__granularity
 
-    @abstractmethod
     def _get_expressions_impl(self) -> Iterable[Expression]:
         """
         Provides an iterable on all additional nodes added by the children
         on top of this query structure.
         """
-        raise NotImplementedError
+        return []
 
     def get_all_expressions(self) -> Iterable[Expression]:
         """
@@ -233,7 +236,6 @@ class Query(DataSource, ABC, Generic[TDataSource]):
             self._get_expressions_impl(),
         )
 
-    @abstractmethod
     def _transform_expressions_impl(
         self, func: Callable[[Expression], Expression]
     ) -> None:
@@ -244,7 +246,7 @@ class Query(DataSource, ABC, Generic[TDataSource]):
         See the `transform_expressions` method for details on how this is
         applied.
         """
-        raise NotImplementedError
+        pass
 
     def transform_expressions(self, func: Callable[[Expression], Expression]) -> None:
         """
@@ -288,14 +290,13 @@ class Query(DataSource, ABC, Generic[TDataSource]):
         )
         self._transform_expressions_impl(func)
 
-    @abstractmethod
     def _transform_impl(self, visitor: ExpressionVisitor[Expression]) -> None:
         """
         Applies a transformation, defined through a Visitor to the
         nodes added by any child class.
         See the `transform` method for how this is applied.
         """
-        raise NotImplementedError
+        pass
 
     def transform(self, visitor: ExpressionVisitor[Expression]) -> None:
         """
@@ -389,3 +390,15 @@ class Query(DataSource, ABC, Generic[TDataSource]):
 
         declared_symbols |= {c.flattened for c in self.get_from_clause().get_columns()}
         return not referenced_symbols - declared_symbols
+
+
+TSimpleDataSource = TypeVar("TSimpleDataSource", bound=SimpleDataSource)
+
+
+class ProcessableQuery(Query[TSimpleDataSource], Generic[TSimpleDataSource]):
+    """
+    A Query class that can be used by query processors and translators.
+    Specifically its data source can only be a SimpleDataSource.
+    """
+
+    pass
