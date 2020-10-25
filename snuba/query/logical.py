@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import (
     Any,
+    Callable,
+    Iterable,
     Mapping,
     MutableMapping,
     Optional,
@@ -15,7 +17,7 @@ from snuba.query import Limitby, OrderBy
 from snuba.query import ProcessableQuery as AbstractQuery
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity
-from snuba.query.expressions import Expression
+from snuba.query.expressions import Expression, ExpressionVisitor
 
 Aggregation = Union[
     Tuple[Any, Any, Any], Sequence[Any],
@@ -86,3 +88,14 @@ class Query(AbstractQuery[Entity]):
     )
     def get_body(self) -> Mapping[str, Any]:
         return self.__body
+
+    def _get_expressions_impl(self) -> Iterable[Expression]:
+        return []
+
+    def _transform_expressions_impl(
+        self, func: Callable[[Expression], Expression]
+    ) -> None:
+        pass
+
+    def _transform_impl(self, visitor: ExpressionVisitor[Expression]) -> None:
+        pass

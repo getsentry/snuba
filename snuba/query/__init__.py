@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from enum import Enum
 from itertools import chain
@@ -26,7 +27,6 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 
-TDataSource = TypeVar("TDataSource", bound=DataSource)
 
 Limitby = Tuple[int, str]
 
@@ -53,7 +53,7 @@ class SelectedExpression:
 TExp = TypeVar("TExp", bound=Expression)
 
 
-class Query(DataSource, Generic[TDataSource]):
+class Query(DataSource, ABC):
     """
     The representation of a query in Snuba.
     This class can be extended to support either the logical query which
@@ -81,7 +81,6 @@ class Query(DataSource, Generic[TDataSource]):
 
     def __init__(
         self,
-        from_clause: Optional[TDataSource],
         # TODO: Consider if to remove the defaults and make some of
         # these fields mandatory. This impacts a lot of code so it
         # would be done on its own.
@@ -98,8 +97,6 @@ class Query(DataSource, Generic[TDataSource]):
         totals: bool = False,
         granularity: Optional[int] = None,
     ):
-        self.__from_clause = from_clause
-
         self.__selected_columns = selected_columns or []
         self.__array_join = array_join
         self.__condition = condition
@@ -136,12 +133,9 @@ class Query(DataSource, Generic[TDataSource]):
 
         return ColumnSet(ret)
 
-    def get_from_clause(self) -> TDataSource:
-        assert self.__from_clause is not None, "Data source has not been provided yet."
-        return self.__from_clause
-
-    def set_from_clause(self, from_clause: TDataSource) -> None:
-        self.__from_clause = from_clause
+    @abstractmethod
+    def get_from_clause(self) -> DataSource:
+        raise NotImplementedError
 
     # TODO: Run a codemod to remove the "from_ast" from all these
     # methods.
@@ -212,12 +206,13 @@ class Query(DataSource, Generic[TDataSource]):
     def get_granularity(self) -> Optional[int]:
         return self.__granularity
 
+    @abstractmethod
     def _get_expressions_impl(self) -> Iterable[Expression]:
         """
         Provides an iterable on all additional nodes added by the children
         on top of this query structure.
         """
-        return []
+        raise NotImplementedError
 
     def get_all_expressions(self) -> Iterable[Expression]:
         """
@@ -240,6 +235,7 @@ class Query(DataSource, Generic[TDataSource]):
             self._get_expressions_impl(),
         )
 
+    @abstractmethod
     def _transform_expressions_impl(
         self, func: Callable[[Expression], Expression]
     ) -> None:
@@ -250,7 +246,7 @@ class Query(DataSource, Generic[TDataSource]):
         See the `transform_expressions` method for details on how this is
         applied.
         """
-        pass
+        raise NotImplementedError
 
     def transform_expressions(self, func: Callable[[Expression], Expression]) -> None:
         """
@@ -294,13 +290,14 @@ class Query(DataSource, Generic[TDataSource]):
         )
         self._transform_expressions_impl(func)
 
+    @abstractmethod
     def _transform_impl(self, visitor: ExpressionVisitor[Expression]) -> None:
         """
         Applies a transformation, defined through a Visitor to the
         nodes added by any child class.
         See the `transform` method for how this is applied.
         """
-        pass
+        raise NotImplementedError
 
     def transform(self, visitor: ExpressionVisitor[Expression]) -> None:
         """
@@ -399,10 +396,50 @@ class Query(DataSource, Generic[TDataSource]):
 TSimpleDataSource = TypeVar("TSimpleDataSource", bound=SimpleDataSource)
 
 
-class ProcessableQuery(Query[TSimpleDataSource], Generic[TSimpleDataSource]):
+class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
     """
     A Query class that can be used by query processors and translators.
     Specifically its data source can only be a SimpleDataSource.
     """
 
-    pass
+    def __init__(
+        self,
+        from_clause: Optional[TSimpleDataSource],
+        # TODO: Consider if to remove the defaults and make some of
+        # these fields mandatory. This impacts a lot of code so it
+        # would be done on its own.
+        selected_columns: Optional[Sequence[SelectedExpression]] = None,
+        array_join: Optional[Expression] = None,
+        condition: Optional[Expression] = None,
+        groupby: Optional[Sequence[Expression]] = None,
+        having: Optional[Expression] = None,
+        order_by: Optional[Sequence[OrderBy]] = None,
+        limitby: Optional[Limitby] = None,
+        sample: Optional[float] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        totals: bool = False,
+        granularity: Optional[int] = None,
+    ):
+        super().__init__(
+            selected_columns=selected_columns,
+            array_join=array_join,
+            condition=condition,
+            groupby=groupby,
+            having=having,
+            order_by=order_by,
+            limitby=limitby,
+            sample=sample,
+            limit=limit,
+            offset=offset,
+            totals=totals,
+            granularity=granularity,
+        )
+        self.__from_clause = from_clause
+
+    def get_from_clause(self) -> TSimpleDataSource:
+        assert self.__from_clause is not None, "Data source has not been provided yet."
+        return self.__from_clause
+
+    def set_from_clause(self, from_clause: TSimpleDataSource) -> None:
+        self.__from_clause = from_clause

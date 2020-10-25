@@ -1,6 +1,7 @@
 from snuba.clickhouse.columns import Any, ColumnSet, String
 from snuba.datasets.entities import EntityKey
-from snuba.query import Query, SelectedExpression
+from snuba.query import SelectedExpression
+from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column
 from snuba.query.logical import Query as LogicalQuery
@@ -21,7 +22,7 @@ def test_nested_query() -> None:
         ],
     )
 
-    composite = Query[LogicalQuery](
+    composite = CompositeQuery(
         from_clause=nested,
         selected_columns=[
             SelectedExpression("output", Column("output", None, "string_evt_id"))
