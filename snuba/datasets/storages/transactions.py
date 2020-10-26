@@ -71,6 +71,9 @@ columns = ColumnSet(
         ("retention_days", UInt(16)),
         ("deleted", UInt(8)),
         ("type", ReadOnly(String())),
+        ("message", ReadOnly(String())),
+        ("title", ReadOnly(String())),
+        ("timestamp", ReadOnly(DateTime())),
     ]
 )
 
