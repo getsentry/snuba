@@ -130,6 +130,7 @@ class ErrorsReplacer(ReplacerProcessor):
         tag_column_map: Mapping[str, Mapping[str, str]],
         promoted_tags: Mapping[str, Sequence[str]],
         state_name: ReplacerState,
+        use_promoted_prewhere: bool,
     ) -> None:
         super().__init__(schema=schema)
         self.__required_columns = required_columns
@@ -140,6 +141,7 @@ class ErrorsReplacer(ReplacerProcessor):
         self.__tag_column_map = tag_column_map
         self.__promoted_tags = promoted_tags
         self.__state_name = state_name
+        self.__use_promoted_prewhere = use_promoted_prewhere
 
     def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
         type_ = message.action_type
@@ -160,7 +162,11 @@ class ErrorsReplacer(ReplacerProcessor):
             processed = process_unmerge(event, self.__all_columns, self.__state_name)
         elif type_ == "end_delete_tag":
             processed = process_delete_tag(
-                event, self.__all_columns, self.__tag_column_map, self.__promoted_tags,
+                event,
+                self.__all_columns,
+                self.__tag_column_map,
+                self.__promoted_tags,
+                self.__use_promoted_prewhere,
             )
         else:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
@@ -379,6 +385,7 @@ def process_delete_tag(
     all_columns: Sequence[FlattenedColumn],
     tag_column_map: Mapping[str, Mapping[str, str]],
     promoted_tags: Mapping[str, Sequence[str]],
+    use_promoted_prewhere: bool,
 ) -> Optional[Replacement]:
     tag = message["tag"]
     if not tag:
@@ -395,7 +402,7 @@ def process_delete_tag(
         AND NOT deleted
     """
 
-    if is_promoted:
+    if is_promoted and use_promoted_prewhere:
         prewhere = " PREWHERE %(tag_column)s IS NOT NULL "
     else:
         prewhere = " PREWHERE has(`tags.key`, %(tag_str)s) "
