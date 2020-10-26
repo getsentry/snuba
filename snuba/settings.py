@@ -27,6 +27,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "storage_sets": {
             "events",
             "events_ro",
+            "discover",
             "migrations",
             "outcomes",
             "querylog",
