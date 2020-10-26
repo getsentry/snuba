@@ -503,7 +503,7 @@ test_cases = [
 @pytest.mark.parametrize("query_body, expected_query", test_cases)
 def test_format_expressions(query_body: str, expected_query: Query) -> None:
     state.set_config("query_parsing_expand_aliases", 1)
-    events = get_dataset("events").get_default_entity()
+    events = get_dataset("events")
     query = parse_snql_query(query_body, events)
 
     assert query.get_from_clause() == expected_query.get_from_clause()

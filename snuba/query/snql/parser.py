@@ -10,7 +10,6 @@ from typing import (
     Union,
 )
 
-from parsimonious.exceptions import ParseError
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 from snuba.datasets.dataset import Dataset
