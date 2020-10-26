@@ -1,3 +1,4 @@
+from abc import ABC
 from datetime import timedelta
 from typing import Mapping, Optional, Sequence
 
@@ -68,7 +69,7 @@ transaction_translator = TranslationMappers(
 )
 
 
-class BaseTransactionsEntity(Entity):
+class BaseTransactionsEntity(Entity, ABC):
     def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
         storage = get_writable_storage(StorageKey.TRANSACTIONS)
         schema = storage.get_table_writer().get_schema()
