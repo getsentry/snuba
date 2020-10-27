@@ -13,19 +13,17 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
-from snuba.migrations.columns import lowcardinality, MigrationModifiers, nullable
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-status_type = Enum[MigrationModifiers](
-    [("success", 0), ("error", 1), ("rate-limited", 2)]
-)
+status_type = Enum[Modifiers]([("success", 0), ("error", 1), ("rate-limited", 2)])
 
-columns: Sequence[Column[MigrationModifiers]] = [
+columns: Sequence[Column[Modifiers]] = [
     Column("request_id", UUID()),
     Column("request_body", String()),
-    Column("referrer", String(lowcardinality())),
-    Column("dataset", String(lowcardinality())),
+    Column("referrer", String(Modifiers(low_cardinality=True))),
+    Column("dataset", String(Modifiers(low_cardinality=True))),
     Column("projects", Array(UInt(64))),
-    Column("organization", UInt(64, nullable())),
+    Column("organization", UInt(64, Modifiers(nullable=True))),
     Column("timestamp", DateTime()),
     Column("duration_ms", UInt(32)),
     Column("status", status_type),
@@ -35,7 +33,7 @@ columns: Sequence[Column[MigrationModifiers]] = [
             [
                 Column("sql", String()),
                 Column("status", status_type),
-                Column("trace_id", UUID(nullable())),
+                Column("trace_id", UUID(Modifiers(nullable=True))),
                 Column("duration_ms", UInt(32)),
                 Column("stats", String()),
                 Column("final", UInt(8)),
@@ -43,7 +41,7 @@ columns: Sequence[Column[MigrationModifiers]] = [
                 Column("sample", Float(32)),
                 Column("max_threads", UInt(8)),
                 Column("num_days", UInt(32)),
-                Column("clickhouse_table", String(lowcardinality())),
+                Column("clickhouse_table", String(Modifiers(low_cardinality=True))),
                 Column("query_id", String()),
                 Column("is_duplicate", UInt(8)),
                 Column("consistent", UInt(8)),

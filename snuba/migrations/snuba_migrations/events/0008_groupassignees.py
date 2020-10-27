@@ -3,18 +3,18 @@ from typing import Sequence
 from snuba.clickhouse.columns import Column, DateTime, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
-from snuba.migrations.columns import MigrationModifiers, nullable
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-columns: Sequence[Column[MigrationModifiers]] = [
+columns: Sequence[Column[Modifiers]] = [
     # Kafka topic offset
     Column("offset", UInt(64)),
     Column("record_deleted", UInt(8)),
     # PG columns
     Column("project_id", UInt(64)),
     Column("group_id", UInt(64)),
-    Column("date_added", DateTime(nullable())),
-    Column("user_id", UInt(64, nullable())),
-    Column("team_id", UInt(64, nullable())),
+    Column("date_added", DateTime(Modifiers(nullable=True))),
+    Column("user_id", UInt(64, Modifiers(nullable=True))),
+    Column("team_id", UInt(64, Modifiers(nullable=True))),
 ]
 
 

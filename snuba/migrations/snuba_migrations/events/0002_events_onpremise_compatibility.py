@@ -3,7 +3,7 @@ from typing import Sequence
 from snuba.clickhouse.columns import Array, Column, DateTime, Nested, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
-from snuba.migrations.columns import nullable
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
 class Migration(migration.MultiStepMigration):
@@ -45,25 +45,25 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="sentry_local",
-                column=Column("culprit", String(nullable())),
+                column=Column("culprit", String(Modifiers(nullable=True))),
                 after="sdk_integrations",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="sentry_local",
-                column=Column("search_message", String(nullable())),
+                column=Column("search_message", String(Modifiers(nullable=True))),
                 after="received",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="sentry_local",
-                column=Column("title", String(nullable())),
+                column=Column("title", String(Modifiers(nullable=True))),
                 after="search_message",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="sentry_local",
-                column=Column("location", String(nullable())),
+                column=Column("location", String(Modifiers(nullable=True))),
                 after="title",
             ),
             operations.AddColumn(

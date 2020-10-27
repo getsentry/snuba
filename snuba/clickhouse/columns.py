@@ -220,14 +220,6 @@ class Nullable(TypeModifier):
         return "Nullable({})".format(content)
 
 
-def nullable() -> SchemaModifiers:
-    return SchemaModifiers(nullable=True)
-
-
-def readonly() -> SchemaModifiers:
-    return SchemaModifiers(readonly=True)
-
-
 class Any(ColumnType[SchemaModifiers]):
     """
     Special type to be used in ColumnSets that represent the select

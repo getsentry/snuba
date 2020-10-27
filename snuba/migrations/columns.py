@@ -5,14 +5,6 @@ from dataclasses import dataclass
 from snuba.clickhouse.columns import TypeModifier, TypeModifiers, Nullable
 
 
-def nullable() -> MigrationModifiers:
-    return MigrationModifiers(nullable=True)
-
-
-def lowcardinality() -> MigrationModifiers:
-    return MigrationModifiers(low_cardinality=True)
-
-
 @dataclass(frozen=True)
 class MigrationModifiers(TypeModifiers):
     """

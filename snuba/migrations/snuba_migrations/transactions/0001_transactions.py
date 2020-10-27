@@ -16,7 +16,6 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import Materialized
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from snuba.migrations.columns import lowcardinality, nullable
 
 UNKNOWN_SPAN_STATUS = 2
 
@@ -25,29 +24,29 @@ columns = [
     Column("event_id", UUID()),
     Column("trace_id", UUID()),
     Column("span_id", UInt(64)),
-    Column("transaction_name", String(lowcardinality())),
+    Column("transaction_name", String(Modifiers(low_cardinality=True))),
     Column(
         "transaction_hash",
         UInt(64, Modifiers(materialized="cityHash64(transaction_name)")),
     ),
-    Column("transaction_op", String(lowcardinality())),
+    Column("transaction_op", String(Modifiers(low_cardinality=True))),
     Column("transaction_status", UInt(8, Modifiers(default=str(UNKNOWN_SPAN_STATUS)))),
     Column("start_ts", DateTime()),
     Column("start_ms", UInt(16)),
     Column("finish_ts", DateTime()),
     Column("finish_ms", UInt(16)),
     Column("duration", UInt(32)),
-    Column("platform", String(lowcardinality())),
+    Column("platform", String(Modifiers(low_cardinality=True))),
     Column("environment", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("release", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("dist", String(Modifiers(nullable=True, low_cardinality=True))),
-    Column("ip_address_v4", IPv4(nullable())),
-    Column("ip_address_v6", IPv6(nullable())),
+    Column("ip_address_v4", IPv4(Modifiers(nullable=True))),
+    Column("ip_address_v6", IPv6(Modifiers(nullable=True))),
     Column("user", String(Modifiers(default="''"))),
     Column("user_hash", UInt(64, Modifiers(materialized="cityHash64(user)"))),
-    Column("user_id", String(nullable())),
-    Column("user_name", String(nullable())),
-    Column("user_email", String(nullable())),
+    Column("user_id", String(Modifiers(nullable=True))),
+    Column("user_name", String(Modifiers(nullable=True))),
+    Column("user_email", String(Modifiers(nullable=True))),
     Column("sdk_name", String(Modifiers(low_cardinality=True, default="''"))),
     Column("sdk_version", String(Modifiers(low_cardinality=True, default="''"))),
     Column("tags", Nested([("key", String()), ("value", String())])),
