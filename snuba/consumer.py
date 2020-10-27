@@ -21,7 +21,8 @@ from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder
 from snuba.datasets.message_filters import StreamMessageFilter
-from snuba.datasets.storage import WritableStorage
+from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storages import StorageKey
 from snuba.processor import (
     InsertBatch,
     MessageProcessor,
@@ -362,15 +363,13 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
 
 class MultistorageCollector(
     ProcessingStep[
-        Sequence[
-            Tuple[WritableStorage, Union[None, JSONRowInsertBatch, ReplacementBatch]]
-        ]
+        Sequence[Tuple[StorageKey, Union[None, JSONRowInsertBatch, ReplacementBatch]]]
     ]
 ):
     def __init__(
         self,
         steps: Mapping[
-            WritableStorage,
+            StorageKey,
             ProcessingStep[Union[None, JSONRowInsertBatch, ReplacementBatch]],
         ],
     ):
@@ -386,16 +385,14 @@ class MultistorageCollector(
         self,
         message: Message[
             Sequence[
-                Tuple[
-                    WritableStorage, Union[None, JSONRowInsertBatch, ReplacementBatch]
-                ]
+                Tuple[StorageKey, Union[None, JSONRowInsertBatch, ReplacementBatch]]
             ]
         ],
     ) -> None:
         assert not self.__closed
 
-        for destination, payload in message.payload:
-            self.__steps[destination].submit(
+        for storage_key, payload in message.payload:
+            self.__steps[storage_key].submit(
                 Message(
                     message.partition,
                     message.offset,
@@ -431,12 +428,52 @@ class MultistorageCollector(
             step.join(timeout_remaining)
 
 
+def process_message_multistorage(
+    message: Message[Tuple[Sequence[StorageKey], KafkaPayload]]
+) -> Sequence[Tuple[StorageKey, Union[None, JSONRowInsertBatch, ReplacementBatch]]]:
+    # XXX: Avoid circular import on KafkaMessageMetadata, remove when that type
+    # is itself removed.
+    from snuba.datasets.storages.factory import get_writable_storage
+
+    storage_keys, payload = message.payload
+    value = rapidjson.loads(payload.value)
+    metadata = KafkaMessageMetadata(
+        message.offset, message.partition.index, message.timestamp
+    )
+
+    results: MutableSequence[
+        Tuple[StorageKey, Union[None, JSONRowInsertBatch, ReplacementBatch]]
+    ] = []
+
+    for storage_key in storage_keys:
+        result = (
+            get_writable_storage(storage_key)
+            .get_table_writer()
+            .get_stream_loader()
+            .get_processor()
+            .process_message(value, metadata)
+        )
+        if isinstance(result, InsertBatch):
+            results.append(
+                (
+                    storage_key,
+                    JSONRowInsertBatch(
+                        [json_row_encoder.encode(row) for row in result.rows]
+                    ),
+                )
+            )
+        else:
+            results.append((storage_key, result))
+
+    return results
+
+
 class MultistorageConsumerProcessingStrategyFactory(
     ProcessingStrategyFactory[KafkaPayload]
 ):
     def __init__(
         self,
-        storages: Sequence[WritableStorage],
+        storages: Sequence[WritableTableStorage],
         max_batch_size: int,
         max_batch_time: float,
         metrics: MetricsBackend,
@@ -448,57 +485,21 @@ class MultistorageConsumerProcessingStrategyFactory(
 
     def __find_destination_storages(
         self, message: Message[KafkaPayload]
-    ) -> Tuple[Sequence[WritableStorage], KafkaPayload]:
-        storages: MutableSequence[WritableStorage] = []
+    ) -> Tuple[Sequence[StorageKey], KafkaPayload]:
+        storages: MutableSequence[StorageKey] = []
         for storage in self.__storages:
             filter = storage.get_table_writer().get_stream_loader().get_pre_filter()
             if filter is None or not filter.should_drop(message):
-                storages.append(storage)
+                storages.append(storage.get_storage_key())
         return (storages, message.payload)
 
     def __has_destination_storages(
-        self, message: Message[Tuple[Sequence[WritableStorage], KafkaPayload]]
+        self, message: Message[Tuple[Sequence[StorageKey], KafkaPayload]]
     ) -> bool:
         return len(message.payload[0]) > 0
 
-    def __process_message(
-        self, message: Message[Tuple[Sequence[WritableStorage], KafkaPayload]]
-    ) -> Sequence[
-        Tuple[WritableStorage, Union[None, JSONRowInsertBatch, ReplacementBatch]]
-    ]:
-        storages, payload = message.payload
-        value = rapidjson.loads(payload.value)
-        metadata = KafkaMessageMetadata(
-            message.offset, message.partition.index, message.timestamp
-        )
-
-        results: MutableSequence[
-            Tuple[WritableStorage, Union[None, JSONRowInsertBatch, ReplacementBatch]]
-        ] = []
-
-        for storage in storages:
-            result = (
-                storage.get_table_writer()
-                .get_stream_loader()
-                .get_processor()
-                .process_message(value, metadata)
-            )
-            if isinstance(result, InsertBatch):
-                results.append(
-                    (
-                        storage,
-                        JSONRowInsertBatch(
-                            [json_row_encoder.encode(row) for row in result.rows]
-                        ),
-                    )
-                )
-            else:
-                results.append((storage, result))
-
-        return results
-
     def __build_batch_writer(
-        self, storage: WritableStorage
+        self, storage: WritableTableStorage
     ) -> ProcessedMessageBatchWriter:
         replacement_batch_writer: Optional[ReplacementBatchWriter]
         replacement_topic_spec = (
@@ -525,12 +526,13 @@ class MultistorageConsumerProcessingStrategyFactory(
     def __build_collector(
         self,
     ) -> ProcessingStep[
-        Sequence[
-            Tuple[WritableStorage, Union[None, JSONRowInsertBatch, ReplacementBatch]]
-        ]
+        Sequence[Tuple[StorageKey, Union[None, JSONRowInsertBatch, ReplacementBatch]]]
     ]:
         return MultistorageCollector(
-            {storage: self.__build_batch_writer(storage) for storage in self.__storages}
+            {
+                storage.get_storage_key(): self.__build_batch_writer(storage)
+                for storage in self.__storages
+            }
         )
 
     def create(
@@ -544,14 +546,20 @@ class MultistorageConsumerProcessingStrategyFactory(
             self.__find_destination_storages,
             FilterStep(
                 self.__has_destination_storages,
-                TransformStep(
-                    self.__process_message,
+                ParallelTransformStep(
+                    process_message_multistorage,
                     CollectStep(
                         self.__build_collector,
                         commit,
                         self.__max_batch_size,
                         self.__max_batch_time,
                     ),
+                    2,
+                    10,
+                    10,
+                    512 * 1000,
+                    512 * 1000,
+                    self.__metrics,
                 ),
             ),
         )

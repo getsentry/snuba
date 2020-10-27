@@ -4,7 +4,7 @@ import pickle
 from datetime import datetime
 from pickle import PickleBuffer
 from typing import MutableSequence
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import pytest
 
@@ -76,8 +76,8 @@ def test_streaming_consumer_strategy() -> None:
 
     def get_number_of_insertion_metrics() -> int:
         count = 0
-        for call in metrics.calls:
-            if isinstance(call, Timing) and call.name == "insertions.latency_ms":
+        for c in metrics.calls:
+            if isinstance(c, Timing) and c.name == "insertions.latency_ms":
                 count += 1
         return count
 
@@ -107,7 +107,7 @@ def test_json_row_batch_pickle_out_of_band() -> None:
     assert pickle.loads(data, buffers=[b.raw() for b in buffers]) == batch
 
 
-def test_multiprocess_strategy() -> None:
+def test_multistorage_strategy() -> None:
     from snuba.datasets.storages import groupassignees, groupedmessages
     from tests.datasets.cdc.test_groupassignee import TestGroupassignee
     from tests.datasets.cdc.test_groupedmessage import TestGroupedMessage
@@ -125,12 +125,12 @@ def test_multiprocess_strategy() -> None:
         KafkaPayload(None, b"{}", [("table", b"ignored")]),
         KafkaPayload(
             None,
-            json.dumps(TestGroupassignee.INSERT_MSG),
+            json.dumps(TestGroupassignee.INSERT_MSG).encode("utf8"),
             [("table", b"sentry_groupedassignee")],
         ),
         KafkaPayload(
             None,
-            json.dumps(TestGroupedMessage.INSERT_MSG),
+            json.dumps(TestGroupedMessage.INSERT_MSG).encode("utf8"),
             [("table", b"sentry_groupedmessage")],
         ),
     ]
@@ -145,5 +145,10 @@ def test_multiprocess_strategy() -> None:
     for message in messages:
         strategy.submit(message)
 
-    strategy.close()
-    strategy.join()
+    with assert_changes(
+        lambda: commit.call_args_list, [], [call({Partition(Topic("topic"), 0): 3})]
+    ):
+        strategy.close()
+        strategy.join()
+
+    # TODO: Ensure the data has been written as expeted.
