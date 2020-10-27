@@ -1,16 +1,17 @@
-from snuba.clickhouse.columns import ColumnSet, DateTime, nullable, UInt
+from snuba.clickhouse.columns import ColumnSet, DateTime
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import UInt
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.cdc.groupassignee_processor import (
     GroupAssigneeProcessor,
     GroupAssigneeRow,
 )
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
-from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
-
 
 columns = ColumnSet(
     [
@@ -21,9 +22,9 @@ columns = ColumnSet(
         # PG columns
         ("project_id", UInt(64)),
         ("group_id", UInt(64)),
-        ("date_added", DateTime(nullable())),
-        ("user_id", UInt(64, nullable())),
-        ("team_id", UInt(64, nullable())),
+        ("date_added", DateTime(Modifiers(nullable=True))),
+        ("user_id", UInt(64, Modifiers(nullable=True))),
+        ("team_id", UInt(64, Modifiers(nullable=True))),
     ]
 )
 

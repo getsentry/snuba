@@ -7,11 +7,9 @@ from snuba.clickhouse.columns import (
     IPv4,
     IPv6,
     Nested,
-    nullable,
-    readonly,
-    String,
-    UInt,
 )
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
@@ -24,10 +22,9 @@ from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
-from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
+from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.web.split import TimeSplitQueryStrategy
-
 
 columns = ColumnSet(
     [
@@ -36,7 +33,7 @@ columns = ColumnSet(
         ("trace_id", UUID()),
         ("span_id", UInt(64)),
         ("transaction_name", String()),
-        ("transaction_hash", UInt(64, readonly())),
+        ("transaction_hash", UInt(64, Modifiers(readonly=True))),
         ("transaction_op", String()),
         ("transaction_status", UInt(8)),
         ("start_ts", DateTime()),
@@ -45,23 +42,23 @@ columns = ColumnSet(
         ("finish_ms", UInt(16)),
         ("duration", UInt(32)),
         ("platform", String()),
-        ("environment", String(nullable())),
-        ("release", String(nullable())),
-        ("dist", String(nullable())),
-        ("ip_address_v4", IPv4(nullable())),
-        ("ip_address_v6", IPv6(nullable())),
+        ("environment", String(Modifiers(nullable=True))),
+        ("release", String(Modifiers(nullable=True))),
+        ("dist", String(Modifiers(nullable=True))),
+        ("ip_address_v4", IPv4(Modifiers(nullable=True))),
+        ("ip_address_v6", IPv6(Modifiers(nullable=True))),
         ("user", String()),
-        ("user_hash", UInt(64, readonly())),
-        ("user_id", String(nullable())),
-        ("user_name", String(nullable())),
-        ("user_email", String(nullable())),
+        ("user_hash", UInt(64, Modifiers(readonly=True))),
+        ("user_id", String(Modifiers(nullable=True))),
+        ("user_name", String(Modifiers(nullable=True))),
+        ("user_email", String(Modifiers(nullable=True))),
         ("sdk_name", String()),
         ("sdk_version", String()),
-        ("http_method", String(nullable())),
-        ("http_referer", String(nullable())),
+        ("http_method", String(Modifiers(nullable=True))),
+        ("http_referer", String(Modifiers(nullable=True))),
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
-        ("_tags_hash_map", Array(UInt(64), readonly())),
+        ("_tags_hash_map", Array(UInt(64), Modifiers(readonly=True))),
         ("contexts", Nested([("key", String()), ("value", String())])),
         ("_contexts_flattened", String()),
         ("measurements", Nested([("key", String()), ("value", Float(64))]),),

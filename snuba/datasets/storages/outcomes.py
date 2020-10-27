@@ -1,22 +1,10 @@
-from snuba.clickhouse.columns import (
-    ColumnSet,
-    DateTime,
-    nullable,
-    String,
-    UInt,
-    UUID,
-)
+from snuba.clickhouse.columns import UUID, ColumnSet, DateTime
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.outcomes_processor import OutcomesProcessor
-from snuba.datasets.storage import (
-    ReadableTableStorage,
-    WritableTableStorage,
-)
-
-from snuba.datasets.schemas.tables import (
-    TableSchema,
-    WritableTableSchema,
-)
+from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
+from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
@@ -30,11 +18,11 @@ write_columns = ColumnSet(
     [
         ("org_id", UInt(64)),
         ("project_id", UInt(64)),
-        ("key_id", UInt(64, nullable())),
+        ("key_id", UInt(64, Modifiers(nullable=True))),
         ("timestamp", DateTime()),
         ("outcome", UInt(8)),
-        ("reason", String(nullable())),
-        ("event_id", UUID(nullable())),
+        ("reason", String(Modifiers(nullable=True))),
+        ("event_id", UUID(Modifiers(nullable=True))),
     ]
 )
 

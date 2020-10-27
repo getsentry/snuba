@@ -214,14 +214,6 @@ class Nullable(TypeModifier):
         return "Nullable({})".format(content)
 
 
-def nullable() -> SchemaModifiers:
-    return SchemaModifiers(nullable=True)
-
-
-def readonly() -> SchemaModifiers:
-    return SchemaModifiers(readonly=True)
-
-
 class Array(ColumnType):
     def __init__(
         self, inner_type: ColumnType, modifiers: Optional[TypeModifiers] = None

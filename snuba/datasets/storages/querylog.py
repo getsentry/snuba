@@ -1,14 +1,7 @@
 from snuba import settings
-from snuba.clickhouse.columns import (
-    UUID,
-    Array,
-    ColumnSet,
-    DateTime,
-    Float,
-    nullable,
-    String,
-    UInt,
-)
+from snuba.clickhouse.columns import UUID, Array, ColumnSet, DateTime, Float
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.querylog_processor import QuerylogProcessor
 from snuba.datasets.schemas.tables import WritableTableSchema
@@ -23,7 +16,7 @@ columns = ColumnSet(
         ("referrer", String()),
         ("dataset", String()),
         ("projects", Array(UInt(64))),
-        ("organization", UInt(64, nullable())),
+        ("organization", UInt(64, Modifiers(nullable=True))),
         ("timestamp", DateTime()),
         ("duration_ms", UInt(32)),
         ("status", String()),
@@ -38,7 +31,7 @@ columns = ColumnSet(
         # by the migration framework (or by any ALTER statement).
         ("clickhouse_queries.sql", Array(String())),
         ("clickhouse_queries.status", Array(String())),
-        ("clickhouse_queries.trace_id", Array(UUID(nullable()))),
+        ("clickhouse_queries.trace_id", Array(UUID(Modifiers(nullable=True)))),
         ("clickhouse_queries.duration_ms", Array(UInt(32))),
         ("clickhouse_queries.stats", Array(String())),
         ("clickhouse_queries.final", Array(UInt(8))),
