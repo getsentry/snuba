@@ -31,8 +31,8 @@ from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.entities.events import EventsEntity, EventsQueryStorageSelector
-from snuba.datasets.entities.transactions import TransactionsEntity
+from snuba.datasets.entities.events import BaseEventsEntity, EventsQueryStorageSelector
+from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.query.dsl import identity
 from snuba.query.expressions import (
     Column,
@@ -397,7 +397,7 @@ class DiscoverEntity(Entity):
         }
 
 
-class DiscoverEventsEntity(EventsEntity):
+class DiscoverEventsEntity(BaseEventsEntity):
     """
     Identical to EventsEntity except it maps columns and functions present in the
     transactions entity to null. This logic will eventually move to Sentry and this
@@ -412,7 +412,7 @@ class DiscoverEventsEntity(EventsEntity):
         )
 
 
-class DiscoverTransactionsEntity(TransactionsEntity):
+class DiscoverTransactionsEntity(BaseTransactionsEntity):
     """
     Identical to TransactionsEntity except it maps columns and functions present
     in the events entity to null. This logic will eventually move to Sentry and this
