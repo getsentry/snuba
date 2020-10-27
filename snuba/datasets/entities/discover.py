@@ -10,10 +10,9 @@ from snuba.clickhouse.columns import (
     FixedString,
     Float,
     Nested,
-    Nullable,
-    String,
-    UInt,
 )
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.clickhouse.translators.snuba.allowed import (
     ColumnMapper,
@@ -27,12 +26,12 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities.events import BaseEventsEntity, EventsQueryStorageSelector
+from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.entities.events import BaseEventsEntity, EventsQueryStorageSelector
-from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.query.dsl import identity
 from snuba.query.expressions import (
     Column,
@@ -218,28 +217,28 @@ class DefaultNoneSubscriptMapper(SubscriptableReferenceMapper):
 
 EVENTS_COLUMNS = ColumnSet(
     [
-        ("group_id", Nullable(UInt(64))),
-        ("primary_hash", Nullable(FixedString(32))),
+        ("group_id", UInt(64, Modifiers(nullable=True))),
+        ("primary_hash", FixedString(32, Modifiers(nullable=True))),
         # Promoted tags
-        ("level", Nullable(String())),
-        ("logger", Nullable(String())),
-        ("server_name", Nullable(String())),
-        ("site", Nullable(String())),
-        ("url", Nullable(String())),
-        ("location", Nullable(String())),
-        ("culprit", Nullable(String())),
-        ("received", Nullable(DateTime())),
-        ("sdk_integrations", Nullable(Array(String()))),
-        ("version", Nullable(String())),
+        ("level", String(Modifiers(nullable=True))),
+        ("logger", String(Modifiers(nullable=True))),
+        ("server_name", String(Modifiers(nullable=True))),
+        ("site", String(Modifiers(nullable=True))),
+        ("url", String(Modifiers(nullable=True))),
+        ("location", String(Modifiers(nullable=True))),
+        ("culprit", String(Modifiers(nullable=True))),
+        ("received", DateTime(Modifiers(nullable=True))),
+        ("sdk_integrations", Array(String(), Modifiers(nullable=True))),
+        ("version", String(Modifiers(nullable=True))),
         # exception interface
         (
             "exception_stacks",
             Nested(
                 [
-                    ("type", Nullable(String())),
-                    ("value", Nullable(String())),
-                    ("mechanism_type", Nullable(String())),
-                    ("mechanism_handled", Nullable(UInt(8))),
+                    ("type", String(Modifiers(nullable=True))),
+                    ("value", String(Modifiers(nullable=True))),
+                    ("mechanism_type", String(Modifiers(nullable=True))),
+                    ("mechanism_handled", UInt(8, Modifiers(nullable=True))),
                 ]
             ),
         ),
@@ -247,14 +246,14 @@ EVENTS_COLUMNS = ColumnSet(
             "exception_frames",
             Nested(
                 [
-                    ("abs_path", Nullable(String())),
-                    ("filename", Nullable(String())),
-                    ("package", Nullable(String())),
-                    ("module", Nullable(String())),
-                    ("function", Nullable(String())),
-                    ("in_app", Nullable(UInt(8))),
-                    ("colno", Nullable(UInt(32))),
-                    ("lineno", Nullable(UInt(32))),
+                    ("abs_path", String(Modifiers(nullable=True))),
+                    ("filename", String(Modifiers(nullable=True))),
+                    ("package", String(Modifiers(nullable=True))),
+                    ("module", String(Modifiers(nullable=True))),
+                    ("function", String(Modifiers(nullable=True))),
+                    ("in_app", UInt(8, Modifiers(nullable=True))),
+                    ("colno", UInt(32, Modifiers(nullable=True))),
+                    ("lineno", UInt(32, Modifiers(nullable=True))),
                     ("stack_level", UInt(16)),
                 ]
             ),
@@ -265,12 +264,12 @@ EVENTS_COLUMNS = ColumnSet(
 
 TRANSACTIONS_COLUMNS = ColumnSet(
     [
-        ("trace_id", Nullable(UUID())),
-        ("span_id", Nullable(UInt(64))),
-        ("transaction_hash", Nullable(UInt(64))),
-        ("transaction_op", Nullable(String())),
-        ("transaction_status", Nullable(UInt(8))),
-        ("duration", Nullable(UInt(32))),
+        ("trace_id", UUID(Modifiers(nullable=True))),
+        ("span_id", UInt(64, Modifiers(nullable=True))),
+        ("transaction_hash", UInt(64, Modifiers(nullable=True))),
+        ("transaction_op", String(Modifiers(nullable=True))),
+        ("transaction_status", UInt(8, Modifiers(nullable=True))),
+        ("duration", UInt(32, Modifiers(nullable=True))),
         ("measurements", Nested([("key", String()), ("value", Float(64))]),),
     ]
 )
@@ -307,30 +306,30 @@ class DiscoverEntity(Entity):
             [
                 ("event_id", FixedString(32)),
                 ("project_id", UInt(64)),
-                ("type", Nullable(String())),
+                ("type", String(Modifiers(nullable=True))),
                 ("timestamp", DateTime()),
-                ("platform", Nullable(String())),
-                ("environment", Nullable(String())),
-                ("release", Nullable(String())),
-                ("dist", Nullable(String())),
-                ("user", Nullable(String())),
-                ("transaction", Nullable(String())),
-                ("message", Nullable(String())),
-                ("title", Nullable(String())),
+                ("platform", String(Modifiers(nullable=True))),
+                ("environment", String(Modifiers(nullable=True))),
+                ("release", String(Modifiers(nullable=True))),
+                ("dist", String(Modifiers(nullable=True))),
+                ("user", String(Modifiers(nullable=True))),
+                ("transaction", String(Modifiers(nullable=True))),
+                ("message", String(Modifiers(nullable=True))),
+                ("title", String(Modifiers(nullable=True))),
                 # User
-                ("user_id", Nullable(String())),
-                ("username", Nullable(String())),
-                ("email", Nullable(String())),
-                ("ip_address", Nullable(String())),
+                ("user_id", String(Modifiers(nullable=True))),
+                ("username", String(Modifiers(nullable=True))),
+                ("email", String(Modifiers(nullable=True))),
+                ("ip_address", String(Modifiers(nullable=True))),
                 # SDK
-                ("sdk_name", Nullable(String())),
-                ("sdk_version", Nullable(String())),
+                ("sdk_name", String(Modifiers(nullable=True))),
+                ("sdk_version", String(Modifiers(nullable=True))),
                 # geo location context
-                ("geo_country_code", Nullable(String())),
-                ("geo_region", Nullable(String())),
-                ("geo_city", Nullable(String())),
-                ("http_method", Nullable(String())),
-                ("http_referer", Nullable(String())),
+                ("geo_country_code", String(Modifiers(nullable=True))),
+                ("geo_region", String(Modifiers(nullable=True))),
+                ("geo_city", String(Modifiers(nullable=True))),
+                ("http_method", String(Modifiers(nullable=True))),
+                ("http_referer", String(Modifiers(nullable=True))),
                 # Other tags and context
                 ("tags", Nested([("key", String()), ("value", String())])),
                 ("contexts", Nested([("key", String()), ("value", String())])),

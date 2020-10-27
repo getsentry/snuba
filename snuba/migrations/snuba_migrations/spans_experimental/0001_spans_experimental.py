@@ -1,22 +1,11 @@
 from typing import Sequence
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
-
-from snuba.clickhouse.columns import (
-    UUID,
-    Array,
-    Column,
-    DateTime,
-    Nested,
-    Nullable,
-    String,
-    UInt,
-)
+from snuba.clickhouse.columns import UUID, Array, Column, DateTime, Nested, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations, table_engines
-from snuba.migrations.columns import LowCardinality, Materialized, WithDefault
-
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 UNKNOWN_SPAN_STATUS = SPAN_STATUS_NAME_TO_CODE["unknown"]
 
@@ -28,11 +17,11 @@ columns = [
     Column("trace_id", UUID()),
     Column("transaction_span_id", UInt(64)),
     Column("span_id", UInt(64)),
-    Column("parent_span_id", Nullable(UInt(64))),
-    Column("transaction_name", LowCardinality(String())),
+    Column("parent_span_id", UInt(64, Modifiers(nullable=True))),
+    Column("transaction_name", String(Modifiers(low_cardinality=True))),
     Column("description", String()),  # description in span
-    Column("op", LowCardinality(String())),
-    Column("status", WithDefault(UInt(8), str(UNKNOWN_SPAN_STATUS)),),
+    Column("op", String(Modifiers(low_cardinality=True))),
+    Column("status", UInt(8, Modifiers(default=str(UNKNOWN_SPAN_STATUS)))),
     Column("start_ts", DateTime()),
     Column("start_ns", UInt(32)),
     Column("finish_ts", DateTime()),
@@ -72,7 +61,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="spans_experimental_local",
                 column=Column(
                     "_tags_hash_map",
-                    Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN),
+                    Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN)),
                 ),
                 after="tags.value",
             ),
@@ -102,7 +91,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="spans_experimental_dist",
                 column=Column(
                     "_tags_hash_map",
-                    Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN),
+                    Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN)),
                 ),
                 after="tags.value",
             ),

@@ -1,4 +1,6 @@
-from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
+from snuba.clickhouse.columns import ColumnSet, DateTime
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.cdc.groupedmessage_processor import (
@@ -25,11 +27,11 @@ columns = ColumnSet(
         # PG columns
         ("project_id", UInt(64)),
         ("id", UInt(64)),
-        ("status", Nullable(UInt(8))),
-        ("last_seen", Nullable(DateTime())),
-        ("first_seen", Nullable(DateTime())),
-        ("active_at", Nullable(DateTime())),
-        ("first_release_id", Nullable(UInt(64))),
+        ("status", UInt(8, Modifiers(nullable=True))),
+        ("last_seen", DateTime(Modifiers(nullable=True))),
+        ("first_seen", DateTime(Modifiers(nullable=True))),
+        ("active_at", DateTime(Modifiers(nullable=True))),
+        ("first_release_id", UInt(64, Modifiers(nullable=True))),
     ]
 )
 

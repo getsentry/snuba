@@ -8,11 +8,9 @@ from snuba.clickhouse.columns import (
     FixedString,
     Float,
     Nested,
-    Nullable,
-    ReadOnly,
-    String,
-    UInt,
 )
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsProcessor
 from snuba.datasets.storages.events_column_processor import EventsColumnProcessor
 from snuba.datasets.storages.processors.replaced_groups import (
@@ -31,8 +29,8 @@ from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 metadata_columns = ColumnSet(
     [
         # optional stream related data
-        ("offset", Nullable(UInt(64))),
-        ("partition", Nullable(UInt(16))),
+        ("offset", UInt(64, Modifiers(nullable=True))),
+        ("partition", UInt(16, Modifiers(nullable=True))),
         ("message_timestamp", DateTime()),
     ]
 )
@@ -41,16 +39,16 @@ promoted_tag_columns = ColumnSet(
     [
         # These are the classic tags, they are saved in Snuba exactly as they
         # appear in the event body.
-        ("level", Nullable(String())),
-        ("logger", Nullable(String())),
-        ("server_name", Nullable(String())),  # future name: device_id?
-        ("transaction", Nullable(String())),
-        ("environment", Nullable(String())),
-        ("sentry:release", Nullable(String())),
-        ("sentry:dist", Nullable(String())),
-        ("sentry:user", Nullable(String())),
-        ("site", Nullable(String())),
-        ("url", Nullable(String())),
+        ("level", String(Modifiers(nullable=True))),
+        ("logger", String(Modifiers(nullable=True))),
+        ("server_name", String(Modifiers(nullable=True))),  # future name: device_id?
+        ("transaction", String(Modifiers(nullable=True))),
+        ("environment", String(Modifiers(nullable=True))),
+        ("sentry:release", String(Modifiers(nullable=True))),
+        ("sentry:dist", String(Modifiers(nullable=True))),
+        ("sentry:user", String(Modifiers(nullable=True))),
+        ("site", String(Modifiers(nullable=True))),
+        ("url", String(Modifiers(nullable=True))),
     ]
 )
 
@@ -60,34 +58,34 @@ promoted_context_tag_columns = ColumnSet(
         # related to contexts.  To avoid naming confusion with Clickhouse nested
         # columns, they are stored in the database with s/./_/
         # promoted tags
-        ("app_device", Nullable(String())),
-        ("device", Nullable(String())),
-        ("device_family", Nullable(String())),
-        ("runtime", Nullable(String())),
-        ("runtime_name", Nullable(String())),
-        ("browser", Nullable(String())),
-        ("browser_name", Nullable(String())),
-        ("os", Nullable(String())),
-        ("os_name", Nullable(String())),
-        ("os_rooted", Nullable(UInt(8))),
+        ("app_device", String(Modifiers(nullable=True))),
+        ("device", String(Modifiers(nullable=True))),
+        ("device_family", String(Modifiers(nullable=True))),
+        ("runtime", String(Modifiers(nullable=True))),
+        ("runtime_name", String(Modifiers(nullable=True))),
+        ("browser", String(Modifiers(nullable=True))),
+        ("browser_name", String(Modifiers(nullable=True))),
+        ("os", String(Modifiers(nullable=True))),
+        ("os_name", String(Modifiers(nullable=True))),
+        ("os_rooted", UInt(8, Modifiers(nullable=True))),
     ]
 )
 
 promoted_context_columns = ColumnSet(
     [
-        ("os_build", Nullable(String())),
-        ("os_kernel_version", Nullable(String())),
-        ("device_name", Nullable(String())),
-        ("device_brand", Nullable(String())),
-        ("device_locale", Nullable(String())),
-        ("device_uuid", Nullable(String())),
-        ("device_model_id", Nullable(String())),
-        ("device_arch", Nullable(String())),
-        ("device_battery_level", Nullable(Float(32))),
-        ("device_orientation", Nullable(String())),
-        ("device_simulator", Nullable(UInt(8))),
-        ("device_online", Nullable(UInt(8))),
-        ("device_charging", Nullable(UInt(8))),
+        ("os_build", String(Modifiers(nullable=True))),
+        ("os_kernel_version", String(Modifiers(nullable=True))),
+        ("device_name", String(Modifiers(nullable=True))),
+        ("device_brand", String(Modifiers(nullable=True))),
+        ("device_locale", String(Modifiers(nullable=True))),
+        ("device_uuid", String(Modifiers(nullable=True))),
+        ("device_model_id", String(Modifiers(nullable=True))),
+        ("device_arch", String(Modifiers(nullable=True))),
+        ("device_battery_level", Float(32, Modifiers(nullable=True))),
+        ("device_orientation", String(Modifiers(nullable=True))),
+        ("device_simulator", UInt(8, Modifiers(nullable=True))),
+        ("device_online", UInt(8, Modifiers(nullable=True))),
+        ("device_charging", UInt(8, Modifiers(nullable=True))),
     ]
 )
 
@@ -106,26 +104,26 @@ all_columns = (
     required_columns
     + [
         # required for non-deleted
-        ("platform", Nullable(String())),
-        ("message", Nullable(String())),
-        ("primary_hash", Nullable(FixedString(32))),
-        ("received", Nullable(DateTime())),
-        ("search_message", Nullable(String())),
-        ("title", Nullable(String())),
-        ("location", Nullable(String())),
+        ("platform", String(Modifiers(nullable=True))),
+        ("message", String(Modifiers(nullable=True))),
+        ("primary_hash", FixedString(32, Modifiers(nullable=True))),
+        ("received", DateTime(Modifiers(nullable=True))),
+        ("search_message", String(Modifiers(nullable=True))),
+        ("title", String(Modifiers(nullable=True))),
+        ("location", String(Modifiers(nullable=True))),
         # optional user
-        ("user_id", Nullable(String())),
-        ("username", Nullable(String())),
-        ("email", Nullable(String())),
-        ("ip_address", Nullable(String())),
+        ("user_id", String(Modifiers(nullable=True))),
+        ("username", String(Modifiers(nullable=True))),
+        ("email", String(Modifiers(nullable=True))),
+        ("ip_address", String(Modifiers(nullable=True))),
         # optional geo
-        ("geo_country_code", Nullable(String())),
-        ("geo_region", Nullable(String())),
-        ("geo_city", Nullable(String())),
-        ("sdk_name", Nullable(String())),
-        ("sdk_version", Nullable(String())),
-        ("type", Nullable(String())),
-        ("version", Nullable(String())),
+        ("geo_country_code", String(Modifiers(nullable=True))),
+        ("geo_region", String(Modifiers(nullable=True))),
+        ("geo_city", String(Modifiers(nullable=True))),
+        ("sdk_name", String(Modifiers(nullable=True))),
+        ("sdk_version", String(Modifiers(nullable=True))),
+        ("type", String(Modifiers(nullable=True))),
+        ("version", String(Modifiers(nullable=True))),
     ]
     + metadata_columns
     + promoted_context_columns
@@ -135,21 +133,21 @@ all_columns = (
         # other tags
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
-        ("_tags_hash_map", ReadOnly(Array(UInt(64)))),
+        ("_tags_hash_map", Array(UInt(64), Modifiers(readonly=True))),
         # other context
         ("contexts", Nested([("key", String()), ("value", String())])),
         # http interface
-        ("http_method", Nullable(String())),
-        ("http_referer", Nullable(String())),
+        ("http_method", String(Modifiers(nullable=True))),
+        ("http_referer", String(Modifiers(nullable=True))),
         # exception interface
         (
             "exception_stacks",
             Nested(
                 [
-                    ("type", Nullable(String())),
-                    ("value", Nullable(String())),
-                    ("mechanism_type", Nullable(String())),
-                    ("mechanism_handled", Nullable(UInt(8))),
+                    ("type", String(Modifiers(nullable=True))),
+                    ("value", String(Modifiers(nullable=True))),
+                    ("mechanism_type", String(Modifiers(nullable=True))),
+                    ("mechanism_handled", UInt(8, Modifiers(nullable=True))),
                 ]
             ),
         ),
@@ -157,14 +155,14 @@ all_columns = (
             "exception_frames",
             Nested(
                 [
-                    ("abs_path", Nullable(String())),
-                    ("filename", Nullable(String())),
-                    ("package", Nullable(String())),
-                    ("module", Nullable(String())),
-                    ("function", Nullable(String())),
-                    ("in_app", Nullable(UInt(8))),
-                    ("colno", Nullable(UInt(32))),
-                    ("lineno", Nullable(UInt(32))),
+                    ("abs_path", String(Modifiers(nullable=True))),
+                    ("filename", String(Modifiers(nullable=True))),
+                    ("package", String(Modifiers(nullable=True))),
+                    ("module", String(Modifiers(nullable=True))),
+                    ("function", String(Modifiers(nullable=True))),
+                    ("in_app", UInt(8, Modifiers(nullable=True))),
+                    ("colno", UInt(32, Modifiers(nullable=True))),
+                    ("lineno", UInt(32, Modifiers(nullable=True))),
                     ("stack_level", UInt(16)),
                 ]
             ),
@@ -173,12 +171,12 @@ all_columns = (
         # database. They don't necessarily belong here in a logical/readability sense
         # but they are here to match the order of columns in production becase
         # `insert_distributed_sync` is very sensitive to column existence and ordering.
-        ("culprit", Nullable(String())),
+        ("culprit", String(Modifiers(nullable=True))),
         ("sdk_integrations", Array(String())),
         ("modules", Nested([("name", String()), ("version", String())])),
-        ("release", ReadOnly(Nullable(String()))),
-        ("dist", ReadOnly(Nullable(String()))),
-        ("user", ReadOnly(Nullable(String()))),
+        ("release", String(Modifiers(nullable=True, readonly=True))),
+        ("dist", String(Modifiers(nullable=True, readonly=True))),
+        ("user", String(Modifiers(nullable=True, readonly=True))),
     ]
 )
 

@@ -1,4 +1,5 @@
 from copy import deepcopy
+from dataclasses import replace
 from typing import Sequence
 
 from snuba.clickhouse.columns import (
@@ -8,13 +9,13 @@ from snuba.clickhouse.columns import (
     IPv4,
     IPv6,
     Nested,
-    Nullable,
     String,
     UInt,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
-from snuba.migrations.columns import LowCardinality, Materialized, WithDefault
+from snuba.migrations.columns import Materialized
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 UNKNOWN_SPAN_STATUS = 2
 
@@ -23,28 +24,31 @@ columns = [
     Column("event_id", UUID()),
     Column("trace_id", UUID()),
     Column("span_id", UInt(64)),
-    Column("transaction_name", LowCardinality(String())),
-    Column("transaction_hash", Materialized(UInt(64), "cityHash64(transaction_name)")),
-    Column("transaction_op", LowCardinality(String())),
-    Column("transaction_status", WithDefault(UInt(8), str(UNKNOWN_SPAN_STATUS))),
+    Column("transaction_name", String(Modifiers(low_cardinality=True))),
+    Column(
+        "transaction_hash",
+        UInt(64, Modifiers(materialized="cityHash64(transaction_name)")),
+    ),
+    Column("transaction_op", String(Modifiers(low_cardinality=True))),
+    Column("transaction_status", UInt(8, Modifiers(default=str(UNKNOWN_SPAN_STATUS)))),
     Column("start_ts", DateTime()),
     Column("start_ms", UInt(16)),
     Column("finish_ts", DateTime()),
     Column("finish_ms", UInt(16)),
     Column("duration", UInt(32)),
-    Column("platform", LowCardinality(String())),
-    Column("environment", LowCardinality(Nullable(String()))),
-    Column("release", LowCardinality(Nullable(String()))),
-    Column("dist", LowCardinality(Nullable(String()))),
-    Column("ip_address_v4", Nullable(IPv4())),
-    Column("ip_address_v6", Nullable(IPv6())),
-    Column("user", WithDefault(String(), "''",)),
-    Column("user_hash", Materialized(UInt(64), "cityHash64(user)")),
-    Column("user_id", Nullable(String())),
-    Column("user_name", Nullable(String())),
-    Column("user_email", Nullable(String())),
-    Column("sdk_name", WithDefault(LowCardinality(String()), "''")),
-    Column("sdk_version", WithDefault(LowCardinality(String()), "''")),
+    Column("platform", String(Modifiers(low_cardinality=True))),
+    Column("environment", String(Modifiers(nullable=True, low_cardinality=True))),
+    Column("release", String(Modifiers(nullable=True, low_cardinality=True))),
+    Column("dist", String(Modifiers(nullable=True, low_cardinality=True))),
+    Column("ip_address_v4", IPv4(Modifiers(nullable=True))),
+    Column("ip_address_v6", IPv6(Modifiers(nullable=True))),
+    Column("user", String(Modifiers(default="''"))),
+    Column("user_hash", UInt(64, Modifiers(materialized="cityHash64(user)"))),
+    Column("user_id", String(Modifiers(nullable=True))),
+    Column("user_name", String(Modifiers(nullable=True))),
+    Column("user_email", String(Modifiers(nullable=True))),
+    Column("sdk_name", String(Modifiers(low_cardinality=True, default="''"))),
+    Column("sdk_version", String(Modifiers(low_cardinality=True, default="''"))),
     Column("tags", Nested([("key", String()), ("value", String())])),
     Column("_tags_flattened", String()),
     Column("contexts", Nested([("key", String()), ("value", String())])),
@@ -89,8 +93,12 @@ class Migration(migration.MultiStepMigration):
         # We removed the materialized for the dist table DDL.
         def strip_materialized(columns: Sequence[Column]) -> None:
             for col in columns:
-                if isinstance(col.type, Materialized):
-                    col.type = col.type.inner_type
+                if col.type.has_modifier(Materialized):
+                    modifiers = col.type.get_modifiers()
+                    assert modifiers is not None
+                    col.type = col.type.set_modifiers(
+                        replace(modifiers, materialized=None)
+                    )
 
         dist_columns = deepcopy(columns)
         strip_materialized(dist_columns)

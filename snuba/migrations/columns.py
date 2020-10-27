@@ -1,88 +1,73 @@
-from abc import ABC
-from typing import cast, Sequence
+from __future__ import annotations
 
-from snuba.clickhouse.columns import ColumnType
-
-
-class ColumnTypeWithModifier(ABC, ColumnType):
-    def __init__(self, inner_type: ColumnType) -> None:
-        self.inner_type = inner_type
-
-    def get_raw(self) -> ColumnType:
-        return self.inner_type.get_raw()
+from typing import Optional, Sequence, List
+from dataclasses import dataclass
+from snuba.clickhouse.columns import TypeModifier, TypeModifiers, Nullable
 
 
-class Materialized(ColumnTypeWithModifier):
-    def __init__(self, inner_type: ColumnType, expression: str) -> None:
-        super().__init__(inner_type)
-        self.expression = expression
+@dataclass(frozen=True)
+class MigrationModifiers(TypeModifiers):
+    """
+    Modifiers to be used in migrations.
+    """
 
-    def __repr__(self) -> str:
-        return "Materialized({}, {})".format(repr(self.inner_type), self.expression)
+    nullable: bool = False
+    low_cardinality: bool = False
+    default: Optional[str] = None
+    materialized: Optional[str] = None
+    codecs: Optional[Sequence[str]] = None
 
-    def __eq__(self, other: object) -> bool:
-        return (
-            self.__class__ == other.__class__
-            and self.expression == cast(Materialized, other).expression
-            and self.inner_type == cast(Materialized, other).inner_type
+    def _get_modifiers(self) -> Sequence[TypeModifier]:
+        ret: List[TypeModifier] = []
+        if self.nullable:
+            ret.append(Nullable())
+        if self.low_cardinality:
+            ret.append(LowCardinality())
+        if self.default is not None:
+            ret.append(WithDefault(self.default))
+        if self.materialized is not None:
+            ret.append(Materialized(self.materialized))
+        if self.codecs is not None:
+            ret.append(WithCodecs(self.codecs))
+        return ret
+
+    def merge(self, other: MigrationModifiers) -> MigrationModifiers:
+        return MigrationModifiers(
+            nullable=self.nullable | other.nullable,
+            low_cardinality=self.low_cardinality | other.low_cardinality,
+            default=self.default if other.default is None else other.default,
+            materialized=self.materialized
+            if other.materialized is None
+            else other.materialized,
+            codecs=self.codecs if other.codecs is None else other.codecs,
         )
 
-    def for_schema(self) -> str:
-        return "{} MATERIALIZED {}".format(
-            self.inner_type.for_schema(), self.expression,
-        )
+
+@dataclass(frozen=True)
+class Materialized(TypeModifier):
+    expression: str
+
+    def for_schema(self, content: str) -> str:
+        return "{} MATERIALIZED {}".format(content, self.expression)
 
 
-class WithCodecs(ColumnTypeWithModifier):
-    def __init__(self, inner_type: ColumnType, codecs: Sequence[str]) -> None:
-        super().__init__(inner_type)
-        self.__codecs = codecs
+@dataclass(frozen=True)
+class WithCodecs(TypeModifier):
+    codecs: Sequence[str]
 
-    def __repr__(self) -> str:
-        return f"WithCodecs({repr(self.inner_type)}, {', '.join(self.__codecs)})"
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            self.__class__ == other.__class__
-            and self.__codecs == cast(WithCodecs, other).__codecs
-            and self.inner_type == cast(WithCodecs, other).inner_type
-        )
-
-    def for_schema(self) -> str:
-        return f"{self.inner_type.for_schema()} CODEC ({', '.join(self.__codecs)})"
+    def for_schema(self, content: str) -> str:
+        return f"{content} CODEC ({', '.join(self.codecs)})"
 
 
-class WithDefault(ColumnTypeWithModifier):
-    def __init__(self, inner_type: ColumnType, default: str) -> None:
-        super().__init__(inner_type)
-        self.default = default
+@dataclass(frozen=True)
+class WithDefault(TypeModifier):
+    default: str
 
-    def __repr__(self) -> str:
-        return "WithDefault({}, {})".format(repr(self.inner_type), self.default)
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            self.__class__ == other.__class__
-            and self.default == cast(WithDefault, other).default
-            and self.inner_type == cast(WithDefault, other).inner_type
-        )
-
-    def for_schema(self) -> str:
-        return "{} DEFAULT {}".format(self.inner_type.for_schema(), self.default)
+    def for_schema(self, content: str) -> str:
+        return "{} DEFAULT {}".format(content, self.default)
 
 
-class LowCardinality(ColumnTypeWithModifier):
-    def __init__(self, inner_type: ColumnType) -> None:
-        super().__init__(inner_type)
-
-    def __repr__(self) -> str:
-        return "LowCardinality({})".format(repr(self.inner_type))
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            self.__class__ == other.__class__
-            and self.inner_type == cast(LowCardinality, other).inner_type
-        )
-
-    def for_schema(self) -> str:
-        return "LowCardinality({})".format(self.inner_type.for_schema())
+@dataclass(frozen=True)
+class LowCardinality(TypeModifier):
+    def for_schema(self, content: str) -> str:
+        return "LowCardinality({})".format(content)

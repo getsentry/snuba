@@ -1,6 +1,6 @@
 import pytest
-
 from snuba.clickhouse.columns import (
+    UUID,
     AggregateFunction,
     Array,
     Date,
@@ -10,19 +10,11 @@ from snuba.clickhouse.columns import (
     Float,
     IPv4,
     IPv6,
-    Nullable,
     String,
     UInt,
-    UUID,
 )
-from snuba.migrations.columns import (
-    LowCardinality,
-    Materialized,
-    WithCodecs,
-    WithDefault,
-)
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.parse_schema import _get_column
-
 
 test_data = [
     # Basic types
@@ -42,52 +34,58 @@ test_data = [
     # Aggregate functions
     (
         ("AggregateFunction(uniq, UInt8)", "", "", ""),
-        AggregateFunction("uniq", UInt(8)),
+        AggregateFunction("uniq", [UInt(8)]),
     ),
     (
         ("AggregateFunction(countIf, UUID, UInt8)", "", "", ""),
-        AggregateFunction("countIf", UUID(), UInt(8)),
+        AggregateFunction("countIf", [UUID(), UInt(8)]),
     ),
     (
         ("AggregateFunction(quantileIf(0.5, 0.9), UInt32, UInt8)", "", "", ""),
-        AggregateFunction("quantileIf(0.5, 0.9)", UInt(32), UInt(8)),
+        AggregateFunction("quantileIf(0.5, 0.9)", [UInt(32), UInt(8)]),
     ),
     # Array
     (("Array(String)", "", "", ""), Array(String())),
     (("Array(DateTime)", "", "", ""), Array(DateTime())),
     (("Array(UInt64)", "", "", ""), Array(UInt(64))),
-    (("Array(Nullable(UUID))", "", "", ""), Array(Nullable(UUID()))),
-    (("Array(Array(Nullable(UUID)))", "", "", ""), Array(Array(Nullable(UUID())))),
+    (("Array(Nullable(UUID))", "", "", ""), Array(UUID(Modifiers(nullable=True)))),
+    (
+        ("Array(Array(Nullable(UUID)))", "", "", ""),
+        Array(Array(UUID(Modifiers(nullable=True)))),
+    ),
     # Nullable
-    (("Nullable(String)", "", "", ""), Nullable(String())),
-    (("Nullable(FixedString(8))", "", "", ""), Nullable(FixedString(8))),
-    (("Nullable(Date)", "", "", ""), Nullable(Date())),
+    (("Nullable(String)", "", "", ""), String(Modifiers(nullable=True))),
+    (
+        ("Nullable(FixedString(8))", "", "", ""),
+        FixedString(8, Modifiers(nullable=True)),
+    ),
+    (("Nullable(Date)", "", "", ""), Date(Modifiers(nullable=True))),
     # Low cardinality
-    (("LowCardinality(String)", "", "", ""), LowCardinality(String())),
+    (("LowCardinality(String)", "", "", ""), String(Modifiers(low_cardinality=True))),
     (
         ("LowCardinality(Nullable(String))", "", "", ""),
-        LowCardinality(Nullable(String())),
+        String(Modifiers(nullable=True, low_cardinality=True)),
     ),
     # Materialized
     (
         ("Date", "MATERIALIZED", "toDate(col1)", ""),
-        Materialized(Date(), "toDate(col1)"),
+        (Date(Modifiers(materialized="toDate(col1)"))),
     ),
     (
         ("UInt64", "MATERIALIZED", "CAST(cityHash64(col1), 'UInt64')", ""),
-        Materialized(UInt(64), "cityHash64(col1)"),
+        (UInt(64, Modifiers(materialized="cityHash64(col1)"))),
     ),
     # Default value
     (
         ("LowCardinality(String)", "DEFAULT", "a", ""),
-        WithDefault(LowCardinality(String()), "a"),
+        (String(Modifiers(low_cardinality=True, default="a"))),
     ),
-    (("UInt8", "DEFAULT", "2", ""), WithDefault(UInt(8), "2")),
+    (("UInt8", "DEFAULT", "2", ""), (UInt(8, Modifiers(default="2")))),
     # With codecs
-    (("UUID", "", "", "NONE"), WithCodecs(UUID(), ["NONE"])),
+    (("UUID", "", "", "NONE"), (UUID(Modifiers(codecs=["NONE"])))),
     (
         ("DateTime", "", "", "DoubleDelta, LZ4"),
-        WithCodecs(DateTime(), ["DoubleDelta", "LZ4"]),
+        (DateTime(Modifiers(codecs=["DoubleDelta", "LZ4"]))),
     ),
 ]
 

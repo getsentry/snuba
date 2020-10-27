@@ -3,7 +3,7 @@ from typing import Sequence
 from snuba.clickhouse.columns import Column, Float, Nested, String
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
-from snuba.migrations.columns import LowCardinality
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
 class Migration(migration.MultiStepMigration):
@@ -20,7 +20,12 @@ class Migration(migration.MultiStepMigration):
                 table_name="transactions_local",
                 column=Column(
                     "measurements",
-                    Nested([("key", LowCardinality(String())), ("value", Float(64))]),
+                    Nested(
+                        [
+                            ("key", String(Modifiers(low_cardinality=True))),
+                            ("value", Float(64)),
+                        ]
+                    ),
                 ),
                 after="_contexts_flattened",
             ),
@@ -40,7 +45,12 @@ class Migration(migration.MultiStepMigration):
                 table_name="transactions_dist",
                 column=Column(
                     "measurements",
-                    Nested([("key", LowCardinality(String())), ("value", Float(64))]),
+                    Nested(
+                        [
+                            ("key", String(Modifiers(low_cardinality=True))),
+                            ("value", Float(64)),
+                        ]
+                    ),
                 ),
                 after="_contexts_flattened",
             ),
