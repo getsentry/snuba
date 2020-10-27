@@ -1,12 +1,6 @@
-from snuba.clickhouse.columns import (
-    UUID,
-    ColumnSet,
-    DateTime,
-    SchemaModifiers,
-    String,
-    UInt,
-    nullable,
-)
+from snuba.clickhouse.columns import UUID, ColumnSet, DateTime
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.outcomes_processor import OutcomesProcessor
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
@@ -20,15 +14,15 @@ WRITE_DIST_TABLE_NAME = "outcomes_raw_dist"
 READ_LOCAL_TABLE_NAME = "outcomes_hourly_local"
 READ_DIST_TABLE_NAME = "outcomes_hourly_dist"
 
-write_columns = ColumnSet[SchemaModifiers](
+write_columns = ColumnSet[Modifiers](
     [
         ("org_id", UInt(64)),
         ("project_id", UInt(64)),
-        ("key_id", UInt(64, nullable())),
+        ("key_id", UInt(64, Modifiers(nullable=True))),
         ("timestamp", DateTime()),
         ("outcome", UInt(8)),
-        ("reason", String(nullable())),
-        ("event_id", UUID(nullable())),
+        ("reason", String(Modifiers(nullable=True))),
+        ("event_id", UUID(Modifiers(nullable=True))),
     ]
 )
 
@@ -40,7 +34,7 @@ raw_schema = WritableTableSchema(
     storage_set_key=StorageSetKey.OUTCOMES,
 )
 
-read_columns = ColumnSet[SchemaModifiers](
+read_columns = ColumnSet[Modifiers](
     [
         ("org_id", UInt(64)),
         ("project_id", UInt(64)),
@@ -59,7 +53,7 @@ read_schema = TableSchema(
     storage_set_key=StorageSetKey.OUTCOMES,
 )
 
-materialized_view_columns = ColumnSet[SchemaModifiers](
+materialized_view_columns = ColumnSet[Modifiers](
     [
         ("org_id", UInt(64)),
         ("project_id", UInt(64)),

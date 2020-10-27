@@ -3,7 +3,7 @@ from typing import Sequence
 from snuba.clickhouse.columns import Array, Column, Enum, String
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
-from snuba.migrations.columns import lowcardinality, MigrationModifiers
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
 class Migration(migration.MultiStepMigration):
@@ -19,17 +19,20 @@ class Migration(migration.MultiStepMigration):
             operations.ModifyColumn(
                 StorageSetKey.QUERYLOG,
                 table_name,
-                Column("status", String(lowcardinality())),
+                Column("status", String(Modifiers(low_cardinality=True))),
             ),
             operations.ModifyColumn(
                 StorageSetKey.QUERYLOG,
                 table_name,
-                Column("clickhouse_queries.status", Array(String(lowcardinality()))),
+                Column(
+                    "clickhouse_queries.status",
+                    Array(String(Modifiers(low_cardinality=True))),
+                ),
             ),
         ]
 
     def __backwards_migrations(self, table_name: str) -> Sequence[operations.Operation]:
-        status_type = Enum[MigrationModifiers](
+        status_type = Enum[Modifiers](
             [("success", 0), ("error", 1), ("rate-limited", 2)]
         )
         return [

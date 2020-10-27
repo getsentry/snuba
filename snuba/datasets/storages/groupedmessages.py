@@ -1,10 +1,6 @@
-from snuba.clickhouse.columns import (
-    ColumnSet,
-    DateTime,
-    SchemaModifiers,
-    UInt,
-    nullable,
-)
+from snuba.clickhouse.columns import ColumnSet, DateTime
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.cdc.groupedmessage_processor import (
@@ -18,7 +14,7 @@ from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 
-columns = ColumnSet[SchemaModifiers](
+columns = ColumnSet[Modifiers](
     [
         # columns to maintain the dataset
         # Kafka topic offset
@@ -31,11 +27,11 @@ columns = ColumnSet[SchemaModifiers](
         # PG columns
         ("project_id", UInt(64)),
         ("id", UInt(64)),
-        ("status", UInt(8, nullable())),
-        ("last_seen", DateTime(nullable())),
-        ("first_seen", DateTime(nullable())),
-        ("active_at", DateTime(nullable())),
-        ("first_release_id", UInt(64, nullable())),
+        ("status", UInt(8, Modifiers(nullable=True))),
+        ("last_seen", DateTime(Modifiers(nullable=True))),
+        ("first_seen", DateTime(Modifiers(nullable=True))),
+        ("active_at", DateTime(Modifiers(nullable=True))),
+        ("first_release_id", UInt(64, Modifiers(nullable=True))),
     ]
 )
 

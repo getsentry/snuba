@@ -14,7 +14,6 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from snuba.migrations.columns import lowcardinality, nullable
 from snuba.migrations.parse_schema import _get_column
 
 test_data = [
@@ -49,14 +48,20 @@ test_data = [
     (("Array(String)", "", "", ""), Array(String())),
     (("Array(DateTime)", "", "", ""), Array(DateTime())),
     (("Array(UInt64)", "", "", ""), Array(UInt(64))),
-    (("Array(Nullable(UUID))", "", "", ""), Array(UUID(nullable()))),
-    (("Array(Array(Nullable(UUID)))", "", "", ""), Array(Array(UUID(nullable())))),
+    (("Array(Nullable(UUID))", "", "", ""), Array(UUID(Modifiers(nullable=True)))),
+    (
+        ("Array(Array(Nullable(UUID)))", "", "", ""),
+        Array(Array(UUID(Modifiers(nullable=True)))),
+    ),
     # Nullable
-    (("Nullable(String)", "", "", ""), String(nullable())),
-    (("Nullable(FixedString(8))", "", "", ""), FixedString(8, nullable())),
-    (("Nullable(Date)", "", "", ""), Date(nullable())),
+    (("Nullable(String)", "", "", ""), String(Modifiers(nullable=True))),
+    (
+        ("Nullable(FixedString(8))", "", "", ""),
+        FixedString(8, Modifiers(nullable=True)),
+    ),
+    (("Nullable(Date)", "", "", ""), Date(Modifiers(nullable=True))),
     # Low cardinality
-    (("LowCardinality(String)", "", "", ""), String(lowcardinality())),
+    (("LowCardinality(String)", "", "", ""), String(Modifiers(low_cardinality=True))),
     (
         ("LowCardinality(Nullable(String))", "", "", ""),
         String(Modifiers(nullable=True, low_cardinality=True)),

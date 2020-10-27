@@ -3,9 +3,9 @@ from typing import Sequence
 from snuba.clickhouse.columns import Column, DateTime, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
-from snuba.migrations.columns import MigrationModifiers, nullable
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-columns: Sequence[Column[MigrationModifiers]] = [
+columns: Sequence[Column[Modifiers]] = [
     # Kafka topic offset
     Column("offset", UInt(64)),
     # GroupStatus in Sentry does not have a 'DELETED' state that reflects the deletion
@@ -16,11 +16,11 @@ columns: Sequence[Column[MigrationModifiers]] = [
     # PG columns
     Column("project_id", UInt(64)),
     Column("id", UInt(64)),
-    Column("status", UInt(8, nullable())),
-    Column("last_seen", DateTime(nullable())),
-    Column("first_seen", DateTime(nullable())),
-    Column("active_at", DateTime(nullable())),
-    Column("first_release_id", UInt(64, nullable())),
+    Column("status", UInt(8, Modifiers(nullable=True))),
+    Column("last_seen", DateTime(Modifiers(nullable=True))),
+    Column("first_seen", DateTime(Modifiers(nullable=True))),
+    Column("active_at", DateTime(Modifiers(nullable=True))),
+    Column("first_release_id", UInt(64, Modifiers(nullable=True))),
 ]
 
 

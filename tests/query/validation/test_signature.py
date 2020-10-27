@@ -2,7 +2,8 @@ from typing import Sequence
 
 import pytest
 
-from snuba.clickhouse.columns import ColumnSet, DateTime, nullable, String
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import ColumnSet, DateTime, String
 from snuba.query.expressions import (
     Column as ColumnExpr,
     Expression,
@@ -123,10 +124,10 @@ def test_like_validator(
     schema = ColumnSet(
         [
             ("event_id", String()),
-            ("level", String(nullable())),
+            ("level", String(Modifiers(nullable=True))),
             ("str_col", String()),
             ("timestamp", DateTime()),
-            ("received", DateTime(nullable())),
+            ("received", DateTime(Modifiers(nullable=True))),
         ]
     )
 
