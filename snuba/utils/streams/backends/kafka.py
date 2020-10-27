@@ -663,7 +663,9 @@ def get_default_kafka_configuration(
         else:
             default_config = settings.BROKER_CONFIG
     broker_config = copy.deepcopy(default_config)
-    bootstrap_servers = bootstrap_servers or default_bootstrap_servers
+    bootstrap_servers = (
+        ",".join(bootstrap_servers) if bootstrap_servers else default_bootstrap_servers
+    )
     if bootstrap_servers:
         broker_config["bootstrap.servers"] = bootstrap_servers
     broker_config = {k: v for k, v in broker_config.items() if v is not None}

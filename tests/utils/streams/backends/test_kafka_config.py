@@ -17,6 +17,17 @@ def test_default_config():
     )
 
 
+def test_default_config_cli_bootstrap_servers():
+    broker_config = get_default_kafka_configuration(
+        bootstrap_servers=["cli.server:9092"]
+    )
+    assert broker_config["bootstrap.servers"] == "cli.server:9092"
+    broker_config = get_default_kafka_configuration(
+        bootstrap_servers=["cli.server:9092", "cli2.server:9092"]
+    )
+    assert broker_config["bootstrap.servers"] == "cli.server:9092,cli2.server:9092"
+
+
 def test_default_config_legacy_override_default_servers():
     default_broker = "my.broker:9092"
     settings.DEFAULT_BROKERS = [default_broker]
