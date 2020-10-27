@@ -1,4 +1,5 @@
 import itertools
+import json
 import pickle
 from datetime import datetime
 from pickle import PickleBuffer
@@ -8,6 +9,7 @@ from unittest.mock import Mock
 import pytest
 
 from snuba.consumer import (
+    MultistorageConsumerProcessingStrategyFactory,
     JSONRowInsertBatch,
     StreamingConsumerStrategyFactory,
 )
@@ -103,3 +105,45 @@ def test_json_row_batch_pickle_out_of_band() -> None:
     buffers: MutableSequence[PickleBuffer] = []
     data = pickle.dumps(batch, protocol=5, buffer_callback=buffers.append)
     assert pickle.loads(data, buffers=[b.raw() for b in buffers]) == batch
+
+
+def test_multiprocess_strategy() -> None:
+    from snuba.datasets.storages import groupassignees, groupedmessages
+    from tests.datasets.cdc.test_groupassignee import TestGroupassignee
+    from tests.datasets.cdc.test_groupedmessage import TestGroupedMessage
+
+    commit = Mock()
+
+    strategy = MultistorageConsumerProcessingStrategyFactory(
+        [groupassignees.storage, groupedmessages.storage],
+        10,
+        10,
+        TestingMetricsBackend(),
+    ).create(commit)
+
+    payloads = [
+        KafkaPayload(None, b"{}", [("table", b"ignored")]),
+        KafkaPayload(
+            None,
+            json.dumps(TestGroupassignee.INSERT_MSG),
+            [("table", b"sentry_groupedassignee")],
+        ),
+        KafkaPayload(
+            None,
+            json.dumps(TestGroupedMessage.INSERT_MSG),
+            [("table", b"sentry_groupedmessage")],
+        ),
+    ]
+
+    messages = [
+        Message(
+            Partition(Topic("topic"), 0), offset, payload, datetime.now(), offset + 1
+        )
+        for offset, payload in enumerate(payloads)
+    ]
+
+    for message in messages:
+        strategy.submit(message)
+
+    strategy.close()
+    strategy.join()
