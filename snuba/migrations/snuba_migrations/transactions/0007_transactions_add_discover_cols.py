@@ -23,7 +23,7 @@ class Migration(migration.MultiStepMigration):
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name=table_name,
                 column=Column(
-                    "type", Materialized(LowCardinality(String()), "transaction_name")
+                    "type", Materialized(LowCardinality(String()), "'transaction'")
                 ),
                 after="deleted",
             ),
