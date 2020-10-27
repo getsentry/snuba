@@ -1,18 +1,17 @@
 from typing import Sequence
 
 from snuba.clickhouse.columns import (
+    UUID,
     AggregateFunction,
     Column,
     DateTime,
     String,
     UInt,
-    UUID,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
-from snuba.migrations.columns import lowcardinality
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.processor import MAX_UINT32, NIL_UUID
-
 
 raw_columns = [
     Column("session_id", UUID()),
@@ -26,8 +25,8 @@ raw_columns = [
     Column("errors", UInt(16)),
     Column("received", DateTime()),
     Column("started", DateTime()),
-    Column("release", String(lowcardinality())),
-    Column("environment", String(lowcardinality())),
+    Column("release", String(Modifiers(low_cardinality=True))),
+    Column("environment", String(Modifiers(low_cardinality=True))),
 ]
 
 
@@ -35,8 +34,8 @@ aggregate_columns = [
     Column("org_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("started", DateTime()),
-    Column("release", String(lowcardinality())),
-    Column("environment", String(lowcardinality())),
+    Column("release", String(Modifiers(low_cardinality=True))),
+    Column("environment", String(Modifiers(low_cardinality=True))),
     Column(
         "duration_quantiles",
         AggregateFunction("quantilesIf(0.5, 0.9)", [UInt(32), UInt(8)]),

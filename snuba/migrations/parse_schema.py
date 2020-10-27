@@ -20,7 +20,7 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.migrations.columns import MigrationModifiers, lowcardinality, nullable
+from snuba.migrations.columns import MigrationModifiers
 
 logger = logging.getLogger("snuba.migrate")
 
@@ -146,14 +146,14 @@ class Visitor(NodeVisitor):
         self, node: Node, visited_children: Tuple[Any, Any, Any, ColumnType, Any, Any]
     ) -> ColumnType:
         (_lc, _paren, _sp, inner_type, _sp, _paren) = visited_children
-        return merge_modifiers(inner_type, lowcardinality())
+        return merge_modifiers(inner_type, MigrationModifiers(low_cardinality=True))
 
     def visit_nullable(
         self, node: Node, visited_children: Tuple[Any, Any, Any, ColumnType, Any, Any]
     ) -> ColumnType:
         (_null, _paren, _sp, inner_type, _sp, _paren) = visited_children
         # TODO: Remove these assertions when ColumnType will be generic
-        return merge_modifiers(inner_type, nullable())
+        return merge_modifiers(inner_type, MigrationModifiers(nullable=True))
 
     def visit_array(self, node: Node, visited_children: Iterable[Any]) -> ColumnType:
         (_arr, _paren, _sp, inner_type, _sp, _paren) = visited_children

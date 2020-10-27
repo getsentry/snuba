@@ -3,7 +3,6 @@ from typing import Sequence
 from snuba.clickhouse.columns import Column, String
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
-from snuba.migrations.columns import nullable
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
@@ -29,7 +28,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_local",
-                column=Column("http_referer", String(nullable())),
+                column=Column("http_referer", String(Modifiers(nullable=True))),
                 after="http_method",
             ),
         ]
@@ -54,7 +53,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_dist",
-                column=Column("http_referer", String(nullable())),
+                column=Column("http_referer", String(Modifiers(nullable=True))),
                 after="http_method",
             ),
         ]

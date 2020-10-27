@@ -15,7 +15,6 @@ from snuba.clickhouse.columns import (
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from snuba.migrations.columns import lowcardinality, nullable
 
 columns = [
     Column("org_id", UInt(64)),
@@ -29,17 +28,17 @@ columns = [
             Modifiers(materialized="cityHash64(toString(event_id))", codecs=["NONE"]),
         ),
     ),
-    Column("platform", String(lowcardinality())),
+    Column("platform", String(Modifiers(low_cardinality=True))),
     Column("environment", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("release", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("dist", String(Modifiers(nullable=True, low_cardinality=True))),
-    Column("ip_address_v4", IPv4(nullable())),
-    Column("ip_address_v6", IPv6(nullable())),
+    Column("ip_address_v4", IPv4(Modifiers(nullable=True))),
+    Column("ip_address_v6", IPv6(Modifiers(nullable=True))),
     Column("user", (String(Modifiers(default="''")))),
     Column("user_hash", UInt(64, Modifiers(materialized="cityHash64(user)"))),
-    Column("user_id", String(nullable())),
-    Column("user_name", String(nullable())),
-    Column("user_email", String(nullable())),
+    Column("user_id", String(Modifiers(nullable=True))),
+    Column("user_name", String(Modifiers(nullable=True))),
+    Column("user_email", String(Modifiers(nullable=True))),
     Column("sdk_name", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("sdk_version", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("tags", Nested([("key", String()), ("value", String())])),
@@ -51,8 +50,8 @@ columns = [
         "transaction_hash",
         UInt(64, Modifiers(materialized="cityHash64(transaction_name)")),
     ),
-    Column("span_id", UInt(64, nullable())),
-    Column("trace_id", UUID(nullable())),
+    Column("span_id", UInt(64, Modifiers(nullable=True))),
+    Column("trace_id", UUID(Modifiers(nullable=True))),
     Column("partition", UInt(16)),
     Column("offset", UInt(64, Modifiers(codecs=["DoubleDelta", "LZ4"]))),
     Column("message_timestamp", DateTime()),
@@ -66,18 +65,18 @@ columns = [
     Column("message", String()),
     Column("title", String()),
     Column("culprit", String()),
-    Column("level", String(lowcardinality())),
-    Column("location", String(nullable())),
+    Column("level", String(Modifiers(low_cardinality=True))),
+    Column("location", String(Modifiers(nullable=True))),
     Column("version", String(Modifiers(nullable=True, low_cardinality=True))),
-    Column("type", String(lowcardinality())),
+    Column("type", String(Modifiers(low_cardinality=True))),
     Column(
         "exception_stacks",
         Nested(
             [
-                ("type", String(nullable())),
-                ("value", String(nullable())),
-                ("mechanism_type", String(nullable())),
-                ("mechanism_handled", UInt(8, nullable())),
+                ("type", String(Modifiers(nullable=True))),
+                ("value", String(Modifiers(nullable=True))),
+                ("mechanism_type", String(Modifiers(nullable=True))),
+                ("mechanism_handled", UInt(8, Modifiers(nullable=True))),
             ]
         ),
     ),
@@ -85,15 +84,15 @@ columns = [
         "exception_frames",
         Nested(
             [
-                ("abs_path", String(nullable())),
-                ("colno", UInt(32, nullable())),
-                ("filename", String(nullable())),
-                ("function", String(nullable())),
-                ("lineno", UInt(32, nullable())),
-                ("in_app", UInt(8, nullable())),
-                ("package", String(nullable())),
-                ("module", String(nullable())),
-                ("stack_level", UInt(16, nullable())),
+                ("abs_path", String(Modifiers(nullable=True))),
+                ("colno", UInt(32, Modifiers(nullable=True))),
+                ("filename", String(Modifiers(nullable=True))),
+                ("function", String(Modifiers(nullable=True))),
+                ("lineno", UInt(32, Modifiers(nullable=True))),
+                ("in_app", UInt(8, Modifiers(nullable=True))),
+                ("package", String(Modifiers(nullable=True))),
+                ("module", String(Modifiers(nullable=True))),
+                ("stack_level", UInt(16, Modifiers(nullable=True))),
             ]
         ),
     ),

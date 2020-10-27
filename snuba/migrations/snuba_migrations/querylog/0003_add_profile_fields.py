@@ -4,7 +4,6 @@ from snuba.clickhouse.columns import Array, Column, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from snuba.migrations.columns import lowcardinality
 
 
 class Migration(migration.MultiStepMigration):
@@ -22,7 +21,7 @@ class Migration(migration.MultiStepMigration):
                 column=Column(
                     "clickhouse_queries.all_columns",
                     Array(
-                        Array((String(lowcardinality()))),
+                        Array((String(Modifiers(low_cardinality=True)))),
                         Modifiers(
                             default="arrayResize([['']], length(clickhouse_queries.sql))"
                         ),
@@ -50,7 +49,7 @@ class Migration(migration.MultiStepMigration):
                 column=Column(
                     "clickhouse_queries.where_columns",
                     Array(
-                        Array(String(lowcardinality())),
+                        Array(String(Modifiers(low_cardinality=True))),
                         Modifiers(
                             default="arrayResize([['']], length(clickhouse_queries.sql))"
                         ),
@@ -64,7 +63,7 @@ class Migration(migration.MultiStepMigration):
                 column=Column(
                     "clickhouse_queries.where_mapping_columns",
                     Array(
-                        Array(String(lowcardinality())),
+                        Array(String(Modifiers(low_cardinality=True))),
                         Modifiers(
                             default="arrayResize([['']], length(clickhouse_queries.sql))"
                         ),
@@ -78,7 +77,7 @@ class Migration(migration.MultiStepMigration):
                 column=Column(
                     "clickhouse_queries.groupby_columns",
                     Array(
-                        Array(String(lowcardinality())),
+                        Array(String(Modifiers(low_cardinality=True))),
                         Modifiers(
                             default="arrayResize([['']], length(clickhouse_queries.sql))"
                         ),
@@ -92,7 +91,7 @@ class Migration(migration.MultiStepMigration):
                 column=Column(
                     "clickhouse_queries.array_join_columns",
                     Array(
-                        Array(String(lowcardinality())),
+                        Array(String(Modifiers(low_cardinality=True))),
                         Modifiers(
                             default="arrayResize([['']], length(clickhouse_queries.sql))"
                         ),

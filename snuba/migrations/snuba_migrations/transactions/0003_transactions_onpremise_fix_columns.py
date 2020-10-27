@@ -4,7 +4,6 @@ from snuba.clickhouse.columns import Column, DateTime, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from snuba.migrations.columns import lowcardinality
 
 UNKNOWN_SPAN_STATUS = 2
 
@@ -75,7 +74,9 @@ class Migration(migration.MultiStepMigration):
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column("transaction_name", String(lowcardinality())),
+                column=Column(
+                    "transaction_name", String(Modifiers(low_cardinality=True))
+                ),
             ),
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,

@@ -6,7 +6,6 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from snuba.migrations.columns import lowcardinality, nullable
 
 UNKNOWN_SPAN_STATUS = SPAN_STATUS_NAME_TO_CODE["unknown"]
 
@@ -18,10 +17,10 @@ columns = [
     Column("trace_id", UUID()),
     Column("transaction_span_id", UInt(64)),
     Column("span_id", UInt(64)),
-    Column("parent_span_id", UInt(64, nullable())),
-    Column("transaction_name", String(lowcardinality())),
+    Column("parent_span_id", UInt(64, Modifiers(nullable=True))),
+    Column("transaction_name", String(Modifiers(low_cardinality=True))),
     Column("description", String()),  # description in span
-    Column("op", String(lowcardinality())),
+    Column("op", String(Modifiers(low_cardinality=True))),
     Column("status", UInt(8, Modifiers(default=str(UNKNOWN_SPAN_STATUS)))),
     Column("start_ts", DateTime()),
     Column("start_ns", UInt(32)),
