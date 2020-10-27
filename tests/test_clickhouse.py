@@ -1,8 +1,9 @@
 from unittest.mock import call, patch
 
 from clickhouse_driver import errors
-
-from snuba.clickhouse.columns import Array, nullable, UInt
+from snuba.clickhouse.columns import Array
+from snuba.clickhouse.columns import SchemaModifiers as Modifier
+from snuba.clickhouse.columns import UInt
 from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
@@ -22,7 +23,9 @@ def test_flattened() -> None:
     assert columns["group_id"].base_name is None
     assert columns["group_id"].flattened == "group_id"
 
-    assert columns["exception_frames.in_app"].type == Array(UInt(8, nullable()))
+    assert columns["exception_frames.in_app"].type == Array(
+        UInt(8, Modifier(nullable=True))
+    )
     assert columns["exception_frames.in_app"].name == "in_app"
     assert columns["exception_frames.in_app"].base_name == "exception_frames"
     assert columns["exception_frames.in_app"].flattened == "exception_frames.in_app"
