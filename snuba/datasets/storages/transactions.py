@@ -67,10 +67,10 @@ columns = ColumnSet(
         ("message_timestamp", DateTime()),
         ("retention_days", UInt(16)),
         ("deleted", UInt(8)),
-        ("type", ReadOnly(String())),
-        ("message", ReadOnly(String())),
-        ("title", ReadOnly(String())),
-        ("timestamp", ReadOnly(DateTime())),
+        ("type", String(Modifiers(readonly=True))),
+        ("message", String(Modifiers(readonly=True))),
+        ("title", String(Modifiers(readonly=True))),
+        ("timestamp", DateTime(Modifiers(readonly=True))),
     ]
 )
 
