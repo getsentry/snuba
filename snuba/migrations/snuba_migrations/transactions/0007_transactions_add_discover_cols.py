@@ -7,7 +7,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
-from snuba.migrations.columns import LowCardinality, Materialized
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
 class Migration(migration.MultiStepMigration):
@@ -23,7 +23,10 @@ class Migration(migration.MultiStepMigration):
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name=table_name,
                 column=Column(
-                    "type", Materialized(LowCardinality(String()), "'transaction'")
+                    "type",
+                    String(
+                        Modifiers(low_cardinality=True, materialized="'transaction'")
+                    ),
                 ),
                 after="deleted",
             ),
@@ -32,7 +35,9 @@ class Migration(migration.MultiStepMigration):
                 table_name=table_name,
                 column=Column(
                     "message",
-                    Materialized(LowCardinality(String()), "transaction_name"),
+                    String(
+                        Modifiers(low_cardinality=True, materialized="transaction_name")
+                    ),
                 ),
                 after="type",
             ),
@@ -40,14 +45,19 @@ class Migration(migration.MultiStepMigration):
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name=table_name,
                 column=Column(
-                    "title", Materialized(LowCardinality(String()), "transaction_name")
+                    "title",
+                    String(
+                        Modifiers(low_cardinality=True, materialized="transaction_name")
+                    ),
                 ),
                 after="message",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name=table_name,
-                column=Column("timestamp", Materialized(DateTime(), "finish_ts")),
+                column=Column(
+                    "timestamp", DateTime(Modifiers(materialized="transaction_name"))
+                ),
                 after="title",
             ),
         ]
