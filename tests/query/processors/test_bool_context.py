@@ -1,4 +1,6 @@
-from snuba.clickhouse.columns import ColumnSet, Nested, Nullable, String, UInt
+from snuba.clickhouse.columns import ColumnSet, Nested
+from snuba.clickhouse.columns import SchemaModifiers as Modifier
+from snuba.clickhouse.columns import String, UInt
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsProcessor
@@ -13,7 +15,7 @@ from snuba.request.request_settings import HTTPRequestSettings
 def test_events_boolean_context() -> None:
     columns = ColumnSet(
         [
-            ("device_charging", Nullable(UInt(8))),
+            ("device_charging", UInt(8, Modifier(nullable=True))),
             ("contexts", Nested([("key", String()), ("value", String())])),
         ]
     )

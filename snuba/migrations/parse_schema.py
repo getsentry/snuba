@@ -1,12 +1,12 @@
 import logging
 import re
+from typing import Any, Iterable, Mapping, Sequence, Tuple
 
 from clickhouse_driver import Client
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
-from typing import Any, Iterable, Mapping, Sequence, Tuple
-
 from snuba.clickhouse.columns import (
+    UUID,
     AggregateFunction,
     Array,
     ColumnType,
@@ -17,17 +17,10 @@ from snuba.clickhouse.columns import (
     Float,
     IPv4,
     IPv6,
-    Nullable,
     String,
     UInt,
-    UUID,
 )
-from snuba.migrations.columns import (
-    LowCardinality,
-    Materialized,
-    WithCodecs,
-    WithDefault,
-)
+from snuba.migrations.columns import MigrationModifiers
 
 logger = logging.getLogger("snuba.migrate")
 
@@ -64,6 +57,16 @@ grammar = Grammar(
     quote            = "'"
     """
 )
+
+
+def merge_modifiers(col_type: ColumnType, modifiers: MigrationModifiers) -> ColumnType:
+    # TODO: Remove these assertions when ColumnType will be generic
+    existing_modifiers = col_type.get_modifiers()
+    if existing_modifiers is None:
+        return col_type.set_modifiers(modifiers)
+    else:
+        assert isinstance(existing_modifiers, MigrationModifiers)
+        return col_type.set_modifiers(existing_modifiers.merge(modifiers))
 
 
 class Visitor(NodeVisitor):
@@ -129,7 +132,7 @@ class Visitor(NodeVisitor):
             _sp,
             _paren,
         ) = visited_children
-        return AggregateFunction(agg_func, *agg_types)
+        return AggregateFunction(agg_func, [*agg_types])
 
     def visit_agg_func(self, node: Node, visited_children: Iterable[Any]) -> str:
         return str(node.text)
@@ -140,14 +143,17 @@ class Visitor(NodeVisitor):
         return [c[0] for c in visited_children]
 
     def visit_lowcardinality(
-        self, node: Node, visited_children: Iterable[Any]
+        self, node: Node, visited_children: Tuple[Any, Any, Any, ColumnType, Any, Any]
     ) -> ColumnType:
         (_lc, _paren, _sp, inner_type, _sp, _paren) = visited_children
-        return LowCardinality(inner_type)
+        return merge_modifiers(inner_type, MigrationModifiers(low_cardinality=True))
 
-    def visit_nullable(self, node: Node, visited_children: Iterable[Any]) -> ColumnType:
+    def visit_nullable(
+        self, node: Node, visited_children: Tuple[Any, Any, Any, ColumnType, Any, Any]
+    ) -> ColumnType:
         (_null, _paren, _sp, inner_type, _sp, _paren) = visited_children
-        return Nullable(inner_type)
+        # TODO: Remove these assertions when ColumnType will be generic
+        return merge_modifiers(inner_type, MigrationModifiers(nullable=True))
 
     def visit_array(self, node: Node, visited_children: Iterable[Any]) -> ColumnType:
         (_arr, _paren, _sp, inner_type, _sp, _paren) = visited_children
@@ -175,12 +181,18 @@ def _get_column(
     column: ColumnType = Visitor().visit(grammar.parse(column_type))
 
     if default_type == "MATERIALIZED":
-        column = Materialized(column, _strip_cast(default_expr))
+        column = merge_modifiers(
+            column, MigrationModifiers(materialized=_strip_cast(default_expr))
+        )
     elif default_type == "DEFAULT":
-        column = WithDefault(column, _strip_cast(default_expr))
+        column = merge_modifiers(
+            column, MigrationModifiers(default=_strip_cast(default_expr))
+        )
 
     if codec_expr:
-        column = WithCodecs(column, codec_expr.split(", "))
+        column = merge_modifiers(
+            column, MigrationModifiers(codecs=codec_expr.split(", "))
+        )
 
     return column
 

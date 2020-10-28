@@ -1,5 +1,6 @@
 import pytest
-from snuba.clickhouse.columns import ColumnSet, Nested, Nullable, String, UInt
+from snuba.clickhouse.columns import ColumnSet, Nested, String, UInt
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query import SelectedExpression
@@ -9,7 +10,7 @@ from snuba.request.request_settings import HTTPRequestSettings
 
 columns = ColumnSet(
     [
-        ("promoted", Nullable(UInt(8))),
+        ("promoted", UInt(8, Modifiers(nullable=True))),
         ("tags", Nested([("key", String()), ("value", String())])),
     ]
 )
