@@ -711,8 +711,6 @@ def build_kafka_consumer_configuration(
 
 def build_kafka_producer_configuration(
     storage_key: Optional[StorageKey],
-    partitioner: str = DEFAULT_PARTITIONER,
-    message_max_bytes: int = DEFAULT_MAX_MESSAGE_BYTES,
     bootstrap_servers: Optional[Sequence[str]] = None,
     override_params: Optional[Mapping[str, Any]] = None,
 ) -> KafkaBrokerConfig:
@@ -720,9 +718,6 @@ def build_kafka_producer_configuration(
         storage_key,
         bootstrap_servers=bootstrap_servers,
         override_params=override_params,
-    )
-    broker_config.update(
-        {"partitioner": partitioner, "message.max.bytes": message_max_bytes}
     )
     return broker_config
 

@@ -59,7 +59,12 @@ class ConsumerBuilder:
             storage_key, bootstrap_servers=bootstrap_servers
         )
         self.producer_broker_config = build_kafka_producer_configuration(
-            storage_key, bootstrap_servers=bootstrap_servers
+            storage_key,
+            bootstrap_servers=bootstrap_servers,
+            override_params={
+                "partitioner": "consistent",
+                "message.max.bytes": 50000000,  # 50MB, default is 1MB
+            },
         )
 
         stream_loader = self.storage.get_table_writer().get_stream_loader()

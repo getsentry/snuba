@@ -33,7 +33,6 @@ from snuba.utils.streams.processing.strategies.batching import (
 )
 from snuba.utils.streams.synchronized import SynchronizedConsumer
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -163,7 +162,12 @@ def subscriptions(
     producer = ProducerEncodingWrapper(
         KafkaProducer(
             build_kafka_producer_configuration(
-                storage_key, bootstrap_servers=bootstrap_servers
+                storage_key,
+                bootstrap_servers=bootstrap_servers,
+                override_params={
+                    "partitioner": "consistent",
+                    "message.max.bytes": 50000000,  # 50MB, default is 1MB
+                },
             )
         ),
         SubscriptionTaskResultEncoder(),

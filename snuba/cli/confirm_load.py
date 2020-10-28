@@ -66,7 +66,12 @@ def confirm_load(
 
     producer = Producer(
         build_kafka_producer_configuration(
-            storage_key, bootstrap_servers=bootstrap_server
+            storage_key,
+            bootstrap_servers=bootstrap_server,
+            override_params={
+                "partitioner": "consistent",
+                "message.max.bytes": 50000000,  # 50MB, default is 1MB
+            },
         )
     )
 
