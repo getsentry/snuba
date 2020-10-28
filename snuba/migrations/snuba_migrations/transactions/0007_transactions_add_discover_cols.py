@@ -56,7 +56,7 @@ class Migration(migration.MultiStepMigration):
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name=table_name,
                 column=Column(
-                    "timestamp", DateTime(Modifiers(materialized="transaction_name"))
+                    "timestamp", DateTime(Modifiers(materialized="finish_ts"))
                 ),
                 after="title",
             ),
