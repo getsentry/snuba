@@ -111,9 +111,7 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
     called on NULL, change the entire function to be NULL.
     """
 
-    function_match = FunctionCallMatch(
-        StringMatch("ifNull"), (LiteralMatch(), LiteralMatch())
-    )
+    function_match = FunctionCallMatch(StringMatch("identity"), (LiteralMatch(),))
 
     def attempt_map(
         self,
@@ -121,25 +119,23 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
         children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[FunctionCall]:
         parameters = tuple(p.accept(children_translator) for p in expression.parameters)
-        all_null = True
+        has_null = False
         for param in parameters:
-            # Handle wrapped functions that have been converted to ifNull(NULL, NULL)
+            # Handle wrapped functions that have been converted already
             fmatch = self.function_match.match(param)
-            if fmatch is None:
-                if isinstance(param, Literal):
-                    if param.value is not None:
-                        all_null = False
-                        break
-                else:
-                    all_null = False
-                    break
+            if fmatch is not None:
+                has_null = True
+                break
+            elif (
+                isinstance(param, Literal) and param.alias != "" and param.value is None
+            ):
+                has_null = True
+                break
 
-        if all_null and len(parameters) > 0:
+        if has_null:
             # Currently function mappers require returning other functions. So return this
             # to keep the mapper happy.
-            return FunctionCall(
-                expression.alias, "ifNull", (Literal(None, None), Literal(None, None))
-            )
+            return identity(Literal(None, None), expression.alias)
 
         return None
 
@@ -151,9 +147,7 @@ class DefaultIfNullCurriedFunctionMapper(CurriedFunctionCallMapper):
     called on NULL, change the entire function to be NULL.
     """
 
-    function_match = FunctionCallMatch(
-        StringMatch("ifNull"), (LiteralMatch(), LiteralMatch())
-    )
+    function_match = FunctionCallMatch(StringMatch("identity"), (LiteralMatch(),))
 
     def attempt_map(
         self,
@@ -164,20 +158,20 @@ class DefaultIfNullCurriedFunctionMapper(CurriedFunctionCallMapper):
         assert isinstance(internal_function, FunctionCall)  # mypy
         parameters = tuple(p.accept(children_translator) for p in expression.parameters)
 
-        all_null = True
+        has_null = False
         for param in parameters:
-            # Handle wrapped functions that have been converted to ifNull(NULL, NULL)
+            # Handle wrapped functions that have been converted already
             fmatch = self.function_match.match(param)
-            if fmatch is None:
-                if isinstance(param, Literal):
-                    if param.value is not None:
-                        all_null = False
-                        break
-                else:
-                    all_null = False
-                    break
+            if fmatch is not None:
+                has_null = True
+                break
+            elif (
+                isinstance(param, Literal) and param.alias != "" and param.value is None
+            ):
+                has_null = True
+                break
 
-        if all_null and len(parameters) > 0:
+        if has_null:
             # Currently curried function mappers require returning other curried functions.
             # So return this to keep the mapper happy.
             return CurriedFunctionCall(
