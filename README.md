@@ -2,6 +2,7 @@
 
 A service providing fast event searching, filtering and aggregation on arbitrary fields.
 
+
 ## Sentry + Snuba
 
 Add/change the following lines in `~/.sentry/sentry.conf.py`:
