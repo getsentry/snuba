@@ -1,7 +1,7 @@
 import logging
 from abc import ABC
 from datetime import date, datetime
-from typing import cast, Sequence, Set, Type, Union
+from typing import Sequence, Set, Type, Union
 
 from snuba.clickhouse.columns import (
     UUID,
@@ -110,19 +110,14 @@ class Column(ParamType):
             # case.
             return
 
-        column_type = column.type.get_raw()
+        nullable = column.type.has_modifier(Nullable)
 
-        nullable = isinstance(column_type, Nullable)
-
-        if nullable:
-            column_type = cast(Nullable, column_type).inner_type
-
-        if not isinstance(column_type, tuple(self.__valid_types)) or (
+        if not isinstance(column.type, tuple(self.__valid_types)) or (
             nullable and not self.__allow_nullable
         ):
             raise InvalidFunctionCall(
                 (
-                    f"Illegal type {'Nullable ' if nullable else ''}{str(column_type)} "
+                    f"Illegal type {'Nullable ' if nullable else ''}{str(column.type)} "
                     f"of argument `{column_name}`. Required types {self.__valid_types}"
                 )
             )

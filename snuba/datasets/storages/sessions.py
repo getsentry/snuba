@@ -63,16 +63,16 @@ read_columns = ColumnSet(
         ("environment", String()),
         (
             "duration_quantiles",
-            AggregateFunction("quantilesIf(0.5, 0.9)", UInt(32), UInt(8)),
+            AggregateFunction("quantilesIf(0.5, 0.9)", [UInt(32), UInt(8)]),
         ),
-        ("sessions", AggregateFunction("countIf", UUID(), UInt(8))),
-        ("users", AggregateFunction("uniqIf", UUID(), UInt(8))),
-        ("sessions_crashed", AggregateFunction("countIf", UUID(), UInt(8)),),
-        ("sessions_abnormal", AggregateFunction("countIf", UUID(), UInt(8)),),
-        ("sessions_errored", AggregateFunction("uniqIf", UUID(), UInt(8))),
-        ("users_crashed", AggregateFunction("uniqIf", UUID(), UInt(8))),
-        ("users_abnormal", AggregateFunction("uniqIf", UUID(), UInt(8))),
-        ("users_errored", AggregateFunction("uniqIf", UUID(), UInt(8))),
+        ("sessions", AggregateFunction("countIf", [UUID(), UInt(8)])),
+        ("users", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
+        ("sessions_crashed", AggregateFunction("countIf", [UUID(), UInt(8)]),),
+        ("sessions_abnormal", AggregateFunction("countIf", [UUID(), UInt(8)]),),
+        ("sessions_errored", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
+        ("users_crashed", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
+        ("users_abnormal", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
+        ("users_errored", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
     ]
 )
 read_schema = TableSchema(

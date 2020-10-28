@@ -9,7 +9,7 @@ from typing import Any, Deque, Mapping, Optional, Sequence, Tuple
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
-from snuba.clickhouse.columns import FlattenedColumn, ReadOnly
+from snuba.clickhouse.columns import FlattenedColumn, ReadOnly, Nullable
 from snuba.clickhouse.escaping import escape_identifier, escape_string
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import InvalidMessageType, _hashify
@@ -135,13 +135,14 @@ class ErrorsReplacer(ReplacerProcessor):
         super().__init__(schema=schema)
         self.__required_columns = required_columns
         self.__all_columns = [
-            col for col in schema.get_columns() if not isinstance(col.type, ReadOnly)
+            col for col in schema.get_columns() if not col.type.has_modifier(ReadOnly)
         ]
 
         self.__tag_column_map = tag_column_map
         self.__promoted_tags = promoted_tags
         self.__state_name = state_name
         self.__use_promoted_prewhere = use_promoted_prewhere
+        self.__schema = schema
 
     def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
         type_ = message.action_type
@@ -167,6 +168,7 @@ class ErrorsReplacer(ReplacerProcessor):
                 self.__tag_column_map,
                 self.__promoted_tags,
                 self.__use_promoted_prewhere,
+                self.__schema,
             )
         else:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
@@ -386,6 +388,7 @@ def process_delete_tag(
     tag_column_map: Mapping[str, Mapping[str, str]],
     promoted_tags: Mapping[str, Sequence[str]],
     use_promoted_prewhere: bool,
+    schema: WritableTableSchema,
 ) -> Optional[Replacement]:
     tag = message["tag"]
     if not tag:
@@ -420,7 +423,16 @@ def process_delete_tag(
     select_columns = []
     for col in all_columns:
         if is_promoted and col.flattened == tag_column_name:
-            select_columns.append("NULL")
+            # The promoted tag columns of events are non nullable, but those of
+            # errors are non nullable. We check the column against the schema
+            # to determine whether to write an empty string or NULL.
+            column_type = schema.get_data_source().get_columns().get(tag_column_name)
+            assert column_type is not None
+            is_nullable = column_type.type.has_modifier(Nullable)
+            if is_nullable:
+                select_columns.append("NULL")
+            else:
+                select_columns.append("''")
         elif col.flattened == "tags.key":
             select_columns.append(
                 "arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, %s)), `tags.key`)"

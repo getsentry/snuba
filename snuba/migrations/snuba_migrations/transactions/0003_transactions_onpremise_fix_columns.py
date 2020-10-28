@@ -1,16 +1,9 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import (
-    Column,
-    DateTime,
-    Nullable,
-    String,
-    UInt,
-)
+from snuba.clickhouse.columns import Column, DateTime, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
-from snuba.migrations.columns import LowCardinality, Materialized, WithDefault
-
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 UNKNOWN_SPAN_STATUS = 2
 
@@ -35,14 +28,16 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column("sdk_name", WithDefault(LowCardinality(String()), "''")),
+                column=Column(
+                    "sdk_name", String(Modifiers(low_cardinality=True, default="''"))
+                ),
                 after="user_email",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
                 column=Column(
-                    "sdk_version", WithDefault(LowCardinality(String()), "''")
+                    "sdk_version", String(Modifiers(low_cardinality=True, default="''"))
                 ),
                 after="sdk_name",
             ),
@@ -50,7 +45,8 @@ class Migration(migration.MultiStepMigration):
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
                 column=Column(
-                    "transaction_status", WithDefault(UInt(8), str(UNKNOWN_SPAN_STATUS))
+                    "transaction_status",
+                    UInt(8, Modifiers(default=str(UNKNOWN_SPAN_STATUS))),
                 ),
                 after="transaction_op",
             ),
@@ -69,41 +65,54 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column("user_hash", Materialized(UInt(64), "cityHash64(user)")),
+                column=Column(
+                    "user_hash", UInt(64, Modifiers(materialized="cityHash64(user)"))
+                ),
                 after="user",
             ),
             # The following columns were originally created as non low cardinality strings
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column("transaction_name", LowCardinality(String())),
-            ),
-            operations.ModifyColumn(
-                storage_set=StorageSetKey.TRANSACTIONS,
-                table_name="transactions_local",
-                column=Column("release", LowCardinality(Nullable(String()))),
-            ),
-            operations.ModifyColumn(
-                storage_set=StorageSetKey.TRANSACTIONS,
-                table_name="transactions_local",
-                column=Column("dist", LowCardinality(Nullable(String()))),
-            ),
-            operations.ModifyColumn(
-                storage_set=StorageSetKey.TRANSACTIONS,
-                table_name="transactions_local",
-                column=Column("sdk_name", WithDefault(LowCardinality(String()), "''")),
-            ),
-            operations.ModifyColumn(
-                storage_set=StorageSetKey.TRANSACTIONS,
-                table_name="transactions_local",
                 column=Column(
-                    "sdk_version", WithDefault(LowCardinality(String()), "''")
+                    "transaction_name", String(Modifiers(low_cardinality=True))
                 ),
             ),
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_local",
-                column=Column("environment", LowCardinality(Nullable(String()))),
+                column=Column(
+                    "release", String(Modifiers(nullable=True, low_cardinality=True))
+                ),
+            ),
+            operations.ModifyColumn(
+                storage_set=StorageSetKey.TRANSACTIONS,
+                table_name="transactions_local",
+                column=Column(
+                    "dist", String(Modifiers(nullable=True, low_cardinality=True))
+                ),
+            ),
+            operations.ModifyColumn(
+                storage_set=StorageSetKey.TRANSACTIONS,
+                table_name="transactions_local",
+                column=Column(
+                    "sdk_name", String(Modifiers(low_cardinality=True, default="''"))
+                ),
+            ),
+            operations.ModifyColumn(
+                storage_set=StorageSetKey.TRANSACTIONS,
+                table_name="transactions_local",
+                column=Column(
+                    "sdk_version", String(Modifiers(low_cardinality=True, default="''"))
+                ),
+            ),
+            operations.ModifyColumn(
+                storage_set=StorageSetKey.TRANSACTIONS,
+                table_name="transactions_local",
+                column=Column(
+                    "environment",
+                    String(Modifiers(nullable=True, low_cardinality=True)),
+                ),
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,

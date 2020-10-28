@@ -1,14 +1,9 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import (
-    Column,
-    DateTime,
-    Nullable,
-    UInt,
-)
+from snuba.clickhouse.columns import Column, DateTime, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
-
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 columns = [
     # Kafka topic offset
@@ -21,11 +16,11 @@ columns = [
     # PG columns
     Column("project_id", UInt(64)),
     Column("id", UInt(64)),
-    Column("status", Nullable(UInt(8))),
-    Column("last_seen", Nullable(DateTime())),
-    Column("first_seen", Nullable(DateTime())),
-    Column("active_at", Nullable(DateTime())),
-    Column("first_release_id", Nullable(UInt(64))),
+    Column("status", UInt(8, Modifiers(nullable=True))),
+    Column("last_seen", DateTime(Modifiers(nullable=True))),
+    Column("first_seen", DateTime(Modifiers(nullable=True))),
+    Column("active_at", DateTime(Modifiers(nullable=True))),
+    Column("first_release_id", UInt(64, Modifiers(nullable=True))),
 ]
 
 

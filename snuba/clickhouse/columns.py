@@ -1,19 +1,136 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from itertools import chain
 from typing import (
-    cast,
     Iterator,
+    List,
     Mapping,
     MutableMapping,
-    List,
     Optional,
     Sequence,
     Tuple,
+    Type,
     Union,
+    cast,
 )
 
 from snuba.clickhouse.escaping import escape_identifier
+
+
+class TypeModifier(ABC):
+    """
+    Changes the semantics of a ColumnType. Usual modifiers are
+    Nullable, WithDefault, or similar.
+    """
+
+    @abstractmethod
+    def for_schema(self, content: str) -> str:
+        """
+        Formats the modifier for DDL statements.
+        The content parameter is the serialized type the modifier
+        applies to.
+        """
+        raise NotImplementedError
+
+
+class TypeModifiers(ABC):
+    """
+    Contains all the modifiers to apply to a type in a schema.
+    An instance of this class is associated to a an instance of a
+    ColumnType and provides the method to format the modifiers.
+
+    The way instances of this class are initialized and the order
+    in which modifiers are applied are up to the subclasses.
+    """
+
+    def for_schema(self, serialized_type: str) -> str:
+        """
+        Formats the modifiers around the pre-formatted ColumnType.
+        """
+        ret = serialized_type
+        for c in self._get_modifiers():
+            ret = c.for_schema(ret)
+        return ret
+
+    @abstractmethod
+    def _get_modifiers(self) -> Sequence[TypeModifier]:
+        """
+        Establishes the order to follow when applying modifiers.
+        """
+        raise NotImplementedError
+
+    def has_modifier(self, modifier: Type[TypeModifier]) -> bool:
+        """
+        Returns true if a modifier of the type provided is present in
+        this container.
+        """
+        return any(t for t in self._get_modifiers() if isinstance(t, modifier))
+
+
+# Unfortunately we cannot easily make these classes dataclasses (which
+# would provide a convenient default implementation for all __repr__
+# and __eq__ methods and allow for immutability) while keeping the
+# schemas and migration concise.
+# Making this a dataclass would mean `modifiers` would have to be the
+# first argument of the constructor meaning that an empty list would
+# have to be provided everytime we define a column in a migration or
+# in a schema.
+class ColumnType:
+    def __init__(self, modifiers: Optional[TypeModifiers] = None):
+        self.__modifiers = modifiers
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self._repr_content()})[{self.__modifiers}]"
+
+    def _repr_content(self) -> str:
+        """
+        Extend if the type you are building has additional parameters
+        to show in the representation.
+        """
+        return ""
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.__modifiers == cast(ColumnType, other).get_modifiers()
+        )
+
+    def for_schema(self) -> str:
+        return (
+            self.__modifiers.for_schema(self._for_schema_impl())
+            if self.__modifiers is not None
+            else self._for_schema_impl()
+        )
+
+    def _for_schema_impl(self) -> str:
+        """
+        Provides the clickhouse representation of this type
+        without including the modifiers.
+        """
+        return self.__class__.__name__
+
+    def flatten(self, name: str) -> Sequence[FlattenedColumn]:
+        return [FlattenedColumn(None, name, self)]
+
+    def get_modifiers(self) -> Optional[TypeModifiers]:
+        return self.__modifiers
+
+    def set_modifiers(self, modifiers: Optional[TypeModifiers]) -> ColumnType:
+        """
+        Returns a new instance of this class with the provided
+        modifiers.
+        """
+        return type(self)(modifiers=modifiers)
+
+    def get_raw(self) -> ColumnType:
+        return type(self)()
+
+    def has_modifier(self, modifier: Type[TypeModifier]) -> bool:
+        if self.__modifiers is None:
+            return False
+        return self.__modifiers.has_modifier(modifier)
 
 
 class Column:
@@ -67,89 +184,83 @@ class FlattenedColumn:
         )
 
 
-class ColumnType:
-    def __repr__(self) -> str:
-        return self.__class__.__name__ + "()"
+@dataclass(frozen=True)
+class SchemaModifiers(TypeModifiers):
+    """
+    Modifiers for the schemas we use during query processing.
+    """
 
-    def __eq__(self, other: object) -> bool:
-        return self.__class__ == other.__class__
+    nullable: bool = False
+    readonly: bool = False
 
-    def for_schema(self) -> str:
-        return self.__class__.__name__
-
-    def flatten(self, name: str) -> Sequence[FlattenedColumn]:
-        return [FlattenedColumn(None, name, self)]
-
-    def get_raw(self) -> ColumnType:
-        return self
-
-
-class ReadOnly(ColumnType):
-    def __init__(self, inner_type: ColumnType) -> None:
-        self.inner_type = inner_type
-
-    def __repr__(self) -> str:
-        return "ReadOnly({})".format(repr(self.inner_type))
-
-    def get_raw(self) -> ColumnType:
-        return self.inner_type.get_raw()
+    def _get_modifiers(self) -> Sequence[TypeModifier]:
+        ret: List[TypeModifier] = []
+        if self.nullable:
+            ret.append(Nullable())
+        if self.readonly:
+            ret.append(ReadOnly())
+        return ret
 
 
-class Nullable(ColumnType):
-    def __init__(self, inner_type: ColumnType) -> None:
-        self.inner_type = inner_type
+@dataclass(frozen=True)
+class ReadOnly(TypeModifier):
+    def for_schema(self, content: str) -> str:
+        return content
 
-    def __repr__(self) -> str:
-        return "Nullable({})".format(repr(self.inner_type))
 
-    def __eq__(self, other: object) -> bool:
-        return (self.__class__ == other.__class__) and self.inner_type == cast(
-            Nullable, other
-        ).inner_type
-
-    def for_schema(self) -> str:
-        return "Nullable({})".format(self.inner_type.for_schema())
-
-    def get_raw(self) -> ColumnType:
-        return Nullable(self.inner_type.get_raw())
+@dataclass(frozen=True)
+class Nullable(TypeModifier):
+    def for_schema(self, content: str) -> str:
+        return "Nullable({})".format(content)
 
 
 class Array(ColumnType):
-    def __init__(self, inner_type: ColumnType) -> None:
+    def __init__(
+        self, inner_type: ColumnType, modifiers: Optional[TypeModifiers] = None
+    ) -> None:
+        super().__init__(modifiers)
         self.inner_type = inner_type
 
-    def __repr__(self) -> str:
-        return "Array({})".format(repr(self.inner_type))
+    def _repr_content(self) -> str:
+        return repr(self.inner_type)
 
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
             and self.inner_type == cast(Array, other).inner_type
+            and self.get_modifiers() == cast(Array, other).get_modifiers()
         )
 
-    def for_schema(self) -> str:
+    def _for_schema_impl(self) -> str:
         return "Array({})".format(self.inner_type.for_schema())
 
-    def get_raw(self) -> ColumnType:
-        return Array(self.inner_type.get_raw())
+    def set_modifiers(self, modifiers: Optional[TypeModifiers]) -> Array:
+        return Array(inner_type=self.inner_type, modifiers=modifiers)
+
+    def get_raw(self) -> Array:
+        return Array(inner_type=self.inner_type.get_raw())
 
 
 class Nested(ColumnType):
     def __init__(
-        self, nested_columns: Sequence[Union[Column, Tuple[str, ColumnType]]]
+        self,
+        nested_columns: Sequence[Union[Column, Tuple[str, ColumnType]]],
+        modifiers: Optional[TypeModifiers] = None,
     ) -> None:
+        super().__init__(modifiers)
         self.nested_columns = Column.to_columns(nested_columns)
 
-    def __repr__(self) -> str:
-        return "Nested({})".format(repr(self.nested_columns))
+    def _repr_content(self) -> str:
+        return repr(self.nested_columns)
 
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
+            and self.get_modifiers() == cast(Nested, other).get_modifiers()
             and self.nested_columns == cast(Nested, other).nested_columns
         )
 
-    def for_schema(self) -> str:
+    def _for_schema_impl(self) -> str:
         return "Nested({})".format(
             ", ".join(column.for_schema() for column in self.nested_columns)
         )
@@ -160,28 +271,46 @@ class Nested(ColumnType):
             for column in self.nested_columns
         ]
 
+    def set_modifiers(self, modifiers: Optional[TypeModifiers]) -> Nested:
+        return Nested(nested_columns=self.nested_columns, modifiers=modifiers)
+
+    def get_raw(self) -> Nested:
+        raw_columns = [Column(c.name, c.type.get_raw()) for c in self.nested_columns]
+        return Nested(nested_columns=raw_columns)
+
 
 class AggregateFunction(ColumnType):
-    def __init__(self, func: str, *arg_types: ColumnType) -> None:
+    def __init__(
+        self,
+        func: str,
+        arg_types: Sequence[ColumnType],
+        modifiers: Optional[TypeModifiers] = None,
+    ) -> None:
+        super().__init__(modifiers)
         self.func = func
         self.arg_types = arg_types
 
-    def __repr__(self) -> str:
-        return "AggregateFunction({})".format(
-            ", ".join(repr(x) for x in chain([self.func], self.arg_types)),
-        )
+    def _repr_content(self) -> str:
+        return ", ".join(repr(x) for x in chain([self.func], self.arg_types))
 
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
+            and self.get_modifiers() == cast(AggregateFunction, other).get_modifiers()
             and self.func == cast(AggregateFunction, other).func
             and self.arg_types == cast(AggregateFunction, other).arg_types
         )
 
-    def for_schema(self) -> str:
+    def _for_schema_impl(self) -> str:
         return "AggregateFunction({})".format(
             ", ".join(chain([self.func], (x.for_schema() for x in self.arg_types))),
         )
+
+    def set_modifiers(self, modifiers: Optional[TypeModifiers]) -> AggregateFunction:
+        return AggregateFunction(self.func, self.arg_types, modifiers)
+
+    def get_raw(self) -> AggregateFunction:
+        return AggregateFunction(self.func, [t.get_raw() for t in self.arg_types])
 
 
 class String(ColumnType):
@@ -201,52 +330,80 @@ class IPv6(ColumnType):
 
 
 class FixedString(ColumnType):
-    def __init__(self, length: int) -> None:
+    def __init__(self, length: int, modifiers: Optional[TypeModifiers] = None) -> None:
+        super().__init__(modifiers)
         self.length = length
 
-    def __repr__(self) -> str:
-        return "FixedString({})".format(self.length)
+    def _repr_content(self) -> str:
+        return str(self.length)
 
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
+            and self.get_modifiers() == cast(FixedString, other).get_modifiers()
             and self.length == cast(FixedString, other).length
         )
 
-    def for_schema(self) -> str:
+    def _for_schema_impl(self) -> str:
         return "FixedString({})".format(self.length)
+
+    def set_modifiers(self, modifiers: Optional[TypeModifiers]) -> FixedString:
+        return FixedString(length=self.length, modifiers=modifiers)
+
+    def get_raw(self) -> FixedString:
+        return FixedString(self.length)
 
 
 class UInt(ColumnType):
-    def __init__(self, size: int) -> None:
+    def __init__(self, size: int, modifiers: Optional[TypeModifiers] = None) -> None:
+        super().__init__(modifiers)
         assert size in (8, 16, 32, 64)
         self.size = size
 
-    def __repr__(self) -> str:
-        return "UInt({})".format(self.size)
-
-    def __eq__(self, other: object) -> bool:
-        return self.__class__ == other.__class__ and self.size == cast(UInt, other).size
-
-    def for_schema(self) -> str:
-        return "UInt{}".format(self.size)
-
-
-class Float(ColumnType):
-    def __init__(self, size: int) -> None:
-        assert size in (32, 64)
-        self.size = size
-
-    def __repr__(self) -> str:
-        return "Float({})".format(self.size)
+    def _repr_content(self) -> str:
+        return str(self.size)
 
     def __eq__(self, other: object) -> bool:
         return (
-            self.__class__ == other.__class__ and self.size == cast(Float, other).size
+            self.__class__ == other.__class__
+            and self.get_modifiers() == cast(UInt, other).get_modifiers()
+            and self.size == cast(UInt, other).size
         )
 
-    def for_schema(self) -> str:
+    def _for_schema_impl(self) -> str:
+        return "UInt{}".format(self.size)
+
+    def set_modifiers(self, modifiers: Optional[TypeModifiers]) -> UInt:
+        return UInt(size=self.size, modifiers=modifiers)
+
+    def get_raw(self) -> UInt:
+        return UInt(self.size)
+
+
+class Float(ColumnType):
+    def __init__(self, size: int, modifiers: Optional[TypeModifiers] = None,) -> None:
+        super().__init__(modifiers)
+        assert size in (32, 64)
+        self.size = size
+
+    def _repr_content(self) -> str:
+        return str(self.size)
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.get_modifiers() == cast(Float, other).get_modifiers()
+            and self.size == cast(Float, other).size
+        )
+
+    def _for_schema_impl(self) -> str:
         return "Float{}".format(self.size)
+
+    def set_modifiers(self, modifiers: Optional[TypeModifiers]) -> Float:
+        return Float(size=self.size, modifiers=modifiers)
+
+    def get_raw(self) -> Float:
+        return Float(self.size)
 
 
 class Date(ColumnType):
@@ -258,24 +415,34 @@ class DateTime(ColumnType):
 
 
 class Enum(ColumnType):
-    def __init__(self, values: Sequence[Tuple[str, int]]) -> None:
+    def __init__(
+        self,
+        values: Sequence[Tuple[str, int]],
+        modifiers: Optional[TypeModifiers] = None,
+    ) -> None:
+        super().__init__(modifiers)
         self.values = values
 
-    def __repr__(self) -> str:
-        return "Enum({})".format(
-            ", ".join("'{}' = {}".format(v[0], v[1]) for v in self.values)
-        )
+    def _repr_content(self) -> str:
+        return ", ".join("'{}' = {}".format(v[0], v[1]) for v in self.values)
 
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
+            and self.get_modifiers() == cast(Enum, other).get_modifiers()
             and self.values == cast(Enum, other).values
         )
 
-    def for_schema(self) -> str:
+    def _for_schema_impl(self) -> str:
         return "Enum({})".format(
             ", ".join("'{}' = {}".format(v[0], v[1]) for v in self.values)
         )
+
+    def set_modifiers(self, modifiers: Optional[TypeModifiers]) -> Enum:
+        return Enum(values=self.values, modifiers=modifiers)
+
+    def get_raw(self) -> Enum:
+        return Enum(self.values)
 
 
 class ColumnSet:
