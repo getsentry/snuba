@@ -5,8 +5,8 @@ from snuba.clickhouse.columns import (
     Nested,
 )
 
-from snuba.datasets.schemas.join import JoinedSchema
-from tests.datasets.schemas.join_examples import complex_join_structure
+# from snuba.query.data_source.join import JoinedSchema
+# from tests.datasets.schemas.join_examples import complex_join_structure
 
 
 def test_joined_columns():

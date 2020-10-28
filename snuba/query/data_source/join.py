@@ -1,19 +1,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections import ChainMap
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Mapping, NamedTuple, Optional, Sequence, Union
+from typing import Generic, Mapping, NamedTuple, Optional, Sequence, Union
 
-from dataclasses import dataclass
-from snuba.query.data_source.simple import Entity
-from snuba.query import ProcessableQuery
-from snuba.query.data_source import DataSource
 from snuba.clickhouse.columns import ColumnSet, QualifiedColumnSet, SchemaModifiers
-from snuba.datasets.schemas import RelationalSource, Schema
-from snuba.datasets.schemas.tables import TableSource
-from snuba.query.expressions import FunctionCall
+from snuba.query import ProcessableQuery, TSimpleDataSource
+from snuba.query.data_source import DataSource
 
 
 class JoinType(Enum):
@@ -26,13 +20,19 @@ class JoinModifier(Enum):
     SEMI = "SEMI"
 
 
-Joinable = Union[
-    Entity,
-    RelationalSource,
-    ProcessableQuery[Entity],
-    ProcessableQuery[RelationalSource],
-    JoinClause,
-]
+class JoinNode(ABC, Generic[TSimpleDataSource]):
+    alias: str
+
+    @abstractmethod
+    def get_column_sets(self) -> Mapping[str, ColumnSet[SchemaModifiers]]:
+        raise NotImplementedError
+
+
+class IndividualNode(JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
+    data_source: Union[TSimpleDataSource, ProcessableQuery[TSimpleDataSource]]
+
+    def get_column_sets(self) -> Mapping[str, ColumnSet[SchemaModifiers]]:
+        return {self.alias: self.data_source.get_columns()}
 
 
 class JoinConditionExpression(NamedTuple):
@@ -56,12 +56,26 @@ class JoinCondition:
 
 
 @dataclass(frozen=True)
-class JoinClause(DataSource):
-    left_node: Joinable
-    right_node: Joinable
-    mapping: Sequence[JoinCondition]
+class JoinClause(DataSource, JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
+    left_node: IndividualNode[TSimpleDataSource]
+    right_node: JoinNode[TSimpleDataSource]
+    keys: Sequence[JoinCondition]
     join_type: JoinType
     join_modifier: Optional[JoinModifier]
 
+    def get_column_sets(self) -> Mapping[str, ColumnSet[SchemaModifiers]]:
+        return {
+            **self.left_node.get_column_sets(),
+            **self.right_node.get_column_sets(),
+        }
+
     def get_columns(self) -> ColumnSet[SchemaModifiers]:
-        raise NotImplementedError
+        return QualifiedColumnSet(self.get_column_sets())
+
+    def __post_init__(self) -> None:
+        column_set = self.get_columns()
+        for condition in self.keys:
+            assert f"{condition.left.table_alias}.{condition.left.column}" in column_set
+            assert (
+                f"{condition.right.table_alias}.{condition.right.column}" in column_set
+            )

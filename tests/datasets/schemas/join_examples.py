@@ -6,13 +6,14 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.schemas.join import (
-    JoinConditionExpression,
-    JoinCondition,
-    JoinClause,
-    JoinType,
-    TableJoinNode,
-)
+
+# from tests.datasets.schemas.join_examples import (
+#    JoinConditionExpression,
+##    JoinCondition,
+#    JoinClause,
+#    JoinType,
+#    TableJoinNode,
+# )
 
 
 table1 = TableSchema(
