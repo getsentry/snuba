@@ -4,6 +4,8 @@ from typing import Callable, Mapping, Optional, Sequence, Tuple
 
 import logging
 
+from snuba.utils.streams.backends.kafka import KafkaBrokerConfig
+
 logger = logging.getLogger("snuba.kafka-consumer")
 
 
@@ -41,7 +43,7 @@ class StrictConsumer:
     def __init__(
         self,
         topic: str,
-        bootstrap_servers: Sequence[str],
+        broker_config: KafkaBrokerConfig,
         group_id: str,
         initial_auto_offset_reset: str,
         partition_assignment_timeout: int,
@@ -61,13 +63,15 @@ class StrictConsumer:
         self.__topic = topic
         self.__consuming = False
 
-        consumer_config = {
-            "enable.auto.commit": False,
-            "bootstrap.servers": ",".join(bootstrap_servers),
-            "group.id": group_id,
-            "enable.partition.eof": "true",
-            "auto.offset.reset": initial_auto_offset_reset,
-        }
+        consumer_config = broker_config.copy()
+        consumer_config.update(
+            {
+                "enable.auto.commit": False,
+                "group.id": group_id,
+                "enable.partition.eof": "true",
+                "auto.offset.reset": initial_auto_offset_reset,
+            }
+        )
 
         self.__consumer = self._create_consumer(consumer_config)
 
@@ -93,9 +97,9 @@ class StrictConsumer:
                 self.__on_partitions_revoked(consumer, partitions)
 
         logger.debug(
-            "Subscribing strict consuemr to topic %s on broker %r",
+            "Subscribing strict consumer to topic %s on broker %r",
             topic,
-            bootstrap_servers,
+            broker_config.get("bootstrap.servers"),
         )
         self.__consumer.subscribe(
             [topic],

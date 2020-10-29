@@ -15,6 +15,9 @@ from confluent_kafka import Producer
 from snuba import environment, settings
 from snuba.redis import redis_client as rds
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.streams.backends.kafka import (
+    build_default_kafka_producer_configuration,
+)
 
 metrics = MetricsWrapper(environment.metrics, "snuba.state")
 logger = logging.getLogger("snuba.state")
@@ -214,7 +217,7 @@ def record_query(query_metadata: Mapping[str, Any]) -> None:
         ).execute()
 
         if kfk is None:
-            kfk = Producer({"bootstrap.servers": ",".join(settings.DEFAULT_BROKERS)})
+            kfk = Producer(build_default_kafka_producer_configuration())
 
         kfk.poll(0)  # trigger queued delivery callbacks
         kfk.produce(

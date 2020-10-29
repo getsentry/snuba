@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import logging
 from concurrent.futures import Future
 from datetime import datetime
@@ -34,6 +35,8 @@ from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
+from snuba import settings
+from snuba.datasets.storages import StorageKey
 from snuba.utils.concurrent import execute
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
 from snuba.utils.streams.backends.abstract import (
@@ -45,7 +48,6 @@ from snuba.utils.streams.backends.abstract import (
 )
 from snuba.utils.streams.types import Message, Partition, Topic
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -56,6 +58,8 @@ class TransportError(ConsumerError):
 KafkaConsumerState = Enum(
     "KafkaConsumerState", ["CONSUMING", "ERROR", "CLOSED", "ASSIGNING", "REVOKING"]
 )
+
+KafkaBrokerConfig = Mapping[str, Any]
 
 
 class InvalidState(RuntimeError):
@@ -615,26 +619,111 @@ class KafkaConsumer(Consumer[KafkaPayload]):
 
 DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
 DEFAULT_QUEUED_MIN_MESSAGES = 10000
+DEFAULT_PARTITIONER = "consistent"
+DEFAULT_MAX_MESSAGE_BYTES = 50000000  # 50MB, default is 1MB
+SUPPORTED_KAFKA_CONFIGURATION = (
+    # Check https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+    # for the full list of available options
+    "bootstrap.servers",
+    "sasl.mechanism",
+    "sasl.username",
+    "sasl.password",
+    "security.protocol",
+)
+
+
+def get_default_kafka_configuration(
+    storage_key: Optional[StorageKey] = None,
+    bootstrap_servers: Optional[Sequence[str]] = None,
+    override_params: Optional[Mapping[str, Any]] = None,
+) -> KafkaBrokerConfig:
+    default_bootstrap_servers = None
+    if storage_key is not None:
+        storage_name = storage_key.value
+        if storage_name in settings.DEFAULT_STORAGE_BROKERS:
+            # this is now deprecated
+            logger.warning(
+                "DEPRECATED: DEFAULT_STORAGE_BROKERS is defined. Please use STORAGE_BROKER_CONFIG instead"
+            )
+            default_config = {}
+            default_bootstrap_servers = ",".join(
+                settings.DEFAULT_STORAGE_BROKERS[storage_name]
+            )
+        elif settings.DEFAULT_BROKERS:
+            default_config = {}
+            default_bootstrap_servers = ",".join(settings.DEFAULT_BROKERS)
+        else:
+            default_config = settings.STORAGE_BROKER_CONFIG.get(
+                storage_name, settings.BROKER_CONFIG
+            )
+    else:
+        if settings.DEFAULT_BROKERS:
+            default_config = {}
+            default_bootstrap_servers = ",".join(settings.DEFAULT_BROKERS)
+        else:
+            default_config = settings.BROKER_CONFIG
+    broker_config = copy.deepcopy(default_config)
+    bootstrap_servers = (
+        ",".join(bootstrap_servers) if bootstrap_servers else default_bootstrap_servers
+    )
+    if bootstrap_servers:
+        broker_config["bootstrap.servers"] = bootstrap_servers
+    broker_config = {k: v for k, v in broker_config.items() if v is not None}
+    for configuration_key in broker_config:
+        if configuration_key not in SUPPORTED_KAFKA_CONFIGURATION:
+            raise ValueError(
+                f"The `{configuration_key}` configuration key is not supported."
+            )
+
+    if override_params:
+        broker_config.update(override_params)
+    return broker_config
 
 
 def build_kafka_consumer_configuration(
-    bootstrap_servers: Sequence[str],
+    storage_key: Optional[StorageKey],
     group_id: str,
     auto_offset_reset: str = "error",
     queued_max_messages_kbytes: int = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
     queued_min_messages: int = DEFAULT_QUEUED_MIN_MESSAGES,
-) -> Mapping[str, Any]:
-    return {
-        "enable.auto.commit": False,
-        "enable.auto.offset.store": False,
-        "bootstrap.servers": ",".join(bootstrap_servers),
-        "group.id": group_id,
-        "auto.offset.reset": auto_offset_reset,
-        # overridden to reduce memory usage when there's a large backlog
-        "queued.max.messages.kbytes": queued_max_messages_kbytes,
-        "queued.min.messages": queued_min_messages,
-        "enable.partition.eof": False,
-    }
+    bootstrap_servers: Optional[Sequence[str]] = None,
+    override_params: Optional[Mapping[str, Any]] = None,
+) -> KafkaBrokerConfig:
+    broker_config = get_default_kafka_configuration(
+        storage_key,
+        bootstrap_servers=bootstrap_servers,
+        override_params=override_params,
+    )
+    broker_config.update(
+        {
+            "enable.auto.commit": False,
+            "enable.auto.offset.store": False,
+            "group.id": group_id,
+            "auto.offset.reset": auto_offset_reset,
+            # overridden to reduce memory usage when there's a large backlog
+            "queued.max.messages.kbytes": queued_max_messages_kbytes,
+            "queued.min.messages": queued_min_messages,
+            "enable.partition.eof": False,
+        }
+    )
+    return broker_config
+
+
+def build_kafka_producer_configuration(
+    storage_key: Optional[StorageKey],
+    bootstrap_servers: Optional[Sequence[str]] = None,
+    override_params: Optional[Mapping[str, Any]] = None,
+) -> KafkaBrokerConfig:
+    broker_config = get_default_kafka_configuration(
+        storage_key,
+        bootstrap_servers=bootstrap_servers,
+        override_params=override_params,
+    )
+    return broker_config
+
+
+def build_default_kafka_producer_configuration() -> KafkaBrokerConfig:
+    return build_kafka_producer_configuration(None)
 
 
 # XXX: This must be imported after `KafkaPayload` to avoid a circular import.
