@@ -119,23 +119,15 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
         children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[FunctionCall]:
         parameters = tuple(p.accept(children_translator) for p in expression.parameters)
-        has_null = False
         for param in parameters:
             # Handle wrapped functions that have been converted already
             fmatch = self.function_match.match(param)
-            if fmatch is not None:
-                has_null = True
-                break
-            elif (
+            if fmatch is not None or (
                 isinstance(param, Literal) and param.alias != "" and param.value is None
             ):
-                has_null = True
-                break
-
-        if has_null:
-            # Currently function mappers require returning other functions. So return this
-            # to keep the mapper happy.
-            return identity(Literal(None, None), expression.alias)
+                # Currently function mappers require returning other functions. So return this
+                # to keep the mapper happy.
+                return identity(Literal(None, None), expression.alias)
 
         return None
 
@@ -158,31 +150,21 @@ class DefaultIfNullCurriedFunctionMapper(CurriedFunctionCallMapper):
         assert isinstance(internal_function, FunctionCall)  # mypy
         parameters = tuple(p.accept(children_translator) for p in expression.parameters)
 
-        has_null = False
         for param in parameters:
             # Handle wrapped functions that have been converted already
             fmatch = self.function_match.match(param)
-            if fmatch is not None:
-                has_null = True
-                break
-            elif (
+            if fmatch is not None or (
                 isinstance(param, Literal) and param.alias != "" and param.value is None
             ):
-                has_null = True
-                break
-
-        if has_null:
-            # Currently curried function mappers require returning other curried functions.
-            # So return this to keep the mapper happy.
-            return CurriedFunctionCall(
-                alias=expression.alias,
-                internal_function=FunctionCall(
-                    None,
-                    f"{internal_function.function_name}OrNull",
-                    internal_function.parameters,
-                ),
-                parameters=tuple(Literal(None, None) for p in parameters),
-            )
+                return CurriedFunctionCall(
+                    alias=expression.alias,
+                    internal_function=FunctionCall(
+                        None,
+                        f"{internal_function.function_name}OrNull",
+                        internal_function.parameters,
+                    ),
+                    parameters=tuple(Literal(None, None) for p in parameters),
+                )
 
         return None
 
