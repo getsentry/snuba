@@ -20,19 +20,25 @@ class JoinModifier(Enum):
     SEMI = "SEMI"
 
 
+@dataclass(frozen=True)
 class JoinNode(ABC, Generic[TSimpleDataSource]):
-    alias: str
+    alias: Optional[str]
 
     @abstractmethod
     def get_column_sets(self) -> Mapping[str, ColumnSet[SchemaModifiers]]:
         raise NotImplementedError
 
 
+@dataclass(frozen=True)
 class IndividualNode(JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
     data_source: Union[TSimpleDataSource, ProcessableQuery[TSimpleDataSource]]
 
     def get_column_sets(self) -> Mapping[str, ColumnSet[SchemaModifiers]]:
-        return {self.alias: self.data_source.get_columns()}
+        return (
+            {self.alias: self.data_source.get_columns()}
+            if self.alias is not None
+            else {}
+        )
 
 
 class JoinConditionExpression(NamedTuple):
@@ -45,8 +51,7 @@ class JoinConditionExpression(NamedTuple):
     column: str
 
 
-@dataclass(frozen=True)
-class JoinCondition:
+class JoinCondition(NamedTuple):
     """
     Represent a condition in the ON clause in the JOIN expression
     """
@@ -57,11 +62,11 @@ class JoinCondition:
 
 @dataclass(frozen=True)
 class JoinClause(DataSource, JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
-    left_node: IndividualNode[TSimpleDataSource]
-    right_node: JoinNode[TSimpleDataSource]
+    left_node: JoinNode[TSimpleDataSource]
+    right_node: IndividualNode[TSimpleDataSource]
     keys: Sequence[JoinCondition]
     join_type: JoinType
-    join_modifier: Optional[JoinModifier]
+    join_modifier: Optional[JoinModifier] = None
 
     def get_column_sets(self) -> Mapping[str, ColumnSet[SchemaModifiers]]:
         return {
@@ -74,6 +79,7 @@ class JoinClause(DataSource, JoinNode[TSimpleDataSource], Generic[TSimpleDataSou
 
     def __post_init__(self) -> None:
         column_set = self.get_columns()
+
         for condition in self.keys:
             assert f"{condition.left.table_alias}.{condition.left.column}" in column_set
             assert (
