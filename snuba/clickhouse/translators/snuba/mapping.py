@@ -102,6 +102,9 @@ class SnubaClickhouseMappingTranslator(SnubaClickhouseStrictTranslator):
     This relies on a visitor so that we can statically enforce that no
     expression subtype is added to the code base without properly support
     it in all translators. The downside is verbosity.
+
+    This class should only be used once per query, since values are cached
+    as they are translated.
     """
 
     def __init__(self, translation_rules: TranslationMappers) -> None:

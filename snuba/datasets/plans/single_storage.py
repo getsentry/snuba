@@ -101,6 +101,8 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         with sentry_sdk.start_span(
             op="build_plan.single_storage", description="translate"
         ):
+            # The QueryTranslator class should be instantiated once for each call to build_plan,
+            # to avoid cache conflicts.
             clickhouse_query = QueryTranslator(self.__mappers).translate(request.query)
 
         with sentry_sdk.start_span(
@@ -152,6 +154,8 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         with sentry_sdk.start_span(
             op="build_plan.selected_storage", description="translate"
         ):
+            # The QueryTranslator class should be instantiated once for each call to build_plan,
+            # to avoid cache conflicts.
             clickhouse_query = QueryTranslator(mappers).translate(request.query)
 
         with sentry_sdk.start_span(
