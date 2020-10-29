@@ -8,7 +8,7 @@ from snuba.migrations.context import Context
 from snuba.migrations.status import Status
 from snuba.migrations.table_engines import Distributed, ReplacingMergeTree
 
-columns = [
+columns: Sequence[Column[Modifiers]] = [
     Column("group", String()),
     Column("migration_id", String()),
     Column("timestamp", DateTime()),

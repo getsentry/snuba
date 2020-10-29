@@ -15,9 +15,9 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-status_type = Enum([("success", 0), ("error", 1), ("rate-limited", 2)])
+status_type = Enum[Modifiers]([("success", 0), ("error", 1), ("rate-limited", 2)])
 
-columns = [
+columns: Sequence[Column[Modifiers]] = [
     Column("request_id", UUID()),
     Column("request_body", String()),
     Column("referrer", String(Modifiers(low_cardinality=True))),

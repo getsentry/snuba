@@ -5,7 +5,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-columns = [
+columns: Sequence[Column[Modifiers]] = [
     # Kafka topic offset
     Column("offset", UInt(64)),
     # GroupStatus in Sentry does not have a 'DELETED' state that reflects the deletion

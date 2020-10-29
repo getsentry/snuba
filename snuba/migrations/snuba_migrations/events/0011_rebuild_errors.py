@@ -16,7 +16,7 @@ from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-columns = [
+columns: Sequence[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("timestamp", DateTime()),
     Column("event_id", UUID(Modifiers(codecs=["NONE"]))),

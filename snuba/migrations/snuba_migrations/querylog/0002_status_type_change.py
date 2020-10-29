@@ -32,7 +32,9 @@ class Migration(migration.MultiStepMigration):
         ]
 
     def __backwards_migrations(self, table_name: str) -> Sequence[operations.Operation]:
-        status_type = Enum([("success", 0), ("error", 1), ("rate-limited", 2)])
+        status_type = Enum[Modifiers](
+            [("success", 0), ("error", 1), ("rate-limited", 2)]
+        )
         return [
             operations.ModifyColumn(
                 StorageSetKey.QUERYLOG, table_name, Column("status", status_type),

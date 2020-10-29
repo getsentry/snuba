@@ -3,19 +3,16 @@ from typing import Optional, Sequence
 
 import click
 
-from snuba import settings
 from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging
 from snuba.migrations.connect import check_clickhouse_connections
 from snuba.migrations.runner import Runner
+from snuba.utils.streams.backends.kafka import get_default_kafka_configuration
 
 
 @click.command()
 @click.option(
-    "--bootstrap-server",
-    default=settings.DEFAULT_BROKERS,
-    multiple=True,
-    help="Kafka bootstrap server to use.",
+    "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
 )
 @click.option("--kafka/--no-kafka", default=True)
 @click.option("--migrate/--no-migrate", default=True)
@@ -50,10 +47,10 @@ def bootstrap(
             try:
                 logger.debug("Attempting to connect to Kafka (attempt %d)", attempts)
                 client = AdminClient(
-                    {
-                        "bootstrap.servers": ",".join(bootstrap_server),
-                        "socket.timeout.ms": 1000,
-                    }
+                    get_default_kafka_configuration(
+                        bootstrap_servers=bootstrap_server,
+                        override_params={"socket.timeout.ms": 1000},
+                    )
                 )
                 client.list_topics(timeout=1)
                 break
