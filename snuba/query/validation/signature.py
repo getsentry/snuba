@@ -17,16 +17,12 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.query.expressions import (
-    Expression,
-    Literal as LiteralType,
-)
-from snuba.query.matchers import (
-    Any as AnyMatcher,
-    Column as ColumnMatcher,
-    Literal as LiteralMatcher,
-    Param,
-)
+from snuba.query.expressions import Expression
+from snuba.query.expressions import Literal as LiteralType
+from snuba.query.matchers import Any as AnyMatcher
+from snuba.query.matchers import Column as ColumnMatcher
+from snuba.query.matchers import Literal as LiteralMatcher
+from snuba.query.matchers import Param
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
 
 logger = logging.getLogger(__name__)
