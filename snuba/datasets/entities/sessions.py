@@ -27,7 +27,7 @@ def function_column(col_name: str, function_name: str) -> ColumnToFunction:
 
 
 def function_call(col_name: str, function_name: str) -> FunctionCall:
-    return FunctionCall(None, function_name, (Column(None, None, col_name)),)
+    return FunctionCall(None, function_name, (Column(None, None, col_name),),)
 
 
 def plus_columns(

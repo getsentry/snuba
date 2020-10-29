@@ -32,6 +32,10 @@ class SessionsProcessor(MessageProcessor):
         if message["release"] is None:
             return None
 
+        received = _ensure_valid_date(datetime.utcfromtimestamp(message["received"]))
+        if received is None:
+            metrics.increment("empty_received_date")
+
         if message.get("aggregates") is not None:
             template = {
                 "session_id": NIL_UUID,
@@ -40,7 +44,7 @@ class SessionsProcessor(MessageProcessor):
                 "project_id": message["project_id"],
                 "retention_days": message["retention_days"],
                 "duration": MAX_UINT32,
-                "received": datetime.now(),
+                "received": received if received is not None else datetime.now(),
                 "release": message["release"],
                 "environment": message.get("environment") or "",
             }
@@ -96,7 +100,7 @@ class SessionsProcessor(MessageProcessor):
                         )
                     )
 
-            return InsertBatch([batch])
+            return InsertBatch(batch)
 
         if message["duration"] is None:
             duration = None
@@ -115,13 +119,10 @@ class SessionsProcessor(MessageProcessor):
         if message["status"] in ("crashed", "abnormal"):
             errors = max(errors, 1)
 
-        received = _ensure_valid_date(datetime.utcfromtimestamp(message["received"]))
         started = _ensure_valid_date(datetime.utcfromtimestamp(message["started"]))
 
         if started is None:
             metrics.increment("empty_started_date")
-        if received is None:
-            metrics.increment("empty_received_date")
 
         processed = {
             "session_id": str(uuid.UUID(message["session_id"])),

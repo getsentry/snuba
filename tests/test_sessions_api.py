@@ -24,7 +24,7 @@ class TestSessionsApi(BaseApiTest):
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         )
 
-        self.storage = get_writable_storage(StorageKey.SESSIONS)
+        self.storage = get_writable_storage(StorageKey.SESSIONS_RAW)
         self.generate_session_events()
 
     def teardown_method(self, test_method):
@@ -59,6 +59,7 @@ class TestSessionsApi(BaseApiTest):
                     "session_id": "8333339f-5675-4f89-a9a0-1c935255ab58",
                     "started": self.started.timestamp(),
                     "status": "exited",
+                    "received": datetime.utcnow().timestamp(),
                 },
                 meta,
             ),
@@ -78,6 +79,7 @@ class TestSessionsApi(BaseApiTest):
                     "project_id": 1,
                     "release": "sentry-test@1.0.0",
                     "retention_days": settings.DEFAULT_RETENTION_DAYS,
+                    "received": datetime.utcnow().timestamp(),
                 },
                 meta,
             ),
@@ -90,6 +92,7 @@ class TestSessionsApi(BaseApiTest):
             data=json.dumps(
                 {
                     "dataset": "sessions",
+                    "organization": 1,
                     "project": 1,
                     "selected_columns": [
                         "sessions",
@@ -97,14 +100,14 @@ class TestSessionsApi(BaseApiTest):
                         "users",
                         "users_errored",
                     ],
-                    "from_date": (self.base_time - self.skew).isoformat(),
-                    "to_date": (self.base_time + self.skew).isoformat(),
+                    "from_date": (self.started - self.skew).isoformat(),
+                    "to_date": (self.started + self.skew).isoformat(),
                 }
             ),
         )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
-        assert len(data["data"]) > 1, data
+        assert len(data["data"]) == 1, data
         assert data["data"][0]["sessions"] == 10
         assert data["data"][0]["sessions_errored"] == 4
         assert data["data"][0]["users"] == 1

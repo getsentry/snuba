@@ -48,7 +48,7 @@ def test_sessions_processing() -> None:
                             None, "countIfMerge", (Column(None, None, "sessions"),)
                         ),
                         FunctionCall(
-                            None, "sumIfMerge", (Column(None, None, "sessions_sums"),)
+                            None, "sumIfMerge", (Column(None, None, "sessions_sum"),)
                         ),
                     ),
                 ),
