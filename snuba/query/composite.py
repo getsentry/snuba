@@ -16,7 +16,11 @@ from snuba.query.expressions import Expression, ExpressionVisitor
 
 class CompositeQuery(Query, Generic[TSimpleDataSource]):
     """
+    Query class that represents nested or joined queries.
 
+    The from clause can be a processable query, another composite query,
+    a join, but it cannot be a simple data source. That would be a
+    ProcessableQuery.
     """
 
     def __init__(
