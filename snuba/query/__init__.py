@@ -125,9 +125,9 @@ class Query(DataSource, ABC):
             ret.append(
                 (name, Any())
                 if name is not None
-                # This should never happen with SnQL, for nested queries
-                # But the type of the name oof a selected column is still
-                # optional soo we need to fix that first.
+                # This should never happen for nested queries.
+                # Though the type of the name oof a selected column is
+                # still optional soo we need to fix that first.
                 else (f"_invalid_alias_{index}", Any())
             )
 
