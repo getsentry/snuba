@@ -484,7 +484,7 @@ class ColumnSet(Generic[TModifiers]):
     def __init__(
         self,
         columns: Sequence[
-            Union[Column[TModifiers], Tuple[str, ColumnType[TModifiers]]]
+            Union[Column[SchemaModifiers], Tuple[str, ColumnType[SchemaModifiers]]]
         ],
     ) -> None:
         self.columns = Column.to_columns(columns)
@@ -516,10 +516,8 @@ class ColumnSet(Generic[TModifiers]):
 
     def __add__(
         self,
-        other: Union[
-            ColumnSet[TModifiers], Sequence[Tuple[str, ColumnType[TModifiers]]]
-        ],
-    ) -> ColumnSet[TModifiers]:
+        other: Union[ColumnSet, Sequence[Tuple[str, ColumnType[SchemaModifiers]]]],
+    ) -> ColumnSet:
         if isinstance(other, ColumnSet):
             return ColumnSet([*self.columns, *other.columns])
         return ColumnSet([*self.columns, *other])
