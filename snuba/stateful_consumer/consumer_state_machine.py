@@ -65,7 +65,7 @@ class ConsumerStateMachine(
         elif state_class == BootstrapState:
             return BootstrapState(
                 topic=self.__topic,
-                bootstrap_servers=self.__consumer_builder.bootstrap_servers,
+                broker_config=self.__consumer_builder.broker_config,
                 group_id=self.__group_id,
                 storage=self.__storage,
             )

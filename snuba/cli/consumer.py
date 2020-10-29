@@ -107,11 +107,6 @@ def consumer(
     profile_path: Optional[str] = None,
 ) -> None:
 
-    if not bootstrap_server:
-        bootstrap_server = settings.DEFAULT_STORAGE_BROKERS.get(
-            storage_name, settings.DEFAULT_BROKERS,
-        )
-
     setup_logging(log_level)
     setup_sentry()
 

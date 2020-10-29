@@ -5,6 +5,7 @@ from snuba.datasets.storages.factory import get_cdc_storage
 from snuba.stateful_consumer import ConsumerStateCompletionEvent
 from snuba.consumers.strict_consumer import StrictConsumer
 from snuba.stateful_consumer.states.bootstrap import BootstrapState
+from snuba.utils.streams.backends.kafka import get_default_kafka_configuration
 from tests.backends.confluent_kafka import (
     FakeConfluentKafkaConsumer,
     build_confluent_kafka_message,
@@ -12,11 +13,13 @@ from tests.backends.confluent_kafka import (
 
 
 class TestBootstrapState:
+    broker_config = get_default_kafka_configuration(bootstrap_servers=["somewhere"])
+
     def __consumer(self, on_message) -> StrictConsumer:
         return StrictConsumer(
             topic="topic",
-            bootstrap_servers="somewhere",
             group_id="something",
+            broker_config=self.broker_config,
             auto_offset_reset="earliest",
             partition_assignment_timeout=1,
             on_partitions_assigned=None,
@@ -34,7 +37,7 @@ class TestBootstrapState:
 
         bootstrap = BootstrapState(
             "cdc_control",
-            "somewhere",
+            self.broker_config,
             "something",
             get_cdc_storage(StorageKey.GROUPEDMESSAGES),
         )
@@ -59,7 +62,7 @@ class TestBootstrapState:
 
         bootstrap = BootstrapState(
             "cdc_control",
-            "somewhere",
+            self.broker_config,
             "something",
             get_cdc_storage(StorageKey.GROUPEDMESSAGES),
         )
@@ -84,7 +87,7 @@ class TestBootstrapState:
 
         bootstrap = BootstrapState(
             "cdc_control",
-            "somewhere",
+            self.broker_config,
             "something",
             get_cdc_storage(StorageKey.GROUPEDMESSAGES),
         )
@@ -125,7 +128,7 @@ class TestBootstrapState:
 
         bootstrap = BootstrapState(
             "cdc_control",
-            "somewhere",
+            self.broker_config,
             "something",
             get_cdc_storage(StorageKey.GROUPEDMESSAGES),
         )

@@ -69,8 +69,16 @@ SNAPSHOT_CONTROL_TOPIC_INIT_TIMEOUT = 30
 BULK_CLICKHOUSE_BUFFER = 10000
 
 # Processor/Writer Options
-DEFAULT_BROKERS = ["localhost:9092"]
+# DEPRECATED, please use BROKER_CONFIG instead
+DEFAULT_BROKERS: Sequence[str] = []
+# DEPRECATED, please use STORAGE_BROKER_CONFIG instead
 DEFAULT_STORAGE_BROKERS: Mapping[str, Sequence[str]] = {}
+
+BROKER_CONFIG: Mapping[str, Any] = {
+    # See snuba/utils/streams/backends/kafka.py for the supported options
+    "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092"),
+}
+STORAGE_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
 
 DEFAULT_MAX_BATCH_SIZE = 50000
 DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000
