@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional, Sequence
 
-from snuba.clickhouse.columns import ColumnSet, SchemaModifiers
+from snuba.clickhouse.columns import ColumnSet
 from snuba.clusters.cluster import get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas import RelationalSource, Schema
@@ -18,7 +18,7 @@ class TableSource(RelationalSource):
     def __init__(
         self,
         table_name: str,
-        columns: ColumnSet[SchemaModifiers],
+        columns: ColumnSet,
         mandatory_conditions: Optional[Sequence[FunctionCall]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
     ) -> None:
@@ -30,7 +30,7 @@ class TableSource(RelationalSource):
     def format_from(self) -> str:
         return self.__table_name
 
-    def get_columns(self) -> ColumnSet[SchemaModifiers]:
+    def get_columns(self) -> ColumnSet:
         return self.__columns
 
     def get_mandatory_conditions(self) -> Sequence[FunctionCall]:
@@ -48,7 +48,7 @@ class TableSchema(Schema):
 
     def __init__(
         self,
-        columns: ColumnSet[SchemaModifiers],
+        columns: ColumnSet,
         *,
         local_table_name: str,
         dist_table_name: str,

@@ -42,7 +42,6 @@ def get_dataset(name: str) -> Dataset:
     from snuba.datasets.discover import DiscoverDataset
     from snuba.datasets.events import EventsDataset
     from snuba.datasets.errors import ErrorsDataset
-    from snuba.datasets.groups import Groups
     from snuba.datasets.outcomes import OutcomesDataset
     from snuba.datasets.outcomes_raw import OutcomesRawDataset
     from snuba.datasets.sessions import SessionsDataset
@@ -54,7 +53,6 @@ def get_dataset(name: str) -> Dataset:
         "events_migration": ErrorsDataset,
         "groupassignee": GroupAssigneeDataset,
         "groupedmessage": GroupedMessageDataset,
-        "groups": Groups,
         "outcomes": OutcomesDataset,
         "outcomes_raw": OutcomesRawDataset,
         "sessions": SessionsDataset,

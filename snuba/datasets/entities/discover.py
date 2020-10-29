@@ -63,7 +63,7 @@ class DefaultNoneColumnMapper(ColumnMapper):
     the discover dataset file.
     """
 
-    columns: ColumnSet[Modifiers]
+    columns: ColumnSet
 
     def attempt_map(
         self, expression: Column, children_translator: SnubaClickhouseStrictTranslator,
@@ -262,7 +262,7 @@ EVENTS_COLUMNS = ColumnSet(
     ]
 )
 
-TRANSACTIONS_COLUMNS = ColumnSet[Modifiers](
+TRANSACTIONS_COLUMNS = ColumnSet(
     [
         ("trace_id", UUID(Modifiers(nullable=True))),
         ("span_id", UInt(64, Modifiers(nullable=True))),
@@ -302,7 +302,7 @@ class DiscoverEntity(Entity):
     """
 
     def __init__(self) -> None:
-        self.__common_columns = ColumnSet[Modifiers](
+        self.__common_columns = ColumnSet(
             [
                 ("event_id", FixedString(32)),
                 ("project_id", UInt(64)),

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from snuba.clickhouse.columns import ColumnSet, SchemaModifiers
+from snuba.clickhouse.columns import ColumnSet
 
 
 class DataSource(ABC):
@@ -11,5 +11,5 @@ class DataSource(ABC):
     """
 
     @abstractmethod
-    def get_columns(self) -> ColumnSet[SchemaModifiers]:
+    def get_columns(self) -> ColumnSet:
         raise NotImplementedError

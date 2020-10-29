@@ -1,7 +1,7 @@
 import logging
 
 from snuba import environment
-from snuba.clickhouse.columns import ColumnSet, SchemaModifiers
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.discover import EVENTS_COLUMNS, TRANSACTIONS_COLUMNS
@@ -144,8 +144,8 @@ def match_query_to_entity(
 def track_bad_query(
     query: Query,
     selected_entity: EntityKey,
-    events_only_columns: ColumnSet[SchemaModifiers],
-    transactions_only_columns: ColumnSet[SchemaModifiers],
+    events_only_columns: ColumnSet,
+    transactions_only_columns: ColumnSet,
 ) -> None:
     event_columns = set()
     transaction_columns = set()
