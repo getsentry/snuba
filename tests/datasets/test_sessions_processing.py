@@ -41,7 +41,16 @@ def test_sessions_processing() -> None:
             SelectedExpression(
                 "sessions",
                 FunctionCall(
-                    "sessions", "sumIfMerge", (Column(None, None, "sessions"),)
+                    "sessions",
+                    "plus",
+                    (
+                        FunctionCall(
+                            None, "countIfMerge", (Column(None, None, "sessions"),)
+                        ),
+                        FunctionCall(
+                            None, "sumIfMerge", (Column(None, None, "sessions_sums"),)
+                        ),
+                    ),
                 ),
             ),
             SelectedExpression(

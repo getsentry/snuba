@@ -1,3 +1,4 @@
+from importlib import import_module
 from typing import Sequence
 
 from snuba.clickhouse.columns import (
@@ -9,9 +10,14 @@ from snuba.clickhouse.columns import (
     UUID,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations import migration, operations, table_engines
+from snuba.migrations import migration, operations
 from snuba.migrations.columns import LowCardinality, WithDefault
 from snuba.processor import MAX_UINT32, NIL_UUID
+
+
+v1_matview = import_module(
+    "snuba.migrations.snuba_migrations.sessions.0001_sessions"
+).create_matview
 
 
 DEFAULT_QUANTITY = 1
@@ -50,8 +56,8 @@ SELECT
   release,
   environment,
 
-  -- we changed the quantiles here:
-  quantilesIfState(0.5, 0.75, 0.9, 0.95, 0.99)(
+  -- we would have liked to changed the quantiles here to `0.5, 0.75, 0.95, 0.99`:
+  quantilesIfState(0.5, 0.9)(
     duration,
     duration <> {MAX_UINT32} AND status == 1
   ) as duration_quantiles,
@@ -60,9 +66,9 @@ SELECT
   avgIfState(duration, duration <> {MAX_UINT32} AND status == 1) as duration_avg,
 
   -- instead of `count`, we use `sum` of `quantity`
-  sumIfState(quantity, seq == 0) as sessions,
-  sumIfState(quantity, status == 2) as sessions_crashed,
-  sumIfState(quantity, status == 3) as sessions_abnormal,
+  sumIfState(quantity, seq == 0) as sessions_sum,
+  sumIfState(quantity, status == 2) as sessions_crashed_sum,
+  sumIfState(quantity, status == 3) as sessions_abnormal_sum,
 
   -- combination of `sum` of `quantity`, and a `uniq` for "old" individual sessions
 
@@ -70,7 +76,7 @@ SELECT
   sumIfState(quantity, status IN (2, 3, 4) AND session_id == '{NIL_UUID}') as sessions_errored_sum,
 
   -- "old" individual sessions use the uniq session_id as before:
-  uniqIfState(session_id, errors > 0 AND session_id != '{NIL_UUID}') as sessions_errored_uniq,
+  uniqIfState(session_id, errors > 0 AND session_id != '{NIL_UUID}') as sessions_errored,
 
   -- users counts will additionally be constrained for the distinct-id
   uniqIfState(distinct_id, distinct_id != '{NIL_UUID}') as users,
@@ -87,53 +93,86 @@ GROUP BY
 
 class Migration(migration.MultiStepMigration):
     """
-    Adds the `quantity` column to the raw data set and re-creates the materialized view.
+    Adds the `quantity` column to the raw data set, `duration_avg` and a few `X_sum` columns
+    that will be used instead of the normal columns, which will be kept since we can’t
+    change the column types from `countIf` to `sumIf`.
+    The view query is also updated by re-creating it.
+
+    *Ideally*, we would have just modified the `sessions_X` columns to be `sumIf`, but
+    that is not possible, for that reason we keep the old columns around and just
+    sum them at query time.
+    Same for the `quantiles`, which we would have liked to change, but a `quantilesState`
+    allows to query arbitrary quantiles independent of the definition.
+
+    Also, it would be nice to rename all the `countIf` `sessions_X` columns to
+    `sessions_X_count`, but that would require clickhouse 20.4.
     """
 
     blocking = False
 
     def forwards_local(self) -> Sequence[operations.Operation]:
         return [
+            # add new columns
             operations.AddColumn(
                 storage_set=StorageSetKey.SESSIONS,
                 table_name="sessions_raw_local",
                 column=Column("quantity", WithDefault(UInt(32), str(DEFAULT_QUANTITY))),
                 after="distinct_id",
             ),
-            operations.CreateTable(
+            operations.AddColumn(
                 storage_set=StorageSetKey.SESSIONS,
-                table_name="sessions_hourly_local_new",
-                columns=aggregate_columns,
-                engine=table_engines.AggregatingMergeTree(
-                    storage_set=StorageSetKey.SESSIONS,
-                    order_by="(org_id, project_id, release, environment, started)",
-                    partition_by="(toMonday(started))",
-                    settings={"index_granularity": "256"},
+                table_name="sessions_hourly_local",
+                column=Column(
+                    "duration_avg", AggregateFunction("avgIf", UInt(32), UInt(8))
                 ),
+                after="duration_quantiles",
             ),
-            operations.CreateMaterializedView(
+            operations.AddColumn(
                 storage_set=StorageSetKey.SESSIONS,
-                view_name="sessions_hourly_mv_local_new",
-                destination_table_name="sessions_hourly_local_new",
-                columns=aggregate_columns,
-                query=query,
+                table_name="sessions_hourly_local",
+                column=Column(
+                    "sessions_sum", AggregateFunction("sumIf", UInt(32), UInt(8))
+                ),
+                after="sessions",
             ),
-            operations.DropTable(
-                storage_set=StorageSetKey.SESSIONS, table_name="sessions_hourly_local",
-            ),
-            operations.RenameTable(
+            operations.AddColumn(
                 storage_set=StorageSetKey.SESSIONS,
-                old_table_name="sessions_hourly_local_new",
-                new_table_name="sessions_hourly_local",
+                table_name="sessions_hourly_local",
+                column=Column(
+                    "sessions_crashed_sum",
+                    AggregateFunction("sumIf", UInt(32), UInt(8)),
+                ),
+                after="sessions_crashed",
             ),
+            operations.AddColumn(
+                storage_set=StorageSetKey.SESSIONS,
+                table_name="sessions_hourly_local",
+                column=Column(
+                    "sessions_abnormal_sum",
+                    AggregateFunction("sumIf", UInt(32), UInt(8)),
+                ),
+                after="sessions_abnormal",
+            ),
+            operations.AddColumn(
+                storage_set=StorageSetKey.SESSIONS,
+                table_name="sessions_hourly_local",
+                column=Column(
+                    "sessions_errored_sum",
+                    AggregateFunction("sumIf", UInt(32), UInt(8)),
+                ),
+                after="sessions_errored",
+            ),
+            # re-create the materialized view
             operations.DropTable(
                 storage_set=StorageSetKey.SESSIONS,
                 table_name="sessions_hourly_mv_local",
             ),
-            operations.RenameTable(
+            operations.CreateMaterializedView(
                 storage_set=StorageSetKey.SESSIONS,
-                old_table_name="sessions_hourly_mv_local_new",
-                new_table_name="sessions_hourly_mv_local",
+                view_name="sessions_hourly_mv_local",
+                destination_table_name="sessions_hourly_local",
+                columns=aggregate_columns,
+                query=query,
             ),
         ]
 
@@ -142,14 +181,26 @@ class Migration(migration.MultiStepMigration):
             operations.DropColumn(
                 StorageSetKey.SESSIONS, "sessions_raw_local", "quantity"
             ),
-            operations.DropTable(
-                storage_set=StorageSetKey.SESSIONS,
-                table_name="sessions_hourly_local_new",
+            operations.DropColumn(
+                StorageSetKey.SESSIONS, "sessions_hourly_local", "duration_avg"
+            ),
+            operations.DropColumn(
+                StorageSetKey.SESSIONS, "sessions_hourly_local", "sessions_sum"
+            ),
+            operations.DropColumn(
+                StorageSetKey.SESSIONS, "sessions_hourly_local", "sessions_crashed_sum"
+            ),
+            operations.DropColumn(
+                StorageSetKey.SESSIONS, "sessions_hourly_local", "sessions_abnormal_sum"
+            ),
+            operations.DropColumn(
+                StorageSetKey.SESSIONS, "sessions_hourly_local", "sessions_errored_sum"
             ),
             operations.DropTable(
                 storage_set=StorageSetKey.SESSIONS,
-                table_name="sessions_hourly_mv_local_new",
+                table_name="sessions_hourly_mv_local",
             ),
+            v1_matview,
         ]
 
     def forwards_dist(self) -> Sequence[operations.Operation]:
@@ -160,21 +211,48 @@ class Migration(migration.MultiStepMigration):
                 column=Column("quantity", WithDefault(UInt(32), str(DEFAULT_QUANTITY))),
                 after="distinct_id",
             ),
-            operations.CreateTable(
+            operations.AddColumn(
                 storage_set=StorageSetKey.SESSIONS,
-                table_name="sessions_hourly_dist_new",
-                columns=aggregate_columns,
-                engine=table_engines.Distributed(
-                    local_table_name="sessions_hourly_local", sharding_key="org_id",
+                table_name="sessions_hourly_dist",
+                column=Column(
+                    "duration_avg", AggregateFunction("avgIf", UInt(32), UInt(8))
                 ),
+                after="duration_quantiles",
             ),
-            operations.DropTable(
-                storage_set=StorageSetKey.SESSIONS, table_name="sessions_hourly_dist",
-            ),
-            operations.RenameTable(
+            operations.AddColumn(
                 storage_set=StorageSetKey.SESSIONS,
-                old_table_name="sessions_hourly_dist_new",
-                new_table_name="sessions_hourly_dist",
+                table_name="sessions_hourly_dist",
+                column=Column(
+                    "sessions_sum", AggregateFunction("sumIf", UInt(32), UInt(8))
+                ),
+                after="sessions",
+            ),
+            operations.AddColumn(
+                storage_set=StorageSetKey.SESSIONS,
+                table_name="sessions_hourly_dist",
+                column=Column(
+                    "sessions_crashed_sum",
+                    AggregateFunction("sumIf", UInt(32), UInt(8)),
+                ),
+                after="sessions_crashed",
+            ),
+            operations.AddColumn(
+                storage_set=StorageSetKey.SESSIONS,
+                table_name="sessions_hourly_dist",
+                column=Column(
+                    "sessions_abnormal_sum",
+                    AggregateFunction("sumIf", UInt(32), UInt(8)),
+                ),
+                after="sessions_abnormal",
+            ),
+            operations.AddColumn(
+                storage_set=StorageSetKey.SESSIONS,
+                table_name="sessions_hourly_dist",
+                column=Column(
+                    "sessions_errored_sum",
+                    AggregateFunction("sumIf", UInt(32), UInt(8)),
+                ),
+                after="sessions_errored",
             ),
         ]
 
@@ -183,8 +261,19 @@ class Migration(migration.MultiStepMigration):
             operations.DropColumn(
                 StorageSetKey.SESSIONS, "sessions_raw_dist", "quantity"
             ),
-            operations.DropTable(
-                storage_set=StorageSetKey.SESSIONS,
-                table_name="sessions_hourly_dist_new",
+            operations.DropColumn(
+                StorageSetKey.SESSIONS, "sessions_hourly_dist", "duration_avg"
+            ),
+            operations.DropColumn(
+                StorageSetKey.SESSIONS, "sessions_hourly_dist", "sessions_sum"
+            ),
+            operations.DropColumn(
+                StorageSetKey.SESSIONS, "sessions_hourly_dist", "sessions_crashed_sum"
+            ),
+            operations.DropColumn(
+                StorageSetKey.SESSIONS, "sessions_hourly_dist", "sessions_abnormal_sum"
+            ),
+            operations.DropColumn(
+                StorageSetKey.SESSIONS, "sessions_hourly_dist", "sessions_errored_sum"
             ),
         ]

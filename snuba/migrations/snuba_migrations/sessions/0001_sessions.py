@@ -52,6 +52,40 @@ aggregate_columns = [
 ]
 
 
+create_matview = (
+    operations.CreateMaterializedView(
+        storage_set=StorageSetKey.SESSIONS,
+        view_name="sessions_hourly_mv_local",
+        destination_table_name="sessions_hourly_local",
+        columns=aggregate_columns,
+        query=f"""
+        SELECT
+            org_id,
+            project_id,
+            toStartOfHour(started) as started,
+            release,
+            environment,
+            quantilesIfState(0.5, 0.9)(
+                duration,
+                duration <> {MAX_UINT32} AND status == 1
+            ) as duration_quantiles,
+            countIfState(session_id, seq == 0) as sessions,
+            uniqIfState(distinct_id, distinct_id != '{NIL_UUID}') as users,
+            countIfState(session_id, status == 2) as sessions_crashed,
+            countIfState(session_id, status == 3) as sessions_abnormal,
+            uniqIfState(session_id, errors > 0) as sessions_errored,
+            uniqIfState(distinct_id, status == 2) as users_crashed,
+            uniqIfState(distinct_id, status == 3) as users_abnormal,
+            uniqIfState(distinct_id, errors > 0) as users_errored
+        FROM
+            sessions_raw_local
+        GROUP BY
+            org_id, project_id, started, release, environment
+    """,
+    ),
+)
+
+
 class Migration(migration.MultiStepMigration):
     blocking = False
 
@@ -79,36 +113,7 @@ class Migration(migration.MultiStepMigration):
                     settings={"index_granularity": "256"},
                 ),
             ),
-            operations.CreateMaterializedView(
-                storage_set=StorageSetKey.SESSIONS,
-                view_name="sessions_hourly_mv_local",
-                destination_table_name="sessions_hourly_local",
-                columns=aggregate_columns,
-                query=f"""
-                    SELECT
-                        org_id,
-                        project_id,
-                        toStartOfHour(started) as started,
-                        release,
-                        environment,
-                        quantilesIfState(0.5, 0.9)(
-                            duration,
-                            duration <> {MAX_UINT32} AND status == 1
-                        ) as duration_quantiles,
-                        countIfState(session_id, seq == 0) as sessions,
-                        uniqIfState(distinct_id, distinct_id != '{NIL_UUID}') as users,
-                        countIfState(session_id, status == 2) as sessions_crashed,
-                        countIfState(session_id, status == 3) as sessions_abnormal,
-                        uniqIfState(session_id, errors > 0) as sessions_errored,
-                        uniqIfState(distinct_id, status == 2) as users_crashed,
-                        uniqIfState(distinct_id, status == 3) as users_abnormal,
-                        uniqIfState(distinct_id, errors > 0) as users_errored
-                    FROM
-                        sessions_raw_local
-                    GROUP BY
-                        org_id, project_id, started, release, environment
-                """,
-            ),
+            create_matview,
         ]
 
     def backwards_local(self) -> Sequence[operations.Operation]:
