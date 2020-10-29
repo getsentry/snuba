@@ -9,11 +9,11 @@ from snuba.clickhouse.columns import (
     Nullable,
     TModifiers,
 )
-from snuba.query.data_source import DataSource
+from snuba.query.data_source.simple import SimpleDataSource
 from snuba.query.expressions import FunctionCall
 
 
-class RelationalSource(DataSource, ABC):
+class RelationalSource(SimpleDataSource, ABC):
     """
     Abstract representation of the datamodel in the schema. This includes the
     list of the tables that compose this datamodel with their columns as well as

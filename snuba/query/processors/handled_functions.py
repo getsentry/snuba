@@ -1,4 +1,4 @@
-from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.columns import ColumnSet, SchemaModifiers
 from snuba.query.validation import InvalidFunctionCall
 from snuba.query.validation.signature import SignatureValidator
 from snuba.query.exceptions import InvalidExpressionException
@@ -34,7 +34,7 @@ class HandledFunctionsProcessor(QueryProcessor):
     Both functions return 1 or 0 if a row matches.
     """
 
-    def __init__(self, column: str, columnset: ColumnSet):
+    def __init__(self, column: str, columnset: ColumnSet[SchemaModifiers]):
         self.__column = column
         self.__columnset = columnset
 

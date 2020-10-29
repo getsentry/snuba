@@ -14,6 +14,7 @@ from snuba.clickhouse.columns import (
     IPv4,
     IPv6,
     Nullable,
+    SchemaModifiers,
     String,
     UInt,
 )
@@ -29,12 +30,16 @@ logger = logging.getLogger(__name__)
 
 
 class ParamType(ABC):
-    def validate(self, expression: Expression, schema: ColumnSet) -> None:
+    def validate(
+        self, expression: Expression, schema: ColumnSet[SchemaModifiers]
+    ) -> None:
         raise NotImplementedError
 
 
 class Any(ParamType):
-    def validate(self, expression: Expression, schema: ColumnSet) -> None:
+    def validate(
+        self, expression: Expression, schema: ColumnSet[SchemaModifiers]
+    ) -> None:
         return
 
     def __str__(self) -> str:
@@ -92,7 +97,9 @@ class Column(ParamType):
     def __str__(self) -> str:
         return f"{'Nullable ' if self.__allow_nullable else ''}{self.__valid_types}"
 
-    def validate(self, expression: Expression, schema: ColumnSet) -> None:
+    def validate(
+        self, expression: Expression, schema: ColumnSet[SchemaModifiers]
+    ) -> None:
         match = COLUMN_PATTERN.match(expression)
         if match is None:
             return
@@ -139,7 +146,9 @@ class Literal(ParamType):
     def __str__(self) -> str:
         return f"{self.__valid_types}"
 
-    def validate(self, expression: Expression, schema: ColumnSet) -> None:
+    def validate(
+        self, expression: Expression, schema: ColumnSet[SchemaModifiers]
+    ) -> None:
         if not isinstance(expression, LiteralType):
             return None
 
@@ -171,7 +180,9 @@ class SignatureValidator(FunctionCallValidator):
         # exceptions.
         self.__enforce = enforce
 
-    def validate(self, parameters: Sequence[Expression], schema: ColumnSet) -> None:
+    def validate(
+        self, parameters: Sequence[Expression], schema: ColumnSet[SchemaModifiers]
+    ) -> None:
         try:
             self.__validate_impl(parameters, schema)
         except InvalidFunctionCall as exception:
@@ -183,7 +194,7 @@ class SignatureValidator(FunctionCallValidator):
                 )
 
     def __validate_impl(
-        self, parameters: Sequence[Expression], schema: ColumnSet
+        self, parameters: Sequence[Expression], schema: ColumnSet[SchemaModifiers]
     ) -> None:
         if len(parameters) < len(self.__param_types):
             raise InvalidFunctionCall(

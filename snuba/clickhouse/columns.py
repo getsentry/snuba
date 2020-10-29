@@ -220,6 +220,20 @@ class Nullable(TypeModifier):
         return "Nullable({})".format(content)
 
 
+class Any(ColumnType[SchemaModifiers]):
+    """
+    Special type to be used in ColumnSets that represent the select
+    statement of a subquery since that is the schema the subquery
+    provides to the query that contains it.
+
+    Of course this cannot be used for migrations since this type does
+    not exist in Clickhouse.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(None)
+
+
 class Array(ColumnType[TModifiers]):
     def __init__(
         self, inner_type: ColumnType[TModifiers], modifiers: Optional[TModifiers] = None
@@ -455,7 +469,7 @@ class Enum(ColumnType[TModifiers]):
         return Enum(self.values)
 
 
-class ColumnSet:
+class ColumnSet(Generic[TModifiers]):
     """\
     A set of columns, unique by column name.
     Initialized with a list of Column objects or
@@ -494,7 +508,7 @@ class ColumnSet:
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self._flattened == cast(ColumnSet, other)._flattened
+            and self._flattened == cast(ColumnSet[TModifiers], other)._flattened
         )
 
     def __len__(self) -> int:
@@ -526,7 +540,7 @@ class ColumnSet:
             return default
 
 
-class QualifiedColumnSet(ColumnSet):
+class QualifiedColumnSet(ColumnSet[TModifiers], Generic[TModifiers]):
     """
     Works like a Columnset but it represent a list of columns
     coming from different tables (like the ones we would use in
@@ -535,7 +549,7 @@ class QualifiedColumnSet(ColumnSet):
     structure and to which table each column belongs to.
     """
 
-    def __init__(self, column_sets: Mapping[str, ColumnSet]) -> None:
+    def __init__(self, column_sets: Mapping[str, ColumnSet[TModifiers]]) -> None:
         # Iterate over the structured columns. get_columns() flattens nested
         # columns. We need them intact here.
         flat_columns = []

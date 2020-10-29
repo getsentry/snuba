@@ -14,7 +14,7 @@ from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 
-columns = ColumnSet(
+columns = ColumnSet[Modifiers](
     [
         # columns to maintain the dataset
         # Kafka topic offset

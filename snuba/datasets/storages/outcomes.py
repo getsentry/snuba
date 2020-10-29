@@ -14,7 +14,7 @@ WRITE_DIST_TABLE_NAME = "outcomes_raw_dist"
 READ_LOCAL_TABLE_NAME = "outcomes_hourly_local"
 READ_DIST_TABLE_NAME = "outcomes_hourly_dist"
 
-write_columns = ColumnSet(
+write_columns = ColumnSet[Modifiers](
     [
         ("org_id", UInt(64)),
         ("project_id", UInt(64)),
@@ -34,7 +34,7 @@ raw_schema = WritableTableSchema(
     storage_set_key=StorageSetKey.OUTCOMES,
 )
 
-read_columns = ColumnSet(
+read_columns = ColumnSet[Modifiers](
     [
         ("org_id", UInt(64)),
         ("project_id", UInt(64)),
@@ -53,7 +53,7 @@ read_schema = TableSchema(
     storage_set_key=StorageSetKey.OUTCOMES,
 )
 
-materialized_view_columns = ColumnSet(
+materialized_view_columns = ColumnSet[Modifiers](
     [
         ("org_id", UInt(64)),
         ("project_id", UInt(64)),

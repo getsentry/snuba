@@ -9,7 +9,7 @@ from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader
 
-columns = ColumnSet(
+columns = ColumnSet[Modifiers](
     [
         ("request_id", UUID()),
         ("request_body", String()),
