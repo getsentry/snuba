@@ -11,6 +11,7 @@ from snuba.datasets.storages.factory import get_cdc_storage, CDC_STORAGES
 from snuba.environment import setup_logging, setup_sentry
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
 from snuba.stateful_consumer.control_protocol import SnapshotLoaded, TransactionData
+from snuba.utils.streams.backends.kafka import build_kafka_producer_configuration
 
 
 @click.command()
@@ -52,7 +53,8 @@ def confirm_load(
         source,
     )
 
-    storage = get_cdc_storage(StorageKey(storage_name))
+    storage_key = StorageKey(storage_name)
+    storage = get_cdc_storage(storage_key)
 
     control_topic = control_topic or storage.get_default_control_topic()
 
@@ -62,18 +64,15 @@ def confirm_load(
 
     descriptor = snapshot_source.get_descriptor()
 
-    if not bootstrap_server:
-        storage_key = storage.get_storage_key().value
-        bootstrap_server = settings.DEFAULT_STORAGE_BROKERS.get(
-            storage_key, settings.DEFAULT_BROKERS,
-        )
-
     producer = Producer(
-        {
-            "bootstrap.servers": ",".join(bootstrap_server),
-            "partitioner": "consistent",
-            "message.max.bytes": 50000000,  # 50MB, default is 1MB
-        }
+        build_kafka_producer_configuration(
+            storage_key,
+            bootstrap_servers=bootstrap_server,
+            override_params={
+                "partitioner": "consistent",
+                "message.max.bytes": 50000000,  # 50MB, default is 1MB
+            },
+        )
     )
 
     msg = SnapshotLoaded(
