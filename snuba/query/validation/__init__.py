@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Sequence
 
-from snuba.clickhouse.columns import ColumnSet, SchemaModifiers
+from snuba.clickhouse.columns import ColumnSet
 from snuba.query.expressions import Expression
 
 
@@ -17,7 +17,5 @@ class FunctionCallValidator(ABC):
     """
 
     @abstractmethod
-    def validate(
-        self, parameters: Sequence[Expression], schema: ColumnSet[SchemaModifiers]
-    ) -> None:
+    def validate(self, parameters: Sequence[Expression], schema: ColumnSet) -> None:
         raise NotImplementedError

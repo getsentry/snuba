@@ -469,7 +469,7 @@ class Enum(ColumnType[TModifiers]):
         return Enum(self.values)
 
 
-class ColumnSet(Generic[TModifiers]):
+class ColumnSet:
     """\
     A set of columns, unique by column name.
     Initialized with a list of Column objects or
@@ -508,7 +508,7 @@ class ColumnSet(Generic[TModifiers]):
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self._flattened == cast(ColumnSet[TModifiers], other)._flattened
+            and self._flattened == cast(ColumnSet, other)._flattened
         )
 
     def __len__(self) -> int:
@@ -540,7 +540,7 @@ class ColumnSet(Generic[TModifiers]):
             return default
 
 
-class QualifiedColumnSet(ColumnSet[TModifiers], Generic[TModifiers]):
+class QualifiedColumnSet(ColumnSet):
     """
     Works like a Columnset but it represent a list of columns
     coming from different tables (like the ones we would use in
@@ -549,7 +549,7 @@ class QualifiedColumnSet(ColumnSet[TModifiers], Generic[TModifiers]):
     structure and to which table each column belongs to.
     """
 
-    def __init__(self, column_sets: Mapping[str, ColumnSet[TModifiers]]) -> None:
+    def __init__(self, column_sets: Mapping[str, ColumnSet]) -> None:
         # Iterate over the structured columns. get_columns() flattens nested
         # columns. We need them intact here.
         flat_columns = []
