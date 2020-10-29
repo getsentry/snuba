@@ -22,6 +22,14 @@ class JoinModifier(Enum):
 
 @dataclass(frozen=True)
 class JoinNode(ABC, Generic[TSimpleDataSource]):
+    """
+    Assigns an alias to a node in a join expression.
+    The alias is used in the join condition and in all the expressions
+    that rely on the join in the query.
+
+    Join nodes can be simple data sources, join expressions and queries.
+    """
+
     alias: Optional[str]
 
     @abstractmethod
@@ -31,6 +39,11 @@ class JoinNode(ABC, Generic[TSimpleDataSource]):
 
 @dataclass(frozen=True)
 class IndividualNode(JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
+    """
+    Join node that represent an individual data source: an entity/table
+    or a subquery.
+    """
+
     data_source: Union[TSimpleDataSource, ProcessableQuery[TSimpleDataSource]]
 
     def get_column_sets(self) -> Mapping[str, ColumnSet[SchemaModifiers]]:
@@ -53,7 +66,7 @@ class JoinConditionExpression(NamedTuple):
 
 class JoinCondition(NamedTuple):
     """
-    Represent a condition in the ON clause in the JOIN expression
+    Represents a condition in the ON clause in the JOIN expression.
     """
 
     left: JoinConditionExpression
@@ -62,6 +75,20 @@ class JoinCondition(NamedTuple):
 
 @dataclass(frozen=True)
 class JoinClause(DataSource, JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
+    """
+    Joins two JoinNodes.
+
+    For a simple join between two entities/tables or two subqueries, both
+    left and right node are IndividualNodes.
+
+    For a more complex joins between multiple nodes, nodes are associative
+    on the left:
+    `(a INNER JOIN b ON condition) INNER JOIN c ON condition`
+
+    This means the left node can be a join on its own while the right node
+    still needs to be an IndividualNode.
+    """
+
     left_node: JoinNode[TSimpleDataSource]
     right_node: IndividualNode[TSimpleDataSource]
     keys: Sequence[JoinCondition]
