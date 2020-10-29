@@ -7,7 +7,6 @@ from snuba.clickhouse.columns import (
     ColumnSet,
     ColumnType,
     Nullable,
-    SchemaModifiers,
     TModifiers,
 )
 from snuba.query.data_source import DataSource
@@ -39,7 +38,7 @@ class RelationalSource(DataSource, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_columns(self) -> ColumnSet[SchemaModifiers]:
+    def get_columns(self) -> ColumnSet:
         raise NotImplementedError
 
     @abstractmethod
@@ -96,7 +95,7 @@ class Schema(ABC):
         """
         raise NotImplementedError
 
-    def get_columns(self) -> ColumnSet[SchemaModifiers]:
+    def get_columns(self) -> ColumnSet:
         return self.get_data_source().get_columns()
 
     def get_column_differences(

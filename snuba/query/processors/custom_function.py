@@ -1,7 +1,7 @@
 from dataclasses import replace
 from typing import Any, Mapping, Sequence, Tuple
 
-from snuba.clickhouse.columns import ColumnSet, SchemaModifiers
+from snuba.clickhouse.columns import ColumnSet
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
@@ -70,7 +70,7 @@ class CustomFunction(QueryProcessor):
 
     def __init__(
         self,
-        dataset_schema: ColumnSet[SchemaModifiers],
+        dataset_schema: ColumnSet,
         name: str,
         signature: Sequence[Tuple[str, ParamType]],
         body: Expression,

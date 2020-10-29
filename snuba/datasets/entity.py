@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Mapping, Optional, Sequence
 
-from snuba.clickhouse.columns import ColumnSet, SchemaModifiers
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
 from snuba.datasets.storage import Storage, WritableStorage, WritableTableStorage
 from snuba.query.extensions import QueryExtension
@@ -20,7 +20,7 @@ class Entity(ABC):
         *,
         storages: Sequence[Storage],
         query_plan_builder: ClickhouseQueryPlanBuilder,
-        abstract_column_set: ColumnSet[SchemaModifiers],
+        abstract_column_set: ColumnSet,
         writable_storage: Optional[WritableStorage],
     ) -> None:
         self.__storages = storages
@@ -49,7 +49,7 @@ class Entity(ABC):
         """
         return []
 
-    def get_data_model(self) -> ColumnSet[SchemaModifiers]:
+    def get_data_model(self) -> ColumnSet:
         """
         Now the data model is flat so this is just a simple ColumnSet object. We can expand this
         to also include relationships between entities.

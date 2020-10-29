@@ -13,7 +13,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
 
-columns = ColumnSet[Modifiers](
+columns = ColumnSet(
     [
         # columns to maintain the dataset
         # Kafka topic offset

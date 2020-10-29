@@ -3,7 +3,7 @@ from typing import Any, Mapping, MutableMapping
 import logging
 import _strptime  # NOQA fixes _strptime deferred import issue
 
-from snuba.clickhouse.columns import ColumnSet, SchemaModifiers
+from snuba.clickhouse.columns import ColumnSet
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.events_format import extract_http, extract_user
 from snuba.datasets.events_processor_base import EventsProcessorBase, InsertEvent
@@ -18,7 +18,7 @@ logger = logging.getLogger("snuba.processor")
 
 
 class EventsProcessor(EventsProcessorBase):
-    def __init__(self, promoted_tag_columns: ColumnSet[SchemaModifiers]):
+    def __init__(self, promoted_tag_columns: ColumnSet):
         self._promoted_tag_columns = promoted_tag_columns
 
     def extract_promoted_tags(

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List, Mapping, NamedTuple, Optional, Sequence
 
-from snuba.clickhouse.columns import ColumnSet, QualifiedColumnSet, SchemaModifiers
+from snuba.clickhouse.columns import ColumnSet, QualifiedColumnSet
 from snuba.datasets.schemas import RelationalSource, Schema
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.expressions import FunctionCall
@@ -78,7 +78,7 @@ class TableJoinNode(TableSource, JoinNode):
     def __init__(
         self,
         table_name: str,
-        columns: ColumnSet[SchemaModifiers],
+        columns: ColumnSet,
         mandatory_conditions: Optional[Sequence[FunctionCall]],
         prewhere_candidates: Optional[Sequence[str]],
         alias: str,
@@ -130,7 +130,7 @@ class JoinClause(JoinNode):
             assert left[alias] == right[alias]
         return ChainMap(left, right)
 
-    def get_columns(self) -> QualifiedColumnSet[SchemaModifiers]:
+    def get_columns(self) -> QualifiedColumnSet:
         """
         Extracts all the columns recursively from the joined schemas and
         builds a column set that preserves the structure.

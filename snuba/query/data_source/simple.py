@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from snuba.clickhouse.columns import ColumnSet, SchemaModifiers
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities import EntityKey
 from snuba.query.data_source import DataSource
 
@@ -12,7 +12,7 @@ class Entity(DataSource):
     """
 
     key: EntityKey
-    schema: ColumnSet[SchemaModifiers]
+    schema: ColumnSet
 
-    def get_columns(self) -> ColumnSet[SchemaModifiers]:
+    def get_columns(self) -> ColumnSet:
         return self.schema
