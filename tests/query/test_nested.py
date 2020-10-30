@@ -76,7 +76,6 @@ def test_join_query() -> None:
 
     join_query = CompositeQuery(
         from_clause=JoinClause(
-            alias=None,
             left_node=IndividualNode("e", events_query),
             right_node=IndividualNode("g", groups_query),
             keys=[

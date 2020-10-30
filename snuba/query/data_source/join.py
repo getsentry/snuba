@@ -23,14 +23,9 @@ class JoinModifier(Enum):
 @dataclass(frozen=True)
 class JoinNode(ABC, Generic[TSimpleDataSource]):
     """
-    Assigns an alias to a node in a join expression.
-    The alias is used in the join condition and in all the expressions
-    that rely on the join in the query.
-
+    Represent a Node in the join tree data structure.
     Join nodes can be simple data sources, join expressions and queries.
     """
-
-    alias: Optional[str]
 
     @abstractmethod
     def get_column_sets(self) -> Mapping[str, ColumnSet]:
@@ -42,8 +37,13 @@ class IndividualNode(JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
     """
     Join node that represent an individual data source: an entity/table
     or a subquery.
+
+    It also assign an alias to a node in a join expression.
+    The alias is used in the join condition and in all the expressions
+    that rely on the join in the query.
     """
 
+    alias: str
     data_source: Union[TSimpleDataSource, ProcessableQuery[TSimpleDataSource]]
 
     def get_column_sets(self) -> Mapping[str, ColumnSet]:

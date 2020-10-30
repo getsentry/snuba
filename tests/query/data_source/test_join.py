@@ -7,6 +7,7 @@ from snuba.query.data_source.join import (
     JoinClause,
     JoinCondition,
     JoinConditionExpression,
+    JoinModifier,
     JoinType,
 )
 from snuba.query.data_source.simple import Entity
@@ -37,7 +38,6 @@ def test_simple_join() -> None:
     node_group = IndividualNode(alias="groups", data_source=g)
 
     join = JoinClause(
-        alias=None,
         left_node=node_err,
         right_node=node_group,
         keys=[
@@ -47,6 +47,7 @@ def test_simple_join() -> None:
             )
         ],
         join_type=JoinType.INNER,
+        join_modifier=JoinModifier.SEMI,
     )
 
     assert join.get_column_sets() == {"err": ERRORS_SCHEMA, "groups": GROUPS_SCHEMA}
@@ -59,7 +60,6 @@ def test_simple_join() -> None:
 
     with pytest.raises(AssertionError):
         JoinClause(
-            alias=None,
             left_node=node_err,
             right_node=node_group,
             keys=[
@@ -91,9 +91,7 @@ def test_complex_joins() -> None:
     node_query = IndividualNode(alias="assignee", data_source=query)
 
     join = JoinClause(
-        alias=None,
         left_node=JoinClause(
-            alias=None,
             left_node=node_err,
             right_node=node_group,
             keys=[
