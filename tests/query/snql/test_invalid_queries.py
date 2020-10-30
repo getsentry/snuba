@@ -5,7 +5,7 @@ from snuba.datasets.factory import get_dataset
 from snuba.query.snql.parser import parse_snql_query
 
 test_cases = [
-    # below are case1s that are not parsed completely
+    # below are cases that are not parsed completely
     # i.e. the entire string is not consumed
     pytest.param(
         "MATCH(e: Events)SELECT4-5,3*g(c),cBYd,2+7 WHEREa<3ORDERBYfDESC",

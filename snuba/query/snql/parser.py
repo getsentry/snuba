@@ -16,6 +16,13 @@ from parsimonious.nodes import Node, NodeVisitor
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.query import (
+    Limitby,
+    OrderBy,
+    OrderByDirection,
+    SelectedExpression,
+)
+from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     binary_condition,
@@ -30,8 +37,8 @@ from snuba.query.expressions import (
     FunctionCall,
     Literal,
 )
-from snuba.query import Limitby, OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.logical import Query
+
+from snuba.query.logical import Query as LogicalQuery
 from snuba.query.matchers import (
     Any as AnyMatch,
     FunctionCall as FunctionCallMatch,
@@ -40,15 +47,12 @@ from snuba.query.matchers import (
     String as StringMatch,
 )
 from snuba.query.parser import (
-    _validate_empty_table_names,
     _validate_aliases,
     _parse_subscriptables,
     _apply_column_aliases,
     _expand_aliases,
     _deescape_aliases,
-    _validate_arrayjoin,
 )
-from snuba.query.parser.validation import validate_query
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
     HighPriOperator,
@@ -78,22 +82,25 @@ from snuba.util import parse_datetime
 
 snql_grammar = Grammar(
     r"""
-    query_exp             = match_clause select_clause group_by_clause? where_clause? having_clause? order_by_clause? limit_by_clause? limit_clause? offset_clause? sample_clause?
+    query_exp             = match_clause select_clause group_by_clause? where_clause? having_clause? order_by_clause? limit_by_clause? limit_clause? offset_clause? granularity_clause? totals_clause?
 
-    match_clause          = whitespace* "MATCH" space+ (relationship_match+ / entity_match / subquery) space*
-    select_clause         = whitespace* "SELECT" space+ select_list space*
-    group_by_clause       = whitespace* "BY" space+ group_list space*
-    where_clause          = whitespace* "WHERE" space+ or_expression space*
-    having_clause         = whitespace* "HAVING" space+ or_expression space*
-    order_by_clause       = whitespace* "ORDER BY" space+ order_list space*
-    limit_by_clause       = whitespace* "LIMIT" space+ integer_literal space* "BY" space* column_name space*
-    limit_clause          = whitespace* "LIMIT" space+ integer_literal space*
-    offset_clause         = whitespace* "OFFSET" space+ integer_literal space*
-    sample_clause         = whitespace* "SAMPLE" space+ numeric_literal space*
+    match_clause          = space* "MATCH" space+ (relationships / entity_match / subquery) space*
+    select_clause         = space* "SELECT" space+ select_list space*
+    group_by_clause       = space* "BY" space+ group_list space*
+    where_clause          = space* "WHERE" space+ or_expression space*
+    having_clause         = space* "HAVING" space+ or_expression space*
+    order_by_clause       = space* "ORDER BY" space+ order_list space*
+    limit_by_clause       = space* "LIMIT" space+ integer_literal space* "BY" space* column_name space*
+    limit_clause          = space* "LIMIT" space+ integer_literal space*
+    offset_clause         = space* "OFFSET" space+ integer_literal space*
+    granularity_clause    = space* "GRANULARITY" space+ integer_literal space*
+    totals_clause         = space* "TOTALS" space+ boolean_literal space*
 
+    sample_clause         = space* "SAMPLE" space* numeric_literal space*
     entity_match          = open_paren entity_alias colon space* entity_name sample_clause? close_paren
     relationship_link     = ~r"-\[" relationship_name ~r"\]->"
-    relationship_match    = space* entity_match space* relationship_link space* entity_match space* comma*
+    relationship_match    = space* entity_match space* relationship_link space* entity_match space*
+    relationships         = relationship_match (comma relationship_match)*
     subquery              = open_brace query_exp close_brace
 
     main_condition        = low_pri_arithmetic condition_op (function_call / column_name / quoted_literal / numeric_literal) space*
@@ -130,7 +137,7 @@ snql_grammar = Grammar(
     param_expression      = low_pri_arithmetic / quoted_literal
     parameters_list       = parameter* (param_expression)
     parameter             = param_expression space* comma space*
-    function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)? (space* "AS" space* string_literal)?
+    function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)? (space* "AS" space* string_literal)
     simple_term           = quoted_literal / numeric_literal / column_name
     literal               = ~r"[a-zA-Z0-9_\.:-]+"
     quoted_literal        = "'" string_literal "'"
@@ -145,16 +152,14 @@ snql_grammar = Grammar(
     entity_alias          = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     entity_name           = ~r"[A-Z][a-zA-Z]*"
     relationship_name     = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
-    whitespace            = space / newline
     open_paren            = "("
     close_paren           = ")"
     open_brace            = "{"
     close_brace           = "}"
     single_quote          = "'"
     colon                 = ":"
-    space                 = " "
+    space                 = ~r" |\n|\t"
     comma                 = ","
-    newline               = "\n"
 
 """
 )
@@ -187,14 +192,14 @@ class SnQLVisitor(NodeVisitor):
     Builds Snuba AST expressions from the Parsimonious parse tree.
     """
 
-    def visit_query_exp(self, node: Node, visited_children: Iterable[Any]) -> Query:
+    def visit_query_exp(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> Union[LogicalQuery, CompositeQuery[QueryEntity]]:
         args: MutableMapping[str, Any] = {
-            "body": {},
             "array_join": None,
-            "prewhere": None,
         }
         (
-            args["data_source"],
+            data_source,
             args["selected_columns"],
             args["groupby"],
             args["condition"],
@@ -203,7 +208,8 @@ class SnQLVisitor(NodeVisitor):
             args["limitby"],
             args["limit"],
             offset,
-            args["sample"],
+            args["granularity"],
+            args["totals"],
         ) = visited_children
         if not isinstance(offset, Node):
             args["offset"] = offset
@@ -212,10 +218,13 @@ class SnQLVisitor(NodeVisitor):
             if isinstance(v, Node):
                 args[k] = None
 
-        if args["data_source"].sample_rate is not None:
-            args["sample"] = args["data_source"].sample_rate
+        # Do some magic based on what the data source for this query is.
+        if isinstance(data_source, (CompositeQuery, LogicalQuery)):
+            args["from_clause"] = data_source
+            return CompositeQuery(**args)
 
-        return Query(**args)
+        args.update({"body": {}, "prewhere": None, "data_source": data_source})
+        return LogicalQuery(**args)
 
     def visit_function_name(self, node: Node, visited_children: Iterable[Any]) -> str:
         return visit_function_name(node, visited_children)
@@ -312,7 +321,11 @@ class SnQLVisitor(NodeVisitor):
         visited_children: Tuple[
             Any, Any, Any, Union[EntityTuple, Sequence[RelationshipTuple]], Any
         ],
-    ) -> Optional[QueryEntity]:
+    ) -> Union[
+        Optional[CompositeQuery[QueryEntity]],
+        Optional[LogicalQuery],
+        Optional[QueryEntity],
+    ]:
         _, _, _, match, _ = visited_children
         if isinstance(match, EntityTuple):
             key = EntityKey(match.name.lower())
@@ -320,6 +333,8 @@ class SnQLVisitor(NodeVisitor):
                 key, get_entity(key).get_data_model(), match.sample_rate
             )
             return query_entity
+        elif isinstance(match, (CompositeQuery, LogicalQuery)):
+            return match
         elif isinstance(match, RelationshipTuple):
             # TODO: Change this once we have a proper data source for JOINs
             key = EntityKey(match.lhs.name.lower())
@@ -332,19 +347,30 @@ class SnQLVisitor(NodeVisitor):
             key = EntityKey(match[0].lhs.name.lower())
             query_entity = QueryEntity(key, get_entity(key).get_data_model())
             return query_entity
-        elif isinstance(match, Query):
-            return match
 
         return None
+
+    def visit_relationships(
+        self, node: Node, visited_children: Tuple[RelationshipTuple, Any],
+    ) -> Sequence[RelationshipTuple]:
+        relationships = [visited_children[0]]
+        if isinstance(visited_children[1], Node):
+            return relationships
+
+        for child in visited_children[1]:
+            if isinstance(child, RelationshipTuple):
+                relationships.append(child)
+            elif isinstance(child, list):
+                relationships.append(child[1])
+
+        return relationships
 
     def visit_relationship_match(
         self,
         node: Node,
-        visited_children: Tuple[
-            Any, EntityTuple, Any, Node, Any, EntityTuple, Any, Any
-        ],
+        visited_children: Tuple[Any, EntityTuple, Any, Node, Any, EntityTuple, Any],
     ) -> RelationshipTuple:
-        _, lhs, _, relationship, _, rhs, _, _ = visited_children
+        _, lhs, _, relationship, _, rhs, _ = visited_children
         return RelationshipTuple(lhs, relationship, rhs)
 
     def visit_relationship_link(
@@ -371,9 +397,9 @@ class SnQLVisitor(NodeVisitor):
 
     def visit_subquery(
         self, node: Node, visited_children: Tuple[Any, Node, Any]
-    ) -> Query:
+    ) -> Union[LogicalQuery, CompositeQuery[QueryEntity]]:
         _, query, _ = visited_children
-        assert isinstance(query, Query)  # mypy
+        assert isinstance(query, (CompositeQuery, LogicalQuery))  # mypy
         return query
 
     def visit_where_clause(
@@ -477,6 +503,20 @@ class SnQLVisitor(NodeVisitor):
         _, _, _, sample, _ = visited_children
         assert isinstance(sample.value, float)  # mypy
         return sample.value
+
+    def visit_granularity_clause(
+        self, node: Node, visited_children: Tuple[Any, Any, Any, Literal, Any]
+    ) -> float:
+        _, _, _, granularity, _ = visited_children
+        assert isinstance(granularity.value, int)  # mypy
+        return granularity.value
+
+    def visit_totals_clause(
+        self, node: Node, visited_children: Tuple[Any, Any, Any, Literal, Any]
+    ) -> float:
+        _, _, _, totals, _ = visited_children
+        assert isinstance(totals.value, bool)  # mypy
+        return totals.value
 
     def visit_limit_by_clause(
         self,
@@ -623,7 +663,9 @@ class SnQLVisitor(NodeVisitor):
         return generic_visit(node, visited_children)
 
 
-def parse_snql_query_initial(body: str) -> Query:
+def parse_snql_query_initial(
+    body: str,
+) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
     """
     Parses the query body generating the AST. This only takes into
     account the initial query body. Extensions are parsed by extension
@@ -631,7 +673,7 @@ def parse_snql_query_initial(body: str) -> Query:
     """
     exp_tree = snql_grammar.parse(body)
     query = SnQLVisitor().visit(exp_tree)
-    assert isinstance(query, Query)  # mypy
+    assert isinstance(query, (CompositeQuery, LogicalQuery))  # mypy
     return query
 
 
@@ -640,7 +682,7 @@ DATETIME_MATCH = FunctionCallMatch(
 )
 
 
-def _parse_datetime_literals(query: Query) -> None:
+def _parse_datetime_literals(query: LogicalQuery) -> None:
     def parse(exp: Expression) -> Expression:
         result = DATETIME_MATCH.match(exp)
         if result is not None:
@@ -654,20 +696,27 @@ def _parse_datetime_literals(query: Query) -> None:
     query.transform_expressions(parse)
 
 
-def parse_snql_query(body: str, dataset: Dataset) -> Query:
+def parse_snql_query(
+    body: str, dataset: Dataset
+) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
     query = parse_snql_query_initial(body)
-    entity = get_entity(query.get_from_clause().key)
+
     # These are the post processing phases
     _parse_datetime_literals(query)
-    _validate_empty_table_names(query)
+
+    # query transform query function that recurses lower
+    # Post process
+    # Post pushdown -> entity
+    #
     _validate_aliases(query)
+    # -> valid for snql, needs to recurse through sub queries
     _parse_subscriptables(query)
+    # -> This should be part of the grammar
     _apply_column_aliases(query)
+    # -> No need to change this except to recurse through sub queries
     _expand_aliases(query)
-    # WARNING: These steps above assume table resolution did not happen
-    # yet. If it is put earlier than here (unlikely), we need to adapt them.
+    # -> No change needed except to recurse through sub queries and update each query individually
     _deescape_aliases(query)
-    _validate_arrayjoin(query)
-    validate_query(query, entity)
+    # -> This should not be needed at all, assuming SnQL can properly accept escaped/unicode strings
 
     return query

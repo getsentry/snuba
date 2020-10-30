@@ -114,10 +114,7 @@ class RequestSchema:
                 if key in value
             }
 
-        if "query" in query_body:
-            query = parse_snql_query(query_body["query"], dataset)
-        else:
-            query = parse_query(query_body, dataset)
+        query = parse_query(query_body, dataset)
 
         request_id = uuid.uuid4().hex
         return Request(
