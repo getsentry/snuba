@@ -2,7 +2,6 @@ from typing import Sequence
 
 from snuba.clickhouse.columns import (
     UUID,
-    AggregateFunction,
     Column,
     DateTime,
     String,
@@ -11,7 +10,8 @@ from snuba.clickhouse.columns import (
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from snuba.processor import MAX_UINT32, NIL_UUID
+from .matview import aggregate_columns_v1, create_matview_v1
+
 
 raw_columns: Sequence[Column[Modifiers]] = [
     Column("session_id", UUID()),
@@ -27,27 +27,6 @@ raw_columns: Sequence[Column[Modifiers]] = [
     Column("started", DateTime()),
     Column("release", String(Modifiers(low_cardinality=True))),
     Column("environment", String(Modifiers(low_cardinality=True))),
-]
-
-
-aggregate_columns: Sequence[Column[Modifiers]] = [
-    Column("org_id", UInt(64)),
-    Column("project_id", UInt(64)),
-    Column("started", DateTime()),
-    Column("release", String(Modifiers(low_cardinality=True))),
-    Column("environment", String(Modifiers(low_cardinality=True))),
-    Column(
-        "duration_quantiles",
-        AggregateFunction("quantilesIf(0.5, 0.9)", [UInt(32), UInt(8)]),
-    ),
-    Column("sessions", AggregateFunction("countIf", [UUID(), UInt(8)])),
-    Column("users", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
-    Column("sessions_crashed", AggregateFunction("countIf", [UUID(), UInt(8)]),),
-    Column("sessions_abnormal", AggregateFunction("countIf", [UUID(), UInt(8)]),),
-    Column("sessions_errored", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
-    Column("users_crashed", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
-    Column("users_abnormal", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
-    Column("users_errored", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
 ]
 
 
@@ -70,7 +49,7 @@ class Migration(migration.MultiStepMigration):
             operations.CreateTable(
                 storage_set=StorageSetKey.SESSIONS,
                 table_name="sessions_hourly_local",
-                columns=aggregate_columns,
+                columns=aggregate_columns_v1,
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=StorageSetKey.SESSIONS,
                     order_by="(org_id, project_id, release, environment, started)",
@@ -78,36 +57,7 @@ class Migration(migration.MultiStepMigration):
                     settings={"index_granularity": "256"},
                 ),
             ),
-            operations.CreateMaterializedView(
-                storage_set=StorageSetKey.SESSIONS,
-                view_name="sessions_hourly_mv_local",
-                destination_table_name="sessions_hourly_local",
-                columns=aggregate_columns,
-                query=f"""
-                    SELECT
-                        org_id,
-                        project_id,
-                        toStartOfHour(started) as started,
-                        release,
-                        environment,
-                        quantilesIfState(0.5, 0.9)(
-                            duration,
-                            duration <> {MAX_UINT32} AND status == 1
-                        ) as duration_quantiles,
-                        countIfState(session_id, seq == 0) as sessions,
-                        uniqIfState(distinct_id, distinct_id != '{NIL_UUID}') as users,
-                        countIfState(session_id, status == 2) as sessions_crashed,
-                        countIfState(session_id, status == 3) as sessions_abnormal,
-                        uniqIfState(session_id, errors > 0) as sessions_errored,
-                        uniqIfState(distinct_id, status == 2) as users_crashed,
-                        uniqIfState(distinct_id, status == 3) as users_abnormal,
-                        uniqIfState(distinct_id, errors > 0) as users_errored
-                    FROM
-                        sessions_raw_local
-                    GROUP BY
-                        org_id, project_id, started, release, environment
-                """,
-            ),
+            create_matview_v1,
         ]
 
     def backwards_local(self) -> Sequence[operations.Operation]:
@@ -137,7 +87,7 @@ class Migration(migration.MultiStepMigration):
             operations.CreateTable(
                 storage_set=StorageSetKey.SESSIONS,
                 table_name="sessions_hourly_dist",
-                columns=aggregate_columns,
+                columns=aggregate_columns_v1,
                 engine=table_engines.Distributed(
                     local_table_name="sessions_hourly_local", sharding_key="org_id",
                 ),
