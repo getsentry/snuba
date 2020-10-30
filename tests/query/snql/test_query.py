@@ -15,7 +15,7 @@ from snuba.query.snql.parser import parse_snql_query
 
 test_cases = [
     pytest.param(
-        "MATCH(e:Events) SELECT 4-5, c",
+        "MATCH (e:Events) SELECT 4-5, c",
         Query(
             {},
             QueryEntity(
@@ -98,7 +98,7 @@ test_cases = [
         id="sub query of sub query match",
     ),
     pytest.param(
-        "MATCH(e:Events) SELECT 4-5, c SAMPLE 0.5",
+        "MATCH (e:Events) SELECT 4-5, c SAMPLE 0.5",
         Query(
             {},
             QueryEntity(
@@ -116,7 +116,7 @@ test_cases = [
         id="sample on whole query",
     ),
     pytest.param(
-        "MATCH(e:Events SAMPLE 0.5) SELECT 4-5, c",
+        "MATCH (e:Events SAMPLE 0.5) SELECT 4-5, c",
         Query(
             {},
             QueryEntity(
@@ -134,7 +134,7 @@ test_cases = [
         id="sample on entity",
     ),
     pytest.param(
-        "MATCH(e:Events) SELECT 4-5, c LIMIT 5 BY c",
+        "MATCH (e:Events) SELECT 4-5, c LIMIT 5 BY c",
         Query(
             {},
             QueryEntity(
@@ -152,7 +152,7 @@ test_cases = [
         id="limit by column",
     ),
     pytest.param(
-        "MATCH(e:Events) SELECT 4-5, c LIMIT 5 OFFSET 3",
+        "MATCH (e:Events) SELECT 4-5, c LIMIT 5 OFFSET 3",
         Query(
             {},
             QueryEntity(
@@ -171,7 +171,7 @@ test_cases = [
         id="limit and offset",
     ),
     pytest.param(
-        "MATCH(e:Events)SELECT4-5,3*foo(c),c WHEREa<3",
+        "MATCH (e:Events)SELECT 4-5,3*foo(c),c WHERE a<3",
         Query(
             {},
             QueryEntity(
@@ -200,6 +200,39 @@ test_cases = [
             ),
         ),
         id="Basic query with no spaces and no ambiguous clause content",
+    ),
+    pytest.param(
+        """MATCH (e:Events)
+        SELECT 4-5,3*foo(c),c
+        WHERE a<3""",
+        Query(
+            {},
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "4-5",
+                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                ),
+                SelectedExpression(
+                    "3*foo(c)",
+                    FunctionCall(
+                        None,
+                        "multiply",
+                        (
+                            Literal(None, 3),
+                            FunctionCall(None, "foo", (Column("c", None, "c"),)),
+                        ),
+                    ),
+                ),
+                SelectedExpression("c", Column("c", None, "c")),
+            ],
+            condition=binary_condition(
+                None, "less", Column("a", None, "a"), Literal(None, 3)
+            ),
+        ),
+        id="Basic query with new lines and no ambiguous clause content",
     ),
     pytest.param(
         "MATCH (e: Events) SELECT (2*(4-5)+3), foo(c), c BY d, 2+7 WHERE a<3 ORDER BY f DESC",

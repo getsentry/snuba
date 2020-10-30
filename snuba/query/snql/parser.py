@@ -80,16 +80,16 @@ snql_grammar = Grammar(
     r"""
     query_exp             = match_clause select_clause group_by_clause? where_clause? having_clause? order_by_clause? limit_by_clause? limit_clause? offset_clause? sample_clause?
 
-    match_clause          = space* "MATCH" space* (relationship_match+ / entity_match / subquery) space*
-    select_clause         = space* "SELECT" select_list space*
-    group_by_clause       = space* "BY" group_list space*
-    where_clause          = space* "WHERE" or_expression space*
-    having_clause         = space* "HAVING" or_expression space*
-    order_by_clause       = space* "ORDER BY" order_list space*
-    limit_by_clause       = space* "LIMIT" space* integer_literal space* "BY" space* column_name space*
-    limit_clause          = space* "LIMIT" space* integer_literal space*
-    offset_clause         = space* "OFFSET" space* integer_literal space*
-    sample_clause         = space* "SAMPLE" space* numeric_literal space*
+    match_clause          = whitespace* "MATCH" space+ (relationship_match+ / entity_match / subquery) space*
+    select_clause         = whitespace* "SELECT" space+ select_list space*
+    group_by_clause       = whitespace* "BY" space+ group_list space*
+    where_clause          = whitespace* "WHERE" space+ or_expression space*
+    having_clause         = whitespace* "HAVING" space+ or_expression space*
+    order_by_clause       = whitespace* "ORDER BY" space+ order_list space*
+    limit_by_clause       = whitespace* "LIMIT" space+ integer_literal space* "BY" space* column_name space*
+    limit_clause          = whitespace* "LIMIT" space+ integer_literal space*
+    offset_clause         = whitespace* "OFFSET" space+ integer_literal space*
+    sample_clause         = whitespace* "SAMPLE" space+ numeric_literal space*
 
     entity_match          = open_paren entity_alias colon space* entity_name sample_clause? close_paren
     relationship_link     = ~r"-\[" relationship_name ~r"\]->"
@@ -145,6 +145,7 @@ snql_grammar = Grammar(
     entity_alias          = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     entity_name           = ~r"[A-Z][a-zA-Z]*"
     relationship_name     = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
+    whitespace            = space / newline
     open_paren            = "("
     close_paren           = ")"
     open_brace            = "{"
@@ -153,6 +154,7 @@ snql_grammar = Grammar(
     colon                 = ":"
     space                 = " "
     comma                 = ","
+    newline               = "\n"
 
 """
 )
@@ -331,8 +333,7 @@ class SnQLVisitor(NodeVisitor):
             query_entity = QueryEntity(key, get_entity(key).get_data_model())
             return query_entity
         elif isinstance(match, Query):
-            # TODO: Also need to be able to handle queries this as a data source
-            return match.get_from_clause()
+            return match
 
         return None
 
@@ -376,9 +377,9 @@ class SnQLVisitor(NodeVisitor):
         return query
 
     def visit_where_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Expression, Any]
+        self, node: Node, visited_children: Tuple[Any, Any, Any, Expression, Any]
     ) -> Expression:
-        _, _, conditions, _ = visited_children
+        _, _, _, conditions, _ = visited_children
         return conditions
 
     def visit_having_clause(
@@ -433,9 +434,9 @@ class SnQLVisitor(NodeVisitor):
         return OPERATOR_TO_FUNCTION[node.text]
 
     def visit_order_by_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Sequence[OrderBy], Any]
+        self, node: Node, visited_children: Tuple[Any, Any, Any, Sequence[OrderBy], Any]
     ) -> Sequence[OrderBy]:
-        _, _, order_columns, _ = visited_children
+        _, _, _, order_columns, _ = visited_children
         return order_columns
 
     def visit_order_list(
@@ -501,9 +502,11 @@ class SnQLVisitor(NodeVisitor):
         return offset.value
 
     def visit_group_by_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Sequence[Expression], Any]
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Any, Any, Sequence[Expression], Any],
     ) -> Sequence[Expression]:
-        _, _, group_columns, _ = visited_children
+        _, _, _, group_columns, _ = visited_children
         return group_columns
 
     def visit_group_columns(
@@ -533,9 +536,9 @@ class SnQLVisitor(NodeVisitor):
     def visit_select_clause(
         self,
         node: Node,
-        visited_children: Tuple[Any, Any, Sequence[SelectedExpression], Any],
+        visited_children: Tuple[Any, Any, Any, Sequence[SelectedExpression], Any],
     ) -> Sequence[SelectedExpression]:
-        _, _, selected_columns, _ = visited_children
+        _, _, _, selected_columns, _ = visited_children
         return selected_columns
 
     def visit_selected_expression(
@@ -602,11 +605,11 @@ class SnQLVisitor(NodeVisitor):
             alias = alias.text
 
         param_list1 = tuple(params1)
-        internal_f = FunctionCall(alias, name, param_list1)
         if isinstance(params2, Node) and params2.text == "":
             # params2.text == "" means empty node.
-            return internal_f
+            return FunctionCall(alias, name, param_list1)
 
+        internal_f = FunctionCall(None, name, param_list1)
         _, param_list2, _ = params2
         if isinstance(param_list2, (list, tuple)) and len(param_list2) > 0:
             param_list2 = tuple(param_list2)
@@ -614,7 +617,7 @@ class SnQLVisitor(NodeVisitor):
             # This happens when the second parameter list is empty. Somehow
             # it does not turn into an empty list.
             param_list2 = ()
-        return CurriedFunctionCall(None, internal_f, param_list2)
+        return CurriedFunctionCall(alias, internal_f, param_list2)
 
     def generic_visit(self, node: Node, visited_children: Any) -> Any:
         return generic_visit(node, visited_children)
