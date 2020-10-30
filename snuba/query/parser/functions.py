@@ -5,7 +5,7 @@ from typing import Any, Callable, List, Optional, Set, Tuple, TypeVar, Union
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
-from snuba.clickhouse.columns import Array, ColumnSet, SchemaModifiers
+from snuba.clickhouse.columns import Array, ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.query.conditions import ConditionFunctions, FUNCTION_TO_OPERATOR
 from snuba.query.expressions import Argument, Expression, FunctionCall, Lambda, Literal
@@ -107,7 +107,7 @@ def parse_function(
     unpack_array_condition_builder: Callable[
         [TExpression, str, Any, Optional[str]], TExpression
     ],
-    dataset_columns: ColumnSet[SchemaModifiers],
+    dataset_columns: ColumnSet,
     arrayjoin_cols: Set[str],
     expr: Any,
     depth: int = 0,
@@ -197,7 +197,7 @@ def parse_function(
 
 
 def parse_function_to_expr(
-    expr: Any, dataset_columns: ColumnSet[SchemaModifiers], arrayjoin_cols: Set[str]
+    expr: Any, dataset_columns: ColumnSet, arrayjoin_cols: Set[str]
 ) -> Expression:
     """
     Parses a function expression in the Snuba syntax and produces an AST Expression.

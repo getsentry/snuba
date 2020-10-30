@@ -62,7 +62,6 @@ grammar = Grammar(
 def merge_modifiers(
     col_type: ColumnType[MigrationModifiers], modifiers: MigrationModifiers
 ) -> ColumnType[MigrationModifiers]:
-    # TODO: Remove these assertions when ColumnType will be generic
     existing_modifiers = col_type.get_modifiers()
     if existing_modifiers is None:
         return col_type.set_modifiers(modifiers)

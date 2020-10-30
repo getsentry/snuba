@@ -20,10 +20,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
     help="Consumer group use for consuming the replacements topic.",
 )
 @click.option(
-    "--bootstrap-server",
-    default=settings.DEFAULT_BROKERS,
-    multiple=True,
-    help="Kafka bootstrap server to use.",
+    "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
 )
 @click.option(
     "--storage",
@@ -108,6 +105,7 @@ def replacer(
     replacer = StreamProcessor(
         KafkaConsumer(
             build_kafka_consumer_configuration(
+                storage_key,
                 bootstrap_servers=bootstrap_server,
                 group_id=consumer_group,
                 auto_offset_reset=auto_offset_reset,

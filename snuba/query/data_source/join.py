@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Generic, Mapping, NamedTuple, Optional, Sequence, Union
 
-from snuba.clickhouse.columns import ColumnSet, QualifiedColumnSet, SchemaModifiers
+from snuba.clickhouse.columns import ColumnSet, QualifiedColumnSet
 from snuba.query import ProcessableQuery, TSimpleDataSource
 from snuba.query.data_source import DataSource
 
@@ -33,7 +33,7 @@ class JoinNode(ABC, Generic[TSimpleDataSource]):
     alias: Optional[str]
 
     @abstractmethod
-    def get_column_sets(self) -> Mapping[str, ColumnSet[SchemaModifiers]]:
+    def get_column_sets(self) -> Mapping[str, ColumnSet]:
         raise NotImplementedError
 
 
@@ -46,7 +46,7 @@ class IndividualNode(JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
 
     data_source: Union[TSimpleDataSource, ProcessableQuery[TSimpleDataSource]]
 
-    def get_column_sets(self) -> Mapping[str, ColumnSet[SchemaModifiers]]:
+    def get_column_sets(self) -> Mapping[str, ColumnSet]:
         return (
             {self.alias: self.data_source.get_columns()}
             if self.alias is not None
@@ -95,13 +95,13 @@ class JoinClause(DataSource, JoinNode[TSimpleDataSource], Generic[TSimpleDataSou
     join_type: JoinType
     join_modifier: Optional[JoinModifier] = None
 
-    def get_column_sets(self) -> Mapping[str, ColumnSet[SchemaModifiers]]:
+    def get_column_sets(self) -> Mapping[str, ColumnSet]:
         return {
             **self.left_node.get_column_sets(),
             **self.right_node.get_column_sets(),
         }
 
-    def get_columns(self) -> ColumnSet[SchemaModifiers]:
+    def get_columns(self) -> ColumnSet:
         return QualifiedColumnSet(self.get_column_sets())
 
     def __post_init__(self) -> None:

@@ -26,7 +26,7 @@ from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.web.split import TimeSplitQueryStrategy
 
-columns = ColumnSet[Modifiers](
+columns = ColumnSet(
     [
         ("project_id", UInt(64)),
         ("event_id", UUID()),

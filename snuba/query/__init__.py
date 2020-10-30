@@ -16,7 +16,7 @@ from typing import (
     TypeVar,
 )
 
-from snuba.clickhouse.columns import Any, ColumnSet, SchemaModifiers
+from snuba.clickhouse.columns import Any, ColumnSet
 from snuba.query.conditions import BooleanFunctions, binary_condition
 from snuba.query.data_source import DataSource
 from snuba.query.data_source.simple import SimpleDataSource
@@ -110,7 +110,7 @@ class Query(DataSource, ABC):
         self.__totals = totals
         self.__granularity = granularity
 
-    def get_columns(self) -> ColumnSet[SchemaModifiers]:
+    def get_columns(self) -> ColumnSet:
         """
         From the DataSource class. It returns the schema exposed by this
         query when used as a Data Source for another query.

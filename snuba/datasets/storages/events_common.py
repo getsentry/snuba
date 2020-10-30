@@ -9,7 +9,6 @@ from snuba.clickhouse.columns import (
     Float,
     Nested,
 )
-from snuba.clickhouse.columns import SchemaModifiers
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsProcessor
@@ -27,7 +26,7 @@ from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
-metadata_columns = ColumnSet[SchemaModifiers](
+metadata_columns = ColumnSet(
     [
         # optional stream related data
         ("offset", UInt(64, Modifiers(nullable=True))),
@@ -36,7 +35,7 @@ metadata_columns = ColumnSet[SchemaModifiers](
     ]
 )
 
-promoted_tag_columns = ColumnSet[SchemaModifiers](
+promoted_tag_columns = ColumnSet(
     [
         # These are the classic tags, they are saved in Snuba exactly as they
         # appear in the event body.
@@ -53,7 +52,7 @@ promoted_tag_columns = ColumnSet[SchemaModifiers](
     ]
 )
 
-promoted_context_tag_columns = ColumnSet[SchemaModifiers](
+promoted_context_tag_columns = ColumnSet(
     [
         # These are promoted tags that come in in `tags`, but are more closely
         # related to contexts.  To avoid naming confusion with Clickhouse nested
@@ -72,7 +71,7 @@ promoted_context_tag_columns = ColumnSet[SchemaModifiers](
     ]
 )
 
-promoted_context_columns = ColumnSet[SchemaModifiers](
+promoted_context_columns = ColumnSet(
     [
         ("os_build", String(Modifiers(nullable=True))),
         ("os_kernel_version", String(Modifiers(nullable=True))),
@@ -90,7 +89,7 @@ promoted_context_columns = ColumnSet[SchemaModifiers](
     ]
 )
 
-required_columns = ColumnSet[SchemaModifiers](
+required_columns = ColumnSet(
     [
         ("event_id", FixedString(32)),
         ("project_id", UInt(64)),

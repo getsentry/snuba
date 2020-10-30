@@ -1,5 +1,5 @@
 import pytest
-from snuba.clickhouse.columns import UUID, Any, ColumnSet, SchemaModifiers, String, UInt
+from snuba.clickhouse.columns import UUID, Any, ColumnSet, String, UInt
 from snuba.datasets.entities import EntityKey
 from snuba.query import SelectedExpression
 from snuba.query.data_source.join import (
@@ -13,13 +13,13 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column
 from snuba.query.logical import Query
 
-ERRORS_SCHEMA = ColumnSet[SchemaModifiers](
+ERRORS_SCHEMA = ColumnSet(
     [("event_id", UUID()), ("message", String()), ("group_id", UInt(32))]
 )
 
-GROUPS_SCHEMA = ColumnSet[SchemaModifiers]([("id", UInt(32)), ("message", String())])
+GROUPS_SCHEMA = ColumnSet([("id", UInt(32)), ("message", String())])
 
-GROUPS_ASSIGNEE = ColumnSet[SchemaModifiers]([("id", UInt(32)), ("user", String())])
+GROUPS_ASSIGNEE = ColumnSet([("id", UInt(32)), ("user", String())])
 
 
 def test_entity_node() -> None:
@@ -116,8 +116,6 @@ def test_complex_joins() -> None:
 
     assert join.get_column_sets() == {
         "err": ERRORS_SCHEMA,
-        "assignee": ColumnSet[SchemaModifiers](
-            [("id", Any()), ("assigned_user", Any())]
-        ),
+        "assignee": ColumnSet([("id", Any()), ("assigned_user", Any())]),
         "groups": GROUPS_SCHEMA,
     }

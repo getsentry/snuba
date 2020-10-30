@@ -10,7 +10,7 @@ from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.web.split import TimeSplitQueryStrategy
 
-columns = ColumnSet[Modifiers](
+columns = ColumnSet(
     [
         ("project_id", UInt(64)),
         ("transaction_id", UUID()),

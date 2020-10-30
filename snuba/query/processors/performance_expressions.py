@@ -1,6 +1,6 @@
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
-from snuba.clickhouse.columns import ColumnSet, SchemaModifiers, UInt
+from snuba.clickhouse.columns import ColumnSet, UInt
 from snuba.query.validation.signature import Column as ColType, Literal as LiteralType
 from snuba.query.processors.custom_function import (
     CustomFunction,
@@ -9,7 +9,7 @@ from snuba.query.processors.custom_function import (
 )
 
 
-def apdex_processor(columns: ColumnSet[SchemaModifiers]) -> CustomFunction:
+def apdex_processor(columns: ColumnSet) -> CustomFunction:
     return CustomFunction(
         columns,
         "apdex",
@@ -20,7 +20,7 @@ def apdex_processor(columns: ColumnSet[SchemaModifiers]) -> CustomFunction:
     )
 
 
-def failure_rate_processor(columns: ColumnSet[SchemaModifiers]) -> CustomFunction:
+def failure_rate_processor(columns: ColumnSet) -> CustomFunction:
     return CustomFunction(
         columns,
         "failure_rate",

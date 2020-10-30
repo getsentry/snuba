@@ -5,7 +5,7 @@ from typing import Any, Iterable, List, Optional, Set, Tuple, Union
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
-from snuba.clickhouse.columns import ColumnSet, SchemaModifiers
+from snuba.clickhouse.columns import ColumnSet
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -164,7 +164,7 @@ class ClickhouseVisitor(NodeVisitor):
 
 
 def parse_expression(
-    val: Any, dataset_columns: ColumnSet[SchemaModifiers], arrayjoin: Set[str]
+    val: Any, dataset_columns: ColumnSet, arrayjoin: Set[str]
 ) -> Expression:
     """
     Parse a simple or structured expression encoded in the Snuba query language
@@ -192,7 +192,7 @@ def parse_aggregation(
     aggregation_function: str,
     column: Any,
     alias: Optional[str],
-    dataset_columns: ColumnSet[SchemaModifiers],
+    dataset_columns: ColumnSet,
     array_join_cols: Set[str],
 ) -> Expression:
     """

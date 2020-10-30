@@ -469,7 +469,7 @@ class Enum(ColumnType[TModifiers]):
         return Enum(self.values)
 
 
-class ColumnSet(Generic[TModifiers]):
+class ColumnSet:
     """\
     A set of columns, unique by column name.
     Initialized with a list of Column objects or
@@ -484,7 +484,7 @@ class ColumnSet(Generic[TModifiers]):
     def __init__(
         self,
         columns: Sequence[
-            Union[Column[TModifiers], Tuple[str, ColumnType[TModifiers]]]
+            Union[Column[SchemaModifiers], Tuple[str, ColumnType[SchemaModifiers]]]
         ],
     ) -> None:
         self.columns = Column.to_columns(columns)
@@ -508,7 +508,7 @@ class ColumnSet(Generic[TModifiers]):
     def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self._flattened == cast(ColumnSet[TModifiers], other)._flattened
+            and self._flattened == cast(ColumnSet, other)._flattened
         )
 
     def __len__(self) -> int:
@@ -516,10 +516,8 @@ class ColumnSet(Generic[TModifiers]):
 
     def __add__(
         self,
-        other: Union[
-            ColumnSet[TModifiers], Sequence[Tuple[str, ColumnType[TModifiers]]]
-        ],
-    ) -> ColumnSet[TModifiers]:
+        other: Union[ColumnSet, Sequence[Tuple[str, ColumnType[SchemaModifiers]]]],
+    ) -> ColumnSet:
         if isinstance(other, ColumnSet):
             return ColumnSet([*self.columns, *other.columns])
         return ColumnSet([*self.columns, *other])
@@ -542,7 +540,7 @@ class ColumnSet(Generic[TModifiers]):
             return default
 
 
-class QualifiedColumnSet(ColumnSet[TModifiers], Generic[TModifiers]):
+class QualifiedColumnSet(ColumnSet):
     """
     Works like a Columnset but it represent a list of columns
     coming from different tables (like the ones we would use in
@@ -551,7 +549,7 @@ class QualifiedColumnSet(ColumnSet[TModifiers], Generic[TModifiers]):
     structure and to which table each column belongs to.
     """
 
-    def __init__(self, column_sets: Mapping[str, ColumnSet[TModifiers]]) -> None:
+    def __init__(self, column_sets: Mapping[str, ColumnSet]) -> None:
         # Iterate over the structured columns. get_columns() flattens nested
         # columns. We need them intact here.
         flat_columns = []

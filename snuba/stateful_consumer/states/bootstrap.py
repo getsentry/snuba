@@ -1,7 +1,7 @@
 import json
 import logging
 
-from typing import Optional, Sequence, Set, Tuple
+from typing import Optional, Set, Tuple
 from confluent_kafka import Message
 
 from snuba import settings
@@ -17,6 +17,7 @@ from snuba.stateful_consumer.control_protocol import (
     TransactionData,
 )
 from snuba.utils.state_machine import State
+from snuba.utils.streams.backends.kafka import KafkaBrokerConfig
 
 logger = logging.getLogger("snuba.snapshot-load")
 
@@ -189,13 +190,13 @@ class BootstrapState(State[ConsumerStateCompletionEvent, Optional[ConsumerStateD
     def __init__(
         self,
         topic: str,
-        bootstrap_servers: Sequence[str],
+        broker_config: KafkaBrokerConfig,
         group_id: str,
         storage: CdcStorage,
     ):
         self.__consumer = StrictConsumer(
             topic=topic,
-            bootstrap_servers=bootstrap_servers,
+            broker_config=broker_config,
             group_id=group_id,
             initial_auto_offset_reset="earliest",
             partition_assignment_timeout=settings.SNAPSHOT_CONTROL_TOPIC_INIT_TIMEOUT,
