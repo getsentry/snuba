@@ -26,23 +26,31 @@ def test_sessions_processing() -> None:
     def query_runner(
         query: Query, settings: RequestSettings, reader: Reader[SqlQuery]
     ) -> QueryResult:
+        quantiles = tuple(
+            Literal(None, quant) for quant in [0.5, 0.75, 0.9, 0.95, 0.99]
+        )
         assert query.get_selected_columns_from_ast() == [
             SelectedExpression(
                 "duration_quantiles",
                 CurriedFunctionCall(
                     "duration_quantiles",
-                    FunctionCall(
-                        None,
-                        "quantilesIfMerge",
-                        (Literal(None, 0.5), Literal(None, 0.9)),
-                    ),
+                    FunctionCall(None, "quantilesIfMerge", quantiles,),
                     (Column(None, None, "duration_quantiles"),),
                 ),
             ),
             SelectedExpression(
                 "sessions",
                 FunctionCall(
-                    "sessions", "countIfMerge", (Column(None, None, "sessions"),)
+                    "sessions",
+                    "plus",
+                    (
+                        FunctionCall(
+                            None, "countIfMerge", (Column(None, None, "sessions"),)
+                        ),
+                        FunctionCall(
+                            None, "sumIfMerge", (Column(None, None, "sessions_sum"),)
+                        ),
+                    ),
                 ),
             ),
             SelectedExpression(
