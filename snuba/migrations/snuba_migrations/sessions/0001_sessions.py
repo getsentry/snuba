@@ -13,7 +13,7 @@ from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.processor import MAX_UINT32, NIL_UUID
 
-raw_columns = [
+raw_columns: Sequence[Column[Modifiers]] = [
     Column("session_id", UUID()),
     Column("distinct_id", UUID()),
     Column("seq", UInt(64)),
@@ -30,7 +30,7 @@ raw_columns = [
 ]
 
 
-aggregate_columns = [
+aggregate_columns: Sequence[Column[Modifiers]] = [
     Column("org_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("started", DateTime()),

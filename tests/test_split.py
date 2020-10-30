@@ -28,7 +28,7 @@ def setup_function(function) -> None:
 
 split_specs = [
     ("events", "event_id", "project_id", "timestamp",),
-    ("groups", "events.event_id", "events.project_id", "events.timestamp",),
+    ("transactions", "event_id", "project_id", "finish_ts",),
 ]
 
 
@@ -87,23 +87,17 @@ test_data_col = [
         ],
     ),
     (
-        "groups",
-        "events.event_id",
-        "events.project_id",
-        "events.timestamp",
+        "transactions",
+        "event_id",
+        "project_id",
+        "finish_ts",
+        [{"event_id": "a", "project_id": "1", "finish_ts": "2019-10-01 22:33:42"}],
         [
             {
-                "events.event_id": "a",
-                "events.project_id": "1",
-                "events.timestamp": "2019-10-01 22:33:42",
-            }
-        ],
-        [
-            {
-                "events.event_id": "a",
-                "events.project_id": "1",
-                "events.level": "error",
-                "events.timestamp": "2019-10-01 22:33:42",
+                "event_id": "a",
+                "project_id": "1",
+                "level": "error",
+                "finish_ts": "2019-10-01 22:33:42",
             }
         ],
     ),

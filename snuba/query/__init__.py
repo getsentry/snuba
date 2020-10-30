@@ -16,8 +16,10 @@ from typing import (
     TypeVar,
 )
 
+from snuba.clickhouse.columns import Any, ColumnSet
 from snuba.query.conditions import BooleanFunctions, binary_condition
 from snuba.query.data_source import DataSource
+from snuba.query.data_source.simple import SimpleDataSource
 from snuba.query.expressions import (
     Column,
     Expression,
@@ -25,7 +27,6 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 
-TDataSource = TypeVar("TDataSource", bound=DataSource)
 
 Limitby = Tuple[int, str]
 
@@ -44,6 +45,7 @@ class OrderBy:
 @dataclass(frozen=True)
 class SelectedExpression:
     # The name of this column in the resultset.
+    # TODO: Make this non nullable
     name: Optional[str]
     expression: Expression
 
@@ -51,9 +53,9 @@ class SelectedExpression:
 TExp = TypeVar("TExp", bound=Expression)
 
 
-class Query(ABC, Generic[TDataSource]):
+class Query(DataSource, ABC):
     """
-    The abstract representation of a query in Snuba.
+    The representation of a query in Snuba.
     This class can be extended to support either the logical query which
     is based on a concept of graph or a physical query which is
     relational or any nested structure.
@@ -62,6 +64,10 @@ class Query(ABC, Generic[TDataSource]):
     all types of queries and high level methods to manipulate them.
     Each of the node is an AST expression or a sequence of AST
     expressions.
+
+    This class can represent either a query on a simple data source
+    (entity or relational source) or a composite query with nested
+    queries, joins, or a combination of them.
 
     There are three ways to manipulate the query:
     - direct access methods to individual nodes.
@@ -75,7 +81,6 @@ class Query(ABC, Generic[TDataSource]):
 
     def __init__(
         self,
-        from_clause: Optional[TDataSource],
         # TODO: Consider if to remove the defaults and make some of
         # these fields mandatory. This impacts a lot of code so it
         # would be done on its own.
@@ -92,8 +97,6 @@ class Query(ABC, Generic[TDataSource]):
         totals: bool = False,
         granularity: Optional[int] = None,
     ):
-        self.__from_clause = from_clause
-
         self.__selected_columns = selected_columns or []
         self.__array_join = array_join
         self.__condition = condition
@@ -107,12 +110,32 @@ class Query(ABC, Generic[TDataSource]):
         self.__totals = totals
         self.__granularity = granularity
 
-    def get_from_clause(self) -> TDataSource:
-        assert self.__from_clause is not None, "Data source has not been provided yet."
-        return self.__from_clause
+    def get_columns(self) -> ColumnSet:
+        """
+        From the DataSource class. It returns the schema exposed by this
+        query when used as a Data Source for another query.
+        """
+        ret = []
+        for index, selected_col in enumerate(self.__selected_columns):
+            name = selected_col.name
+            # TODO: Make the type of the columns precise onn the type
+            # when possible. It may become useful for query validation
+            # but it would be best effort because we cannot infer the
+            # type of complex expressions.
+            ret.append(
+                (name, Any())
+                if name is not None
+                # This should never happen for nested queries.
+                # Though the type of the name oof a selected column is
+                # still optional soo we need to fix that first.
+                else (f"_invalid_alias_{index}", Any())
+            )
 
-    def set_from_clause(self, from_clause: TDataSource) -> None:
-        self.__from_clause = from_clause
+        return ColumnSet(ret)
+
+    @abstractmethod
+    def get_from_clause(self) -> DataSource:
+        raise NotImplementedError
 
     # TODO: Run a codemod to remove the "from_ast" from all these
     # methods.
@@ -368,3 +391,55 @@ class Query(ABC, Generic[TDataSource]):
 
         declared_symbols |= {c.flattened for c in self.get_from_clause().get_columns()}
         return not referenced_symbols - declared_symbols
+
+
+TSimpleDataSource = TypeVar("TSimpleDataSource", bound=SimpleDataSource)
+
+
+class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
+    """
+    A Query class that can be used by query processors and translators.
+    Specifically its data source can only be a SimpleDataSource.
+    """
+
+    def __init__(
+        self,
+        from_clause: Optional[TSimpleDataSource],
+        # TODO: Consider if to remove the defaults and make some of
+        # these fields mandatory. This impacts a lot of code so it
+        # would be done on its own.
+        selected_columns: Optional[Sequence[SelectedExpression]] = None,
+        array_join: Optional[Expression] = None,
+        condition: Optional[Expression] = None,
+        groupby: Optional[Sequence[Expression]] = None,
+        having: Optional[Expression] = None,
+        order_by: Optional[Sequence[OrderBy]] = None,
+        limitby: Optional[Limitby] = None,
+        sample: Optional[float] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        totals: bool = False,
+        granularity: Optional[int] = None,
+    ):
+        super().__init__(
+            selected_columns=selected_columns,
+            array_join=array_join,
+            condition=condition,
+            groupby=groupby,
+            having=having,
+            order_by=order_by,
+            limitby=limitby,
+            sample=sample,
+            limit=limit,
+            offset=offset,
+            totals=totals,
+            granularity=granularity,
+        )
+        self.__from_clause = from_clause
+
+    def get_from_clause(self) -> TSimpleDataSource:
+        assert self.__from_clause is not None, "Data source has not been provided yet."
+        return self.__from_clause
+
+    def set_from_clause(self, from_clause: TSimpleDataSource) -> None:
+        self.__from_clause = from_clause
