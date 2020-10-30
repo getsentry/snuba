@@ -147,7 +147,7 @@ class SessionsLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.sessions")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_sessions"]
+        return ["0001_sessions", "0002_sessions_aggregates"]
 
 
 class QuerylogLoader(DirectoryLoader):
