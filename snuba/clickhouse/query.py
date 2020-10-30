@@ -15,7 +15,7 @@ Expression = SnubaExpression
 class Query(AbstractQuery[RelationalSource]):
     def __init__(
         self,
-        data_source: Optional[RelationalSource],
+        from_clause: Optional[RelationalSource],
         # New data model to replace the one based on the dictionary
         selected_columns: Optional[Sequence[SelectedExpression]] = None,
         array_join: Optional[Expression] = None,
@@ -36,7 +36,7 @@ class Query(AbstractQuery[RelationalSource]):
         self.__prewhere = prewhere
 
         super().__init__(
-            from_clause=data_source,
+            from_clause=from_clause,
             selected_columns=selected_columns,
             array_join=array_join,
             condition=condition,

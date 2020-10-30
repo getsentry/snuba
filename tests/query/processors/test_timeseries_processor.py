@@ -3,14 +3,15 @@ from typing import Optional
 import pytest
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
+from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.transactions import TransactionsEntity
-from snuba.datasets.schemas.tables import TableSource
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
     binary_condition,
 )
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.dsl import multiply
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -152,7 +153,7 @@ def test_timeseries_format_expressions(
 ) -> None:
     unprocessed = Query(
         {},
-        TableSource("transactions", ColumnSet([])),
+        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
             SelectedExpression(
                 "transaction.duration", Column("transaction.duration", None, "duration")
@@ -164,7 +165,7 @@ def test_timeseries_format_expressions(
     )
     expected = Query(
         {"granularity": granularity},
-        TableSource("transactions", ColumnSet([])),
+        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
             SelectedExpression(
                 "transaction.duration", Column("transaction.duration", None, "duration")
@@ -200,7 +201,7 @@ def test_timeseries_format_expressions(
 def test_invalid_datetime() -> None:
     unprocessed = Query(
         {},
-        TableSource("transactions", ColumnSet([])),
+        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
             SelectedExpression(
                 "transaction.duration", Column("transaction.duration", None, "duration")

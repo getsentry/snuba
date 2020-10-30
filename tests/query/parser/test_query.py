@@ -3,9 +3,9 @@ from typing import Any, MutableMapping
 import pytest
 
 from snuba import state
-from snuba.clickhouse.columns import ColumnSet
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.schemas.tables import TableSource
 from snuba.query.conditions import binary_condition, ConditionFunctions
 from snuba.query.expressions import (
     Argument,
@@ -16,6 +16,7 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.logical import Query
 from snuba.query.parser import parse_query
 from snuba.query.parser.exceptions import AliasShadowingException, CyclicAliasException
@@ -29,7 +30,9 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression("column2", Column("column2", None, "column2")),
                 SelectedExpression("column3", Column("column3", None, "column3")),
@@ -67,7 +70,9 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression(
                     None,
@@ -146,7 +151,9 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression("column1", Column("column1", None, "column1")),
                 SelectedExpression("column2", Column("column2", None, "column2")),
@@ -169,7 +176,9 @@ test_cases = [
         {"selected_columns": [], "groupby": "column1", "orderby": "-column1"},
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression("column1", Column("column1", None, "column1"))
             ],
@@ -189,7 +198,9 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression(
                     name=None,
@@ -243,7 +254,9 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression(
                     "group_id",
@@ -309,7 +322,9 @@ test_cases = [
         {"selected_columns": [["f", ["column3"], "exp"], ["f", ["column3"], "exp"]]},
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression(
                     "exp",
@@ -327,7 +342,9 @@ test_cases = [
         {"selected_columns": [["f", ["column"], "`exp`"], "`exp`"]},
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression(
                     "exp",
@@ -352,7 +369,9 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression("count", FunctionCall("count", "count", ())),
                 SelectedExpression(
@@ -374,7 +393,9 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression("count", FunctionCall("count", "count", ())),
                 SelectedExpression(
@@ -421,7 +442,9 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression("count", FunctionCall("count", "count", ())),
                 SelectedExpression(
@@ -451,7 +474,9 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression("count", FunctionCall("count", "count", ())),
                 SelectedExpression(
@@ -502,7 +527,9 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression("count", FunctionCall("count", "count", ())),
                 SelectedExpression(
@@ -613,7 +640,9 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression("count", FunctionCall("count", "count", ())),
                 SelectedExpression(
@@ -688,7 +717,9 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression("count", FunctionCall("count", "count", ())),
                 SelectedExpression(
@@ -763,7 +794,9 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression(
                     name="tags_key", expression=Column("tags_key", None, "tags_key"),
@@ -833,6 +866,8 @@ def test_format_expressions(
     state.set_config("query_parsing_expand_aliases", 1)
     events = get_dataset("events")
     query = parse_query(query_body, events)
+
+    assert query == expected_query
 
     # We cannot just run == on the query objects. The content of the two
     # objects is different, being one the AST and the ont the AST + raw body

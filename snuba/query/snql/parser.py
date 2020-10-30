@@ -124,7 +124,7 @@ class SnQLVisitor(NodeVisitor):
             having = None
         return Query(
             body={},
-            data_source=None,
+            from_clause=None,
             selected_columns=collect,
             array_join=None,
             condition=where,
