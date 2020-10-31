@@ -35,6 +35,18 @@ def iterate_rows(result: Result) -> Iterator[Row]:
         return iter(result["data"])
 
 
+def transform_rows(result: Result, transformer: Callable[[Row], Row]) -> None:
+    """
+    Transforms the Result dictionary in place replacing each Row object
+    with the one returned by the transformer function.
+    """
+    for index, row in enumerate(result["data"]):
+        result["data"][index] = transformer(row)
+
+    if "totals" in result:
+        result["totals"] = transformer(result["totals"])
+
+
 NULLABLE_RE = re.compile(r"^Nullable\((.+)\)$")
 
 
