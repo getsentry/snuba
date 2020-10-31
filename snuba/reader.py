@@ -4,32 +4,28 @@ import itertools
 import re
 from abc import ABC, abstractmethod
 from typing import (
-    TYPE_CHECKING,
     Any,
     Callable,
     Generic,
     Iterator,
     Mapping,
     MutableMapping,
+    MutableSequence,
     Optional,
     Pattern,
     Sequence,
     Tuple,
+    TypedDict,
     TypeVar,
 )
 
-if TYPE_CHECKING:
-    from mypy_extensions import TypedDict
-
-    Column = TypedDict("Column", {"name": str, "type": str})
-    Row = MutableMapping[str, Any]
-    Result = TypedDict(
-        "Result",
-        {"meta": Sequence[Column], "data": Sequence[Row], "totals": Row},
-        total=False,
-    )
-else:
-    Result = MutableMapping[str, Any]
+Column = TypedDict("Column", {"name": str, "type": str})
+Row = MutableMapping[str, Any]
+Result = TypedDict(
+    "Result",
+    {"meta": Sequence[Column], "data": MutableSequence[Row], "totals": Row},
+    total=False,
+)
 
 
 def iterate_rows(result: Result) -> Iterator[Row]:
