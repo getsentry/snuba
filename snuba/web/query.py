@@ -2,6 +2,7 @@ import copy
 import logging
 from datetime import datetime
 from functools import partial
+from typing import MutableMapping
 
 import sentry_sdk
 from snuba import environment
@@ -165,11 +166,31 @@ def _run_and_apply_column_names(
         reader,
     )
 
-    alias_name_mapping = {
-        select_col.expression.alias: select_col.name
-        for select_col in clickhouse_query.get_selected_columns_from_ast()
-        if select_col.expression.alias is not None and select_col.name is not None
-    }
+    alias_name_mapping: MutableMapping[str, str] = {}
+    for select_col in clickhouse_query.get_selected_columns_from_ast():
+        alias = select_col.expression.alias
+        name = select_col.name
+        if alias is None or name is None:
+            logger.warning(
+                "Missing alias or name for selected expression",
+                extra={
+                    "selected_expression_name": name,
+                    "selected_expression_alias": alias,
+                },
+                exc_info=True,
+            )
+        elif alias in alias_name_mapping and alias_name_mapping[alias] != name:
+            logger.warning(
+                "Duplicated alias definition in select clause",
+                extra={
+                    "alias": alias,
+                    "name": name,
+                    "existing_name": alias_name_mapping[alias],
+                },
+                exc_info=True,
+            )
+        else:
+            alias_name_mapping[alias] = name
 
     transform_column_names(result, alias_name_mapping)
 

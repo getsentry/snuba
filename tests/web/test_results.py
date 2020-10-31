@@ -97,7 +97,7 @@ TEST_CASES = [
             "_snuba_duration": "duration",
             "_snuba_message": "message",
         },
-        id="Result without final, complete mapping",
+        id="Result with final, complete mapping",
     ),
     pytest.param(
         QueryResult(
