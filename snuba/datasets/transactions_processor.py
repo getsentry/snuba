@@ -8,6 +8,7 @@ from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
 from snuba import environment
 from snuba.datasets.events_format import (
+    EventTooOld,
     enforce_retention,
     extract_base,
     extract_extra_contexts,
@@ -68,11 +69,17 @@ class TransactionsMessageProcessor(MessageProcessor):
         if event_type != "transaction":
             return None
         extract_base(processed, event)
-        # We are purposely using a naive datetime here to work with the rest of the codebase.
-        # We can be confident that clients are only sending UTC dates.
-        processed["retention_days"] = enforce_retention(
-            event, datetime.utcfromtimestamp(data["timestamp"]),
-        )
+
+        try:
+            # We are purposely using a naive datetime here to work with the
+            # rest of the codebase. We can be confident that clients are only
+            # sending UTC dates.
+            processed["retention_days"] = enforce_retention(
+                event, datetime.utcfromtimestamp(data["timestamp"]),
+            )
+        except EventTooOld:
+            return None
+
         if not data.get("contexts", {}).get("trace"):
             return None
 
