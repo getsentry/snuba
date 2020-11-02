@@ -27,7 +27,6 @@ def get_entity(name: EntityKey) -> Entity:
     )
     from snuba.datasets.entities.errors import ErrorsEntity
     from snuba.datasets.entities.events import EventsEntity
-    from snuba.datasets.entities.groups import GroupsEntity
     from snuba.datasets.entities.outcomes import OutcomesEntity
     from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
     from snuba.datasets.entities.sessions import SessionsEntity
@@ -37,7 +36,6 @@ def get_entity(name: EntityKey) -> Entity:
         EntityKey.DISCOVER: DiscoverEntity,
         EntityKey.ERRORS: ErrorsEntity,
         EntityKey.EVENTS: EventsEntity,
-        EntityKey.GROUPS: GroupsEntity,
         EntityKey.GROUPASSIGNEE: GroupAssigneeEntity,
         EntityKey.GROUPEDMESSAGES: GroupedMessageEntity,
         EntityKey.OUTCOMES: OutcomesEntity,

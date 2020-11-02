@@ -2,7 +2,7 @@ from typing import Callable, Iterable, Optional, Sequence
 
 from snuba.datasets.schemas import RelationalSource
 from snuba.query import Limitby, OrderBy
-from snuba.query import Query as AbstractQuery
+from snuba.query import ProcessableQuery as AbstractQuery
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Expression as SnubaExpression
 from snuba.query.expressions import ExpressionVisitor
