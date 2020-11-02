@@ -1,6 +1,9 @@
 from typing import Mapping, Sequence
 
 from snuba.datasets.entity import Entity
+from snuba.datasets.pipeline.single_query_plan_pipeline import (
+    SingleQueryPlanPipelineBuilder,
+)
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_cdc_storage
@@ -24,7 +27,9 @@ class GroupAssigneeEntity(Entity):
 
         super().__init__(
             storages=[storage],
-            query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
+            query_pipeline_builder=SingleQueryPlanPipelineBuilder(
+                query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
+            ),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,
         )

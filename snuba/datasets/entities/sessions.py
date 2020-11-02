@@ -7,6 +7,9 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
+from snuba.datasets.pipeline.single_query_plan_pipeline import (
+    SingleQueryPlanPipelineBuilder,
+)
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
@@ -37,29 +40,31 @@ class SessionsEntity(Entity):
             # TODO: Once we are ready to expose the raw data model and select whether to use
             # materialized storage or the raw one here, replace this with a custom storage
             # selector that decides when to use the materialized data.
-            query_plan_builder=SingleStorageQueryPlanBuilder(
-                storage=materialized_storage,
-                mappers=TranslationMappers(
-                    columns=[
-                        ColumnToCurriedFunction(
-                            None,
-                            "duration_quantiles",
-                            FunctionCall(
+            query_pipeline_builder=SingleQueryPlanPipelineBuilder(
+                query_plan_builder=SingleStorageQueryPlanBuilder(
+                    storage=materialized_storage,
+                    mappers=TranslationMappers(
+                        columns=[
+                            ColumnToCurriedFunction(
                                 None,
-                                "quantilesIfMerge",
-                                (Literal(None, 0.5), Literal(None, 0.9)),
+                                "duration_quantiles",
+                                FunctionCall(
+                                    None,
+                                    "quantilesIfMerge",
+                                    (Literal(None, 0.5), Literal(None, 0.9)),
+                                ),
+                                (Column(None, None, "duration_quantiles"),),
                             ),
-                            (Column(None, None, "duration_quantiles"),),
-                        ),
-                        function_rule("sessions", "countIfMerge"),
-                        function_rule("sessions_crashed", "countIfMerge"),
-                        function_rule("sessions_abnormal", "countIfMerge"),
-                        function_rule("users", "uniqIfMerge"),
-                        function_rule("sessions_errored", "uniqIfMerge"),
-                        function_rule("users_crashed", "uniqIfMerge"),
-                        function_rule("users_abnormal", "uniqIfMerge"),
-                        function_rule("users_errored", "uniqIfMerge"),
-                    ]
+                            function_rule("sessions", "countIfMerge"),
+                            function_rule("sessions_crashed", "countIfMerge"),
+                            function_rule("sessions_abnormal", "countIfMerge"),
+                            function_rule("users", "uniqIfMerge"),
+                            function_rule("sessions_errored", "uniqIfMerge"),
+                            function_rule("users_crashed", "uniqIfMerge"),
+                            function_rule("users_abnormal", "uniqIfMerge"),
+                            function_rule("users_errored", "uniqIfMerge"),
+                        ]
+                    ),
                 ),
             ),
             abstract_column_set=read_schema.get_columns(),

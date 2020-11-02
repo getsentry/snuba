@@ -29,6 +29,9 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.events import BaseEventsEntity, EventsQueryStorageSelector
 from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.datasets.entity import Entity
+from snuba.datasets.pipeline.single_query_plan_pipeline import (
+    SingleQueryPlanPipelineBuilder,
+)
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
@@ -342,33 +345,37 @@ class DiscoverEntity(Entity):
 
         super().__init__(
             storages=[events_storage],
-            query_plan_builder=SelectedStorageQueryPlanBuilder(
-                selector=EventsQueryStorageSelector(
-                    mappers=events_translation_mappers.concat(
-                        transaction_translation_mappers
-                    )
-                    .concat(null_function_translation_mappers)
-                    .concat(
-                        TranslationMappers(
-                            # XXX: Remove once we are using errors
-                            columns=[
-                                ColumnToMapping(
-                                    None, "release", None, "tags", "sentry:release"
-                                ),
-                                ColumnToMapping(
-                                    None, "dist", None, "tags", "sentry:dist"
-                                ),
-                                ColumnToMapping(
-                                    None, "user", None, "tags", "sentry:user"
-                                ),
-                            ],
-                            subscriptables=[
-                                SubscriptableMapper(None, "tags", None, "tags"),
-                                SubscriptableMapper(None, "contexts", None, "contexts"),
-                            ],
+            query_pipeline_builder=SingleQueryPlanPipelineBuilder(
+                query_plan_builder=SelectedStorageQueryPlanBuilder(
+                    selector=EventsQueryStorageSelector(
+                        mappers=events_translation_mappers.concat(
+                            transaction_translation_mappers
+                        )
+                        .concat(null_function_translation_mappers)
+                        .concat(
+                            TranslationMappers(
+                                # XXX: Remove once we are using errors
+                                columns=[
+                                    ColumnToMapping(
+                                        None, "release", None, "tags", "sentry:release"
+                                    ),
+                                    ColumnToMapping(
+                                        None, "dist", None, "tags", "sentry:dist"
+                                    ),
+                                    ColumnToMapping(
+                                        None, "user", None, "tags", "sentry:user"
+                                    ),
+                                ],
+                                subscriptables=[
+                                    SubscriptableMapper(None, "tags", None, "tags"),
+                                    SubscriptableMapper(
+                                        None, "contexts", None, "contexts"
+                                    ),
+                                ],
+                            )
                         )
                     )
-                )
+                ),
             ),
             abstract_column_set=(
                 self.__common_columns
