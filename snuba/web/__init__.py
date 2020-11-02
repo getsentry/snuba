@@ -2,7 +2,7 @@ from typing import Any, Mapping, NamedTuple
 
 from mypy_extensions import TypedDict
 
-from snuba.reader import Result
+from snuba.reader import Result, transform_rows, Column
 
 
 class QueryExtraData(TypedDict):
@@ -26,3 +26,19 @@ class QueryException(Exception):
 class QueryResult(NamedTuple):
     result: Result
     extra: QueryExtraData
+
+
+def transform_column_names(result: QueryResult, mapping: Mapping[str, str]) -> None:
+    """
+    Replaces the column names in a ResultSet object in place.
+    """
+
+    transform_rows(
+        result.result,
+        lambda row: {mapping.get(key, key): value for key, value in row.items()},
+    )
+
+    result.result["meta"] = [
+        Column(name=mapping.get(c["name"], c["name"]), type=c["type"])
+        for c in result.result["meta"]
+    ]
