@@ -20,6 +20,7 @@ STATUS_MAPPING = {
     "exited": 1,
     "crashed": 2,
     "abnormal": 3,
+    "errored": 4,
 }
 
 metrics = MetricsWrapper(environment.metrics, "sessions.processor")
@@ -40,6 +41,7 @@ class SessionsProcessor(MessageProcessor):
             duration = MAX_UINT32
 
         errors = _collapse_uint16(message["errors"]) or 0
+        quantity = _collapse_uint32(message.get("quantity")) or 1
 
         # If a session ends in crashed or abnormal we want to make sure that
         # they count as errored too, so we can get the number of health and
@@ -58,6 +60,7 @@ class SessionsProcessor(MessageProcessor):
         processed = {
             "session_id": str(uuid.UUID(message["session_id"])),
             "distinct_id": str(uuid.UUID(message.get("distinct_id") or NIL_UUID)),
+            "quantity": quantity,
             "seq": message["seq"],
             "org_id": message["org_id"],
             "project_id": message["project_id"],

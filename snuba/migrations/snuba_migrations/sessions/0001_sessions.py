@@ -110,13 +110,7 @@ class Migration(migration.MultiStepMigration):
                     settings={"index_granularity": "256"},
                 ),
             ),
-            operations.CreateMaterializedView(
-                storage_set=StorageSetKey.SESSIONS,
-                view_name="sessions_hourly_mv_local",
-                destination_table_name="sessions_hourly_local",
-                columns=aggregate_columns,
-                query=create_matview,
-            ),
+            create_matview,
         ]
 
     def backwards_local(self) -> Sequence[operations.Operation]:

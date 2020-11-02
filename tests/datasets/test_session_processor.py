@@ -48,6 +48,7 @@ class TestSessionProcessor:
                     "started": started.replace(tzinfo=None),
                     "status": 1,
                     "received": timestamp.replace(tzinfo=None),
+                    "quantity": 1,
                 }
             ]
         )
@@ -95,6 +96,7 @@ class TestSessionProcessor:
                     "started": started.replace(tzinfo=None),
                     "status": 3,
                     "received": timestamp.replace(tzinfo=None),
+                    "quantity": 1,
                 }
             ]
         )
@@ -142,6 +144,7 @@ class TestSessionProcessor:
                     "started": started.replace(tzinfo=None),
                     "status": 2,
                     "received": timestamp.replace(tzinfo=None),
+                    "quantity": 1,
                 }
             ]
         )
