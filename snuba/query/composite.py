@@ -10,6 +10,7 @@ from snuba.query import (
     SelectedExpression,
     TSimpleDataSource,
 )
+from snuba.query.data_source.join import JoinClause
 from snuba.query.expressions import Expression, ExpressionVisitor
 
 
@@ -26,9 +27,9 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
         self,
         from_clause: Optional[
             Union[
-                # TODO: Add the join here when it will exist.
                 ProcessableQuery[TSimpleDataSource],
                 CompositeQuery[TSimpleDataSource],
+                JoinClause[TSimpleDataSource],
             ]
         ],
         # TODO: Consider if to remove the defaults and make some of
@@ -65,7 +66,11 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
 
     def get_from_clause(
         self,
-    ) -> Union[ProcessableQuery[TSimpleDataSource], CompositeQuery[TSimpleDataSource]]:
+    ) -> Union[
+        ProcessableQuery[TSimpleDataSource],
+        CompositeQuery[TSimpleDataSource],
+        JoinClause[TSimpleDataSource],
+    ]:
         assert self.__from_clause is not None, "Data source has not been provided yet."
         return self.__from_clause
 
