@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Mapping, Optional, Sequence
+from typing import Mapping, Optional, Sequence, Tuple
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
@@ -55,6 +55,11 @@ class Entity(ABC):
         to also include relationships between entities.
         """
         return self.__data_model
+
+    def get_join_conditions(self, relationship: str) -> Sequence[Tuple[str, str]]:
+        # TODO: Placeholder, these relationships should be stored as part of the entity
+        # data model so they can be read by the query parsers.
+        return []
 
     def get_query_plan_builder(self) -> ClickhouseQueryPlanBuilder:
         """

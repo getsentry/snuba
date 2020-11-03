@@ -1,5 +1,6 @@
 from typing import (
     Any,
+    Callable,
     Iterable,
     MutableMapping,
     NamedTuple,
@@ -20,6 +21,7 @@ from snuba.query import (
     Limitby,
     OrderBy,
     OrderByDirection,
+    Query as AbstractQuery,
     SelectedExpression,
 )
 from snuba.query.composite import CompositeQuery
@@ -30,6 +32,13 @@ from snuba.query.conditions import (
     combine_or_conditions,
 )
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.data_source.join import (
+    IndividualNode,
+    JoinClause,
+    JoinCondition,
+    JoinConditionExpression,
+    JoinType,
+)
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -137,7 +146,7 @@ snql_grammar = Grammar(
     param_expression      = low_pri_arithmetic / quoted_literal
     parameters_list       = parameter* (param_expression)
     parameter             = param_expression space* comma space*
-    function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)? (space* "AS" space* string_literal)
+    function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)? (space* "AS" space* string_literal)?
     simple_term           = quoted_literal / numeric_literal / column_name
     literal               = ~r"[a-zA-Z0-9_\.:-]+"
     quoted_literal        = "'" string_literal "'"
@@ -219,11 +228,15 @@ class SnQLVisitor(NodeVisitor):
                 args[k] = None
 
         # Do some magic based on what the data source for this query is.
-        if isinstance(data_source, (CompositeQuery, LogicalQuery)):
+        if isinstance(data_source, (CompositeQuery, LogicalQuery, JoinClause)):
             args["from_clause"] = data_source
             return CompositeQuery(**args)
 
         args.update({"body": {}, "prewhere": None, "data_source": data_source})
+        if isinstance(data_source, QueryEntity):
+            # TODO: How sample rate gets stored needs to be addressed in a future PR
+            args["sample"] = data_source.sample_rate
+
         return LogicalQuery(**args)
 
     def visit_function_name(self, node: Node, visited_children: Iterable[Any]) -> str:
@@ -315,6 +328,43 @@ class SnQLVisitor(NodeVisitor):
     ) -> Literal:
         return visit_quoted_literal(node, visited_children)
 
+    def __relationship_to_join_clause(
+        self,
+        relationship: RelationshipTuple,
+        left_join: Optional[JoinClause[QueryEntity]] = None,
+    ) -> JoinClause[QueryEntity]:
+        lhs_query_entity = QueryEntity(
+            EntityKey(relationship.lhs.name.lower()),
+            get_entity(EntityKey(relationship.lhs.name.lower())).get_data_model(),
+            relationship.lhs.sample_rate,
+        )
+        rhs_entity = get_entity(EntityKey(relationship.rhs.name.lower()))
+        rhs_query_entity = QueryEntity(
+            EntityKey(relationship.rhs.name.lower()),
+            get_entity(EntityKey(relationship.rhs.name.lower())).get_data_model(),
+            relationship.rhs.sample_rate,
+        )
+
+        # This part of the process is a WIP. It will change once the relationships
+        # are stored in the data model.
+        join_keys = rhs_entity.get_join_conditions(relationship.relationship)
+        join_conditions = []
+        for join_key in join_keys:
+            join_conditions.append(
+                JoinCondition(
+                    left=JoinConditionExpression(relationship.lhs.alias, join_key[0]),
+                    right=JoinConditionExpression(relationship.rhs.alias, join_key[1]),
+                )
+            )
+
+        join = JoinClause(
+            left_node=IndividualNode(relationship.lhs.alias, lhs_query_entity),
+            right_node=IndividualNode(relationship.rhs.alias, rhs_query_entity),
+            keys=join_conditions,
+            join_type=JoinType.INNER,
+        )
+        return join
+
     def visit_match_clause(
         self,
         node: Node,
@@ -325,6 +375,7 @@ class SnQLVisitor(NodeVisitor):
         Optional[CompositeQuery[QueryEntity]],
         Optional[LogicalQuery],
         Optional[QueryEntity],
+        Optional[JoinClause[QueryEntity]],
     ]:
         _, _, _, match, _ = visited_children
         if isinstance(match, EntityTuple):
@@ -336,10 +387,7 @@ class SnQLVisitor(NodeVisitor):
         elif isinstance(match, (CompositeQuery, LogicalQuery)):
             return match
         elif isinstance(match, RelationshipTuple):
-            # TODO: Change this once we have a proper data source for JOINs
-            key = EntityKey(match.lhs.name.lower())
-            query_entity = QueryEntity(key, get_entity(key).get_data_model())
-            return query_entity
+            return self.__relationship_to_join_clause(match)
         if isinstance(match, list) and all(
             isinstance(m, RelationshipTuple) for m in match
         ):
@@ -682,7 +730,17 @@ DATETIME_MATCH = FunctionCallMatch(
 )
 
 
-def _parse_datetime_literals(query: LogicalQuery) -> None:
+def query_transform(
+    query: AbstractQuery, transformer: Callable[[AbstractQuery], None],
+) -> None:
+    transformer(query)
+    if isinstance(query, CompositeQuery):
+        sub_query = query.get_from_clause()
+        if isinstance(sub_query, AbstractQuery):
+            query_transform(sub_query, transformer)
+
+
+def _parse_datetime_literals(query: AbstractQuery) -> None:
     def parse(exp: Expression) -> Expression:
         result = DATETIME_MATCH.match(exp)
         if result is not None:
@@ -702,21 +760,14 @@ def parse_snql_query(
     query = parse_snql_query_initial(body)
 
     # These are the post processing phases
-    _parse_datetime_literals(query)
+    query_transform(query, _parse_datetime_literals)
 
-    # query transform query function that recurses lower
-    # Post process
-    # Post pushdown -> entity
-    #
-    _validate_aliases(query)
-    # -> valid for snql, needs to recurse through sub queries
-    _parse_subscriptables(query)
-    # -> This should be part of the grammar
-    _apply_column_aliases(query)
-    # -> No need to change this except to recurse through sub queries
-    _expand_aliases(query)
-    # -> No change needed except to recurse through sub queries and update each query individually
-    _deescape_aliases(query)
-    # -> This should not be needed at all, assuming SnQL can properly accept escaped/unicode strings
-
+    # TODO: Update these functions to work with snql queries in a separate PR
+    _validate_aliases(query)  # -> needs to recurse through sub queries
+    _parse_subscriptables(query)  # -> This should be part of the grammar
+    _apply_column_aliases(query)  # -> needs to recurse through sub queries
+    _expand_aliases(query)  # -> needs to recurse through sub queries
+    _deescape_aliases(
+        query
+    )  # -> This should not be needed at all, assuming SnQL can properly accept escaped/unicode strings
     return query
