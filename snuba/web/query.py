@@ -2,6 +2,7 @@ import copy
 import logging
 from datetime import datetime
 from functools import partial
+from typing import MutableMapping
 
 import sentry_sdk
 from snuba import environment
@@ -20,7 +21,7 @@ from snuba.request.request_settings import RequestSettings
 from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.web import QueryException, QueryResult
+from snuba.web import QueryException, QueryResult, transform_column_names
 from snuba.web.db_query import raw_query
 
 logger = logging.getLogger("snuba.query")
@@ -165,26 +166,33 @@ def _run_and_apply_column_names(
         reader,
     )
 
-    name_alias_mappings = [
-        (select.name, select.expression.alias)
-        for select in clickhouse_query.get_selected_columns_from_ast()
-    ]
-    discrepancies = [
-        (name, alias) for name, alias in name_alias_mappings if name != alias
-    ]
-    if discrepancies:
-        logger.warning(
-            "Discrepancies between select clause names and aliases",
-            extra={"mappings": discrepancies},
-            exc_info=True,
-        )
+    alias_name_mapping: MutableMapping[str, str] = {}
+    for select_col in clickhouse_query.get_selected_columns_from_ast():
+        alias = select_col.expression.alias
+        name = select_col.name
+        if alias is None or name is None:
+            logger.warning(
+                "Missing alias or name for selected expression",
+                extra={
+                    "selected_expression_name": name,
+                    "selected_expression_alias": alias,
+                },
+                exc_info=True,
+            )
+        elif alias in alias_name_mapping and alias_name_mapping[alias] != name:
+            logger.warning(
+                "Duplicated alias definition in select clause",
+                extra={
+                    "alias": alias,
+                    "name": name,
+                    "existing_name": alias_name_mapping[alias],
+                },
+                exc_info=True,
+            )
+        else:
+            alias_name_mapping[alias] = name
 
-    # TODO actually replace the column names in the result (data and
-    # meta) with the names the user expects from the SelectedExpression
-    # objects.
-    # As of now, to ensure the column names are what the user expects,
-    # we rely on the aliases assigned to the AST expressions after parsing.
-    # That's why we should not have the discrepancies logged above.
+    transform_column_names(result, alias_name_mapping)
 
     return result
 
