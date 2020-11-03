@@ -4,32 +4,28 @@ import itertools
 import re
 from abc import ABC, abstractmethod
 from typing import (
-    TYPE_CHECKING,
     Any,
     Callable,
     Generic,
     Iterator,
     Mapping,
     MutableMapping,
+    MutableSequence,
     Optional,
     Pattern,
     Sequence,
     Tuple,
+    TypedDict,
     TypeVar,
 )
 
-if TYPE_CHECKING:
-    from mypy_extensions import TypedDict
-
-    Column = TypedDict("Column", {"name": str, "type": str})
-    Row = MutableMapping[str, Any]
-    Result = TypedDict(
-        "Result",
-        {"meta": Sequence[Column], "data": Sequence[Row], "totals": Row},
-        total=False,
-    )
-else:
-    Result = MutableMapping[str, Any]
+Column = TypedDict("Column", {"name": str, "type": str})
+Row = MutableMapping[str, Any]
+Result = TypedDict(
+    "Result",
+    {"meta": Sequence[Column], "data": MutableSequence[Row], "totals": Row},
+    total=False,
+)
 
 
 def iterate_rows(result: Result) -> Iterator[Row]:
@@ -37,6 +33,18 @@ def iterate_rows(result: Result) -> Iterator[Row]:
         return itertools.chain(result["data"], [result["totals"]])
     else:
         return iter(result["data"])
+
+
+def transform_rows(result: Result, transformer: Callable[[Row], Row]) -> None:
+    """
+    Transforms the Result dictionary in place replacing each Row object
+    with the one returned by the transformer function.
+    """
+    for index, row in enumerate(result["data"]):
+        result["data"][index] = transformer(row)
+
+    if "totals" in result:
+        result["totals"] = transformer(result["totals"])
 
 
 NULLABLE_RE = re.compile(r"^Nullable\((.+)\)$")

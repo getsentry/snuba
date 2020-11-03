@@ -3,12 +3,17 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Mapping, Sequence
 
-from snuba.clickhouse.columns import ColumnSet, ColumnType
-from snuba.query.data_source import DataSource
+from snuba.clickhouse.columns import (
+    ColumnSet,
+    ColumnType,
+    Nullable,
+    TModifiers,
+)
+from snuba.query.data_source.simple import SimpleDataSource
 from snuba.query.expressions import FunctionCall
 
 
-class RelationalSource(DataSource, ABC):
+class RelationalSource(SimpleDataSource, ABC):
     """
     Abstract representation of the datamodel in the schema. This includes the
     list of the tables that compose this datamodel with their columns as well as
@@ -94,7 +99,7 @@ class Schema(ABC):
         return self.get_data_source().get_columns()
 
     def get_column_differences(
-        self, expected_columns: Mapping[str, ColumnType]
+        self, expected_columns: Mapping[str, ColumnType[TModifiers]]
     ) -> List[str]:
         """
         Returns a list of differences between the expected_columns and the columns described in the schema.
@@ -111,7 +116,9 @@ class Schema(ABC):
 
             expected_type = self.get_columns()[column_name].type
 
-            if column.get_raw() != expected_type.get_raw():
+            if column.get_raw() != expected_type.get_raw() or column.has_modifier(
+                Nullable
+            ) != expected_type.has_modifier(Nullable):
                 errors.append(
                     "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)"
                     % (column_name, expected_type, column)

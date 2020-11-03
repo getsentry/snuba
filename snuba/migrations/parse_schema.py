@@ -59,20 +59,20 @@ grammar = Grammar(
 )
 
 
-def merge_modifiers(col_type: ColumnType, modifiers: MigrationModifiers) -> ColumnType:
-    # TODO: Remove these assertions when ColumnType will be generic
+def merge_modifiers(
+    col_type: ColumnType[MigrationModifiers], modifiers: MigrationModifiers
+) -> ColumnType[MigrationModifiers]:
     existing_modifiers = col_type.get_modifiers()
     if existing_modifiers is None:
         return col_type.set_modifiers(modifiers)
     else:
-        assert isinstance(existing_modifiers, MigrationModifiers)
         return col_type.set_modifiers(existing_modifiers.merge(modifiers))
 
 
 class Visitor(NodeVisitor):
     def visit_basic_type(
         self, node: Node, visited_children: Iterable[Any]
-    ) -> ColumnType:
+    ) -> ColumnType[MigrationModifiers]:
         return {
             "Date": Date,
             "DateTime": DateTime,
@@ -82,21 +82,27 @@ class Visitor(NodeVisitor):
             "UUID": UUID,
         }[node.text]()
 
-    def visit_uint(self, node: Node, visited_children: Iterable[Any]) -> ColumnType:
+    def visit_uint(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> ColumnType[MigrationModifiers]:
         size = int(node.children[1].text)
         return UInt(size)
 
-    def visit_float(self, node: Node, visited_children: Iterable[Any]) -> ColumnType:
+    def visit_float(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> ColumnType[MigrationModifiers]:
         size = int(node.children[1].text)
         return Float(size)
 
     def visit_fixedstring(
         self, node: Node, visited_children: Iterable[Any]
-    ) -> ColumnType:
+    ) -> ColumnType[MigrationModifiers]:
         size = int(node.children[3].text)
         return FixedString(size)
 
-    def visit_enum(self, node: Node, visited_children: Iterable[Any]) -> ColumnType:
+    def visit_enum(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> ColumnType[MigrationModifiers]:
         _enum, _size, _open, _sp, pairs, _sp, _close = visited_children
         return Enum(pairs)
 
@@ -119,7 +125,7 @@ class Visitor(NodeVisitor):
 
     def visit_agg(
         self, node: Node, visited_children: Iterable[Any]
-    ) -> AggregateFunction:
+    ) -> AggregateFunction[MigrationModifiers]:
         (
             _agg,
             _paren,
@@ -139,23 +145,33 @@ class Visitor(NodeVisitor):
 
     def visit_agg_types(
         self, node: Node, visited_children: Iterable[Any]
-    ) -> Sequence[ColumnType]:
+    ) -> Sequence[ColumnType[MigrationModifiers]]:
         return [c[0] for c in visited_children]
 
     def visit_lowcardinality(
-        self, node: Node, visited_children: Tuple[Any, Any, Any, ColumnType, Any, Any]
-    ) -> ColumnType:
+        self,
+        node: Node,
+        visited_children: Tuple[
+            Any, Any, Any, ColumnType[MigrationModifiers], Any, Any
+        ],
+    ) -> ColumnType[MigrationModifiers]:
         (_lc, _paren, _sp, inner_type, _sp, _paren) = visited_children
         return merge_modifiers(inner_type, MigrationModifiers(low_cardinality=True))
 
     def visit_nullable(
-        self, node: Node, visited_children: Tuple[Any, Any, Any, ColumnType, Any, Any]
-    ) -> ColumnType:
+        self,
+        node: Node,
+        visited_children: Tuple[
+            Any, Any, Any, ColumnType[MigrationModifiers], Any, Any
+        ],
+    ) -> ColumnType[MigrationModifiers]:
         (_null, _paren, _sp, inner_type, _sp, _paren) = visited_children
         # TODO: Remove these assertions when ColumnType will be generic
         return merge_modifiers(inner_type, MigrationModifiers(nullable=True))
 
-    def visit_array(self, node: Node, visited_children: Iterable[Any]) -> ColumnType:
+    def visit_array(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> ColumnType[MigrationModifiers]:
         (_arr, _paren, _sp, inner_type, _sp, _paren) = visited_children
         return Array(inner_type)
 
@@ -177,8 +193,8 @@ def _strip_cast(default_expr: str) -> str:
 
 def _get_column(
     column_type: str, default_type: str, default_expr: str, codec_expr: str
-) -> ColumnType:
-    column: ColumnType = Visitor().visit(grammar.parse(column_type))
+) -> ColumnType[MigrationModifiers]:
+    column: ColumnType[MigrationModifiers] = Visitor().visit(grammar.parse(column_type))
 
     if default_type == "MATERIALIZED":
         column = merge_modifiers(
@@ -197,7 +213,9 @@ def _get_column(
     return column
 
 
-def get_local_schema(conn: Client, table_name: str) -> Mapping[str, ColumnType]:
+def get_local_schema(
+    conn: Client, table_name: str
+) -> Mapping[str, ColumnType[MigrationModifiers]]:
     return {
         column_name: _get_column(column_type, default_type, default_expr, codec_expr)
         for column_name, column_type, default_type, default_expr, _comment, codec_expr in [
