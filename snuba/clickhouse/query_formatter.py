@@ -59,17 +59,18 @@ def format_query(query: Query, settings: RequestSettings) -> FormattedQuery:
 def _format_query_impl(query: FormattableQuery) -> FormattedQuery:
     """
     Formats a Query from the AST representation into an intermediate
-    structure that can either serialized into a string (for clickhouse)
-    or to a dictionary (for logging and tracing).
+    structure that can either be serialized into a string (for clickhouse)
+    or extracted as a dictionary (for logging and tracing).
 
     This is the entry point for any type of query, whether simple or
     composite.
 
     Remark: The ideal way to structure this would be a visitor just
-    like we doo for the AST expression but this is not possible
+    like we did for the AST expression but this is not possible
     without introducing either circular dependencies or dropping
     type checking since the visitor and the classes to visit cannot
-    be in the same module as of now.
+    be in the same module as of now and in a visitor pattern they would
+    have to be mutually dependent.
     """
 
     if isinstance(query, Query):
