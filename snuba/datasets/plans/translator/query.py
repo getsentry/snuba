@@ -42,6 +42,9 @@ class QueryTranslator:
 
     A QueryTranslator is supposed to be a stateless component that does
     not mutate the input query and produce a new object as a result.
+
+    The QueryTranslator class should only be used once per query, since the
+    underlying translator has a cache.
     """
 
     def __init__(self, mappers: TranslationMappers) -> None:

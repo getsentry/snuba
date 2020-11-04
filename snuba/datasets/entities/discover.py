@@ -111,9 +111,7 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
     called on NULL, change the entire function to be NULL.
     """
 
-    function_match = FunctionCallMatch(
-        StringMatch("ifNull"), (LiteralMatch(), LiteralMatch())
-    )
+    function_match = FunctionCallMatch(StringMatch("identity"), (LiteralMatch(),))
 
     def attempt_map(
         self,
@@ -121,25 +119,15 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
         children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[FunctionCall]:
         parameters = tuple(p.accept(children_translator) for p in expression.parameters)
-        all_null = True
         for param in parameters:
-            # Handle wrapped functions that have been converted to ifNull(NULL, NULL)
+            # Handle wrapped functions that have been converted already
             fmatch = self.function_match.match(param)
-            if fmatch is None:
-                if isinstance(param, Literal):
-                    if param.value is not None:
-                        all_null = False
-                        break
-                else:
-                    all_null = False
-                    break
-
-        if all_null and len(parameters) > 0:
-            # Currently function mappers require returning other functions. So return this
-            # to keep the mapper happy.
-            return FunctionCall(
-                expression.alias, "ifNull", (Literal(None, None), Literal(None, None))
-            )
+            if fmatch is not None or (
+                isinstance(param, Literal) and param.alias != "" and param.value is None
+            ):
+                # Currently function mappers require returning other functions. So return this
+                # to keep the mapper happy.
+                return identity(Literal(None, None), expression.alias)
 
         return None
 
@@ -151,9 +139,7 @@ class DefaultIfNullCurriedFunctionMapper(CurriedFunctionCallMapper):
     called on NULL, change the entire function to be NULL.
     """
 
-    function_match = FunctionCallMatch(
-        StringMatch("ifNull"), (LiteralMatch(), LiteralMatch())
-    )
+    function_match = FunctionCallMatch(StringMatch("identity"), (LiteralMatch(),))
 
     def attempt_map(
         self,
@@ -164,31 +150,21 @@ class DefaultIfNullCurriedFunctionMapper(CurriedFunctionCallMapper):
         assert isinstance(internal_function, FunctionCall)  # mypy
         parameters = tuple(p.accept(children_translator) for p in expression.parameters)
 
-        all_null = True
         for param in parameters:
-            # Handle wrapped functions that have been converted to ifNull(NULL, NULL)
+            # Handle wrapped functions that have been converted already
             fmatch = self.function_match.match(param)
-            if fmatch is None:
-                if isinstance(param, Literal):
-                    if param.value is not None:
-                        all_null = False
-                        break
-                else:
-                    all_null = False
-                    break
-
-        if all_null and len(parameters) > 0:
-            # Currently curried function mappers require returning other curried functions.
-            # So return this to keep the mapper happy.
-            return CurriedFunctionCall(
-                alias=expression.alias,
-                internal_function=FunctionCall(
-                    None,
-                    f"{internal_function.function_name}OrNull",
-                    internal_function.parameters,
-                ),
-                parameters=tuple(Literal(None, None) for p in parameters),
-            )
+            if fmatch is not None or (
+                isinstance(param, Literal) and param.alias != "" and param.value is None
+            ):
+                return CurriedFunctionCall(
+                    alias=expression.alias,
+                    internal_function=FunctionCall(
+                        None,
+                        f"{internal_function.function_name}OrNull",
+                        internal_function.parameters,
+                    ),
+                    parameters=tuple(Literal(None, None) for p in parameters),
+                )
 
         return None
 
