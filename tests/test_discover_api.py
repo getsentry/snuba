@@ -22,7 +22,7 @@ class TestDiscoverApi(BaseApiTest):
             get_writable_storage(StorageKey.TRANSACTIONS), [get_raw_transaction()],
         )
 
-    def test_raw_data(self):
+    def test_raw_data(self) -> None:
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -80,7 +80,7 @@ class TestDiscoverApi(BaseApiTest):
             "sdk_name": "sentry.python",
         }
 
-    def test_aggregations(self):
+    def test_aggregations(self) -> None:
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -132,7 +132,7 @@ class TestDiscoverApi(BaseApiTest):
             }
         ]
 
-    def test_handles_columns_from_other_dataset(self):
+    def test_handles_columns_from_other_dataset(self) -> None:
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -158,7 +158,12 @@ class TestDiscoverApi(BaseApiTest):
 
         assert response.status_code == 200
         assert data["data"] == [
-            {"type": "transaction", "count": 0, "uniq_group_id": 0, "uniq_ex_stacks": 0}
+            {
+                "type": "transaction",
+                "count": 0,
+                "uniq_group_id": 0,
+                "uniq_ex_stacks": None,
+            }
         ]
 
         response = self.app.post(
@@ -177,10 +182,10 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200
         assert data["data"] == [
-            {"type": "error", "group_id": self.event["group_id"], "uniq_trace_id": 0}
+            {"type": "error", "group_id": self.event["group_id"], "uniq_trace_id": None}
         ]
 
-    def test_geo_column_condition(self):
+    def test_geo_column_condition(self) -> None:
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -223,7 +228,7 @@ class TestDiscoverApi(BaseApiTest):
         assert response.status_code == 200
         assert data["data"] == [{"count": 1}]
 
-    def test_exception_stack_column_condition(self):
+    def test_exception_stack_column_condition(self) -> None:
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -243,7 +248,7 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["data"] == [{"count": 1}]
 
-    def test_exception_stack_column_boolean_condition(self):
+    def test_exception_stack_column_boolean_condition(self) -> None:
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -282,7 +287,7 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["data"] == [{"count": 1}]
 
-    def test_exception_stack_column_boolean_condition_with_arrayjoin(self):
+    def test_exception_stack_column_boolean_condition_with_arrayjoin(self) -> None:
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -325,7 +330,7 @@ class TestDiscoverApi(BaseApiTest):
             {"count": 1, "exception_stacks.type": "ArithmeticException"}
         ]
 
-    def test_exception_stack_column_boolean_condition_arrayjoin_function(self):
+    def test_exception_stack_column_boolean_condition_arrayjoin_function(self) -> None:
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -374,7 +379,7 @@ class TestDiscoverApi(BaseApiTest):
             {"count": 1, "exception_stacks.type": "ArithmeticException"}
         ]
 
-    def test_tags_key_boolean_condition(self):
+    def test_tags_key_boolean_condition(self) -> None:
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -419,7 +424,7 @@ class TestDiscoverApi(BaseApiTest):
         )
         assert response.status_code == 200
 
-    def test_os_fields_condition(self):
+    def test_os_fields_condition(self) -> None:
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -440,7 +445,7 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["data"] == [{"count": 0}]
 
-    def test_http_fields(self):
+    def test_http_fields(self) -> None:
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -489,7 +494,7 @@ class TestDiscoverApi(BaseApiTest):
             }
         ]
 
-    def test_device_fields_condition(self):
+    def test_device_fields_condition(self) -> None:
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -532,7 +537,7 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["data"][0]["count"] == 1
 
-    def test_device_boolean_fields_context_vs_promoted_column(self):
+    def test_device_boolean_fields_context_vs_promoted_column(self) -> None:
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -571,7 +576,7 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"][0]["contexts[device.charging]"] == "True"
         assert data["data"][0]["count"] == 1
 
-    def test_is_handled(self):
+    def test_is_handled(self) -> None:
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -592,7 +597,7 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["data"][0]["exception_stacks.mechanism_handled"] == [0]
 
-    def test_having(self):
+    def test_having(self) -> None:
         result = json.loads(
             self.app.post(
                 "/query",
@@ -610,7 +615,7 @@ class TestDiscoverApi(BaseApiTest):
         )
         assert len(result["data"]) == 1
 
-    def test_time(self):
+    def test_time(self) -> None:
         result = json.loads(
             self.app.post(
                 "/query",
@@ -643,7 +648,7 @@ class TestDiscoverApi(BaseApiTest):
         )
         assert len(result["data"]) == 1
 
-    def test_transaction_group_ids(self):
+    def test_transaction_group_ids(self) -> None:
         result = json.loads(
             self.app.post(
                 "/query",
@@ -682,7 +687,7 @@ class TestDiscoverApi(BaseApiTest):
 
         assert result["data"] == []
 
-    def test_contexts(self):
+    def test_contexts(self) -> None:
         result = json.loads(
             self.app.post(
                 "/query",
@@ -713,7 +718,7 @@ class TestDiscoverApi(BaseApiTest):
         )
         assert result["data"] == [{"contexts[device.online]": "True"}]
 
-    def test_ast_impossible_queries(self):
+    def test_ast_impossible_queries(self) -> None:
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -741,7 +746,7 @@ class TestDiscoverApi(BaseApiTest):
             }
         ]
 
-    def test_count_null_user_consistency(self):
+    def test_count_null_user_consistency(self) -> None:
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -872,3 +877,85 @@ class TestDiscoverApi(BaseApiTest):
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 1, data
         assert data["data"][0]["quantile_0_95_transaction_duration"] is None
+
+    def test_web_vitals_histogram_function(self) -> None:
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": [
+                        [
+                            "arrayJoin",
+                            ["measurements.key"],
+                            "array_join_measurements_key",
+                        ],
+                        [
+                            "plus",
+                            [
+                                [
+                                    "multiply",
+                                    [
+                                        [
+                                            "floor",
+                                            [
+                                                [
+                                                    "divide",
+                                                    [
+                                                        [
+                                                            "minus",
+                                                            [
+                                                                [
+                                                                    "multiply",
+                                                                    [
+                                                                        [
+                                                                            "arrayJoin",
+                                                                            [
+                                                                                "measurements.value"
+                                                                            ],
+                                                                        ],
+                                                                        100.0,
+                                                                    ],
+                                                                ],
+                                                                0.0,
+                                                            ],
+                                                        ],
+                                                        1.0,
+                                                    ],
+                                                ]
+                                            ],
+                                        ],
+                                        1.0,
+                                    ],
+                                ],
+                                0.0,
+                            ],
+                            "measurements_histogram_1_0_100",
+                        ],
+                    ],
+                    "aggregations": [["count", None, "count"]],
+                    "conditions": [
+                        ["type", "=", "transaction"],
+                        ["transaction_op", "=", "pageload"],
+                        ["transaction", "=", "/organizations/:orgId/issues/"],
+                        ["array_join_measurements_key", "IN", ["cls"]],
+                        ["measurements_histogram_1_0_100", ">=", 0],
+                        ["project_id", "IN", [1]],
+                    ],
+                    "orderby": [
+                        "measurements_histogram_1_0_100",
+                        "array_join_measurements_key",
+                    ],
+                    "having": [],
+                    "groupby": [
+                        "array_join_measurements_key",
+                        "measurements_histogram_1_0_100",
+                    ],
+                    "limit": 1,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 0, data
