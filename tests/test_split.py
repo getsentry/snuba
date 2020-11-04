@@ -10,7 +10,7 @@ from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.pipeline.single_query_plan_pipeline import SingleQueryPlanPipeline
+from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipeline
 from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
 from snuba.datasets.plans.translator.query import identity_translate
 from snuba.query import SelectedExpression

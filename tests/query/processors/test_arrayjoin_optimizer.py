@@ -6,7 +6,7 @@ from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.pipeline.single_query_plan_pipeline import SingleQueryPlanPipeline
+from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipeline
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,

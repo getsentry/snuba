@@ -1,4 +1,4 @@
-from snuba.datasets.pipeline.query_pipeline import (
+from snuba.pipeline.query_pipeline import (
     QueryPipeline,
     QueryPipelineBuilder,
     _execute_query_plan_processors,
@@ -22,9 +22,9 @@ class SingleQueryPlanPipeline(QueryPipeline):
     ):
         self.__request = request
         self.__query_plan = query_plan_builder.build_plan(request)
-        _execute_query_plan_processors(self.__query_plan, self.__request)
 
     def execute(self, runner: QueryRunner) -> QueryResult:
+        _execute_query_plan_processors(self.__query_plan, self.__request)
         return self.__query_plan.execution_strategy.execute(
             self.__query_plan.query, self.__request.settings, runner
         )

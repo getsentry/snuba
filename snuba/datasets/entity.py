@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Mapping, Optional, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.pipeline.query_pipeline import QueryPipelineBuilder
+from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.datasets.storage import Storage, WritableStorage, WritableTableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor

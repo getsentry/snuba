@@ -1,7 +1,7 @@
 from typing import Callable, List, Mapping, Tuple
 
 from snuba.clickhouse.query import Query
-from snuba.datasets.pipeline.query_pipeline import QueryPipeline, QueryPipelineBuilder
+from snuba.pipeline.query_pipeline import QueryPipeline, QueryPipelineBuilder
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlanBuilder,
     QueryRunner,

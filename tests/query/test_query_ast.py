@@ -3,7 +3,7 @@ from typing import Any, MutableMapping
 import pytest
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.pipeline.single_query_plan_pipeline import SingleQueryPlanPipeline
+from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipeline
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition

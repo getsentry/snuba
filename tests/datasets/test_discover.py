@@ -4,7 +4,7 @@ from typing import Any, MutableMapping
 
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.pipeline.single_query_plan_pipeline import SingleQueryPlanPipeline
+from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipeline
 from snuba.query.parser import parse_query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings

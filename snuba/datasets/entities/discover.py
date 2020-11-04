@@ -29,9 +29,7 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.events import BaseEventsEntity, EventsQueryStorageSelector
 from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.datasets.entity import Entity
-from snuba.datasets.pipeline.single_query_plan_pipeline import (
-    SingleQueryPlanPipelineBuilder,
-)
+from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipelineBuilder
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage

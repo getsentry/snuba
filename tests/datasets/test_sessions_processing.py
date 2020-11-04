@@ -1,7 +1,7 @@
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.pipeline.single_query_plan_pipeline import SingleQueryPlanPipeline
+from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipeline
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
 from snuba.query.parser import parse_query
