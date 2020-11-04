@@ -185,6 +185,9 @@ class Query(DataSource, ABC):
     def get_sample(self) -> Optional[float]:
         return self.__sample
 
+    def set_sample(self, sample: Optional[float]) -> None:
+        self.__sample = sample
+
     def get_limit(self) -> Optional[int]:
         return self.__limit
 
