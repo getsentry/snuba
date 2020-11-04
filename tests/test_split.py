@@ -6,7 +6,6 @@ from snuba import state
 from snuba.clickhouse.columns import ColumnSet, String
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.query_dsl.accessors import get_time_range
-from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
@@ -47,9 +46,7 @@ def test_no_split(
     )
 
     def do_query(
-        query: ClickhouseQuery,
-        request_settings: RequestSettings,
-        reader: Reader[SqlQuery],
+        query: ClickhouseQuery, request_settings: RequestSettings, reader: Reader,
     ) -> QueryResult:
         assert query == query
         return QueryResult({}, {})
@@ -117,9 +114,7 @@ def test_col_split(
     second_query_data: Sequence[MutableMapping[str, Any]],
 ) -> None:
     def do_query(
-        query: ClickhouseQuery,
-        request_settings: RequestSettings,
-        reader: Reader[SqlQuery],
+        query: ClickhouseQuery, request_settings: RequestSettings, reader: Reader,
     ) -> QueryResult:
         selected_col_names = [
             c.expression.column_name

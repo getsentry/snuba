@@ -1,9 +1,9 @@
-from typing import List, Tuple
+from typing import Mapping
 
 import pytest
-from snuba.clickhouse.astquery import AstSqlQuery
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.clickhouse.query_formatter import format_query
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import (
@@ -204,12 +204,10 @@ test_cases = [
 
 
 @pytest.mark.parametrize("query, data", test_cases)
-def test_format_expressions(
-    query: ClickhouseQuery, data: List[Tuple[str, str]]
-) -> None:
+def test_format_expressions(query: ClickhouseQuery, data: Mapping[str, str]) -> None:
     request_settings = HTTPRequestSettings()
-    clickhouse_query = AstSqlQuery(query, request_settings)
-    assert clickhouse_query.sql_data() == data
+    clickhouse_query = format_query(query, request_settings)
+    assert clickhouse_query.get_mapping() == data
 
 
 def test_format_clickhouse_specific_query() -> None:
@@ -242,7 +240,7 @@ def test_format_clickhouse_specific_query() -> None:
     query.set_limit(100)
 
     request_settings = HTTPRequestSettings()
-    clickhouse_query = AstSqlQuery(query, request_settings)
+    clickhouse_query = format_query(query, request_settings)
 
     expected = {
         "from": "FROM my_table FINAL SAMPLE 0.1",
@@ -256,4 +254,4 @@ def test_format_clickhouse_specific_query() -> None:
         "where": "WHERE eq(column1, 'blabla')",
     }
 
-    assert clickhouse_query.sql_data() == expected
+    assert clickhouse_query.get_mapping() == expected

@@ -18,9 +18,8 @@ from snuba import settings
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.http import HTTPBatchWriter, JSONRow
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
-from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.reader import Reader, TQuery
+from snuba.reader import Reader
 from snuba.utils.metrics import MetricsBackend
 from snuba.writer import BatchWriter
 
@@ -66,7 +65,7 @@ class ClickhouseNode:
 TWriterOptions = TypeVar("TWriterOptions")
 
 
-class Cluster(ABC, Generic[TQuery, TWriterOptions]):
+class Cluster(ABC, Generic[TWriterOptions]):
     """
     A cluster is responsible for managing a collection of database nodes.
 
@@ -102,7 +101,7 @@ class Cluster(ABC, Generic[TQuery, TWriterOptions]):
         return storage_set_keys
 
     @abstractmethod
-    def get_reader(self) -> Reader[TQuery]:
+    def get_reader(self) -> Reader:
         raise NotImplementedError
 
     @abstractmethod
@@ -119,7 +118,7 @@ class Cluster(ABC, Generic[TQuery, TWriterOptions]):
 ClickhouseWriterOptions = Optional[Mapping[str, Any]]
 
 
-class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
+class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     """
     ClickhouseCluster provides a reader, writer and Clickhouse connections that are
     shared by all storages located on the cluster.
@@ -161,7 +160,7 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         self.__single_node = single_node
         self.__cluster_name = cluster_name
         self.__distributed_cluster_name = distributed_cluster_name
-        self.__reader: Optional[Reader[SqlQuery]] = None
+        self.__reader: Optional[Reader] = None
         self.__connection_cache: MutableMapping[
             Tuple[ClickhouseNode, ClickhouseClientSettings], ClickhousePool
         ] = {}
@@ -207,7 +206,7 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
 
         return self.__connection_cache[cache_key]
 
-    def get_reader(self) -> Reader[SqlQuery]:
+    def get_reader(self) -> Reader:
         if not self.__reader:
             self.__reader = NativeDriverReader(
                 self.get_query_connection(ClickhouseClientSettings.QUERY)

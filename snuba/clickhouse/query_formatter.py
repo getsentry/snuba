@@ -1,15 +1,21 @@
 from typing import Sequence, Tuple, Union, NamedTuple, Mapping, Optional
 
+from snuba import settings as snuba_settings
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Query
 from snuba.datasets.schemas import RelationalSource
 from snuba.query.composite import CompositeQuery
 from snuba.query.parsing import ParsingContext
-
-FormattableQuery = Union[Query, CompositeQuery[RelationalSource]]
+from snuba.request.request_settings import RequestSettings
 
 
 class FormattedQuery(NamedTuple):
+    """
+    Used to move around a query data structure after all clauses have
+    been formatted but such that it can be still serialized
+    differently for different usages (running the query or tracing).
+    """
+
     # TODO: This is going to be a little more complex for subqueries
     # and joins in order to have a useful tracing representation.
     clauses: Sequence[Tuple[str, str]]
@@ -25,7 +31,32 @@ class FormattedQuery(NamedTuple):
         return dict(self.clauses)
 
 
-def format_query(query: FormattableQuery) -> FormattedQuery:
+FormattableQuery = Union[Query, CompositeQuery[RelationalSource]]
+
+
+def format_query(query: Query, settings: RequestSettings) -> FormattedQuery:
+    """
+    Replaces the AstSqlQuery abstraction.
+
+    TODO: Remove this method entirely and move the sampling logic
+    into a query processor.
+    """
+
+    if not query.get_from_clause().supports_sample():
+        sample_rate = None
+    else:
+        if query.get_sample():
+            sample_rate = query.get_sample()
+        elif settings.get_turbo():
+            sample_rate = snuba_settings.TURBO_SAMPLE_RATE
+        else:
+            sample_rate = None
+    query.set_sample(sample_rate)
+
+    return _format_query_impl(query)
+
+
+def _format_query_impl(query: FormattableQuery) -> FormattedQuery:
     """
     Formats a Query from the AST representation into an intermediate
     structure that can either serialized into a string (for clickhouse)
