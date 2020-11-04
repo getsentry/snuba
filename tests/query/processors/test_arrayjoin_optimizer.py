@@ -1,4 +1,5 @@
 from typing import Any, MutableMapping, Optional, Sequence, Set
+from unittest.mock import Mock
 
 import pytest
 from snuba.clickhouse.astquery import AstSqlQuery
@@ -320,7 +321,7 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     entity = get_entity(query.get_from_clause().key)
     for p in entity.get_query_processors():
         p.process_query(query, request.settings)
-    pipeline = entity.get_query_pipeline_builder().build_pipeline(request)
+    pipeline = entity.get_query_pipeline_builder().build_pipeline(request, Mock())
     assert isinstance(pipeline, SingleQueryPlanPipeline)
     plan = pipeline.query_plan
 

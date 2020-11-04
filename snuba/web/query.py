@@ -107,8 +107,6 @@ def _run_query_pipeline(
         ):
             processor.process_query(request.query, request.settings)
 
-    pipeline = entity.get_query_pipeline_builder().build_pipeline(request)
-
     query_runner = partial(
         _run_and_apply_column_names,
         timer,
@@ -118,7 +116,11 @@ def _run_query_pipeline(
         request.referrer,
     )
 
-    return pipeline.execute(query_runner)
+    return (
+        entity.get_query_pipeline_builder()
+        .build_pipeline(request, query_runner)
+        .execute()
+    )
 
 
 def _run_and_apply_column_names(

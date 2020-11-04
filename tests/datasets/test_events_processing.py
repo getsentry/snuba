@@ -17,10 +17,6 @@ def test_events_processing() -> None:
     query = parse_query(query_body, events)
     request = Request("", query, HTTPRequestSettings(), {}, "")
 
-    query_pipeline = (
-        events.get_default_entity().get_query_pipeline_builder().build_pipeline(request)
-    )
-
     def query_runner(
         query: Query, settings: RequestSettings, reader: Reader[SqlQuery]
     ) -> QueryResult:
@@ -49,4 +45,6 @@ def test_events_processing() -> None:
         ]
         return QueryResult({}, {})
 
-    query_pipeline.execute(query_runner)
+    events.get_default_entity().get_query_pipeline_builder().build_pipeline(
+        request, query_runner
+    ).execute()

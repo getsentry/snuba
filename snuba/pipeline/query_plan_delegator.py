@@ -24,6 +24,7 @@ class MultipleQueryPlanPipeline(QueryPipeline):
     def __init__(
         self,
         request: Request,
+        runner: QueryRunner,
         query_plan_builders: QueryPlanBuilders,
         selector_func: SelectorFunc,
         callback_func: CallbackFunc,
@@ -31,7 +32,7 @@ class MultipleQueryPlanPipeline(QueryPipeline):
         self.__request = request
         self.__query_plan_builders = query_plan_builders
 
-    def execute(self, runner: QueryRunner) -> QueryResult:
+    def execute(self) -> QueryResult:
         raise NotImplementedError
 
 
@@ -50,9 +51,10 @@ class QueryPlanDelegator(QueryPipelineBuilder):
         self.__selector_func = selector_func
         self.__callback_func = callback_func
 
-    def build_pipeline(self, request: Request) -> QueryPipeline:
+    def build_pipeline(self, request: Request, runner: QueryRunner) -> QueryPipeline:
         return MultipleQueryPlanPipeline(
             request=request,
+            runner=runner,
             query_plan_builders=self.__query_plan_builders,
             selector_func=self.__selector_func,
             callback_func=self.__callback_func,

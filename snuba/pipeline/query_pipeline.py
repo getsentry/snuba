@@ -17,7 +17,7 @@ class QueryPipeline(ABC):
     """
 
     @abstractmethod
-    def execute(self, runner: QueryRunner) -> QueryResult:
+    def execute(self) -> QueryResult:
         raise NotImplementedError
 
 
@@ -28,7 +28,7 @@ class QueryPipelineBuilder(ABC):
     """
 
     @abstractmethod
-    def build_pipeline(self, request: Request) -> QueryPipeline:
+    def build_pipeline(self, request: Request, runner: QueryRunner) -> QueryPipeline:
         raise NotImplementedError
 
 

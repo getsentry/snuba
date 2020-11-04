@@ -296,12 +296,9 @@ def test_col_split_conditions(
     splitter = ColumnSplitQueryStrategy(id_column, project_column, timestamp_column)
     request = Request("a", query, HTTPRequestSettings(), {}, "r")
     entity = get_entity(query.get_from_clause().key)
-    pipeline = entity.get_query_pipeline_builder().build_pipeline(request)
-    assert isinstance(pipeline, SingleQueryPlanPipeline)
-    plan = pipeline.query_plan
 
     def do_query(
-        query: ClickhouseQuery, request_settings: RequestSettings,
+        query: ClickhouseQuery, request_settings: RequestSettings
     ) -> QueryResult:
         return QueryResult(
             {
@@ -315,6 +312,10 @@ def test_col_split_conditions(
             },
             {},
         )
+
+    pipeline = entity.get_query_pipeline_builder().build_pipeline(request, do_query)
+    assert isinstance(pipeline, SingleQueryPlanPipeline)
+    plan = pipeline.query_plan
 
     assert (
         splitter.execute(plan.query, HTTPRequestSettings(), do_query) is not None

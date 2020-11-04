@@ -18,14 +18,6 @@ def test_sessions_processing() -> None:
     query = parse_query(query_body, sessions)
     request = Request("", query, HTTPRequestSettings(), {}, "")
 
-    pipeline = (
-        sessions.get_default_entity()
-        .get_query_pipeline_builder()
-        .build_pipeline(request)
-    )
-    assert isinstance(pipeline, SingleQueryPlanPipeline)
-    query_plan = pipeline.query_plan
-
     def query_runner(
         query: Query, settings: RequestSettings, reader: Reader[SqlQuery]
     ) -> QueryResult:
@@ -54,6 +46,14 @@ def test_sessions_processing() -> None:
             ),
         ]
         return QueryResult({}, {})
+
+    pipeline = (
+        sessions.get_default_entity()
+        .get_query_pipeline_builder()
+        .build_pipeline(request, query_runner)
+    )
+    assert isinstance(pipeline, SingleQueryPlanPipeline)
+    query_plan = pipeline.query_plan
 
     query_plan.execution_strategy.execute(
         query_plan.query, request.settings, query_runner

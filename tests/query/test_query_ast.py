@@ -1,4 +1,5 @@
 from typing import Any, MutableMapping
+from unittest.mock import Mock
 
 import pytest
 from snuba.clickhouse.columns import ColumnSet
@@ -236,7 +237,7 @@ def test_alias_validation(
     query_pipeline = (
         events.get_default_entity()
         .get_query_pipeline_builder()
-        .build_pipeline(Request("", query, HTTPRequestSettings(), {}, ""))
+        .build_pipeline(Request("", query, HTTPRequestSettings(), {}, ""), Mock())
     )
 
     assert isinstance(query_pipeline, SingleQueryPlanPipeline)
