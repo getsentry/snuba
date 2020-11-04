@@ -7,6 +7,7 @@ from typing import (
     List,
     Optional,
     Sequence,
+    Set,
     Tuple,
     Union,
 )
@@ -196,6 +197,120 @@ class RelationshipTuple(NamedTuple):
     rhs: EntityTuple
 
 
+class JoinGraph(NamedTuple):
+    vertices: Set[EntityTuple]
+    edges: Set[RelationshipTuple]
+
+    def find_edges(self, vertex: EntityTuple) -> Sequence[RelationshipTuple]:
+        return [e for e in self.edges if e.lhs == vertex]
+
+    def find_root(self) -> EntityTuple:
+        incoming = {v: 0 for v in self.vertices}
+        for relationship in self.edges:
+            incoming[relationship.rhs] += 1
+
+        roots = set()
+        for v, count in incoming.items():
+            if count == 0:
+                roots.add(v)
+
+        if len(roots) > 1:
+            raise Exception("graph is not connected")
+        elif len(roots) < 1:
+            raise Exception("why would you add a cycle")
+
+        return roots.pop()
+
+
+class ListNode(NamedTuple):
+    entity: EntityTuple
+    join_conditions: Optional[Sequence[JoinCondition]]
+
+
+def build_graph(relationships: Sequence[RelationshipTuple]) -> JoinGraph:
+    vertices = set()
+    edges = set()
+    for relationship in relationships:
+        vertices.add(relationship.lhs)
+        vertices.add(relationship.rhs)
+        edges.add(relationship)
+
+    return JoinGraph(vertices, edges)
+
+
+def graph_to_join_clause(graph: JoinGraph) -> JoinClause[QueryEntity]:
+    root = graph.find_root()
+    nodelist = _flatten(root, graph, [ListNode(root, None)])
+
+    to_build = list(reversed(nodelist))
+    join_clause = build_join_clause(to_build)
+
+    return join_clause
+
+
+def build_join_clause(nodes: List[ListNode],) -> JoinClause[QueryEntity]:
+    if len(nodes) < 2:
+        raise Exception("something went wrong")
+
+    node = nodes.pop()
+    assert node.join_conditions is not None, "no conditions???"
+    rhs = IndividualNode(
+        node.entity.alias,
+        QueryEntity(
+            EntityKey(node.entity.name),
+            get_entity(EntityKey(node.entity.name)).get_data_model(),
+            node.entity.sample_rate,
+        ),
+    )
+    lhs: Optional[Union[JoinClause[QueryEntity], IndividualNode[QueryEntity]]] = None
+    if len(nodes) == 1:
+        lhs_node = nodes.pop()
+        lhs = IndividualNode(
+            lhs_node.entity.alias,
+            QueryEntity(
+                EntityKey(lhs_node.entity.name),
+                get_entity(EntityKey(lhs_node.entity.name)).get_data_model(),
+                lhs_node.entity.sample_rate,
+            ),
+        )
+    else:
+        lhs = build_join_clause(nodes)
+
+    return JoinClause(
+        left_node=lhs,
+        right_node=rhs,
+        keys=node.join_conditions,
+        join_type=JoinType.INNER,
+    )
+
+
+def _flatten(
+    root: EntityTuple, graph: JoinGraph, nodelist: List[ListNode]
+) -> List[ListNode]:
+    edges = graph.find_edges(root)
+    if len(edges) == 0:
+        return nodelist
+
+    for edge in edges:
+        join_keys = get_entity(EntityKey(root.name)).get_join_conditions(
+            edge.relationship
+        )
+        join_conditions = []
+        for join_key in join_keys:
+            join_conditions.append(
+                JoinCondition(
+                    left=JoinConditionExpression(edge.lhs.alias, join_key[0]),
+                    right=JoinConditionExpression(edge.rhs.alias, join_key[1]),
+                )
+            )
+        nodelist.append(ListNode(edge.rhs, join_conditions,))
+
+    for edge in edges:
+        _flatten(edge.rhs, graph, nodelist)
+
+    return nodelist
+
+
 class SnQLVisitor(NodeVisitor):
     """
     Builds Snuba AST expressions from the Parsimonious parse tree.
@@ -329,25 +444,23 @@ class SnQLVisitor(NodeVisitor):
         return visit_quoted_literal(node, visited_children)
 
     def __relationship_to_join_clause(
-        self,
-        relationship: RelationshipTuple,
-        left_join: Optional[JoinClause[QueryEntity]] = None,
+        self, relationship: RelationshipTuple
     ) -> JoinClause[QueryEntity]:
+        lhs_entity = get_entity(EntityKey(relationship.lhs.name))
         lhs_query_entity = QueryEntity(
-            EntityKey(relationship.lhs.name.lower()),
-            get_entity(EntityKey(relationship.lhs.name.lower())).get_data_model(),
+            EntityKey(relationship.lhs.name),
+            lhs_entity.get_data_model(),
             relationship.lhs.sample_rate,
         )
-        rhs_entity = get_entity(EntityKey(relationship.rhs.name.lower()))
         rhs_query_entity = QueryEntity(
-            EntityKey(relationship.rhs.name.lower()),
-            get_entity(EntityKey(relationship.rhs.name.lower())).get_data_model(),
+            EntityKey(relationship.rhs.name),
+            get_entity(EntityKey(relationship.rhs.name)).get_data_model(),
             relationship.rhs.sample_rate,
         )
 
         # This part of the process is a WIP. It will change once the relationships
         # are stored in the data model.
-        join_keys = rhs_entity.get_join_conditions(relationship.relationship)
+        join_keys = lhs_entity.get_join_conditions(relationship.relationship)
         join_conditions = []
         for join_key in join_keys:
             join_conditions.append(
@@ -379,7 +492,7 @@ class SnQLVisitor(NodeVisitor):
     ]:
         _, _, _, match, _ = visited_children
         if isinstance(match, EntityTuple):
-            key = EntityKey(match.name.lower())
+            key = EntityKey(match.name)
             query_entity = QueryEntity(
                 key, get_entity(key).get_data_model(), match.sample_rate
             )
@@ -391,8 +504,16 @@ class SnQLVisitor(NodeVisitor):
         if isinstance(match, list) and all(
             isinstance(m, RelationshipTuple) for m in match
         ):
+            # Build a graph connecting nodes with one way edges
+            # Find the beginning node (top of the graph)
+            # For each node, flatten it and it's children into an array
+            # do the same for each child node
+            # if we haven't added every node/edge to the array when we reach the bottom of the tree,
+            # then the tree isn't connected and we can break
+            # Once we have a flattened array, reverse it and build the join query back up
+
             # TODO: Change this once we have a proper data source for JOINs
-            key = EntityKey(match[0].lhs.name.lower())
+            key = EntityKey(match[0].lhs.name)
             query_entity = QueryEntity(key, get_entity(key).get_data_model())
             return query_entity
 
@@ -435,7 +556,7 @@ class SnQLVisitor(NodeVisitor):
         _, alias, _, _, name, sample, _ = visited_children
         if isinstance(sample, Node):
             sample = None
-        return EntityTuple(alias, name, sample)
+        return EntityTuple(alias, name.lower(), sample)
 
     def visit_entity_alias(self, node: Node, visited_children: Tuple[Any]) -> str:
         return str(node.text)
