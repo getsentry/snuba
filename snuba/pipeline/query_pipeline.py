@@ -14,6 +14,12 @@ class QueryPipeline(ABC):
     plan processors, executes the query plans and returns the relevant result.
 
     This component is produced by the QueryPipelineBuilder.
+
+    TODO: In future, the query pipeline wiil be composed of segments, which will
+    each perform individual processing steps and can be easily reused.
+    Examples of transformations performed by segments are entity processing, query
+    plan building and processing, storage processing, as well as splitters
+    and collectors to help break apart and reassemble joined queries.
     """
 
     @abstractmethod
