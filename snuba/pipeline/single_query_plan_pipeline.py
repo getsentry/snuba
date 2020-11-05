@@ -15,6 +15,10 @@ from snuba.web import QueryResult
 class SingleQueryPlanPipeline(QueryPipeline):
     """
     A query pipeline for a single query plan.
+
+    TODO: Currently only query plan building and processing is done by the query
+    pipeline, eventually the rest of the query processing sequence will move into
+    the pipeline as well.
     """
 
     def __init__(

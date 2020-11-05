@@ -9,9 +9,16 @@ from snuba.web import QueryResult
 
 class QueryPipeline(ABC):
     """
-    Contains the instructions to build the query plans for the requested query
-    (this can be one or multiple query plans). The QueryPipeline runs the query
-    plan processors, executes the query plans and returns the relevant result.
+    Contains the instructions to build the query plans for the requested query.
+    The QueryPipeline runs the query plan processors, executes the query plans and
+    returns the relevant result.
+
+    Most of the time, a single query plan is built by the SingleQueryPlanPipeline,
+    however under certain circumstances we may have a pipeline with multiple query
+    plans. For example, the MultipleQueryPlanPipeline provides a way to build and
+    execute more than one query plan and compare their results, which provides a
+    way to experiment with different query plans in production without actually
+    using their results yet.
 
     This component is produced by the QueryPipelineBuilder.
 
