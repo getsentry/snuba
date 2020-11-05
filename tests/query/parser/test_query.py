@@ -869,18 +869,6 @@ def test_format_expressions(
 
     assert query == expected_query
 
-    # We cannot just run == on the query objects. The content of the two
-    # objects is different, being one the AST and the ont the AST + raw body
-    assert (
-        query.get_selected_columns_from_ast()
-        == expected_query.get_selected_columns_from_ast()
-    )
-    assert query.get_groupby_from_ast() == expected_query.get_groupby_from_ast()
-    assert query.get_condition_from_ast() == expected_query.get_condition_from_ast()
-    assert query.get_arrayjoin_from_ast() == expected_query.get_arrayjoin_from_ast()
-    assert query.get_having_from_ast() == expected_query.get_having_from_ast()
-    assert query.get_orderby_from_ast() == expected_query.get_orderby_from_ast()
-
 
 def test_shadowing() -> None:
     with pytest.raises(AliasShadowingException):
