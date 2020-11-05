@@ -11,7 +11,6 @@ from snuba.datasets.dataset import Dataset
 from snuba.query.extensions import QueryExtension
 from snuba.query.parser import parse_query
 from snuba.query.schema import GENERIC_QUERY_SCHEMA
-from snuba.query.snql.parser import parse_snql_query
 from snuba.request import Request
 from snuba.request.exceptions import JsonSchemaValidationException
 from snuba.request.request_settings import (
