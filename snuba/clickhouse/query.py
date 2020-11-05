@@ -77,3 +77,15 @@ class Query(AbstractQuery[RelationalSource]):
 
     def set_final(self, final: bool) -> None:
         self.__final = final
+
+    def __eq__(self, other: object) -> bool:
+        if not super().__eq__(other):
+            return False
+
+        assert isinstance(other, Query)  # mypy
+        return all(
+            [
+                self.get_prewhere_ast() == other.get_prewhere_ast(),
+                self.get_final() == other.get_final(),
+            ]
+        )

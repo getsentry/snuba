@@ -82,6 +82,13 @@ class Query(AbstractQuery[Entity]):
     def set_final(self, final: bool) -> None:
         self.__final = final
 
+    def __eq__(self, other: object) -> bool:
+        if not super().__eq__(other):
+            return False
+
+        assert isinstance(other, Query)  # mypy
+        return self.get_final() == other.get_final()
+
     @deprecated(
         details="Do not access the internal query representation "
         "use the specific accessor methods instead."
