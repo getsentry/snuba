@@ -238,17 +238,34 @@ def build_graph(relationships: Sequence[RelationshipTuple]) -> JoinGraph:
     return JoinGraph(vertices, edges)
 
 
-def graph_to_join_clause(graph: JoinGraph) -> JoinClause[QueryEntity]:
-    root = graph.find_root()
-    nodelist = _flatten(root, graph, [ListNode(root, None)])
+def _flatten(
+    root: EntityTuple, graph: JoinGraph, nodelist: List[ListNode]
+) -> List[ListNode]:
+    edges = graph.find_edges(root)
+    if len(edges) == 0:
+        return nodelist
 
-    to_build = list(reversed(nodelist))
-    join_clause = build_join_clause(to_build)
+    for edge in edges:
+        join_keys = get_entity(EntityKey(root.name)).get_join_conditions(
+            edge.relationship
+        )
+        join_conditions = []
+        for join_key in join_keys:
+            join_conditions.append(
+                JoinCondition(
+                    left=JoinConditionExpression(edge.lhs.alias, join_key[0]),
+                    right=JoinConditionExpression(edge.rhs.alias, join_key[1]),
+                )
+            )
+        nodelist.append(ListNode(edge.rhs, join_conditions,))
 
-    return join_clause
+    for edge in edges:
+        _flatten(edge.rhs, graph, nodelist)
+
+    return nodelist
 
 
-def build_join_clause(nodes: List[ListNode],) -> JoinClause[QueryEntity]:
+def build_join_clause(nodes: List[ListNode]) -> JoinClause[QueryEntity]:
     if len(nodes) < 2:
         raise Exception("something went wrong")
 
@@ -284,31 +301,12 @@ def build_join_clause(nodes: List[ListNode],) -> JoinClause[QueryEntity]:
     )
 
 
-def _flatten(
-    root: EntityTuple, graph: JoinGraph, nodelist: List[ListNode]
-) -> List[ListNode]:
-    edges = graph.find_edges(root)
-    if len(edges) == 0:
-        return nodelist
+def graph_to_join_clause(graph: JoinGraph) -> JoinClause[QueryEntity]:
+    root = graph.find_root()
+    nodelist = _flatten(root, graph, [ListNode(root, None)])
+    join_clause = build_join_clause(nodelist)
 
-    for edge in edges:
-        join_keys = get_entity(EntityKey(root.name)).get_join_conditions(
-            edge.relationship
-        )
-        join_conditions = []
-        for join_key in join_keys:
-            join_conditions.append(
-                JoinCondition(
-                    left=JoinConditionExpression(edge.lhs.alias, join_key[0]),
-                    right=JoinConditionExpression(edge.rhs.alias, join_key[1]),
-                )
-            )
-        nodelist.append(ListNode(edge.rhs, join_conditions,))
-
-    for edge in edges:
-        _flatten(edge.rhs, graph, nodelist)
-
-    return nodelist
+    return join_clause
 
 
 class SnQLVisitor(NodeVisitor):
@@ -504,18 +502,9 @@ class SnQLVisitor(NodeVisitor):
         if isinstance(match, list) and all(
             isinstance(m, RelationshipTuple) for m in match
         ):
-            # Build a graph connecting nodes with one way edges
-            # Find the beginning node (top of the graph)
-            # For each node, flatten it and it's children into an array
-            # do the same for each child node
-            # if we haven't added every node/edge to the array when we reach the bottom of the tree,
-            # then the tree isn't connected and we can break
-            # Once we have a flattened array, reverse it and build the join query back up
-
-            # TODO: Change this once we have a proper data source for JOINs
-            key = EntityKey(match[0].lhs.name)
-            query_entity = QueryEntity(key, get_entity(key).get_data_model())
-            return query_entity
+            graph = build_graph(match)
+            join_clause = graph_to_join_clause(graph)
+            return join_clause
 
         return None
 

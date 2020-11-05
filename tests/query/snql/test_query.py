@@ -92,8 +92,8 @@ test_cases = [
         """MATCH
             (e: Errors) -[contains]-> (t: Transactions),
             (e: Errors) -[assigned]-> (ga: GroupAssignee),
-            (e: Errors) -[bookmark]-> (ub: UserBookmarked),
-            (e: Errors) -[thespans]-> (sp: Spans)
+            (e: Errors) -[bookmark]-> (gm: GroupedMessage),
+            (e: Errors) -[activity]-> (se: Sessions)
         SELECT 4-5, c""",
         LogicalQuery(
             {},
