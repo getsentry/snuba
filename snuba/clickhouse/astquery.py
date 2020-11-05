@@ -24,7 +24,7 @@ class AstSqlQuery(SqlQuery):
         self.__groupby = query.get_groupby_from_ast()
         self.__having = query.get_having_from_ast()
         self.__orderby = query.get_orderby_from_ast()
-        self.__data_source = query.get_from_clause()
+        self.__from_clause = query.get_from_clause()
         self.__arrayjoin = query.get_arrayjoin_from_ast()
         self.__granularity = query.get_granularity()
         self.__limit = query.get_limit()
@@ -58,13 +58,13 @@ class AstSqlQuery(SqlQuery):
         select_clause = f"SELECT {', '.join(selected_cols)}"
 
         # TODO: The visitor approach will be used for the FROM clause as well.
-        from_clause = f"FROM {self.__data_source.format_from()}"
+        from_clause = f"FROM {self.__from_clause.format_from()}"
 
         if self.__final:
             from_clause = f"{from_clause} FINAL"
 
         # TODO: Sampling rate will become one step of Clickhouse query processing
-        if not self.__data_source.supports_sample():
+        if not self.__from_clause.supports_sample():
             sample_rate = None
         else:
             if self.__sample:

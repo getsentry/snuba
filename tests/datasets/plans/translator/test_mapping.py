@@ -8,8 +8,11 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities import EntityKey
 from snuba.datasets.plans.translator.query import QueryTranslator
 from snuba.datasets.schemas.tables import TableSource
+from snuba.query import SelectedExpression
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
     Column,
     FunctionCall,
@@ -17,14 +20,14 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query as SnubaQuery
-from snuba.query import SelectedExpression
+
 
 test_cases = [
     pytest.param(
         TranslationMappers(),
         SnubaQuery(
             body={},
-            data_source=TableSource("my_table", ColumnSet([])),
+            from_clause=QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression("alias", Column("alias", "table", "column")),
                 SelectedExpression(
@@ -44,7 +47,7 @@ test_cases = [
             ],
         ),
         ClickhouseQuery(
-            data_source=TableSource("my_table", ColumnSet([])),
+            from_clause=TableSource("my_table", ColumnSet([])),
             selected_columns=[
                 SelectedExpression("alias", Column("alias", "table", "column")),
                 SelectedExpression(
@@ -72,7 +75,7 @@ test_cases = [
         ),
         SnubaQuery(
             body={},
-            data_source=TableSource("my_table", ColumnSet([])),
+            from_clause=QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression("alias", Column("alias", "table", "column")),
                 SelectedExpression(
@@ -97,7 +100,7 @@ test_cases = [
             ],
         ),
         ClickhouseQuery(
-            data_source=TableSource("my_table", ColumnSet([])),
+            from_clause=TableSource("my_table", ColumnSet([])),
             selected_columns=[
                 SelectedExpression("alias", Column("alias", "table", "column")),
                 SelectedExpression(
@@ -146,7 +149,7 @@ test_cases = [
         ),
         SnubaQuery(
             body={},
-            data_source=TableSource("my_table", ColumnSet([])),
+            from_clause=QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "alias",
@@ -163,7 +166,7 @@ test_cases = [
             ],
         ),
         ClickhouseQuery(
-            data_source=TableSource("my_table", ColumnSet([])),
+            from_clause=TableSource("my_table", ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "alias",

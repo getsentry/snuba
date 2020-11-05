@@ -92,3 +92,10 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
 
     def _transform_impl(self, visitor: ExpressionVisitor[Expression]) -> None:
         pass
+
+    def __eq__(self, other: object) -> bool:
+        if not super().__eq__(other):
+            return False
+
+        assert isinstance(other, CompositeQuery)
+        return self.get_from_clause() == other.get_from_clause()

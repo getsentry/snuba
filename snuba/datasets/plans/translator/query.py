@@ -14,7 +14,7 @@ def identity_translate(query: LogicalQuery) -> ClickhouseQuery:
     It is exposed by this module because it is often useful in tests.
     """
     return ClickhouseQuery(
-        data_source=None,
+        from_clause=None,
         selected_columns=query.get_selected_columns_from_ast(),
         array_join=query.get_arrayjoin_from_ast(),
         condition=query.get_condition_from_ast(),

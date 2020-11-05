@@ -36,7 +36,7 @@ class Query(AbstractQuery[Entity]):
     def __init__(
         self,
         body: MutableMapping[str, Any],  # Temporary
-        data_source: Optional[Entity],
+        from_clause: Optional[Entity],
         # New data model to replace the one based on the dictionary
         selected_columns: Optional[Sequence[SelectedExpression]] = None,
         array_join: Optional[Expression] = None,
@@ -61,7 +61,7 @@ class Query(AbstractQuery[Entity]):
         self.__final = False
 
         super().__init__(
-            from_clause=data_source,
+            from_clause=from_clause,
             selected_columns=selected_columns,
             array_join=array_join,
             condition=condition,
@@ -81,6 +81,13 @@ class Query(AbstractQuery[Entity]):
 
     def set_final(self, final: bool) -> None:
         self.__final = final
+
+    def __eq__(self, other: object) -> bool:
+        if not super().__eq__(other):
+            return False
+
+        assert isinstance(other, Query)  # mypy
+        return self.get_final() == other.get_final()
 
     @deprecated(
         details="Do not access the internal query representation "
