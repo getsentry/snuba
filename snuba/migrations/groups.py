@@ -12,6 +12,7 @@ class MigrationGroup(Enum):
     SYSTEM = "system"
     EVENTS = "events"
     TRANSACTIONS = "transactions"
+    DISCOVER = "discover"
     OUTCOMES = "outcomes"
     SESSIONS = "sessions"
     QUERYLOG = "querylog"
@@ -113,6 +114,21 @@ class TransactionsLoader(DirectoryLoader):
             "0004_transactions_add_tags_hash_map",
             "0005_transactions_add_measurements",
             "0006_transactions_add_http_fields",
+            "0007_transactions_add_discover_cols",
+        ]
+
+
+class DiscoverLoader(DirectoryLoader):
+    """
+    This migration group depends on events and transactions
+    """
+
+    def __init__(self) -> None:
+        super().__init__("snuba.migrations.snuba_migrations.discover")
+
+    def get_migrations(self) -> Sequence[str]:
+        return [
+            "0001_discover_merge_table",
         ]
 
 
@@ -152,6 +168,7 @@ _REGISTERED_GROUPS = {
     MigrationGroup.SYSTEM: SystemLoader(),
     MigrationGroup.EVENTS: EventsLoader(),
     MigrationGroup.TRANSACTIONS: TransactionsLoader(),
+    MigrationGroup.DISCOVER: DiscoverLoader(),
     MigrationGroup.OUTCOMES: OutcomesLoader(),
     MigrationGroup.SESSIONS: SessionsLoader(),
     MigrationGroup.QUERYLOG: QuerylogLoader(),
