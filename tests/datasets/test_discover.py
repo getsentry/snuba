@@ -1,9 +1,11 @@
 import simplejson as json
 import pytest
 from typing import Any, MutableMapping
+from unittest.mock import Mock
 
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.entities.factory import get_entity
+from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipeline
 from snuba.query.parser import parse_query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
@@ -153,10 +155,9 @@ def test_data_source(
     for processor in entity.get_query_processors():
         processor.process_query(request.query, request.settings)
 
-    plan = entity.get_query_plan_builder().build_plan(request)
-
-    for physical_processor in plan.plan_processors:
-        physical_processor.process_query(plan.query, request.settings)
+    pipeline = entity.get_query_pipeline_builder().build_pipeline(request, Mock())
+    assert isinstance(pipeline, SingleQueryPlanPipeline)
+    plan = pipeline.query_plan
 
     assert plan.query.get_from_clause().format_from() == expected_table, json.dumps(
         query_body

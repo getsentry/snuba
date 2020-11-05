@@ -107,21 +107,6 @@ def _run_query_pipeline(
         ):
             processor.process_query(request.query, request.settings)
 
-    query_plan = entity.get_query_plan_builder().build_plan(request)
-    # From this point on. The logical query should not be used anymore by anyone.
-    # The Clickhouse Query is the one to be used to run the rest of the query pipeline.
-
-    # TODO: Break the Query Plan execution out of this method. With the division
-    # between plan specific processors and DB query specific processors and with
-    # the soon to come ClickhouseCluster, there is more coupling between the
-    # components of the query plan.
-
-    for clickhouse_processor in query_plan.plan_processors:
-        with sentry_sdk.start_span(
-            description=type(clickhouse_processor).__name__, op="processor"
-        ):
-            clickhouse_processor.process_query(query_plan.query, request.settings)
-
     query_runner = partial(
         _run_and_apply_column_names,
         timer,
@@ -131,8 +116,10 @@ def _run_query_pipeline(
         request.referrer,
     )
 
-    return query_plan.execution_strategy.execute(
-        query_plan.query, request.settings, query_runner
+    return (
+        entity.get_query_pipeline_builder()
+        .build_pipeline(request, query_runner)
+        .execute()
     )
 
 

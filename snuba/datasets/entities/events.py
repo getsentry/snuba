@@ -9,6 +9,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
+from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipelineBuilder
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import (
     QueryStorageSelector,
@@ -74,12 +75,14 @@ class BaseEventsEntity(Entity, ABC):
 
         super().__init__(
             storages=[storage],
-            query_plan_builder=SelectedStorageQueryPlanBuilder(
-                selector=EventsQueryStorageSelector(
-                    mappers=event_translator
-                    if custom_mappers is None
-                    else event_translator.concat(custom_mappers)
-                )
+            query_pipeline_builder=SingleQueryPlanPipelineBuilder(
+                query_plan_builder=SelectedStorageQueryPlanBuilder(
+                    selector=EventsQueryStorageSelector(
+                        mappers=event_translator
+                        if custom_mappers is None
+                        else event_translator.concat(custom_mappers)
+                    )
+                ),
             ),
             abstract_column_set=columns,
             writable_storage=storage,
