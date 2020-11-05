@@ -18,6 +18,7 @@ def setup_function() -> None:
             "database": "default",
             "http_port": 8123,
             "storage_sets": {
+                "discover",
                 "events",
                 "events_ro",
                 "migrations",

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Mapping, Optional, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
+from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.datasets.storage import Storage, WritableStorage, WritableTableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
@@ -19,12 +19,12 @@ class Entity(ABC):
         self,
         *,
         storages: Sequence[Storage],
-        query_plan_builder: ClickhouseQueryPlanBuilder,
+        query_pipeline_builder: QueryPipelineBuilder,
         abstract_column_set: ColumnSet,
         writable_storage: Optional[WritableStorage],
     ) -> None:
         self.__storages = storages
-        self.__query_plan_builder = query_plan_builder
+        self.__query_pipeline_builder = query_pipeline_builder
         self.__writable_storage = writable_storage
         self.__data_model = abstract_column_set
 
@@ -56,12 +56,11 @@ class Entity(ABC):
         """
         return self.__data_model
 
-    def get_query_plan_builder(self) -> ClickhouseQueryPlanBuilder:
+    def get_query_pipeline_builder(self) -> QueryPipelineBuilder:
         """
-        Returns the component that transforms a Snuba query in a Storage query by selecting
-        the storage and provides the directions on how to run the query.
+        Returns the component that orchestrates building and runnning query plans.
         """
-        return self.__query_plan_builder
+        return self.__query_pipeline_builder
 
     def get_all_storages(self) -> Sequence[Storage]:
         """

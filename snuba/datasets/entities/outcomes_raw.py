@@ -3,6 +3,7 @@ from typing import Mapping, Sequence
 
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipelineBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.query.extensions import QueryExtension
@@ -19,7 +20,9 @@ class OutcomesRawEntity(Entity):
 
         super().__init__(
             storages=[storage],
-            query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
+            query_pipeline_builder=SingleQueryPlanPipelineBuilder(
+                query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
+            ),
             abstract_column_set=storage.get_schema().get_columns(),
             writable_storage=None,
         )
