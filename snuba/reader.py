@@ -6,7 +6,6 @@ from abc import ABC, abstractmethod
 from typing import (
     Any,
     Callable,
-    Generic,
     Iterator,
     Mapping,
     MutableMapping,
@@ -18,6 +17,8 @@ from typing import (
     TypedDict,
     TypeVar,
 )
+
+from snuba.clickhouse.query_formatter import FormattedQuery
 
 Column = TypedDict("Column", {"name": str, "type": str})
 Row = MutableMapping[str, Any]
@@ -109,14 +110,11 @@ def build_result_transformer(
     return transform_result
 
 
-TQuery = TypeVar("TQuery")
-
-
-class Reader(ABC, Generic[TQuery]):
+class Reader(ABC):
     @abstractmethod
     def execute(
         self,
-        query: TQuery,
+        query: FormattedQuery,
         settings: Optional[Mapping[str, str]] = None,
         with_totals: bool = False,
     ) -> Result:
