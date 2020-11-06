@@ -7,6 +7,7 @@ from uuid import UUID
 
 import jsonschema
 import sentry_sdk
+from sentry_sdk import Hub
 import simplejson as json
 from flask import Flask, Response, redirect, render_template
 from flask import request as http_request
@@ -273,6 +274,12 @@ def _trace_transaction(dataset: Dataset) -> None:
         if scope.span:
             scope.span.set_tag("dataset", get_dataset_name(dataset))
             scope.span.set_tag("referrer", http_request.referrer)
+
+    transaction = Hub.current.scope.transaction
+    if transaction is not None and settings.UPDATE_TRANSACTION_NAME:
+        transaction.name = (
+            f"{transaction.name}__{get_dataset_name(dataset)}__{http_request.referrer}"
+        )
 
 
 @application.route("/query", methods=["GET", "POST"])
