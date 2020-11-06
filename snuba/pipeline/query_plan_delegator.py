@@ -2,14 +2,13 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Iterator, List, Mapping, Optional, Tuple
 
-from snuba.clickhouse.query import Query
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder, QueryRunner
-from snuba.datasets.plans.translator.query import identity_translate
 from snuba.pipeline.query_pipeline import (
     QueryPipeline,
     QueryPipelineBuilder,
     _execute_query_plan_processors,
 )
+from snuba.query.logical import Query
 from snuba.request import Request
 from snuba.web import QueryException, QueryResult
 
@@ -75,8 +74,7 @@ class MultipleQueryPlanPipeline(QueryPipeline):
             )
 
         def execute_queries() -> Iterator[Tuple[BuilderId, QueryResult]]:
-            query = identity_translate(self.__request.query)
-            builder_ids = self.__selector_func(query)
+            builder_ids = self.__selector_func(self.__request.query)
             primary_builder_id = builder_ids.pop(0)
 
             futures = [
