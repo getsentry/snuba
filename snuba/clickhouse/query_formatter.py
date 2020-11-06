@@ -1,10 +1,10 @@
-from typing import Sequence, Tuple, Union, NamedTuple, Mapping, Optional
+from typing import Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
 from snuba import settings as snuba_settings
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Query
-from snuba.datasets.schemas import RelationalSource
 from snuba.query.composite import CompositeQuery
+from snuba.query.data_source.simple import Table
 from snuba.query.parsing import ParsingContext
 from snuba.request.request_settings import RequestSettings
 
@@ -31,7 +31,7 @@ class FormattedQuery(NamedTuple):
         return dict(self.clauses)
 
 
-FormattableQuery = Union[Query, CompositeQuery[RelationalSource]]
+FormattableQuery = Union[Query, CompositeQuery[Table]]
 
 
 def format_query(query: Query, settings: RequestSettings) -> FormattedQuery:
@@ -42,15 +42,12 @@ def format_query(query: Query, settings: RequestSettings) -> FormattedQuery:
     into a query processor.
     """
 
-    if not query.get_from_clause().supports_sample():
-        sample_rate = None
+    if query.get_sample():
+        sample_rate = query.get_sample()
+    elif settings.get_turbo():
+        sample_rate = snuba_settings.TURBO_SAMPLE_RATE
     else:
-        if query.get_sample():
-            sample_rate = query.get_sample()
-        elif settings.get_turbo():
-            sample_rate = snuba_settings.TURBO_SAMPLE_RATE
-        else:
-            sample_rate = None
+        sample_rate = None
     query.set_sample(sample_rate)
 
     return _format_query_impl(query)
@@ -96,7 +93,7 @@ def format_processable_query(query: Query) -> FormattedQuery:
     ]
     select_clause = f"SELECT {', '.join(selected_cols)}"
 
-    from_clause = f"FROM {query.get_from_clause().format_from()}"
+    from_clause = f"FROM {query.get_from_clause().table_name}"
 
     if query.get_final():
         from_clause = f"{from_clause} FINAL"

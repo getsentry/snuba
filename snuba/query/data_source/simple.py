@@ -1,9 +1,11 @@
 from abc import ABC
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Sequence
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities import EntityKey
 from snuba.query.data_source import DataSource
+from snuba.query.expressions import FunctionCall
 
 
 class SimpleDataSource(DataSource, ABC):
@@ -29,6 +31,21 @@ class Entity(SimpleDataSource):
 
     key: EntityKey
     schema: ColumnSet
+
+    def get_columns(self) -> ColumnSet:
+        return self.schema
+
+
+@dataclass(frozen=True)
+class Table(SimpleDataSource):
+    """
+    Represents a table or a view in the physical query.
+    """
+
+    table_name: str
+    schema: ColumnSet
+    mandatory_conditions: Sequence[FunctionCall] = field(default_factory=list)
+    prewhere_candidates: Sequence[str] = field(default_factory=list)
 
     def get_columns(self) -> ColumnSet:
         return self.schema

@@ -30,6 +30,9 @@ class TableSource(RelationalSource):
     def format_from(self) -> str:
         return self.__table_name
 
+    def get_table_name(self) -> str:
+        return self.__table_name
+
     def get_columns(self) -> ColumnSet:
         return self.__columns
 
