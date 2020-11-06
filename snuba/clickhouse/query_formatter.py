@@ -78,13 +78,6 @@ def _format_query_impl(query: FormattableQuery) -> FormattedQuery:
 
 
 def format_processable_query(query: Query) -> FormattedQuery:
-    ast_groupby = query.get_groupby_from_ast()
-    ast_having = query.get_having_from_ast()
-
-    # TODO: Move this into a validator much earlier in the query.
-    if ast_having:
-        assert ast_groupby, "found HAVING clause with no GROUP BY"
-
     parsing_context = ParsingContext()
     formatter = ClickhouseExpressionFormatter(parsing_context)
 
@@ -123,6 +116,7 @@ def format_processable_query(query: Query) -> FormattedQuery:
         where_clause = ""
 
     group_clause = ""
+    ast_groupby = query.get_groupby_from_ast()
     if ast_groupby:
         # reformat to use aliases generated during the select clause formatting.
         groupby_expressions = [e.accept(formatter) for e in ast_groupby]
@@ -130,6 +124,7 @@ def format_processable_query(query: Query) -> FormattedQuery:
         if query.has_totals():
             group_clause = f"{group_clause} WITH TOTALS"
 
+    ast_having = query.get_having_from_ast()
     if ast_having:
         having_clause = f"HAVING {ast_having.accept(formatter)}"
     else:
