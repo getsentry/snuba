@@ -6,13 +6,12 @@ from snuba.datasets.storages.transaction_column_processor import (
 )
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.logical import Query
+from snuba.clickhouse.query import Query
 from snuba.request.request_settings import HTTPRequestSettings
 
 
 def test_transaction_column_format_expressions() -> None:
     unprocessed = Query(
-        {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
             SelectedExpression(
@@ -24,7 +23,6 @@ def test_transaction_column_format_expressions() -> None:
         ],
     )
     expected = Query(
-        {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
             SelectedExpression(

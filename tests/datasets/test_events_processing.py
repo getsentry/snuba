@@ -16,12 +16,6 @@ def test_events_processing() -> None:
     query = parse_query(query_body, events)
     request = Request("", query, HTTPRequestSettings(), {}, "")
 
-    query_plan = (
-        events.get_default_entity().get_query_plan_builder().build_plan(request)
-    )
-    for clickhouse_processor in query_plan.plan_processors:
-        clickhouse_processor.process_query(query_plan.query, request.settings)
-
     def query_runner(
         query: Query, settings: RequestSettings, reader: Reader
     ) -> QueryResult:
@@ -50,6 +44,6 @@ def test_events_processing() -> None:
         ]
         return QueryResult({}, {})
 
-    query_plan.execution_strategy.execute(
-        query_plan.query, request.settings, query_runner
-    )
+    events.get_default_entity().get_query_pipeline_builder().build_pipeline(
+        request, query_runner
+    ).execute()

@@ -395,6 +395,28 @@ class Query(DataSource, ABC):
         declared_symbols |= {c.flattened for c in self.get_from_clause().get_columns()}
         return not referenced_symbols - declared_symbols
 
+    def __eq__(self, other: object) -> bool:
+        if self.__class__ != other.__class__:
+            return False
+
+        assert isinstance(other, Query)  # mypy
+        tests = [
+            self.get_selected_columns_from_ast()
+            == other.get_selected_columns_from_ast(),
+            self.get_groupby_from_ast() == other.get_groupby_from_ast(),
+            self.get_condition_from_ast() == other.get_condition_from_ast(),
+            self.get_arrayjoin_from_ast() == other.get_arrayjoin_from_ast(),
+            self.get_having_from_ast() == other.get_having_from_ast(),
+            self.get_orderby_from_ast() == other.get_orderby_from_ast(),
+            self.get_limitby() == other.get_limitby(),
+            self.get_sample() == other.get_sample(),
+            self.get_limit() == other.get_limit(),
+            self.get_offset() == other.get_offset(),
+            self.has_totals() == other.has_totals(),
+            self.get_granularity() == other.get_granularity(),
+        ]
+        return all(tests)
+
 
 TSimpleDataSource = TypeVar("TSimpleDataSource", bound=SimpleDataSource)
 
@@ -446,3 +468,10 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
 
     def set_from_clause(self, from_clause: TSimpleDataSource) -> None:
         self.__from_clause = from_clause
+
+    def __eq__(self, other: object) -> bool:
+        if not super().__eq__(other):
+            return False
+
+        assert isinstance(other, ProcessableQuery)
+        return bool(self.get_from_clause() == other.get_from_clause())

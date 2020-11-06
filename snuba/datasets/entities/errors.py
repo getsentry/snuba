@@ -5,6 +5,7 @@ from snuba.clickhouse.translators.snuba.mappers import ColumnToFunction
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipelineBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors import promoted_tag_columns
 from snuba.datasets.storages.factory import get_writable_storage
@@ -42,8 +43,10 @@ class ErrorsEntity(Entity):
 
         super().__init__(
             storages=[storage],
-            query_plan_builder=SingleStorageQueryPlanBuilder(
-                storage=storage, mappers=errors_translators
+            query_pipeline_builder=SingleQueryPlanPipelineBuilder(
+                query_plan_builder=SingleStorageQueryPlanBuilder(
+                    storage=storage, mappers=errors_translators
+                ),
             ),
             abstract_column_set=columns,
             writable_storage=storage,

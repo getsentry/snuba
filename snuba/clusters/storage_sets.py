@@ -15,6 +15,7 @@ class StorageSetKey(Enum):
     Storage sets are assigned to clusters via configuration.
     """
 
+    DISCOVER = "discover"
     EVENTS = "events"
     EVENTS_RO = "events_ro"
     MIGRATIONS = "migrations"

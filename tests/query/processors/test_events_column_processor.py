@@ -4,13 +4,12 @@ from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storages.events_column_processor import EventsColumnProcessor
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.logical import Query
+from snuba.clickhouse.query import Query
 from snuba.request.request_settings import HTTPRequestSettings
 
 
 def test_events_column_format_expressions() -> None:
     unprocessed = Query(
-        {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
             SelectedExpression("dr_claw", Column("dr_claw", None, "culprit")),
@@ -21,7 +20,6 @@ def test_events_column_format_expressions() -> None:
         ],
     )
     expected = Query(
-        {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
             SelectedExpression("dr_claw", Column("dr_claw", None, "culprit")),
