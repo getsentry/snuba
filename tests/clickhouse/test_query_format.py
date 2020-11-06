@@ -1,7 +1,7 @@
 import pytest
-from snuba.clickhouse.astquery import AstSqlQuery
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.query_formatter import format_query
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import binary_condition
@@ -142,8 +142,8 @@ test_cases = [
 @pytest.mark.parametrize("query, formatted", test_cases)
 def test_format_expressions(query: Query, formatted: str) -> None:
     request_settings = HTTPRequestSettings()
-    clickhouse_query = AstSqlQuery(query, request_settings)
-    assert clickhouse_query.format_sql() == formatted
+    clickhouse_query = format_query(query, request_settings)
+    assert clickhouse_query.get_sql() == formatted
 
 
 def test_format_clickhouse_specific_query() -> None:
@@ -176,7 +176,7 @@ def test_format_clickhouse_specific_query() -> None:
     query.set_limit(100)
 
     request_settings = HTTPRequestSettings()
-    clickhouse_query = AstSqlQuery(query, request_settings)
+    clickhouse_query = format_query(query, request_settings)
 
     expected = (
         "SELECT column1, table1.column2 "
@@ -190,4 +190,4 @@ def test_format_clickhouse_specific_query() -> None:
         "LIMIT 100 OFFSET 50"
     )
 
-    assert clickhouse_query.format_sql() == expected
+    assert clickhouse_query.get_sql() == expected

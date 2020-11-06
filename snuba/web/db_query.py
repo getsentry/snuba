@@ -11,7 +11,7 @@ from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_profiler import generate_profile
-from snuba.clickhouse.sql import SqlQuery
+from snuba.clickhouse.query_formatter import FormattedQuery
 from snuba.querylog.query_metadata import (
     ClickhouseQueryMetadata,
     QueryStatus,
@@ -77,8 +77,8 @@ def execute_query(
     # the formatter.
     clickhouse_query: Query,
     request_settings: RequestSettings,
-    formatted_query: SqlQuery,
-    reader: Reader[SqlQuery],
+    formatted_query: FormattedQuery,
+    reader: Reader,
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -128,8 +128,8 @@ def execute_query(
 def execute_query_with_rate_limits(
     clickhouse_query: Query,
     request_settings: RequestSettings,
-    formatted_query: SqlQuery,
-    reader: Reader[SqlQuery],
+    formatted_query: FormattedQuery,
+    reader: Reader,
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -167,16 +167,16 @@ def execute_query_with_rate_limits(
         )
 
 
-def get_query_cache_key(formatted_query: SqlQuery) -> str:
-    return md5(force_bytes(formatted_query.format_sql())).hexdigest()
+def get_query_cache_key(formatted_query: FormattedQuery) -> str:
+    return md5(force_bytes(formatted_query.get_sql())).hexdigest()
 
 
 @with_span(op="db")
 def execute_query_with_caching(
     clickhouse_query: Query,
     request_settings: RequestSettings,
-    formatted_query: SqlQuery,
-    reader: Reader[SqlQuery],
+    formatted_query: FormattedQuery,
+    reader: Reader,
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -235,8 +235,8 @@ def execute_query_with_caching(
 def execute_query_with_readthrough_caching(
     clickhouse_query: Query,
     request_settings: RequestSettings,
-    formatted_query: SqlQuery,
-    reader: Reader[SqlQuery],
+    formatted_query: FormattedQuery,
+    reader: Reader,
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -267,8 +267,8 @@ def raw_query(
     # the formatter.
     clickhouse_query: Query,
     request_settings: RequestSettings,
-    formatted_query: SqlQuery,
-    reader: Reader[SqlQuery],
+    formatted_query: FormattedQuery,
+    reader: Reader,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     stats: MutableMapping[str, Any],
@@ -289,7 +289,7 @@ def raw_query(
 
     timer.mark("get_configs")
 
-    sql = formatted_query.format_sql()
+    sql = formatted_query.get_sql()
 
     update_with_status = partial(
         update_query_metadata_and_stats,
