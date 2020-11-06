@@ -93,9 +93,10 @@ def format_processable_query(query: Query) -> FormattedQuery:
     ]
     select_clause = f"SELECT {', '.join(selected_cols)}"
 
-    from_clause = f"FROM {query.get_from_clause().table_name}"
+    query_from_clause = query.get_from_clause()
+    from_clause = f"FROM {query_from_clause.table_name}"
 
-    if query.get_final():
+    if query_from_clause.final:
         from_clause = f"{from_clause} FINAL"
 
     ast_sample = query.get_sample()

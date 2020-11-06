@@ -216,7 +216,7 @@ def test_format_clickhouse_specific_query() -> None:
     """
 
     query = ClickhouseQuery(
-        Table("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([]), final=True),
         selected_columns=[
             SelectedExpression("column1", Column(None, None, "column1")),
             SelectedExpression("column2", Column(None, "table1", "column2")),
@@ -235,7 +235,6 @@ def test_format_clickhouse_specific_query() -> None:
         limitby=(10, "environment"),
     )
 
-    query.set_final(True)
     query.set_offset(50)
     query.set_limit(100)
 

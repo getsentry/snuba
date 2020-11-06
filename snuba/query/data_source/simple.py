@@ -44,6 +44,7 @@ class Table(SimpleDataSource):
 
     table_name: str
     schema: ColumnSet
+    final: bool = False
     # TODO: Move mandatory connditions ad prewhere candidates out of
     # here as they are structural property of a storage. This requires
     # the processors that consume these fields to access the storage.

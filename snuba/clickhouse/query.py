@@ -30,9 +30,7 @@ class Query(AbstractQuery[Table]):
         offset: int = 0,
         totals: bool = False,
         granularity: Optional[int] = None,
-        final: bool = False,
     ) -> None:
-        self.__final = final
         self.__prewhere = prewhere
 
         super().__init__(
@@ -72,20 +70,9 @@ class Query(AbstractQuery[Table]):
     def set_prewhere_ast_condition(self, condition: Optional[Expression]) -> None:
         self.__prewhere = condition
 
-    def get_final(self) -> bool:
-        return self.__final
-
-    def set_final(self, final: bool) -> None:
-        self.__final = final
-
     def __eq__(self, other: object) -> bool:
         if not super().__eq__(other):
             return False
 
         assert isinstance(other, Query)  # mypy
-        return all(
-            [
-                self.get_prewhere_ast() == other.get_prewhere_ast(),
-                self.get_final() == other.get_final(),
-            ]
-        )
+        return self.get_prewhere_ast() == other.get_prewhere_ast()

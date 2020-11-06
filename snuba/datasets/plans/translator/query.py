@@ -27,7 +27,6 @@ def identity_translate(query: LogicalQuery) -> ClickhouseQuery:
         offset=query.get_offset(),
         totals=query.has_totals(),
         granularity=query.get_granularity(),
-        final=query.get_final(),
     )
 
 
