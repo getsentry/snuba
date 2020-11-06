@@ -210,7 +210,7 @@ def _format_storage_query_and_run(
         "final": from_clause.final,
         "referrer": referrer,
         "num_days": (to_date - from_date).days,
-        "sample": clickhouse_query.get_sample(),
+        "sample": from_clause.sampling_rate,
     }
 
     with sentry_sdk.start_span(description=formatted_query.get_sql(), op="db") as span:

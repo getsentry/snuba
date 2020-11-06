@@ -59,6 +59,7 @@ class Query(AbstractQuery[Entity]):
         # in order not to expose the internal representation.
         self.__body = body
         self.__final = False
+        self.__sample = sample
 
         super().__init__(
             from_clause=from_clause,
@@ -69,7 +70,6 @@ class Query(AbstractQuery[Entity]):
             having=having,
             order_by=order_by,
             limitby=limitby,
-            sample=sample,
             limit=limit,
             offset=offset,
             totals=totals,
@@ -79,7 +79,10 @@ class Query(AbstractQuery[Entity]):
     def get_final(self) -> bool:
         return self.__final
 
-    def set_final(self, final: bool) -> None:
+    def get_sample(self) -> Optional[float]:
+        return self.__sample
+
+    def set_sample(self, final: bool) -> None:
         self.__final = final
 
     def __eq__(self, other: object) -> bool:
@@ -87,7 +90,10 @@ class Query(AbstractQuery[Entity]):
             return False
 
         assert isinstance(other, Query)  # mypy
-        return self.get_final() == other.get_final()
+        return (
+            self.get_final() == other.get_final()
+            and self.get_sample() == other.get_sample()
+        )
 
     @deprecated(
         details="Do not access the internal query representation "
