@@ -1,4 +1,6 @@
 import pytest
+
+
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_formatter import format_query

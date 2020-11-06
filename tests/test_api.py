@@ -1007,20 +1007,6 @@ class TestApi(BaseApiTest):
         )
         assert len(result["data"]) == 0
 
-        # HAVING fails with no GROUP BY
-        result = self.app.post(
-            "/query",
-            data=json.dumps(
-                {
-                    "project": 2,
-                    "groupby": [],
-                    "having": [["times_seen", ">", 1]],
-                    "aggregations": [["count()", "", "times_seen"]],
-                }
-            ),
-        )
-        assert result.status_code == 500
-
         # unknown field times_seen
         result = json.loads(
             self.app.post(
