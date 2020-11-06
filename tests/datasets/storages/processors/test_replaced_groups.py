@@ -1,7 +1,6 @@
 from typing import Sequence
 
 import pytest
-
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
@@ -10,11 +9,11 @@ from snuba.datasets.errors_replacer import (
     set_project_exclude_groups,
     set_project_needs_final,
 )
-from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
 from snuba.query.conditions import BooleanFunctions
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.redis import redis_client
 from snuba.request.request_settings import HTTPRequestSettings
@@ -34,7 +33,7 @@ def build_in(project_column: str, projects: Sequence[int]) -> Expression:
 @pytest.fixture
 def query() -> ClickhouseQuery:
     return ClickhouseQuery(
-        TableSource("my_table", ColumnSet([])), condition=build_in("project_id", [2]),
+        Table("my_table", ColumnSet([])), condition=build_in("project_id", [2]),
     )
 
 
