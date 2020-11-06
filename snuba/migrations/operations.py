@@ -205,7 +205,7 @@ class AddIndex(SqlOperation):
         index_expression: str,
         index_type: str,
         granularity: int,
-        after: Optional[str],
+        after: Optional[str] = None,
     ):
         super().__init__(storage_set)
         self.__table_name = table_name
