@@ -1,12 +1,13 @@
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
-from snuba.datasets.schemas.tables import TableSource
+from snuba.datasets.entities import EntityKey
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     ConditionFunctions,
     binary_condition,
     combine_and_conditions,
 )
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.dsl import count, divide
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
@@ -17,7 +18,7 @@ from snuba.request.request_settings import HTTPRequestSettings
 def test_failure_rate_format_expressions() -> None:
     unprocessed = Query(
         {},
-        TableSource("events", ColumnSet([])),
+        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
             SelectedExpression(name=None, expression=Column(None, None, "column2")),
             SelectedExpression("perf", FunctionCall("perf", "failure_rate", ())),
@@ -25,7 +26,7 @@ def test_failure_rate_format_expressions() -> None:
     )
     expected = Query(
         {},
-        TableSource("events", ColumnSet([])),
+        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
             SelectedExpression(name=None, expression=Column(None, None, "column2")),
             SelectedExpression(

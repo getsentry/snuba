@@ -6,13 +6,12 @@ from typing import Callable, Sequence
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.sql import SqlQuery
 from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
 
-QueryRunner = Callable[[Query, RequestSettings, Reader[SqlQuery]], QueryResult]
+QueryRunner = Callable[[Query, RequestSettings, Reader], QueryResult]
 
 
 @dataclass(frozen=True)
