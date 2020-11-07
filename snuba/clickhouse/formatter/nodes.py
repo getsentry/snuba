@@ -21,6 +21,10 @@ class FormattedNode(ABC):
         raise NotImplementedError
 
     def structured(self) -> Union[str, Sequence[Any]]:
+        """
+        This exports the query as a Sequence of clauses. Each clause
+        is either a string or a Sequence itself (like for subqueries).
+        """
         raise NotImplementedError
 
 
@@ -57,8 +61,8 @@ class PaddingNode(FormattedNode):
         suffix = f" {self.suffix}" if self.suffix else ""
         return f"{prefix}{str(self.node)}{suffix}"
 
-    def structured(self) -> Union[str, Sequence[Any]]:
-        ret: Union[str, Sequence[Any]]
+    def structured(self) -> Sequence[Any]:
+        ret: Sequence[Any]
         if self.prefix is not None:
             ret = [self.prefix, self.node.structured()]
         else:

@@ -1,12 +1,12 @@
 from dataclasses import replace
-from typing import Optional, Union
+from typing import Optional
 
 from snuba import settings as snuba_settings
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.formatter.nodes import (
-    PaddingNode,
     FormattedNode,
     FormattedQuery,
+    PaddingNode,
     StringNode,
 )
 from snuba.clickhouse.query import Query
@@ -17,12 +17,10 @@ from snuba.query.data_source.simple import Table
 from snuba.query.parsing import ParsingContext
 from snuba.request.request_settings import RequestSettings
 
-FormattableQuery = Union[Query, CompositeQuery[Table]]
-
 
 def format_query(query: Query, settings: RequestSettings) -> FormattedQuery:
     """
-    Replaces the AstSqlQuery abstraction.
+    Formats a Clickhouse Query.
 
     TODO: Remove this method entirely and move the sampling logic
     into a query processor.
@@ -39,6 +37,11 @@ def format_query(query: Query, settings: RequestSettings) -> FormattedQuery:
 
 
 def format_data_source(data_source: DataSource) -> FormattedNode:
+    """
+    Builds a FormattedNode out of any type of DataSource object. This
+    is called when formatting the FROM clause of every nested query
+    in a Composite query.
+    """
     if isinstance(data_source, Table):
         return format_table(data_source)
     elif isinstance(data_source, Query):
@@ -59,9 +62,9 @@ def format_table(data_source: Table) -> StringNode:
 
 def format_simple_query(query: Query) -> FormattedQuery:
     """
-    Formats a Query from the AST representation into an intermediate
-    structure that can either be serialized into a string (for clickhouse)
-    or extracted as a dictionary (for logging and tracing).
+    Formats a Clickhouse Query from the AST representation into an
+    intermediate structure that can either be serialized into a string
+    (for clickhouse) or extracted as a sequence (for logging and tracing).
 
     This is the entry point for any type of query, whether simple or
     composite.
