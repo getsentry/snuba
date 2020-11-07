@@ -50,9 +50,19 @@ class OrderedNestedNode(FormattedNode):
 
 
 @dataclass(frozen=True)
-class FormattedSubQuery(OrderedNestedNode):
+class OrderedNestedWithPrefix(OrderedNestedNode):
+    prefix: str
+
     def __str__(self) -> str:
-        return f"({super().__str__()})"
+        return f"{self.prefix or ''}{super().__str__()}"
+
+
+@dataclass(frozen=True)
+class FormattedSubQuery(OrderedNestedNode):
+    prefix: Optional[str] = None
+
+    def __str__(self) -> str:
+        return f"{self.prefix or ''}({super().__str__()})"
 
 
 @dataclass(frozen=True)
