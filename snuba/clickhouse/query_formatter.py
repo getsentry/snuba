@@ -13,7 +13,7 @@ from snuba.request.request_settings import RequestSettings
 
 class FormattedNode(ABC):
     """
-    After formatting all clauses of a query, we may serialize the
+    After formatting all the clauses of a query, we may serialize the
     query itself as a string or exporting it as a dictionary for
     tracing and debugging.
     This data structure is a node in a tree of formatted expressions
@@ -21,6 +21,10 @@ class FormattedNode(ABC):
     """
 
     def __str__(self) -> str:
+        """
+        This serializes the formatted node as a string. For example,
+        in a query, this would return the SQL.
+        """
         raise NotImplementedError
 
     def for_mapping(self) -> Union[str, Mapping[str, Any]]:
