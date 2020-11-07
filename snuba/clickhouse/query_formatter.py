@@ -1,5 +1,6 @@
-from dataclasses import replace
-from typing import Mapping, NamedTuple, Optional, Sequence, Tuple, Union
+from abc import ABC
+from dataclasses import dataclass, replace
+from typing import Any, Mapping, Optional, Sequence, Tuple, Union
 
 from snuba import settings as snuba_settings
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
@@ -10,26 +11,64 @@ from snuba.query.parsing import ParsingContext
 from snuba.request.request_settings import RequestSettings
 
 
-class FormattedQuery(NamedTuple):
+class FormattedNode(ABC):
+    """
+    After formatting all clauses of a query, we may serialize the
+    query itself as a string or exporting it as a dictionary for
+    tracing and debugging.
+    This data structure is a node in a tree of formatted expressions
+    that can be serialized as a string or as a dictionary.
+    """
+
+    def __str__(self) -> str:
+        raise NotImplementedError
+
+    def for_mapping(self) -> Union[str, Mapping[str, Any]]:
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class StringNode(FormattedNode):
+    value: str
+
+    def __str__(self) -> str:
+        return self.value
+
+    def for_mapping(self) -> str:
+        return self.value
+
+
+@dataclass(frozen=True)
+class OrderedNestedNode(FormattedNode):
+    content: Sequence[Tuple[str, FormattedNode]]
+
+    def __str__(self) -> str:
+        return " ".join([str(c) for _, c in self.content])
+
+    def for_mapping(self) -> Mapping[str, Any]:
+        return dict(((k, v.for_mapping()) for k, v in self.content))
+
+
+@dataclass(frozen=True)
+class FormattedSubQuery(OrderedNestedNode):
+    def __str__(self) -> str:
+        return f"({super().__str__()})"
+
+
+@dataclass(frozen=True)
+class FormattedQuery(OrderedNestedNode):
     """
     Used to move around a query data structure after all clauses have
     been formatted but such that it can be still serialized
     differently for different usages (running the query or tracing).
     """
 
-    # TODO: This is going to be a little more complex for subqueries
-    # and joins in order to have a useful tracing representation.
-    clauses: Sequence[Tuple[str, str]]
-
     def get_sql(self, format: Optional[str] = None) -> str:
-        query = " ".join([c for _, c in self.clauses])
+        query = str(self)
         if format is not None:
             query = f"{query} FORMAT {format}"
 
         return query
-
-    def get_mapping(self) -> Mapping[str, str]:
-        return dict(self.clauses)
 
 
 FormattableQuery = Union[Query, CompositeQuery[Table]]
@@ -156,16 +195,19 @@ def format_processable_query(query: Query) -> FormattedQuery:
         [
             (clause, value)
             for clause, value in [
-                ("select", select_clause),
-                ("from", from_clause),
-                ("array_join", array_join_clause),
-                ("prewhere", prewhere_clause),
-                ("where", where_clause),
-                ("group", group_clause),
-                ("having", having_clause),
-                ("order", order_clause),
-                ("limitby", limitby_clause),
-                ("limit", limit_clause),
+                ("select", StringNode(select_clause) if select_clause else None),
+                ("from", StringNode(from_clause) if from_clause else None),
+                (
+                    "array_join",
+                    StringNode(array_join_clause) if array_join_clause else None,
+                ),
+                ("prewhere", StringNode(prewhere_clause) if prewhere_clause else None),
+                ("where", StringNode(where_clause) if where_clause else None),
+                ("group", StringNode(group_clause) if group_clause else None),
+                ("having", StringNode(having_clause) if having_clause else None),
+                ("order", StringNode(order_clause) if order_clause else None),
+                ("limitby", StringNode(limitby_clause) if limitby_clause else None),
+                ("limit", StringNode(limit_clause) if limit_clause else None),
             ]
             if value
         ]

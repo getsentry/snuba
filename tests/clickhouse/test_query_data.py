@@ -207,7 +207,7 @@ test_cases = [
 def test_format_expressions(query: ClickhouseQuery, data: Mapping[str, str]) -> None:
     request_settings = HTTPRequestSettings()
     clickhouse_query = format_query(query, request_settings)
-    assert clickhouse_query.get_mapping() == data
+    assert clickhouse_query.for_mapping() == data
 
 
 def test_format_clickhouse_specific_query() -> None:
@@ -252,4 +252,4 @@ def test_format_clickhouse_specific_query() -> None:
         "where": "WHERE eq(column1, 'blabla')",
     }
 
-    assert clickhouse_query.get_mapping() == expected
+    assert clickhouse_query.for_mapping() == expected
