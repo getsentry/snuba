@@ -10,7 +10,7 @@ from clickhouse_driver import Client, errors
 from dateutil.tz import tz
 from snuba import settings
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.query_formatter import FormattedQuery
+from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.reader import Reader, Result, build_result_transformer
 
 logger = logging.getLogger("snuba.clickhouse")

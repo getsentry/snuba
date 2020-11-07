@@ -7,7 +7,7 @@ from typing import MutableMapping
 import sentry_sdk
 from snuba import environment
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.query_formatter import format_query
+from snuba.clickhouse.formatter.query import format_query
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
@@ -200,7 +200,7 @@ def _format_storage_query_and_run(
     table_name = from_clause.table_name
     with sentry_sdk.start_span(description="create_query", op="db") as span:
         formatted_query = format_query(clickhouse_query, request_settings)
-        span.set_data("query", formatted_query.for_mapping())
+        span.set_data("query", formatted_query.structured())
         metrics.increment("execute")
 
     timer.mark("prepare_query")
