@@ -1,8 +1,8 @@
 from snuba.clickhouse.formatter.nodes import (
     FormattedQuery,
     FormattedSubQuery,
-    SequenceNode,
     PaddingNode,
+    SequenceNode,
     StringNode,
 )
 

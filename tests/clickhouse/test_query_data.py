@@ -2,8 +2,8 @@ from typing import Any, Sequence
 
 import pytest
 from snuba.clickhouse.columns import ColumnSet
-from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.formatter.query import format_query
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,

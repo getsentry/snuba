@@ -6,8 +6,8 @@ from typing import MutableMapping
 
 import sentry_sdk
 from snuba import environment
-from snuba.clickhouse.query import Query
 from snuba.clickhouse.formatter.query import format_query
+from snuba.clickhouse.query import Query
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name

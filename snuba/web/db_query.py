@@ -6,12 +6,11 @@ from typing import Any, Mapping, MutableMapping, Optional
 
 import sentry_sdk
 from sentry_sdk.api import configure_scope
-
 from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_profiler import generate_profile
-from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.querylog.query_metadata import (
     ClickhouseQueryMetadata,
     QueryStatus,
