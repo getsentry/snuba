@@ -210,6 +210,9 @@ node_err = IndividualNode(alias="err", data_source=Table("errors_local", ERRORS_
 node_group = IndividualNode(
     alias="groups", data_source=Table("groupedmessage_local", GROUPS_SCHEMA)
 )
+node_assignee = IndividualNode(
+    alias="assignee", data_source=Table("groupassignee_local", GROUPS_ASSIGNEE)
+)
 
 TEST_JOIN = [
     pytest.param(
@@ -239,6 +242,53 @@ TEST_JOIN = [
             "ON err.group_id=groups.id"
         ),
         id="Simple join",
+    ),
+    pytest.param(
+        JoinClause(
+            left_node=JoinClause(
+                left_node=node_err,
+                right_node=node_group,
+                keys=[
+                    JoinCondition(
+                        left=JoinConditionExpression("err", "group_id"),
+                        right=JoinConditionExpression("groups", "id"),
+                    )
+                ],
+                join_type=JoinType.INNER,
+                join_modifier=JoinModifier.SEMI,
+            ),
+            right_node=node_assignee,
+            keys=[
+                JoinCondition(
+                    left=JoinConditionExpression("err", "group_id"),
+                    right=JoinConditionExpression("assignee", "id"),
+                )
+            ],
+            join_type=JoinType.INNER,
+        ),
+        SequenceNode(
+            [
+                SequenceNode(
+                    [
+                        PaddingNode(None, StringNode("errors_local"), "err"),
+                        StringNode("INNER SEMI JOIN"),
+                        PaddingNode(None, StringNode("groupedmessage_local"), "groups"),
+                        StringNode("ON"),
+                        SequenceNode([StringNode("err.group_id=groups.id")]),
+                    ]
+                ),
+                StringNode("INNER JOIN"),
+                PaddingNode(None, StringNode("groupassignee_local"), "assignee"),
+                StringNode("ON"),
+                SequenceNode([StringNode("err.group_id=assignee.id")]),
+            ]
+        ),
+        (
+            "errors_local err INNER SEMI JOIN groupedmessage_local groups "
+            "ON err.group_id=groups.id INNER JOIN groupassignee_local assignee "
+            "ON err.group_id=assignee.id"
+        ),
+        id="Complex join",
     ),
 ]
 
