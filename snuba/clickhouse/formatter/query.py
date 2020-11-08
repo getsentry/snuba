@@ -7,12 +7,13 @@ from snuba.clickhouse.formatter.nodes import (
     FormattedNode,
     FormattedQuery,
     PaddingNode,
+    SequenceNode,
     StringNode,
 )
 from snuba.clickhouse.query import Query
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source import DataSource
-from snuba.query.data_source.join import JoinClause
+from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Table
 from snuba.query.parsing import ParsingContext
 from snuba.request.request_settings import RequestSettings
@@ -47,7 +48,7 @@ def format_data_source(data_source: DataSource) -> FormattedNode:
     elif isinstance(data_source, Query):
         return format_simple_query(data_source)
     elif isinstance(data_source, JoinClause):
-        raise NotImplementedError("Joins not yet implemented")
+        return data_source.accept(JoinFormatter())
     elif isinstance(data_source, CompositeQuery):
         raise NotImplementedError("Composite queries not yet implemented")
     else:
@@ -167,3 +168,32 @@ def format_simple_query(query: Query) -> FormattedQuery:
             if value
         ]
     )
+
+
+class JoinFormatter(JoinVisitor[FormattedNode, Table]):
+    """
+    Formats a Join tree.
+    """
+
+    def visit_individual_node(self, node: IndividualNode[Table]) -> FormattedNode:
+        return PaddingNode(None, format_data_source(node.data_source), node.alias)
+
+    def visit_join_clause(self, node: JoinClause[Table]) -> FormattedNode:
+        join_type = f"{node.join_type.value} " if node.join_type else ""
+        modifier = f"{node.join_modifier.value} " if node.join_modifier else ""
+        return SequenceNode(
+            [
+                node.left_node.accept(self),
+                StringNode(f"{join_type}{modifier}JOIN"),
+                node.right_node.accept(self),
+                StringNode("ON"),
+                SequenceNode(
+                    [
+                        StringNode(
+                            f"{k.left.table_alias}.{k.left.column}={k.right.table_alias}.{k.right.column}"
+                        )
+                        for k in node.keys
+                    ]
+                ),
+            ]
+        )

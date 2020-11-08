@@ -1,18 +1,24 @@
 import pytest
-
-
-from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
+from snuba.clickhouse.formatter.nodes import PaddingNode, SequenceNode, StringNode
+from snuba.clickhouse.formatter.query import JoinFormatter, format_query
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.formatter.query import format_query
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import binary_condition
+from snuba.query.data_source.join import (
+    IndividualNode,
+    JoinClause,
+    JoinCondition,
+    JoinConditionExpression,
+    JoinModifier,
+    JoinType,
+)
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
 from snuba.request.request_settings import HTTPRequestSettings
 
 test_cases = [
-    (
-        # Simple query with aliases and multiple tables
+    pytest.param(
         Query(
             Table("my_table", ColumnSet([])),
             selected_columns=[
@@ -48,9 +54,9 @@ test_cases = [
             "HAVING eq(column1, 123) "
             "ORDER BY column1 ASC, table1.column2 DESC"
         ),
+        id="Simple query with aliases and multiple tables",
     ),
-    (
-        # Query with complex functions
+    pytest.param(
         Query(
             Table("my_table", ColumnSet([])),
             selected_columns=[
@@ -116,9 +122,9 @@ test_cases = [
             "GROUP BY (my_complex_math) "
             "ORDER BY f(column1) ASC"
         ),
+        id="Query with complex functions",
     ),
-    (
-        # Query with escaping
+    pytest.param(
         Query(
             Table("my_table", ColumnSet([])),
             selected_columns=[
@@ -137,6 +143,7 @@ test_cases = [
             "GROUP BY (al1, al2) "
             "ORDER BY column1 ASC"
         ),
+        id="Query with escaping",
     ),
 ]
 
@@ -191,3 +198,54 @@ def test_format_clickhouse_specific_query() -> None:
     )
 
     assert clickhouse_query.get_sql() == expected
+
+
+ERRORS_SCHEMA = ColumnSet(
+    [("event_id", UUID()), ("message", String()), ("group_id", UInt(32))]
+)
+GROUPS_SCHEMA = ColumnSet([("id", UInt(32)), ("message", String())])
+GROUPS_ASSIGNEE = ColumnSet([("id", UInt(32)), ("user", String())])
+
+node_err = IndividualNode(alias="err", data_source=Table("errors_local", ERRORS_SCHEMA))
+node_group = IndividualNode(
+    alias="groups", data_source=Table("groupedmessage_local", GROUPS_SCHEMA)
+)
+
+TEST_JOIN = [
+    pytest.param(
+        JoinClause(
+            left_node=node_err,
+            right_node=node_group,
+            keys=[
+                JoinCondition(
+                    left=JoinConditionExpression("err", "group_id"),
+                    right=JoinConditionExpression("groups", "id"),
+                )
+            ],
+            join_type=JoinType.INNER,
+            join_modifier=JoinModifier.SEMI,
+        ),
+        SequenceNode(
+            [
+                PaddingNode(None, StringNode("errors_local"), "err"),
+                StringNode("INNER SEMI JOIN"),
+                PaddingNode(None, StringNode("groupedmessage_local"), "groups"),
+                StringNode("ON"),
+                SequenceNode([StringNode("err.group_id=groups.id")]),
+            ]
+        ),
+        (
+            "errors_local err INNER SEMI JOIN groupedmessage_local groups "
+            "ON err.group_id=groups.id"
+        ),
+        id="Simple join",
+    ),
+]
+
+
+@pytest.mark.parametrize("clause, formatted_seq, formatted_str", TEST_JOIN)
+def test_join_format(
+    clause: JoinClause[Table], formatted_seq: SequenceNode, formatted_str: str
+) -> None:
+    assert str(clause.accept(JoinFormatter())) == formatted_str
+    assert clause.accept(JoinFormatter()) == formatted_seq
