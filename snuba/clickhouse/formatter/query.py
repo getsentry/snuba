@@ -176,6 +176,10 @@ class JoinFormatter(JoinVisitor[FormattedNode, Table]):
     """
 
     def visit_individual_node(self, node: IndividualNode[Table]) -> FormattedNode:
+        """
+        An individual node is formatted as a table name with a table
+        alias, thus the padding.
+        """
         return PaddingNode(None, format_data_source(node.data_source), node.alias)
 
     def visit_join_clause(self, node: JoinClause[Table]) -> FormattedNode:
