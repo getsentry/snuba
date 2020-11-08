@@ -1,16 +1,18 @@
 from dataclasses import replace
-from typing import Optional
+from typing import Optional, Sequence, Union
 
 from snuba import settings as snuba_settings
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.formatter.nodes import (
     FormattedNode,
     FormattedQuery,
+    FormattedSubQuery,
     PaddingNode,
     SequenceNode,
     StringNode,
 )
 from snuba.clickhouse.query import Query
+from snuba.query import Query as AbstractQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source import DataSource
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
@@ -18,8 +20,10 @@ from snuba.query.data_source.simple import Table
 from snuba.query.parsing import ParsingContext
 from snuba.request.request_settings import RequestSettings
 
+FormattableQuery = Union[Query, CompositeQuery[Table]]
 
-def format_query(query: Query, settings: RequestSettings) -> FormattedQuery:
+
+def format_query(query: FormattableQuery, settings: RequestSettings) -> FormattedQuery:
     """
     Formats a Clickhouse Query.
 
@@ -27,14 +31,17 @@ def format_query(query: Query, settings: RequestSettings) -> FormattedQuery:
     into a query processor.
     """
 
-    if settings.get_turbo() and not query.get_from_clause().sampling_rate:
-        query.set_from_clause(
-            replace(
-                query.get_from_clause(), sampling_rate=snuba_settings.TURBO_SAMPLE_RATE
+    if isinstance(query, Query):
+        if settings.get_turbo() and not query.get_from_clause().sampling_rate:
+            query.set_from_clause(
+                replace(
+                    query.get_from_clause(),
+                    sampling_rate=snuba_settings.TURBO_SAMPLE_RATE,
+                )
             )
-        )
-
-    return format_simple_query(query)
+        return FormattedQuery(format_single_query_content(query))
+    else:
+        return FormattedQuery(format_composite_query_content(query))
 
 
 def format_data_source(data_source: DataSource) -> FormattedNode:
@@ -46,11 +53,11 @@ def format_data_source(data_source: DataSource) -> FormattedNode:
     if isinstance(data_source, Table):
         return format_table(data_source)
     elif isinstance(data_source, Query):
-        return format_simple_query(data_source)
+        return FormattedSubQuery(format_single_query_content(data_source))
     elif isinstance(data_source, JoinClause):
         return data_source.accept(JoinFormatter())
     elif isinstance(data_source, CompositeQuery):
-        raise NotImplementedError("Composite queries not yet implemented")
+        return FormattedSubQuery(format_composite_query_content(data_source))
     else:
         raise NotImplementedError(f"Unsupported data source {type(data_source)}")
 
@@ -61,7 +68,110 @@ def format_table(data_source: Table) -> StringNode:
     return StringNode(f"{data_source.table_name}{final}{sample}")
 
 
-def format_simple_query(query: Query) -> FormattedQuery:
+def _format_select(
+    query: AbstractQuery, formatter: ClickhouseExpressionFormatter
+) -> StringNode:
+    selected_cols = [
+        e.expression.accept(formatter) for e in query.get_selected_columns_from_ast()
+    ]
+    return StringNode(f"SELECT {', '.join(selected_cols)}")
+
+
+def _format_arrayjoin(
+    query: AbstractQuery, formatter: ClickhouseExpressionFormatter
+) -> Optional[StringNode]:
+    ast_arrayjoin = query.get_arrayjoin_from_ast()
+    return (
+        StringNode(f"ARRAY JOIN {ast_arrayjoin.accept(formatter)}")
+        if ast_arrayjoin is not None
+        else None
+    )
+
+
+def _format_prewhere(
+    query: Query, formatter: ClickhouseExpressionFormatter
+) -> Optional[StringNode]:
+    ast_prewhere = query.get_prewhere_ast()
+    return (
+        StringNode(f"PREWHERE {ast_prewhere.accept(formatter)}")
+        if ast_prewhere is not None
+        else None
+    )
+
+
+def _format_condition(
+    query: AbstractQuery, formatter: ClickhouseExpressionFormatter
+) -> Optional[StringNode]:
+    ast_condition = query.get_condition_from_ast()
+    return (
+        StringNode(f"WHERE {ast_condition.accept(formatter)}")
+        if ast_condition is not None
+        else None
+    )
+
+
+def _format_groupby(
+    query: AbstractQuery, formatter: ClickhouseExpressionFormatter
+) -> Optional[StringNode]:
+    group_clause: Optional[StringNode] = None
+    ast_groupby = query.get_groupby_from_ast()
+    if ast_groupby:
+        # reformat to use aliases generated during the select clause formatting.
+        groupby_expressions = [e.accept(formatter) for e in ast_groupby]
+        group_clause_str = f"({', '.join(groupby_expressions)})"
+        if query.has_totals():
+            group_clause_str = f"{group_clause_str} WITH TOTALS"
+        group_clause = StringNode(f"GROUP BY {group_clause_str}")
+    return group_clause
+
+
+def _format_having(
+    query: AbstractQuery, formatter: ClickhouseExpressionFormatter
+) -> Optional[StringNode]:
+    ast_having = query.get_having_from_ast()
+    return (
+        StringNode(f"HAVING {ast_having.accept(formatter)}")
+        if ast_having is not None
+        else None
+    )
+
+
+def _format_orderby(
+    query: AbstractQuery, formatter: ClickhouseExpressionFormatter
+) -> Optional[StringNode]:
+    ast_orderby = query.get_orderby_from_ast()
+    if ast_orderby:
+        orderby = [
+            f"{e.expression.accept(formatter)} {e.direction.value}" for e in ast_orderby
+        ]
+        return StringNode(f"ORDER BY {', '.join(orderby)}")
+    else:
+        return None
+
+
+def _format_limitby(
+    query: AbstractQuery, formatter: ClickhouseExpressionFormatter
+) -> Optional[StringNode]:
+    ast_limitby = query.get_limitby()
+    return (
+        StringNode("LIMIT {} BY {}".format(*ast_limitby))
+        if ast_limitby is not None
+        else None
+    )
+
+
+def _format_limit(
+    query: AbstractQuery, formatter: ClickhouseExpressionFormatter
+) -> Optional[StringNode]:
+    ast_limit = query.get_limit()
+    return (
+        StringNode(f"LIMIT {ast_limit} OFFSET {query.get_offset()}")
+        if ast_limit is not None
+        else None
+    )
+
+
+def format_single_query_content(query: Query) -> Sequence[FormattedNode]:
     """
     Formats a Clickhouse Query from the AST representation into an
     intermediate structure that can either be serialized into a string
@@ -77,97 +187,49 @@ def format_simple_query(query: Query) -> FormattedQuery:
     be in the same module as of now and in a visitor pattern they would
     have to be mutually dependent.
     """
+
     parsing_context = ParsingContext()
     formatter = ClickhouseExpressionFormatter(parsing_context)
 
-    selected_cols = [
-        e.expression.accept(formatter) for e in query.get_selected_columns_from_ast()
+    return [
+        value
+        for value in [
+            _format_select(query, formatter),
+            PaddingNode("FROM", format_data_source(query.get_from_clause())),
+            _format_arrayjoin(query, formatter),
+            _format_prewhere(query, formatter),
+            _format_condition(query, formatter),
+            _format_groupby(query, formatter),
+            _format_having(query, formatter),
+            _format_orderby(query, formatter),
+            _format_limitby(query, formatter),
+            _format_limit(query, formatter),
+        ]
+        if value
     ]
-    select_clause = StringNode(f"SELECT {', '.join(selected_cols)}")
 
-    from_clause = PaddingNode("FROM", format_data_source(query.get_from_clause()))
 
-    ast_arrayjoin = query.get_arrayjoin_from_ast()
-    array_join_clause = (
-        StringNode(f"ARRAY JOIN {ast_arrayjoin.accept(formatter)}")
-        if ast_arrayjoin is not None
-        else None
-    )
+def format_composite_query_content(
+    query: CompositeQuery[Table],
+) -> Sequence[FormattedNode]:
+    parsing_context = ParsingContext()
+    formatter = ClickhouseExpressionFormatter(parsing_context)
 
-    ast_prewhere = query.get_prewhere_ast()
-    prewhere_clause = (
-        StringNode(f"PREWHERE {ast_prewhere.accept(formatter)}")
-        if ast_prewhere is not None
-        else None
-    )
-
-    ast_condition = query.get_condition_from_ast()
-    where_clause = (
-        StringNode(f"WHERE {ast_condition.accept(formatter)}")
-        if ast_condition is not None
-        else None
-    )
-
-    group_clause: Optional[FormattedNode] = None
-    ast_groupby = query.get_groupby_from_ast()
-    if ast_groupby:
-        # reformat to use aliases generated during the select clause formatting.
-        groupby_expressions = [e.accept(formatter) for e in ast_groupby]
-        group_clause_str = f"({', '.join(groupby_expressions)})"
-        if query.has_totals():
-            group_clause_str = f"{group_clause_str} WITH TOTALS"
-        group_clause = StringNode(f"GROUP BY {group_clause_str}")
-
-    ast_having = query.get_having_from_ast()
-    having_clause = (
-        StringNode(f"HAVING {ast_having.accept(formatter)}")
-        if ast_having is not None
-        else None
-    )
-
-    ast_orderby = query.get_orderby_from_ast()
-    if ast_orderby:
-        orderby = [
-            f"{e.expression.accept(formatter)} {e.direction.value}" for e in ast_orderby
+    return [
+        value
+        for value in [
+            _format_select(query, formatter),
+            PaddingNode("FROM", format_data_source(query.get_from_clause())),
+            _format_arrayjoin(query, formatter),
+            _format_condition(query, formatter),
+            _format_groupby(query, formatter),
+            _format_having(query, formatter),
+            _format_orderby(query, formatter),
+            _format_limitby(query, formatter),
+            _format_limit(query, formatter),
         ]
-        order_clause: Optional[FormattedNode] = StringNode(
-            f"ORDER BY {', '.join(orderby)}"
-        )
-    else:
-        order_clause = None
-
-    ast_limitby = query.get_limitby()
-    limitby_clause = (
-        StringNode("LIMIT {} BY {}".format(*ast_limitby))
-        if ast_limitby is not None
-        else None
-    )
-
-    ast_limit = query.get_limit()
-    limit_clause = (
-        StringNode(f"LIMIT {ast_limit} OFFSET {query.get_offset()}")
-        if ast_limit is not None
-        else None
-    )
-
-    return FormattedQuery(
-        [
-            value
-            for value in [
-                select_clause,
-                from_clause,
-                array_join_clause,
-                prewhere_clause,
-                where_clause,
-                group_clause,
-                having_clause,
-                order_clause,
-                limitby_clause,
-                limit_clause,
-            ]
-            if value
-        ]
-    )
+        if value
+    ]
 
 
 class JoinFormatter(JoinVisitor[FormattedNode, Table]):
