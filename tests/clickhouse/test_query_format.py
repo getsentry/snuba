@@ -18,6 +18,20 @@ from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
 from snuba.request.request_settings import HTTPRequestSettings
 
+ERRORS_SCHEMA = ColumnSet(
+    [("event_id", UUID()), ("message", String()), ("group_id", UInt(32))]
+)
+GROUPS_SCHEMA = ColumnSet([("id", UInt(32)), ("message", String())])
+GROUPS_ASSIGNEE = ColumnSet([("id", UInt(32)), ("user", String())])
+
+node_err = IndividualNode(alias="err", data_source=Table("errors_local", ERRORS_SCHEMA))
+node_group = IndividualNode(
+    alias="groups", data_source=Table("groupedmessage_local", GROUPS_SCHEMA)
+)
+node_assignee = IndividualNode(
+    alias="assignee", data_source=Table("groupassignee_local", GROUPS_ASSIGNEE)
+)
+
 test_cases = [
     pytest.param(
         Query(
@@ -191,6 +205,127 @@ test_cases = [
         ),
         id="Composite query",
     ),
+    pytest.param(
+        CompositeQuery(
+            from_clause=JoinClause(
+                left_node=node_err,
+                right_node=node_group,
+                keys=[
+                    JoinCondition(
+                        left=JoinConditionExpression("err", "group_id"),
+                        right=JoinConditionExpression("groups", "id"),
+                    )
+                ],
+                join_type=JoinType.INNER,
+            ),
+            selected_columns=[
+                SelectedExpression("error_id", Column("error_id", "err", "event_id")),
+                SelectedExpression("message", Column("message", "groups", "message")),
+            ],
+            condition=binary_condition(
+                None, "eq", Column(None, "groups", "id"), Literal(None, 1)
+            ),
+        ),
+        (
+            "SELECT (err.event_id AS error_id), (groups.message AS message) "
+            "FROM errors_local err INNER JOIN groupedmessage_local groups "
+            "ON err.group_id=groups.id "
+            "WHERE eq(groups.id, 1)"
+        ),
+        id="Simple join",
+    ),
+    pytest.param(
+        CompositeQuery(
+            from_clause=JoinClause(
+                left_node=JoinClause(
+                    left_node=IndividualNode(
+                        alias="err",
+                        data_source=Query(
+                            from_clause=Table("errors_local", ERRORS_SCHEMA),
+                            selected_columns=[
+                                SelectedExpression(
+                                    "error_id", Column("error_id", None, "event_id")
+                                ),
+                                SelectedExpression(
+                                    "group_id", Column("group_id", None, "group_id")
+                                ),
+                            ],
+                            condition=binary_condition(
+                                None,
+                                "eq",
+                                Column(None, None, "project_id"),
+                                Literal(None, 1),
+                            ),
+                        ),
+                    ),
+                    right_node=IndividualNode(
+                        alias="groups",
+                        data_source=Query(
+                            from_clause=Table("groupedmessage_local", GROUPS_SCHEMA),
+                            selected_columns=[
+                                SelectedExpression("id", Column("id", None, "id")),
+                                SelectedExpression(
+                                    "message", Column("message", None, "message")
+                                ),
+                            ],
+                            condition=binary_condition(
+                                None,
+                                "eq",
+                                Column(None, None, "project_id"),
+                                Literal(None, 1),
+                            ),
+                        ),
+                    ),
+                    keys=[
+                        JoinCondition(
+                            left=JoinConditionExpression("err", "group_id"),
+                            right=JoinConditionExpression("groups", "id"),
+                        )
+                    ],
+                    join_type=JoinType.INNER,
+                ),
+                right_node=IndividualNode(
+                    alias="assignee",
+                    data_source=Query(
+                        from_clause=Table("groupassignee_local", GROUPS_ASSIGNEE),
+                        selected_columns=[
+                            SelectedExpression(
+                                "group_id", Column("group_id", None, "group_id")
+                            ),
+                        ],
+                        condition=binary_condition(
+                            None, "eq", Column(None, None, "user"), Literal(None, "me"),
+                        ),
+                    ),
+                ),
+                keys=[
+                    JoinCondition(
+                        left=JoinConditionExpression("err", "group_id"),
+                        right=JoinConditionExpression("assignee", "group_id"),
+                    )
+                ],
+                join_type=JoinType.INNER,
+            ),
+            selected_columns=[
+                SelectedExpression("group_id", Column("group_id", "err", "group_id")),
+                SelectedExpression("events", FunctionCall("events", "count", tuple())),
+            ],
+            groupby=[Column(None, "groups", "id")],
+        ),
+        (
+            "SELECT (err.group_id AS group_id), (count() AS events) "
+            "FROM "
+            "(SELECT (event_id AS error_id), group_id FROM errors_local WHERE eq(project_id, 1)) err "
+            "INNER JOIN "
+            "(SELECT id, message FROM groupedmessage_local WHERE eq(project_id, 1)) groups "
+            "ON err.group_id=groups.id "
+            "INNER JOIN "
+            "(SELECT group_id FROM groupassignee_local WHERE eq(user, 'me')) assignee "
+            "ON err.group_id=assignee.group_id "
+            "GROUP BY (groups.id)"
+        ),
+        id="Join of multiple subqueries",
+    ),
 ]
 
 
@@ -245,20 +380,6 @@ def test_format_clickhouse_specific_query() -> None:
 
     assert clickhouse_query.get_sql() == expected
 
-
-ERRORS_SCHEMA = ColumnSet(
-    [("event_id", UUID()), ("message", String()), ("group_id", UInt(32))]
-)
-GROUPS_SCHEMA = ColumnSet([("id", UInt(32)), ("message", String())])
-GROUPS_ASSIGNEE = ColumnSet([("id", UInt(32)), ("user", String())])
-
-node_err = IndividualNode(alias="err", data_source=Table("errors_local", ERRORS_SCHEMA))
-node_group = IndividualNode(
-    alias="groups", data_source=Table("groupedmessage_local", GROUPS_SCHEMA)
-)
-node_assignee = IndividualNode(
-    alias="assignee", data_source=Table("groupassignee_local", GROUPS_ASSIGNEE)
-)
 
 TEST_JOIN = [
     pytest.param(
