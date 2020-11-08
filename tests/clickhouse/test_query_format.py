@@ -3,6 +3,7 @@ from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
 from snuba.clickhouse.formatter.nodes import PaddingNode, SequenceNode, StringNode
 from snuba.clickhouse.formatter.query import JoinFormatter, format_query
 from snuba.clickhouse.query import Query
+from snuba.query.composite import CompositeQuery
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.join import (
@@ -144,6 +145,51 @@ test_cases = [
             "ORDER BY column1 ASC"
         ),
         id="Query with escaping",
+    ),
+    pytest.param(
+        CompositeQuery(
+            from_clause=Query(
+                Table("my_table", ColumnSet([])),
+                selected_columns=[
+                    SelectedExpression("column1", Column(None, None, "column1")),
+                    SelectedExpression(
+                        "sub_average",
+                        FunctionCall(
+                            "sub_average", "avg", (Column(None, None, "column2"),)
+                        ),
+                    ),
+                    SelectedExpression("column3", Column(None, None, "column3")),
+                ],
+                condition=binary_condition(
+                    None,
+                    "eq",
+                    lhs=Column("al", None, "column3"),
+                    rhs=Literal(None, "blabla"),
+                ),
+                groupby=[Column(None, None, "column2")],
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "average",
+                    FunctionCall(
+                        "average", "avg", (Column(None, None, "sub_average"),)
+                    ),
+                ),
+                SelectedExpression("alias", Column("alias", None, "column3")),
+            ],
+            groupby=[Column(None, None, "alias")],
+        ),
+        (
+            "SELECT (avg(sub_average) AS average), (column3 AS alias) "
+            "FROM ("
+            "SELECT column1, (avg(column2) AS sub_average), column3 "
+            "FROM my_table "
+            "WHERE eq((column3 AS al), 'blabla') "
+            "GROUP BY (column2)"
+            ") "
+            "GROUP BY (alias)"
+        ),
+        id="Composite query",
     ),
 ]
 
