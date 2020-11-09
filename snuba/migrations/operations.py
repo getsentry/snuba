@@ -231,7 +231,9 @@ class DropIndex(SqlOperation):
         self.__index_name = index_name
 
     def format_sql(self) -> str:
-        return f"ALTER TABLE {self.__table_name} DROP INDEX {self.__index_name};"
+        return (
+            f"ALTER TABLE {self.__table_name} DROP INDEX IF EXISTS {self.__index_name};"
+        )
 
 
 class InsertIntoSelect(SqlOperation):
