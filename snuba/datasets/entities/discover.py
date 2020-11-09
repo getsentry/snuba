@@ -29,7 +29,7 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.events import BaseEventsEntity, EventsQueryStorageSelector
 from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.datasets.entity import Entity
-from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipelineBuilder
+from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
@@ -319,7 +319,7 @@ class DiscoverEntity(Entity):
 
         super().__init__(
             storages=[events_storage],
-            query_pipeline_builder=SingleQueryPlanPipelineBuilder(
+            query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=SelectedStorageQueryPlanBuilder(
                     selector=EventsQueryStorageSelector(
                         mappers=events_translation_mappers.concat(

@@ -7,7 +7,7 @@ from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipeline
+from snuba.pipeline.simple_pipeline import SimplePipeline
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -322,7 +322,7 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     for p in entity.get_query_processors():
         p.process_query(query, request.settings)
     pipeline = entity.get_query_pipeline_builder().build_pipeline(request, Mock())
-    assert isinstance(pipeline, SingleQueryPlanPipeline)
+    assert isinstance(pipeline, SimplePipeline)
     plan = pipeline.query_plan
 
     ArrayJoinKeyValueOptimizer("tags").process_query(plan.query, request.settings)

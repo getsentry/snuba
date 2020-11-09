@@ -7,7 +7,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
-from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipelineBuilder
+from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
@@ -38,7 +38,7 @@ class SessionsEntity(Entity):
             # TODO: Once we are ready to expose the raw data model and select whether to use
             # materialized storage or the raw one here, replace this with a custom storage
             # selector that decides when to use the materialized data.
-            query_pipeline_builder=SingleQueryPlanPipelineBuilder(
+            query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=SingleStorageQueryPlanBuilder(
                     storage=materialized_storage,
                     mappers=TranslationMappers(

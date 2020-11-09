@@ -3,7 +3,7 @@ from typing import Mapping, Sequence
 
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipelineBuilder
+from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.query.extensions import QueryExtension
@@ -30,7 +30,7 @@ class OutcomesEntity(Entity):
         read_schema = materialized_storage.get_schema()
         super().__init__(
             storages=[writable_storage, materialized_storage],
-            query_pipeline_builder=SingleQueryPlanPipelineBuilder(
+            query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=SingleStorageQueryPlanBuilder(
                     # TODO: Once we are ready to expose the raw data model and select whether to use
                     # materialized storage or the raw one here, replace this with a custom storage

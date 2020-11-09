@@ -10,7 +10,7 @@ from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipeline
+from snuba.pipeline.simple_pipeline import SimplePipeline
 from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
 from snuba.datasets.plans.translator.query import identity_translate
 from snuba.query import SelectedExpression
@@ -314,7 +314,7 @@ def test_col_split_conditions(
         )
 
     pipeline = entity.get_query_pipeline_builder().build_pipeline(request, do_query)
-    assert isinstance(pipeline, SingleQueryPlanPipeline)
+    assert isinstance(pipeline, SimplePipeline)
     plan = pipeline.query_plan
 
     assert (
