@@ -240,6 +240,10 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             for col in query.get_all_ast_referenced_columns()
         }
 
+        if len(total_columns) < settings.COLUMN_SPLIT_MIN_COLS:
+            metrics.increment("column_splitter.main_query_min_threshold")
+            return None
+
         minimal_query = copy.deepcopy(query)
 
         # TODO: provide the table alias name to this splitter if we ever use it
@@ -288,6 +292,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         del minimal_query
 
         if not result.result["data"]:
+            metrics.increment("column_splitter.no_data_from_minimal_query")
             return None
 
         # Making a copy just in case runner returned None (which would drive the execution

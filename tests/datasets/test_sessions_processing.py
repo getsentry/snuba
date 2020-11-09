@@ -1,5 +1,4 @@
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.factory import get_dataset
 from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipeline
 from snuba.query import SelectedExpression
@@ -19,7 +18,7 @@ def test_sessions_processing() -> None:
     request = Request("", query, HTTPRequestSettings(), {}, "")
 
     def query_runner(
-        query: Query, settings: RequestSettings, reader: Reader[SqlQuery]
+        query: Query, settings: RequestSettings, reader: Reader
     ) -> QueryResult:
         assert query.get_selected_columns_from_ast() == [
             SelectedExpression(
