@@ -2,9 +2,9 @@ from typing import Any, MutableMapping, Optional, Sequence, Set
 from unittest.mock import Mock
 
 import pytest
-from snuba.clickhouse.astquery import AstSqlQuery
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.clickhouse.query_formatter import format_query
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.pipeline.simple_pipeline import SimplePipeline
@@ -395,7 +395,7 @@ def test_aliasing() -> None:
             "conditions": [["tags_key", "IN", ["t1", "t2"]]],
         }
     )
-    sql = AstSqlQuery(processed, HTTPRequestSettings()).format_sql()
+    sql = format_query(processed, HTTPRequestSettings()).get_sql()
 
     assert sql == (
         "SELECT (tupleElement((arrayJoin(arrayMap((x, y -> tuple(x, y)), "

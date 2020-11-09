@@ -115,6 +115,7 @@ class TransactionsLoader(DirectoryLoader):
             "0005_transactions_add_measurements",
             "0006_transactions_add_http_fields",
             "0007_transactions_add_discover_cols",
+            "0008_transactions_add_timestamp_index",
         ]
 
 

@@ -274,6 +274,9 @@ def _trace_transaction(dataset: Dataset) -> None:
             scope.span.set_tag("dataset", get_dataset_name(dataset))
             scope.span.set_tag("referrer", http_request.referrer)
 
+        if scope.transaction:
+            scope.transaction = f"{scope.transaction.name}__{get_dataset_name(dataset)}__{http_request.referrer}"
+
 
 @application.route("/query", methods=["GET", "POST"])
 @util.time_request("query")

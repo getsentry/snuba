@@ -6,7 +6,6 @@ from snuba import state
 from snuba.clickhouse.columns import ColumnSet, String
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.query_dsl.accessors import get_time_range
-from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
@@ -48,9 +47,7 @@ def test_no_split(
     )
 
     def do_query(
-        query: ClickhouseQuery,
-        request_settings: RequestSettings,
-        reader: Reader[SqlQuery],
+        query: ClickhouseQuery, request_settings: RequestSettings, reader: Reader,
     ) -> QueryResult:
         assert query == query
         return QueryResult({}, {})
@@ -118,9 +115,7 @@ def test_col_split(
     second_query_data: Sequence[MutableMapping[str, Any]],
 ) -> None:
     def do_query(
-        query: ClickhouseQuery,
-        request_settings: RequestSettings,
-        reader: Reader[SqlQuery],
+        query: ClickhouseQuery, request_settings: RequestSettings, reader: Reader,
     ) -> QueryResult:
         selected_col_names = [
             c.expression.column_name
@@ -232,13 +227,29 @@ column_split_tests = [
             "limit": 10,
         },
         False,
+    ),  # Valid query but same number of columns between minimal
+    # and original query.
+    (
+        "event_id",
+        "project_id",
+        "timestamp",
+        {
+            "selected_columns": ["event_id"],
+            "conditions": [
+                ("timestamp", ">=", "2019-09-19T10:00:00"),
+                ("timestamp", "<", "2019-09-19T12:00:00"),
+                ("project_id", "IN", [1, 2, 3]),
+            ],
+            "limit": 10,
+        },
+        False,
     ),  # Valid query but not enough columns to split.
     (
         "event_id",
         "project_id",
         "timestamp",
         {
-            "selected_columns": ["group_id"],
+            "selected_columns": ["group_id", "message", "tags.key", "level"],
             "conditions": [
                 ("timestamp", ">=", "2019-09-19T10:00:00"),
                 ("timestamp", "<", "2019-09-19T12:00:00"),
@@ -254,7 +265,7 @@ column_split_tests = [
         "project_id",
         "timestamp",
         {
-            "selected_columns": ["group_id"],
+            "selected_columns": ["group_id", "message", "tags.key", "level"],
             "conditions": [
                 ("timestamp", ">=", "2019-09-19T10:00:00"),
                 ("timestamp", "<", "2019-09-19T12:00:00"),
@@ -270,7 +281,7 @@ column_split_tests = [
         "project_id",
         "timestamp",
         {
-            "selected_columns": ["group_id"],
+            "selected_columns": ["group_id", "message", "tags.key", "level"],
             "conditions": [
                 ("timestamp", ">=", "2019-09-19T10:00:00"),
                 ("timestamp", "<", "2019-09-19T12:00:00"),
