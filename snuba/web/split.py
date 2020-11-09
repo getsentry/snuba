@@ -241,6 +241,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         }
 
         if len(total_columns) < settings.COLUMN_SPLIT_MIN_COLS:
+            metrics.increment("column_splitter.main_query_min_threshold")
             return None
 
         minimal_query = copy.deepcopy(query)
