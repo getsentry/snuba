@@ -130,6 +130,7 @@ class DiscoverLoader(DirectoryLoader):
     def get_migrations(self) -> Sequence[str]:
         return [
             "0001_discover_merge_table",
+            "0002_discover_tags_hash_map",
         ]
 
 
