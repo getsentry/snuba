@@ -3,7 +3,7 @@ import pytest
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.query_formatter import format_query
+from snuba.clickhouse.formatter.query import format_query
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Table

@@ -1,9 +1,9 @@
-from typing import Mapping
+from typing import Any, Sequence
 
 import pytest
 from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.clickhouse.query_formatter import format_query
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -44,14 +44,14 @@ test_cases = [
                 OrderBy(OrderByDirection.DESC, Column(None, "table1", "column2")),
             ],
         ),
-        {
-            "from": "FROM my_table",
-            "group": "GROUP BY (column1, table1.column2, al, column4)",
-            "having": "HAVING eq(column1, 123)",
-            "order": "ORDER BY column1 ASC, table1.column2 DESC",
-            "select": "SELECT column1, table1.column2, (column3 AS al)",
-            "where": "WHERE eq(al, 'blabla')",
-        },
+        [
+            "SELECT column1, table1.column2, (column3 AS al)",
+            ["FROM", "my_table"],
+            "WHERE eq(al, 'blabla')",
+            "GROUP BY (column1, table1.column2, al, column4)",
+            "HAVING eq(column1, 123)",
+            "ORDER BY column1 ASC, table1.column2 DESC",
+        ],
         id="Query_with_aliases",
     ),
     pytest.param(
@@ -114,14 +114,13 @@ test_cases = [
                 )
             ],
         ),
-        {
-            "from": "FROM my_table",
-            "group": "GROUP BY (my_complex_math)",
-            "order": "ORDER BY f(column1) ASC",
-            "select": "SELECT (doSomething(column1, table1.column2, (column3 AS "
-            "al))(column1) AS my_complex_math)",
-            "where": "WHERE eq(al, 'blabla') AND neq(al, 'blabla')",
-        },
+        [
+            "SELECT (doSomething(column1, table1.column2, (column3 AS al))(column1) AS my_complex_math)",
+            ["FROM", "my_table"],
+            "WHERE eq(al, 'blabla') AND neq(al, 'blabla')",
+            "GROUP BY (my_complex_math)",
+            "ORDER BY f(column1) ASC",
+        ],
         id="complex_functions",
     ),
     pytest.param(
@@ -138,12 +137,12 @@ test_cases = [
             ],
             order_by=[OrderBy(OrderByDirection.ASC, Column(None, None, "column1"))],
         ),
-        {
-            "from": "FROM my_table",
-            "group": "GROUP BY (al1, al2)",
-            "order": "ORDER BY column1 ASC",
-            "select": "SELECT (`field_##$$%` AS al1), (`t&^%$`.`f@!@` AS al2)",
-        },
+        [
+            "SELECT (`field_##$$%` AS al1), (`t&^%$`.`f@!@` AS al2)",
+            ["FROM", "my_table"],
+            "GROUP BY (al1, al2)",
+            "ORDER BY column1 ASC",
+        ],
         id="query_with_escaping",
     ),
     pytest.param(
@@ -190,24 +189,24 @@ test_cases = [
                 ),
             ),
         ),
-        {
-            "from": "FROM my_table",
-            "select": "SELECT (column3 AS al), (column4 AS al2)",
-            "where": (
+        [
+            "SELECT (column3 AS al), (column4 AS al2)",
+            ["FROM", "my_table"],
+            (
                 "WHERE (equals(al, 'blabla') OR equals(al2, 'blabla2')) AND "
                 "(equals(column5, 'blabla3') OR equals(column6, 'blabla4'))"
             ),
-        },
+        ],
         id="query_complex_condition",
     ),
 ]
 
 
 @pytest.mark.parametrize("query, data", test_cases)
-def test_format_expressions(query: ClickhouseQuery, data: Mapping[str, str]) -> None:
+def test_format_expressions(query: ClickhouseQuery, data: Sequence[Any]) -> None:
     request_settings = HTTPRequestSettings()
     clickhouse_query = format_query(query, request_settings)
-    assert clickhouse_query.get_mapping() == data
+    assert clickhouse_query.structured() == data
 
 
 def test_format_clickhouse_specific_query() -> None:
@@ -240,16 +239,16 @@ def test_format_clickhouse_specific_query() -> None:
     request_settings = HTTPRequestSettings()
     clickhouse_query = format_query(query, request_settings)
 
-    expected = {
-        "from": "FROM my_table FINAL SAMPLE 0.1",
-        "group": "GROUP BY (column1, table1.column2) WITH TOTALS",
-        "having": "HAVING eq(column1, 123)",
-        "array_join": "ARRAY JOIN column1",
-        "limit": "LIMIT 100 OFFSET 50",
-        "limitby": "LIMIT 10 BY environment",
-        "order": "ORDER BY column1 ASC",
-        "select": "SELECT column1, table1.column2",
-        "where": "WHERE eq(column1, 'blabla')",
-    }
+    expected = [
+        "SELECT column1, table1.column2",
+        ["FROM", "my_table FINAL SAMPLE 0.1"],
+        "ARRAY JOIN column1",
+        "WHERE eq(column1, 'blabla')",
+        "GROUP BY (column1, table1.column2) WITH TOTALS",
+        "HAVING eq(column1, 123)",
+        "ORDER BY column1 ASC",
+        "LIMIT 10 BY environment",
+        "LIMIT 100 OFFSET 50",
+    ]
 
-    assert clickhouse_query.get_mapping() == expected
+    assert clickhouse_query.structured() == expected
