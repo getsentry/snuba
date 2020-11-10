@@ -82,6 +82,9 @@ class Query(AbstractQuery[Entity]):
     def get_final(self) -> bool:
         return self.__final
 
+    def set_final(self, final: bool) -> None:
+        self.__final = final
+
     def get_sample(self) -> Optional[float]:
         return self.__sample
 
