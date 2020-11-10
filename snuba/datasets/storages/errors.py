@@ -10,6 +10,7 @@ from snuba.datasets.storages.errors_common import (
     prewhere_candidates,
     promoted_tag_columns,
     query_processors,
+    query_splitters,
     required_columns,
 )
 from snuba.datasets.table_storage import KafkaStreamLoader
@@ -28,6 +29,7 @@ storage = WritableTableStorage(
     storage_set_key=StorageSetKey.EVENTS,
     schema=schema,
     query_processors=query_processors,
+    query_splitters=query_splitters,
     stream_loader=KafkaStreamLoader(
         processor=ErrorsProcessor(promoted_tag_columns),
         default_topic="events",
