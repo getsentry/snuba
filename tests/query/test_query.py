@@ -9,7 +9,6 @@ def test_query_parameters() -> None:
     query = Query(
         Table("my_table", ColumnSet([])),
         limitby=(100, "environment"),
-        sample=10,
         limit=100,
         offset=50,
         totals=True,
@@ -17,7 +16,6 @@ def test_query_parameters() -> None:
     )
 
     assert query.get_limitby() == (100, "environment")
-    assert query.get_sample() == 10
     assert query.get_limit() == 100
     assert query.get_offset() == 50
     assert query.has_totals() is True

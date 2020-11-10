@@ -22,12 +22,10 @@ def identity_translate(query: LogicalQuery) -> ClickhouseQuery:
         having=query.get_having_from_ast(),
         order_by=query.get_orderby_from_ast(),
         limitby=query.get_limitby(),
-        sample=query.get_sample(),
         limit=query.get_limit(),
         offset=query.get_offset(),
         totals=query.has_totals(),
         granularity=query.get_granularity(),
-        final=query.get_final(),
     )
 
 

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from typing import Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
 from snuba import settings as snuba_settings
@@ -42,13 +43,12 @@ def format_query(query: Query, settings: RequestSettings) -> FormattedQuery:
     into a query processor.
     """
 
-    if query.get_sample():
-        sample_rate = query.get_sample()
-    elif settings.get_turbo():
-        sample_rate = snuba_settings.TURBO_SAMPLE_RATE
-    else:
-        sample_rate = None
-    query.set_sample(sample_rate)
+    if settings.get_turbo() and not query.get_from_clause().sampling_rate:
+        query.set_from_clause(
+            replace(
+                query.get_from_clause(), sampling_rate=snuba_settings.TURBO_SAMPLE_RATE
+            )
+        )
 
     return _format_query_impl(query)
 
@@ -86,12 +86,13 @@ def format_processable_query(query: Query) -> FormattedQuery:
     ]
     select_clause = f"SELECT {', '.join(selected_cols)}"
 
-    from_clause = f"FROM {query.get_from_clause().table_name}"
+    query_from_clause = query.get_from_clause()
+    from_clause = f"FROM {query_from_clause.table_name}"
 
-    if query.get_final():
+    if query_from_clause.final:
         from_clause = f"{from_clause} FINAL"
 
-    ast_sample = query.get_sample()
+    ast_sample = query_from_clause.sampling_rate
     if ast_sample:
         from_clause = f"{from_clause} SAMPLE {ast_sample}"
 
