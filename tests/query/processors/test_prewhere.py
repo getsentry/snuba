@@ -5,12 +5,12 @@ from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.translator.query import identity_translate
-from snuba.datasets.schemas.tables import TableSource
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     BooleanFunctions,
     not_in_condition,
 )
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.parser import parse_query
 from snuba.query.processors.prewhere import PrewhereProcessor
@@ -153,7 +153,7 @@ def test_prewhere(
     settings.MAX_PREWHERE_CONDITIONS = 2
     events = get_dataset("events")
     query = identity_translate(parse_query(query_body, events))
-    query.set_from_clause(TableSource("my_table", ColumnSet([]), None, keys))
+    query.set_from_clause(Table("my_table", ColumnSet([]), prewhere_candidates=keys))
 
     request_settings = HTTPRequestSettings()
     processor = PrewhereProcessor()

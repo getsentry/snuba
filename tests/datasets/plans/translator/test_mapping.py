@@ -1,5 +1,4 @@
 import pytest
-
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import (
@@ -10,9 +9,9 @@ from snuba.clickhouse.translators.snuba.mappers import (
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.plans.translator.query import QueryTranslator
-from snuba.datasets.schemas.tables import TableSource
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import (
     Column,
     FunctionCall,
@@ -20,7 +19,6 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query as SnubaQuery
-
 
 test_cases = [
     pytest.param(
@@ -47,7 +45,7 @@ test_cases = [
             ],
         ),
         ClickhouseQuery(
-            from_clause=TableSource("my_table", ColumnSet([])),
+            from_clause=Table("my_table", ColumnSet([])),
             selected_columns=[
                 SelectedExpression("alias", Column("alias", "table", "column")),
                 SelectedExpression(
@@ -100,7 +98,7 @@ test_cases = [
             ],
         ),
         ClickhouseQuery(
-            from_clause=TableSource("my_table", ColumnSet([])),
+            from_clause=Table("my_table", ColumnSet([])),
             selected_columns=[
                 SelectedExpression("alias", Column("alias", "table", "column")),
                 SelectedExpression(
@@ -166,7 +164,7 @@ test_cases = [
             ],
         ),
         ClickhouseQuery(
-            from_clause=TableSource("my_table", ColumnSet([])),
+            from_clause=Table("my_table", ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "alias",
