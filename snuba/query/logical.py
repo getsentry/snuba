@@ -59,6 +59,9 @@ class Query(AbstractQuery[Entity]):
         # in order not to expose the internal representation.
         self.__body = body
         self.__final = False
+        # TODO: Remove sampling rate from this class entirely, and move
+        # it to the data source since we sample a data source, not a
+        # query.
         self.__sample = sample
 
         super().__init__(
