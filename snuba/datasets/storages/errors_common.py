@@ -22,6 +22,7 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 )
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.web.split import TimeSplitQueryStrategy
 
 required_columns = [
     "event_id",
@@ -137,4 +138,8 @@ query_processors = [
     MappingColumnPromoter(mapping_specs={"tags": promoted_tag_columns}),
     ArrayJoinKeyValueOptimizer("tags"),
     PrewhereProcessor(),
+]
+
+query_splitters = [
+    TimeSplitQueryStrategy(timestamp_col="timestamp"),
 ]

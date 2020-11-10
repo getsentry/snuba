@@ -159,6 +159,6 @@ def test_data_source(
     assert isinstance(pipeline, SingleQueryPlanPipeline)
     plan = pipeline.query_plan
 
-    assert plan.query.get_from_clause().format_from() == expected_table, json.dumps(
+    assert plan.query.get_from_clause().table_name == expected_table, json.dumps(
         query_body
     )

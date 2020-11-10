@@ -27,7 +27,7 @@ class TableSource(RelationalSource):
         self.__mandatory_conditions = mandatory_conditions or []
         self.__prewhere_candidates = prewhere_candidates or []
 
-    def format_from(self) -> str:
+    def get_table_name(self) -> str:
         return self.__table_name
 
     def get_columns(self) -> ColumnSet:
