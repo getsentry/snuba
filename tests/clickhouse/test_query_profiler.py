@@ -5,13 +5,13 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.query_profiler import generate_profile
 from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
-from snuba.datasets.schemas.tables import TableSource
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
     binary_condition,
 )
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.querylog.query_metadata import ClickhouseQueryProfile, FilterProfile
 from snuba.state import safe_dumps
@@ -19,7 +19,7 @@ from snuba.state import safe_dumps
 test_cases = [
     pytest.param(
         ClickhouseQuery(
-            TableSource("events", ColumnSet([])),
+            Table("events", ColumnSet([])),
             selected_columns=[
                 SelectedExpression("column2", Column("column2", None, "column2")),
                 SelectedExpression(
@@ -85,7 +85,7 @@ test_cases = [
     ),
     pytest.param(
         ClickhouseQuery(
-            TableSource("events", ColumnSet([])),
+            Table("events", ColumnSet([])),
             selected_columns=[
                 SelectedExpression("column2", Column("column2", None, "column2")),
             ],

@@ -3,39 +3,20 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Mapping, Sequence
 
-from snuba.clickhouse.columns import (
-    ColumnSet,
-    ColumnType,
-    Nullable,
-    TModifiers,
-)
-from snuba.query.data_source.simple import SimpleDataSource
+from snuba.clickhouse.columns import ColumnSet, ColumnType, Nullable, TModifiers
 from snuba.query.expressions import FunctionCall
 
 
-class RelationalSource(SimpleDataSource, ABC):
+# TODO: Remove this abstraction entirely. It is not providing anything
+# anymore since we are not making the query class depend on this and
+# we are not using it anymore to create tables.
+class RelationalSource(ABC):
     """
-    Abstract representation of the datamodel in the schema. This includes the
-    list of the tables that compose this datamodel with their columns as well as
-    their relationships expressed as relational joins.
+    Abstract representation of the datamodel in the schema.
 
     This class and its subclasses are the go-to place to inspect the structure
     of the datamodel, either during query or when writing.
-
-    This implies our data model is defined in a relational way. Should we move
-    away from this assumption, this will change.
     """
-
-    @abstractmethod
-    def format_from(self) -> str:
-        """
-        Builds the SQL representation of the data source for the FROM clause
-        when querying.
-        """
-        # Not using the __str__ method because this is moving towards a more
-        # abstract method that will receive a FormatStrategy (clickhouse specific)
-        # that would do the actual formatting work
-        raise NotImplementedError
 
     @abstractmethod
     def get_columns(self) -> ColumnSet:
@@ -62,15 +43,6 @@ class RelationalSource(SimpleDataSource, ABC):
         to the dataset.
         """
         raise NotImplementedError
-
-    def supports_sample(self) -> bool:
-        """
-        TODO: This is a temporary method to prevent Clickhouse query to try to
-        add the SAMPLE clause to a JOIN expression, where SAMPLE not only is formatted
-        differently, but would have to be rethought since, in a join SAMPLE would
-        have to be applied table by table.
-        """
-        return True
 
 
 class Schema(ABC):

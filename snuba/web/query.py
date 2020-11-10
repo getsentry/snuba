@@ -196,7 +196,7 @@ def _format_storage_query_and_run(
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
     """
-    source = clickhouse_query.get_from_clause().format_from()
+    table_name = clickhouse_query.get_from_clause().table_name
     with sentry_sdk.start_span(description="create_query", op="db") as span:
         formatted_query = format_query(clickhouse_query, request_settings)
         span.set_data("query", formatted_query.get_mapping())
@@ -205,7 +205,7 @@ def _format_storage_query_and_run(
     timer.mark("prepare_query")
 
     stats = {
-        "clickhouse_table": source,
+        "clickhouse_table": table_name,
         "final": clickhouse_query.get_final(),
         "referrer": referrer,
         "num_days": (to_date - from_date).days,
@@ -213,7 +213,7 @@ def _format_storage_query_and_run(
     }
 
     with sentry_sdk.start_span(description=formatted_query.get_sql(), op="db") as span:
-        span.set_tag("table", source)
+        span.set_tag("table", table_name)
 
         return raw_query(
             clickhouse_query,

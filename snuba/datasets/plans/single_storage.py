@@ -1,7 +1,6 @@
 from typing import Optional, Sequence
 
 import sentry_sdk
-
 from snuba import state
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
@@ -15,7 +14,11 @@ from snuba.datasets.plans.query_plan import (
 )
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy
 from snuba.datasets.plans.translator.query import QueryTranslator
+from snuba.datasets.schemas import RelationalSource
+from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
+from snuba.query.data_source.simple import Table
+from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 
@@ -25,8 +28,6 @@ from snuba.request.request_settings import RequestSettings
 # extra data from the result of the query.
 from snuba.util import with_span
 from snuba.web import QueryResult
-
-from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
 
 
 class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
@@ -69,6 +70,16 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
         return process_and_run_query(query, request_settings)
 
 
+def get_query_data_source(relational_source: RelationalSource) -> Table:
+    assert isinstance(relational_source, TableSource)
+    return Table(
+        table_name=relational_source.get_table_name(),
+        schema=relational_source.get_columns(),
+        mandatory_conditions=relational_source.get_mandatory_conditions(),
+        prewhere_candidates=relational_source.get_prewhere_candidates(),
+    )
+
+
 class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     """
     Builds the Clickhouse Query Execution Plan for a dataset that is based on
@@ -109,7 +120,7 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             op="build_plan.single_storage", description="set_from_clause"
         ):
             clickhouse_query.set_from_clause(
-                self.__storage.get_schema().get_data_source()
+                get_query_data_source(self.__storage.get_schema().get_data_source())
             )
 
         cluster = self.__storage.get_cluster()
@@ -161,7 +172,9 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         with sentry_sdk.start_span(
             op="build_plan.selected_storage", description="set_from_clause"
         ):
-            clickhouse_query.set_from_clause(storage.get_schema().get_data_source())
+            clickhouse_query.set_from_clause(
+                get_query_data_source(storage.get_schema().get_data_source())
+            )
 
         cluster = storage.get_cluster()
 

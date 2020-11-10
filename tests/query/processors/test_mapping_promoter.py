@@ -1,9 +1,10 @@
 import pytest
-from snuba.clickhouse.columns import ColumnSet, Nested, String, UInt
+from snuba.clickhouse.columns import ColumnSet, Nested
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.datasets.schemas.tables import TableSource
 from snuba.query import SelectedExpression
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.request.request_settings import HTTPRequestSettings
@@ -19,7 +20,7 @@ test_cases = [
     (
         "not promoted",
         ClickhouseQuery(
-            TableSource("events", columns),
+            Table("events", columns),
             selected_columns=[
                 SelectedExpression(
                     "tags[foo]",
@@ -39,7 +40,7 @@ test_cases = [
             ],
         ),
         ClickhouseQuery(
-            TableSource("events", columns),
+            Table("events", columns),
             selected_columns=[
                 SelectedExpression(
                     "tags[foo]",
@@ -62,7 +63,7 @@ test_cases = [
     (
         "replaced with promoted col",
         ClickhouseQuery(
-            TableSource("events", columns),
+            Table("events", columns),
             selected_columns=[
                 SelectedExpression(
                     "tags[promoted_tag]",
@@ -85,7 +86,7 @@ test_cases = [
             ],
         ),
         ClickhouseQuery(
-            TableSource("events", columns),
+            Table("events", columns),
             selected_columns=[
                 SelectedExpression(
                     "tags[promoted_tag]",
