@@ -278,15 +278,19 @@ def process_tombstone_events(
     if not event_ids:
         return None
 
+    # XXX: We need to construct a query that works on both event_id columns,
+    # either represented as UUID or as hyphenless FixedString. That's why we
+    # use replaceAll(toString()).
     where = """\
-        PREWHERE event_id IN (%(event_ids)s)
+        PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s)
         WHERE project_id = %(project_id)s
         AND NOT deleted
     """
 
     query_args = {
         "event_ids": ", ".join(
-            "'%s'" % str(uuid.UUID(eid)) for eid in message["event_ids"]
+            "'%s'" % str(uuid.UUID(eid)).replace("-", "")
+            for eid in message["event_ids"]
         ),
     }
 
