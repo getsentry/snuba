@@ -53,7 +53,7 @@ def _get_table(query: Query) -> str:
     if source is None:
         # Should never happen at this point.
         return ""
-    return source.format_from()
+    return source.table_name
 
 
 def _has_complex_conditions(query: Query) -> bool:

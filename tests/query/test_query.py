@@ -1,13 +1,13 @@
 from snuba.clickhouse.columns import Any, ColumnSet
 from snuba.clickhouse.query import Query
-from snuba.datasets.schemas.tables import TableSource
 from snuba.query import SelectedExpression
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall
 
 
 def test_query_parameters() -> None:
     query = Query(
-        TableSource("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([])),
         limitby=(100, "environment"),
         sample=10,
         limit=100,
@@ -23,7 +23,7 @@ def test_query_parameters() -> None:
     assert query.has_totals() is True
     assert query.get_granularity() == 60
 
-    assert query.get_from_clause().format_from() == "my_table"
+    assert query.get_from_clause().table_name == "my_table"
 
 
 def test_query_data_source() -> None:
@@ -32,7 +32,7 @@ def test_query_data_source() -> None:
     """
 
     query = Query(
-        TableSource("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([])),
         selected_columns=[
             SelectedExpression(
                 "col1", Column(alias="col1", table_name=None, column_name="col1")

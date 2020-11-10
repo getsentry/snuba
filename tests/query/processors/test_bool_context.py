@@ -2,10 +2,10 @@ from snuba.clickhouse.columns import ColumnSet, Nested
 from snuba.clickhouse.columns import SchemaModifiers as Modifier
 from snuba.clickhouse.columns import String, UInt
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsProcessor
 from snuba.query import SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.data_source.simple import Table
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
@@ -20,7 +20,7 @@ def test_events_boolean_context() -> None:
         ]
     )
     query = ClickhouseQuery(
-        TableSource("events", columns),
+        Table("events", columns),
         selected_columns=[
             SelectedExpression(
                 "contexts[device.charging]",
@@ -44,7 +44,7 @@ def test_events_boolean_context() -> None:
     )
 
     expected = ClickhouseQuery(
-        TableSource("events", columns),
+        Table("events", columns),
         selected_columns=[
             SelectedExpression(
                 "contexts[device.charging]",
