@@ -82,10 +82,13 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
             alias = f" AS {value[2]}" if len(value) > 2 else ""
             return f"{value[0]}({children}){alias}"
 
-        def literal(value: str) -> str:
+        def literal(value: Union[str, List[Any]]) -> str:
+            if isinstance(value, list):
+                return f"tuple({','.join(list(map(literal, value)))})"
+
             try:
                 float(value)
-                return value
+                return f"{value}"
             except ValueError:
                 return f"'{value}'"
 
@@ -110,7 +113,7 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
                 aggregations.append(f"{func_name}({params_str}) AS {a[2]}")
 
         aggregations_str = ", ".join(aggregations)
-        joined = ", " if select_clause else ""
+        joined = ", " if select_clause else "COLLECT "
         aggregation_clause = f"{joined}{aggregations_str}" if aggregations_str else ""
 
         groupby = legacy.get("groupby", [])
@@ -124,15 +127,15 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
             if len(cond) != 3 or not isinstance(cond[1], str):
                 or_condition = []
                 for or_cond in cond:
+                    op = " IN " if or_cond[1] == "IN" else or_cond[1]
                     or_condition.append(
-                        f"{func(or_cond[0])}{or_cond[1]}{literal(or_cond[2])}".join(
-                            or_cond
-                        )
+                        f"{func(or_cond[0])}{op}{literal(or_cond[2])}".join(or_cond)
                     )
                 or_condition_str = " OR ".join(or_condition)
                 conditions.append(f"({or_condition_str})")
             else:
-                conditions.append(f"({func(cond[0])}{cond[1]}{literal(cond[2])})")
+                op = " IN " if cond[1] == "IN" else cond[1]
+                conditions.append(f"({func(cond[0])}{op}{literal(cond[2])})")
 
         project = legacy.get("project")
         if isinstance(project, int):
@@ -140,6 +143,13 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
         elif isinstance(project, list):
             project = ",".join(project)
             conditions.append(f"project_id IN {project}")
+
+        organization = legacy.get("organization")
+        if isinstance(organization, int):
+            conditions.append(f"org_id={organization}")
+        elif isinstance(organization, list):
+            organization = ",".join(organization)
+            conditions.append(f"org_id IN {organization}")
 
         conditions_str = " AND ".join(conditions)
         where_clause = f"WHERE {conditions_str}" if conditions_str else ""
@@ -170,9 +180,8 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
             limit_clause = f"LIMIT {legacy.get('limit')}"
 
         query = f"{match_clause} {where_clause} {select_clause} {aggregation_clause} {groupby_clause} {order_by_clause} {limit_clause}"
-
         body = {"query": query}
-        extensions = ["project", "from_date", "to_date"]
+        extensions = ["project", "from_date", "to_date", "organization"]
         for ext in extensions:
             if ext in legacy:
                 body[ext] = legacy.get(ext)

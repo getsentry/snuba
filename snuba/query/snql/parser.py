@@ -73,9 +73,9 @@ snql_grammar = Grammar(
 
     entity_match          = open_paren entity_alias colon space* entity_name close_paren
 
-    main_condition        = low_pri_arithmetic condition_op (function_call / column_name / quoted_literal / numeric_literal) space*
+    main_condition        = low_pri_arithmetic space* condition_op space* (function_call / column_name / quoted_literal / numeric_literal) space*
     condition             = main_condition / parenthesized_cdn
-    condition_op          = "=" / "!=" / ">" / ">=" / "<" / "<="
+    condition_op          = "=" / "!=" / ">" / ">=" / "<" / "<=" / "IN"
     parenthesized_cdn     = space* open_paren or_expression close_paren space*
 
     and_expression        = space* condition space* (and_tuple)*
@@ -87,8 +87,8 @@ snql_grammar = Grammar(
     collect_columns       = selected_expression space* comma space*
     selected_expression   = low_pri_arithmetic space*
 
-    group_list            = group_columns* (low_pri_arithmetic)
-    group_columns         = low_pri_arithmetic space* comma space*
+    group_list            = group_columns* (selected_expression)
+    group_columns         = selected_expression space* comma space*
     order_list            = order_columns* low_pri_arithmetic ("ASC"/"DESC")
     order_columns         = low_pri_arithmetic ("ASC"/"DESC") space* comma space*
 
@@ -163,14 +163,20 @@ class SnQLVisitor(NodeVisitor):
         if isinstance(limit, Node):
             limit = None
 
+        selected_columns = collect
+        _groupby = None
+        if groupby:
+            selected_columns += groupby
+            _groupby = [g.expression for g in groupby]
+
         return Query(
             body={},
             from_clause=match,
-            selected_columns=collect,
+            selected_columns=selected_columns,
             array_join=None,
             condition=where,
             prewhere=None,
-            groupby=groupby,
+            groupby=_groupby,
             having=having,
             order_by=orderby,
             limit=limit,
@@ -334,9 +340,11 @@ class SnQLVisitor(NodeVisitor):
         return combine_or_conditions(args)
 
     def visit_main_condition(
-        self, node: Node, visited_children: Tuple[Expression, str, Expression, Any]
+        self,
+        node: Node,
+        visited_children: Tuple[Expression, Any, str, Any, Expression, Any],
     ) -> Expression:
-        exp, op, literal, _ = visited_children
+        exp, _, op, _, literal, _ = visited_children
         return binary_condition(None, op, exp, literal)
 
     def visit_condition_op(self, node: Node, visited_children: Iterable[Any]) -> str:
@@ -388,22 +396,26 @@ class SnQLVisitor(NodeVisitor):
         return limit.value
 
     def visit_group_by_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Sequence[Expression], Any]
-    ) -> Sequence[Expression]:
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Any, Sequence[SelectedExpression], Any],
+    ) -> Sequence[SelectedExpression]:
         _, _, group_columns, _ = visited_children
         return group_columns
 
     def visit_group_columns(
-        self, node: Node, visited_children: Tuple[Expression, Any, Any, Any]
-    ) -> Expression:
+        self, node: Node, visited_children: Tuple[SelectedExpression, Any, Any, Any]
+    ) -> SelectedExpression:
         columns, _, _, _ = visited_children
         return columns
 
     def visit_group_list(
-        self, node: Node, visited_children: Tuple[Expression, Expression]
-    ) -> Sequence[Expression]:
+        self,
+        node: Node,
+        visited_children: Tuple[SelectedExpression, SelectedExpression],
+    ) -> Sequence[SelectedExpression]:
         left_group_list, right_group = visited_children
-        ret: List[Expression] = []
+        ret: List[SelectedExpression] = []
 
         # in the case of one GroupBy / By
         # left_group_list will be an empty node
