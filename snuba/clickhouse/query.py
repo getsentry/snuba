@@ -1,9 +1,9 @@
 from typing import Callable, Iterable, Optional, Sequence
 
-from snuba.datasets.schemas import RelationalSource
 from snuba.query import Limitby, OrderBy
 from snuba.query import ProcessableQuery as AbstractQuery
 from snuba.query import SelectedExpression
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Expression as SnubaExpression
 from snuba.query.expressions import ExpressionVisitor
 
@@ -12,10 +12,10 @@ from snuba.query.expressions import ExpressionVisitor
 Expression = SnubaExpression
 
 
-class Query(AbstractQuery[RelationalSource]):
+class Query(AbstractQuery[Table]):
     def __init__(
         self,
-        from_clause: Optional[RelationalSource],
+        from_clause: Optional[Table],
         # New data model to replace the one based on the dictionary
         selected_columns: Optional[Sequence[SelectedExpression]] = None,
         array_join: Optional[Expression] = None,

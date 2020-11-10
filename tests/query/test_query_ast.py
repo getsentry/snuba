@@ -3,11 +3,12 @@ from unittest.mock import Mock
 
 import pytest
 from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
 from snuba.pipeline.simple_pipeline import SimplePipeline
-from snuba.datasets.schemas.tables import TableSource
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import (
     Column,
     Expression,
@@ -15,7 +16,6 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.clickhouse.query import Query
 from snuba.query.parser import parse_query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
@@ -41,7 +41,7 @@ def test_iterate_over_query():
     orderby = OrderBy(OrderByDirection.ASC, function_2)
 
     query = Query(
-        TableSource("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([])),
         selected_columns=[SelectedExpression("alias", function_1)],
         array_join=None,
         condition=condition,
@@ -97,7 +97,7 @@ def test_replace_expression():
     orderby = OrderBy(OrderByDirection.ASC, function_2)
 
     query = Query(
-        TableSource("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([])),
         selected_columns=[SelectedExpression("alias", function_1)],
         array_join=None,
         condition=condition,
@@ -115,7 +115,7 @@ def test_replace_expression():
     query.transform_expressions(replace)
 
     expected_query = Query(
-        TableSource("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([])),
         selected_columns=[
             SelectedExpression(
                 "alias", FunctionCall("alias", "tag", (Literal(None, "f1"),))
