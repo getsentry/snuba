@@ -113,7 +113,7 @@ def test_add_index() -> None:
 def test_drop_index() -> None:
     assert (
         DropIndex(StorageSetKey.EVENTS, "test_table", "index_1").format_sql()
-        == "ALTER TABLE test_table DROP INDEX index_1;"
+        == "ALTER TABLE test_table DROP INDEX IF EXISTS index_1;"
     )
 
 
