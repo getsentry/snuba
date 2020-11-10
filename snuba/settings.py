@@ -117,6 +117,7 @@ AST_REFERRER_ROLLOUT: Mapping[
     str, Mapping[Optional[str], int]
 ] = {}  # (dataset name: (referrer: percentage))
 
+COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 
