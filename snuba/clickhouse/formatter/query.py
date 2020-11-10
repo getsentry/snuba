@@ -110,7 +110,6 @@ def format_simple_query(query: Query) -> FormattedQuery:
     group_clause: Optional[FormattedNode] = None
     ast_groupby = query.get_groupby_from_ast()
     if ast_groupby:
-        # reformat to use aliases generated during the select clause formatting.
         groupby_expressions = [e.accept(formatter) for e in ast_groupby]
         group_clause_str = f"({', '.join(groupby_expressions)})"
         if query.has_totals():
