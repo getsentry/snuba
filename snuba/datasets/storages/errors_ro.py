@@ -8,6 +8,7 @@ from snuba.datasets.storages.errors_common import (
     mandatory_conditions,
     prewhere_candidates,
     query_processors,
+    query_splitters,
 )
 
 
@@ -25,4 +26,5 @@ storage = ReadableTableStorage(
     storage_set_key=StorageSetKey.EVENTS_RO,
     schema=schema,
     query_processors=query_processors,
+    query_splitters=query_splitters,
 )
