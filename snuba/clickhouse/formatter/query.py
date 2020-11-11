@@ -1,6 +1,5 @@
 from dataclasses import replace
-from functools import partial
-from typing import Callable, Optional, Sequence, Union
+from typing import Optional, Sequence, Union
 
 from snuba import settings as snuba_settings
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
@@ -46,9 +45,7 @@ def format_query(query: FormattableQuery, settings: RequestSettings) -> Formatte
                     sampling_rate=snuba_settings.TURBO_SAMPLE_RATE,
                 )
             )
-        return FormattedQuery(_format_single_query_content(query))
-    else:
-        return FormattedQuery(_format_composite_query_content(query))
+    return FormattedQuery(_format_query_content(query))
 
 
 def format_data_source(data_source: DataSource) -> FormattedNode:
@@ -67,11 +64,11 @@ def format_data_source(data_source: DataSource) -> FormattedNode:
     if isinstance(data_source, Table):
         return format_table(data_source)
     elif isinstance(data_source, Query):
-        return FormattedSubQuery(_format_single_query_content(data_source))
+        return FormattedSubQuery(_format_query_content(data_source))
     elif isinstance(data_source, JoinClause):
         return data_source.accept(JoinFormatter())
     elif isinstance(data_source, CompositeQuery):
-        return FormattedSubQuery(_format_composite_query_content(data_source))
+        return FormattedSubQuery(_format_query_content(data_source))
     else:
         raise NotImplementedError(f"Unsupported data source {type(data_source)}")
 
@@ -86,67 +83,41 @@ def format_table(data_source: Table) -> StringNode:
     return StringNode(f"{data_source.table_name}{final}{sample}")
 
 
-def _format_single_query_content(query: Query) -> Sequence[FormattedNode]:
+def _format_query_content(query: FormattableQuery) -> Sequence[FormattedNode]:
     """
-    Produces the content for a simple physical query that references
-    a single table.
-    """
-    return _format_query_content(
-        [
-            partial(_format_select, query),
-            lambda _: PaddingNode("FROM", format_data_source(query.get_from_clause())),
-            partial(_format_arrayjoin, query),
-            partial(_format_prewhere, query),
-            partial(_format_condition, query),
-            partial(_format_groupby, query),
-            partial(_format_having, query),
-            partial(_format_orderby, query),
-            partial(_format_limitby, query),
-            partial(_format_limit, query),
-        ]
-    )
-
-
-def _format_composite_query_content(
-    query: CompositeQuery[Table],
-) -> Sequence[FormattedNode]:
-    """
-    Produces the content for composite query (thus no prewhere).
-    """
-    return _format_query_content(
-        [
-            partial(_format_select, query),
-            lambda _: PaddingNode("FROM", format_data_source(query.get_from_clause())),
-            partial(_format_arrayjoin, query),
-            partial(_format_condition, query),
-            partial(_format_groupby, query),
-            partial(_format_having, query),
-            partial(_format_orderby, query),
-            partial(_format_limitby, query),
-            partial(_format_limit, query),
-        ]
-    )
-
-
-def _format_query_content(
-    components: Sequence[
-        Callable[[ClickhouseExpressionFormatter], Optional[FormattedNode]]
-    ]
-) -> Sequence[FormattedNode]:
-    """
-    Takes a sequence of rules to produce the clauses of the query,
-    formats them and returns a Sequence of those that were not None
-    in the right order to compose the query string.
+    Produces the content of the formatted query.
+    It works for both the composite query and the simple one as the
+    only difference is the presence of the prewhere condition.
+    Should we have more differences going onn we should break this
+    method into smaller ones.
     """
     parsing_context = ParsingContext()
     formatter = ClickhouseExpressionFormatter(parsing_context)
 
-    ret = []
-    for component in components:
-        formatted = component(formatter)
-        if formatted is not None:
-            ret.append(formatted)
-    return ret
+    return [
+        v
+        for v in [
+            _format_select(query, formatter),
+            PaddingNode("FROM", format_data_source(query.get_from_clause())),
+            _build_optional_string_node(
+                "ARRAY JOIN", query.get_arrayjoin_from_ast(), formatter
+            ),
+            _build_optional_string_node("PREWHERE", query.get_prewhere_ast(), formatter)
+            if isinstance(query, Query)
+            else None,
+            _build_optional_string_node(
+                "WHERE", query.get_condition_from_ast(), formatter
+            ),
+            _format_groupby(query, formatter),
+            _build_optional_string_node(
+                "HAVING", query.get_having_from_ast(), formatter
+            ),
+            _format_orderby(query, formatter),
+            _format_limitby(query, formatter),
+            _format_limit(query, formatter),
+        ]
+        if v is not None
+    ]
 
 
 def _format_select(
@@ -170,28 +141,6 @@ def _build_optional_string_node(
     )
 
 
-def _format_arrayjoin(
-    query: AbstractQuery, formatter: ClickhouseExpressionFormatter
-) -> Optional[StringNode]:
-    return _build_optional_string_node(
-        "ARRAY JOIN", query.get_arrayjoin_from_ast(), formatter
-    )
-
-
-def _format_prewhere(
-    query: Query, formatter: ClickhouseExpressionFormatter
-) -> Optional[StringNode]:
-    return _build_optional_string_node("PREWHERE", query.get_prewhere_ast(), formatter)
-
-
-def _format_condition(
-    query: AbstractQuery, formatter: ClickhouseExpressionFormatter
-) -> Optional[StringNode]:
-    return _build_optional_string_node(
-        "WHERE", query.get_condition_from_ast(), formatter
-    )
-
-
 def _format_groupby(
     query: AbstractQuery, formatter: ClickhouseExpressionFormatter
 ) -> Optional[StringNode]:
@@ -204,12 +153,6 @@ def _format_groupby(
             group_clause_str = f"{group_clause_str} WITH TOTALS"
         group_clause = StringNode(f"GROUP BY {group_clause_str}")
     return group_clause
-
-
-def _format_having(
-    query: AbstractQuery, formatter: ClickhouseExpressionFormatter
-) -> Optional[StringNode]:
-    return _build_optional_string_node("HAVING", query.get_having_from_ast(), formatter)
 
 
 def _format_orderby(
