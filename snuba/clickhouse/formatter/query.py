@@ -88,7 +88,7 @@ def _format_query_content(query: FormattableQuery) -> Sequence[FormattedNode]:
     Produces the content of the formatted query.
     It works for both the composite query and the simple one as the
     only difference is the presence of the prewhere condition.
-    Should we have more differences going onn we should break this
+    Should we have more differences going on we should break this
     method into smaller ones.
     """
     parsing_context = ParsingContext()
