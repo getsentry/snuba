@@ -1,6 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass, field
-from typing import Sequence
+from typing import Optional, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities import EntityKey
@@ -44,6 +44,8 @@ class Table(SimpleDataSource):
 
     table_name: str
     schema: ColumnSet
+    final: bool = False
+    sampling_rate: Optional[float] = None
     # TODO: Move mandatory connditions ad prewhere candidates out of
     # here as they are structural property of a storage. This requires
     # the processors that consume these fields to access the storage.

@@ -54,7 +54,14 @@ test_data = [
 def test_mand_conditions(table: str, mand_conditions: List[FunctionCall]) -> None:
 
     query = Query(
-        Table(table, ColumnSet([]), mand_conditions, ["c1"]),
+        Table(
+            table,
+            ColumnSet([]),
+            final=False,
+            sampling_rate=None,
+            mandatory_conditions=mand_conditions,
+            prewhere_candidates=["c1"],
+        ),
         None,
         None,
         binary_condition(

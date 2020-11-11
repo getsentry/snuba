@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
 
-import sentry_sdk
 
-from snuba.datasets.plans.query_plan import ClickhouseQueryPlan, QueryRunner
+from snuba.datasets.plans.query_plan import QueryRunner
 from snuba.request import Request
 from snuba.web import QueryResult
 
@@ -43,13 +42,3 @@ class QueryPipelineBuilder(ABC):
     @abstractmethod
     def build_pipeline(self, request: Request, runner: QueryRunner) -> QueryPipeline:
         raise NotImplementedError
-
-
-def _execute_query_plan_processors(
-    query_plan: ClickhouseQueryPlan, request: Request
-) -> None:
-    for clickhouse_processor in query_plan.plan_processors:
-        with sentry_sdk.start_span(
-            description=type(clickhouse_processor).__name__, op="processor"
-        ):
-            clickhouse_processor.process_query(query_plan.query, request.settings)

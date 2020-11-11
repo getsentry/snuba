@@ -1,5 +1,5 @@
 from snuba.clickhouse.columns import ColumnSet
-from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
+from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.query.data_source.simple import Table
 from snuba.datasets.storages.events_column_processor import EventsColumnProcessor
 from snuba.query import SelectedExpression
