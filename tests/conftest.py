@@ -92,7 +92,7 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
             except ValueError:
                 return f"'{value}'"
 
-        match_clause = f"MATCH ({entity[0].lower()}: {entity.capitalize()})"
+        match_clause = f"MATCH ({entity[0].lower()}: {entity})"
 
         selected = ", ".join(map(func, legacy.get("selected_columns", [])))
         select_clause = f"COLLECT {selected}" if selected else ""

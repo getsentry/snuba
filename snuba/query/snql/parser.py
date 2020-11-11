@@ -118,7 +118,7 @@ snql_grammar = Grammar(
     column_name           = ~r"[a-zA-Z_][a-zA-Z0-9_\.]*"
     function_name         = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     entity_alias          = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
-    entity_name           = ~r"[A-Z][a-zA-Z]*"
+    entity_name           = ~r"[a-zA-Z]+"
     open_paren            = "("
     close_paren           = ")"
     open_square           = "["
@@ -194,7 +194,7 @@ class SnQLVisitor(NodeVisitor):
         self, node: Node, visited_children: Tuple[Any, str, Any, Any, str, Any],
     ) -> EntityTuple:
         _, alias, _, _, name, _ = visited_children
-        return EntityTuple(alias, name.lower())
+        return EntityTuple(alias, name)
 
     def visit_entity_alias(self, node: Node, visited_children: Tuple[Any]) -> str:
         return str(node.text)

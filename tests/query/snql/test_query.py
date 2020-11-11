@@ -19,7 +19,7 @@ from snuba.query.snql.parser import parse_snql_query
 
 test_cases = [
     pytest.param(
-        "MATCH(e: Events)WHEREa<3COLLECT4-5,3*g(c),c",
+        "MATCH(e: events)WHEREa<3COLLECT4-5,3*g(c),c",
         Query(
             {},
             QueryEntity(
@@ -50,7 +50,7 @@ test_cases = [
         id="Basic query with no spaces and no ambiguous clause content",
     ),
     pytest.param(
-        "MATCH (e: Events) WHERE a<3 COLLECT (2*(4-5)+3), g(c), c BY d, 2+7 ORDER BY f DESC",
+        "MATCH (e: events) WHERE a<3 COLLECT (2*(4-5)+3), g(c), c BY d, 2+7 ORDER BY f DESC",
         Query(
             {},
             QueryEntity(
@@ -101,7 +101,7 @@ test_cases = [
         id="Simple complete query with example of parenthesized arithmetic expression in COLLECT",
     ),
     pytest.param(
-        "MATCH (e: Events) WHERE time_seen<3 AND last_seen=2 AND c=2 AND d=3 COLLECT a",
+        "MATCH (e: events) WHERE time_seen<3 AND last_seen=2 AND c=2 AND d=3 COLLECT a",
         Query(
             {},
             QueryEntity(
@@ -153,7 +153,7 @@ test_cases = [
         id="Query with multiple conditions joined by AND",
     ),
     pytest.param(
-        "MATCH (e: Events) WHERE (time_seen<3 OR last_seen=afternoon) OR name=bob COLLECT a",
+        "MATCH (e: events) WHERE (time_seen<3 OR last_seen=afternoon) OR name=bob COLLECT a",
         Query(
             {},
             QueryEntity(
@@ -197,7 +197,7 @@ test_cases = [
         id="Query with multiple conditions joined by OR / parenthesized OR",
     ),
     pytest.param(
-        "MATCH (e: Events) WHERE name!=bob OR last_seen<afternoon AND (location=gps(x,y,z) OR times_seen>0) COLLECT a",
+        "MATCH (e: events) WHERE name!=bob OR last_seen<afternoon AND (location=gps(x,y,z) OR times_seen>0) COLLECT a",
         Query(
             {},
             QueryEntity(
@@ -263,7 +263,7 @@ test_cases = [
         id="Query with multiple / complex conditions joined by parenthesized / regular AND / OR",
     ),
     pytest.param(
-        "MATCH (e: Events) WHERE project_id IN tuple( 2 , 3) COLLECT a, b[c]",
+        "MATCH (e: events) WHERE project_id IN tuple( 2 , 3) COLLECT a, b[c]",
         Query(
             {},
             QueryEntity(
