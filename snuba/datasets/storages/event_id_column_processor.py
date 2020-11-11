@@ -4,7 +4,7 @@ from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.request.request_settings import RequestSettings
 
 
-class TransactionColumnProcessor(QueryProcessor):
+class EventIdColumnProcessor(QueryProcessor):
     """
     Strip any dashes out of the event ID to match what is stored internally.
     """
