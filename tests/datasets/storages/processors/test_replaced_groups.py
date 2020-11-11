@@ -57,7 +57,7 @@ def test_without_turbo_with_projects_needing_final(query: ClickhouseQuery) -> No
     ).process_query(query, HTTPRequestSettings())
 
     assert query.get_condition_from_ast() == build_in("project_id", [2])
-    assert query.get_final()
+    assert query.get_from_clause().final
 
 
 def test_without_turbo_without_projects_needing_final(query: ClickhouseQuery) -> None:
@@ -66,7 +66,7 @@ def test_without_turbo_without_projects_needing_final(query: ClickhouseQuery) ->
     )
 
     assert query.get_condition_from_ast() == build_in("project_id", [2])
-    assert not query.get_final()
+    assert not query.get_from_clause().final
 
 
 def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
@@ -98,7 +98,7 @@ def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
             build_in("project_id", [2]),
         ),
     )
-    assert not query.get_final()
+    assert not query.get_from_clause().final
 
 
 def test_too_many_groups_to_exclude(query: ClickhouseQuery) -> None:
@@ -110,4 +110,4 @@ def test_too_many_groups_to_exclude(query: ClickhouseQuery) -> None:
     ).process_query(query, HTTPRequestSettings())
 
     assert query.get_condition_from_ast() == build_in("project_id", [2])
-    assert query.get_final()
+    assert query.get_from_clause().final

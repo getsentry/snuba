@@ -70,11 +70,15 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
         return process_and_run_query(query, request_settings)
 
 
-def get_query_data_source(relational_source: RelationalSource) -> Table:
+def get_query_data_source(
+    relational_source: RelationalSource, final: bool, sampling_rate: Optional[float]
+) -> Table:
     assert isinstance(relational_source, TableSource)
     return Table(
         table_name=relational_source.get_table_name(),
         schema=relational_source.get_columns(),
+        final=final,
+        sampling_rate=sampling_rate,
         mandatory_conditions=relational_source.get_mandatory_conditions(),
         prewhere_candidates=relational_source.get_prewhere_candidates(),
     )
@@ -120,7 +124,11 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             op="build_plan.single_storage", description="set_from_clause"
         ):
             clickhouse_query.set_from_clause(
-                get_query_data_source(self.__storage.get_schema().get_data_source())
+                get_query_data_source(
+                    self.__storage.get_schema().get_data_source(),
+                    final=request.query.get_final(),
+                    sampling_rate=request.query.get_sample(),
+                )
             )
 
         cluster = self.__storage.get_cluster()
@@ -173,7 +181,11 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             op="build_plan.selected_storage", description="set_from_clause"
         ):
             clickhouse_query.set_from_clause(
-                get_query_data_source(storage.get_schema().get_data_source())
+                get_query_data_source(
+                    storage.get_schema().get_data_source(),
+                    final=request.query.get_final(),
+                    sampling_rate=request.query.get_sample(),
+                )
             )
 
         cluster = storage.get_cluster()

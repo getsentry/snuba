@@ -1,4 +1,5 @@
 import logging
+from dataclasses import replace
 from typing import Optional
 
 from snuba import environment, settings
@@ -69,4 +70,4 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             else:
                 set_final = final
 
-        query.set_final(set_final)
+        query.set_from_clause(replace(query.get_from_clause(), final=set_final))

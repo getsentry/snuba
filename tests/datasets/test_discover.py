@@ -156,6 +156,7 @@ def test_data_source(
         processor.process_query(request.query, request.settings)
 
     pipeline = entity.get_query_pipeline_builder().build_pipeline(request, Mock())
+    pipeline.execute()
     assert isinstance(pipeline, SingleQueryPlanPipeline)
     plan = pipeline.query_plan
 
