@@ -9,14 +9,12 @@ from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.pipeline.simple_pipeline import SimplePipeline
 from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
 from snuba.datasets.plans.translator.query import identity_translate
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column
 from snuba.query.parser import parse_query
 from snuba.reader import Reader
-from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.web import QueryResult
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
@@ -305,11 +303,9 @@ def test_col_split_conditions(
     dataset = get_dataset("events")
     query = parse_query(query, dataset)
     splitter = ColumnSplitQueryStrategy(id_column, project_column, timestamp_column)
-    request = Request("a", query, HTTPRequestSettings(), {}, "r")
-    entity = get_entity(query.get_from_clause().key)
 
     def do_query(
-        query: ClickhouseQuery, request_settings: RequestSettings
+        query: ClickhouseQuery, request_settings: RequestSettings = None
     ) -> QueryResult:
         return QueryResult(
             {
@@ -324,12 +320,8 @@ def test_col_split_conditions(
             {},
         )
 
-    pipeline = entity.get_query_pipeline_builder().build_pipeline(request, do_query)
-    assert isinstance(pipeline, SimplePipeline)
-    plan = pipeline.query_plan
-
     assert (
-        splitter.execute(plan.query, HTTPRequestSettings(), do_query) is not None
+        splitter.execute(query, HTTPRequestSettings(), do_query) is not None
     ) == expected_result
 
 

@@ -91,7 +91,6 @@ class Query(DataSource, ABC):
         having: Optional[Expression] = None,
         order_by: Optional[Sequence[OrderBy]] = None,
         limitby: Optional[Limitby] = None,
-        sample: Optional[float] = None,
         limit: Optional[int] = None,
         offset: int = 0,
         totals: bool = False,
@@ -104,7 +103,6 @@ class Query(DataSource, ABC):
         self.__having = having
         self.__order_by = order_by or []
         self.__limitby = limitby
-        self.__sample = sample
         self.__limit = limit
         self.__offset = offset
         self.__totals = totals
@@ -181,12 +179,6 @@ class Query(DataSource, ABC):
 
     def get_limitby(self) -> Optional[Limitby]:
         return self.__limitby
-
-    def get_sample(self) -> Optional[float]:
-        return self.__sample
-
-    def set_sample(self, sample: Optional[float]) -> None:
-        self.__sample = sample
 
     def get_limit(self) -> Optional[int]:
         return self.__limit
@@ -409,7 +401,6 @@ class Query(DataSource, ABC):
             self.get_having_from_ast() == other.get_having_from_ast(),
             self.get_orderby_from_ast() == other.get_orderby_from_ast(),
             self.get_limitby() == other.get_limitby(),
-            self.get_sample() == other.get_sample(),
             self.get_limit() == other.get_limit(),
             self.get_offset() == other.get_offset(),
             self.has_totals() == other.has_totals(),
@@ -440,7 +431,6 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
         having: Optional[Expression] = None,
         order_by: Optional[Sequence[OrderBy]] = None,
         limitby: Optional[Limitby] = None,
-        sample: Optional[float] = None,
         limit: Optional[int] = None,
         offset: int = 0,
         totals: bool = False,
@@ -454,7 +444,6 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
             having=having,
             order_by=order_by,
             limitby=limitby,
-            sample=sample,
             limit=limit,
             offset=offset,
             totals=totals,

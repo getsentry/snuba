@@ -239,6 +239,7 @@ def test_alias_validation(
         .get_query_pipeline_builder()
         .build_pipeline(Request("", query, HTTPRequestSettings(), {}, ""), Mock())
     )
+    query_pipeline.execute()
 
     assert isinstance(query_pipeline, SimplePipeline)
     assert query_pipeline.query_plan.query.validate_aliases() == expected_result

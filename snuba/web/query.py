@@ -6,8 +6,8 @@ from typing import MutableMapping
 
 import sentry_sdk
 from snuba import environment
+from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.query_formatter import format_query
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
@@ -72,6 +72,7 @@ def _run_query_pipeline(
     - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
       to the QueryExecutionStrategy to actually run the DB Query.
     """
+
     query_entity = request.query.get_from_clause()
     entity = get_entity(query_entity.key)
 
@@ -99,12 +100,6 @@ def _run_query_pipeline(
     # datasets/storages and never hardcoded.
     if request.settings.get_turbo():
         request.query.set_final(False)
-
-    for processor in entity.get_query_processors():
-        with sentry_sdk.start_span(
-            description=type(processor).__name__, op="processor"
-        ):
-            processor.process_query(request.query, request.settings)
 
     query_runner = partial(
         _run_and_apply_column_names,
@@ -196,20 +191,21 @@ def _format_storage_query_and_run(
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
     """
-    table_name = clickhouse_query.get_from_clause().table_name
+    from_clause = clickhouse_query.get_from_clause()
+    table_name = from_clause.table_name
     with sentry_sdk.start_span(description="create_query", op="db") as span:
         formatted_query = format_query(clickhouse_query, request_settings)
-        span.set_data("query", formatted_query.get_mapping())
+        span.set_data("query", formatted_query.structured())
         metrics.increment("execute")
 
     timer.mark("prepare_query")
 
     stats = {
         "clickhouse_table": table_name,
-        "final": clickhouse_query.get_final(),
+        "final": from_clause.final,
         "referrer": referrer,
         "num_days": (to_date - from_date).days,
-        "sample": clickhouse_query.get_sample(),
+        "sample": from_clause.sampling_rate,
     }
 
     with sentry_sdk.start_span(description=formatted_query.get_sql(), op="db") as span:
