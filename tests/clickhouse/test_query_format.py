@@ -25,9 +25,21 @@ from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, L
 from snuba.request.request_settings import HTTPRequestSettings
 
 ERRORS_SCHEMA = ColumnSet(
-    [("event_id", UUID()), ("message", String()), ("group_id", UInt(32))]
+    [
+        ("event_id", UUID()),
+        ("project_id", UInt(32)),
+        ("message", String()),
+        ("group_id", UInt(32)),
+    ]
 )
-GROUPS_SCHEMA = ColumnSet([("id", UInt(32)), ("message", String())])
+GROUPS_SCHEMA = ColumnSet(
+    [
+        ("id", UInt(32)),
+        ("project_id", UInt(32)),
+        ("group_id", UInt(32)),
+        ("message", String()),
+    ]
+)
 GROUPS_ASSIGNEE = ColumnSet([("id", UInt(32)), ("user", String())])
 
 node_err = IndividualNode(alias="err", data_source=Table("errors_local", ERRORS_SCHEMA))
@@ -548,7 +560,11 @@ TEST_JOIN = [
                 JoinCondition(
                     left=JoinConditionExpression("err", "group_id"),
                     right=JoinConditionExpression("groups", "id"),
-                )
+                ),
+                JoinCondition(
+                    left=JoinConditionExpression("err", "project_id"),
+                    right=JoinConditionExpression("groups", "project_id"),
+                ),
             ],
             join_type=JoinType.INNER,
             join_modifier=JoinModifier.SEMI,
@@ -559,12 +575,18 @@ TEST_JOIN = [
                 StringNode("INNER SEMI JOIN"),
                 PaddingNode(None, StringNode("groupedmessage_local"), "groups"),
                 StringNode("ON"),
-                SequenceNode([StringNode("err.group_id=groups.id")]),
+                SequenceNode(
+                    [
+                        StringNode("err.group_id=groups.id"),
+                        StringNode("err.project_id=groups.project_id"),
+                    ],
+                    " AND ",
+                ),
             ]
         ),
         (
             "errors_local err INNER SEMI JOIN groupedmessage_local groups "
-            "ON err.group_id=groups.id"
+            "ON err.group_id=groups.id AND err.project_id=groups.project_id"
         ),
         id="Simple join",
     ),
@@ -599,13 +621,13 @@ TEST_JOIN = [
                         StringNode("INNER SEMI JOIN"),
                         PaddingNode(None, StringNode("groupedmessage_local"), "groups"),
                         StringNode("ON"),
-                        SequenceNode([StringNode("err.group_id=groups.id")]),
+                        SequenceNode([StringNode("err.group_id=groups.id")], " AND "),
                     ]
                 ),
                 StringNode("INNER JOIN"),
                 PaddingNode(None, StringNode("groupassignee_local"), "assignee"),
                 StringNode("ON"),
-                SequenceNode([StringNode("err.group_id=assignee.id")]),
+                SequenceNode([StringNode("err.group_id=assignee.id")], " AND "),
             ]
         ),
         (

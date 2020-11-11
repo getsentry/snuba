@@ -274,7 +274,8 @@ class JoinFormatter(JoinVisitor[FormattedNode, Table]):
                             f"{k.left.table_alias}.{k.left.column}={k.right.table_alias}.{k.right.column}"
                         )
                         for k in node.keys
-                    ]
+                    ],
+                    " AND ",
                 ),
             ]
         )

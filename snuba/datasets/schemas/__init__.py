@@ -19,17 +19,6 @@ class RelationalSource(ABC):
     """
 
     @abstractmethod
-    def format_from(self) -> str:
-        """
-        Builds the SQL representation of the data source for the FROM clause
-        when querying.
-        """
-        # Not using the __str__ method because this is moving towards a more
-        # abstract method that will receive a FormatStrategy (clickhouse specific)
-        # that would do the actual formatting work
-        raise NotImplementedError
-
-    @abstractmethod
     def get_columns(self) -> ColumnSet:
         raise NotImplementedError
 
@@ -54,15 +43,6 @@ class RelationalSource(ABC):
         to the dataset.
         """
         raise NotImplementedError
-
-    def supports_sample(self) -> bool:
-        """
-        TODO: This is a temporary method to prevent Clickhouse query to try to
-        add the SAMPLE clause to a JOIN expression, where SAMPLE not only is formatted
-        differently, but would have to be rethought since, in a join SAMPLE would
-        have to be applied table by table.
-        """
-        return True
 
 
 class Schema(ABC):
