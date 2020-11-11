@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Generic, Mapping, NamedTuple, Optional, Sequence, Union
+from typing import Generic, Mapping, NamedTuple, Optional, Sequence, TypeVar, Union
 
 from snuba.clickhouse.columns import ColumnSet, QualifiedColumnSet
 from snuba.query import ProcessableQuery, TSimpleDataSource
@@ -31,6 +31,10 @@ class JoinNode(ABC, Generic[TSimpleDataSource]):
     def get_column_sets(self) -> Mapping[str, ColumnSet]:
         raise NotImplementedError
 
+    @abstractmethod
+    def accept(self, visitor: JoinVisitor[TReturn, TSimpleDataSource]) -> TReturn:
+        raise NotImplementedError
+
 
 @dataclass(frozen=True)
 class IndividualNode(JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
@@ -52,6 +56,9 @@ class IndividualNode(JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
             if self.alias is not None
             else {}
         )
+
+    def accept(self, visitor: JoinVisitor[TReturn, TSimpleDataSource]) -> TReturn:
+        return visitor.visit_individual_node(self)
 
 
 class JoinConditionExpression(NamedTuple):
@@ -112,3 +119,19 @@ class JoinClause(DataSource, JoinNode[TSimpleDataSource], Generic[TSimpleDataSou
             assert (
                 f"{condition.right.table_alias}.{condition.right.column}" in column_set
             )
+
+    def accept(self, visitor: JoinVisitor[TReturn, TSimpleDataSource]) -> TReturn:
+        return visitor.visit_join_clause(self)
+
+
+TReturn = TypeVar("TReturn")
+
+
+class JoinVisitor(ABC, Generic[TReturn, TSimpleDataSource]):
+    @abstractmethod
+    def visit_individual_node(self, node: IndividualNode[TSimpleDataSource]) -> TReturn:
+        raise NotImplementedError
+
+    @abstractmethod
+    def visit_join_clause(self, node: JoinClause[TSimpleDataSource]) -> TReturn:
+        raise NotImplementedError

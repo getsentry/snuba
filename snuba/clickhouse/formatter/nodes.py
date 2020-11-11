@@ -42,9 +42,10 @@ class StringNode(FormattedNode):
 @dataclass(frozen=True)
 class SequenceNode(FormattedNode):
     content: Sequence[FormattedNode]
+    separator: str = " "
 
     def __str__(self) -> str:
-        return " ".join([str(c) for c in self.content])
+        return self.separator.join([str(c) for c in self.content])
 
     def structured(self) -> Sequence[Any]:
         return [v.structured() for v in self.content]
