@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import Enum
 import itertools
 import uuid
 from typing import Any, Mapping, Type
@@ -24,6 +25,15 @@ from snuba.schemas import Schema, validate_jsonschema
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "parser")
+
+
+class Language(Enum):
+    """
+    Which language is being used in the Snuba request.
+    """
+
+    LEGACY = "legacy"
+    SNQL = "snql"
 
 
 class RequestSchema:
@@ -80,9 +90,9 @@ class RequestSchema:
         cls,
         extensions: Mapping[str, QueryExtension],
         settings_class: Type[RequestSettings],
-        language: str,
+        language: Language,
     ) -> RequestSchema:
-        if language == "snql":
+        if language == Language.SNQL:
             generic_schema = SNQL_QUERY_SCHEMA
         else:
             generic_schema = GENERIC_QUERY_SCHEMA
