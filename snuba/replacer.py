@@ -52,27 +52,35 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
                 **replacement.query_args,
                 "table_name": self.__replacer_processor.get_schema().get_table_name(),
             }
-            count = self.clickhouse.execute_robust(
-                replacement.count_query_template % query_args
-            )[0][0]
-            if count == 0:
-                continue
+
+            if replacement.count_query_template is not None:
+                count = self.clickhouse.execute_robust(
+                    replacement.count_query_template % query_args
+                )[0][0]
+                if count == 0:
+                    continue
+            else:
+                count = 0
 
             need_optimize = (
                 self.__replacer_processor.pre_replacement(replacement, count)
                 or need_optimize
             )
 
-            t = time.time()
-            query = replacement.insert_query_template % query_args
-            logger.debug("Executing replace query: %s" % query)
-            self.clickhouse.execute_robust(query)
-            duration = int((time.time() - t) * 1000)
+            if replacement.insert_query_template is not None:
+                t = time.time()
+                query = replacement.insert_query_template % query_args
+                logger.debug("Executing replace query: %s" % query)
+                self.clickhouse.execute_robust(query)
+                duration = int((time.time() - t) * 1000)
+
+                logger.info("Replacing %s rows took %sms" % (count, duration))
+                self.metrics.timing("replacements.count", count)
+                self.metrics.timing("replacements.duration", duration)
+            else:
+                count = duration = 0
 
             self.__replacer_processor.post_replacement(replacement, duration, count)
-            logger.info("Replacing %s rows took %sms" % (count, duration))
-            self.metrics.timing("replacements.count", count)
-            self.metrics.timing("replacements.duration", duration)
 
         if need_optimize:
             from snuba.optimize import run_optimize

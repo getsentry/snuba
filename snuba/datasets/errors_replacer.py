@@ -207,8 +207,8 @@ class ErrorsReplacer(ReplacerProcessor):
 
 def _build_event_tombstone_replacement(
     message: Mapping[str, Any],
-    where: str,
     required_columns: Sequence[str],
+    where: str,
     query_args: Mapping[str, str],
     query_time_flags: Tuple[Any, ...],
 ) -> Replacement:
@@ -267,7 +267,7 @@ def process_delete_groups(
     query_time_flags = (EXCLUDE_GROUPS, message["project_id"], group_ids)
 
     return _build_event_tombstone_replacement(
-        message, where, required_columns, query_args, query_time_flags
+        message, required_columns, where, query_args, query_time_flags
     )
 
 
@@ -297,7 +297,7 @@ def process_tombstone_events(
     query_time_flags = (None, message["project_id"])
 
     return _build_event_tombstone_replacement(
-        message, where, required_columns, query_args, query_time_flags
+        message, required_columns, where, query_args, query_time_flags
     )
 
 
@@ -307,8 +307,7 @@ def process_exclude_groups(message: Mapping[str, Any]) -> Optional[Replacement]:
         return None
 
     query_time_flags = (EXCLUDE_GROUPS, message["project_id"], group_ids)
-    # XXX: Fugly, empty query
-    return Replacement("select 1", "select 1", {}, query_time_flags)
+    return Replacement(None, None, {}, query_time_flags)
 
 
 SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)

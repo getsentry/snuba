@@ -59,7 +59,7 @@ class TestReplacer:
             self.app.post("/events_migration/query", data=json.dumps(args)).data
         )["data"]
 
-    def _get_group_id(self, project_id, event_id):
+    def _get_group_id(self, project_id: int, event_id: str):
         args = {
             "project": [project_id],
             "selected_columns": ["group_id"],
