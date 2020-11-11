@@ -49,6 +49,7 @@ columns = ColumnSet(
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_hash_map", Array(UInt(64))),
         ("contexts", Nested([("key", String()), ("value", String())])),
+        ("deleted", UInt(8)),
     ]
 )
 
