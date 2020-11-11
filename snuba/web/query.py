@@ -72,6 +72,7 @@ def _run_query_pipeline(
     - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
       to the QueryExecutionStrategy to actually run the DB Query.
     """
+
     query_entity = request.query.get_from_clause()
     entity = get_entity(query_entity.key)
 
@@ -99,12 +100,6 @@ def _run_query_pipeline(
     # datasets/storages and never hardcoded.
     if request.settings.get_turbo():
         request.query.set_final(False)
-
-    for processor in entity.get_query_processors():
-        with sentry_sdk.start_span(
-            description=type(processor).__name__, op="processor"
-        ):
-            processor.process_query(request.query, request.settings)
 
     query_runner = partial(
         _run_and_apply_column_names,
