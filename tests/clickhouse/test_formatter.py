@@ -1,6 +1,6 @@
 import pytest
 
-from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
+from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,

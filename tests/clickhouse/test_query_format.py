@@ -3,7 +3,7 @@ import pytest
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.query_formatter import format_query
+from snuba.clickhouse.formatter.query import format_query
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Table
@@ -154,7 +154,7 @@ def test_format_clickhouse_specific_query() -> None:
     """
 
     query = Query(
-        Table("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([]), final=True, sampling_rate=0.1),
         selected_columns=[
             SelectedExpression("column1", Column(None, None, "column1")),
             SelectedExpression("column2", Column(None, "table1", "column2")),
@@ -168,12 +168,10 @@ def test_format_clickhouse_specific_query() -> None:
         ),
         order_by=[OrderBy(OrderByDirection.ASC, Column(None, None, "column1"))],
         array_join=Column(None, None, "column1"),
-        sample=0.1,
         totals=True,
         limitby=(10, "environment"),
     )
 
-    query.set_final(True)
     query.set_offset(50)
     query.set_limit(100)
 
