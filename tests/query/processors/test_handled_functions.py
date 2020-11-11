@@ -1,6 +1,6 @@
 import pytest
 from snuba.clickhouse.columns import ColumnSet
-from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
+from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.datasets.entities import EntityKey
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (

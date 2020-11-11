@@ -2,7 +2,8 @@ import copy
 from typing import List
 
 import pytest
-from snuba.datasets.schemas.tables import TableSource
+from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.query import Query
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     BooleanFunctions,
@@ -10,8 +11,8 @@ from snuba.query.conditions import (
     binary_condition,
     combine_and_conditions,
 )
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.logical import Query
 from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
 from snuba.request.request_settings import HTTPRequestSettings
 
@@ -52,11 +53,15 @@ test_data = [
 @pytest.mark.parametrize("table, mand_conditions", test_data)
 def test_mand_conditions(table: str, mand_conditions: List[FunctionCall]) -> None:
 
-    body = {"conditions": [["d", "=", "1"], ["c", "=", "3"]]}
-
     query = Query(
-        copy.deepcopy(body),
-        TableSource(table, None, mand_conditions, ["c1"]),
+        Table(
+            table,
+            ColumnSet([]),
+            final=False,
+            sampling_rate=None,
+            mandatory_conditions=mand_conditions,
+            prewhere_candidates=["c1"],
+        ),
         None,
         None,
         binary_condition(

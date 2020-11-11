@@ -6,8 +6,8 @@ from typing import MutableMapping
 
 import sentry_sdk
 from snuba import environment
+from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.query_formatter import format_query
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
@@ -196,24 +196,25 @@ def _format_storage_query_and_run(
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
     """
-    source = clickhouse_query.get_from_clause().format_from()
+    from_clause = clickhouse_query.get_from_clause()
+    table_name = from_clause.table_name
     with sentry_sdk.start_span(description="create_query", op="db") as span:
         formatted_query = format_query(clickhouse_query, request_settings)
-        span.set_data("query", formatted_query.get_mapping())
+        span.set_data("query", formatted_query.structured())
         metrics.increment("execute")
 
     timer.mark("prepare_query")
 
     stats = {
-        "clickhouse_table": source,
-        "final": clickhouse_query.get_final(),
+        "clickhouse_table": table_name,
+        "final": from_clause.final,
         "referrer": referrer,
         "num_days": (to_date - from_date).days,
-        "sample": clickhouse_query.get_sample(),
+        "sample": from_clause.sampling_rate,
     }
 
     with sentry_sdk.start_span(description=formatted_query.get_sql(), op="db") as span:
-        span.set_tag("table", source)
+        span.set_tag("table", table_name)
 
         return raw_query(
             clickhouse_query,

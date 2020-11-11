@@ -2,9 +2,9 @@ from typing import Any, MutableMapping, Optional, Sequence, Set
 from unittest.mock import Mock
 
 import pytest
-from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
+from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
+from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.clickhouse.query_formatter import format_query
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipeline

@@ -1,9 +1,9 @@
 from typing import Callable, Iterable, Optional, Sequence
 
-from snuba.datasets.schemas import RelationalSource
 from snuba.query import Limitby, OrderBy
 from snuba.query import ProcessableQuery as AbstractQuery
 from snuba.query import SelectedExpression
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Expression as SnubaExpression
 from snuba.query.expressions import ExpressionVisitor
 
@@ -12,10 +12,10 @@ from snuba.query.expressions import ExpressionVisitor
 Expression = SnubaExpression
 
 
-class Query(AbstractQuery[RelationalSource]):
+class Query(AbstractQuery[Table]):
     def __init__(
         self,
-        from_clause: Optional[RelationalSource],
+        from_clause: Optional[Table],
         # New data model to replace the one based on the dictionary
         selected_columns: Optional[Sequence[SelectedExpression]] = None,
         array_join: Optional[Expression] = None,
@@ -25,14 +25,11 @@ class Query(AbstractQuery[RelationalSource]):
         having: Optional[Expression] = None,
         order_by: Optional[Sequence[OrderBy]] = None,
         limitby: Optional[Limitby] = None,
-        sample: Optional[float] = None,
         limit: Optional[int] = None,
         offset: int = 0,
         totals: bool = False,
         granularity: Optional[int] = None,
-        final: bool = False,
     ) -> None:
-        self.__final = final
         self.__prewhere = prewhere
 
         super().__init__(
@@ -44,7 +41,6 @@ class Query(AbstractQuery[RelationalSource]):
             having=having,
             order_by=order_by,
             limitby=limitby,
-            sample=sample,
             limit=limit,
             offset=offset,
             totals=totals,
@@ -72,20 +68,9 @@ class Query(AbstractQuery[RelationalSource]):
     def set_prewhere_ast_condition(self, condition: Optional[Expression]) -> None:
         self.__prewhere = condition
 
-    def get_final(self) -> bool:
-        return self.__final
-
-    def set_final(self, final: bool) -> None:
-        self.__final = final
-
     def __eq__(self, other: object) -> bool:
         if not super().__eq__(other):
             return False
 
         assert isinstance(other, Query)  # mypy
-        return all(
-            [
-                self.get_prewhere_ast() == other.get_prewhere_ast(),
-                self.get_final() == other.get_final(),
-            ]
-        )
+        return self.get_prewhere_ast() == other.get_prewhere_ast()

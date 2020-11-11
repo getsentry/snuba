@@ -18,7 +18,7 @@ from typing import (
     TypeVar,
 )
 
-from snuba.clickhouse.query_formatter import FormattedQuery
+from snuba.clickhouse.formatter.nodes import FormattedQuery
 
 Column = TypedDict("Column", {"name": str, "type": str})
 Row = MutableMapping[str, Any]
