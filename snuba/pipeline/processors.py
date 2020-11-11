@@ -1,5 +1,6 @@
 import sentry_sdk
 
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.request import Request
 
@@ -15,8 +16,6 @@ def _execute_query_plan_processors(
 
 
 def _execute_entity_processors(request: Request) -> None:
-    from snuba.datasets.entities.factory import get_entity
-
     entity = get_entity(request.query.get_from_clause().key)
 
     for processor in entity.get_query_processors():
