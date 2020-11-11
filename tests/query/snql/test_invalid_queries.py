@@ -8,17 +8,17 @@ test_cases = [
     # below are all cases that are not parsed completely
     # i.e. the entire string is not consumed
     pytest.param(
-        "MATCH(e: Events)WHEREa<3COLLECT4-5,3*g(c),cBYd,2+7ORDERBYfDESC",
+        "MATCH(e: events)WHEREa<3COLLECT4-5,3*g(c),cBYd,2+7ORDERBYfDESC",
         IncompleteParseError,
         id="ORDER BY is two words",
     ),
     pytest.param(
-        "MATCH (e: Events) WHERE a<3 COLLECT 4-5, 3*g(c), c BY d,2+7 ORDER BYfDESC",
+        "MATCH (e: events) WHERE a<3 COLLECT 4-5, 3*g(c), c BY d,2+7 ORDER BYfDESC",
         IncompleteParseError,
         id="Expression before ASC / DESC needs to be separated from ASC / DESC keyword by space",
     ),
     pytest.param(
-        "MATCH (e: Events) WHERE a<3 COLLECT 4-5, 3*g(c), c BY d, ,2+7 ORDER BY f DESC",
+        "MATCH (e: events) WHERE a<3 COLLECT 4-5, 3*g(c), c BY d, ,2+7 ORDER BY f DESC",
         IncompleteParseError,
         id="In a list, columns are separated by exactly one comma",
     ),
