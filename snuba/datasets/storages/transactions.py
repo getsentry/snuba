@@ -14,9 +14,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.transaction_column_processor import (
-    TransactionColumnProcessor,
-)
+from snuba.datasets.storages.event_id_column_processor import EventIdColumnProcessor
 from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
@@ -90,7 +88,7 @@ storage = WritableTableStorage(
     schema=schema,
     query_processors=[
         MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
-        TransactionColumnProcessor(),
+        EventIdColumnProcessor(),
         ArrayJoinKeyValueOptimizer("tags"),
         ArrayJoinKeyValueOptimizer("measurements"),
         PrewhereProcessor(),
