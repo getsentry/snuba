@@ -788,11 +788,6 @@ class TestApi(BaseApiTest):
             ).data
         )
         assert (
-            # legacy representation
-            "PREWHERE positionCaseInsensitive(message, 'abc') != 0"
-            in result["sql"]
-        ) or (
-            # ast representation
             "PREWHERE notEquals(positionCaseInsensitive(message, 'abc'), 0)"
             in result["sql"]
         )
@@ -817,15 +812,7 @@ class TestApi(BaseApiTest):
                 ),
             ).data
         )
-        assert (
-            # legacy representation
-            "PREWHERE positionCaseInsensitive(message"
-            in result["sql"]
-        ) or (
-            # ast representation
-            "PREWHERE notEquals(positionCaseInsensitive(message"
-            in result["sql"]
-        )
+        assert "PREWHERE notEquals(positionCaseInsensitive(message" in result["sql"]
 
         # Allow 2 conditions in prewhere clause
         settings.MAX_PREWHERE_CONDITIONS = 2
@@ -846,11 +833,6 @@ class TestApi(BaseApiTest):
             ).data
         )
         assert (
-            # legacy representation
-            "PREWHERE positionCaseInsensitive(message, 'abc') != 0 AND project_id IN (1)"
-            in result["sql"]
-        ) or (
-            # ast representation
             "PREWHERE notEquals(positionCaseInsensitive(message, 'abc'), 0) AND in(project_id, tuple(1))"
             in result["sql"]
         )
@@ -873,16 +855,8 @@ class TestApi(BaseApiTest):
         )
 
         # make sure the conditions is in PREWHERE and nowhere else
-        assert (
-            "PREWHERE project_id IN (1)" in result["sql"]  # legacy representation
-            or "PREWHERE in(project_id, tuple(1))"
-            in result["sql"]  # ast representation
-        )
-        assert (
-            result["sql"].count("project_id IN (1)") == 1  # legacy representation
-            or result["sql"].count("in(project_id, tuple(1))")
-            == 1  # ast representation
-        )
+        assert "PREWHERE in(project_id, tuple(1))" in result["sql"]
+        assert result["sql"].count("in(project_id, tuple(1))") == 1
 
     def test_aggregate(self):
         result = json.loads(
@@ -1117,14 +1091,8 @@ class TestApi(BaseApiTest):
             ).data
         )
         # Issue is expanded once, and alias used subsequently
-        assert (
-            "group_id = 0" in response["sql"]  # legacy representation
-            or "equals(group_id, 0)" in response["sql"]  # ast representation
-        )
-        assert (
-            "group_id = 1" in response["sql"]  # legacy representation
-            or "equals(group_id, 1)" in response["sql"]  # ast representation
-        )
+        assert "equals(group_id, 0)" in response["sql"]
+        assert "equals(group_id, 1)" in response["sql"]
 
     def test_sampling_expansion(self):
         response = json.loads(

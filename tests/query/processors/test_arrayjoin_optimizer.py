@@ -1,13 +1,13 @@
 from typing import Any, MutableMapping, Optional, Sequence, Set
-from unittest.mock import Mock
 
 import pytest
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entities.transactions import transaction_translator
 from snuba.datasets.factory import get_dataset
-from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipeline
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -321,12 +321,14 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     entity = get_entity(query.get_from_clause().key)
     for p in entity.get_query_processors():
         p.process_query(query, request.settings)
-    pipeline = entity.get_query_pipeline_builder().build_pipeline(request, Mock())
-    assert isinstance(pipeline, SingleQueryPlanPipeline)
-    plan = pipeline.query_plan
 
-    ArrayJoinKeyValueOptimizer("tags").process_query(plan.query, request.settings)
-    return plan.query
+    ArrayJoinKeyValueOptimizer("tags").process_query(query, request.settings)
+
+    query_plan = SingleStorageQueryPlanBuilder(
+        storage=entity.get_writable_storage(), mappers=transaction_translator,
+    ).build_plan(request)
+
+    return query_plan.query
 
 
 @pytest.mark.parametrize("query_body, expected_query", test_data)
