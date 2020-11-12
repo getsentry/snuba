@@ -102,14 +102,18 @@ class MultipleConcurrentPipeline(QueryPipeline):
             query_results.append((builder_id, query_result))
             return query_result
         finally:
-            try:
-                for builder_id, query_result in generator:
-                    query_results.append((builder_id, query_result))
 
-                if self.__callback_func is not None:
-                    self.__callback_func(query_results)
-            except QueryException as error:
-                logger.exception(error)
+            def execute_callback() -> None:
+                try:
+                    for builder_id, query_result in generator:
+                        query_results.append((builder_id, query_result))
+
+                    if self.__callback_func is not None:
+                        self.__callback_func(query_results)
+                except QueryException as error:
+                    logger.exception(error)
+
+            executor.submit(execute_callback)
 
 
 class PipelineDelegator(QueryPipelineBuilder):

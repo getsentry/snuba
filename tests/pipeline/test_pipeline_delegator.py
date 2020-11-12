@@ -1,3 +1,4 @@
+import time
 from unittest.mock import Mock, call
 
 from snuba.datasets.factory import get_dataset
@@ -44,6 +45,9 @@ def test() -> None:
     delegator.build_pipeline(
         Request("", query, HTTPRequestSettings(), {}, ""), mock_query_runner
     ).execute()
+
+    # Allow threads to finish
+    time.sleep(0.01)
 
     assert mock_query_runner.call_count == 2
 
