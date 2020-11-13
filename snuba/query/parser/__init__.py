@@ -377,21 +377,13 @@ ARRAYJOIN_FUNCTION_MATCH = FunctionCallMatch(StringMatch("arrayJoin"), None)
 def _mangle_aliases(query: Query) -> None:
     alias_prefix = "_snuba_"
 
-    def transform_alias(alias: Optional[str]) -> Optional[str]:
+    def transform_alias(expression: Expression) -> Expression:
+        alias = expression.alias
         if alias is not None:
-            return f"{alias_prefix}{alias}"
+            return replace(expression, alias=f"{alias_prefix}{alias}")
+        return expression
 
-        return alias
-
-    query.transform_expressions(
-        lambda expr: replace(expr, alias=transform_alias(expr.alias))
-    )
-
-    for expression in query.get_all_expressions():
-        if expression.alias:
-            expression.transform(
-                lambda expr: replace(expr, alias=f"{alias_prefix}{expr.alias}")
-            )
+    query.transform_expressions(transform_alias)
 
     # HACK: This reverts the mangle of arrayjoin since we cannot reference aliases
     # there
