@@ -3,8 +3,8 @@ from snuba.pipeline.query_pipeline import (
     QueryPipelineBuilder,
 )
 from snuba.pipeline.processors import (
-    _execute_entity_processors,
-    _execute_query_plan_processors,
+    QueryPlanProcessorsExecutor,
+    EntityProcessingExecutor,
 )
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
@@ -29,18 +29,24 @@ class SingleQueryPlanPipeline(QueryPipeline):
         request: Request,
         runner: QueryRunner,
         query_plan_builder: ClickhouseQueryPlanBuilder,
+        entity_processors: EntityProcessingExecutor,
+        clickhouse_processors: QueryPlanProcessorsExecutor,
     ):
         self.__request = request
         self.__runner = runner
         self.__query_plan_builder = query_plan_builder
+        self.__entity_processors = entity_processors
+        self.__clickhouse_processors = clickhouse_processors
 
     def execute(self) -> QueryResult:
+        settings = self.__request.settings
+
         # Execute entity processors
-        _execute_entity_processors(self.__request)
+        self.__entity_processors.execute((self.__request.query, settings))
 
         # Build and execute query plan
         self.__query_plan = self.__query_plan_builder.build_plan(self.__request)
-        _execute_query_plan_processors(self.__query_plan, self.__request)
+        self.__clickhouse_processors.execute((self.__query_plan, settings))
         return self.__query_plan.execution_strategy.execute(
             self.__query_plan.query, self.__request.settings, self.__runner
         )
@@ -55,4 +61,10 @@ class SingleQueryPlanPipelineBuilder(QueryPipelineBuilder):
         self.__query_plan_builder = query_plan_builder
 
     def build_pipeline(self, request: Request, runner: QueryRunner) -> QueryPipeline:
-        return SingleQueryPlanPipeline(request, runner, self.__query_plan_builder)
+        return SingleQueryPlanPipeline(
+            request,
+            runner,
+            self.__query_plan_builder,
+            EntityProcessingExecutor(),
+            QueryPlanProcessorsExecutor(),
+        )
