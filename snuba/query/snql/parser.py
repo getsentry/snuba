@@ -23,17 +23,23 @@ from snuba.query.conditions import (
 )
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
+    Argument,
     Column,
     CurriedFunctionCall,
     Expression,
     FunctionCall,
+    Lambda,
     Literal,
 )
 from snuba.query.matchers import (
     Any as AnyMatch,
+    AnyExpression,
+    AnyOptionalString,
+    Column as ColumnMatch,
     FunctionCall as FunctionCallMatch,
     Literal as LiteralMatch,
     Param,
+    Or,
     String as StringMatch,
 )
 from snuba.query import (
@@ -51,6 +57,7 @@ from snuba.query.parser import (
     _parse_subscriptables,
     _validate_aliases,
 )
+from snuba.query.schema import POSITIVE_OPERATORS
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
     HighPriOperator,
@@ -77,15 +84,16 @@ from snuba.util import parse_datetime
 
 snql_grammar = Grammar(
     r"""
-    query_exp             = match_clause select_clause group_by_clause? where_clause? having_clause? order_by_clause? limit_by_clause? limit_clause? offset_clause? granularity_clause? totals_clause? space*
+    query_exp             = match_clause select_clause group_by_clause? array_join_clause? where_clause? having_clause? order_by_clause? limit_by_clause? limit_clause? offset_clause? granularity_clause? totals_clause? space*
 
     match_clause          = space* "MATCH" space+ entity_match
     select_clause         = space+ "SELECT" space+ select_list
     group_by_clause       = space+ "BY" space+ group_list
+    array_join_clause     = space+ "ARRAY JOIN" space+ column_name
     where_clause          = space+ "WHERE" space+ or_expression
     having_clause         = space+ "HAVING" space+ or_expression
     order_by_clause       = space+ "ORDER BY" space+ order_list
-    limit_by_clause       = space+ "LIMIT" space+ integer_literal space* "BY" space* column_name
+    limit_by_clause       = space+ "LIMIT" space+ integer_literal space+ "BY" space+ column_name
     limit_clause          = space+ "LIMIT" space+ integer_literal
     offset_clause         = space+ "OFFSET" space+ integer_literal
     granularity_clause    = space+ "GRANULARITY" space+ integer_literal
@@ -183,6 +191,7 @@ class SnQLVisitor(NodeVisitor):
             data_source,
             args["selected_columns"],
             args["groupby"],
+            args["array_join"],
             args["condition"],
             args["having"],
             args["order_by"],
@@ -330,6 +339,11 @@ class SnQLVisitor(NodeVisitor):
         self, node: Node, visited_children: Tuple[Any, Node, Any]
     ) -> Literal:
         return visit_quoted_literal(node, visited_children)
+
+    def visit_array_join_clause(
+        self, node: Node, visited_children: Tuple[Any, Any, Any, Expression]
+    ) -> Expression:
+        return visited_children[-1]
 
     def visit_where_clause(
         self, node: Node, visited_children: Tuple[Any, Any, Any, Expression]
@@ -632,11 +646,65 @@ def _parse_datetime_literals(query: LogicalQuery) -> None:
     query.transform_expressions(parse)
 
 
+ARRAY_JOIN_MATCH = FunctionCallMatch(
+    StringMatch("arrayJoinExplode"),
+    (
+        Param("column", ColumnMatch(AnyOptionalString(), AnyMatch(str))),
+        Param("op", Or([LiteralMatch(StringMatch(op)) for op in OPERATOR_TO_FUNCTION])),
+        Param("value", AnyExpression()),
+    ),
+)
+
+
+def _array_join_transformation(query: LogicalQuery) -> None:
+    def parse(exp: Expression) -> Expression:
+        result = ARRAY_JOIN_MATCH.match(exp)
+        if result:
+            column = result.expression("column")
+            assert isinstance(column, Column)
+
+            op_literal = result.expression("op")
+            assert isinstance(op_literal, Literal)
+            op = str(op_literal.value)
+
+            value = result.expression("value")
+
+            function_name = "arrayExists" if op in POSITIVE_OPERATORS else "arrayAll"
+
+            return FunctionCall(
+                None,
+                function_name,
+                (
+                    Lambda(
+                        None,
+                        ("x",),
+                        FunctionCall(
+                            None,
+                            "assumeNotNull",
+                            (
+                                FunctionCall(
+                                    None,
+                                    OPERATOR_TO_FUNCTION[op],
+                                    (Argument(None, "x"), value,),
+                                ),
+                            ),
+                        ),
+                    ),
+                    column,
+                ),
+            )
+
+        return exp
+
+    query.transform_expressions(parse)
+
+
 def parse_snql_query(body: str, dataset: Dataset) -> LogicalQuery:
     query = parse_snql_query_initial(body)
 
     # These are the post processing phases
     _parse_datetime_literals(query)
+    _array_join_transformation(query)
 
     # TODO: Update these functions to work with snql queries in a separate PR
     _validate_aliases(query)  # -> needs to recurse through sub queries

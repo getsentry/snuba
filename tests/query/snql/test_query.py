@@ -8,8 +8,10 @@ from snuba.datasets.factory import get_dataset
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
+    Argument,
     Column,
     FunctionCall,
+    Lambda,
     Literal,
     SubscriptableReference,
 )
@@ -109,6 +111,25 @@ test_cases = [
             offset=3,
         ),
         id="limit and offset",
+    ),
+    pytest.param(
+        "MATCH (e:events) SELECT 4-5, c ARRAY JOIN c TOTALS true",
+        LogicalQuery(
+            {},
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "4-5",
+                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                ),
+                SelectedExpression("c", Column("_snuba_c", None, "c")),
+            ],
+            array_join=Column(None, None, "c"),
+            totals=True,
+        ),
+        id="Array join",
     ),
     pytest.param(
         "MATCH (e: events) SELECT 4-5, 3* foo(c) AS foo, c WHERE a<3",
@@ -536,6 +557,116 @@ test_cases = [
             ),
         ),
         id="Basic query with new lines and no ambiguous clause content",
+    ),
+    pytest.param(
+        """MATCH (e:events)
+        SELECT 4-5,3*foo(c) AS foo,c
+        WHERE or(equals(arrayJoinExplode(a, '=', 'RuntimeException'), 1), equals(arrayJoinExplode(b, 'NOT IN', tuple('Stack', 'Arithmetic')), 1)) = 1""",
+        LogicalQuery(
+            {},
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "4-5",
+                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                ),
+                SelectedExpression(
+                    "3*foo(c) AS foo",
+                    FunctionCall(
+                        None,
+                        "multiply",
+                        (
+                            Literal(None, 3),
+                            FunctionCall(
+                                "_snuba_foo", "foo", (Column("_snuba_c", None, "c"),)
+                            ),
+                        ),
+                    ),
+                ),
+                SelectedExpression("c", Column("_snuba_c", None, "c")),
+            ],
+            condition=binary_condition(
+                None,
+                "equals",
+                binary_condition(
+                    None,
+                    "or",
+                    binary_condition(
+                        None,
+                        "equals",
+                        FunctionCall(
+                            None,
+                            "arrayExists",
+                            (
+                                Lambda(
+                                    None,
+                                    ("x",),
+                                    FunctionCall(
+                                        None,
+                                        "assumeNotNull",
+                                        (
+                                            FunctionCall(
+                                                None,
+                                                "equals",
+                                                (
+                                                    Argument(None, "x"),
+                                                    Literal(None, "RuntimeException"),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                                Column("_snuba_a", None, "a"),
+                            ),
+                        ),
+                        Literal(None, 1),
+                    ),
+                    binary_condition(
+                        None,
+                        "equals",
+                        FunctionCall(
+                            None,
+                            "arrayAll",
+                            (
+                                Lambda(
+                                    None,
+                                    ("x",),
+                                    FunctionCall(
+                                        None,
+                                        "assumeNotNull",
+                                        (
+                                            FunctionCall(
+                                                None,
+                                                "notIn",
+                                                (
+                                                    Argument(None, "x"),
+                                                    FunctionCall(
+                                                        None,
+                                                        "tuple",
+                                                        (
+                                                            Literal(None, "Stack"),
+                                                            Literal(
+                                                                None, "Arithmetic",
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                                Column("_snuba_b", None, "b"),
+                            ),
+                        ),
+                        Literal(None, 1),
+                    ),
+                ),
+                Literal(None, 1),
+            ),
+        ),
+        id="Special array join functions",
     ),
 ]
 

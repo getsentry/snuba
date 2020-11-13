@@ -121,6 +121,7 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
         groupby = legacy.get("groupby", [])
         if groupby and not isinstance(groupby, list):
             groupby = [groupby]
+
         groupby = ", ".join(map(func, groupby))
         groupby_clause = f"BY {groupby}" if groupby else ""
 
@@ -147,7 +148,7 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
         if isinstance(project, int):
             conditions.append(f"project_id={project}")
         elif isinstance(project, list):
-            project = ",".join(project)
+            project = ",".join(map(str, project))
             conditions.append(f"project_id IN {project}")
 
         organization = legacy.get("organization")
@@ -186,6 +187,9 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
             limit, column = legacy.get("limitby")
             limit_by_clause = f"LIMIT {limit} BY {column}"
 
+        arrayjoin = legacy.get("arrayjoin")
+        array_join_clause = f"ARRAY JOIN {arrayjoin}" if arrayjoin else ""
+
         extras = ("limit", "offset", "granularity", "totals")
         extra_exps = []
         for extra in extras:
@@ -193,7 +197,7 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
                 extra_exps.append(f"{extra.upper()} {legacy.get(extra)}")
         extras_clause = " ".join(extra_exps)
 
-        query = f"{match_clause} {select_clause} {aggregation_clause} {groupby_clause} {where_clause} {order_by_clause} {limit_by_clause} {extras_clause}"
+        query = f"{match_clause} {select_clause} {aggregation_clause} {groupby_clause} {array_join_clause} {where_clause} {order_by_clause} {limit_by_clause} {extras_clause}"
         body = {"query": query}
         extensions = ["project", "from_date", "to_date", "organization"]
         for ext in extensions:

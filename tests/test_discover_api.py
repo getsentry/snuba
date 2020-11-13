@@ -1,3 +1,4 @@
+import pytest
 import uuid
 from functools import partial
 
@@ -11,6 +12,25 @@ from tests.helpers import write_unprocessed_events
 
 
 class TestDiscoverApi(BaseApiTest):
+    @pytest.fixture(
+        autouse=True, params=["/query", "/discover/snql"], ids=["legacy", "snql"]
+    )
+    def _set_endpoint(self, request, convert_legacy_to_snql):
+        self.endpoint = request.param
+        old_post = self.app.post
+
+        if request.param == "/discover/snql":
+
+            def new_post(endpoint, entity, data=None):
+                return old_post(endpoint, data=convert_legacy_to_snql(data, entity))
+
+        else:
+
+            def new_post(endpoint, entity, data=None):
+                return old_post(endpoint, data=data)
+
+        self.app.post = new_post
+
     def setup_method(self, test_method):
         super().setup_method(test_method)
         self.app.post = partial(self.app.post, headers={"referer": "test"})
@@ -24,7 +44,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_raw_data(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_events",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -47,7 +68,8 @@ class TestDiscoverApi(BaseApiTest):
         }
 
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_transactions",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -82,7 +104,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_aggregations(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_events",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -107,7 +130,8 @@ class TestDiscoverApi(BaseApiTest):
         ]
 
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_transactions",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -134,7 +158,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_handles_columns_from_other_dataset(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_transactions",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -167,7 +192,8 @@ class TestDiscoverApi(BaseApiTest):
         ]
 
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_events",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -187,7 +213,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_geo_column_condition(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_transactions",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -207,7 +234,8 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"] == [{"count": 0}]
 
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_transactions",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -229,8 +257,14 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"] == [{"count": 1}]
 
     def test_exception_stack_column_condition(self) -> None:
+        if "snql" in self.endpoint:
+            pytest.xfail(
+                reason="snql doesn't do the implicit unpacking of array join conditions"
+            )
+
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_events",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -249,8 +283,14 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"] == [{"count": 1}]
 
     def test_exception_stack_column_boolean_condition(self) -> None:
+        if "snql" in self.endpoint:
+            pytest.xfail(
+                reason="snql doesn't do the implicit unpacking of array join conditions"
+            )
+
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_events",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -289,7 +329,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_exception_stack_column_boolean_condition_with_arrayjoin(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_events",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -332,7 +373,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_exception_stack_column_boolean_condition_arrayjoin_function(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_events",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -381,7 +423,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_tags_key_boolean_condition(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_events",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -426,7 +469,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_os_fields_condition(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_transactions",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -447,7 +491,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_http_fields(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_transactions",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -471,7 +516,8 @@ class TestDiscoverApi(BaseApiTest):
         ]
 
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_events",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -496,7 +542,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_device_fields_condition(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_transactions",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -517,7 +564,8 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"][0]["count"] == 1
 
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_events",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -539,7 +587,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_device_boolean_fields_context_vs_promoted_column(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_transactions",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -558,7 +607,8 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"][0]["count"] == 1
 
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_events",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -578,7 +628,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_is_handled(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_events",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -600,7 +651,8 @@ class TestDiscoverApi(BaseApiTest):
     def test_having(self) -> None:
         result = json.loads(
             self.app.post(
-                "/query",
+                self.endpoint,
+                "discover_events",
                 data=json.dumps(
                     {
                         "dataset": "discover",
@@ -618,7 +670,8 @@ class TestDiscoverApi(BaseApiTest):
     def test_time(self) -> None:
         result = json.loads(
             self.app.post(
-                "/query",
+                self.endpoint,
+                "discover_events",
                 data=json.dumps(
                     {
                         "dataset": "discover",
@@ -634,7 +687,8 @@ class TestDiscoverApi(BaseApiTest):
 
         result = json.loads(
             self.app.post(
-                "/query",
+                self.endpoint,
+                "discover_transactions",
                 data=json.dumps(
                     {
                         "dataset": "discover",
@@ -651,7 +705,8 @@ class TestDiscoverApi(BaseApiTest):
     def test_transaction_group_ids(self) -> None:
         result = json.loads(
             self.app.post(
-                "/query",
+                self.endpoint,
+                "discover_transactions",
                 data=json.dumps(
                     {
                         "dataset": "discover",
@@ -669,7 +724,8 @@ class TestDiscoverApi(BaseApiTest):
 
         result = json.loads(
             self.app.post(
-                "/query",
+                self.endpoint,
+                "discover_transactions",
                 data=json.dumps(
                     {
                         "dataset": "discover",
@@ -690,7 +746,8 @@ class TestDiscoverApi(BaseApiTest):
     def test_contexts(self) -> None:
         result = json.loads(
             self.app.post(
-                "/query",
+                self.endpoint,
+                "discover_events",
                 data=json.dumps(
                     {
                         "dataset": "discover",
@@ -705,7 +762,8 @@ class TestDiscoverApi(BaseApiTest):
 
         result = json.loads(
             self.app.post(
-                "/query",
+                self.endpoint,
+                "discover_transactions",
                 data=json.dumps(
                     {
                         "dataset": "discover",
@@ -720,7 +778,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_ast_impossible_queries(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_transactions",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -748,7 +807,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_count_null_user_consistency(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_events",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -770,7 +830,8 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"][0]["uniq_user"] == 0
 
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_transactions",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -794,7 +855,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_individual_measurement(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_transactions",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -817,7 +879,8 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"][0]["measurements[asd]"] is None
 
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_events",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -835,7 +898,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_functions_called_on_null(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_events",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -854,7 +918,8 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"][0]["sum_transaction_duration"] is None
 
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_events",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -880,7 +945,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_web_vitals_histogram_function(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_transactions",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -962,7 +1028,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_max_timestamp_by_timestamp(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_events",
             data=json.dumps(
                 {
                     "dataset": "discover",
