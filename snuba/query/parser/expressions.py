@@ -51,12 +51,12 @@ minimal_clickhouse_grammar = Grammar(
 # function field which can mean a clickhouse function expression or the simple
 # name of a clickhouse function.
 
-root_element          = low_pri_arithmetic
-low_pri_arithmetic    = space* high_pri_arithmetic space* (low_pri_tuple)*
-high_pri_arithmetic   = space* arithmetic_term space* (high_pri_tuple)*
-low_pri_tuple         = low_pri_op high_pri_arithmetic
+root_element          = low_pri_arithmetic space*
+low_pri_arithmetic    = space* high_pri_arithmetic (space* low_pri_tuple)*
+high_pri_arithmetic   = space* arithmetic_term (space* high_pri_tuple)*
+low_pri_tuple         = low_pri_op space* high_pri_arithmetic
 high_pri_tuple        = high_pri_op arithmetic_term
-arithmetic_term       = (space*) (function_call / numeric_literal / column_name) (space*)
+arithmetic_term       = space* (function_call / numeric_literal / column_name)
 low_pri_op            = "+" / "-"
 high_pri_op           = "/" / "*"
 param_expression      = low_pri_arithmetic / quoted_literal
@@ -83,6 +83,12 @@ class ClickhouseVisitor(NodeVisitor):
     Builds Snuba AST expressions from the Parsimonious parse tree.
     """
 
+    def visit_root_element(
+        self, node: Node, visited_children: Tuple[Expression, Any]
+    ) -> Expression:
+        ret, _ = visited_children
+        return ret
+
     def visit_function_name(self, node: Node, visited_children: Iterable[Any]) -> str:
         return visit_function_name(node, visited_children)
 
@@ -90,12 +96,12 @@ class ClickhouseVisitor(NodeVisitor):
         return visit_column_name(node, visited_children)
 
     def visit_low_pri_tuple(
-        self, node: Node, visited_children: Tuple[LowPriOperator, Expression]
+        self, node: Node, visited_children: Tuple[LowPriOperator, Any, Expression]
     ) -> LowPriTuple:
         return visit_low_pri_tuple(node, visited_children)
 
     def visit_high_pri_tuple(
-        self, node: Node, visited_children: Tuple[HighPriOperator, Expression]
+        self, node: Node, visited_children: Tuple[HighPriOperator, Any, Expression]
     ) -> HighPriTuple:
         return visit_high_pri_tuple(node, visited_children)
 
@@ -110,21 +116,17 @@ class ClickhouseVisitor(NodeVisitor):
         return visit_high_pri_op(node, visited_children)
 
     def visit_arithmetic_term(
-        self, node: Node, visited_children: Tuple[Any, Expression, Any]
+        self, node: Node, visited_children: Tuple[Any, Expression]
     ) -> Expression:
         return visit_arithmetic_term(node, visited_children)
 
     def visit_low_pri_arithmetic(
-        self,
-        node: Node,
-        visited_children: Tuple[Any, Expression, Any, LowPriArithmetic],
+        self, node: Node, visited_children: Tuple[Any, Expression, LowPriArithmetic],
     ) -> Expression:
         return visit_low_pri_arithmetic(node, visited_children)
 
     def visit_high_pri_arithmetic(
-        self,
-        node: Node,
-        visited_children: Tuple[Any, Expression, Any, HighPriArithmetic],
+        self, node: Node, visited_children: Tuple[Any, Expression, HighPriArithmetic],
     ) -> Expression:
         return visit_high_pri_arithmetic(node, visited_children)
 
