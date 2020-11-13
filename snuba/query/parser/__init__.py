@@ -397,13 +397,13 @@ def _mangle_aliases(query: Query) -> None:
     # there
     arrayjoin = query.get_arrayjoin_from_ast()
 
-    def transform_expr(expr: Expression) -> Expression:
+    def transform_arrayjoin(expr: Expression) -> Expression:
         if isinstance(expr, Column):
             return replace(expr, alias=expr.column_name)
         return expr
 
     if arrayjoin:
-        query.set_arrayjoin(arrayjoin.transform(transform_expr))
+        query.set_arrayjoin(arrayjoin.transform(transform_arrayjoin))
 
 
 def _validate_arrayjoin(query: Query) -> None:
