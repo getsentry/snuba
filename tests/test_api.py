@@ -788,7 +788,10 @@ class TestApi(BaseApiTest):
             ).data
         )
 
-        assert "PREWHERE notEquals(positionCaseInsensitive((message AS _snuba_message), 'abc'), 0)" in result["sql"]
+        assert (
+            "PREWHERE notEquals(positionCaseInsensitive((message AS _snuba_message), 'abc'), 0)"
+            in result["sql"]
+        )
 
         # Choose the highest priority one
 
@@ -810,7 +813,10 @@ class TestApi(BaseApiTest):
                 ),
             ).data
         )
-        assert "PREWHERE notEquals(positionCaseInsensitive((message AS _snuba_message)" in result["sql"]
+        assert (
+            "PREWHERE notEquals(positionCaseInsensitive((message AS _snuba_message)"
+            in result["sql"]
+        )
 
         # Allow 2 conditions in prewhere clause
         settings.MAX_PREWHERE_CONDITIONS = 2
