@@ -1,7 +1,10 @@
 from datetime import timedelta
 from typing import FrozenSet, Mapping, Sequence
 
-from snuba.clickhouse.translators.snuba.mappers import ColumnToFunction
+from snuba.clickhouse.translators.snuba.mappers import (
+    ColumnToFunction,
+    SubscriptableMapper,
+)
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -25,7 +28,11 @@ errors_translators = TranslationMappers(
         ColumnToFunction(
             None, "user", "nullIf", (Column(None, None, "user"), Literal(None, ""))
         ),
-    ]
+    ],
+    subscriptables=[
+        SubscriptableMapper(None, "tags", None, "tags"),
+        SubscriptableMapper(None, "contexts", None, "contexts"),
+    ],
 )
 
 
