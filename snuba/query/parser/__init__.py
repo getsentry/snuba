@@ -387,10 +387,7 @@ def _validate_arrayjoin(query: Query) -> None:
     for exp in query.get_all_expressions():
         match = ARRAYJOIN_FUNCTION_MATCH.match(exp)
         if match is not None:
-            if isinstance(exp, Column):
-                array_joins.add(exp.column_name)
-            else:
-                array_joins.add(f"{type(exp)}")
+            array_joins.add(f"{type(exp)}")
 
     if len(array_joins) > 0:
         join_type = "body" if body_arrayjoin else "function"

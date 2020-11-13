@@ -49,6 +49,7 @@ class ErrorsEntity(Entity):
                 ),
             ),
             abstract_column_set=columns,
+            join_relationships={},
             writable_storage=storage,
         )
 
