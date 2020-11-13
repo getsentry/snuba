@@ -377,19 +377,11 @@ ARRAYJOIN_FUNCTION_MATCH = FunctionCallMatch(StringMatch("arrayJoin"), None)
 def _mangle_aliases(query: Query) -> None:
     alias_prefix = "_snuba_"
 
-    def deescape(expression: Optional[str]) -> Optional[str]:
-        if expression is not None:
-            match = DEESCAPER_RE.match(expression)
-            if match:
-                return match[1]
-        return expression
-
     def transform_alias(alias: Optional[str]) -> Optional[str]:
-        deescaped_alias = deescape(alias)
-        if deescaped_alias is not None:
-            return f"{alias_prefix}{deescaped_alias}"
+        if alias is not None:
+            return f"{alias_prefix}{alias}"
 
-        return deescaped_alias
+        return alias
 
     query.transform_expressions(
         lambda expr: replace(expr, alias=transform_alias(expr.alias))
