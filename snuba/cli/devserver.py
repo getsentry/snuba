@@ -106,7 +106,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--result-topic=transaction-subscription-results",
                 "--dataset=transactions",
                 "--commit-log-topic=snuba-commit-log",
-                "--commit-log-group=snuba-transactions-consumers",
+                "--commit-log-group=transactions_group",
                 "--delay-seconds=1",
                 "--schedule-ttl=10",
                 "--max-query-workers=1",
