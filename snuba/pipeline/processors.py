@@ -6,6 +6,8 @@ from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.pipeline import Segment
 from snuba.query.logical import Query as LogicalQuery
 from snuba.request.request_settings import RequestSettings
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
+
 
 ClickhouseProcessingPayload = Tuple[ClickhouseQueryPlan, RequestSettings]
 
@@ -49,3 +51,18 @@ class EntityProcessingExecutor(Segment[EntityProcessingPayload, None]):
                 description=type(processor).__name__, op="processor"
             ):
                 processor.process_query(query, settings)
+
+
+class QueryProcessingPipeline(Segment[EntityProcessingPayload, ClickhouseQueryPlan]):
+    def __init__(self, query_plan_builder: ClickhouseQueryPlanBuilder) -> None:
+        self.__query_plan_builder = query_plan_builder
+        self.__entity_processors = EntityProcessingExecutor()
+        self.__clickhouse_processors = QueryPlanProcessorsExecutor()
+
+    def execute(self, query_payload: EntityProcessingPayload) -> ClickhouseQueryPlan:
+        self.__entity_processors.execute(query_payload)
+
+        query, settings = query_payload
+        query_plan = self.__query_plan_builder.build_plan(query, settings)
+        self.__clickhouse_processors.execute((query_plan, settings))
+        return query_plan

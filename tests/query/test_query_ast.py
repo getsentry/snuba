@@ -234,12 +234,13 @@ def test_alias_validation(
 ) -> None:
     events = get_dataset("events")
     query = parse_query(query_body, events)
+    request = Request("", query, HTTPRequestSettings(), {}, "")
     query_pipeline = (
         events.get_default_entity()
         .get_query_pipeline_builder()
-        .build_pipeline(Request("", query, HTTPRequestSettings(), {}, ""), Mock())
+        .build_pipeline(request, Mock())
     )
-    query_pipeline.execute()
+    query_pipeline.execute(request)
 
     assert isinstance(query_pipeline, SingleQueryPlanPipeline)
     assert query_pipeline.query_plan.query.validate_aliases() == expected_result

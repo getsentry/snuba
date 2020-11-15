@@ -46,4 +46,4 @@ def test_events_processing() -> None:
 
     events.get_default_entity().get_query_pipeline_builder().build_pipeline(
         request, query_runner
-    ).execute()
+    ).execute(request)

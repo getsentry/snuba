@@ -1,7 +1,10 @@
 from typing import Callable, List, Mapping, Tuple
 
 from snuba.clickhouse.query import Query
-from snuba.pipeline.query_pipeline import QueryPipeline, QueryPipelineBuilder
+from snuba.pipeline.query_pipeline import (
+    QueryExecutionPipeline,
+    QueryExecutionPipelineBuilder,
+)
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlanBuilder,
     QueryRunner,
@@ -16,7 +19,7 @@ SelectorFunc = Callable[[Query], List[BuilderId]]
 CallbackFunc = Callable[[QueryResults], None]
 
 
-class MultipleQueryPlanPipeline(QueryPipeline):
+class MultipleQueryPlanPipeline(QueryExecutionPipeline):
     """
     A query pipeline that executes a request against one or more query plans in parallel.
     """
@@ -36,7 +39,7 @@ class MultipleQueryPlanPipeline(QueryPipeline):
         raise NotImplementedError
 
 
-class QueryPlanDelegator(QueryPipelineBuilder):
+class QueryPlanDelegator(QueryExecutionPipelineBuilder):
     """
     Builds a pipeline which is able to run one or more query plans in parallel.
     """
@@ -51,7 +54,9 @@ class QueryPlanDelegator(QueryPipelineBuilder):
         self.__selector_func = selector_func
         self.__callback_func = callback_func
 
-    def build_pipeline(self, request: Request, runner: QueryRunner) -> QueryPipeline:
+    def build_pipeline(
+        self, request: Request, runner: QueryRunner
+    ) -> QueryExecutionPipeline:
         return MultipleQueryPlanPipeline(
             request=request,
             runner=runner,
