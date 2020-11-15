@@ -1,11 +1,9 @@
 from typing import Any, MutableMapping
-from unittest.mock import Mock
 
 import pytest
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
-from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipeline
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Table
@@ -238,9 +236,8 @@ def test_alias_validation(
     query_pipeline = (
         events.get_default_entity()
         .get_query_pipeline_builder()
-        .build_pipeline(request, Mock())
+        .build_processing_pipeline(request)
     )
-    query_pipeline.execute(request)
+    plan = query_pipeline.execute((request.query, request.settings))
 
-    assert isinstance(query_pipeline, SingleQueryPlanPipeline)
-    assert query_pipeline.query_plan.query.validate_aliases() == expected_result
+    assert plan.query.validate_aliases() == expected_result

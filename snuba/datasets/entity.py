@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Mapping, Optional, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.pipeline.query_pipeline import QueryExecutionPipelineBuilder
+from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.datasets.storage import Storage, WritableStorage, WritableTableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
@@ -19,7 +19,7 @@ class Entity(ABC):
         self,
         *,
         storages: Sequence[Storage],
-        query_pipeline_builder: QueryExecutionPipelineBuilder,
+        query_pipeline_builder: QueryPipelineBuilder,
         abstract_column_set: ColumnSet,
         writable_storage: Optional[WritableStorage],
     ) -> None:
@@ -56,7 +56,7 @@ class Entity(ABC):
         """
         return self.__data_model
 
-    def get_query_pipeline_builder(self) -> QueryExecutionPipelineBuilder:
+    def get_query_pipeline_builder(self) -> QueryPipelineBuilder:
         """
         Returns the component that orchestrates building and runnning query plans.
         """

@@ -45,6 +45,6 @@ def test_sessions_processing() -> None:
         ]
         return QueryResult({}, {})
 
-    sessions.get_default_entity().get_query_pipeline_builder().build_pipeline(
+    sessions.get_default_entity().get_query_pipeline_builder().build_execution_pipeline(
         request, query_runner
     ).execute(request)
