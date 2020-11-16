@@ -104,7 +104,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--max-batch-size=1",
                 "--consumer-group=snuba-transactions-subscriptions-consumers",
                 "--topic=events",
-                "--result-topic=transaction-subscription-results",
+                "--result-topic=transactions-subscription-results",
                 "--dataset=transactions",
                 "--commit-log-topic=snuba-commit-log",
                 "--commit-log-group=transactions_group",
