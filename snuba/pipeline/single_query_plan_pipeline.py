@@ -47,8 +47,8 @@ class SinglePlanProcessingPipeline(QueryProcessingPipeline, ABC):
 class PreStrategyProcessingPipeline(SinglePlanProcessingPipeline):
     """
     Executes the query processing of a single query plan query up to the
-    plan Clickhouse query processors. It does not execute the db query
-    processors since they are ran by the execution strategy.
+    plan query processors. It does not execute the db query processors
+    since they are ran by the execution strategy.
 
     This is the processing pipeline to use when executing a simple query
     that references a single entity and a single storage.

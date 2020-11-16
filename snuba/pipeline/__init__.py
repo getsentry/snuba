@@ -10,8 +10,8 @@ TOut = TypeVar("TOut")
 class Segment(ABC, Generic[TIn, TOut]):
     """
     Represents a segment in a pipeline (generally a query execution
-    pipeline). The only goal of this class is to make reuse between
-    pieces of a pipeline easier by imposing that the execute method
+    pipeline). The only goal of this class is to make it easier to
+    reuse pieces of a pipeline by imposing that the execute method
     takes the input and returns the output in a stateless way.
     """
 

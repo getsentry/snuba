@@ -55,7 +55,7 @@ class QueryExecutionPipeline(Segment[Request, QueryResult], ABC):
 class QueryPipelineBuilder(ABC):
     """
     Builds a query pipeline, which contains the directions for building
-    and running query plans.
+    and running the query.
     """
 
     @abstractmethod
@@ -73,7 +73,8 @@ class QueryPipelineBuilder(ABC):
         Returns a pipeline that executes the processing phase of a query.
 
         TODO: Split this method out of this class so that we can reuse
-        the execution builder for the dataset for composite queries
-        Where the processing does not need to be split from execution.
+        the execution builder for the dataset for composite queries.
+        In those cases the processing does not need to be split from
+        execution.
         """
         raise NotImplementedError
