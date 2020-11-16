@@ -391,7 +391,7 @@ def _mangle_aliases(query: Query) -> None:
 
     def transform_arrayjoin(expr: Expression) -> Expression:
         if isinstance(expr, Column):
-            return replace(expr, alias=expr.column_name)
+            return replace(expr, alias=None)
         return expr
 
     if arrayjoin:
