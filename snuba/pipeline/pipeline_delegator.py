@@ -1,6 +1,4 @@
-import logging
-from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, Iterator, List, Mapping, Optional, Tuple
+from typing import Callable, List, Mapping, Optional, Tuple
 
 from snuba.datasets.plans.query_plan import QueryRunner
 from snuba.pipeline.query_pipeline import (
@@ -9,17 +7,15 @@ from snuba.pipeline.query_pipeline import (
 )
 from snuba.query.logical import Query
 from snuba.request import Request
-from snuba.web import QueryException, QueryResult
+from snuba.threaded_function_delegator import ThreadedFunctionDelegator
+from snuba.web import QueryResult
+
 
 BuilderId = str
 QueryPipelineBuilders = Mapping[BuilderId, QueryPipelineBuilder]
 QueryResults = List[Tuple[BuilderId, QueryResult]]
 SelectorFunc = Callable[[Query], List[BuilderId]]
 CallbackFunc = Callable[[QueryResults], None]
-
-logger = logging.getLogger(__name__)
-
-executor = ThreadPoolExecutor()
 
 
 class MultipleConcurrentPipeline(QueryPipeline):
@@ -61,59 +57,17 @@ class MultipleConcurrentPipeline(QueryPipeline):
         self.__callback_func = callback_func
 
     def execute(self) -> QueryResult:
-        def build_and_execute_pipeline(
-            query_pipeline_builder: QueryPipelineBuilder,
-        ) -> QueryResult:
-            return query_pipeline_builder.build_pipeline(
-                self.__request, self.__runner
-            ).execute()
-
-        def execute_pipelines() -> Iterator[Tuple[BuilderId, QueryResult]]:
-            builder_ids = self.__selector_func(self.__request.query)
-            primary_builder_id = builder_ids.pop(0)
-
-            futures = [
-                (
-                    builder_id,
-                    executor.submit(
-                        build_and_execute_pipeline,
-                        query_pipeline_builder=self.__query_pipeline_builders[
-                            builder_id
-                        ],
-                    ),
-                )
-                for builder_id in builder_ids
-            ]
-
-            yield primary_builder_id, build_and_execute_pipeline(
-                self.__query_pipeline_builders[primary_builder_id]
-            )
-
-            yield from [
-                (builder_id, future.result()) for (builder_id, future) in futures
-            ]
-
-        generator = execute_pipelines()
-
-        query_results: QueryResults = []
-
-        try:
-            builder_id, query_result = next(generator)
-            query_results.append((builder_id, query_result))
-            return query_result
-        finally:
-
-            def execute_callback() -> None:
-                try:
-                    for builder_id, query_result in generator:
-                        query_results.append((builder_id, query_result))
-
-                    if self.__callback_func is not None:
-                        self.__callback_func(query_results)
-                except QueryException as error:
-                    logger.exception(error)
-
-            executor.submit(execute_callback)
+        executor = ThreadedFunctionDelegator[Query, QueryResult](
+            callables={
+                builder_id: builder.build_pipeline(
+                    self.__request, self.__runner
+                ).execute
+                for builder_id, builder in self.__query_pipeline_builders.items()
+            },
+            selector_func=self.__selector_func,
+            callback_func=self.__callback_func,
+        )
+        return executor.execute(self.__request.query)
 
 
 class PipelineDelegator(QueryPipelineBuilder):
