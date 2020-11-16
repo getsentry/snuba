@@ -1,17 +1,14 @@
-from typing import Callable, Sequence, Tuple
+from typing import Callable, Sequence
 
 import sentry_sdk
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
-from snuba.pipeline import Segment
-from snuba.pipeline.query_pipeline import EntityProcessingPayload
+from snuba.query.logical import Query as LogicalQuery
 from snuba.request.request_settings import RequestSettings
 
-ClickhouseProcessingPayload = Tuple[ClickhouseQueryPlan, RequestSettings]
 
-
-class ClickhouseProcessorsExecutor(Segment[ClickhouseProcessingPayload, None]):
+class ClickhouseProcessorsExecutor:
     """
     Executes the Clickhouse query processors for the query. These
     are taken from the query plan.
@@ -32,8 +29,9 @@ class ClickhouseProcessorsExecutor(Segment[ClickhouseProcessingPayload, None]):
         # from the ClickhouseQueryPlan.
         self.__processors = processors
 
-    def execute(self, processing_payload: ClickhouseProcessingPayload) -> None:
-        query_plan, settings = processing_payload
+    def execute(
+        self, query_plan: ClickhouseQueryPlan, settings: RequestSettings
+    ) -> None:
         for clickhouse_processor in self.__processors(query_plan):
             with sentry_sdk.start_span(
                 description=type(clickhouse_processor).__name__, op="processor"
@@ -41,7 +39,7 @@ class ClickhouseProcessorsExecutor(Segment[ClickhouseProcessingPayload, None]):
                 clickhouse_processor.process_query(query_plan.query, settings)
 
 
-class EntityProcessorsExecutor(Segment[EntityProcessingPayload, None]):
+class EntityProcessorsExecutor:
     """
     Executes the entity query processors for the query. These are taken
     from the entity.
@@ -50,8 +48,7 @@ class EntityProcessorsExecutor(Segment[EntityProcessingPayload, None]):
     the assumption that the query is transformed in place.
     """
 
-    def execute(self, processing_payload: EntityProcessingPayload) -> None:
-        query, settings = processing_payload
+    def execute(self, query: LogicalQuery, settings: RequestSettings) -> None:
         entity = get_entity(query.get_from_clause().key)
 
         for processor in entity.get_query_processors():

@@ -1,19 +1,13 @@
 from abc import ABC, abstractmethod
-from typing import Tuple
 
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan, QueryRunner
-from snuba.pipeline import Segment
 from snuba.query.logical import Query as LogicalQuery
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
 
-EntityProcessingPayload = Tuple[LogicalQuery, RequestSettings]
 
-
-class QueryProcessingPipeline(
-    Segment[EntityProcessingPayload, ClickhouseQueryPlan], ABC
-):
+class QueryProcessingPipeline(ABC):
     """
     A QueryProcessingPipeline contains a series of steps that, given
     a logical single entity query and request settings, Performs the
@@ -27,11 +21,13 @@ class QueryProcessingPipeline(
     """
 
     @abstractmethod
-    def execute(self, input: EntityProcessingPayload) -> ClickhouseQueryPlan:
+    def execute(
+        self, query: LogicalQuery, settings: RequestSettings
+    ) -> ClickhouseQueryPlan:
         raise NotImplementedError
 
 
-class QueryExecutionPipeline(Segment[Request, QueryResult], ABC):
+class QueryExecutionPipeline(ABC):
     """
     Contains the instructions to execute a query.
     The QueryExecutionPipeline performs the all query processing steps and,

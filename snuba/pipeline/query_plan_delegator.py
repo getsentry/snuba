@@ -63,7 +63,5 @@ class QueryPlanDelegator(QueryPipelineBuilder):
             callback_func=self.__callback_func,
         )
 
-    def build_processing_pipeline(
-        self, request: Request, runner: QueryRunner
-    ) -> QueryProcessingPipeline:
+    def build_processing_pipeline(self, request: Request) -> QueryProcessingPipeline:
         raise NotImplementedError

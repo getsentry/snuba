@@ -6,16 +6,17 @@ from snuba.datasets.plans.query_plan import (
     QueryRunner,
 )
 from snuba.pipeline.processors import (
-    EntityProcessorsExecutor,
     ClickhouseProcessorsExecutor,
+    EntityProcessorsExecutor,
 )
 from snuba.pipeline.query_pipeline import (
-    EntityProcessingPayload,
     QueryExecutionPipeline,
     QueryPipelineBuilder,
     QueryProcessingPipeline,
 )
+from snuba.query.logical import Query as LogicalQuery
 from snuba.request import Request
+from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
 
 
@@ -35,12 +36,13 @@ class SinglePlanProcessingPipeline(QueryProcessingPipeline, ABC):
         self.__entity_processors = EntityProcessorsExecutor()
         self.__clickhouse_processors = processors
 
-    def execute(self, query_payload: EntityProcessingPayload) -> ClickhouseQueryPlan:
-        self.__entity_processors.execute(query_payload)
+    def execute(
+        self, query: LogicalQuery, settings: RequestSettings
+    ) -> ClickhouseQueryPlan:
+        self.__entity_processors.execute(query, settings)
 
-        query, settings = query_payload
         query_plan = self.__query_plan_builder.build_plan(query, settings)
-        self.__clickhouse_processors.execute((query_plan, settings))
+        self.__clickhouse_processors.execute(query_plan, settings)
         return query_plan
 
 
@@ -78,7 +80,7 @@ class SinglePlanExecutionPipeline(QueryExecutionPipeline):
     def execute(self, input: Request) -> QueryResult:
         settings = input.settings
 
-        plan = self.__processing_pipeline.execute((input.query, settings))
+        plan = self.__processing_pipeline.execute(input.query, settings)
         return plan.execution_strategy.execute(plan.query, settings, self.__runner)
 
 
