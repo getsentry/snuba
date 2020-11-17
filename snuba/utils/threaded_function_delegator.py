@@ -25,7 +25,7 @@ class ThreadedFunctionDelegator(Generic[TInput, TResult]):
     def __init__(
         self,
         callables: Mapping[str, Callable[[], TResult]],
-        selector_func: Callable[[TInput], List[str]],
+        selector_func: Callable[[TInput], Tuple[str, List[str]]],
         callback_func: Optional[Callable[[List[Tuple[str, TResult]]], None]],
     ) -> None:
         self.__callables = callables
@@ -33,13 +33,13 @@ class ThreadedFunctionDelegator(Generic[TInput, TResult]):
         self.__callback_func = callback_func
 
     def __execute_callables(self, input: TInput) -> Iterator[Tuple[str, TResult]]:
-        function_ids = self.__selector_func(input)
+        selected = self.__selector_func(input)
 
-        primary_function_id = function_ids.pop(0)
+        primary_function_id = selected[0]
 
         futures = [
             (function_id, executor.submit(self.__callables[function_id]))
-            for function_id in function_ids
+            for function_id in selected[1]
         ]
 
         yield primary_function_id, self.__callables[primary_function_id]()

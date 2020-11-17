@@ -14,8 +14,8 @@ def test() -> None:
         "three": Mock(return_value=3),
     }
 
-    def selector_func(_: int) -> List[str]:
-        return ["one", "two"]
+    def selector_func(_: int) -> Tuple[str, List[str]]:
+        return ("one", ["two"])
 
     def callback_func(args: List[Tuple[str, int]]) -> None:
         with cv:

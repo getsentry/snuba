@@ -14,7 +14,7 @@ from snuba.web import QueryResult
 BuilderId = str
 QueryPipelineBuilders = Mapping[BuilderId, QueryPipelineBuilder]
 QueryResults = List[Tuple[BuilderId, QueryResult]]
-SelectorFunc = Callable[[Query], List[BuilderId]]
+SelectorFunc = Callable[[Query], Tuple[BuilderId, List[BuilderId]]]
 CallbackFunc = Callable[[QueryResults], None]
 
 

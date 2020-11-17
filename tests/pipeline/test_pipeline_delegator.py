@@ -38,7 +38,7 @@ def test() -> None:
 
     delegator = PipelineDelegator(
         query_pipeline_builders={"events": events_pipeline, "errors": errors_pipeline},
-        selector_func=lambda query: ["events", "errors"],
+        selector_func=lambda query: ("events", ["errors"]),
         callback_func=mock_callback_func,
     )
 
