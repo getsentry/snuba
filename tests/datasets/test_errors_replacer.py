@@ -63,7 +63,9 @@ class TestReplacer:
         args = {
             "project": [project_id],
             "selected_columns": ["group_id"],
-            "conditions": [["event_id", "=", str(uuid.UUID(event_id))]],
+            "conditions": [
+                ["event_id", "=", str(uuid.UUID(event_id)).replace("-", "")]
+            ],
         }
 
         data = json.loads(
