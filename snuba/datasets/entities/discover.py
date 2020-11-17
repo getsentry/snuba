@@ -356,6 +356,7 @@ class DiscoverEntity(Entity):
                 + self.__events_columns
                 + self.__transactions_columns
             ),
+            join_relationships={},
             writable_storage=None,
         )
 

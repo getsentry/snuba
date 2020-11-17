@@ -11,15 +11,16 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.datasets.errors_replacer import ReplacerState
+from snuba.datasets.storages.event_id_column_processor import EventIdColumnProcessor
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
-
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
+from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.web.split import TimeSplitQueryStrategy
@@ -136,6 +137,8 @@ query_processors = [
         project_column="project_id", replacer_state_name=ReplacerState.ERRORS,
     ),
     MappingColumnPromoter(mapping_specs={"tags": promoted_tag_columns}),
+    EventIdColumnProcessor(),
+    MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
     PrewhereProcessor(),
 ]

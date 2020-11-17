@@ -24,6 +24,7 @@ class OutcomesRawEntity(Entity):
                 query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             ),
             abstract_column_set=storage.get_schema().get_columns(),
+            join_relationships={},
             writable_storage=None,
         )
 

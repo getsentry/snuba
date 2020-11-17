@@ -18,8 +18,10 @@ class ReplacementMessage(NamedTuple):
 
 @dataclass(frozen=True)
 class Replacement:
-    count_query_template: str
-    insert_query_template: str
+    # XXX: For the group_exclude message we need to be able to run a
+    # replacement without running any query.
+    count_query_template: Optional[str]
+    insert_query_template: Optional[str]
     query_args: Mapping[str, Any]
     query_time_flags: Any
 

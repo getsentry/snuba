@@ -30,7 +30,7 @@ from snuba.query.exceptions import InvalidQueryException
 from snuba.redis import redis_client
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.request_settings import HTTPRequestSettings
-from snuba.request.schema import RequestSchema
+from snuba.request.schema import Language, RequestSchema
 from snuba.request.validation import build_request
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
@@ -287,7 +287,8 @@ def unqualified_query_view(*, timer: Timer):
         body = parse_request_body(http_request)
         dataset = get_dataset(body.pop("dataset", settings.DEFAULT_DATASET_NAME))
         _trace_transaction(dataset)
-        return dataset_query(dataset, body, timer)
+        # Not sure what language to pass into dataset_query here
+        return dataset_query(dataset, body, timer, Language.LEGACY)
     else:
         assert False, "unexpected fallthrough"
 
@@ -297,7 +298,9 @@ def unqualified_query_view(*, timer: Timer):
 def dataset_query_view(*, dataset: Dataset, timer: Timer):
     if http_request.method == "GET":
         schema = RequestSchema.build_with_extensions(
-            dataset.get_default_entity().get_extensions(), HTTPRequestSettings
+            dataset.get_default_entity().get_extensions(),
+            HTTPRequestSettings,
+            Language.LEGACY,
         )
         return render_template(
             "query.html",
@@ -306,18 +309,37 @@ def dataset_query_view(*, dataset: Dataset, timer: Timer):
     elif http_request.method == "POST":
         body = parse_request_body(http_request)
         _trace_transaction(dataset)
-        return dataset_query(dataset, body, timer)
+        return dataset_query(dataset, body, timer, Language.LEGACY)
+    else:
+        assert False, "unexpected fallthrough"
+
+
+@application.route("/<dataset:dataset>/snql", methods=["GET", "POST"])
+@util.time_request("snql")
+def snql_dataset_query_view(*, dataset: Dataset, timer: Timer):
+    if http_request.method == "GET":
+        schema = RequestSchema.build_with_extensions(
+            dataset.get_extensions(), HTTPRequestSettings, Language.SNQL
+        )
+        return render_template(
+            "query.html",
+            query_template=json.dumps(schema.generate_template(), indent=4,),
+        )
+    elif http_request.method == "POST":
+        body = parse_request_body(http_request)
+        _trace_transaction(dataset)
+        return dataset_query(dataset, body, timer, Language.SNQL)
     else:
         assert False, "unexpected fallthrough"
 
 
 @with_span()
-def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
+def dataset_query(dataset: Dataset, body, timer: Timer, language: Language) -> Response:
     assert http_request.method == "POST"
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build_with_extensions(
-            dataset.get_default_entity().get_extensions(), HTTPRequestSettings
+            dataset.get_default_entity().get_extensions(), HTTPRequestSettings, language
         )
 
     request = build_request(body, schema, timer, dataset, http_request.referrer)
