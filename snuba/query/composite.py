@@ -1,20 +1,13 @@
 from __future__ import annotations
 
-from typing import Callable, Generic, Iterable, Optional, Sequence, Union
+from abc import ABC
+from typing import Callable, Iterable
 
-from snuba.query import (
-    Limitby,
-    OrderBy,
-    ProcessableQuery,
-    Query,
-    SelectedExpression,
-    TSimpleDataSource,
-)
-from snuba.query.data_source.join import JoinClause
+from snuba.query import Query
 from snuba.query.expressions import Expression, ExpressionVisitor
 
 
-class CompositeQuery(Query, Generic[TSimpleDataSource]):
+class CompositeQuery(Query, ABC):
     """
     Query class that represents nested or joined queries.
 
@@ -22,63 +15,6 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
     a join, but it cannot be a simple data source. That would be a
     ProcessableQuery.
     """
-
-    def __init__(
-        self,
-        from_clause: Optional[
-            Union[
-                ProcessableQuery[TSimpleDataSource],
-                CompositeQuery[TSimpleDataSource],
-                JoinClause[TSimpleDataSource],
-            ]
-        ],
-        # TODO: Consider if to remove the defaults and make some of
-        # these fields mandatory. This impacts a lot of code so it
-        # would be done on its own.
-        selected_columns: Optional[Sequence[SelectedExpression]] = None,
-        array_join: Optional[Expression] = None,
-        condition: Optional[Expression] = None,
-        groupby: Optional[Sequence[Expression]] = None,
-        having: Optional[Expression] = None,
-        order_by: Optional[Sequence[OrderBy]] = None,
-        limitby: Optional[Limitby] = None,
-        limit: Optional[int] = None,
-        offset: int = 0,
-        totals: bool = False,
-        granularity: Optional[int] = None,
-    ):
-        super().__init__(
-            selected_columns=selected_columns,
-            array_join=array_join,
-            condition=condition,
-            groupby=groupby,
-            having=having,
-            order_by=order_by,
-            limitby=limitby,
-            limit=limit,
-            offset=offset,
-            totals=totals,
-            granularity=granularity,
-        )
-        self.__from_clause = from_clause
-
-    def get_from_clause(
-        self,
-    ) -> Union[
-        ProcessableQuery[TSimpleDataSource],
-        CompositeQuery[TSimpleDataSource],
-        JoinClause[TSimpleDataSource],
-    ]:
-        assert self.__from_clause is not None, "Data source has not been provided yet."
-        return self.__from_clause
-
-    def set_from_clause(
-        self,
-        from_clause: Union[
-            ProcessableQuery[TSimpleDataSource], CompositeQuery[TSimpleDataSource]
-        ],
-    ) -> None:
-        self.__from_clause = from_clause
 
     def _get_expressions_impl(self) -> Iterable[Expression]:
         return []
@@ -95,5 +31,5 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
         if not super().__eq__(other):
             return False
 
-        assert isinstance(other, CompositeQuery)
+        assert isinstance(other, type(self))
         return self.get_from_clause() == other.get_from_clause()

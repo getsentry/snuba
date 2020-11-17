@@ -1,8 +1,12 @@
-from typing import Callable, Iterable, Optional, Sequence
+from __future__ import annotations
+
+from typing import Callable, Iterable, Optional, Sequence, Union
 
 from snuba.query import Limitby, OrderBy
 from snuba.query import ProcessableQuery as AbstractQuery
 from snuba.query import SelectedExpression
+from snuba.query.composite import CompositeQuery as AbstractCompositeQuery
+from snuba.query.data_source.join import JoinClause
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Expression as SnubaExpression
 from snuba.query.expressions import ExpressionVisitor
@@ -74,3 +78,44 @@ class Query(AbstractQuery[Table]):
 
         assert isinstance(other, Query)  # mypy
         return self.get_prewhere_ast() == other.get_prewhere_ast()
+
+
+class CompositeQuery(AbstractCompositeQuery):
+    def __init__(
+        self,
+        from_clause: Optional[Union[Query, CompositeQuery, JoinClause[Table]]],
+        selected_columns: Optional[Sequence[SelectedExpression]] = None,
+        array_join: Optional[Expression] = None,
+        condition: Optional[Expression] = None,
+        groupby: Optional[Sequence[Expression]] = None,
+        having: Optional[Expression] = None,
+        order_by: Optional[Sequence[OrderBy]] = None,
+        limitby: Optional[Limitby] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        totals: bool = False,
+        granularity: Optional[int] = None,
+    ):
+        super().__init__(
+            selected_columns=selected_columns,
+            array_join=array_join,
+            condition=condition,
+            groupby=groupby,
+            having=having,
+            order_by=order_by,
+            limitby=limitby,
+            limit=limit,
+            offset=offset,
+            totals=totals,
+            granularity=granularity,
+        )
+        self.__from_clause = from_clause
+
+    def get_from_clause(self) -> Union[Query, CompositeQuery, JoinClause[Table]]:
+        assert self.__from_clause is not None, "Data source has not been provided yet."
+        return self.__from_clause
+
+    def set_from_clause(
+        self, from_clause: Union[Query, CompositeQuery, JoinClause[Table]]
+    ) -> None:
+        self.__from_clause = from_clause

@@ -11,9 +11,8 @@ from snuba.clickhouse.formatter.nodes import (
     SequenceNode,
     StringNode,
 )
-from snuba.clickhouse.query import Query
+from snuba.clickhouse.query import CompositeQuery, Query
 from snuba.query import Query as AbstractQuery
-from snuba.query.composite import CompositeQuery
 from snuba.query.data_source import DataSource
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Table
@@ -21,7 +20,7 @@ from snuba.query.expressions import Expression
 from snuba.query.parsing import ParsingContext
 from snuba.request.request_settings import RequestSettings
 
-FormattableQuery = Union[Query, CompositeQuery[Table]]
+FormattableQuery = Union[Query, CompositeQuery]
 
 
 def format_query(query: FormattableQuery, settings: RequestSettings) -> FormattedQuery:

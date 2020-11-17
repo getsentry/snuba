@@ -4,9 +4,8 @@ import pytest
 from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
 from snuba.clickhouse.formatter.nodes import PaddingNode, SequenceNode, StringNode
 from snuba.clickhouse.formatter.query import JoinFormatter, format_query
-from snuba.clickhouse.query import Query
+from snuba.clickhouse.query import CompositeQuery, Query
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,

@@ -1,7 +1,6 @@
 from snuba.clickhouse.columns import Any, ColumnSet, String, UInt
 from snuba.datasets.entities import EntityKey
 from snuba.query import SelectedExpression
-from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import (
     IndividualNode,
     JoinClause,
@@ -11,6 +10,7 @@ from snuba.query.data_source.join import (
 )
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column
+from snuba.query.logical import CompositeQuery
 from snuba.query.logical import Query as LogicalQuery
 
 

@@ -16,6 +16,8 @@ from deprecation import deprecated
 from snuba.query import Limitby, OrderBy
 from snuba.query import ProcessableQuery as AbstractQuery
 from snuba.query import SelectedExpression
+from snuba.query.composite import CompositeQuery as AbstractCompositeQuery
+from snuba.query.data_source.join import JoinClause
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Expression, ExpressionVisitor
 
@@ -115,3 +117,44 @@ class Query(AbstractQuery[Entity]):
 
     def _transform_impl(self, visitor: ExpressionVisitor[Expression]) -> None:
         pass
+
+
+class CompositeQuery(AbstractCompositeQuery):
+    def __init__(
+        self,
+        from_clause: Optional[Union[Query, CompositeQuery, JoinClause[Entity]]],
+        selected_columns: Optional[Sequence[SelectedExpression]] = None,
+        array_join: Optional[Expression] = None,
+        condition: Optional[Expression] = None,
+        groupby: Optional[Sequence[Expression]] = None,
+        having: Optional[Expression] = None,
+        order_by: Optional[Sequence[OrderBy]] = None,
+        limitby: Optional[Limitby] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        totals: bool = False,
+        granularity: Optional[int] = None,
+    ):
+        super().__init__(
+            selected_columns=selected_columns,
+            array_join=array_join,
+            condition=condition,
+            groupby=groupby,
+            having=having,
+            order_by=order_by,
+            limitby=limitby,
+            limit=limit,
+            offset=offset,
+            totals=totals,
+            granularity=granularity,
+        )
+        self.__from_clause = from_clause
+
+    def get_from_clause(self) -> Union[Query, CompositeQuery, JoinClause[Entity]]:
+        assert self.__from_clause is not None, "Data source has not been provided yet."
+        return self.__from_clause
+
+    def set_from_clause(
+        self, from_clause: Union[Query, CompositeQuery, JoinClause[Entity]]
+    ) -> None:
+        self.__from_clause = from_clause
