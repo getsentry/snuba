@@ -145,7 +145,7 @@ snql_grammar = Grammar(
     close_paren           = ")"
     open_square           = "["
     close_square          = "]"
-    space                 = ~r" |\n|\t"
+    space                 = ~r"\s"
     comma                 = ","
     colon                 = ":"
 
@@ -177,9 +177,7 @@ class SnQLVisitor(NodeVisitor):
     def visit_query_exp(
         self, node: Node, visited_children: Iterable[Any]
     ) -> LogicalQuery:
-        args: MutableMapping[str, Any] = {
-            "array_join": None,
-        }
+        args: MutableMapping[str, Any] = {}
         (
             data_source,
             args["selected_columns"],

@@ -88,10 +88,7 @@ def visit_column_name(node: Node, visited_children: Iterable[Any]) -> Column:
 def visit_low_pri_tuple(
     node: Node, visited_children: Tuple[LowPriOperator, Any, Expression]
 ) -> LowPriTuple:
-    if len(visited_children) == 2:
-        left, right = visited_children[0], visited_children[1]
-    else:
-        left, _, right = visited_children
+    left, _, right = visited_children
     return LowPriTuple(op=left, arithm=right)
 
 
