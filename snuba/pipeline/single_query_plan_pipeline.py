@@ -30,16 +30,21 @@ class SinglePlanProcessingPipeline(QueryProcessingPipeline):
     The main use case is for subqueries.
     """
 
-    def __init__(self, query_plan_builder: ClickhouseQueryPlanBuilder,) -> None:
+    def __init__(
+        self,
+        query: LogicalQuery,
+        settings: RequestSettings,
+        query_plan_builder: ClickhouseQueryPlanBuilder,
+    ) -> None:
+        self.__query = query
+        self.__settings = settings
         self.__query_plan_builder = query_plan_builder
 
-    def execute(
-        self, query: LogicalQuery, settings: RequestSettings
-    ) -> ClickhouseQueryPlan:
-        execute_entity_processors(query, settings)
+    def execute(self) -> ClickhouseQueryPlan:
+        execute_entity_processors(self.__query, self.__settings)
 
-        query_plan = self.__query_plan_builder.build_plan(query, settings)
-        execute_all_clickhouse_processors(query_plan, settings)
+        query_plan = self.__query_plan_builder.build_plan(self.__query, self.__settings)
+        execute_all_clickhouse_processors(query_plan, self.__settings)
         return query_plan
 
 
@@ -49,14 +54,18 @@ class SinglePlanExecutionPipeline(QueryExecutionPipeline):
     """
 
     def __init__(
-        self, runner: QueryRunner, query_plan_builder: ClickhouseQueryPlanBuilder,
+        self,
+        request: Request,
+        runner: QueryRunner,
+        query_plan_builder: ClickhouseQueryPlanBuilder,
     ):
+        self.__request = request
         self.__runner = runner
         self.__query_plan_builder = query_plan_builder
 
-    def execute(self, input: Request) -> QueryResult:
-        settings = input.settings
-        query = input.query
+    def execute(self) -> QueryResult:
+        settings = self.__request.settings
+        query = self.__request.query
 
         execute_entity_processors(query, settings)
 
@@ -75,7 +84,9 @@ class SingleQueryPlanPipelineBuilder(QueryPipelineBuilder):
     def build_execution_pipeline(
         self, request: Request, runner: QueryRunner
     ) -> QueryExecutionPipeline:
-        return SinglePlanExecutionPipeline(runner, self.__query_plan_builder)
+        return SinglePlanExecutionPipeline(request, runner, self.__query_plan_builder)
 
-    def build_processing_pipeline(self, request: Request) -> QueryProcessingPipeline:
-        return SinglePlanProcessingPipeline(self.__query_plan_builder)
+    def build_processing_pipeline(
+        self, query: LogicalQuery, settings: RequestSettings,
+    ) -> QueryProcessingPipeline:
+        return SinglePlanProcessingPipeline(query, settings, self.__query_plan_builder)

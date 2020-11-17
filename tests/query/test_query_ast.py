@@ -236,8 +236,8 @@ def test_alias_validation(
     query_pipeline = (
         events.get_default_entity()
         .get_query_pipeline_builder()
-        .build_processing_pipeline(request)
+        .build_processing_pipeline(request.query, request.settings)
     )
-    plan = query_pipeline.execute(request.query, request.settings)
+    plan = query_pipeline.execute()
 
     assert plan.query.validate_aliases() == expected_result

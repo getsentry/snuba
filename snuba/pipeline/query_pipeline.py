@@ -10,7 +10,7 @@ from snuba.web import QueryResult
 class QueryProcessingPipeline(ABC):
     """
     A QueryProcessingPipeline contains a series of steps that, given
-    a logical single entity query and request settings, Performs the
+    a logical single entity query and request settings, performs the
     query processing steps to the point where the query is ready to
     be executed.
 
@@ -21,9 +21,7 @@ class QueryProcessingPipeline(ABC):
     """
 
     @abstractmethod
-    def execute(
-        self, query: LogicalQuery, settings: RequestSettings
-    ) -> ClickhouseQueryPlan:
+    def execute(self) -> ClickhouseQueryPlan:
         raise NotImplementedError
 
 
@@ -44,7 +42,7 @@ class QueryExecutionPipeline(ABC):
     """
 
     @abstractmethod
-    def execute(self, input: Request) -> QueryResult:
+    def execute(self) -> QueryResult:
         raise NotImplementedError
 
 
@@ -64,7 +62,9 @@ class QueryPipelineBuilder(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def build_processing_pipeline(self, request: Request) -> QueryProcessingPipeline:
+    def build_processing_pipeline(
+        self, query: LogicalQuery, settings: RequestSettings
+    ) -> QueryProcessingPipeline:
         """
         Returns a pipeline that executes the processing phase of a query.
 

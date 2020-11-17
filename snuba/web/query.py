@@ -113,7 +113,7 @@ def _run_query_pipeline(
     return (
         entity.get_query_pipeline_builder()
         .build_execution_pipeline(request, query_runner)
-        .execute(request)
+        .execute()
     )
 
 

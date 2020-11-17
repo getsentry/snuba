@@ -150,11 +150,11 @@ def test_data_source(
     query = parse_query(query_body, dataset)
     request = Request("a", query, request_settings, {}, "r")
     entity = get_entity(query.get_from_clause().key)
-    for processor in entity.get_query_processors():
-        processor.process_query(request.query, request.settings)
 
-    pipeline = entity.get_query_pipeline_builder().build_processing_pipeline(request)
-    plan = pipeline.execute(request.query, request.settings)
+    pipeline = entity.get_query_pipeline_builder().build_processing_pipeline(
+        request.query, request.settings
+    )
+    plan = pipeline.execute()
 
     assert plan.query.get_from_clause().table_name == expected_table, json.dumps(
         query_body
