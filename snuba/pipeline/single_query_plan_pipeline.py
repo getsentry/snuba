@@ -9,9 +9,9 @@ from snuba.pipeline.processors import (
     execute_pre_strategy_processors,
 )
 from snuba.pipeline.query_pipeline import (
+    EntityQueryProcessingPipeline,
     QueryExecutionPipeline,
     QueryPipelineBuilder,
-    QueryProcessingPipeline,
 )
 from snuba.query.logical import Query as LogicalQuery
 from snuba.request import Request
@@ -19,7 +19,7 @@ from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
 
 
-class SinglePlanProcessingPipeline(QueryProcessingPipeline):
+class SinglePlanQueryProcessingPipeline(EntityQueryProcessingPipeline):
     """
     Executes the processing phase of a single plan query. Which means a
     query based on a single entity, that would produce a query plan based
@@ -88,5 +88,7 @@ class SingleQueryPlanPipelineBuilder(QueryPipelineBuilder):
 
     def build_processing_pipeline(
         self, query: LogicalQuery, settings: RequestSettings,
-    ) -> QueryProcessingPipeline:
-        return SinglePlanProcessingPipeline(query, settings, self.__query_plan_builder)
+    ) -> EntityQueryProcessingPipeline:
+        return SinglePlanQueryProcessingPipeline(
+            query, settings, self.__query_plan_builder
+        )

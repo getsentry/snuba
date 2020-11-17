@@ -3,11 +3,13 @@ from typing import Callable, List, Mapping, Tuple
 from snuba.clickhouse.query import Query
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder, QueryRunner
 from snuba.pipeline.query_pipeline import (
+    EntityQueryProcessingPipeline,
     QueryExecutionPipeline,
     QueryPipelineBuilder,
-    QueryProcessingPipeline,
 )
+from snuba.query.logical import Query as LogicalQuery
 from snuba.request import Request
+from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
 
 BuilderId = str
@@ -33,7 +35,7 @@ class MultipleQueryPlanPipeline(QueryExecutionPipeline):
         self.__request = request
         self.__query_plan_builders = query_plan_builders
 
-    def execute(self, input: Request) -> QueryResult:
+    def execute(self) -> QueryResult:
         raise NotImplementedError
 
 
@@ -63,5 +65,7 @@ class QueryPlanDelegator(QueryPipelineBuilder):
             callback_func=self.__callback_func,
         )
 
-    def build_processing_pipeline(self, request: Request) -> QueryProcessingPipeline:
+    def build_processing_pipeline(
+        self, query: LogicalQuery, settings: RequestSettings,
+    ) -> EntityQueryProcessingPipeline:
         raise NotImplementedError

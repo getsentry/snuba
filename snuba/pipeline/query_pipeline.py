@@ -7,17 +7,14 @@ from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
 
 
-class QueryProcessingPipeline(ABC):
+class EntityQueryProcessingPipeline(ABC):
     """
-    A QueryProcessingPipeline contains a series of steps that, given
+    A EntityQueryProcessingPipeline contains a series of steps that, given
     a logical single entity query and request settings, performs the
     query processing steps to the point where the query is ready to
     be executed.
 
     the query is returned as a ClickhouseQueryPlan.
-
-    TODO: If we will build a processing pipeline for composite query
-    the return type of this pipeline will have to change.
     """
 
     @abstractmethod
@@ -49,7 +46,8 @@ class QueryExecutionPipeline(ABC):
 class QueryPipelineBuilder(ABC):
     """
     Builds a query pipeline, which contains the directions for building
-    and running the query.
+    processing and running a single entity query or a subquery of a
+    composite query.
     """
 
     @abstractmethod
@@ -64,13 +62,9 @@ class QueryPipelineBuilder(ABC):
     @abstractmethod
     def build_processing_pipeline(
         self, query: LogicalQuery, settings: RequestSettings
-    ) -> QueryProcessingPipeline:
+    ) -> EntityQueryProcessingPipeline:
         """
-        Returns a pipeline that executes the processing phase of a query.
-
-        TODO: Split this method out of this class so that we can reuse
-        the execution builder for the dataset for composite queries.
-        In those cases the processing does not need to be split from
-        execution.
+        Returns a pipeline that executes the processing phase of a single
+        entity query.
         """
         raise NotImplementedError
