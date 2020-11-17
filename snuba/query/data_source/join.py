@@ -20,6 +20,15 @@ class JoinModifier(Enum):
     SEMI = "SEMI"
 
 
+class JoinClass(Enum):
+    ONE_2_ZERO_OR_ONE = "1-0/1"
+    ONE_2_ONE = "1-1"
+    ONE_2_N = "1-N"
+    N_2_ZERO_OR_ONE = "N-0/1"
+    N_2_ONE = "N-1"
+    N_2_N = "N-N"
+
+
 @dataclass(frozen=True)
 class JoinNode(ABC, Generic[TSimpleDataSource]):
     """

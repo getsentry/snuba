@@ -1,3 +1,4 @@
+import pytest
 import uuid
 from datetime import datetime, timedelta
 
@@ -11,6 +12,21 @@ from tests.helpers import write_processed_messages
 
 
 class TestOutcomesApi(BaseApiTest):
+    @pytest.fixture(
+        autouse=True, params=["/query", "/outcomes/snql"], ids=["legacy", "snql"]
+    )
+    def _set_endpoint(self, request, convert_legacy_to_snql):
+        self.endpoint = request.param
+        self.multiplier = 1
+        if request.param == "/outcomes/snql":
+            self.multiplier = 2
+            old_post = self.app.post
+
+            def new_post(endpoint, data=None):
+                return old_post(endpoint, data=convert_legacy_to_snql(data, "outcomes"))
+
+            self.app.post = new_post
+
     def setup_method(self, test_method):
         super().setup_method(test_method)
 
@@ -111,7 +127,7 @@ class TestOutcomesApi(BaseApiTest):
         to_date = self.format_time(self.base_time + self.skew)
 
         response = self.app.post(
-            "/query",
+            self.endpoint,
             data=json.dumps(
                 {
                     "dataset": "outcomes",
@@ -129,5 +145,5 @@ class TestOutcomesApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200
         assert len(data["data"]) == 3
-        assert all([row["aggregate"] == 10 for row in data["data"]])
+        assert all([row["aggregate"] == 10 * self.multiplier for row in data["data"]])
         assert sorted([row["project_id"] for row in data["data"]]) == [1, 1, 2]
