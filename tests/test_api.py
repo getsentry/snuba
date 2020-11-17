@@ -421,7 +421,7 @@ class TestApi(BaseApiTest):
                 ),
             ).data
         )
-        assert "LIMIT 100 BY environment" in result["sql"]
+        assert "LIMIT 100 BY _snuba_environment" in result["sql"]
 
         # Stress nullable totals column, making sure we get results as expected
         result = json.loads(
@@ -787,8 +787,9 @@ class TestApi(BaseApiTest):
                 ),
             ).data
         )
+
         assert (
-            "PREWHERE notEquals(positionCaseInsensitive(message, 'abc'), 0)"
+            "PREWHERE notEquals(positionCaseInsensitive((message AS _snuba_message), 'abc'), 0)"
             in result["sql"]
         )
 
@@ -812,7 +813,10 @@ class TestApi(BaseApiTest):
                 ),
             ).data
         )
-        assert "PREWHERE notEquals(positionCaseInsensitive(message" in result["sql"]
+        assert (
+            "PREWHERE notEquals(positionCaseInsensitive((message AS _snuba_message)"
+            in result["sql"]
+        )
 
         # Allow 2 conditions in prewhere clause
         settings.MAX_PREWHERE_CONDITIONS = 2
@@ -833,7 +837,7 @@ class TestApi(BaseApiTest):
             ).data
         )
         assert (
-            "PREWHERE notEquals(positionCaseInsensitive(message, 'abc'), 0) AND in(project_id, tuple(1))"
+            "PREWHERE notEquals(positionCaseInsensitive((message AS _snuba_message), 'abc'), 0) AND in(project_id, tuple(1))"
             in result["sql"]
         )
 
@@ -1091,8 +1095,8 @@ class TestApi(BaseApiTest):
             ).data
         )
         # Issue is expanded once, and alias used subsequently
-        assert "equals(group_id, 0)" in response["sql"]
-        assert "equals(group_id, 1)" in response["sql"]
+        assert "equals(_snuba_group_id, 0)" in response["sql"]
+        assert "equals(_snuba_group_id, 1)" in response["sql"]
 
     def test_sampling_expansion(self):
         response = json.loads(
