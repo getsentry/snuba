@@ -421,7 +421,7 @@ class TestApi(BaseApiTest):
                 ),
             ).data
         )
-        assert "LIMIT 100 BY environment" in result["sql"]
+        assert "LIMIT 100 BY _snuba_environment" in result["sql"]
 
         # Stress nullable totals column, making sure we get results as expected
         result = json.loads(
