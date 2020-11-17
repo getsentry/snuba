@@ -29,6 +29,7 @@ class GroupAssigneeEntity(Entity):
                 query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             ),
             abstract_column_set=schema.get_columns(),
+            join_relationships={},
             writable_storage=storage,
         )
 

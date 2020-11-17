@@ -39,6 +39,7 @@ class OutcomesEntity(Entity):
                 ),
             ),
             abstract_column_set=read_schema.get_columns(),
+            join_relationships={},
             writable_storage=writable_storage,
         )
 

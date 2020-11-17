@@ -172,11 +172,15 @@ def _format_limitby(
     query: AbstractQuery, formatter: ClickhouseExpressionFormatter
 ) -> Optional[StringNode]:
     ast_limitby = query.get_limitby()
-    return (
-        StringNode("LIMIT {} BY {}".format(*ast_limitby))
-        if ast_limitby is not None
-        else None
-    )
+
+    if ast_limitby is not None:
+        return StringNode(
+            "LIMIT {} BY {}".format(
+                ast_limitby.limit, ast_limitby.expression.accept(formatter)
+            )
+        )
+
+    return None
 
 
 def _format_limit(

@@ -1,6 +1,6 @@
 from typing import Callable, Iterable, Optional, Sequence
 
-from snuba.query import Limitby, OrderBy
+from snuba.query import LimitBy, OrderBy
 from snuba.query import ProcessableQuery as AbstractQuery
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
@@ -24,7 +24,7 @@ class Query(AbstractQuery[Table]):
         groupby: Optional[Sequence[Expression]] = None,
         having: Optional[Expression] = None,
         order_by: Optional[Sequence[OrderBy]] = None,
-        limitby: Optional[Limitby] = None,
+        limitby: Optional[LimitBy] = None,
         limit: Optional[int] = None,
         offset: int = 0,
         totals: bool = False,
@@ -68,9 +68,5 @@ class Query(AbstractQuery[Table]):
     def set_prewhere_ast_condition(self, condition: Optional[Expression]) -> None:
         self.__prewhere = condition
 
-    def __eq__(self, other: object) -> bool:
-        if not super().__eq__(other):
-            return False
-
-        assert isinstance(other, Query)  # mypy
-        return self.get_prewhere_ast() == other.get_prewhere_ast()
+    def _eq_functions(self) -> Sequence[str]:
+        return tuple(super()._eq_functions()) + ("get_prewhere_ast",)

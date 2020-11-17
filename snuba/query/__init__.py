@@ -28,7 +28,10 @@ from snuba.query.expressions import (
 )
 
 
-Limitby = Tuple[int, str]
+@dataclass(frozen=True)
+class LimitBy:
+    limit: int
+    expression: Expression
 
 
 class OrderByDirection(Enum):
@@ -90,7 +93,7 @@ class Query(DataSource, ABC):
         groupby: Optional[Sequence[Expression]] = None,
         having: Optional[Expression] = None,
         order_by: Optional[Sequence[OrderBy]] = None,
-        limitby: Optional[Limitby] = None,
+        limitby: Optional[LimitBy] = None,
         limit: Optional[int] = None,
         offset: int = 0,
         totals: bool = False,
@@ -180,7 +183,7 @@ class Query(DataSource, ABC):
     def get_orderby_from_ast(self) -> Sequence[OrderBy]:
         return self.__order_by
 
-    def get_limitby(self) -> Optional[Limitby]:
+    def get_limitby(self) -> Optional[LimitBy]:
         return self.__limitby
 
     def get_limit(self) -> Optional[int]:
@@ -230,6 +233,7 @@ class Query(DataSource, ABC):
             chain.from_iterable(
                 map(lambda orderby: orderby.expression, self.__order_by)
             ),
+            [self.__limitby.expression] if self.__limitby else [],
             self._get_expressions_impl(),
         )
 
@@ -286,6 +290,12 @@ class Query(DataSource, ABC):
                 self.__order_by,
             )
         )
+
+        if self.__limitby is not None:
+            self.__limitby = LimitBy(
+                self.__limitby.limit, self.__limitby.expression.transform(func)
+            )
+
         self._transform_expressions_impl(func)
 
     @abstractmethod
@@ -390,26 +400,37 @@ class Query(DataSource, ABC):
         declared_symbols |= {c.flattened for c in self.get_from_clause().get_columns()}
         return not referenced_symbols - declared_symbols
 
-    def __eq__(self, other: object) -> bool:
-        if self.__class__ != other.__class__:
-            return False
+    def _eq_functions(self) -> Sequence[str]:
+        return (
+            "get_selected_columns_from_ast",
+            "get_groupby_from_ast",
+            "get_condition_from_ast",
+            "get_arrayjoin_from_ast",
+            "get_having_from_ast",
+            "get_orderby_from_ast",
+            "get_limitby",
+            "get_limit",
+            "get_offset",
+            "has_totals",
+            "get_granularity",
+        )
 
-        assert isinstance(other, Query)  # mypy
-        tests = [
-            self.get_selected_columns_from_ast()
-            == other.get_selected_columns_from_ast(),
-            self.get_groupby_from_ast() == other.get_groupby_from_ast(),
-            self.get_condition_from_ast() == other.get_condition_from_ast(),
-            self.get_arrayjoin_from_ast() == other.get_arrayjoin_from_ast(),
-            self.get_having_from_ast() == other.get_having_from_ast(),
-            self.get_orderby_from_ast() == other.get_orderby_from_ast(),
-            self.get_limitby() == other.get_limitby(),
-            self.get_limit() == other.get_limit(),
-            self.get_offset() == other.get_offset(),
-            self.has_totals() == other.has_totals(),
-            self.get_granularity() == other.get_granularity(),
-        ]
-        return all(tests)
+    def equals(self, other: object) -> Tuple[bool, str]:
+        if self.__class__ != other.__class__:
+            return False, f"{self.__class__} != {other.__class__}"
+
+        tests = self._eq_functions()
+        for func in tests:
+            if getattr(self, func)() != getattr(other, func)():
+                return (
+                    False,
+                    f"{func}: {getattr(self, func)()} != {getattr(other, func)()}",
+                )
+        return True, ""
+
+    def __eq__(self, other: object) -> bool:
+        eq, _ = self.equals(other)
+        return eq
 
 
 TSimpleDataSource = TypeVar("TSimpleDataSource", bound=SimpleDataSource)
@@ -433,7 +454,7 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
         groupby: Optional[Sequence[Expression]] = None,
         having: Optional[Expression] = None,
         order_by: Optional[Sequence[OrderBy]] = None,
-        limitby: Optional[Limitby] = None,
+        limitby: Optional[LimitBy] = None,
         limit: Optional[int] = None,
         offset: int = 0,
         totals: bool = False,
@@ -461,9 +482,5 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
     def set_from_clause(self, from_clause: TSimpleDataSource) -> None:
         self.__from_clause = from_clause
 
-    def __eq__(self, other: object) -> bool:
-        if not super().__eq__(other):
-            return False
-
-        assert isinstance(other, ProcessableQuery)
-        return bool(self.get_from_clause() == other.get_from_clause())
+    def _eq_functions(self) -> Sequence[str]:
+        return tuple(super()._eq_functions()) + ("get_from_clause",)

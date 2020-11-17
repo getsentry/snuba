@@ -928,7 +928,8 @@ def test_format_expressions(
     events = get_dataset("events")
     query = parse_query(query_body, events)
 
-    assert query == expected_query
+    eq, reason = query.equals(expected_query)
+    assert eq, reason
 
 
 def test_shadowing() -> None:
