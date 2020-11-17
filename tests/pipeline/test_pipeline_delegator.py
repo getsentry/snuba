@@ -1,5 +1,6 @@
-import time
-from unittest.mock import Mock, call
+import threading
+from typing import List, Tuple
+from unittest.mock import Mock
 
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -14,9 +15,15 @@ from snuba.web import QueryResult
 
 
 def test() -> None:
+    cv = threading.Condition()
     query_result = QueryResult({}, {"stats": {}, "sql": ""})
     mock_query_runner = Mock(return_value=query_result)
-    mock_callback_func = Mock()
+
+    def callback_func(args: List[Tuple[str, QueryResult]]) -> None:
+        with cv:
+            assert args == [("events", query_result), ("errors", query_result)]
+            cv.notify()
+
     query_body = {
         "selected_columns": ["type", "project_id"],
     }
@@ -39,18 +46,13 @@ def test() -> None:
     delegator = PipelineDelegator(
         query_pipeline_builders={"events": events_pipeline, "errors": errors_pipeline},
         selector_func=lambda query: ("events", ["errors"]),
-        callback_func=mock_callback_func,
+        callback_func=callback_func,
     )
 
-    delegator.build_pipeline(
-        Request("", query, HTTPRequestSettings(), {}, ""), mock_query_runner
-    ).execute()
-
-    # Allow threads to finish
-    time.sleep(0.01)
+    with cv:
+        delegator.build_pipeline(
+            Request("", query, HTTPRequestSettings(), {}, ""), mock_query_runner
+        ).execute()
+        cv.wait()
 
     assert mock_query_runner.call_count == 2
-
-    assert mock_callback_func.call_args_list == [
-        call([("events", query_result), ("errors", query_result)])
-    ]
