@@ -8,7 +8,7 @@ from snuba.clickhouse.escaping import NEGATE_RE
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity import Entity
-from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
     Argument,
@@ -234,6 +234,15 @@ def _parse_query_impl(body: MutableMapping[str, Any], entity: Entity) -> Query:
             )
         )
 
+    limitby_clause: Optional[LimitBy] = None
+
+    if body.get("limitby"):
+        limitby_limit, limitby_expr = body["limitby"]
+        limitby_clause = LimitBy(
+            limitby_limit,
+            parse_expression(limitby_expr, entity.get_data_model(), set()),
+        )
+
     return Query(
         body,
         None,
@@ -243,7 +252,7 @@ def _parse_query_impl(body: MutableMapping[str, Any], entity: Entity) -> Query:
         groupby=[g.expression for g in groupby_clause],
         having=having_expr,
         order_by=orderby_exprs,
-        limitby=body.get("limitby"),
+        limitby=limitby_clause,
         sample=body.get("sample"),
         limit=body.get("limit", None),
         offset=body.get("offset", 0),

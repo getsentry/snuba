@@ -11,7 +11,6 @@ from typing import (
     Optional,
     Sequence,
     Set,
-    Tuple,
     Type,
     TypeVar,
 )
@@ -28,7 +27,10 @@ from snuba.query.expressions import (
 )
 
 
-Limitby = Tuple[int, str]
+@dataclass(frozen=True)
+class LimitBy:
+    limit: int
+    expression: Expression
 
 
 class OrderByDirection(Enum):
@@ -90,7 +92,7 @@ class Query(DataSource, ABC):
         groupby: Optional[Sequence[Expression]] = None,
         having: Optional[Expression] = None,
         order_by: Optional[Sequence[OrderBy]] = None,
-        limitby: Optional[Limitby] = None,
+        limitby: Optional[LimitBy] = None,
         limit: Optional[int] = None,
         offset: int = 0,
         totals: bool = False,
@@ -177,7 +179,7 @@ class Query(DataSource, ABC):
     def get_orderby_from_ast(self) -> Sequence[OrderBy]:
         return self.__order_by
 
-    def get_limitby(self) -> Optional[Limitby]:
+    def get_limitby(self) -> Optional[LimitBy]:
         return self.__limitby
 
     def get_limit(self) -> Optional[int]:
@@ -227,6 +229,7 @@ class Query(DataSource, ABC):
             chain.from_iterable(
                 map(lambda orderby: orderby.expression, self.__order_by)
             ),
+            [self.__limitby.expression] if self.__limitby else [],
             self._get_expressions_impl(),
         )
 
@@ -283,6 +286,12 @@ class Query(DataSource, ABC):
                 self.__order_by,
             )
         )
+
+        if self.__limitby is not None:
+            self.__limitby = LimitBy(
+                self.__limitby.limit, self.__limitby.expression.transform(func)
+            )
+
         self._transform_expressions_impl(func)
 
     @abstractmethod
@@ -430,7 +439,7 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
         groupby: Optional[Sequence[Expression]] = None,
         having: Optional[Expression] = None,
         order_by: Optional[Sequence[OrderBy]] = None,
-        limitby: Optional[Limitby] = None,
+        limitby: Optional[LimitBy] = None,
         limit: Optional[int] = None,
         offset: int = 0,
         totals: bool = False,

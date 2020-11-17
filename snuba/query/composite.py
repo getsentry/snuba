@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Callable, Generic, Iterable, Optional, Sequence, Union
 
 from snuba.query import (
-    Limitby,
+    LimitBy,
     OrderBy,
     ProcessableQuery,
     Query,
@@ -41,7 +41,7 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
         groupby: Optional[Sequence[Expression]] = None,
         having: Optional[Expression] = None,
         order_by: Optional[Sequence[OrderBy]] = None,
-        limitby: Optional[Limitby] = None,
+        limitby: Optional[LimitBy] = None,
         limit: Optional[int] = None,
         offset: int = 0,
         totals: bool = False,
