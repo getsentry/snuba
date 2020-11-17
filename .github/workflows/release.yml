@@ -55,6 +55,9 @@ jobs:
             version: ${{ env.RELEASE_VERSION }}
           env:
             DRY_RUN: ${{ github.event.inputs.dry_run }}
+        # Wait until the builds start. Craft should do this automatically
+        #       # but it is broken now.
+        - run: sleep 10
         - uses: getsentry/craft@master
           with:
             action: publish
