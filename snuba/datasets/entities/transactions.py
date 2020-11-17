@@ -86,6 +86,7 @@ class BaseTransactionsEntity(Entity, ABC):
                 ),
             ),
             abstract_column_set=schema.get_columns(),
+            join_relationships={},
             writable_storage=storage,
         )
 

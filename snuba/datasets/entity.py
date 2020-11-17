@@ -1,12 +1,27 @@
 from abc import ABC, abstractmethod
-from typing import Mapping, Optional, Sequence
+from typing import Mapping, NamedTuple, Optional, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
+from snuba.datasets.entities import EntityKey
 from snuba.datasets.storage import Storage, WritableStorage, WritableTableStorage
+from snuba.query.data_source.join import (
+    JoinClass,
+    JoinCondition,
+)
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.validation import FunctionCallValidator
+
+
+class JoinRelationship(NamedTuple):
+    """
+    Represents the one way relationship between the owning Entity and another entity.
+    """
+
+    rhs_entity: EntityKey
+    keys: Sequence[JoinCondition]
+    join_class: JoinClass
 
 
 class Entity(ABC):
@@ -21,12 +36,14 @@ class Entity(ABC):
         storages: Sequence[Storage],
         query_pipeline_builder: QueryPipelineBuilder,
         abstract_column_set: ColumnSet,
+        join_relationships: Mapping[str, JoinRelationship],
         writable_storage: Optional[WritableStorage],
     ) -> None:
         self.__storages = storages
         self.__query_pipeline_builder = query_pipeline_builder
         self.__writable_storage = writable_storage
         self.__data_model = abstract_column_set
+        self.__join_relationships = join_relationships
 
     @abstractmethod
     def get_extensions(self) -> Mapping[str, QueryExtension]:
@@ -55,6 +72,12 @@ class Entity(ABC):
         to also include relationships between entities.
         """
         return self.__data_model
+
+    def get_join_relationship(self, relationship: str) -> Optional[JoinRelationship]:
+        """
+        Fetch the join relationship specified by the relationship string.
+        """
+        return self.__join_relationships.get(relationship)
 
     def get_query_pipeline_builder(self) -> QueryPipelineBuilder:
         """
