@@ -170,6 +170,10 @@ class ErrorsReplacer(ReplacerProcessor):
                 self.__use_promoted_prewhere,
                 self.__schema,
             )
+        elif type_ == "tombstone_events":
+            processed = process_tombstone_events(event, self.__required_columns)
+        elif type_ == "exclude_groups":
+            processed = process_exclude_groups(event)
         else:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
 
@@ -201,24 +205,14 @@ class ErrorsReplacer(ReplacerProcessor):
         return False
 
 
-def process_delete_groups(
-    message: Mapping[str, Any], required_columns: Sequence[str]
-) -> Optional[Replacement]:
-    group_ids = message["group_ids"]
-    if not group_ids:
-        return None
-
-    assert all(isinstance(gid, int) for gid in group_ids)
-    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+def _build_event_tombstone_replacement(
+    message: Mapping[str, Any],
+    required_columns: Sequence[str],
+    where: str,
+    query_args: Mapping[str, str],
+    query_time_flags: Tuple[Any, ...],
+) -> Replacement:
     select_columns = map(lambda i: i if i != "deleted" else "1", required_columns)
-
-    where = """\
-        PREWHERE group_id IN (%(group_ids)s)
-        WHERE project_id = %(project_id)s
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
-
     count_query_template = (
         """\
         SELECT count()
@@ -236,19 +230,84 @@ def process_delete_groups(
         + where
     )
 
-    query_args = {
+    final_query_args = {
         "required_columns": ", ".join(required_columns),
         "select_columns": ", ".join(select_columns),
         "project_id": message["project_id"],
+    }
+    final_query_args.update(query_args)
+
+    return Replacement(
+        count_query_template, insert_query_template, final_query_args, query_time_flags
+    )
+
+
+def process_delete_groups(
+    message: Mapping[str, Any], required_columns: Sequence[str]
+) -> Optional[Replacement]:
+    group_ids = message["group_ids"]
+    if not group_ids:
+        return None
+
+    assert all(isinstance(gid, int) for gid in group_ids)
+    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+
+    where = """\
+        PREWHERE group_id IN (%(group_ids)s)
+        WHERE project_id = %(project_id)s
+        AND received <= CAST('%(timestamp)s' AS DateTime)
+        AND NOT deleted
+    """
+
+    query_args = {
         "group_ids": ", ".join(str(gid) for gid in group_ids),
         "timestamp": timestamp.strftime(DATETIME_FORMAT),
     }
 
     query_time_flags = (EXCLUDE_GROUPS, message["project_id"], group_ids)
 
-    return Replacement(
-        count_query_template, insert_query_template, query_args, query_time_flags
+    return _build_event_tombstone_replacement(
+        message, required_columns, where, query_args, query_time_flags
     )
+
+
+def process_tombstone_events(
+    message: Mapping[str, Any], required_columns: Sequence[str]
+) -> Optional[Replacement]:
+    event_ids = message["event_ids"]
+    if not event_ids:
+        return None
+
+    # XXX: We need to construct a query that works on both event_id columns,
+    # either represented as UUID or as hyphenless FixedString. That's why we
+    # use replaceAll(toString()).
+    where = """\
+        PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s)
+        WHERE project_id = %(project_id)s
+        AND NOT deleted
+    """
+
+    query_args = {
+        "event_ids": ", ".join(
+            "'%s'" % str(uuid.UUID(eid)).replace("-", "")
+            for eid in message["event_ids"]
+        ),
+    }
+
+    query_time_flags = (None, message["project_id"])
+
+    return _build_event_tombstone_replacement(
+        message, required_columns, where, query_args, query_time_flags
+    )
+
+
+def process_exclude_groups(message: Mapping[str, Any]) -> Optional[Replacement]:
+    group_ids = message["group_ids"]
+    if not group_ids:
+        return None
+
+    query_time_flags = (EXCLUDE_GROUPS, message["project_id"], group_ids)
+    return Replacement(None, None, {}, query_time_flags)
 
 
 SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
