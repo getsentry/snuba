@@ -43,7 +43,7 @@ def test_format_clickhouse_specific_query() -> None:
         ["FROM", "my_table FINAL SAMPLE 0.1"],
         "ARRAY JOIN column1",
         "WHERE eq(column1, 'blabla')",
-        "GROUP BY (column1, table1.column2) WITH TOTALS",
+        "GROUP BY column1, table1.column2 WITH TOTALS",
         "HAVING eq(column1, 123)",
         "ORDER BY column1 ASC",
         "LIMIT 10 BY environment",

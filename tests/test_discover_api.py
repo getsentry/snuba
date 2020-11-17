@@ -959,3 +959,23 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 0, data
+
+    def test_max_timestamp_by_timestamp(self) -> None:
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [["max", "timestamp", "last_seen"]],
+                    "having": [],
+                    "selected_columns": ["title", "type", "timestamp"],
+                    "groupby": ["title", "type", "timestamp"],
+                    "limit": 1,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert data["data"][0]["last_seen"] is not None
