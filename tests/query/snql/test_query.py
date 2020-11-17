@@ -517,4 +517,5 @@ def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> No
     events = get_dataset("events")
     query = parse_snql_query(query_body, events)
 
-    assert query == expected_query
+    eq, reason = query.equals(expected_query)
+    assert eq, reason
