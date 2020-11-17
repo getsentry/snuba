@@ -1,13 +1,12 @@
-from abc import ABC
-
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
     QueryRunner,
 )
 from snuba.pipeline.processors import (
-    ClickhouseProcessorsExecutor,
-    EntityProcessorsExecutor,
+    execute_all_clickhouse_processors,
+    execute_entity_processors,
+    execute_pre_strategy_processors,
 )
 from snuba.pipeline.query_pipeline import (
     QueryExecutionPipeline,
@@ -20,68 +19,53 @@ from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
 
 
-class SinglePlanProcessingPipeline(QueryProcessingPipeline, ABC):
+class SinglePlanProcessingPipeline(QueryProcessingPipeline):
     """
     Executes the processing phase of a single plan query. Which means a
     query based on a single entity, that would produce a query plan based
     on a single storage.
+
+    This should not be used if the plan execution strategy is then used
+    to execute the query as it executes all query processors.
+    The main use case is for subqueries.
     """
 
-    def __init__(
-        self,
-        query_plan_builder: ClickhouseQueryPlanBuilder,
-        processors: ClickhouseProcessorsExecutor,
-    ) -> None:
+    def __init__(self, query_plan_builder: ClickhouseQueryPlanBuilder,) -> None:
         self.__query_plan_builder = query_plan_builder
-        self.__entity_processors = EntityProcessorsExecutor()
-        self.__clickhouse_processors = processors
 
     def execute(
         self, query: LogicalQuery, settings: RequestSettings
     ) -> ClickhouseQueryPlan:
-        self.__entity_processors.execute(query, settings)
+        execute_entity_processors(query, settings)
 
         query_plan = self.__query_plan_builder.build_plan(query, settings)
-        self.__clickhouse_processors.execute(query_plan, settings)
+        execute_all_clickhouse_processors(query_plan, settings)
         return query_plan
-
-
-class PreStrategyProcessingPipeline(SinglePlanProcessingPipeline):
-    """
-    Executes the query processing of a single query plan query up to the
-    plan query processors. It does not execute the db query processors
-    since they are ran by the execution strategy.
-
-    This is the processing pipeline to use when executing a simple query
-    that references a single entity and a single storage.
-    """
-
-    def __init__(self, query_plan_builder: ClickhouseQueryPlanBuilder) -> None:
-        super().__init__(
-            query_plan_builder,
-            ClickhouseProcessorsExecutor(lambda plan: plan.plan_processors),
-        )
 
 
 class SinglePlanExecutionPipeline(QueryExecutionPipeline):
     """
     Executes a simple (single entity) query.
-    This relies on a PreStrategyProcessingPipeline to perform the processing
-    and then relies on the execution strategy provided by the query plan to
-    actually execute the query.
     """
 
     def __init__(
         self, runner: QueryRunner, query_plan_builder: ClickhouseQueryPlanBuilder,
     ):
         self.__runner = runner
-        self.__processing_pipeline = PreStrategyProcessingPipeline(query_plan_builder)
+        self.__query_plan_builder = query_plan_builder
 
     def execute(self, input: Request) -> QueryResult:
         settings = input.settings
+        query = input.query
 
-        plan = self.__processing_pipeline.execute(input.query, settings)
-        return plan.execution_strategy.execute(plan.query, settings, self.__runner)
+        execute_entity_processors(query, settings)
+
+        query_plan = self.__query_plan_builder.build_plan(query, settings)
+        execute_pre_strategy_processors(query_plan, settings)
+
+        return query_plan.execution_strategy.execute(
+            query_plan.query, settings, self.__runner
+        )
 
 
 class SingleQueryPlanPipelineBuilder(QueryPipelineBuilder):
@@ -94,4 +78,4 @@ class SingleQueryPlanPipelineBuilder(QueryPipelineBuilder):
         return SinglePlanExecutionPipeline(runner, self.__query_plan_builder)
 
     def build_processing_pipeline(self, request: Request) -> QueryProcessingPipeline:
-        return PreStrategyProcessingPipeline(self.__query_plan_builder)
+        return SinglePlanProcessingPipeline(self.__query_plan_builder)

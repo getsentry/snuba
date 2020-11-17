@@ -135,16 +135,19 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
         cluster = self.__storage.get_cluster()
 
+        db_query_processors = [
+            *self.__storage.get_query_processors(),
+            *self.__post_processors,
+            MandatoryConditionApplier(),
+        ]
+
         return ClickhouseQueryPlan(
             query=clickhouse_query,
-            plan_processors=[],
+            plan_query_processors=[],
+            db_query_processors=db_query_processors,
             execution_strategy=SimpleQueryPlanExecutionStrategy(
                 cluster=cluster,
-                db_query_processors=[
-                    *self.__storage.get_query_processors(),
-                    *self.__post_processors,
-                    MandatoryConditionApplier(),
-                ],
+                db_query_processors=db_query_processors,
                 splitters=self.__storage.get_query_splitters(),
             ),
         )
@@ -192,16 +195,19 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
         cluster = storage.get_cluster()
 
+        db_query_processors = [
+            *storage.get_query_processors(),
+            *self.__post_processors,
+            MandatoryConditionApplier(),
+        ]
+
         return ClickhouseQueryPlan(
             query=clickhouse_query,
-            plan_processors=[],
+            plan_query_processors=[],
+            db_query_processors=db_query_processors,
             execution_strategy=SimpleQueryPlanExecutionStrategy(
                 cluster=cluster,
-                db_query_processors=[
-                    *storage.get_query_processors(),
-                    *self.__post_processors,
-                    MandatoryConditionApplier(),
-                ],
+                db_query_processors=db_query_processors,
                 splitters=storage.get_query_splitters(),
             ),
         )

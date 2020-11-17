@@ -33,7 +33,8 @@ class ClickhouseQueryPlan:
     """
 
     query: Query
-    plan_processors: Sequence[QueryProcessor]
+    plan_query_processors: Sequence[QueryProcessor]
+    db_query_processors: Sequence[QueryProcessor]
     execution_strategy: QueryPlanExecutionStrategy
 
 
