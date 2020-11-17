@@ -7,7 +7,7 @@ from snuba.pipeline.query_pipeline import (
 )
 from snuba.query.logical import Query
 from snuba.request import Request
-from snuba.threaded_function_delegator import ThreadedFunctionDelegator
+from snuba.utils.threaded_function_delegator import ThreadedFunctionDelegator
 from snuba.web import QueryResult
 
 
