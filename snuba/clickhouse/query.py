@@ -68,9 +68,5 @@ class Query(AbstractQuery[Table]):
     def set_prewhere_ast_condition(self, condition: Optional[Expression]) -> None:
         self.__prewhere = condition
 
-    def __eq__(self, other: object) -> bool:
-        if not super().__eq__(other):
-            return False
-
-        assert isinstance(other, Query)  # mypy
-        return self.get_prewhere_ast() == other.get_prewhere_ast()
+    def _eq_functions(self) -> Sequence[str]:
+        return tuple(super()._eq_functions()) + ("get_prewhere_ast",)
