@@ -298,20 +298,5 @@ def test_format_expressions(query_body: str, expected_query: Query) -> None:
     events = get_dataset("events")
     query = parse_snql_query(query_body, events)
 
-    # assert query == expected_query
-
-    assert (
-        query.get_selected_columns_from_ast()
-        == expected_query.get_selected_columns_from_ast()
-    )
-    assert query.get_groupby_from_ast() == expected_query.get_groupby_from_ast()
-    assert query.get_condition_from_ast() == expected_query.get_condition_from_ast()
-    assert query.get_arrayjoin_from_ast() == expected_query.get_arrayjoin_from_ast()
-    assert query.get_having_from_ast() == expected_query.get_having_from_ast()
-    assert query.get_orderby_from_ast() == expected_query.get_orderby_from_ast()
-    assert query.get_limitby() == expected_query.get_limitby()
-    assert query.get_sample() == expected_query.get_sample()
-    assert query.get_limit() == expected_query.get_limit()
-    assert query.get_offset() == expected_query.get_offset()
-    assert query.has_totals() == expected_query.has_totals()
-    assert query.get_granularity() == expected_query.get_granularity()
+    eq, reason = query.equals(expected_query)
+    assert eq, reason
