@@ -148,7 +148,7 @@ def _format_groupby(
     ast_groupby = query.get_groupby_from_ast()
     if ast_groupby:
         groupby_expressions = [e.accept(formatter) for e in ast_groupby]
-        group_clause_str = f"({', '.join(groupby_expressions)})"
+        group_clause_str = f"{', '.join(groupby_expressions)}"
         if query.has_totals():
             group_clause_str = f"{group_clause_str} WITH TOTALS"
         group_clause = StringNode(f"GROUP BY {group_clause_str}")
