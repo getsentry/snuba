@@ -80,6 +80,7 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     # WARNING: These steps above assume table resolution did not happen
     # yet. If it is put earlier than here (unlikely), we need to adapt them.
     _deescape_aliases(query)
+    _mangle_aliases(query)
     _validate_arrayjoin(query)
     validate_query(query, entity)
 
@@ -380,6 +381,30 @@ def _expand_aliases(query: Query) -> None:
 
 
 ARRAYJOIN_FUNCTION_MATCH = FunctionCallMatch(StringMatch("arrayJoin"), None)
+
+
+def _mangle_aliases(query: Query) -> None:
+    alias_prefix = "_snuba_"
+
+    def transform_alias(expression: Expression) -> Expression:
+        alias = expression.alias
+        if alias is not None:
+            return replace(expression, alias=f"{alias_prefix}{alias}")
+        return expression
+
+    query.transform_expressions(transform_alias)
+
+    # HACK: This reverts the mangle of arrayjoin since we cannot reference aliases
+    # there
+    arrayjoin = query.get_arrayjoin_from_ast()
+
+    def transform_arrayjoin(expr: Expression) -> Expression:
+        if isinstance(expr, Column):
+            return replace(expr, alias=None)
+        return expr
+
+    if arrayjoin:
+        query.set_arrayjoin(arrayjoin.transform(transform_arrayjoin))
 
 
 def _validate_arrayjoin(query: Query) -> None:

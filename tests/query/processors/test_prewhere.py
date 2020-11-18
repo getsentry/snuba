@@ -35,7 +35,7 @@ test_data = [
                 FunctionCall(
                     None,
                     "positionCaseInsensitive",
-                    (Column("message", None, "message"), Literal(None, "abc")),
+                    (Column("_snuba_message", None, "message"), Literal(None, "abc")),
                 ),
                 Literal(None, 0),
             ),
@@ -59,12 +59,12 @@ test_data = [
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column("d", None, "d"), Literal(None, "1")),
+                    (Column("_snuba_d", None, "d"), Literal(None, "1")),
                 ),
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column("c", None, "c"), Literal(None, "3")),
+                    (Column("_snuba_c", None, "c"), Literal(None, "3")),
                 ),
             ),
         ),
@@ -75,12 +75,12 @@ test_data = [
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column("a", None, "a"), Literal(None, "1")),
+                    (Column("_snuba_a", None, "a"), Literal(None, "1")),
                 ),
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column("b", None, "b"), Literal(None, "2")),
+                    (Column("_snuba_b", None, "b"), Literal(None, "2")),
                 ),
             ),
         ),
@@ -96,19 +96,19 @@ test_data = [
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column("a", None, "a"), Literal(None, "1")),
+                    (Column("_snuba_a", None, "a"), Literal(None, "1")),
                 ),
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column("b", None, "b"), Literal(None, "2")),
+                    (Column("_snuba_b", None, "b"), Literal(None, "2")),
                 ),
             ),
         ),
         FunctionCall(
             None,
             OPERATOR_TO_FUNCTION["="],
-            (Column("c", None, "c"), Literal(None, "3")),
+            (Column("_snuba_c", None, "c"), Literal(None, "3")),
         ),
     ),
     (
@@ -122,20 +122,20 @@ test_data = [
             (
                 not_in_condition(
                     None,
-                    Column("a", None, "a"),
+                    Column("_snuba_a", None, "a"),
                     [Literal(None, 1), Literal(None, 2), Literal(None, 3)],
                 ),
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column("c", None, "c"), Literal(None, "3")),
+                    (Column("_snuba_c", None, "c"), Literal(None, "3")),
                 ),
             ),
         ),
         FunctionCall(
             None,
             OPERATOR_TO_FUNCTION["="],
-            (Column("b", None, "b"), Literal(None, "2")),
+            (Column("_snuba_b", None, "b"), Literal(None, "2")),
         ),
     ),
 ]

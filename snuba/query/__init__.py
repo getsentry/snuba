@@ -171,6 +171,9 @@ class Query(DataSource, ABC):
     def get_arrayjoin_from_ast(self) -> Optional[Expression]:
         return self.__array_join
 
+    def set_arrayjoin(self, arrayjoin: Optional[Expression]) -> None:
+        self.__array_join = arrayjoin
+
     def get_having_from_ast(self) -> Optional[Expression]:
         return self.__having
 
