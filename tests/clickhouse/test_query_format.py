@@ -5,7 +5,7 @@ from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
 from snuba.clickhouse.formatter.nodes import PaddingNode, SequenceNode, StringNode
 from snuba.clickhouse.formatter.query import JoinFormatter, format_query
 from snuba.clickhouse.query import Query
-from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -527,7 +527,7 @@ def test_format_clickhouse_specific_query() -> None:
         order_by=[OrderBy(OrderByDirection.ASC, Column(None, None, "column1"))],
         array_join=Column(None, None, "column1"),
         totals=True,
-        limitby=(10, "environment"),
+        limitby=LimitBy(10, Column(None, None, "environment")),
     )
 
     query.set_offset(50)
