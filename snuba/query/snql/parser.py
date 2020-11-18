@@ -89,9 +89,9 @@ snql_grammar = Grammar(
     offset_clause         = space+ "OFFSET" space+ integer_literal
     granularity_clause    = space+ "GRANULARITY" space+ integer_literal
     totals_clause         = space+ "TOTALS" space+ boolean_literal
-    sample_clause         = space+ "SAMPLE" space+ numeric_literal
 
     entity_match          = open_paren entity_alias colon space* entity_name sample_clause? space* close_paren
+    sample_clause         = space+ "SAMPLE" space+ numeric_literal
 
     and_expression        = space* condition (space* and_tuple)*
     or_expression         = space* and_expression (space* or_tuple)*
