@@ -4,11 +4,7 @@ from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.request.request_settings import RequestSettings
 
 
-class EventsColumnProcessor(QueryProcessor):
-    """
-    Strip any dashes out of the event ID to match what is stored internally.
-    """
-
+class GroupIdColumnProcessor(QueryProcessor):
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         def process_column(exp: Expression) -> Expression:
             if isinstance(exp, Column):
