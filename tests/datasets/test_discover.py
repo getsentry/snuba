@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.entities.factory import get_entity
-from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipeline
+from snuba.pipeline.simple_pipeline import SimplePipeline
 from snuba.query.parser import parse_query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
@@ -157,7 +157,7 @@ def test_data_source(
 
     pipeline = entity.get_query_pipeline_builder().build_pipeline(request, Mock())
     pipeline.execute()
-    assert isinstance(pipeline, SingleQueryPlanPipeline)
+    assert isinstance(pipeline, SimplePipeline)
     plan = pipeline.query_plan
 
     assert plan.query.get_from_clause().table_name == expected_table, json.dumps(

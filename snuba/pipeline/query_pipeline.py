@@ -12,12 +12,11 @@ class QueryPipeline(ABC):
     The QueryPipeline runs the query plan processors, executes the query plans and
     returns the relevant result.
 
-    Most of the time, a single query plan is built by the SingleQueryPlanPipeline,
-    however under certain circumstances we may have a pipeline with multiple query
-    plans. For example, the MultipleQueryPlanPipeline provides a way to build and
-    execute more than one query plan and compare their results, which provides a
-    way to experiment with different query plans in production without actually
-    using their results yet.
+    Most of the time, a single pipeline and query plan is built by the SimplePipeline.
+    However, we can also use the MultipleConcurrentPipeline in order to build and
+    execute more than one other pipeline and compare their results, which provides
+    a way to experiment with different pipeline in production without actually using
+    their results yet.
 
     This component is produced by the QueryPipelineBuilder.
 

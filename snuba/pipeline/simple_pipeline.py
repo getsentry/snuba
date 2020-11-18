@@ -15,7 +15,7 @@ from snuba.request import Request
 from snuba.web import QueryResult
 
 
-class SingleQueryPlanPipeline(QueryPipeline):
+class SimplePipeline(QueryPipeline):
     """
     A query pipeline for a single query plan.
 
@@ -50,9 +50,9 @@ class SingleQueryPlanPipeline(QueryPipeline):
         return self.__query_plan
 
 
-class SingleQueryPlanPipelineBuilder(QueryPipelineBuilder):
+class SimplePipelineBuilder(QueryPipelineBuilder):
     def __init__(self, query_plan_builder: ClickhouseQueryPlanBuilder) -> None:
         self.__query_plan_builder = query_plan_builder
 
     def build_pipeline(self, request: Request, runner: QueryRunner) -> QueryPipeline:
-        return SingleQueryPlanPipeline(request, runner, self.__query_plan_builder)
+        return SimplePipeline(request, runner, self.__query_plan_builder)

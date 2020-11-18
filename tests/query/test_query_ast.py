@@ -5,7 +5,7 @@ import pytest
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
-from snuba.pipeline.single_query_plan_pipeline import SingleQueryPlanPipeline
+from snuba.pipeline.simple_pipeline import SimplePipeline
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Table
@@ -241,5 +241,5 @@ def test_alias_validation(
     )
     query_pipeline.execute()
 
-    assert isinstance(query_pipeline, SingleQueryPlanPipeline)
+    assert isinstance(query_pipeline, SimplePipeline)
     assert query_pipeline.query_plan.query.validate_aliases() == expected_result
