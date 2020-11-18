@@ -5,7 +5,7 @@ from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
 from snuba.clickhouse.formatter.nodes import PaddingNode, SequenceNode, StringNode
 from snuba.clickhouse.formatter.query import JoinFormatter, format_query
 from snuba.clickhouse.query import Query
-from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -83,7 +83,7 @@ test_cases = [
             "SELECT column1, table1.column2, (column3 AS al)",
             ["FROM", "my_table"],
             "WHERE eq(al, 'blabla')",
-            "GROUP BY (column1, table1.column2, al, column4)",
+            "GROUP BY column1, table1.column2, al, column4",
             "HAVING eq(column1, 123)",
             "ORDER BY column1 ASC, table1.column2 DESC",
         ],
@@ -91,7 +91,7 @@ test_cases = [
             "SELECT column1, table1.column2, (column3 AS al) "
             "FROM my_table "
             "WHERE eq(al, 'blabla') "
-            "GROUP BY (column1, table1.column2, al, column4) "
+            "GROUP BY column1, table1.column2, al, column4 "
             "HAVING eq(column1, 123) "
             "ORDER BY column1 ASC, table1.column2 DESC"
         ),
@@ -160,14 +160,14 @@ test_cases = [
             "SELECT (doSomething(column1, table1.column2, (column3 AS al))(column1) AS my_complex_math)",
             ["FROM", "my_table"],
             "WHERE eq(al, 'blabla') AND neq(al, 'blabla')",
-            "GROUP BY (my_complex_math)",
+            "GROUP BY my_complex_math",
             "ORDER BY f(column1) ASC",
         ],
         (
             "SELECT (doSomething(column1, table1.column2, (column3 AS al))(column1) AS my_complex_math) "
             "FROM my_table "
             "WHERE eq(al, 'blabla') AND neq(al, 'blabla') "
-            "GROUP BY (my_complex_math) "
+            "GROUP BY my_complex_math "
             "ORDER BY f(column1) ASC"
         ),
         id="Query with complex functions",
@@ -188,13 +188,13 @@ test_cases = [
         [
             "SELECT (`field_##$$%` AS al1), (`t&^%$`.`f@!@` AS al2)",
             ["FROM", "my_table"],
-            "GROUP BY (al1, al2)",
+            "GROUP BY al1, al2",
             "ORDER BY column1 ASC",
         ],
         (
             "SELECT (`field_##$$%` AS al1), (`t&^%$`.`f@!@` AS al2) "
             "FROM my_table "
-            "GROUP BY (al1, al2) "
+            "GROUP BY al1, al2 "
             "ORDER BY column1 ASC"
         ),
         id="Query with escaping",
@@ -300,10 +300,10 @@ test_cases = [
                     "SELECT column1, (avg(column2) AS sub_average), column3",
                     ["FROM", "my_table"],
                     "WHERE eq((column3 AS al), 'blabla')",
-                    "GROUP BY (column2)",
+                    "GROUP BY column2",
                 ],
             ],
-            "GROUP BY (alias)",
+            "GROUP BY alias",
         ],
         (
             "SELECT (avg(sub_average) AS average), (column3 AS alias) "
@@ -311,9 +311,9 @@ test_cases = [
             "SELECT column1, (avg(column2) AS sub_average), column3 "
             "FROM my_table "
             "WHERE eq((column3 AS al), 'blabla') "
-            "GROUP BY (column2)"
+            "GROUP BY column2"
             ") "
-            "GROUP BY (alias)"
+            "GROUP BY alias"
         ),
         id="Composite query",
     ),
@@ -477,7 +477,7 @@ test_cases = [
                     ["err.group_id=assignee.group_id"],
                 ],
             ],
-            "GROUP BY (groups.id)",
+            "GROUP BY groups.id",
         ],
         (
             "SELECT (err.group_id AS group_id), (count() AS events) "
@@ -489,7 +489,7 @@ test_cases = [
             "INNER JOIN "
             "(SELECT group_id FROM groupassignee_local WHERE eq(user, 'me')) assignee "
             "ON err.group_id=assignee.group_id "
-            "GROUP BY (groups.id)"
+            "GROUP BY groups.id"
         ),
         id="Join of multiple subqueries",
     ),
@@ -527,7 +527,7 @@ def test_format_clickhouse_specific_query() -> None:
         order_by=[OrderBy(OrderByDirection.ASC, Column(None, None, "column1"))],
         array_join=Column(None, None, "column1"),
         totals=True,
-        limitby=(10, "environment"),
+        limitby=LimitBy(10, Column(None, None, "environment")),
     )
 
     query.set_offset(50)
@@ -541,7 +541,7 @@ def test_format_clickhouse_specific_query() -> None:
         "FROM my_table FINAL SAMPLE 0.1 "
         "ARRAY JOIN column1 "
         "WHERE eq(column1, 'blabla') "
-        "GROUP BY (column1, table1.column2) WITH TOTALS "
+        "GROUP BY column1, table1.column2 WITH TOTALS "
         "HAVING eq(column1, 123) "
         "ORDER BY column1 ASC "
         "LIMIT 10 BY environment "

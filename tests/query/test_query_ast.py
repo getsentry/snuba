@@ -173,20 +173,20 @@ def test_get_all_columns() -> None:
     query = parse_query(query_body, events)
 
     assert query.get_all_ast_referenced_columns() == {
-        Column("column1", None, "column1"),
-        Column("column2", None, "column2"),
-        Column("platform", None, "platform"),
-        Column("field2", None, "field2"),
-        Column("tags", None, "tags"),
-        Column("times_seen", None, "times_seen"),
-        Column("event_id", None, "event_id"),
-        Column("timestamp", None, "timestamp"),
+        Column("_snuba_column1", None, "column1"),
+        Column("_snuba_column2", None, "column2"),
+        Column("_snuba_platform", None, "platform"),
+        Column("_snuba_field2", None, "field2"),
+        Column("_snuba_tags", None, "tags"),
+        Column("_snuba_times_seen", None, "times_seen"),
+        Column("_snuba_event_id", None, "event_id"),
+        Column("_snuba_timestamp", None, "timestamp"),
     }
 
     assert query.get_all_ast_referenced_subscripts() == {
         SubscriptableReference(
-            "tags[sentry:dist]",
-            Column("tags", None, "tags"),
+            "_snuba_tags[sentry:dist]",
+            Column("_snuba_tags", None, "tags"),
             Literal(None, "sentry:dist"),
         )
     }

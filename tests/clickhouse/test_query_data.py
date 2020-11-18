@@ -1,7 +1,7 @@
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Literal
@@ -29,7 +29,7 @@ def test_format_clickhouse_specific_query() -> None:
         order_by=[OrderBy(OrderByDirection.ASC, Column(None, None, "column1"))],
         array_join=Column(None, None, "column1"),
         totals=True,
-        limitby=(10, "environment"),
+        limitby=LimitBy(10, Column(None, None, "environment")),
     )
 
     query.set_offset(50)
@@ -43,7 +43,7 @@ def test_format_clickhouse_specific_query() -> None:
         ["FROM", "my_table FINAL SAMPLE 0.1"],
         "ARRAY JOIN column1",
         "WHERE eq(column1, 'blabla')",
-        "GROUP BY (column1, table1.column2) WITH TOTALS",
+        "GROUP BY column1, table1.column2 WITH TOTALS",
         "HAVING eq(column1, 123)",
         "ORDER BY column1 ASC",
         "LIMIT 10 BY environment",

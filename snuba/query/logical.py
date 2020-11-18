@@ -13,7 +13,7 @@ from typing import (
 )
 
 from deprecation import deprecated
-from snuba.query import Limitby, OrderBy
+from snuba.query import LimitBy, OrderBy
 from snuba.query import ProcessableQuery as AbstractQuery
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity
@@ -45,7 +45,7 @@ class Query(AbstractQuery[Entity]):
         groupby: Optional[Sequence[Expression]] = None,
         having: Optional[Expression] = None,
         order_by: Optional[Sequence[OrderBy]] = None,
-        limitby: Optional[Limitby] = None,
+        limitby: Optional[LimitBy] = None,
         sample: Optional[float] = None,
         limit: Optional[int] = None,
         offset: int = 0,
