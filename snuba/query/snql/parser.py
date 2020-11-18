@@ -37,7 +37,7 @@ from snuba.query.matchers import (
     String as StringMatch,
 )
 from snuba.query import (
-    Limitby,
+    LimitBy,
     OrderBy,
     OrderByDirection,
     SelectedExpression,
@@ -49,6 +49,7 @@ from snuba.query.parser import (
     _apply_column_aliases,
     _expand_aliases,
     _deescape_aliases,
+    _mangle_aliases,
 )
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
@@ -462,10 +463,10 @@ class SnQLVisitor(NodeVisitor):
         self,
         node: Node,
         visited_children: Tuple[Any, Any, Any, Literal, Any, Any, Any, Column],
-    ) -> Limitby:
+    ) -> LimitBy:
         _, _, _, limit, _, _, _, column = visited_children
         assert isinstance(limit.value, int)  # mypy
-        return (limit.value, column.column_name)
+        return LimitBy(limit.value, column)
 
     def visit_limit_clause(
         self, node: Node, visited_children: Tuple[Any, Any, Any, Literal]
@@ -651,4 +652,5 @@ def parse_snql_query(body: str, dataset: Dataset) -> LogicalQuery:
     _deescape_aliases(
         query
     )  # -> This should not be needed at all, assuming SnQL can properly accept escaped/unicode strings
+    _mangle_aliases(query)  # needs to recurse through sub queries
     return query
