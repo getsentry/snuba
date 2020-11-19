@@ -25,7 +25,6 @@ from snuba.processor import (
     _boolify,
     _collapse_uint32,
     _ensure_valid_date,
-    _hashify,
     _unicodify,
 )
 
@@ -225,7 +224,6 @@ class EventsProcessorBase(MessageProcessor, ABC):
     ) -> None:
         # Properties we get from the top level of the message payload
         output["platform"] = _unicodify(event["platform"])
-        output["primary_hash"] = _hashify(event["primary_hash"])
 
         # Properties we get from the "data" dict, which is the actual event body.
         data = event.get("data", {})
@@ -233,11 +231,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         output["received"] = (
             datetime.utcfromtimestamp(received) if received is not None else None
         )
-
-        output["culprit"] = _unicodify(data.get("culprit", None))
-        output["type"] = _unicodify(data.get("type", None))
         output["version"] = _unicodify(data.get("version", None))
-        output["title"] = _unicodify(data.get("title", None))
         output["location"] = _unicodify(data.get("location", None))
 
         module_names = []
