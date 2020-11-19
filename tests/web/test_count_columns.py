@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Set, Union
 
 import pytest
 from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
@@ -16,6 +16,7 @@ from snuba.query.data_source.join import (
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.web.db_query import ReferencedColumnsCounter
+from snuba.web.query import TablesCollector
 
 ERRORS_SCHEMA = ColumnSet(
     [
@@ -61,7 +62,7 @@ SIMPLE_QUERY = ClickhouseQuery(
 )
 
 TEST_CASES = [
-    pytest.param(SIMPLE_QUERY, 3, id="Simple Query",),
+    pytest.param(SIMPLE_QUERY, 3, {"errors_local"}, id="Simple Query",),
     pytest.param(
         CompositeQuery(
             from_clause=SIMPLE_QUERY,
@@ -73,6 +74,7 @@ TEST_CASES = [
             ],
         ),
         3,
+        {"errors_local"},
         id="Nested query. Count the inner query",
     ),
     pytest.param(
@@ -102,15 +104,21 @@ TEST_CASES = [
             ],
         ),
         5,  # 3 from errors and 2 from groups
+        {"errors_local", "groups_local"},
         id="Join between a subquery and an individual table.",
     ),
 ]
 
 
-@pytest.mark.parametrize("query, expected_cols", TEST_CASES)
+@pytest.mark.parametrize("query, expected_cols, expected_tables", TEST_CASES)
 def test_count_columns(
-    query: Union[ClickhouseQuery, CompositeQuery[Table]], expected_cols: int
+    query: Union[ClickhouseQuery, CompositeQuery[Table]],
+    expected_cols: int,
+    expected_tables: Set[str],
 ) -> None:
     counter = ReferencedColumnsCounter()
     counter.visit(query)
     assert counter.count_columns() == expected_cols
+
+    tables = TablesCollector().visit(query)
+    assert tables == expected_tables
