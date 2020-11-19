@@ -4,7 +4,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial, reduce
 from hashlib import md5
-from typing import Any, Mapping, MutableMapping, Optional, Set
+from typing import Any, Mapping, MutableMapping, Optional, Set, Union
 
 import sentry_sdk
 from sentry_sdk.api import configure_scope
@@ -165,7 +165,7 @@ def execute_query(
     # as the execute method depends on it. Otherwise we can make this
     # file rely either entirely on clickhouse query or entirely on
     # the formatter.
-    clickhouse_query: Query,
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     formatted_query: FormattedQuery,
     reader: Reader,
@@ -207,7 +207,7 @@ def execute_query(
 
 @with_span(op="db")
 def execute_query_with_rate_limits(
-    clickhouse_query: Query,
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     formatted_query: FormattedQuery,
     reader: Reader,
@@ -254,7 +254,7 @@ def get_query_cache_key(formatted_query: FormattedQuery) -> str:
 
 @with_span(op="db")
 def execute_query_with_caching(
-    clickhouse_query: Query,
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     formatted_query: FormattedQuery,
     reader: Reader,
@@ -305,7 +305,7 @@ def execute_query_with_caching(
 
 @with_span(op="db")
 def execute_query_with_readthrough_caching(
-    clickhouse_query: Query,
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     formatted_query: FormattedQuery,
     reader: Reader,
@@ -337,7 +337,7 @@ def raw_query(
     # as the execute method depends on it. Otherwise we can make this
     # file rely either entirely on clickhouse query or entirely on
     # the formatter.
-    clickhouse_query: Query,
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     formatted_query: FormattedQuery,
     reader: Reader,
