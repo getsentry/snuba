@@ -12,7 +12,7 @@ from snuba.clickhouse.columns import (
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsProcessor
-from snuba.datasets.storages.events_column_processor import EventsColumnProcessor
+from snuba.datasets.storages.group_id_column_processor import GroupIdColumnProcessor
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
@@ -271,7 +271,7 @@ query_processors = [
         # into in redis are stored with "EVENTS" in the name, we can change this.
         replacer_state_name=None,
     ),
-    EventsColumnProcessor(),
+    GroupIdColumnProcessor(),
     MappingColumnPromoter(
         mapping_specs={
             "tags": ChainMap(
