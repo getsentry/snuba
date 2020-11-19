@@ -4,12 +4,11 @@ from snuba.datasets.plans.query_plan import (
     QueryRunner,
 )
 from snuba.pipeline.processors import (
-    execute_all_clickhouse_processors,
     execute_entity_processors,
     execute_pre_strategy_processors,
 )
 from snuba.pipeline.query_pipeline import (
-    EntityQueryProcessingPipeline,
+    QueryPlanner,
     QueryExecutionPipeline,
     QueryPipelineBuilder,
 )
@@ -19,7 +18,7 @@ from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
 
 
-class SimpleQueryProcessingPipeline(EntityQueryProcessingPipeline):
+class EntityQueryPlanner(QueryPlanner[ClickhouseQueryPlan]):
     """
     Executes the processing phase of a single plan query. Which means a
     query based on a single entity, that would produce a query plan based
@@ -43,9 +42,7 @@ class SimpleQueryProcessingPipeline(EntityQueryProcessingPipeline):
     def execute(self) -> ClickhouseQueryPlan:
         execute_entity_processors(self.__query, self.__settings)
 
-        query_plan = self.__query_plan_builder.build_plan(self.__query, self.__settings)
-        execute_all_clickhouse_processors(query_plan, self.__settings)
-        return query_plan
+        return self.__query_plan_builder.build_plan(self.__query, self.__settings)
 
 
 class SimpleExecutionPipeline(QueryExecutionPipeline):
@@ -54,22 +51,16 @@ class SimpleExecutionPipeline(QueryExecutionPipeline):
     """
 
     def __init__(
-        self,
-        request: Request,
-        runner: QueryRunner,
-        query_plan_builder: ClickhouseQueryPlanBuilder,
+        self, request: Request, runner: QueryRunner, query_planner: EntityQueryPlanner,
     ):
         self.__request = request
         self.__runner = runner
-        self.__query_plan_builder = query_plan_builder
+        self.__query_planner = query_planner
 
     def execute(self) -> QueryResult:
         settings = self.__request.settings
-        query = self.__request.query
 
-        execute_entity_processors(query, settings)
-
-        query_plan = self.__query_plan_builder.build_plan(query, settings)
+        query_plan = self.__query_planner.execute()
         execute_pre_strategy_processors(query_plan, settings)
 
         return query_plan.execution_strategy.execute(
@@ -77,16 +68,18 @@ class SimpleExecutionPipeline(QueryExecutionPipeline):
         )
 
 
-class SimplePipelineBuilder(QueryPipelineBuilder):
+class SimplePipelineBuilder(QueryPipelineBuilder[ClickhouseQueryPlan]):
     def __init__(self, query_plan_builder: ClickhouseQueryPlanBuilder) -> None:
         self.__query_plan_builder = query_plan_builder
 
     def build_execution_pipeline(
         self, request: Request, runner: QueryRunner
     ) -> QueryExecutionPipeline:
-        return SimpleExecutionPipeline(request, runner, self.__query_plan_builder)
+        return SimpleExecutionPipeline(
+            request, runner, self.build_planner(request.query, request.settings),
+        )
 
-    def build_processing_pipeline(
+    def build_planner(
         self, query: LogicalQuery, settings: RequestSettings,
-    ) -> EntityQueryProcessingPipeline:
-        return SimpleQueryProcessingPipeline(query, settings, self.__query_plan_builder)
+    ) -> EntityQueryPlanner:
+        return EntityQueryPlanner(query, settings, self.__query_plan_builder)

@@ -1,9 +1,10 @@
-import simplejson as json
-import pytest
 from typing import Any, MutableMapping
 
-from snuba.datasets.factory import get_dataset
+import pytest
+import simplejson as json
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.factory import get_dataset
+from snuba.pipeline.processors import execute_all_clickhouse_processors
 from snuba.query.parser import parse_query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
@@ -151,10 +152,12 @@ def test_data_source(
     request = Request("a", query, request_settings, {}, "r")
     entity = get_entity(query.get_from_clause().key)
 
-    pipeline = entity.get_query_pipeline_builder().build_processing_pipeline(
-        request.query, request.settings
+    plan = (
+        entity.get_query_pipeline_builder()
+        .build_planner(request.query, request.settings)
+        .execute()
     )
-    plan = pipeline.execute()
+    execute_all_clickhouse_processors(plan, request.settings)
 
     assert plan.query.get_from_clause().table_name == expected_table, json.dumps(
         query_body

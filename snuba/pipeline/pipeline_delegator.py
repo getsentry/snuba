@@ -1,8 +1,9 @@
 from typing import Callable, List, Mapping, Optional, Tuple
 
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.query_plan import QueryRunner
 from snuba.pipeline.query_pipeline import (
-    EntityQueryProcessingPipeline,
+    QueryPlanner,
     QueryExecutionPipeline,
     QueryPipelineBuilder,
 )
@@ -14,7 +15,7 @@ from snuba.utils.threaded_function_delegator import ThreadedFunctionDelegator
 from snuba.web import QueryResult
 
 BuilderId = str
-QueryPipelineBuilders = Mapping[BuilderId, QueryPipelineBuilder]
+QueryPipelineBuilders = Mapping[BuilderId, QueryPipelineBuilder[ClickhouseQueryPlan]]
 QueryResults = List[Tuple[BuilderId, QueryResult]]
 SelectorFunc = Callable[[Query], Tuple[BuilderId, List[BuilderId]]]
 CallbackFunc = Callable[[QueryResults], None]
@@ -72,7 +73,7 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
         return executor.execute(self.__request.query)
 
 
-class PipelineDelegator(QueryPipelineBuilder):
+class PipelineDelegator(QueryPipelineBuilder[ClickhouseQueryPlan]):
     """
     Builds a pipeline which is able to run one or more other pipelines in parallel.
     """
@@ -98,7 +99,7 @@ class PipelineDelegator(QueryPipelineBuilder):
             callback_func=self.__callback_func,
         )
 
-    def build_processing_pipeline(
+    def build_planner(
         self, query: LogicalQuery, settings: RequestSettings
-    ) -> EntityQueryProcessingPipeline:
+    ) -> QueryPlanner[ClickhouseQueryPlan]:
         raise NotImplementedError

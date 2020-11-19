@@ -1,24 +1,31 @@
 from abc import ABC, abstractmethod
+from typing import Generic, TypeVar
 
-from snuba.datasets.plans.query_plan import ClickhouseQueryPlan, QueryRunner
+from snuba.datasets.plans.query_plan import QueryRunner
 from snuba.query.logical import Query as LogicalQuery
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
 
+# TODO: Add a parent class above the composite and simple plan
+# and add a bound to this type variable.
+TPlan = TypeVar("TPlan")
 
-class EntityQueryProcessingPipeline(ABC):
+
+class QueryPlanner(ABC, Generic[TPlan]):
     """
-    A EntityQueryProcessingPipeline contains a series of steps that, given
-    a logical single entity query and request settings, performs the
-    query processing steps to the point where the query is ready to
-    be executed.
+    A QueryPlanner contains a series of steps that, given a logical
+    query and request settings, executes all the logical query processing
+    translates the query and compiles a query plan that can be used
+    to execute the query.
 
-    the query is returned as a ClickhouseQueryPlan.
+    The returned query plan structure may be different between different
+    query types but it must provide the query, all clickhouse query
+    processors, and a strategy to execute the query.
     """
 
     @abstractmethod
-    def execute(self) -> ClickhouseQueryPlan:
+    def execute(self) -> TPlan:
         raise NotImplementedError
 
 
@@ -42,7 +49,7 @@ class QueryExecutionPipeline(ABC):
         raise NotImplementedError
 
 
-class QueryPipelineBuilder(ABC):
+class QueryPipelineBuilder(ABC, Generic[TPlan]):
     """
     Builds a query pipeline, which contains the directions for building
     processing and running a single entity query or a subquery of a
@@ -59,11 +66,7 @@ class QueryPipelineBuilder(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def build_processing_pipeline(
+    def build_planner(
         self, query: LogicalQuery, settings: RequestSettings
-    ) -> EntityQueryProcessingPipeline:
-        """
-        Returns a pipeline that executes the processing phase of a single
-        entity query.
-        """
+    ) -> QueryPlanner[TPlan]:
         raise NotImplementedError

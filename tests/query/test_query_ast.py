@@ -4,6 +4,7 @@ import pytest
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
+from snuba.pipeline.processors import execute_all_clickhouse_processors
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Table
@@ -233,11 +234,11 @@ def test_alias_validation(
     events = get_dataset("events")
     query = parse_query(query_body, events)
     request = Request("", query, HTTPRequestSettings(), {}, "")
-    query_pipeline = (
+    query_plan = (
         events.get_default_entity()
         .get_query_pipeline_builder()
-        .build_processing_pipeline(request.query, request.settings)
-    )
-    plan = query_pipeline.execute()
+        .build_planner(request.query, request.settings)
+    ).execute()
+    execute_all_clickhouse_processors(query_plan, request.settings)
 
-    assert plan.query.validate_aliases() == expected_result
+    assert query_plan.query.validate_aliases() == expected_result
