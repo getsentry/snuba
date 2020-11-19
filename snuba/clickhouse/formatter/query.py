@@ -148,7 +148,7 @@ def _format_groupby(
     ast_groupby = query.get_groupby_from_ast()
     if ast_groupby:
         groupby_expressions = [e.accept(formatter) for e in ast_groupby]
-        group_clause_str = f"({', '.join(groupby_expressions)})"
+        group_clause_str = f"{', '.join(groupby_expressions)}"
         if query.has_totals():
             group_clause_str = f"{group_clause_str} WITH TOTALS"
         group_clause = StringNode(f"GROUP BY {group_clause_str}")
@@ -172,11 +172,15 @@ def _format_limitby(
     query: AbstractQuery, formatter: ClickhouseExpressionFormatter
 ) -> Optional[StringNode]:
     ast_limitby = query.get_limitby()
-    return (
-        StringNode("LIMIT {} BY {}".format(*ast_limitby))
-        if ast_limitby is not None
-        else None
-    )
+
+    if ast_limitby is not None:
+        return StringNode(
+            "LIMIT {} BY {}".format(
+                ast_limitby.limit, ast_limitby.expression.accept(formatter)
+            )
+        )
+
+    return None
 
 
 def _format_limit(

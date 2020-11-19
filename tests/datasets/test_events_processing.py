@@ -21,12 +21,13 @@ def test_events_processing() -> None:
     ) -> QueryResult:
         assert query.get_selected_columns_from_ast() == [
             SelectedExpression(
-                "tags[transaction]", Column("tags[transaction]", None, "transaction")
+                "tags[transaction]",
+                Column("_snuba_tags[transaction]", None, "transaction"),
             ),
             SelectedExpression(
                 "contexts[browser.name]",
                 FunctionCall(
-                    "contexts[browser.name]",
+                    "_snuba_contexts[browser.name]",
                     "arrayElement",
                     (
                         Column(None, None, "contexts.value"),

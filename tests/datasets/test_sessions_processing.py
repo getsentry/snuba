@@ -23,7 +23,7 @@ def test_sessions_processing() -> None:
             SelectedExpression(
                 "duration_quantiles",
                 CurriedFunctionCall(
-                    "duration_quantiles",
+                    "_snuba_duration_quantiles",
                     FunctionCall(
                         None,
                         "quantilesIfMerge",
@@ -35,12 +35,14 @@ def test_sessions_processing() -> None:
             SelectedExpression(
                 "sessions",
                 FunctionCall(
-                    "sessions", "countIfMerge", (Column(None, None, "sessions"),)
+                    "_snuba_sessions", "countIfMerge", (Column(None, None, "sessions"),)
                 ),
             ),
             SelectedExpression(
                 "users",
-                FunctionCall("users", "uniqIfMerge", (Column(None, None, "users"),)),
+                FunctionCall(
+                    "_snuba_users", "uniqIfMerge", (Column(None, None, "users"),)
+                ),
             ),
         ]
         return QueryResult({}, {})

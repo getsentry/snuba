@@ -19,7 +19,7 @@ from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
 
 
-class SinglePlanQueryProcessingPipeline(EntityQueryProcessingPipeline):
+class SimpleQueryProcessingPipeline(EntityQueryProcessingPipeline):
     """
     Executes the processing phase of a single plan query. Which means a
     query based on a single entity, that would produce a query plan based
@@ -48,7 +48,7 @@ class SinglePlanQueryProcessingPipeline(EntityQueryProcessingPipeline):
         return query_plan
 
 
-class SinglePlanExecutionPipeline(QueryExecutionPipeline):
+class SimpleExecutionPipeline(QueryExecutionPipeline):
     """
     Executes a simple (single entity) query.
     """
@@ -77,18 +77,16 @@ class SinglePlanExecutionPipeline(QueryExecutionPipeline):
         )
 
 
-class SingleQueryPlanPipelineBuilder(QueryPipelineBuilder):
+class SimplePipelineBuilder(QueryPipelineBuilder):
     def __init__(self, query_plan_builder: ClickhouseQueryPlanBuilder) -> None:
         self.__query_plan_builder = query_plan_builder
 
     def build_execution_pipeline(
         self, request: Request, runner: QueryRunner
     ) -> QueryExecutionPipeline:
-        return SinglePlanExecutionPipeline(request, runner, self.__query_plan_builder)
+        return SimpleExecutionPipeline(request, runner, self.__query_plan_builder)
 
     def build_processing_pipeline(
         self, query: LogicalQuery, settings: RequestSettings,
     ) -> EntityQueryProcessingPipeline:
-        return SinglePlanQueryProcessingPipeline(
-            query, settings, self.__query_plan_builder
-        )
+        return SimpleQueryProcessingPipeline(query, settings, self.__query_plan_builder)
