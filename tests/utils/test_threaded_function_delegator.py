@@ -1,6 +1,6 @@
 import threading
 from typing import Any, List, Tuple
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 from snuba.utils.threaded_function_delegator import ThreadedFunctionDelegator
 
@@ -12,7 +12,7 @@ def test() -> None:
 
     def artificial_delay() -> int:
         with condition_add_delay:
-            condition_add_delay.wait()
+            condition_add_delay.wait(timeout=5)
         return 2
 
     callables = {
@@ -25,12 +25,13 @@ def test() -> None:
         return ("one", ["two"])
 
     def callback_func(args: List[Tuple[str, int]]) -> None:
-        assert args == [("one", 1), ("two", 2)]
         with condition:
             condition.notify()
 
+    mock_callback = Mock(side_effect=callback_func)
+
     delegator = ThreadedFunctionDelegator[Any, int](
-        callables=callables, selector_func=selector_func, callback_func=callback_func,
+        callables=callables, selector_func=selector_func, callback_func=mock_callback,
     )
 
     result = delegator.execute(5)
@@ -41,10 +42,11 @@ def test() -> None:
 
     # Wait until the callback has finished running
     with condition:
-        condition.wait()
+        condition.wait(timeout=5)
 
     assert result == 1
 
     assert callables["one"].call_count == 1
     assert callables["two"].call_count == 1
     assert callables["three"].call_count == 0
+    assert mock_callback.call_args == call([("one", 1), ("two", 2)])
