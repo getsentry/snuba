@@ -1,7 +1,7 @@
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.query.data_source.simple import Table
-from snuba.datasets.storages.events_column_processor import EventsColumnProcessor
+from snuba.datasets.storages.group_id_column_processor import GroupIdColumnProcessor
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.clickhouse.query import Query
@@ -35,7 +35,7 @@ def test_events_column_format_expressions() -> None:
         ],
     )
 
-    EventsColumnProcessor().process_query(unprocessed, HTTPRequestSettings())
+    GroupIdColumnProcessor().process_query(unprocessed, HTTPRequestSettings())
     assert (
         expected.get_selected_columns_from_ast()
         == unprocessed.get_selected_columns_from_ast()
