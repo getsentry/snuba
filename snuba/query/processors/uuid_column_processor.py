@@ -1,4 +1,4 @@
-from typing import List, Set
+from typing import Set
 import uuid
 
 from snuba.query.conditions import (
@@ -7,7 +7,7 @@ from snuba.query.conditions import (
     FUNCTION_TO_OPERATOR,
 )
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.logical import Query
+from snuba.clickhouse.query import Query
 from snuba.query.matchers import (
     AnyOptionalString,
     Or,
@@ -17,7 +17,7 @@ from snuba.query.matchers import (
 from snuba.query.matchers import Column as ColumnMatch
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
-from snuba.query.processors import QueryProcessor
+from snuba.clickhouse.processors import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
 
@@ -50,10 +50,8 @@ class UUIDColumnProcessor(QueryProcessor):
         )
 
     def __init__(self, uuid_columns: Set[str]) -> None:
-        self.__unique_uuid_columns = set(uuid_columns)
-        self.__uuid_column_match = Or(
-            [String(u_col) for u_col in self.__unique_uuid_columns]
-        )
+        self.__unique_uuid_columns = uuid_columns
+        self.__uuid_column_match = Or([String(u_col) for u_col in uuid_columns])
         self.uuid_in_condition = FunctionCallMatch(
             Or((String(ConditionFunctions.IN), String(ConditionFunctions.NOT_IN))),
             (
@@ -97,30 +95,32 @@ class UUIDColumnProcessor(QueryProcessor):
 
         result = self.uuid_in_condition.match(exp)
         if result is not None:
-            new_params: List[Expression] = []
             if result.contains("formatted_uuid_column"):
                 column = result.expression("formatted_uuid_column")
                 assert isinstance(column, Column)
-                new_params.append(Column(None, column.table_name, column.column_name))
+                new_column = Column(None, column.table_name, column.column_name)
             else:
                 column = result.expression("uuid_column")
                 assert isinstance(column, Column)
-                new_params.append(column)
+                new_column = column
 
             params_fn = result.expression("params")
             assert isinstance(params_fn, FunctionCall)
             new_fn_params = []
             for param in params_fn.parameters:
+                if not isinstance(param, Literal):
+                    # Don't convert if any of the parameters are not literals, to avoid
+                    # making an invalid query if the UUID literal is buried in some function
+                    # e.g. event_id IN tuple(toLower(...), toUpper(...))
+                    return exp
+
                 new_fn_params.append(self.parse_uuid(param))
 
-            new_params.append(
-                FunctionCall(
-                    params_fn.alias, params_fn.function_name, tuple(new_fn_params)
-                )
+            new_function = FunctionCall(
+                params_fn.alias, params_fn.function_name, tuple(new_fn_params)
             )
-
             return binary_condition(
-                exp.alias, exp.function_name, new_params[0], new_params[1]
+                exp.alias, exp.function_name, new_column, new_function
             )
 
         result = self.uuid_condition.match(exp)
@@ -140,9 +140,8 @@ class UUIDColumnProcessor(QueryProcessor):
                         Column(None, column.table_name, column.column_name)
                     )
 
-            return binary_condition(
-                exp.alias, exp.function_name, new_params[0], new_params[1]
-            )
+            left_exp, right_exp = new_params
+            return binary_condition(exp.alias, exp.function_name, left_exp, right_exp)
 
         return exp
 

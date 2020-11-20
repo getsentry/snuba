@@ -1,18 +1,17 @@
 import pytest
 import uuid
 
+from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
-from snuba.datasets.entities import EntityKey
-from snuba.datasets.entities.factory import get_entity
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     binary_condition,
     BooleanFunctions,
     ConditionFunctions,
 )
-from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.logical import Query
+from snuba.clickhouse.query import Query
 from snuba.query.processors.uuid_column_processor import UUIDColumnProcessor
 from snuba.request.request_settings import HTTPRequestSettings
 
@@ -210,18 +209,12 @@ def test_uuid_column_processor(
     unprocessed: Expression, expected: Expression, formatted_value: str,
 ) -> None:
     unprocessed_query = Query(
-        {},
-        QueryEntity(
-            EntityKey.TRANSACTIONS, get_entity(EntityKey.TRANSACTIONS).get_data_model(),
-        ),
+        Table("transactions", ColumnSet([])),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=unprocessed,
     )
     expected_query = Query(
-        {},
-        QueryEntity(
-            EntityKey.TRANSACTIONS, get_entity(EntityKey.TRANSACTIONS).get_data_model(),
-        ),
+        Table("transactions", ColumnSet([])),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=expected,
     )
