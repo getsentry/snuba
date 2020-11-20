@@ -6,18 +6,13 @@ from snuba.utils.threaded_function_delegator import ThreadedFunctionDelegator
 
 
 def test() -> None:
-    condition = threading.Condition()
+    callback_done = threading.Event()
 
-    condition_add_delay = threading.Condition()
-
-    def artificial_delay() -> int:
-        with condition_add_delay:
-            condition_add_delay.wait(timeout=5)
-        return 2
+    result_received = threading.Event()
 
     callables = {
         "one": Mock(return_value=1),
-        "two": Mock(side_effect=artificial_delay),
+        "two": Mock(return_value=2),
         "three": Mock(return_value=3),
     }
 
@@ -25,8 +20,10 @@ def test() -> None:
         return ("one", ["two"])
 
     def callback_func(args: List[Tuple[str, int]]) -> None:
-        with condition:
-            condition.notify()
+        assert result_received.wait(
+            timeout=5
+        ), "Timeout while waiting for the main thread."
+        callback_done.set()
 
     mock_callback = Mock(side_effect=callback_func)
 
@@ -36,13 +33,13 @@ def test() -> None:
 
     result = delegator.execute(5)
 
-    # Allow the second callable to return
-    with condition_add_delay:
-        condition_add_delay.notify()
+    # Allow the callback to return
+    result_received.set()
 
     # Wait until the callback has finished running
-    with condition:
-        condition.wait(timeout=5)
+    assert callback_done.wait(
+        timeout=5
+    ), "Timeout while waiting for the callback to complete"
 
     assert result == 1
 
