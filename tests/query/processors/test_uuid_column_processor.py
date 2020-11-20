@@ -21,7 +21,15 @@ tests = [
         binary_condition(
             "mightaswell",
             ConditionFunctions.EQ,
-            Column(None, None, "column1"),
+            FunctionCall(
+                None,
+                "replaceAll",
+                (
+                    FunctionCall(None, "toString", (Column(None, None, "column1"),),),
+                    Literal(None, "-"),
+                    Literal(None, ""),
+                ),
+            ),
             Literal(None, "a7d67cf796774551a95be6543cacd459"),
         ),
         binary_condition(
@@ -37,24 +45,48 @@ tests = [
         binary_condition(
             "mightaswell",
             ConditionFunctions.EQ,
-            Column(None, None, "notauuid"),
+            FunctionCall(
+                None,
+                "replaceAll",
+                (
+                    FunctionCall(None, "toString", (Column(None, None, "notauuid"),),),
+                    Literal(None, "-"),
+                    Literal(None, ""),
+                ),
+            ),
             Literal(None, "a7d67cf796774551a95be6543cacd459"),
         ),
         binary_condition(
             "mightaswell",
             ConditionFunctions.EQ,
-            Column(None, None, "notauuid"),
+            FunctionCall(
+                None,
+                "replaceAll",
+                (
+                    FunctionCall(None, "toString", (Column(None, None, "notauuid"),),),
+                    Literal(None, "-"),
+                    Literal(None, ""),
+                ),
+            ),
             Literal(None, "a7d67cf796774551a95be6543cacd459"),
         ),
-        "(equals(notauuid, 'a7d67cf796774551a95be6543cacd459') AS mightaswell)",
-        id="(equals(notauuid, 'a7d67cf796774551a95be6543cacd459') AS mightaswell)",
+        "(equals(replaceAll(toString(notauuid), '-', ''), 'a7d67cf796774551a95be6543cacd459') AS mightaswell)",
+        id="(equals(replaceAll(toString(notauuid), '-', ''), 'a7d67cf796774551a95be6543cacd459') AS mightaswell)",
     ),
     pytest.param(
         binary_condition(
             "mightaswell",
             ConditionFunctions.EQ,
             Literal(None, "a7d67cf796774551a95be6543cacd459"),
-            Column(None, None, "column1"),
+            FunctionCall(
+                None,
+                "replaceAll",
+                (
+                    FunctionCall(None, "toString", (Column(None, None, "column1"),),),
+                    Literal(None, "-"),
+                    Literal(None, ""),
+                ),
+            ),
         ),
         binary_condition(
             "mightaswell",
@@ -69,7 +101,15 @@ tests = [
         binary_condition(
             "mightaswell",
             ConditionFunctions.IN,
-            Column(None, None, "column1"),
+            FunctionCall(
+                None,
+                "replaceAll",
+                (
+                    FunctionCall(None, "toString", (Column(None, None, "column1"),),),
+                    Literal(None, "-"),
+                    Literal(None, ""),
+                ),
+            ),
             FunctionCall(
                 None,
                 "tuple",
@@ -178,7 +218,17 @@ tests = [
             binary_condition(
                 "mightaswell",
                 ConditionFunctions.EQ,
-                Column(None, None, "column1"),
+                FunctionCall(
+                    None,
+                    "replaceAll",
+                    (
+                        FunctionCall(
+                            None, "toString", (Column(None, None, "column1"),),
+                        ),
+                        Literal(None, "-"),
+                        Literal(None, ""),
+                    ),
+                ),
                 Literal(None, "a7d67cf796774551a95be6543cacd459"),
             ),
         ),

@@ -44,18 +44,13 @@ class UUIDColumnProcessor(QueryProcessor):
             with_optionals=True,
         )
 
-    def uuid_column_pattern(self, suffix: str = "") -> Param[Column]:
-        return Param(
-            "uuid_column" + suffix, ColumnMatch(None, self.__uuid_column_match)
-        )
-
     def __init__(self, uuid_columns: Set[str]) -> None:
         self.__unique_uuid_columns = uuid_columns
         self.__uuid_column_match = Or([String(u_col) for u_col in uuid_columns])
         self.uuid_in_condition = FunctionCallMatch(
             Or((String(ConditionFunctions.IN), String(ConditionFunctions.NOT_IN))),
             (
-                Or((self.uuid_column_pattern(), self.formatted_uuid_pattern())),
+                self.formatted_uuid_pattern(),
                 Param("params", FunctionCallMatch(String("tuple"), None)),
             ),
         )
@@ -65,14 +60,12 @@ class UUIDColumnProcessor(QueryProcessor):
                 Or(
                     (
                         Param("literal_0", LiteralMatch(AnyOptionalString())),
-                        self.uuid_column_pattern("_0"),
                         self.formatted_uuid_pattern("_0"),
                     )
                 ),
                 Or(
                     (
                         Param("literal_1", LiteralMatch(AnyOptionalString())),
-                        self.uuid_column_pattern("_1"),
                         self.formatted_uuid_pattern("_1"),
                     )
                 ),
@@ -95,14 +88,9 @@ class UUIDColumnProcessor(QueryProcessor):
 
         result = self.uuid_in_condition.match(exp)
         if result is not None:
-            if result.contains("formatted_uuid_column"):
-                column = result.expression("formatted_uuid_column")
-                assert isinstance(column, Column)
-                new_column = Column(None, column.table_name, column.column_name)
-            else:
-                column = result.expression("uuid_column")
-                assert isinstance(column, Column)
-                new_column = column
+            column = result.expression("formatted_uuid_column")
+            assert isinstance(column, Column)
+            new_column = Column(None, column.table_name, column.column_name)
 
             params_fn = result.expression("params")
             assert isinstance(params_fn, FunctionCall)
@@ -131,14 +119,10 @@ class UUIDColumnProcessor(QueryProcessor):
                     new_params.append(
                         self.parse_uuid(result.expression("literal" + suffix))
                     )
-                elif result.contains("uuid_column" + suffix):
-                    new_params.append(result.expression("uuid_column" + suffix))
                 elif result.contains("formatted_uuid_column" + suffix):
                     column = result.expression("formatted_uuid_column" + suffix)
                     assert isinstance(column, Column)
-                    new_params.append(
-                        Column(None, column.table_name, column.column_name)
-                    )
+                    new_params.append(column)
 
             left_exp, right_exp = new_params
             return binary_condition(exp.alias, exp.function_name, left_exp, right_exp)
