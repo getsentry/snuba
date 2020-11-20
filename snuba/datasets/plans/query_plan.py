@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, Sequence
+from typing import Callable, Generic, Mapping, Sequence, TypeVar
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
+from snuba.query import Query as AbstractQuery
+from snuba.query.composite import CompositeQuery
+from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
 from snuba.reader import Reader
 from snuba.request.request_settings import RequestSettings
@@ -13,9 +16,17 @@ from snuba.web import QueryResult
 
 QueryRunner = Callable[[Query, RequestSettings, Reader], QueryResult]
 
+TQuery = TypeVar("TQuery", bound=AbstractQuery)
+
 
 @dataclass(frozen=True)
-class ClickhouseQueryPlan:
+class QueryPlan(ABC, Generic[TQuery]):
+    query: TQuery
+    execution_strategy: QueryPlanExecutionStrategy[TQuery]
+
+
+@dataclass(frozen=True)
+class ClickhouseQueryPlan(QueryPlan[Query]):
     """
     Provides the directions to execute a Clickhouse Query against one storage
     or multiple joined ones.
@@ -32,13 +43,16 @@ class ClickhouseQueryPlan:
     to split the query into multiple chunks.
     """
 
-    query: Query
     plan_query_processors: Sequence[QueryProcessor]
     db_query_processors: Sequence[QueryProcessor]
-    execution_strategy: QueryPlanExecutionStrategy
 
 
-class QueryPlanExecutionStrategy(ABC):
+@dataclass(frozen=True)
+class CompositeQueryPlan(QueryPlan[CompositeQuery[Table]]):
+    sub_query_plans = Mapping[str, ClickhouseQueryPlan]
+
+
+class QueryPlanExecutionStrategy(ABC, Generic[TQuery]):
     """
     Orchestrates the executions of a query. An example use case is split
     queries, when the split is done at storage level.
@@ -57,7 +71,7 @@ class QueryPlanExecutionStrategy(ABC):
 
     @abstractmethod
     def execute(
-        self, query: Query, request_settings: RequestSettings, runner: QueryRunner,
+        self, query: TQuery, request_settings: RequestSettings, runner: QueryRunner,
     ) -> QueryResult:
         """
         Executes the Query passed in as parameter.

@@ -1,12 +1,24 @@
-from typing import Sequence
+from __future__ import annotations
+
+from typing import Sequence, Union
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity import Entity
+from snuba.datasets.plans.query_plan import (
+    ClickhouseQueryPlan,
+    CompositeQueryPlan,
+    QueryRunner,
+)
+from snuba.pipeline.query_pipeline import QueryExecutionPipeline, QueryPlanner
+from snuba.query.composite import CompositeQuery
+from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query
+from snuba.request import Request
+from snuba.request.request_settings import RequestSettings
 
 
-class Dataset(object):
+class Dataset:
     # TODO: s/dataset/entity/g
     """
     A dataset represents a data model we can run a Snuba Query on.
@@ -47,3 +59,30 @@ class Dataset(object):
 
     def get_all_entities(self) -> Sequence[Entity]:
         return [self.get_default_entity()]
+
+    def get_query_pipeline_builder(self) -> DataSetQueryPipelineBuilder:
+        return DataSetQueryPipelineBuilder()
+
+
+class DataSetQueryPipelineBuilder:
+    def build_execution_pipeline(
+        self, request: Request, runner: QueryRunner
+    ) -> QueryExecutionPipeline:
+        if isinstance(request.query, Query):
+            entity = get_entity(request.query.get_from_clause().key)
+            return entity.get_query_pipeline_builder().build_execution_pipeline(
+                request, runner
+            )
+        else:
+            # TODO: Build the composite part
+            raise NotImplementedError
+
+    def build_planner(
+        self, query: Union[Query, CompositeQuery[Table]], settings: RequestSettings
+    ) -> Union[QueryPlanner[ClickhouseQueryPlan], QueryPlanner[CompositeQueryPlan]]:
+        if isinstance(query, Query):
+            entity = get_entity(query.get_from_clause().key)
+            return entity.get_query_pipeline_builder().build_planner(query, settings)
+        else:
+            # TODO: Build the composite part
+            raise NotImplementedError

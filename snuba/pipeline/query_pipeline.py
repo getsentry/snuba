@@ -1,15 +1,17 @@
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, Union
 
-from snuba.datasets.plans.query_plan import QueryRunner
-from snuba.query.logical import Query as LogicalQuery
+from snuba.datasets.plans.query_plan import (
+    ClickhouseQueryPlan,
+    CompositeQueryPlan,
+    QueryRunner,
+)
+from snuba.query.logical import Query
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
 
-# TODO: Add a parent class above the composite and simple plan
-# and add a bound to this type variable.
-TPlan = TypeVar("TPlan")
+TPlan = TypeVar("TPlan", bound=Union[ClickhouseQueryPlan, CompositeQueryPlan])
 
 
 class QueryPlanner(ABC, Generic[TPlan]):
@@ -49,7 +51,7 @@ class QueryExecutionPipeline(ABC):
         raise NotImplementedError
 
 
-class QueryPipelineBuilder(ABC, Generic[TPlan]):
+class QueryPipelineBuilder(ABC):
     """
     Builds a query pipeline, which contains the directions for building
     processing and running a single entity query or a subquery of a
@@ -67,6 +69,6 @@ class QueryPipelineBuilder(ABC, Generic[TPlan]):
 
     @abstractmethod
     def build_planner(
-        self, query: LogicalQuery, settings: RequestSettings
-    ) -> QueryPlanner[TPlan]:
+        self, query: Query, settings: RequestSettings
+    ) -> QueryPlanner[ClickhouseQueryPlan]:
         raise NotImplementedError

@@ -3,7 +3,6 @@ from typing import Mapping, NamedTuple, Optional, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities import EntityKey
-from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.storage import Storage, WritableStorage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinClass, JoinCondition
@@ -32,7 +31,7 @@ class Entity(ABC):
         self,
         *,
         storages: Sequence[Storage],
-        query_pipeline_builder: QueryPipelineBuilder[ClickhouseQueryPlan],
+        query_pipeline_builder: QueryPipelineBuilder,
         abstract_column_set: ColumnSet,
         join_relationships: Mapping[str, JoinRelationship],
         writable_storage: Optional[WritableStorage],
@@ -77,9 +76,9 @@ class Entity(ABC):
         """
         return self.__join_relationships.get(relationship)
 
-    def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
+    def get_query_pipeline_builder(self,) -> QueryPipelineBuilder:
         """
-        Returns the component that orchestrates building and runnning query plans.
+        Returns the component that orchestrates building and running query plans.
         """
         return self.__query_pipeline_builder
 
