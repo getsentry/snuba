@@ -6,8 +6,8 @@ from typing import Callable, Sequence
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
+from snuba.query.logical import Query as LogicalQuery
 from snuba.reader import Reader
-from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
 
@@ -33,7 +33,8 @@ class ClickhouseQueryPlan:
     """
 
     query: Query
-    plan_processors: Sequence[QueryProcessor]
+    plan_query_processors: Sequence[QueryProcessor]
+    db_query_processors: Sequence[QueryProcessor]
     execution_strategy: QueryPlanExecutionStrategy
 
 
@@ -75,5 +76,7 @@ class ClickhouseQueryPlanBuilder(ABC):
     """
 
     @abstractmethod
-    def build_plan(self, request: Request) -> ClickhouseQueryPlan:
+    def build_plan(
+        self, query: LogicalQuery, request_settings: RequestSettings
+    ) -> ClickhouseQueryPlan:
         raise NotImplementedError
