@@ -5,7 +5,7 @@ from snuba.datasets.plans.query_plan import (
 )
 from snuba.pipeline.processors import (
     execute_entity_processors,
-    execute_pre_strategy_processors,
+    execute_plan_processors,
 )
 from snuba.pipeline.query_pipeline import (
     QueryPlanner,
@@ -61,7 +61,7 @@ class SimpleExecutionPipeline(QueryExecutionPipeline):
         settings = self.__request.settings
 
         query_plan = self.__query_planner.execute()
-        execute_pre_strategy_processors(query_plan, settings)
+        execute_plan_processors(query_plan, settings)
 
         return query_plan.execution_strategy.execute(
             query_plan.query, settings, self.__runner

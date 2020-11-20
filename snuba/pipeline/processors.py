@@ -29,7 +29,7 @@ def _execute_clickhouse_processors(
             clickhouse_processor.process_query(query_plan.query, settings)
 
 
-def execute_pre_strategy_processors(
+def execute_plan_processors(
     query_plan: ClickhouseQueryPlan, settings: RequestSettings,
 ) -> None:
     """
