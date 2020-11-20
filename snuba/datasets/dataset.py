@@ -1,21 +1,14 @@
 from __future__ import annotations
 
-from typing import Sequence, Union
+from typing import Sequence
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity import Entity
-from snuba.datasets.plans.query_plan import (
-    ClickhouseQueryPlan,
-    CompositeQueryPlan,
-    QueryRunner,
-)
-from snuba.pipeline.query_pipeline import QueryExecutionPipeline, QueryPlanner
-from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.simple import Table
+from snuba.datasets.plans.query_plan import QueryRunner
+from snuba.pipeline.query_pipeline import QueryExecutionPipeline
 from snuba.query.logical import Query
 from snuba.request import Request
-from snuba.request.request_settings import RequestSettings
 
 
 class Dataset:
@@ -73,16 +66,6 @@ class DataSetQueryPipelineBuilder:
             return entity.get_query_pipeline_builder().build_execution_pipeline(
                 request, runner
             )
-        else:
-            # TODO: Build the composite part
-            raise NotImplementedError
-
-    def build_planner(
-        self, query: Union[Query, CompositeQuery[Table]], settings: RequestSettings
-    ) -> Union[QueryPlanner[ClickhouseQueryPlan], QueryPlanner[CompositeQueryPlan]]:
-        if isinstance(query, Query):
-            entity = get_entity(query.get_from_clause().key)
-            return entity.get_query_pipeline_builder().build_planner(query, settings)
         else:
             # TODO: Build the composite part
             raise NotImplementedError
