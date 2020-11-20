@@ -55,7 +55,13 @@ class UUIDColumnProcessor(QueryProcessor):
             ),
         )
         self.uuid_condition = FunctionCallMatch(
-            Or([String(op) for op in FUNCTION_TO_OPERATOR]),
+            Or(
+                [
+                    String(op)
+                    for op in FUNCTION_TO_OPERATOR
+                    if op not in (ConditionFunctions.IN, ConditionFunctions.NOT_IN)
+                ]
+            ),
             (
                 Or(
                     (
