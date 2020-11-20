@@ -21,6 +21,21 @@ TQuery = TypeVar("TQuery", bound=AbstractQuery)
 
 @dataclass(frozen=True)
 class QueryPlan(ABC, Generic[TQuery]):
+    """
+    Provides the directions to execute a Clickhouse Query against one
+    storage or multiple joined ones.
+
+    This is produced by a QueryPlanner class (provided either by the
+    dataset or by an entity) after the dataset query processing has
+    been performed and the storage/s has/have been selected.
+
+    It embeds the Clickhouse Query (the query to run on the storage
+    after translation). It also provides a plan execution strategy
+    that takes care of coordinating the execution of the query against
+    the database. The execution strategy can also decide to split the
+    query into multiple chunks.
+    """
+
     query: TQuery
     execution_strategy: QueryPlanExecutionStrategy[TQuery]
 
@@ -28,19 +43,15 @@ class QueryPlan(ABC, Generic[TQuery]):
 @dataclass(frozen=True)
 class ClickhouseQueryPlan(QueryPlan[Query]):
     """
-    Provides the directions to execute a Clickhouse Query against one storage
-    or multiple joined ones.
-    This is produced by ClickhouseQueryPlanBuilder (provided by the dataset)
-    after the dataset query processing has been performed and the storage/s
-    has/have been selected.
-    It embeds the Clickhouse Query (the query to run on the storage after translation),
-    and the sequence of storage specific QueryProcessors to apply to the query after
-    the the storage has been selected. These have to be executed only once per plan
-    contrarily to the DB Query Processors, still provided by the storage, which
+    Query plan for a single entity, single storage query.
+
+    It provides the sequence of storage specific QueryProcessors
+    to apply to the query after the the storage has been selected.
+    These are divided in two sequences: plan processors and DB
+    processors.
+    Plan processors have to be executed only once per plan contrarily
+    to the DB Query Processors, still provided by the storage, which
     are executed by the execution strategy at every DB Query.
-    It also provides a plan execution strategy that takes care of coordinating the
-    execution of the query against the database. The execution strategy can also decide
-    to split the query into multiple chunks.
     """
 
     plan_query_processors: Sequence[QueryProcessor]
@@ -49,6 +60,18 @@ class ClickhouseQueryPlan(QueryPlan[Query]):
 
 @dataclass(frozen=True)
 class CompositeQueryPlan(QueryPlan[CompositeQuery[Table]]):
+    """
+    Query plan for the execution of a Composite Query.
+
+    This contains the composite query, the composite strategy and
+    the query plans for all the simple subqueries.
+    These sub plans contain all the storage query processors that
+    still have to be executed on the subquery. Their execution
+    strategy is instead ignored as the strategy for this query
+    is a composite query execution strategy provided by this
+    plan.
+    """
+
     sub_query_plans = Mapping[str, ClickhouseQueryPlan]
 
 

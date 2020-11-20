@@ -58,6 +58,15 @@ class Dataset:
 
 
 class DataSetQueryPipelineBuilder:
+    """
+    Produces the QueryExecutionPipeline to run the query. This is supposed
+    to handle both simple and composite queries.
+
+    TODO: Request still can only contain a simple query. This has to be
+    adapted depending on how the SnQL parser will produce a composite
+    query.
+    """
+
     def build_execution_pipeline(
         self, request: Request, runner: QueryRunner
     ) -> QueryExecutionPipeline:
