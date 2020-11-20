@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import replace
 from typing import Optional, Sequence, Union
 
@@ -12,11 +14,12 @@ from snuba.clickhouse.formatter.nodes import (
     StringNode,
 )
 from snuba.clickhouse.query import Query
+from snuba.query import ProcessableQuery
 from snuba.query import Query as AbstractQuery
 from snuba.query.composite import CompositeQuery
-from snuba.query.data_source import DataSource
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Table
+from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.expressions import Expression
 from snuba.query.parsing import ParsingContext
 from snuba.request.request_settings import RequestSettings
@@ -48,39 +51,37 @@ def format_query(query: FormattableQuery, settings: RequestSettings) -> Formatte
     return FormattedQuery(_format_query_content(query))
 
 
-def format_data_source(data_source: DataSource) -> FormattedNode:
+class DataSourceFormatter(DataSourceVisitor[FormattedNode, Table]):
     """
     Builds a FormattedNode out of any type of DataSource object. This
     is called when formatting the FROM clause of every nested query
     in a Composite query.
-
-    Remark: The ideal way to structure this would be a visitor just
-    like we did for the AST expression but this is not possible
-    without introducing either circular dependencies or dropping
-    type checking since the visitor and the classes to visit cannot
-    be in the same module as of now and in a visitor pattern they would
-    have to be mutually dependent.
     """
-    if isinstance(data_source, Table):
-        return format_table(data_source)
-    elif isinstance(data_source, Query):
-        return FormattedSubQuery(_format_query_content(data_source))
-    elif isinstance(data_source, JoinClause):
+
+    def _visit_simple_source(self, data_source: Table) -> StringNode:
+        """
+        Formats a simple table data source.
+        """
+
+        final = " FINAL" if data_source.final else ""
+        sample = (
+            f" SAMPLE {data_source.sampling_rate}" if data_source.sampling_rate else ""
+        )
+        return StringNode(f"{data_source.table_name}{final}{sample}")
+
+    def _visit_join(self, data_source: JoinClause[Table]) -> FormattedNode:
         return data_source.accept(JoinFormatter())
-    elif isinstance(data_source, CompositeQuery):
+
+    def _visit_simple_query(
+        self, data_source: ProcessableQuery[Table]
+    ) -> FormattedSubQuery:
+        assert isinstance(data_source, Query)
         return FormattedSubQuery(_format_query_content(data_source))
-    else:
-        raise NotImplementedError(f"Unsupported data source {type(data_source)}")
 
-
-def format_table(data_source: Table) -> StringNode:
-    """
-    Formats a simple table data source.
-    """
-
-    final = " FINAL" if data_source.final else ""
-    sample = f" SAMPLE {data_source.sampling_rate}" if data_source.sampling_rate else ""
-    return StringNode(f"{data_source.table_name}{final}{sample}")
+    def _visit_composite_query(
+        self, data_source: CompositeQuery[Table]
+    ) -> FormattedSubQuery:
+        return FormattedSubQuery(_format_query_content(data_source))
 
 
 def _format_query_content(query: FormattableQuery) -> Sequence[FormattedNode]:
@@ -98,7 +99,7 @@ def _format_query_content(query: FormattableQuery) -> Sequence[FormattedNode]:
         v
         for v in [
             _format_select(query, formatter),
-            PaddingNode("FROM", format_data_source(query.get_from_clause())),
+            PaddingNode("FROM", DataSourceFormatter().visit(query.get_from_clause())),
             _build_optional_string_node(
                 "ARRAY JOIN", query.get_arrayjoin_from_ast(), formatter
             ),
@@ -148,7 +149,7 @@ def _format_groupby(
     ast_groupby = query.get_groupby_from_ast()
     if ast_groupby:
         groupby_expressions = [e.accept(formatter) for e in ast_groupby]
-        group_clause_str = f"({', '.join(groupby_expressions)})"
+        group_clause_str = f"{', '.join(groupby_expressions)}"
         if query.has_totals():
             group_clause_str = f"{group_clause_str} WITH TOTALS"
         group_clause = StringNode(f"GROUP BY {group_clause_str}")
@@ -204,7 +205,9 @@ class JoinFormatter(JoinVisitor[FormattedNode, Table]):
         An individual node is formatted as a table name with a table
         alias, thus the padding.
         """
-        return PaddingNode(None, format_data_source(node.data_source), node.alias)
+        return PaddingNode(
+            None, DataSourceFormatter().visit(node.data_source), node.alias
+        )
 
     def visit_join_clause(self, node: JoinClause[Table]) -> FormattedNode:
         join_type = f"{node.join_type.value} " if node.join_type else ""

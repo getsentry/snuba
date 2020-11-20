@@ -1,31 +1,47 @@
 from abc import ABC, abstractmethod
-
+from typing import Generic, TypeVar
 
 from snuba.datasets.plans.query_plan import QueryRunner
+from snuba.query.logical import Query as LogicalQuery
 from snuba.request import Request
+from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
 
+# TODO: Add a parent class above the composite and simple plan
+# and add a bound to this type variable.
+TPlan = TypeVar("TPlan")
 
-class QueryPipeline(ABC):
+
+class QueryPlanner(ABC, Generic[TPlan]):
     """
-    Contains the instructions to build the query plans for the requested query.
-    The QueryPipeline runs the query plan processors, executes the query plans and
-    returns the relevant result.
+    A QueryPlanner contains a series of steps that, given a logical
+    query and request settings, executes all the logical query processing
+    translates the query and compiles a query plan that can be used
+    to execute the query.
 
-    Most of the time, a single query plan is built by the SingleQueryPlanPipeline,
-    however under certain circumstances we may have a pipeline with multiple query
-    plans. For example, the MultipleQueryPlanPipeline provides a way to build and
-    execute more than one query plan and compare their results, which provides a
-    way to experiment with different query plans in production without actually
-    using their results yet.
+    The returned query plan structure may be different between different
+    query types but it must provide the query, all clickhouse query
+    processors, and a strategy to execute the query.
+    """
+
+    @abstractmethod
+    def execute(self) -> TPlan:
+        raise NotImplementedError
+
+
+class QueryExecutionPipeline(ABC):
+    """
+    Contains the instructions to execute a query.
+    The QueryExecutionPipeline performs the all query processing steps and,
+    executes the query plan and returns the result.
+
+    Most of the time, a single query plan is built by the SimplePipeline.
+    However, we can also use the MultipleConcurrentPipeline in order to build and
+    execute more than one other pipeline and compare their results, which provides
+    a way to experiment with different pipeline in production without actually using
+    their results yet.
 
     This component is produced by the QueryPipelineBuilder.
-
-    TODO: In future, the query pipeline wiil be composed of segments, which will
-    each perform individual processing steps and can be easily reused.
-    Examples of transformations performed by segments are entity processing, query
-    plan building and processing, storage processing, as well as splitters
-    and collectors to help break apart and reassemble joined queries.
     """
 
     @abstractmethod
@@ -33,12 +49,24 @@ class QueryPipeline(ABC):
         raise NotImplementedError
 
 
-class QueryPipelineBuilder(ABC):
+class QueryPipelineBuilder(ABC, Generic[TPlan]):
     """
-    Builds a query pipeline, which contains the directions for building and running
-    query plans.
+    Builds a query pipeline, which contains the directions for building
+    processing and running a single entity query or a subquery of a
+    composite query.
     """
 
     @abstractmethod
-    def build_pipeline(self, request: Request, runner: QueryRunner) -> QueryPipeline:
+    def build_execution_pipeline(
+        self, request: Request, runner: QueryRunner
+    ) -> QueryExecutionPipeline:
+        """
+        Returns a pipeline to execute a query
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def build_planner(
+        self, query: LogicalQuery, settings: RequestSettings
+    ) -> QueryPlanner[TPlan]:
         raise NotImplementedError
