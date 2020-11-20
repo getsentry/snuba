@@ -22,6 +22,11 @@ test_cases = [
         IncompleteParseError,
         id="In a list, columns are separated by exactly one comma",
     ),
+    pytest.param(
+        "MATCH (e: events) SELECT 4-5, 3*g(c), c BY d, ,2+7 WHERE a<3ORb>2  ORDER BY f DESC",
+        IncompleteParseError,
+        id="mandatory spacing",
+    ),
 ]
 
 

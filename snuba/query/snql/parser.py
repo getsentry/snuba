@@ -94,10 +94,10 @@ snql_grammar = Grammar(
     entity_match          = open_paren entity_alias colon space* entity_name sample_clause? space* close_paren
     sample_clause         = space+ "SAMPLE" space+ numeric_literal
 
-    and_expression        = space* condition (space* and_tuple)*
-    or_expression         = space* and_expression (space* or_tuple)*
-    and_tuple             = space* "AND" condition
-    or_tuple              = space* "OR" and_expression
+    and_expression        = space* condition and_tuple*
+    or_expression         = space* and_expression or_tuple*
+    and_tuple             = space+ "AND" condition
+    or_tuple              = space+ "OR" and_expression
 
     condition             = main_condition / parenthesized_cdn
     main_condition        = low_pri_arithmetic space* condition_op space* (function_call / column_name / quoted_literal / numeric_literal)
@@ -361,9 +361,6 @@ class SnQLVisitor(NodeVisitor):
                     continue
                 elif isinstance(elem, (AndTuple, OrTuple)):
                     args.append(elem.exp)
-                elif isinstance(elem, list):
-                    _, and_tuple = elem
-                    args.append(and_tuple.exp)
         return combine_and_conditions(args)
 
     def visit_or_expression(
@@ -384,9 +381,6 @@ class SnQLVisitor(NodeVisitor):
                     continue
                 elif isinstance(elem, (AndTuple, OrTuple)):
                     args.append(elem.exp)
-                elif isinstance(elem, list):
-                    _, or_tuple = elem
-                    args.append(or_tuple.exp)
         return combine_or_conditions(args)
 
     def visit_main_condition(
