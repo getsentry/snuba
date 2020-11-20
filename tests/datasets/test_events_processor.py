@@ -115,14 +115,10 @@ class TestEventsProcessor:
         self.processor.extract_common(output, event, self.metadata)
         assert output == {
             "platform": u"the_platform",
-            "primary_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "received": now,
-            "culprit": "the culprit",
-            "type": "error",
             "version": "6",
             "modules.name": [u"foo", u"bar", u"baz"],
             "modules.version": [u"1.0", u"2.0", u""],
-            "title": "FooError",
             "location": "bar.py",
         }
 

@@ -80,6 +80,10 @@ class ErrorsProcessor(EventsProcessorBase):
 
         output["primary_hash"] = str(uuid.UUID(_hashify(event["primary_hash"])))
 
+        output["culprit"] = _unicodify(data.get("culprit", ""))
+        output["type"] = _unicodify(data.get("type", ""))
+        output["title"] = _unicodify(data.get("title", ""))
+
     def extract_tags_custom(
         self,
         output: MutableMapping[str, Any],
