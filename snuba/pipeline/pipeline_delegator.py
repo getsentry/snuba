@@ -1,24 +1,27 @@
 from typing import Callable, List, Mapping, Optional, Tuple
 
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.query_plan import QueryRunner
 from snuba.pipeline.query_pipeline import (
-    QueryPipeline,
+    QueryPlanner,
+    QueryExecutionPipeline,
     QueryPipelineBuilder,
 )
 from snuba.query.logical import Query
+from snuba.query.logical import Query as LogicalQuery
 from snuba.request import Request
+from snuba.request.request_settings import RequestSettings
 from snuba.utils.threaded_function_delegator import ThreadedFunctionDelegator
 from snuba.web import QueryResult
 
-
 BuilderId = str
-QueryPipelineBuilders = Mapping[BuilderId, QueryPipelineBuilder]
+QueryPipelineBuilders = Mapping[BuilderId, QueryPipelineBuilder[ClickhouseQueryPlan]]
 QueryResults = List[Tuple[BuilderId, QueryResult]]
 SelectorFunc = Callable[[Query], Tuple[BuilderId, List[BuilderId]]]
 CallbackFunc = Callable[[QueryResults], None]
 
 
-class MultipleConcurrentPipeline(QueryPipeline):
+class MultipleConcurrentPipeline(QueryExecutionPipeline):
     """
     A query pipeline that executes a request against one or more other pipelines
     in parallel.
@@ -59,7 +62,7 @@ class MultipleConcurrentPipeline(QueryPipeline):
     def execute(self) -> QueryResult:
         executor = ThreadedFunctionDelegator[Query, QueryResult](
             callables={
-                builder_id: builder.build_pipeline(
+                builder_id: builder.build_execution_pipeline(
                     self.__request, self.__runner
                 ).execute
                 for builder_id, builder in self.__query_pipeline_builders.items()
@@ -70,7 +73,7 @@ class MultipleConcurrentPipeline(QueryPipeline):
         return executor.execute(self.__request.query)
 
 
-class PipelineDelegator(QueryPipelineBuilder):
+class PipelineDelegator(QueryPipelineBuilder[ClickhouseQueryPlan]):
     """
     Builds a pipeline which is able to run one or more other pipelines in parallel.
     """
@@ -85,7 +88,9 @@ class PipelineDelegator(QueryPipelineBuilder):
         self.__selector_func = selector_func
         self.__callback_func = callback_func
 
-    def build_pipeline(self, request: Request, runner: QueryRunner) -> QueryPipeline:
+    def build_execution_pipeline(
+        self, request: Request, runner: QueryRunner
+    ) -> QueryExecutionPipeline:
         return MultipleConcurrentPipeline(
             request=request,
             runner=runner,
@@ -93,3 +98,8 @@ class PipelineDelegator(QueryPipelineBuilder):
             selector_func=self.__selector_func,
             callback_func=self.__callback_func,
         )
+
+    def build_planner(
+        self, query: LogicalQuery, settings: RequestSettings
+    ) -> QueryPlanner[ClickhouseQueryPlan]:
+        raise NotImplementedError

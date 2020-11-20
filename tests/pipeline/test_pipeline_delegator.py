@@ -51,7 +51,7 @@ def test() -> None:
     )
 
     with cv:
-        delegator.build_pipeline(
+        delegator.build_execution_pipeline(
             Request("", query, HTTPRequestSettings(), {}, ""), mock_query_runner
         ).execute()
         cv.wait(timeout=5)
