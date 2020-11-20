@@ -1,6 +1,6 @@
 import threading
 from typing import List, Tuple
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -21,8 +21,9 @@ def test() -> None:
 
     def callback_func(args: List[Tuple[str, QueryResult]]) -> None:
         with cv:
-            assert args == [("events", query_result), ("errors", query_result)]
             cv.notify()
+
+    mock_callback = Mock(side_effect=callback_func)
 
     query_body = {
         "selected_columns": ["type", "project_id"],
@@ -46,13 +47,17 @@ def test() -> None:
     delegator = PipelineDelegator(
         query_pipeline_builders={"events": events_pipeline, "errors": errors_pipeline},
         selector_func=lambda query: ("events", ["errors"]),
-        callback_func=callback_func,
+        callback_func=mock_callback,
     )
 
     with cv:
         delegator.build_execution_pipeline(
             Request("", query, HTTPRequestSettings(), {}, ""), mock_query_runner
         ).execute()
-        cv.wait()
+        cv.wait(timeout=5)
 
     assert mock_query_runner.call_count == 2
+
+    assert mock_callback.call_args == call(
+        [("events", query_result), ("errors", query_result)]
+    )
