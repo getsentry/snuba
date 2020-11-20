@@ -51,7 +51,7 @@ class QueryExecutionPipeline(ABC):
         raise NotImplementedError
 
 
-class QueryPipelineBuilder(ABC):
+class QueryPipelineBuilder(ABC, Generic[TPlan]):
     """
     Builds a query pipeline, which contains the directions for building
     processing and running a single entity query or a subquery of a

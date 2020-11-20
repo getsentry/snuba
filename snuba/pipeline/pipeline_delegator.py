@@ -15,7 +15,7 @@ from snuba.utils.threaded_function_delegator import ThreadedFunctionDelegator
 from snuba.web import QueryResult
 
 BuilderId = str
-QueryPipelineBuilders = Mapping[BuilderId, QueryPipelineBuilder]
+QueryPipelineBuilders = Mapping[BuilderId, QueryPipelineBuilder[ClickhouseQueryPlan]]
 QueryResults = List[Tuple[BuilderId, QueryResult]]
 SelectorFunc = Callable[[Query], Tuple[BuilderId, List[BuilderId]]]
 CallbackFunc = Callable[[QueryResults], None]
@@ -73,7 +73,7 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
         return executor.execute(self.__request.query)
 
 
-class PipelineDelegator(QueryPipelineBuilder):
+class PipelineDelegator(QueryPipelineBuilder[ClickhouseQueryPlan]):
     """
     Builds a pipeline which is able to run one or more other pipelines in parallel.
     """

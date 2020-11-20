@@ -2,7 +2,11 @@ import copy
 import logging
 from datetime import datetime
 from functools import partial
-from typing import MutableMapping
+from typing import MutableMapping, Set
+
+from snuba.query.data_source.visitor import DataSourceVisitor
+from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
+from snuba.query.data_source.simple import Table
 
 import sentry_sdk
 from snuba import environment
@@ -11,6 +15,8 @@ from snuba.clickhouse.query import Query
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
+from snuba.query.composite import CompositeQuery
+from snuba.query import ProcessableQuery
 from snuba.query.timeseries_extension import TimeSeriesExtensionProcessor
 from snuba.querylog import record_query
 from snuba.querylog.query_metadata import SnubaQueryMetadata
@@ -178,6 +184,31 @@ def _run_and_apply_column_names(
     return result
 
 
+class TablesCollector(DataSourceVisitor[Set[str], Table], JoinVisitor[Set[str], Table]):
+    """
+    Traverses the data source of a composite query and collects
+    all the referenced table names
+    """
+
+    def _visit_simple_source(self, data_source: Table) -> Set[str]:
+        return {data_source.table_name}
+
+    def _visit_join(self, data_source: JoinClause[Table]) -> Set[str]:
+        return self.visit_join_clause(data_source)
+
+    def _visit_simple_query(self, data_source: ProcessableQuery[Table]) -> Set[str]:
+        return self.visit(data_source.get_from_clause())
+
+    def _visit_composite_query(self, data_source: CompositeQuery[Table]) -> Set[str]:
+        return self.visit(data_source.get_from_clause())
+
+    def visit_individual_node(self, node: IndividualNode[Table]) -> Set[str]:
+        return self.visit(node.data_source)
+
+    def visit_join_clause(self, node: JoinClause[Table]) -> Set[str]:
+        return node.left_node.accept(self) | node.right_node.accept(self)
+
+
 def _format_storage_query_and_run(
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
@@ -192,7 +223,7 @@ def _format_storage_query_and_run(
     Formats the Storage Query and pass it to the DB specific code for execution.
     """
     from_clause = clickhouse_query.get_from_clause()
-    table_name = from_clause.table_name
+    table_names = ",".join(sorted(TablesCollector().visit(from_clause)))
     with sentry_sdk.start_span(description="create_query", op="db") as span:
         formatted_query = format_query(clickhouse_query, request_settings)
         span.set_data("query", formatted_query.structured())
@@ -201,7 +232,7 @@ def _format_storage_query_and_run(
     timer.mark("prepare_query")
 
     stats = {
-        "clickhouse_table": table_name,
+        "clickhouse_table": table_names,
         "final": from_clause.final,
         "referrer": referrer,
         "num_days": (to_date - from_date).days,
@@ -209,7 +240,7 @@ def _format_storage_query_and_run(
     }
 
     with sentry_sdk.start_span(description=formatted_query.get_sql(), op="db") as span:
-        span.set_tag("table", table_name)
+        span.set_tag("table", table_names)
 
         return raw_query(
             clickhouse_query,

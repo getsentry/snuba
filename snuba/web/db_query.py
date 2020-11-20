@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from functools import partial
+from functools import partial, reduce
 from hashlib import md5
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping, Optional, Set, Union
 
 import sentry_sdk
 from sentry_sdk.api import configure_scope
@@ -11,6 +13,11 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_profiler import generate_profile
+from snuba.query import ProcessableQuery
+from snuba.query.composite import CompositeQuery
+from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
+from snuba.query.data_source.simple import Table
+from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.querylog.query_metadata import (
     ClickhouseQueryMetadata,
     QueryStatus,
@@ -36,6 +43,90 @@ cache: Cache[JSONData] = RedisCache(
 )
 
 logger = logging.getLogger("snuba.query")
+
+
+class ReferencedColumnsCounter(
+    DataSourceVisitor[None, Table], JoinVisitor[None, Table]
+):
+    """
+    Traverse a potentially composite data source tree for a query
+    and count the physical Clickhouse columns referenced.
+
+    Since get_all_ast_referenced_columns only returns the columns
+    referenced directly by a query (ignoring subqueries), we need
+    to traverse each node of the data source structure individually.
+    """
+
+    def __init__(self) -> None:
+        # When we have a join node that references a table directly
+        # instead of a subquery we pick the columns list from the
+        # query that contains that join. So when visiting the join
+        # node we signal that the enclosing query has to count the
+        # columns for that join node.
+        self.__incomplete_tables: MutableMapping[str, str] = {}
+        # Analysed tables with their columns list
+        self.__complete_tables: MutableMapping[str, Set[str]] = {}
+
+    def count_columns(self) -> int:
+        return reduce(
+            lambda total, table: total + len(self.__complete_tables[table]),
+            self.__complete_tables,
+            0,
+        )
+
+    def _visit_simple_source(self, data_source: Table) -> None:
+        return
+
+    def _visit_join(self, data_source: JoinClause[Table]) -> None:
+        self.visit_join_clause(data_source)
+
+    def _visit_simple_query(self, data_source: ProcessableQuery[Table]) -> None:
+        table = data_source.get_from_clause().table_name
+        columns = set(
+            (
+                # Skip aliases when counting columns
+                c.column_name
+                for c in data_source.get_all_ast_referenced_columns()
+            )
+        )
+
+        if table in self.__complete_tables:
+            self.__complete_tables[table] |= columns
+        else:
+            self.__complete_tables[table] = columns
+
+    def _visit_composite_query(self, data_source: CompositeQuery[Table]) -> None:
+        self.visit(data_source.get_from_clause())
+        if self.__incomplete_tables:
+            # This case means that we ran into a join node that referenced
+            # a table directly. So that table, with its alias is in the
+            # incomplete tables mapping and we count all the columns this
+            # query references from there.
+            for _, table in self.__incomplete_tables.items():
+                if table not in self.__complete_tables:
+                    self.__complete_tables[table] = set()
+            for c in data_source.get_all_ast_referenced_columns():
+                if (
+                    c.table_name is not None
+                    and c.table_name in self.__incomplete_tables
+                ):
+                    self.__complete_tables[self.__incomplete_tables[c.table_name]].add(
+                        c.column_name
+                    )
+            self.__incomplete_tables = {}
+
+    def visit_individual_node(self, node: IndividualNode[Table]) -> None:
+        if isinstance(node.data_source, Table):
+            # This is an individual table in a join. So we signal that the
+            # enclosing query needs to count the columns that reference this
+            # table.
+            self.__incomplete_tables[node.alias] = node.data_source.table_name
+        else:
+            self.visit(node.data_source)
+
+    def visit_join_clause(self, node: JoinClause[Table]) -> None:
+        node.left_node.accept(self)
+        node.right_node.accept(self)
 
 
 def update_query_metadata_and_stats(
@@ -74,7 +165,7 @@ def execute_query(
     # as the execute method depends on it. Otherwise we can make this
     # file rely either entirely on clickhouse query or entirely on
     # the formatter.
-    clickhouse_query: Query,
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     formatted_query: FormattedQuery,
     reader: Reader,
@@ -88,18 +179,9 @@ def execute_query(
     # Experiment, if we are going to grab more than X columns worth of data,
     # don't use uncompressed_cache in ClickHouse.
     uc_max = state.get_config("uncompressed_cache_max_cols", 5)
-    if (
-        len(
-            set(
-                (
-                    # Skip aliases when counting columns
-                    (c.table_name, c.column_name)
-                    for c in clickhouse_query.get_all_ast_referenced_columns()
-                )
-            )
-        )
-        > uc_max
-    ):
+    column_counter = ReferencedColumnsCounter()
+    column_counter.visit(clickhouse_query.get_from_clause())
+    if column_counter.count_columns() > uc_max:
         query_settings["use_uncompressed_cache"] = 0
 
     # Force query to use the first shard replica, which
@@ -125,7 +207,7 @@ def execute_query(
 
 @with_span(op="db")
 def execute_query_with_rate_limits(
-    clickhouse_query: Query,
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     formatted_query: FormattedQuery,
     reader: Reader,
@@ -172,7 +254,7 @@ def get_query_cache_key(formatted_query: FormattedQuery) -> str:
 
 @with_span(op="db")
 def execute_query_with_caching(
-    clickhouse_query: Query,
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     formatted_query: FormattedQuery,
     reader: Reader,
@@ -186,18 +268,9 @@ def execute_query_with_caching(
         [("use_cache", settings.USE_RESULT_CACHE), ("uncompressed_cache_max_cols", 5)]
     )
 
-    if (
-        len(
-            set(
-                (
-                    # Skip aliases when counting columns
-                    (c.table_name, c.column_name)
-                    for c in clickhouse_query.get_all_ast_referenced_columns()
-                )
-            )
-        )
-        > uc_max
-    ):
+    column_counter = ReferencedColumnsCounter()
+    column_counter.visit(clickhouse_query.get_from_clause())
+    if column_counter.count_columns() > uc_max:
         use_cache = False
 
     execute = partial(
@@ -232,7 +305,7 @@ def execute_query_with_caching(
 
 @with_span(op="db")
 def execute_query_with_readthrough_caching(
-    clickhouse_query: Query,
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     formatted_query: FormattedQuery,
     reader: Reader,
@@ -264,7 +337,7 @@ def raw_query(
     # as the execute method depends on it. Otherwise we can make this
     # file rely either entirely on clickhouse query or entirely on
     # the formatter.
-    clickhouse_query: Query,
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     formatted_query: FormattedQuery,
     reader: Reader,
