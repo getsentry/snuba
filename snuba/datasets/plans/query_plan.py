@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, Generic, Mapping, Sequence, TypeVar
+from typing import Callable, Generic, Mapping, Optional, Sequence, TypeVar
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
@@ -59,20 +59,37 @@ class ClickhouseQueryPlan(QueryPlan[Query]):
 
 
 @dataclass(frozen=True)
+class SubqueryProcessors:
+    plan_query_processors: Sequence[QueryProcessor]
+    db_query_processors: Sequence[QueryProcessor]
+
+
+@dataclass(frozen=True)
 class CompositeQueryPlan(QueryPlan[CompositeQuery[Table]]):
     """
     Query plan for the execution of a Composite Query.
 
     This contains the composite query, the composite strategy and
-    the query plans for all the simple subqueries.
-    These sub plans contain all the storage query processors that
-    still have to be executed on the subquery. Their execution
-    strategy is instead ignored as the strategy for this query
-    is a composite query execution strategy provided by this
-    plan.
+    the processors for all the simple subqueries.
+    SubqueryProcessors instances contain all the storage query
+    processors that still have to be executed on the subquery.
     """
 
-    sub_query_plans = Mapping[str, ClickhouseQueryPlan]
+    # If there is no join there would be no table alias and one
+    # single simple subquery.
+    default_sub_query_processors: Optional[SubqueryProcessors]
+    # If there is a join, there is one SubqueryProcessors instance
+    # per table alias.
+    aliased_sub_queries_processors: Optional[Mapping[str, SubqueryProcessors]]
+
+    def __post_init__(self) -> None:
+        assert (
+            (
+                self.default_sub_query_processors is not None
+                or self.aliased_sub_queries_processors is not None
+            )
+            and self.default_sub_query_processors != self.aliased_sub_queries_processors
+        )
 
 
 class QueryPlanExecutionStrategy(ABC, Generic[TQuery]):
