@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, Generic, Mapping, Sequence, TypeVar
+from typing import Callable, Generic, Mapping, Optional, Sequence, TypeVar
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
@@ -34,6 +34,12 @@ class QueryPlan(ABC, Generic[TQuery]):
     that takes care of coordinating the execution of the query against
     the database. The execution strategy can also decide to split the
     query into multiple chunks.
+
+    TODO: Bring the methods that apply the processors in the plan itself.
+    Now that we have two Plan implementations with a different
+    structure, all code depending on this would have to be written
+    differently depending on the implementation.
+    Having the methods inside the plan would make this simpler.
     """
 
     query: TQuery
@@ -59,20 +65,42 @@ class ClickhouseQueryPlan(QueryPlan[Query]):
 
 
 @dataclass(frozen=True)
+class SubqueryProcessors:
+    """
+    Collects the query processors to execute on each subquery
+    in a composite query.
+    """
+
+    plan_processors: Sequence[QueryProcessor]
+    db_processors: Sequence[QueryProcessor]
+
+
+@dataclass(frozen=True)
 class CompositeQueryPlan(QueryPlan[CompositeQuery[Table]]):
     """
     Query plan for the execution of a Composite Query.
 
     This contains the composite query, the composite strategy and
-    the query plans for all the simple subqueries.
-    These sub plans contain all the storage query processors that
-    still have to be executed on the subquery. Their execution
-    strategy is instead ignored as the strategy for this query
-    is a composite query execution strategy provided by this
-    plan.
+    the processors for all the simple subqueries.
+    SubqueryProcessors instances contain all the storage query
+    processors that still have to be executed on the subquery.
     """
 
-    sub_query_plans = Mapping[str, ClickhouseQueryPlan]
+    # If there is no join there would be no table alias and one
+    # single simple subquery.
+    root_processors: Optional[SubqueryProcessors]
+    # If there is a join, there is one SubqueryProcessors instance
+    # per table alias.
+    aliased_processors: Optional[Mapping[str, SubqueryProcessors]]
+
+    def __post_init__(self) -> None:
+        # If both root processors and aliased processors are populated
+        # we have an invalid query. The two are exclusive.
+        assert (
+            self.root_processors is not None or self.aliased_processors is not None
+        ) and not (
+            self.root_processors is not None and self.aliased_processors is not None
+        )
 
 
 class QueryPlanExecutionStrategy(ABC, Generic[TQuery]):
