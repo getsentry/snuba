@@ -71,8 +71,8 @@ class JoinSourcePlanner(JoinVisitor[JoinDataSourcePlan, Entity]):
             ),
             processors={
                 node.alias: SubqueryProcessors(
-                    plan_query_processors=sub_query_plan.plan_query_processors,
-                    db_query_processors=sub_query_plan.db_query_processors,
+                    plan_processors=sub_query_plan.plan_query_processors,
+                    db_processors=sub_query_plan.db_query_processors,
                 )
             },
         )
@@ -115,16 +115,16 @@ def _plan_composite_query(
             granularity=query.get_granularity(),
         ),
         execution_strategy=CompositeExecutionStrategy(),
-        default_sub_query_processors=planned_source.default_sub_query_processors,
-        aliased_sub_queries_processors=planned_source.aliased_sub_queries_processors,
+        root_processors=planned_source.root_processors,
+        aliased_processors=planned_source.aliased_processors,
     )
 
 
 @dataclass(frozen=True)
 class CompositeDataSourcePlan:
     translated_source: Union[ClickhouseQuery, CompositeQuery[Table], JoinClause[Table]]
-    default_sub_query_processors: Optional[SubqueryProcessors] = None
-    aliased_sub_queries_processors: Optional[Mapping[str, SubqueryProcessors]] = None
+    root_processors: Optional[SubqueryProcessors] = None
+    aliased_processors: Optional[Mapping[str, SubqueryProcessors]] = None
 
 
 class CompositeDataSourcePlanner(DataSourceVisitor[CompositeDataSourcePlan, Entity],):
@@ -150,9 +150,9 @@ class CompositeDataSourcePlanner(DataSourceVisitor[CompositeDataSourcePlan, Enti
         plan = _plan_simple_query(data_source, self.__settings)
         return CompositeDataSourcePlan(
             translated_source=plan.query,
-            default_sub_query_processors=SubqueryProcessors(
-                plan_query_processors=plan.plan_query_processors,
-                db_query_processors=plan.db_query_processors,
+            root_processors=SubqueryProcessors(
+                plan_processors=plan.plan_query_processors,
+                db_processors=plan.db_query_processors,
             ),
         )
 
@@ -162,8 +162,8 @@ class CompositeDataSourcePlanner(DataSourceVisitor[CompositeDataSourcePlan, Enti
         plan = _plan_composite_query(data_source, self.__settings)
         return CompositeDataSourcePlan(
             translated_source=plan.query,
-            default_sub_query_processors=plan.default_sub_query_processors,
-            aliased_sub_queries_processors=plan.aliased_sub_queries_processors,
+            root_processors=plan.root_processors,
+            aliased_processors=plan.aliased_processors,
         )
 
 

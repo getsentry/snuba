@@ -34,6 +34,12 @@ class QueryPlan(ABC, Generic[TQuery]):
     that takes care of coordinating the execution of the query against
     the database. The execution strategy can also decide to split the
     query into multiple chunks.
+
+    TODO: Bring the methods that apply the processors in the plan itself.
+    Now that we have two Plan implementations with a different
+    structure, all code depending on this would have to be written
+    differently depending on the implementation.
+    Having the methods inside the plan would make this simpler.
     """
 
     query: TQuery
@@ -60,8 +66,13 @@ class ClickhouseQueryPlan(QueryPlan[Query]):
 
 @dataclass(frozen=True)
 class SubqueryProcessors:
-    plan_query_processors: Sequence[QueryProcessor]
-    db_query_processors: Sequence[QueryProcessor]
+    """
+    Collects the query processors to execute on each subquery
+    in a composite query.
+    """
+
+    plan_processors: Sequence[QueryProcessor]
+    db_processors: Sequence[QueryProcessor]
 
 
 @dataclass(frozen=True)
@@ -77,18 +88,18 @@ class CompositeQueryPlan(QueryPlan[CompositeQuery[Table]]):
 
     # If there is no join there would be no table alias and one
     # single simple subquery.
-    default_sub_query_processors: Optional[SubqueryProcessors]
+    root_processors: Optional[SubqueryProcessors]
     # If there is a join, there is one SubqueryProcessors instance
     # per table alias.
-    aliased_sub_queries_processors: Optional[Mapping[str, SubqueryProcessors]]
+    aliased_processors: Optional[Mapping[str, SubqueryProcessors]]
 
     def __post_init__(self) -> None:
+        # If both root processors and aliased processors are populated
+        # we have an invalid query. The two are exclusive.
         assert (
-            (
-                self.default_sub_query_processors is not None
-                or self.aliased_sub_queries_processors is not None
-            )
-            and self.default_sub_query_processors != self.aliased_sub_queries_processors
+            self.root_processors is not None or self.aliased_processors is not None
+        ) and not (
+            self.root_processors is not None and self.aliased_processors is not None
         )
 
 
