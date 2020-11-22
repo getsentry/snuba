@@ -178,18 +178,6 @@ class CompositePlanner(QueryPlanner[CompositeQueryPlan]):
         return _plan_composite_query(self.__query, self.__settings)
 
 
-def execute_composite_plan_processors(
-    query_plan: CompositeQueryPlan, settings: RequestSettings,
-) -> None:
-    pass
-
-
-def execute_all_plan_processors(
-    query_plan: CompositeQueryPlan, settings: RequestSettings,
-) -> None:
-    pass
-
-
 class CompositeExecutionStrategy(QueryPlanExecutionStrategy[CompositeQuery[Table]]):
     def execute(
         self,
@@ -197,4 +185,4 @@ class CompositeExecutionStrategy(QueryPlanExecutionStrategy[CompositeQuery[Table
         request_settings: RequestSettings,
         runner: QueryRunner,
     ) -> QueryResult:
-        pass
+        raise NotImplementedError
