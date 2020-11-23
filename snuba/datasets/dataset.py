@@ -12,7 +12,6 @@ from snuba.request import Request
 
 
 class Dataset:
-    # TODO: s/dataset/entity/g
     """
     A dataset represents a data model we can run a Snuba Query on.
     A data model provides a logical schema of a graph of entities (today it is
@@ -53,11 +52,11 @@ class Dataset:
     def get_all_entities(self) -> Sequence[Entity]:
         return [self.get_default_entity()]
 
-    def get_query_pipeline_builder(self) -> DataSetQueryPipelineBuilder:
-        return DataSetQueryPipelineBuilder()
+    def get_query_pipeline_builder(self) -> DatasetQueryPipelineBuilder:
+        return DatasetQueryPipelineBuilder()
 
 
-class DataSetQueryPipelineBuilder:
+class DatasetQueryPipelineBuilder:
     """
     Produces the QueryExecutionPipeline to run the query. This is supposed
     to handle both simple and composite queries.
