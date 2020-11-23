@@ -1,24 +1,20 @@
 from typing import Any, MutableMapping
 
 import pytest
-import simplejson as json
-from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entities import EntityKey
 from snuba.datasets.factory import get_dataset
-from snuba.pipeline.processors import execute_all_clickhouse_processors
 from snuba.query.parser import parse_query
-from snuba.request import Request
-from snuba.request.request_settings import HTTPRequestSettings
 
 test_data = [
-    ({"conditions": [["type", "=", "transaction"]]}, "transactions_local"),
+    ({"conditions": [["type", "=", "transaction"]]}, EntityKey.DISCOVER_TRANSACTIONS),
     (
         {"conditions": [["type", "=", "transaction"], ["duration", ">", 1000]]},
-        "transactions_local",
+        EntityKey.DISCOVER_TRANSACTIONS,
     ),
-    ({"conditions": [["type", "=", "error"]]}, "sentry_local"),
+    ({"conditions": [["type", "=", "error"]]}, EntityKey.DISCOVER_EVENTS),
     (
         {"conditions": [[["type", "=", "error"], ["type", "=", "transaction"]]]},
-        "sentry_local",
+        EntityKey.DISCOVER,
     ),
     (
         {
@@ -36,7 +32,7 @@ test_data = [
                 ]
             ]
         },
-        "sentry_local",
+        EntityKey.DISCOVER,
     ),
     (
         {
@@ -54,7 +50,7 @@ test_data = [
                 ]
             ]
         },
-        "transactions_local",
+        EntityKey.DISCOVER_TRANSACTIONS,
     ),
     (
         {
@@ -72,18 +68,18 @@ test_data = [
                 ]
             ]
         },
-        "sentry_local",
+        EntityKey.DISCOVER,
     ),
-    ({"conditions": [["type", "!=", "transaction"]]}, "sentry_local"),
-    ({"conditions": []}, "sentry_local"),
-    ({"conditions": [["duration", "=", 0]]}, "transactions_local"),
+    ({"conditions": [["type", "!=", "transaction"]]}, EntityKey.DISCOVER_EVENTS),
+    ({"conditions": []}, EntityKey.DISCOVER),
+    ({"conditions": [["duration", "=", 0]]}, EntityKey.DISCOVER_TRANSACTIONS),
     (
         {"conditions": [["event_id", "=", "asdasdasd"], ["duration", "=", 0]]},
-        "transactions_local",
+        EntityKey.DISCOVER_TRANSACTIONS,
     ),
     (
         {"conditions": [["group_id", "=", "asdasdasd"], ["duration", "=", 0]]},
-        "sentry_local",
+        EntityKey.DISCOVER,
     ),
     (
         {
@@ -102,7 +98,7 @@ test_data = [
                 ["duration", "=", 0],
             ]
         },
-        "transactions_local",
+        EntityKey.DISCOVER_TRANSACTIONS,
     ),
     (
         {
@@ -121,44 +117,38 @@ test_data = [
                 ["duration", "=", 0],
             ]
         },
-        "transactions_local",
+        EntityKey.DISCOVER_TRANSACTIONS,
     ),
-    # No conditions, other referenced columns
-    ({"selected_columns": ["group_id"]}, "sentry_local"),
-    ({"selected_columns": ["trace_id"]}, "transactions_local"),
-    ({"selected_columns": ["group_id", "trace_id"]}, "sentry_local"),
-    ({"aggregations": [["max", "duration", "max_duration"]]}, "transactions_local"),
+    # # No conditions, other referenced columns
+    ({"selected_columns": ["group_id"]}, EntityKey.DISCOVER_EVENTS),
+    ({"selected_columns": ["trace_id"]}, EntityKey.DISCOVER_TRANSACTIONS),
+    ({"selected_columns": ["group_id", "trace_id"]}, EntityKey.DISCOVER),
+    (
+        {"aggregations": [["max", "duration", "max_duration"]]},
+        EntityKey.DISCOVER_TRANSACTIONS,
+    ),
     (
         {"aggregations": [["apdex(duration, 300)", None, "apdex_duration_300"]]},
-        "transactions_local",
+        EntityKey.DISCOVER_TRANSACTIONS,
     ),
     (
         {"aggregations": [["failure_rate()", None, "failure_rate"]]},
-        "transactions_local",
+        EntityKey.DISCOVER_TRANSACTIONS,
     ),
-    ({"aggregations": [["isHandled()", None, "handled"]]}, "sentry_local",),
-    ({"aggregations": [["notHandled()", None, "handled"]]}, "sentry_local",),
-    ({"selected_columns": ["measurements[lcp.elementSize]"]}, "transactions_local"),
+    ({"aggregations": [["isHandled()", None, "handled"]]}, EntityKey.DISCOVER_EVENTS),
+    ({"aggregations": [["notHandled()", None, "handled"]]}, EntityKey.DISCOVER_EVENTS),
+    (
+        {"selected_columns": ["measurements[lcp.elementSize]"]},
+        EntityKey.DISCOVER_TRANSACTIONS,
+    ),
 ]
 
 
-@pytest.mark.parametrize("query_body, expected_table", test_data)
+@pytest.mark.parametrize("query_body, expected_entity", test_data)
 def test_data_source(
-    query_body: MutableMapping[str, Any], expected_table: str,
+    query_body: MutableMapping[str, Any], expected_entity: EntityKey,
 ) -> None:
-    request_settings = HTTPRequestSettings()
     dataset = get_dataset("discover")
     query = parse_query(query_body, dataset)
-    request = Request("a", query, request_settings, {}, "r")
-    entity = get_entity(query.get_from_clause().key)
 
-    plan = (
-        entity.get_query_pipeline_builder()
-        .build_planner(request.query, request.settings)
-        .execute()
-    )
-    execute_all_clickhouse_processors(plan, request.settings)
-
-    assert plan.query.get_from_clause().table_name == expected_table, json.dumps(
-        query_body
-    )
+    assert query.get_from_clause().key == expected_entity

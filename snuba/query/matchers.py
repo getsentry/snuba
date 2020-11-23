@@ -28,6 +28,9 @@ class MatchResult:
 
     results: Mapping[str, MatchType] = field(default_factory=dict)
 
+    def contains(self, name: str) -> bool:
+        return name in self.results and self.results[name] is not None
+
     def expression(self, name: str) -> Expression:
         """
         Return an expression from the results given the name of the

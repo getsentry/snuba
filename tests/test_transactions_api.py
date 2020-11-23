@@ -302,6 +302,47 @@ class TestTransactionsApi(BaseApiTest):
         assert len(data["data"]) == 1
         assert data["data"][0]["event_id"] == first_event_id
 
+    def test_trace_column_formatting(self) -> None:
+        response = self.app.post(
+            self.endpoint,
+            data=json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["trace_id", "ip_address", "project_id"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+
+        assert len(data["data"]) == 180
+        first_trace_id = data["data"][0]["trace_id"]
+        assert len(first_trace_id) == 36
+        assert data["data"][0]["ip_address"] == "8.8.8.8"
+
+        response = self.app.post(
+            self.endpoint,
+            data=json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["trace_id", "project_id"],
+                    "conditions": [["trace_id", "=", first_trace_id]],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 180
+        assert data["data"][0]["trace_id"] == first_trace_id
+
     def test_apdex_function(self) -> None:
         response = self.app.post(
             self.endpoint,

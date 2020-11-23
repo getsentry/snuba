@@ -22,6 +22,7 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 )
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.uuid_column_processor import UUIDColumnProcessor
 from snuba.web.split import TimeSplitQueryStrategy
 
 columns = ColumnSet(
@@ -91,6 +92,7 @@ storage = WritableTableStorage(
         EventIdColumnProcessor(),
         ArrayJoinKeyValueOptimizer("tags"),
         ArrayJoinKeyValueOptimizer("measurements"),
+        UUIDColumnProcessor(set(["event_id", "trace_id"])),
         PrewhereProcessor(),
     ],
     stream_loader=KafkaStreamLoader(
