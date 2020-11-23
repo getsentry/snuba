@@ -44,12 +44,12 @@ from snuba.query import (
 )
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.parser import (
-    _validate_aliases,
-    _parse_subscriptables,
     _apply_column_aliases,
-    _expand_aliases,
     _deescape_aliases,
+    _expand_aliases,
     _mangle_aliases,
+    _parse_subscriptables,
+    _validate_aliases,
 )
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
