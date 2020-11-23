@@ -102,7 +102,7 @@ storage = WritableTableStorage(
         ColumnSplitQueryStrategy(
             id_column="event_id",
             project_column="project_id",
-            timestamp_column="timestamp",
+            timestamp_column="finish_ts",
         ),
         TimeSplitQueryStrategy(timestamp_col="finish_ts"),
     ],
