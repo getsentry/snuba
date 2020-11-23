@@ -51,7 +51,7 @@ def parse_and_run_query(
 
     try:
         result = _run_query_pipeline(
-            request=request, timer=timer, query_metadata=query_metadata
+            dataset=dataset, request=request, timer=timer, query_metadata=query_metadata
         )
         record_query(request_copy, timer, query_metadata)
     except QueryException as error:
@@ -62,7 +62,10 @@ def parse_and_run_query(
 
 
 def _run_query_pipeline(
-    request: Request, timer: Timer, query_metadata: SnubaQueryMetadata,
+    dataset: Dataset,
+    request: Request,
+    timer: Timer,
+    query_metadata: SnubaQueryMetadata,
 ) -> QueryResult:
     """
     Runs the query processing and execution pipeline for a Snuba Query. This means it takes a Dataset
@@ -117,7 +120,7 @@ def _run_query_pipeline(
     )
 
     return (
-        entity.get_query_pipeline_builder()
+        dataset.get_query_pipeline_builder()
         .build_execution_pipeline(request, query_runner)
         .execute()
     )
