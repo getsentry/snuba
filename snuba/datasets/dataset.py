@@ -12,7 +12,6 @@ from snuba.request import Request
 
 
 class Dataset:
-    # TODO: s/dataset/entity/g
     """
     A dataset represents a data model we can run a Snuba Query on.
     A data model provides a logical schema of a graph of entities (today it is
