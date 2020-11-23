@@ -77,9 +77,9 @@ class Entity(ABC):
         """
         return self.__join_relationships.get(relationship)
 
-    def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
+    def get_query_pipeline_builder(self) -> QueryPipelineBuilder:
         """
-        Returns the component that orchestrates building and runnning query plans.
+        Returns the component that orchestrates building and running query plans.
         """
         return self.__query_pipeline_builder
 

@@ -30,7 +30,7 @@ from snuba.util import with_span
 from snuba.web import QueryResult
 
 
-class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
+class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
     def __init__(
         self,
         cluster: ClickhouseCluster,
