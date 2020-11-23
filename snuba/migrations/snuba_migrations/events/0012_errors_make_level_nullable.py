@@ -14,7 +14,9 @@ class Migration(migration.MultiStepMigration):
             operations.ModifyColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name=table_name,
-                column=Column("level", String(Modifiers(nullable=True))),
+                column=Column(
+                    "level", String(Modifiers(low_cardinality=True, nullable=True))
+                ),
             )
         ]
 
@@ -23,7 +25,7 @@ class Migration(migration.MultiStepMigration):
             operations.ModifyColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name=table_name,
-                column=Column("level", String()),
+                column=Column("level", String(Modifiers(low_cardinality=True))),
             )
         ]
 
