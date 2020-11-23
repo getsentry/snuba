@@ -2,16 +2,20 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, Sequence
+from typing import Callable, Sequence, Union
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
+from snuba.query.composite import CompositeQuery
+from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
 from snuba.reader import Reader
 from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
 
-QueryRunner = Callable[[Query, RequestSettings, Reader], QueryResult]
+QueryRunner = Callable[
+    [Union[Query, CompositeQuery[Table]], RequestSettings, Reader], QueryResult
+]
 
 
 @dataclass(frozen=True)
