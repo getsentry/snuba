@@ -37,14 +37,14 @@ test_cases = [
                         "multiply",
                         (
                             Literal(None, 3),
-                            FunctionCall(None, "g", (Column("c", None, "c"),),),
+                            FunctionCall(None, "g", (Column("_snuba_c", None, "c"),),),
                         ),
                     ),
                 ),
-                SelectedExpression("c", Column("c", None, "c"),),
+                SelectedExpression("c", Column("_snuba_c", None, "c"),),
             ],
             condition=binary_condition(
-                None, "less", Column("a", None, "a"), Literal(None, 3)
+                None, "less", Column("_snuba_a", None, "a"), Literal(None, 3)
             ),
         ),
         id="Basic query with no spaces and no ambiguous clause content",
@@ -80,23 +80,23 @@ test_cases = [
                     ),
                 ),
                 SelectedExpression(
-                    "g(c)", FunctionCall(None, "g", (Column("c", None, "c"),)),
+                    "g(c)", FunctionCall(None, "g", (Column("_snuba_c", None, "c"),)),
                 ),
-                SelectedExpression("c", Column("c", None, "c")),
-                SelectedExpression("d", Column("d", None, "d")),
+                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression("d", Column("_snuba_d", None, "d")),
                 SelectedExpression(
                     "2+7",
                     FunctionCall(None, "plus", (Literal(None, 2), Literal(None, 7))),
                 ),
             ],
             condition=binary_condition(
-                None, "less", Column("a", None, "a"), Literal(None, 3)
+                None, "less", Column("_snuba_a", None, "a"), Literal(None, 3)
             ),
             groupby=[
-                Column("d", None, "d"),
+                Column("_snuba_d", None, "d"),
                 FunctionCall(None, "plus", (Literal(None, 2), Literal(None, 7))),
             ],
-            order_by=[OrderBy(OrderByDirection.DESC, Column("f", None, "f"))],
+            order_by=[OrderBy(OrderByDirection.DESC, Column("_snuba_f", None, "f"))],
         ),
         id="Simple complete query with example of parenthesized arithmetic expression in COLLECT",
     ),
@@ -107,7 +107,7 @@ test_cases = [
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
-            selected_columns=[SelectedExpression("a", Column("a", None, "a"))],
+            selected_columns=[SelectedExpression("a", Column("_snuba_a", None, "a"))],
             condition=FunctionCall(
                 None,
                 "and",
@@ -115,7 +115,10 @@ test_cases = [
                     FunctionCall(
                         None,
                         "less",
-                        (Column("time_seen", None, "time_seen"), Literal(None, 3)),
+                        (
+                            Column("_snuba_time_seen", None, "time_seen"),
+                            Literal(None, 3),
+                        ),
                     ),
                     FunctionCall(
                         None,
@@ -125,7 +128,7 @@ test_cases = [
                                 None,
                                 "equals",
                                 (
-                                    Column("last_seen", None, "last_seen"),
+                                    Column("_snuba_last_seen", None, "last_seen"),
                                     Literal(None, 2),
                                 ),
                             ),
@@ -136,12 +139,18 @@ test_cases = [
                                     FunctionCall(
                                         None,
                                         "equals",
-                                        (Column("c", None, "c"), Literal(None, 2)),
+                                        (
+                                            Column("_snuba_c", None, "c"),
+                                            Literal(None, 2),
+                                        ),
                                     ),
                                     FunctionCall(
                                         None,
                                         "equals",
-                                        (Column("d", None, "d"), Literal(None, 3)),
+                                        (
+                                            Column("_snuba_d", None, "d"),
+                                            Literal(None, 3),
+                                        ),
                                     ),
                                 ),
                             ),
@@ -159,7 +168,7 @@ test_cases = [
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
-            selected_columns=[SelectedExpression("a", Column("a", None, "a"))],
+            selected_columns=[SelectedExpression("a", Column("_snuba_a", None, "a"))],
             condition=FunctionCall(
                 None,
                 "or",
@@ -172,7 +181,7 @@ test_cases = [
                                 None,
                                 "less",
                                 (
-                                    Column("time_seen", None, "time_seen"),
+                                    Column("_snuba_time_seen", None, "time_seen"),
                                     Literal(None, 3),
                                 ),
                             ),
@@ -180,8 +189,8 @@ test_cases = [
                                 None,
                                 "equals",
                                 (
-                                    Column("last_seen", None, "last_seen"),
-                                    Column("afternoon", None, "afternoon"),
+                                    Column("_snuba_last_seen", None, "last_seen"),
+                                    Column("_snuba_afternoon", None, "afternoon"),
                                 ),
                             ),
                         ),
@@ -189,7 +198,10 @@ test_cases = [
                     FunctionCall(
                         None,
                         "equals",
-                        (Column("name", None, "name"), Column("bob", None, "bob")),
+                        (
+                            Column("_snuba_name", None, "name"),
+                            Column("_snuba_bob", None, "bob"),
+                        ),
                     ),
                 ),
             ),
@@ -203,7 +215,7 @@ test_cases = [
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
-            selected_columns=[SelectedExpression("a", Column("a", None, "a"),)],
+            selected_columns=[SelectedExpression("a", Column("_snuba_a", None, "a"),)],
             condition=FunctionCall(
                 None,
                 "or",
@@ -211,7 +223,10 @@ test_cases = [
                     FunctionCall(
                         None,
                         "notEquals",
-                        (Column("name", None, "name"), Column("bob", None, "bob")),
+                        (
+                            Column("_snuba_name", None, "name"),
+                            Column("_snuba_bob", None, "bob"),
+                        ),
                     ),
                     FunctionCall(
                         None,
@@ -221,8 +236,8 @@ test_cases = [
                                 None,
                                 "less",
                                 (
-                                    Column("last_seen", None, "last_seen"),
-                                    Column("afternoon", None, "afternoon"),
+                                    Column("_snuba_last_seen", None, "last_seen"),
+                                    Column("_snuba_afternoon", None, "afternoon"),
                                 ),
                             ),
                             FunctionCall(
@@ -233,14 +248,14 @@ test_cases = [
                                         None,
                                         "equals",
                                         (
-                                            Column("location", None, "location"),
+                                            Column("_snuba_location", None, "location"),
                                             FunctionCall(
                                                 None,
                                                 "gps",
                                                 (
-                                                    Column("x", None, "x"),
-                                                    Column("y", None, "y"),
-                                                    Column("z", None, "z"),
+                                                    Column("_snuba_x", None, "x"),
+                                                    Column("_snuba_y", None, "y"),
+                                                    Column("_snuba_z", None, "z"),
                                                 ),
                                             ),
                                         ),
@@ -249,7 +264,9 @@ test_cases = [
                                         None,
                                         "greater",
                                         (
-                                            Column("times_seen", None, "times_seen"),
+                                            Column(
+                                                "_snuba_times_seen", None, "times_seen"
+                                            ),
                                             Literal(None, 0),
                                         ),
                                     ),
@@ -270,11 +287,13 @@ test_cases = [
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
             selected_columns=[
-                SelectedExpression("a", Column("a", None, "a")),
+                SelectedExpression("a", Column("_snuba_a", None, "a")),
                 SelectedExpression(
                     "b[c]",
                     SubscriptableReference(
-                        "b[c]", Column("b", None, "b"), key=Literal(None, "c")
+                        "_snuba_b[c]",
+                        Column("_snuba_b", None, "b"),
+                        key=Literal(None, "c"),
                     ),
                 ),
             ],
@@ -282,7 +301,7 @@ test_cases = [
                 None,
                 "in",
                 (
-                    Column("project_id", None, "project_id",),
+                    Column("_snuba_project_id", None, "project_id",),
                     FunctionCall(None, "tuple", (Literal(None, 2), Literal(None, 3))),
                 ),
             ),

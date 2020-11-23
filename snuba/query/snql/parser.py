@@ -30,11 +30,12 @@ from snuba.query.expressions import (
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.logical import Query
 from snuba.query.parser import (
-    _validate_aliases,
-    _parse_subscriptables,
     _apply_column_aliases,
-    _expand_aliases,
     _deescape_aliases,
+    _expand_aliases,
+    _mangle_aliases,
+    _parse_subscriptables,
+    _validate_aliases,
 )
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
@@ -539,4 +540,5 @@ def parse_snql_query(body: str, dataset: Dataset) -> Query:
     _apply_column_aliases(query)
     _expand_aliases(query)
     _deescape_aliases(query)
+    _mangle_aliases(query)
     return query
