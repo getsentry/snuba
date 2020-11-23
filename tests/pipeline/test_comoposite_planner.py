@@ -6,7 +6,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import CompositeQueryPlan, SubqueryProcessors
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.pipeline.composite import CompositeExecutionStrategy, CompositePlanner
+from snuba.pipeline.composite import CompositeExecutionStrategy, CompositeQueryPlanner
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import (
@@ -257,43 +257,38 @@ def test_composite_planner(
     def assert_subquery_processors_equality(
         query: SubqueryProcessors, expected: SubqueryProcessors
     ) -> None:
-        assert [type(x) for x in query.plan_query_processors] == [
-            type(x) for x in expected.plan_query_processors
+        assert [type(x) for x in query.plan_processors] == [
+            type(x) for x in expected.plan_processors
         ]
-        assert [type(x) for x in query.db_query_processors] == [
-            type(x) for x in expected.db_query_processors
+        assert [type(x) for x in query.db_processors] == [
+            type(x) for x in expected.db_processors
         ]
 
-    plan = CompositePlanner(logical_query, HTTPRequestSettings()).execute()
+    plan = CompositeQueryPlanner(logical_query, HTTPRequestSettings()).execute()
     assert plan.query.equals(composite_plan.query)
-    query_processors = plan.default_sub_query_processors is not None
-    expected_processors = composite_plan.default_sub_query_processors is not None
+
+    # We cannot simply check the equality between the plans because
+    # we need to verify processors are of the same type, they can
+    # be different innstances, thus making the simple equality fail.
+    query_processors = plan.root_processors is not None
+    expected_processors = composite_plan.root_processors is not None
     assert query_processors == expected_processors
 
-    if (
-        plan.default_sub_query_processors is not None
-        and composite_plan.default_sub_query_processors is not None
-    ):
+    if plan.root_processors is not None and composite_plan.root_processors is not None:
         assert_subquery_processors_equality(
-            plan.default_sub_query_processors,
-            composite_plan.default_sub_query_processors,
+            plan.root_processors, composite_plan.root_processors,
         )
 
-    query_alias_processors = plan.aliased_sub_queries_processors is not None
-    expected_alias_processors = (
-        composite_plan.aliased_sub_queries_processors is not None
-    )
+    query_alias_processors = plan.aliased_processors is not None
+    expected_alias_processors = composite_plan.aliased_processors is not None
     assert query_alias_processors == expected_alias_processors
 
     if (
-        plan.aliased_sub_queries_processors is not None
-        and composite_plan.aliased_sub_queries_processors is not None
+        plan.aliased_processors is not None
+        and composite_plan.aliased_processors is not None
     ):
-        assert len(plan.aliased_sub_queries_processors) == len(
-            composite_plan.aliased_sub_queries_processors
-        )
-        for k in plan.aliased_sub_queries_processors:
+        assert len(plan.aliased_processors) == len(composite_plan.aliased_processors)
+        for k in plan.aliased_processors:
             assert_subquery_processors_equality(
-                plan.aliased_sub_queries_processors[k],
-                composite_plan.aliased_sub_queries_processors[k],
+                plan.aliased_processors[k], composite_plan.aliased_processors[k],
             )
