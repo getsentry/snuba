@@ -2,7 +2,7 @@ import copy
 import logging
 from datetime import datetime
 from functools import partial
-from typing import MutableMapping, Set
+from typing import MutableMapping, Optional, Set, Union
 
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
@@ -132,7 +132,7 @@ def _run_and_apply_column_names(
     from_date: datetime,
     to_date: datetime,
     referrer: str,
-    clickhouse_query: Query,
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     reader: Reader,
 ) -> QueryResult:
@@ -187,29 +187,51 @@ def _run_and_apply_column_names(
     return result
 
 
-class TablesCollector(DataSourceVisitor[Set[str], Table], JoinVisitor[Set[str], Table]):
+class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
     """
     Traverses the data source of a composite query and collects
-    all the referenced table names
+    all the referenced table names, final state and sampling rate
+    to fill stats.
     """
 
-    def _visit_simple_source(self, data_source: Table) -> Set[str]:
-        return {data_source.table_name}
+    def __init__(self) -> None:
+        self.__tables: Set[str] = set()
+        self.__final: bool = False
+        self.__sample_rate: Optional[float] = None
 
-    def _visit_join(self, data_source: JoinClause[Table]) -> Set[str]:
-        return self.visit_join_clause(data_source)
+    def get_tables(self) -> Set[str]:
+        return self.__tables
 
-    def _visit_simple_query(self, data_source: ProcessableQuery[Table]) -> Set[str]:
-        return self.visit(data_source.get_from_clause())
+    def any_final(self) -> bool:
+        return self.__final
 
-    def _visit_composite_query(self, data_source: CompositeQuery[Table]) -> Set[str]:
-        return self.visit(data_source.get_from_clause())
+    def get_sample_rate(self) -> Optional[float]:
+        return self.__sample_rate
 
-    def visit_individual_node(self, node: IndividualNode[Table]) -> Set[str]:
-        return self.visit(node.data_source)
+    def _visit_simple_source(self, data_source: Table) -> None:
+        self.__tables.add(data_source.table_name)
+        self.__sample_rate = data_source.sampling_rate
+        if data_source.final:
+            self.__final = True
 
-    def visit_join_clause(self, node: JoinClause[Table]) -> Set[str]:
-        return node.left_node.accept(self) | node.right_node.accept(self)
+    def _visit_join(self, data_source: JoinClause[Table]) -> None:
+        self.visit_join_clause(data_source)
+
+    def _visit_simple_query(self, data_source: ProcessableQuery[Table]) -> None:
+        self.visit(data_source.get_from_clause())
+
+    def _visit_composite_query(self, data_source: CompositeQuery[Table]) -> None:
+        self.visit(data_source.get_from_clause())
+        # stats do not yet support sampling rate (there is only one field)
+        # so if we have a composite query we set it to None.
+        self.__sample_rate = None
+
+    def visit_individual_node(self, node: IndividualNode[Table]) -> None:
+        self.visit(node.data_source)
+
+    def visit_join_clause(self, node: JoinClause[Table]) -> None:
+        node.left_node.accept(self)
+        node.right_node.accept(self)
 
 
 def _format_storage_query_and_run(
@@ -218,7 +240,7 @@ def _format_storage_query_and_run(
     from_date: datetime,
     to_date: datetime,
     referrer: str,
-    clickhouse_query: Query,
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     reader: Reader,
 ) -> QueryResult:
@@ -226,7 +248,9 @@ def _format_storage_query_and_run(
     Formats the Storage Query and pass it to the DB specific code for execution.
     """
     from_clause = clickhouse_query.get_from_clause()
-    table_names = ",".join(sorted(TablesCollector().visit(from_clause)))
+    visitor = TablesCollector()
+    visitor.visit(from_clause)
+    table_names = ",".join(sorted(visitor.get_tables()))
     with sentry_sdk.start_span(description="create_query", op="db") as span:
         formatted_query = format_query(clickhouse_query, request_settings)
         span.set_data("query", formatted_query.structured())
@@ -236,10 +260,10 @@ def _format_storage_query_and_run(
 
     stats = {
         "clickhouse_table": table_names,
-        "final": from_clause.final,
+        "final": visitor.any_final(),
         "referrer": referrer,
         "num_days": (to_date - from_date).days,
-        "sample": from_clause.sampling_rate,
+        "sample": visitor.get_sample_rate(),
     }
 
     with sentry_sdk.start_span(description=formatted_query.get_sql(), op="db") as span:

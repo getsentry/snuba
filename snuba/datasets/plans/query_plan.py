@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, Generic, Mapping, Optional, Sequence, TypeVar
+from typing import Callable, Generic, Mapping, Optional, Sequence, TypeVar, Union
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
@@ -14,7 +14,9 @@ from snuba.reader import Reader
 from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
 
-QueryRunner = Callable[[Query, RequestSettings, Reader], QueryResult]
+QueryRunner = Callable[
+    [Union[Query, CompositeQuery[Table]], RequestSettings, Reader], QueryResult
+]
 
 TQuery = TypeVar("TQuery", bound=AbstractQuery)
 

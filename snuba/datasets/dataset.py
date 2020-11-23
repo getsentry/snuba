@@ -53,11 +53,11 @@ class Dataset:
     def get_all_entities(self) -> Sequence[Entity]:
         return [self.get_default_entity()]
 
-    def get_query_pipeline_builder(self) -> DataSetQueryPipelineBuilder:
-        return DataSetQueryPipelineBuilder()
+    def get_query_pipeline_builder(self) -> DatasetQueryPipelineBuilder:
+        return DatasetQueryPipelineBuilder()
 
 
-class DataSetQueryPipelineBuilder:
+class DatasetQueryPipelineBuilder:
     """
     Produces the QueryExecutionPipeline to run the query. This is supposed
     to handle both simple and composite queries.
