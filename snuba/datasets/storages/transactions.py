@@ -23,7 +23,7 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.uuid_column_processor import UUIDColumnProcessor
-from snuba.web.split import TimeSplitQueryStrategy
+from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 columns = ColumnSet(
     [
@@ -98,6 +98,13 @@ storage = WritableTableStorage(
     stream_loader=KafkaStreamLoader(
         processor=TransactionsMessageProcessor(), default_topic="events",
     ),
-    query_splitters=[TimeSplitQueryStrategy(timestamp_col="finish_ts")],
+    query_splitters=[
+        ColumnSplitQueryStrategy(
+            id_column="event_id",
+            project_column="project_id",
+            timestamp_column="timestamp",
+        ),
+        TimeSplitQueryStrategy(timestamp_col="finish_ts"),
+    ],
     writer_options={"insert_allow_materialized_columns": 1},
 )
