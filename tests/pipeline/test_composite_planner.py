@@ -1,6 +1,8 @@
 import pytest
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
+from snuba.clusters.cluster import get_cluster
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import CompositeQueryPlan, SubqueryProcessors
@@ -96,7 +98,8 @@ TEST_CASES = [
                     ),
                 ],
             ),
-            CompositeExecutionStrategy(),
+            CompositeExecutionStrategy(get_cluster(StorageSetKey.EVENTS), [], {}),
+            StorageSetKey.EVENTS,
             SubqueryProcessors(
                 [],
                 [
@@ -226,7 +229,8 @@ TEST_CASES = [
                     ),
                 ],
             ),
-            CompositeExecutionStrategy(),
+            CompositeExecutionStrategy(get_cluster(StorageSetKey.EVENTS), [], {}),
+            StorageSetKey.EVENTS,
             None,
             {
                 "err": SubqueryProcessors(

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, Generic, Mapping, Optional, Sequence, TypeVar, Union
+from typing import Callable, Generic, Mapping, Optional, Sequence, Tuple, TypeVar, Union
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.query import Query as AbstractQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
@@ -46,6 +47,7 @@ class QueryPlan(ABC, Generic[TQuery]):
 
     query: TQuery
     execution_strategy: QueryPlanExecutionStrategy[TQuery]
+    storage_set_key: StorageSetKey
 
 
 @dataclass(frozen=True)
@@ -102,6 +104,21 @@ class CompositeQueryPlan(QueryPlan[CompositeQuery[Table]]):
             self.root_processors is not None or self.aliased_processors is not None
         ) and not (
             self.root_processors is not None and self.aliased_processors is not None
+        )
+
+    def get_plan_processors(
+        self,
+    ) -> Tuple[Sequence[QueryProcessor], Mapping[str, Sequence[QueryProcessor]]]:
+        return (
+            self.root_processors.plan_processors
+            if self.root_processors is not None
+            else [],
+            {
+                alias: subquery.plan_processors
+                for alias, subquery in self.aliased_processors.items()
+            }
+            if self.aliased_processors is not None
+            else {},
         )
 
 
