@@ -15,8 +15,9 @@ from snuba.utils.threaded_function_delegator import ThreadedFunctionDelegator
 from snuba.web import QueryResult
 
 BuilderId = str
+Timing = float
 QueryPipelineBuilders = Mapping[BuilderId, QueryPipelineBuilder[ClickhouseQueryPlan]]
-QueryResults = List[Tuple[BuilderId, QueryResult]]
+QueryResults = List[Tuple[BuilderId, QueryResult, Timing]]
 SelectorFunc = Callable[[Query], Tuple[BuilderId, List[BuilderId]]]
 CallbackFunc = Callable[[QueryResults], None]
 

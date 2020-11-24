@@ -1,6 +1,6 @@
 import threading
 from typing import Any, List, Tuple
-from unittest.mock import Mock, call
+from unittest.mock import Mock, call, ANY
 
 from snuba.utils.threaded_function_delegator import ThreadedFunctionDelegator
 
@@ -46,4 +46,4 @@ def test() -> None:
     assert callables["one"].call_count == 1
     assert callables["two"].call_count == 1
     assert callables["three"].call_count == 0
-    assert mock_callback.call_args == call([("one", 1), ("two", 2)])
+    assert mock_callback.call_args == call([("one", 1, ANY), ("two", 2, ANY)])
