@@ -248,19 +248,31 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
 
         # TODO: provide the table alias name to this splitter if we ever use it
         # in joins.
+        alias_prefix = "_snuba_"
+
         minimal_query.set_ast_selected_columns(
             [
                 SelectedExpression(
                     self.__id_column,
-                    ColumnExpr(self.__id_column, None, self.__id_column),
+                    ColumnExpr(
+                        f"{alias_prefix}{self.__id_column}", None, self.__id_column
+                    ),
                 ),
                 SelectedExpression(
                     self.__project_column,
-                    ColumnExpr(self.__project_column, None, self.__project_column),
+                    ColumnExpr(
+                        f"{alias_prefix}{self.__project_column}",
+                        None,
+                        self.__project_column,
+                    ),
                 ),
                 SelectedExpression(
                     self.__timestamp_column,
-                    ColumnExpr(self.__timestamp_column, None, self.__timestamp_column),
+                    ColumnExpr(
+                        f"{alias_prefix}{self.__timestamp_column}",
+                        None,
+                        self.__timestamp_column,
+                    ),
                 ),
             ]
         )
