@@ -1,6 +1,6 @@
 import threading
 from typing import List, Tuple
-from unittest.mock import Mock, call
+from unittest.mock import Mock, call, ANY
 
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -59,5 +59,5 @@ def test() -> None:
     assert mock_query_runner.call_count == 2
 
     assert mock_callback.call_args == call(
-        [("events", query_result), ("errors", query_result)]
+        [("events", query_result, ANY), ("errors", query_result, ANY)]
     )
