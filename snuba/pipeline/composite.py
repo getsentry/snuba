@@ -71,10 +71,7 @@ def _plan_composite_query(
         query.get_from_clause()
     )
 
-    (
-        root_db_processors,
-        aliased_db_processors,
-    ) = planned_data_source.get_db_processors()
+    root_db_processors, aliased_db_processors = planned_data_source.get_db_processors()
 
     return CompositeQueryPlan(
         # This is a mypy issue: https://github.com/python/mypy/issues/7520
@@ -182,6 +179,9 @@ class JoinDataSourcePlanner(JoinVisitor[JoinDataSourcePlan, Entity]):
         left_node = node.left_node.accept(self)
         right_node = self.visit_individual_node(node.right_node)
 
+        # TODO: Actually return multiple plans for each subquery (one per storage
+        # set) and rank them picking a combination that fits in a single storage
+        # set.
         assert (
             left_node.storage_set_key == right_node.storage_set_key
         ), f"Multiple storage set found in plan: {left_node.storage_set_key} {right_node.storage_set_key}"
@@ -304,6 +304,15 @@ class CompositeDataSourcePlanner(DataSourceVisitor[CompositeDataSourcePlan, Enti
 
 
 class ProcessorsExecutor(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
+    """
+    Applies in place the a sequence of query processors to the subqueries
+    of a composite query.
+    Processors are provided as a sequence of processors to be applied to
+    the root subquery or a mapping of sequences (one per alias) to be
+    applied to subqueries in a join. In the join case there are multiple
+    subqueries with a table alias in the composite query.
+    """
+
     def __init__(
         self,
         root_processors: Sequence[QueryProcessor],
@@ -340,7 +349,7 @@ class ProcessorsExecutor(DataSourceVisitor[None, Table], JoinVisitor[None, Table
     def visit_individual_node(self, node: IndividualNode[Table]) -> None:
         assert isinstance(
             node.data_source, ClickhouseQuery
-        ), "Invalid join structure. Only subqueries are allowed"
+        ), "Invalid join structure. Only subqueries are allowed at this stage."
         self.__process_simple_query(
             node.data_source, self.__aliased_processors[node.alias]
         )
@@ -351,6 +360,11 @@ class ProcessorsExecutor(DataSourceVisitor[None, Table], JoinVisitor[None, Table
 
 
 class CompositeExecutionStrategy(QueryPlanExecutionStrategy[CompositeQuery[Table]]):
+    """
+    Executes a composite query after applying the db query processors
+    to each subquery.
+    """
+
     def __init__(
         self,
         cluster: ClickhouseCluster,
@@ -374,6 +388,12 @@ class CompositeExecutionStrategy(QueryPlanExecutionStrategy[CompositeQuery[Table
 
 
 class CompositeExecutionPipeline(QueryExecutionPipeline):
+    """
+    Executes a logical composite query by generating a plan,
+    applying the plan query processors to all subqueries and
+    handing the result to the execution strategy.
+    """
+
     def __init__(
         self,
         query: CompositeQuery[Entity],

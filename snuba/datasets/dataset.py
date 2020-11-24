@@ -76,4 +76,6 @@ class DatasetQueryPipelineBuilder:
                 request, runner
             )
         else:
+            # This is still unreachable since the Request object only
+            # contains a simple query.
             return CompositeExecutionPipeline(request.query, request.settings, runner)

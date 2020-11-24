@@ -38,6 +38,11 @@ class QueryPlan(ABC, Generic[TQuery]):
     the database. The execution strategy can also decide to split the
     query into multiple chunks.
 
+    When running a query we need a cluster, the cluster is picked according
+    to the storages sets containing the storages used in the query.
+    So the plan keeps track of the storage set as well.
+    There must be only one storage set per query.
+
     TODO: Bring the methods that apply the processors in the plan itself.
     Now that we have two Plan implementations with a different
     structure, all code depending on this would have to be written
@@ -109,6 +114,12 @@ class CompositeQueryPlan(QueryPlan[CompositeQuery[Table]]):
     def get_plan_processors(
         self,
     ) -> Tuple[Sequence[QueryProcessor], Mapping[str, Sequence[QueryProcessor]]]:
+        """
+        Returns the sequences of query processors to execute once per plan.
+        This method is used for convenience to unpack the SubqueryProcessors
+        objects when executing the query.
+        """
+
         return (
             self.root_processors.plan_processors
             if self.root_processors is not None
