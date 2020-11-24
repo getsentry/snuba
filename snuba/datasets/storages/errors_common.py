@@ -73,7 +73,7 @@ all_columns = ColumnSet(
         ("message", String()),
         ("title", String()),
         ("culprit", String()),
-        ("level", String()),
+        ("level", String(Modifiers(nullable=True))),
         ("location", String(Modifiers(nullable=True))),
         ("version", String(Modifiers(nullable=True))),
         ("type", String()),
