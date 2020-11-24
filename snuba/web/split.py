@@ -216,6 +216,11 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         ):
             return None
 
+        # Do not run the splitter if we have any aggregations
+        for expr in query.get_selected_columns_from_ast():
+            if not isinstance(expr.expression, (ColumnExpr, LiteralExpr)):
+                return None
+
         if limit > settings.COLUMN_SPLIT_MAX_LIMIT:
             metrics.increment("column_splitter.query_above_limit")
             return None

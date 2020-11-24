@@ -1795,8 +1795,8 @@ class TestApi(BaseApiTest):
                                 "event_id",
                                 "title",
                                 "transaction",
-                                "tags[a]",
-                                "tags[b]",
+                                "culprit",
+                                "group_id",
                             ],
                             "limit": 5,
                         }
