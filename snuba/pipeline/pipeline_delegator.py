@@ -102,4 +102,8 @@ class PipelineDelegator(QueryPipelineBuilder[ClickhouseQueryPlan]):
     def build_planner(
         self, query: LogicalQuery, settings: RequestSettings
     ) -> QueryPlanner[ClickhouseQueryPlan]:
-        raise NotImplementedError
+        # For composite queries, we just build the primary pipeline / query plan;
+        # running multiple concurrent composite queries is not currently supported.
+        primary_builder_id, _others = self.__selector_func(query)
+        query_pipeline_builder = self.__query_pipeline_builders[primary_builder_id]
+        return query_pipeline_builder.build_planner(query, settings)
