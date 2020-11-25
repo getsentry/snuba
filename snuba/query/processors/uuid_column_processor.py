@@ -1,4 +1,4 @@
-from typing import Set
+from typing import Optional, Set
 import uuid
 
 from snuba.query.conditions import (
@@ -78,15 +78,15 @@ class UUIDColumnProcessor(QueryProcessor):
             ),
         )
 
-    def parse_uuid(self, lit: Expression) -> Expression:
+    def parse_uuid(self, lit: Expression) -> Optional[Expression]:
         if not isinstance(lit, Literal):
-            return lit
+            return None
 
         try:
             parsed = uuid.UUID(str(lit.value))
             return Literal(lit.alias, str(parsed))
         except Exception:
-            return lit
+            return None
 
     def process_condition(self, exp: Expression) -> Expression:
         if not isinstance(exp, FunctionCall):
@@ -108,7 +108,12 @@ class UUIDColumnProcessor(QueryProcessor):
                     # e.g. event_id IN tuple(toLower(...), toUpper(...))
                     return exp
 
-                new_fn_params.append(self.parse_uuid(param))
+                new_lit = self.parse_uuid(param)
+                if new_lit is None:
+                    # There was a parsing error. Return the expression unchanged.
+                    return exp
+
+                new_fn_params.append(new_lit)
 
             new_function = FunctionCall(
                 params_fn.alias, params_fn.function_name, tuple(new_fn_params)
@@ -122,9 +127,12 @@ class UUIDColumnProcessor(QueryProcessor):
             new_params = []
             for suffix in ["_0", "_1"]:
                 if result.contains("literal" + suffix):
-                    new_params.append(
-                        self.parse_uuid(result.expression("literal" + suffix))
-                    )
+                    new_lit = self.parse_uuid(result.expression("literal" + suffix))
+                    if new_lit is None:
+                        # There was a parsing error. Return the expression unchanged.
+                        return exp
+
+                    new_params.append(new_lit)
                 elif result.contains("formatted_uuid_column" + suffix):
                     column = result.expression("formatted_uuid_column" + suffix)
                     assert isinstance(column, Column)
@@ -139,3 +147,7 @@ class UUIDColumnProcessor(QueryProcessor):
         condition = query.get_condition_from_ast()
         if condition:
             query.set_ast_condition(condition.transform(self.process_condition))
+
+        prewhere = query.get_prewhere_ast()
+        if prewhere:
+            query.set_prewhere_ast_condition(prewhere.transform(self.process_condition))

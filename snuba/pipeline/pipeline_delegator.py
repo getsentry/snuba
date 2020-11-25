@@ -11,12 +11,13 @@ from snuba.query.logical import Query
 from snuba.query.logical import Query as LogicalQuery
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
-from snuba.utils.threaded_function_delegator import ThreadedFunctionDelegator
+from snuba.utils.threaded_function_delegator import Result, ThreadedFunctionDelegator
 from snuba.web import QueryResult
 
 BuilderId = str
+Timing = float
 QueryPipelineBuilders = Mapping[BuilderId, QueryPipelineBuilder[ClickhouseQueryPlan]]
-QueryResults = List[Tuple[BuilderId, QueryResult]]
+QueryResults = List[Result[QueryResult]]
 SelectorFunc = Callable[[Query], Tuple[BuilderId, List[BuilderId]]]
 CallbackFunc = Callable[[QueryResults], None]
 
@@ -102,4 +103,8 @@ class PipelineDelegator(QueryPipelineBuilder[ClickhouseQueryPlan]):
     def build_planner(
         self, query: LogicalQuery, settings: RequestSettings
     ) -> QueryPlanner[ClickhouseQueryPlan]:
-        raise NotImplementedError
+        # For composite queries, we just build the primary pipeline / query plan;
+        # running multiple concurrent composite queries is not currently supported.
+        primary_builder_id, _others = self.__selector_func(query)
+        query_pipeline_builder = self.__query_pipeline_builders[primary_builder_id]
+        return query_pipeline_builder.build_planner(query, settings)
