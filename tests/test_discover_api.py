@@ -1,4 +1,6 @@
+import pytz
 import uuid
+from datetime import datetime, timedelta
 from functools import partial
 
 import simplejson as json
@@ -17,6 +19,10 @@ class TestDiscoverApi(BaseApiTest):
         self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
         self.event = get_raw_event()
         self.project_id = self.event["project_id"]
+        self.skew = timedelta(minutes=180)
+        self.base_time = datetime.utcnow().replace(
+            minute=0, second=0, microsecond=0, tzinfo=pytz.utc
+        ) - timedelta(minutes=180)
         write_unprocessed_events(get_writable_storage(StorageKey.EVENTS), [self.event])
         write_unprocessed_events(
             get_writable_storage(StorageKey.TRANSACTIONS), [get_raw_transaction()],
@@ -979,3 +985,29 @@ class TestDiscoverApi(BaseApiTest):
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 1, data
         assert data["data"][0]["last_seen"] is not None
+
+    def test_invalid_event_id_condition(self) -> None:
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "aggregations": [
+                        ["divide(count(), divide(86400, 60))", None, "tpm"],
+                    ],
+                    "having": [],
+                    "project": [self.project_id],
+                    "selected_columns": ["transaction"],
+                    "granularity": 3600,
+                    "totals": False,
+                    "conditions": [
+                        ["event_id", "=", "5897895914504192"],
+                        ["type", "=", "transaction"],
+                    ],
+                    "groupby": ["transaction"],
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 0, data

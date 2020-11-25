@@ -251,6 +251,38 @@ tests = [
         "(equals(column2, 'a7d67cf7-9677-4551-a95b-e6543cacd460') AS butfirst) AND (equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459') AS mightaswell)",
         id="(equals(column2, 'a7d67cf7-9677-4551-a95b-e6543cacd460') AS butfirst) AND (equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459') AS mightaswell)",
     ),
+    pytest.param(
+        binary_condition(
+            "mightaswell",
+            ConditionFunctions.EQ,
+            FunctionCall(
+                None,
+                "replaceAll",
+                (
+                    FunctionCall(None, "toString", (Column(None, None, "column1"),)),
+                    Literal(None, "-"),
+                    Literal(None, ""),
+                ),
+            ),
+            Literal(None, "deadbeefabad"),
+        ),
+        binary_condition(
+            "mightaswell",
+            ConditionFunctions.EQ,
+            FunctionCall(
+                None,
+                "replaceAll",
+                (
+                    FunctionCall(None, "toString", (Column(None, None, "column1"),)),
+                    Literal(None, "-"),
+                    Literal(None, ""),
+                ),
+            ),
+            Literal(None, "deadbeefabad"),
+        ),
+        "(equals(replaceAll(toString(column1), '-', ''), 'deadbeefabad') AS mightaswell)",
+        id="(equals(replaceAll(toString(column1), '-', ''), 'deadbeefabad') AS mightaswell)",
+    ),
 ]
 
 
