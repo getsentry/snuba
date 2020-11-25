@@ -64,7 +64,6 @@ TEST_CASES = [
                 ],
                 groupby=[Column(None, None, "project_id")],
                 condition=binary_condition(
-                    None,
                     ConditionFunctions.EQ,
                     Column(None, None, "project_id"),
                     Literal(None, 1),
@@ -105,7 +104,6 @@ TEST_CASES = [
                     ],
                     groupby=[Column(None, None, "project_id")],
                     condition=binary_condition(
-                        None,
                         ConditionFunctions.EQ,
                         Column(None, None, "project_id"),
                         Literal(None, 1),
@@ -151,7 +149,6 @@ TEST_CASES = [
                 ],
                 groupby=[Column(None, None, "project_id")],
                 prewhere=binary_condition(
-                    None,
                     ConditionFunctions.EQ,
                     Column(None, None, "project_id"),
                     Literal(None, 1),
@@ -193,7 +190,6 @@ TEST_CASES = [
                             ),
                         ],
                         condition=binary_condition(
-                            None,
                             ConditionFunctions.EQ,
                             Column(None, None, "project_id"),
                             Literal(None, 1),
@@ -255,7 +251,6 @@ TEST_CASES = [
                                 ),
                             ],
                             condition=binary_condition(
-                                None,
                                 ConditionFunctions.EQ,
                                 Column(None, None, "project_id"),
                                 Literal(None, 1),
@@ -342,7 +337,6 @@ TEST_CASES = [
                             ),
                         ],
                         prewhere=binary_condition(
-                            None,
                             ConditionFunctions.EQ,
                             Column(None, None, "project_id"),
                             Literal(None, 1),

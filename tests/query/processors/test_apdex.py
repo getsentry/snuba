@@ -43,7 +43,6 @@ def test_apdex_format_expressions() -> None:
                             "countIf",
                             (
                                 binary_condition(
-                                    None,
                                     ConditionFunctions.LTE,
                                     Column(None, None, "column1"),
                                     Literal(None, 300),
@@ -56,16 +55,13 @@ def test_apdex_format_expressions() -> None:
                                 "countIf",
                                 (
                                     binary_condition(
-                                        None,
                                         BooleanFunctions.AND,
                                         binary_condition(
-                                            None,
                                             ConditionFunctions.GT,
                                             Column(None, None, "column1"),
                                             Literal(None, 300),
                                         ),
                                         binary_condition(
-                                            None,
                                             ConditionFunctions.LTE,
                                             Column(None, None, "column1"),
                                             multiply(

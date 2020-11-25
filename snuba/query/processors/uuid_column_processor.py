@@ -118,9 +118,7 @@ class UUIDColumnProcessor(QueryProcessor):
             new_function = FunctionCall(
                 params_fn.alias, params_fn.function_name, tuple(new_fn_params)
             )
-            return binary_condition(
-                exp.alias, exp.function_name, new_column, new_function
-            )
+            return binary_condition(exp.function_name, new_column, new_function)
 
         result = self.uuid_condition.match(exp)
         if result is not None:
@@ -139,7 +137,7 @@ class UUIDColumnProcessor(QueryProcessor):
                     new_params.append(column)
 
             left_exp, right_exp = new_params
-            return binary_condition(exp.alias, exp.function_name, left_exp, right_exp)
+            return binary_condition(exp.function_name, left_exp, right_exp)
 
         return exp
 

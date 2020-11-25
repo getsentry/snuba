@@ -60,10 +60,7 @@ test_cases = [
                 SelectedExpression("column3", Column("al", None, "column3")),
             ],
             condition=binary_condition(
-                None,
-                "eq",
-                lhs=Column("al", None, "column3"),
-                rhs=Literal(None, "blabla"),
+                "eq", lhs=Column("al", None, "column3"), rhs=Literal(None, "blabla"),
             ),
             groupby=[
                 Column(None, None, "column1"),
@@ -72,7 +69,7 @@ test_cases = [
                 Column(None, None, "column4"),
             ],
             having=binary_condition(
-                None, "eq", lhs=Column(None, None, "column1"), rhs=Literal(None, 123),
+                "eq", lhs=Column(None, None, "column1"), rhs=Literal(None, 123),
             ),
             order_by=[
                 OrderBy(OrderByDirection.ASC, Column(None, None, "column1")),
@@ -119,16 +116,13 @@ test_cases = [
                 ),
             ],
             condition=binary_condition(
-                None,
                 "and",
                 lhs=binary_condition(
-                    None,
                     "eq",
                     lhs=Column("al", None, "column3"),
                     rhs=Literal(None, "blabla"),
                 ),
                 rhs=binary_condition(
-                    None,
                     "neq",  # yes, not very smart
                     lhs=Column("al", None, "column3"),
                     rhs=Literal(None, "blabla"),
@@ -207,35 +201,28 @@ test_cases = [
                 SelectedExpression("al2", Column("al2", None, "column4")),
             ],
             condition=binary_condition(
-                None,
                 BooleanFunctions.AND,
                 binary_condition(
-                    None,
                     BooleanFunctions.OR,
                     binary_condition(
-                        None,
                         ConditionFunctions.EQ,
                         lhs=Column("al", None, "column3"),
                         rhs=Literal(None, "blabla"),
                     ),
                     binary_condition(
-                        None,
                         ConditionFunctions.EQ,
                         lhs=Column("al2", None, "column4"),
                         rhs=Literal(None, "blabla2"),
                     ),
                 ),
                 binary_condition(
-                    None,
                     BooleanFunctions.OR,
                     binary_condition(
-                        None,
                         ConditionFunctions.EQ,
                         lhs=Column(None, None, "column5"),
                         rhs=Literal(None, "blabla3"),
                     ),
                     binary_condition(
-                        None,
                         ConditionFunctions.EQ,
                         lhs=Column(None, None, "column6"),
                         rhs=Literal(None, "blabla4"),
@@ -274,7 +261,6 @@ test_cases = [
                     SelectedExpression("column3", Column(None, None, "column3")),
                 ],
                 condition=binary_condition(
-                    None,
                     "eq",
                     lhs=Column("al", None, "column3"),
                     rhs=Literal(None, "blabla"),
@@ -335,7 +321,7 @@ test_cases = [
                 SelectedExpression("message", Column("message", "groups", "message")),
             ],
             condition=binary_condition(
-                None, "eq", Column(None, "groups", "id"), Literal(None, 1)
+                "eq", Column(None, "groups", "id"), Literal(None, 1)
             ),
         ),
         [
@@ -377,7 +363,6 @@ test_cases = [
                                 ),
                             ],
                             condition=binary_condition(
-                                None,
                                 "eq",
                                 Column(None, None, "project_id"),
                                 Literal(None, 1),
@@ -395,7 +380,6 @@ test_cases = [
                                 ),
                             ],
                             condition=binary_condition(
-                                None,
                                 "eq",
                                 Column(None, None, "project_id"),
                                 Literal(None, 1),
@@ -420,7 +404,7 @@ test_cases = [
                             ),
                         ],
                         condition=binary_condition(
-                            None, "eq", Column(None, None, "user"), Literal(None, "me"),
+                            "eq", Column(None, None, "user"), Literal(None, "me"),
                         ),
                     ),
                 ),
@@ -518,11 +502,11 @@ def test_format_clickhouse_specific_query() -> None:
             SelectedExpression("column2", Column(None, "table1", "column2")),
         ],
         condition=binary_condition(
-            None, "eq", lhs=Column(None, None, "column1"), rhs=Literal(None, "blabla"),
+            "eq", lhs=Column(None, None, "column1"), rhs=Literal(None, "blabla"),
         ),
         groupby=[Column(None, None, "column1"), Column(None, "table1", "column2")],
         having=binary_condition(
-            None, "eq", lhs=Column(None, None, "column1"), rhs=Literal(None, 123),
+            "eq", lhs=Column(None, None, "column1"), rhs=Literal(None, 123),
         ),
         order_by=[OrderBy(OrderByDirection.ASC, Column(None, None, "column1"))],
         array_join=Column(None, None, "column1"),

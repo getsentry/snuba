@@ -75,7 +75,6 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
         if project_ids:
             query.add_condition_to_ast(
                 in_condition(
-                    None,
                     Column(None, None, self.__project_column),
                     [Literal(None, p) for p in project_ids],
                 )

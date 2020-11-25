@@ -21,7 +21,6 @@ test_data = [
         "table1",
         [
             binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 Column("deleted", None, "deleted"),
                 Literal(None, "0"),
@@ -33,13 +32,9 @@ test_data = [
         "table2",
         [
             binary_condition(
-                None,
-                ConditionFunctions.EQ,
-                Column("time", None, "time"),
-                Literal(None, "1"),
+                ConditionFunctions.EQ, Column("time", None, "time"), Literal(None, "1"),
             ),
             binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 Column("time2", None, "time2"),
                 Literal(None, "2"),
@@ -65,19 +60,12 @@ def test_mand_conditions(table: str, mand_conditions: List[FunctionCall]) -> Non
         None,
         None,
         binary_condition(
-            None,
             BooleanFunctions.AND,
             binary_condition(
-                None,
-                OPERATOR_TO_FUNCTION["="],
-                Column("d", None, "d"),
-                Literal(None, "1"),
+                OPERATOR_TO_FUNCTION["="], Column("d", None, "d"), Literal(None, "1"),
             ),
             binary_condition(
-                None,
-                OPERATOR_TO_FUNCTION["="],
-                Column("c", None, "c"),
-                Literal(None, "3"),
+                OPERATOR_TO_FUNCTION["="], Column("c", None, "c"), Literal(None, "3"),
             ),
         ),
     )

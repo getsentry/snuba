@@ -389,7 +389,7 @@ class SnQLVisitor(NodeVisitor):
         visited_children: Tuple[Expression, Any, str, Any, Expression],
     ) -> Expression:
         exp, _, op, _, literal = visited_children
-        return binary_condition(None, op, exp, literal)
+        return binary_condition(op, exp, literal)
 
     def visit_condition_op(self, node: Node, visited_children: Iterable[Any]) -> str:
         return OPERATOR_TO_FUNCTION[node.text]
