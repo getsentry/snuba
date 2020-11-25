@@ -1,14 +1,24 @@
+from copy import deepcopy
+from typing import Union
+
 import pytest
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
+from snuba.clusters.cluster import get_cluster
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import CompositeQueryPlan, SubqueryProcessors
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.pipeline.composite import CompositeExecutionStrategy, CompositeQueryPlanner
+from snuba.pipeline.composite import (
+    CompositeExecutionPipeline,
+    CompositeExecutionStrategy,
+    CompositeQueryPlanner,
+)
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
+from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.join import (
     IndividualNode,
     JoinClause,
@@ -20,7 +30,9 @@ from snuba.query.data_source.simple import Entity, Table
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
-from snuba.request.request_settings import HTTPRequestSettings
+from snuba.reader import Reader
+from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
+from snuba.web import QueryResult
 
 events_ent = Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model())
 events_table = Table(
@@ -51,6 +63,12 @@ TEST_CASES = [
                     ),
                 ],
                 groupby=[Column(None, None, "project_id")],
+                condition=binary_condition(
+                    None,
+                    ConditionFunctions.EQ,
+                    Column(None, None, "project_id"),
+                    Literal(None, 1),
+                ),
             ),
             selected_columns=[
                 SelectedExpression(
@@ -86,6 +104,12 @@ TEST_CASES = [
                         ),
                     ],
                     groupby=[Column(None, None, "project_id")],
+                    condition=binary_condition(
+                        None,
+                        ConditionFunctions.EQ,
+                        Column(None, None, "project_id"),
+                        Literal(None, 1),
+                    ),
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -96,7 +120,8 @@ TEST_CASES = [
                     ),
                 ],
             ),
-            CompositeExecutionStrategy(),
+            CompositeExecutionStrategy(get_cluster(StorageSetKey.EVENTS), [], {}),
+            StorageSetKey.EVENTS,
             SubqueryProcessors(
                 [],
                 [
@@ -105,6 +130,41 @@ TEST_CASES = [
                 ],
             ),
             None,
+        ),
+        CompositeQuery(
+            from_clause=ClickhouseQuery(
+                from_clause=events_table,
+                selected_columns=[
+                    SelectedExpression("project_id", Column(None, None, "project_id")),
+                    SelectedExpression(
+                        "count_release",
+                        FunctionCall(
+                            "count_release",
+                            "uniq",
+                            (
+                                build_mapping_expr(
+                                    None, None, "tags", Literal(None, "sentry:release"),
+                                ),
+                            ),
+                        ),
+                    ),
+                ],
+                groupby=[Column(None, None, "project_id")],
+                prewhere=binary_condition(
+                    None,
+                    ConditionFunctions.EQ,
+                    Column(None, None, "project_id"),
+                    Literal(None, 1),
+                ),
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "average",
+                    FunctionCall(
+                        "average", "avg", (Column(None, None, "count_release"),)
+                    ),
+                ),
+            ],
         ),
         id="Query with a subquery",
     ),
@@ -132,6 +192,12 @@ TEST_CASES = [
                                 ),
                             ),
                         ],
+                        condition=binary_condition(
+                            None,
+                            ConditionFunctions.EQ,
+                            Column(None, None, "project_id"),
+                            Literal(None, 1),
+                        ),
                     ),
                 ),
                 right_node=IndividualNode(
@@ -188,6 +254,12 @@ TEST_CASES = [
                                     ),
                                 ),
                             ],
+                            condition=binary_condition(
+                                None,
+                                ConditionFunctions.EQ,
+                                Column(None, None, "project_id"),
+                                Literal(None, 1),
+                            ),
                         ),
                     ),
                     right_node=IndividualNode(
@@ -226,7 +298,8 @@ TEST_CASES = [
                     ),
                 ],
             ),
-            CompositeExecutionStrategy(),
+            CompositeExecutionStrategy(get_cluster(StorageSetKey.EVENTS), [], {}),
+            StorageSetKey.EVENTS,
             None,
             {
                 "err": SubqueryProcessors(
@@ -245,14 +318,83 @@ TEST_CASES = [
                 ),
             },
         ),
+        CompositeQuery(
+            from_clause=JoinClause(
+                left_node=IndividualNode(
+                    alias="err",
+                    data_source=LogicalQuery(
+                        {},
+                        from_clause=events_ent,
+                        selected_columns=[
+                            SelectedExpression(
+                                "project_id", Column(None, None, "project_id")
+                            ),
+                            SelectedExpression(
+                                "group_id", Column(None, None, "group_id")
+                            ),
+                            SelectedExpression(
+                                "count_release",
+                                FunctionCall(
+                                    "count_release",
+                                    "uniq",
+                                    (Column(None, None, "release"),),
+                                ),
+                            ),
+                        ],
+                        prewhere=binary_condition(
+                            None,
+                            ConditionFunctions.EQ,
+                            Column(None, None, "project_id"),
+                            Literal(None, 1),
+                        ),
+                    ),
+                ),
+                right_node=IndividualNode(
+                    alias="groups",
+                    data_source=LogicalQuery(
+                        {},
+                        from_clause=groups_ent,
+                        selected_columns=[
+                            SelectedExpression(
+                                "project_id", Column(None, None, "project_id")
+                            ),
+                            SelectedExpression("id", Column(None, None, "id")),
+                        ],
+                    ),
+                ),
+                keys=[
+                    JoinCondition(
+                        left=JoinConditionExpression("err", "group_id"),
+                        right=JoinConditionExpression("groups", "id"),
+                    )
+                ],
+                join_type=JoinType.INNER,
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "average",
+                    FunctionCall(
+                        "average",
+                        "avg",
+                        (
+                            build_mapping_expr(
+                                None, None, "tags", Literal(None, "sentry:release"),
+                            ),
+                        ),
+                    ),
+                ),
+            ],
+        ),
         id="Join of two subqueries",
     ),
 ]
 
 
-@pytest.mark.parametrize("logical_query, composite_plan", TEST_CASES)
+@pytest.mark.parametrize("logical_query, composite_plan, processed_query", TEST_CASES)
 def test_composite_planner(
-    logical_query: CompositeQuery[Entity], composite_plan: CompositeQueryPlan
+    logical_query: CompositeQuery[Entity],
+    composite_plan: CompositeQueryPlan,
+    processed_query: CompositeQuery[Table],
 ) -> None:
     def assert_subquery_processors_equality(
         query: SubqueryProcessors, expected: SubqueryProcessors
@@ -264,7 +406,9 @@ def test_composite_planner(
             type(x) for x in expected.db_processors
         ]
 
-    plan = CompositeQueryPlanner(logical_query, HTTPRequestSettings()).execute()
+    plan = CompositeQueryPlanner(
+        deepcopy(logical_query), HTTPRequestSettings()
+    ).execute()
     assert plan.query.equals(composite_plan.query)
 
     # We cannot simply check the equality between the plans because
@@ -292,3 +436,13 @@ def test_composite_planner(
             assert_subquery_processors_equality(
                 plan.aliased_processors[k], composite_plan.aliased_processors[k],
             )
+
+    def runner(
+        query: Union[ClickhouseQuery, CompositeQuery[Table]],
+        request_settings: RequestSettings,
+        reader: Reader,
+    ) -> QueryResult:
+        assert query.equals(processed_query)
+        return QueryResult({"data": []}, {},)
+
+    CompositeExecutionPipeline(logical_query, HTTPRequestSettings(), runner).execute()

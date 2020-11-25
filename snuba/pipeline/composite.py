@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-from typing import Mapping, NamedTuple, Optional, Union
+from typing import Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
+import sentry_sdk
+from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.clusters.cluster import ClickhouseCluster, get_cluster
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
@@ -11,7 +15,7 @@ from snuba.datasets.plans.query_plan import (
     QueryRunner,
     SubqueryProcessors,
 )
-from snuba.pipeline.query_pipeline import QueryPlanner
+from snuba.pipeline.query_pipeline import QueryExecutionPipeline, QueryPlanner
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
@@ -67,6 +71,8 @@ def _plan_composite_query(
         query.get_from_clause()
     )
 
+    root_db_processors, aliased_db_processors = planned_data_source.get_db_processors()
+
     return CompositeQueryPlan(
         # This is a mypy issue: https://github.com/python/mypy/issues/7520
         # At the time of writing generics in dataclasses are not properly
@@ -87,7 +93,12 @@ def _plan_composite_query(
             totals=query.has_totals(),
             granularity=query.get_granularity(),
         ),
-        execution_strategy=CompositeExecutionStrategy(),
+        execution_strategy=CompositeExecutionStrategy(
+            get_cluster(planned_data_source.storage_set_key),
+            root_db_processors,
+            aliased_db_processors,
+        ),
+        storage_set_key=planned_data_source.storage_set_key,
         root_processors=planned_data_source.root_processors,
         aliased_processors=planned_data_source.aliased_processors,
     )
@@ -128,6 +139,7 @@ class JoinDataSourcePlan(NamedTuple):
 
     translated_source: Union[JoinClause[Table], IndividualNode[Table]]
     processors: Mapping[str, SubqueryProcessors]
+    storage_set_key: StorageSetKey
 
 
 class JoinDataSourcePlanner(JoinVisitor[JoinDataSourcePlan, Entity]):
@@ -160,11 +172,19 @@ class JoinDataSourcePlanner(JoinVisitor[JoinDataSourcePlan, Entity]):
                     db_processors=sub_query_plan.db_query_processors,
                 )
             },
+            storage_set_key=sub_query_plan.storage_set_key,
         )
 
     def visit_join_clause(self, node: JoinClause[Entity]) -> JoinDataSourcePlan:
         left_node = node.left_node.accept(self)
         right_node = self.visit_individual_node(node.right_node)
+
+        # TODO: Actually return multiple plans for each subquery (one per storage
+        # set) and rank them picking a combination that fits in a single storage
+        # set.
+        assert (
+            left_node.storage_set_key == right_node.storage_set_key
+        ), f"Multiple storage set found in plan: {left_node.storage_set_key} {right_node.storage_set_key}"
 
         # mypy does not know that the method above only produces individual nodes.
         assert isinstance(right_node.translated_source, IndividualNode)
@@ -177,6 +197,7 @@ class JoinDataSourcePlanner(JoinVisitor[JoinDataSourcePlan, Entity]):
                 join_modifier=node.join_modifier,
             ),
             processors={**left_node.processors, **right_node.processors},
+            storage_set_key=left_node.storage_set_key,
         )
 
 
@@ -193,6 +214,7 @@ class CompositeDataSourcePlan(NamedTuple):
     """
 
     translated_source: Union[ClickhouseQuery, CompositeQuery[Table], JoinClause[Table]]
+    storage_set_key: StorageSetKey
     root_processors: Optional[SubqueryProcessors] = None
     aliased_processors: Optional[Mapping[str, SubqueryProcessors]] = None
 
@@ -206,6 +228,7 @@ class CompositeDataSourcePlan(NamedTuple):
                 plan_processors=query_plan.plan_query_processors,
                 db_processors=query_plan.db_query_processors,
             ),
+            storage_set_key=query_plan.storage_set_key,
         )
 
     @classmethod
@@ -216,6 +239,22 @@ class CompositeDataSourcePlan(NamedTuple):
             translated_source=query_plan.query,
             root_processors=query_plan.root_processors,
             aliased_processors=query_plan.aliased_processors,
+            storage_set_key=query_plan.storage_set_key,
+        )
+
+    def get_db_processors(
+        self,
+    ) -> Tuple[Sequence[QueryProcessor], Mapping[str, Sequence[QueryProcessor]]]:
+        return (
+            self.root_processors.db_processors
+            if self.root_processors is not None
+            else [],
+            {
+                alias: subquery.db_processors
+                for alias, subquery in self.aliased_processors.items()
+            }
+            if self.aliased_processors is not None
+            else {},
         )
 
 
@@ -246,6 +285,7 @@ class CompositeDataSourcePlanner(DataSourceVisitor[CompositeDataSourcePlan, Enti
         return CompositeDataSourcePlan(
             translated_source=plan.translated_source,
             aliased_processors=plan.processors,
+            storage_set_key=plan.storage_set_key,
         )
 
     def _visit_simple_query(
@@ -263,12 +303,114 @@ class CompositeDataSourcePlanner(DataSourceVisitor[CompositeDataSourcePlan, Enti
         )
 
 
+class ProcessorsExecutor(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
+    """
+    Applies in place the a sequence of query processors to the subqueries
+    of a composite query.
+    Processors are provided as a sequence of processors to be applied to
+    the root subquery or a mapping of sequences (one per alias) to be
+    applied to subqueries in a join. In the join case there are multiple
+    subqueries with a table alias in the composite query.
+    """
+
+    def __init__(
+        self,
+        root_processors: Sequence[QueryProcessor],
+        aliased_processors: Mapping[str, Sequence[QueryProcessor]],
+        request_settings: RequestSettings,
+    ) -> None:
+        self.__root_processors = root_processors
+        self.__aliased_processors = aliased_processors
+        self.__settings = request_settings
+
+    def __process_simple_query(
+        self, clickhouse_query: ClickhouseQuery, processors: Sequence[QueryProcessor]
+    ) -> None:
+        for clickhouse_processor in processors:
+            with sentry_sdk.start_span(
+                description=type(clickhouse_processor).__name__, op="processor"
+            ):
+                clickhouse_processor.process_query(clickhouse_query, self.__settings)
+
+    def _visit_simple_source(self, data_source: Table) -> None:
+        # We are never supposed to get here.
+        raise ValueError("Cannot translate a simple Entity")
+
+    def _visit_join(self, data_source: JoinClause[Table]) -> None:
+        data_source.accept(self)
+
+    def _visit_simple_query(self, data_source: ProcessableQuery[Table]) -> None:
+        assert isinstance(data_source, ClickhouseQuery)
+        self.__process_simple_query(data_source, self.__root_processors)
+
+    def _visit_composite_query(self, data_source: CompositeQuery[Table]) -> None:
+        self.visit(data_source.get_from_clause())
+
+    def visit_individual_node(self, node: IndividualNode[Table]) -> None:
+        assert isinstance(
+            node.data_source, ClickhouseQuery
+        ), "Invalid join structure. Only subqueries are allowed at this stage."
+        self.__process_simple_query(
+            node.data_source, self.__aliased_processors[node.alias]
+        )
+
+    def visit_join_clause(self, node: JoinClause[Table]) -> None:
+        node.left_node.accept(self)
+        node.right_node.accept(self)
+
+
 class CompositeExecutionStrategy(QueryPlanExecutionStrategy[CompositeQuery[Table]]):
+    """
+    Executes a composite query after applying the db query processors
+    to each subquery.
+    """
+
+    def __init__(
+        self,
+        cluster: ClickhouseCluster,
+        root_processors: Sequence[QueryProcessor],
+        aliased_processors: Mapping[str, Sequence[QueryProcessor]],
+    ) -> None:
+        self.__cluster = cluster
+        self.__root_processors = root_processors
+        self.__aliased_processors = aliased_processors
+
     def execute(
         self,
         query: CompositeQuery[Table],
         request_settings: RequestSettings,
         runner: QueryRunner,
     ) -> QueryResult:
-        # We still need to make the runner take composite queries.
-        raise NotImplementedError
+        ProcessorsExecutor(
+            self.__root_processors, self.__aliased_processors, request_settings
+        ).visit(query)
+        return runner(query, request_settings, self.__cluster.get_reader())
+
+
+class CompositeExecutionPipeline(QueryExecutionPipeline):
+    """
+    Executes a logical composite query by generating a plan,
+    applying the plan query processors to all subqueries and
+    handing the result to the execution strategy.
+    """
+
+    def __init__(
+        self,
+        query: CompositeQuery[Entity],
+        request_settings: RequestSettings,
+        runner: QueryRunner,
+    ):
+        self.__query = query
+        self.__settings = request_settings
+        self.__runner = runner
+
+    def execute(self) -> QueryResult:
+        plan = CompositeQueryPlanner(self.__query, self.__settings).execute()
+        root_processors, aliased_processors = plan.get_plan_processors()
+        ProcessorsExecutor(root_processors, aliased_processors, self.__settings,).visit(
+            plan.query
+        )
+
+        return plan.execution_strategy.execute(
+            plan.query, self.__settings, self.__runner
+        )
