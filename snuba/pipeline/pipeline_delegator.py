@@ -11,13 +11,13 @@ from snuba.query.logical import Query
 from snuba.query.logical import Query as LogicalQuery
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
-from snuba.utils.threaded_function_delegator import ThreadedFunctionDelegator
+from snuba.utils.threaded_function_delegator import Result, ThreadedFunctionDelegator
 from snuba.web import QueryResult
 
 BuilderId = str
 Timing = float
 QueryPipelineBuilders = Mapping[BuilderId, QueryPipelineBuilder[ClickhouseQueryPlan]]
-QueryResults = List[Tuple[BuilderId, QueryResult, Timing]]
+QueryResults = List[Result[QueryResult]]
 SelectorFunc = Callable[[Query], Tuple[BuilderId, List[BuilderId]]]
 CallbackFunc = Callable[[QueryResults], None]
 
