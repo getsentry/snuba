@@ -61,6 +61,7 @@ from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.util import qualified_column
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.threaded_function_delegator import Result
 from snuba.web import QueryResult
 
 metrics = MetricsWrapper(environment.metrics, "api.discover.discover_entity")
@@ -387,11 +388,11 @@ class DiscoverEntity(Entity):
 
             return "events", []
 
-        def callback_func(results: List[Tuple[str, QueryResult]]) -> None:
-            _, primary_result = results.pop(0)
+        def callback_func(results: List[Result[QueryResult]]) -> None:
+            primary_result = results.pop(0)
 
-            for _, result in results:
-                if result.result["data"] == primary_result.result["data"]:
+            for result in results:
+                if result.result.result["data"] == primary_result.result.result["data"]:
                     metrics.increment("query_result", tags={"match": "true"})
                 else:
                     metrics.increment("query_result", tags={"match": "false"})
