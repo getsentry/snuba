@@ -11,6 +11,7 @@ from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.parser import parse_query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
+from snuba.utils.threaded_function_delegator import Result
 from snuba.web import QueryResult
 
 
@@ -59,5 +60,5 @@ def test() -> None:
     assert mock_query_runner.call_count == 2
 
     assert mock_callback.call_args == call(
-        [("events", query_result, ANY), ("errors", query_result, ANY)]
+        [Result("events", query_result, ANY), Result("errors", query_result, ANY)]
     )
