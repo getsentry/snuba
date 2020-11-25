@@ -445,3 +445,21 @@ class TestTransactionsApi(BaseApiTest):
         assert data["data"][2]["value"] == 32.129
         assert data["data"][3]["key"] == "lcp.elementSize"
         assert data["data"][3]["value"] == 4242
+
+    def test_escaping_strings(self) -> None:
+        response = self.app.post(
+            self.endpoint,
+            data=json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["event_id"],
+                    "conditions": [["transaction", "LIKE", "stuff \\\" ' \\' stuff"]],
+                    "limit": 4,
+                    "orderby": ["event_id"],
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 0, data
