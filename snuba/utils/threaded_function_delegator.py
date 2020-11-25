@@ -1,6 +1,7 @@
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from functools import partial
 from typing import Callable, Generic, Iterator, List, Mapping, Optional, Tuple, TypeVar
 
@@ -11,6 +12,13 @@ executor = ThreadPoolExecutor()
 
 TInput = TypeVar("TInput")
 TResult = TypeVar("TResult")
+
+
+@dataclass(frozen=True)
+class Result(Generic[TResult]):
+    function_id: str
+    result: TResult
+    execution_time: float
 
 
 class ThreadedFunctionDelegator(Generic[TInput, TResult]):
@@ -28,22 +36,20 @@ class ThreadedFunctionDelegator(Generic[TInput, TResult]):
         self,
         callables: Mapping[str, Callable[[], TResult]],
         selector_func: Callable[[TInput], Tuple[str, List[str]]],
-        callback_func: Optional[Callable[[List[Tuple[str, TResult, float]]], None]],
+        callback_func: Optional[Callable[[List[Result[TResult]]], None]],
     ) -> None:
         self.__callables = callables
         self.__selector_func = selector_func
         self.__callback_func = callback_func
 
-    def __execute_callable(self, function_id: str) -> Tuple[str, TResult, float]:
+    def __execute_callable(self, function_id: str) -> Result[TResult]:
         start_time = time.time()
         result = self.__callables[function_id]()
         end_time = time.time()
         execution_time = end_time - start_time
-        return function_id, result, execution_time
+        return Result(function_id, result, execution_time)
 
-    def __execute_callables(
-        self, input: TInput
-    ) -> Iterator[Tuple[str, TResult, float]]:
+    def __execute_callables(self, input: TInput) -> Iterator[Result[TResult]]:
 
         primary_function_id, secondary_function_ids = self.__selector_func(input)
 
@@ -59,19 +65,19 @@ class ThreadedFunctionDelegator(Generic[TInput, TResult]):
     def execute(self, input: TInput) -> TResult:
         generator = self.__execute_callables(input)
 
-        results: List[Tuple[str, TResult, float]] = []
+        results: List[Result[TResult]] = []
 
         try:
-            (result_id, result, execution_time) = next(generator)
-            results.append((result_id, result, execution_time))
-            return result
+            result = next(generator)
+            results.append(result)
+            return result.result
 
         finally:
 
             def execute_callback() -> None:
                 try:
-                    for (result_id, result, execution_time) in generator:
-                        results.append((result_id, result, execution_time))
+                    for result in generator:
+                        results.append(result)
 
                     if self.__callback_func is not None:
                         self.__callback_func(results)
