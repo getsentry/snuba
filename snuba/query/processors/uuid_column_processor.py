@@ -82,6 +82,7 @@ class UUIDColumnProcessor(QueryProcessor):
                 ),
             ),
         )
+        self.formatted: Optional[str] = None
 
     def parse_uuid(self, lit: Expression) -> Optional[Expression]:
         if not isinstance(lit, Literal):
@@ -123,7 +124,7 @@ class UUIDColumnProcessor(QueryProcessor):
             new_function = FunctionCall(
                 params_fn.alias, params_fn.function_name, tuple(new_fn_params)
             )
-            metrics.increment("query_processed", tags={"type": "formatted"})
+            self.formatted = "function_wrapped"
             return binary_condition(
                 exp.alias, exp.function_name, new_column, new_function
             )
@@ -145,7 +146,7 @@ class UUIDColumnProcessor(QueryProcessor):
                     new_params.append(column)
 
             left_exp, right_exp = new_params
-            metrics.increment("query_processed", tags={"type": "bare"})
+            self.formatted = "bare_column"
             return binary_condition(exp.alias, exp.function_name, left_exp, right_exp)
 
         return exp
@@ -158,3 +159,6 @@ class UUIDColumnProcessor(QueryProcessor):
         prewhere = query.get_prewhere_ast()
         if prewhere:
             query.set_prewhere_ast_condition(prewhere.transform(self.process_condition))
+
+        if self.formatted:
+            metrics.increment("query_processed", tags={"type": self.formatted})
