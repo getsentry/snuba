@@ -90,7 +90,8 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
                 float(value)
                 return f"{value}"
             except ValueError:
-                return f"'{value}'"
+                escaped = value.replace("'", "\\'")
+                return f"'{escaped}'"
 
         sample = legacy.get("sample")
         sample_clause = f"SAMPLE {sample}" if sample else ""
