@@ -7,6 +7,16 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.data_source.join import (
+    IndividualNode,
+    JoinClause,
+    JoinType,
+    JoinClass,
+    JoinCondition,
+    JoinConditionExpression,
+    JoinModifier,
+    JoinRelationship,
+)
 from snuba.query.expressions import (
     Column,
     FunctionCall,
@@ -14,6 +24,7 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.composite import CompositeQuery
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.snql.parser import parse_snql_query
 
@@ -24,7 +35,7 @@ test_cases = [
         LogicalQuery(
             {},
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(), "e",
             ),
             selected_columns=[
                 SelectedExpression(
@@ -42,7 +53,7 @@ test_cases = [
         LogicalQuery(
             {},
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(), "e",
             ),
             selected_columns=[
                 SelectedExpression(
@@ -60,7 +71,10 @@ test_cases = [
         LogicalQuery(
             {},
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(), 0.5
+                EntityKey.EVENTS,
+                get_entity(EntityKey.EVENTS).get_data_model(),
+                "e",
+                0.5,
             ),
             selected_columns=[
                 SelectedExpression(
@@ -78,7 +92,7 @@ test_cases = [
         LogicalQuery(
             {},
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(), "e",
             ),
             selected_columns=[
                 SelectedExpression(
@@ -96,7 +110,7 @@ test_cases = [
         LogicalQuery(
             {},
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(), "e",
             ),
             selected_columns=[
                 SelectedExpression(
@@ -115,7 +129,7 @@ test_cases = [
         LogicalQuery(
             {},
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(), "e",
             ),
             selected_columns=[
                 SelectedExpression(
@@ -144,11 +158,71 @@ test_cases = [
         id="Basic query with no spaces and no ambiguous clause content",
     ),
     pytest.param(
+        "MATCH (e: events) SELECT count() AS count BY tags[key], measurements[lcp.elementSize] WHERE a<3 AND measurements[lcp.elementSize] > 1",
+        LogicalQuery(
+            {},
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(), "e",
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "count", FunctionCall("_snuba_count", "count", tuple()),
+                ),
+                SelectedExpression(
+                    "tags[key]",
+                    SubscriptableReference(
+                        "_snuba_tags[key]",
+                        Column("_snuba_tags", None, "tags"),
+                        Literal(None, "key"),
+                    ),
+                ),
+                SelectedExpression(
+                    "measurements[lcp.elementSize]",
+                    SubscriptableReference(
+                        "_snuba_measurements[lcp.elementSize]",
+                        Column("_snuba_measurements", None, "measurements",),
+                        Literal(None, "lcp.elementSize"),
+                    ),
+                ),
+            ],
+            groupby=[
+                SubscriptableReference(
+                    "_snuba_tags[key]",
+                    Column("_snuba_tags", None, "tags"),
+                    Literal(None, "key"),
+                ),
+                SubscriptableReference(
+                    "_snuba_measurements[lcp.elementSize]",
+                    Column("_snuba_measurements", None, "measurements",),
+                    Literal(None, "lcp.elementSize"),
+                ),
+            ],
+            condition=binary_condition(
+                None,
+                "and",
+                binary_condition(
+                    None, "less", Column("_snuba_a", None, "a"), Literal(None, 3)
+                ),
+                binary_condition(
+                    None,
+                    "greater",
+                    SubscriptableReference(
+                        "_snuba_measurements[lcp.elementSize]",
+                        Column("_snuba_measurements", None, "measurements",),
+                        Literal(None, "lcp.elementSize"),
+                    ),
+                    Literal(None, 1),
+                ),
+            ),
+        ),
+        id="Basic query with subscriptables",
+    ),
+    pytest.param(
         "MATCH (e: events) SELECT (2*(4-5)+3), g(c) AS goo, c BY d, 2+7 WHERE a<3  ORDER BY f DESC",
         LogicalQuery(
             {},
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(), "e",
             ),
             selected_columns=[
                 SelectedExpression(
@@ -200,7 +274,7 @@ test_cases = [
         LogicalQuery(
             {},
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(), "e",
             ),
             selected_columns=[
                 SelectedExpression(
@@ -254,7 +328,7 @@ test_cases = [
         LogicalQuery(
             {},
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(), "e",
             ),
             selected_columns=[
                 SelectedExpression(
@@ -299,7 +373,7 @@ test_cases = [
         LogicalQuery(
             {},
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(), "e",
             ),
             selected_columns=[SelectedExpression("a", Column("_snuba_a", None, "a"))],
             condition=FunctionCall(
@@ -360,7 +434,7 @@ test_cases = [
         LogicalQuery(
             {},
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(), "e",
             ),
             selected_columns=[SelectedExpression("a", Column("_snuba_a", None, "a"))],
             condition=FunctionCall(
@@ -407,7 +481,7 @@ test_cases = [
         LogicalQuery(
             {},
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(), "e",
             ),
             selected_columns=[SelectedExpression("a", Column("_snuba_a", None, "a"),)],
             condition=FunctionCall(
@@ -478,7 +552,7 @@ test_cases = [
         LogicalQuery(
             {},
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(), "e",
             ),
             selected_columns=[
                 SelectedExpression("a", Column("_snuba_a", None, "a")),
@@ -509,7 +583,7 @@ test_cases = [
         LogicalQuery(
             {},
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(), "e",
             ),
             selected_columns=[
                 SelectedExpression(
@@ -538,11 +612,324 @@ test_cases = [
         id="Basic query with new lines and no ambiguous clause content",
     ),
     pytest.param(
+        "MATCH (e: events) -[contains]-> (t: Transactions) SELECT 4-5, c",
+        CompositeQuery(
+            from_clause=JoinClause(
+                left_node=IndividualNode(
+                    "e",
+                    QueryEntity(
+                        EntityKey.EVENTS,
+                        get_entity(EntityKey.EVENTS).get_data_model(),
+                        "e",
+                    ),
+                ),
+                right_node=IndividualNode(
+                    "t",
+                    QueryEntity(
+                        EntityKey.TRANSACTIONS,
+                        get_entity(EntityKey.TRANSACTIONS).get_data_model(),
+                        "t",
+                    ),
+                ),
+                keys=[
+                    JoinCondition(
+                        JoinConditionExpression("e", "event_id"),
+                        JoinConditionExpression("t", "event_id"),
+                    )
+                ],
+                join_type=JoinType.INNER,
+                join_modifier=JoinModifier.SEMI,
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "4-5",
+                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                ),
+                SelectedExpression("c", Column("_snuba_c", None, "c")),
+            ],
+        ),
+        id="Basic join match",
+    ),
+    pytest.param(
+        "MATCH (e: Events) -[contains]-> (t: Transactions SAMPLE 0.5) SELECT 4-5, c",
+        CompositeQuery(
+            from_clause=JoinClause(
+                left_node=IndividualNode(
+                    "e",
+                    QueryEntity(
+                        EntityKey.EVENTS,
+                        get_entity(EntityKey.EVENTS).get_data_model(),
+                        "e",
+                    ),
+                ),
+                right_node=IndividualNode(
+                    "t",
+                    QueryEntity(
+                        EntityKey.TRANSACTIONS,
+                        get_entity(EntityKey.TRANSACTIONS).get_data_model(),
+                        "t",
+                        0.5,
+                    ),
+                ),
+                keys=[
+                    JoinCondition(
+                        JoinConditionExpression("e", "event_id"),
+                        JoinConditionExpression("t", "event_id"),
+                    )
+                ],
+                join_type=JoinType.INNER,
+                join_modifier=JoinModifier.SEMI,
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "4-5",
+                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                ),
+                SelectedExpression("c", Column("_snuba_c", None, "c")),
+            ],
+        ),
+        id="Basic join match with sample",
+    ),
+    pytest.param(
+        """MATCH
+            (e: events) -[contains]-> (t: Transactions),
+            (e: events) -[assigned]-> (ga: GroupAssignee)
+        SELECT 4-5, c""",
+        CompositeQuery(
+            from_clause=JoinClause(
+                left_node=JoinClause(
+                    left_node=IndividualNode(
+                        "e",
+                        QueryEntity(
+                            EntityKey.EVENTS,
+                            get_entity(EntityKey.EVENTS).get_data_model(),
+                            "e",
+                        ),
+                    ),
+                    right_node=IndividualNode(
+                        "ga",
+                        QueryEntity(
+                            EntityKey.GROUPASSIGNEE,
+                            get_entity(EntityKey.GROUPASSIGNEE).get_data_model(),
+                            "ga",
+                        ),
+                    ),
+                    keys=[
+                        JoinCondition(
+                            JoinConditionExpression("e", "event_id"),
+                            JoinConditionExpression("ga", "group_id"),
+                        )
+                    ],
+                    join_type=JoinType.INNER,
+                    join_modifier=JoinModifier.SEMI,
+                ),
+                right_node=IndividualNode(
+                    "t",
+                    QueryEntity(
+                        EntityKey.TRANSACTIONS,
+                        get_entity(EntityKey.TRANSACTIONS).get_data_model(),
+                        "t",
+                    ),
+                ),
+                keys=[
+                    JoinCondition(
+                        JoinConditionExpression("e", "event_id"),
+                        JoinConditionExpression("t", "event_id"),
+                    )
+                ],
+                join_type=JoinType.INNER,
+                join_modifier=JoinModifier.SEMI,
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "4-5",
+                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                ),
+                SelectedExpression("c", Column("_snuba_c", None, "c")),
+            ],
+        ),
+        id="Multi join match",
+    ),
+    pytest.param(
+        """MATCH
+            (e: events) -[contains]-> (t: Transactions),
+            (e: events) -[assigned]-> (ga: GroupAssignee),
+            (e: events) -[bookmark]-> (gm: GroupedMessage),
+            (e: events) -[activity]-> (se: Sessions)
+        SELECT 4-5, c""",
+        CompositeQuery(
+            from_clause=JoinClause(
+                left_node=JoinClause(
+                    left_node=JoinClause(
+                        left_node=JoinClause(
+                            left_node=IndividualNode(
+                                "e",
+                                QueryEntity(
+                                    EntityKey.EVENTS,
+                                    get_entity(EntityKey.EVENTS).get_data_model(),
+                                    "e",
+                                ),
+                            ),
+                            right_node=IndividualNode(
+                                "se",
+                                QueryEntity(
+                                    EntityKey.SESSIONS,
+                                    get_entity(EntityKey.SESSIONS).get_data_model(),
+                                    "se",
+                                ),
+                            ),
+                            keys=[
+                                JoinCondition(
+                                    JoinConditionExpression("e", "event_id"),
+                                    JoinConditionExpression("se", "org_id"),
+                                )
+                            ],
+                            join_type=JoinType.INNER,
+                            join_modifier=JoinModifier.SEMI,
+                        ),
+                        right_node=IndividualNode(
+                            "gm",
+                            QueryEntity(
+                                EntityKey.GROUPEDMESSAGES,
+                                get_entity(EntityKey.GROUPEDMESSAGES).get_data_model(),
+                                "gm",
+                            ),
+                        ),
+                        keys=[
+                            JoinCondition(
+                                JoinConditionExpression("e", "event_id"),
+                                JoinConditionExpression("gm", "first_release_id"),
+                            )
+                        ],
+                        join_type=JoinType.INNER,
+                        join_modifier=JoinModifier.SEMI,
+                    ),
+                    right_node=IndividualNode(
+                        "ga",
+                        QueryEntity(
+                            EntityKey.GROUPASSIGNEE,
+                            get_entity(EntityKey.GROUPASSIGNEE).get_data_model(),
+                            "ga",
+                        ),
+                    ),
+                    keys=[
+                        JoinCondition(
+                            JoinConditionExpression("e", "event_id"),
+                            JoinConditionExpression("ga", "group_id"),
+                        )
+                    ],
+                    join_type=JoinType.INNER,
+                    join_modifier=JoinModifier.SEMI,
+                ),
+                right_node=IndividualNode(
+                    "t",
+                    QueryEntity(
+                        EntityKey.TRANSACTIONS,
+                        get_entity(EntityKey.TRANSACTIONS).get_data_model(),
+                        "t",
+                    ),
+                ),
+                keys=[
+                    JoinCondition(
+                        JoinConditionExpression("e", "event_id"),
+                        JoinConditionExpression("t", "event_id"),
+                    )
+                ],
+                join_type=JoinType.INNER,
+                join_modifier=JoinModifier.SEMI,
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "4-5",
+                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                ),
+                SelectedExpression("c", Column("_snuba_c", None, "c")),
+            ],
+        ),
+        id="Multi multi join match",
+    ),
+    pytest.param(
+        "MATCH { MATCH (e: events) SELECT count() AS count BY title } SELECT max(count) AS max_count",
+        CompositeQuery(
+            from_clause=LogicalQuery(
+                {},
+                QueryEntity(
+                    EntityKey.EVENTS,
+                    get_entity(EntityKey.EVENTS).get_data_model(),
+                    "e",
+                ),
+                selected_columns=[
+                    SelectedExpression(
+                        "count", FunctionCall("_snuba_count", "count", tuple())
+                    ),
+                    SelectedExpression("title", Column("_snuba_title", None, "title")),
+                ],
+                groupby=[Column("_snuba_title", None, "title")],
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "max_count",
+                    FunctionCall(
+                        "_snuba_max_count",
+                        "max",
+                        (Column("_snuba_count", None, "count"),),
+                    ),
+                ),
+            ],
+        ),
+        id="sub query match",
+    ),
+    pytest.param(
+        "MATCH { MATCH { MATCH (e: events) SELECT count() AS count BY title } SELECT max(count) AS max_count } SELECT min(count) AS min_count",
+        CompositeQuery(
+            from_clause=CompositeQuery(
+                from_clause=LogicalQuery(
+                    {},
+                    QueryEntity(
+                        EntityKey.EVENTS,
+                        get_entity(EntityKey.EVENTS).get_data_model(),
+                        "e",
+                    ),
+                    selected_columns=[
+                        SelectedExpression(
+                            "count", FunctionCall("_snuba_count", "count", tuple())
+                        ),
+                        SelectedExpression(
+                            "title", Column("_snuba_title", None, "title")
+                        ),
+                    ],
+                    groupby=[Column("_snuba_title", None, "title")],
+                ),
+                selected_columns=[
+                    SelectedExpression(
+                        "max_count",
+                        FunctionCall(
+                            "_snuba_max_count",
+                            "max",
+                            (Column("_snuba_count", None, "count"),),
+                        ),
+                    ),
+                ],
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "min_count",
+                    FunctionCall(
+                        "_snuba_min_count",
+                        "min",
+                        (Column("_snuba_count", None, "count"),),
+                    ),
+                ),
+            ],
+        ),
+        id="sub query of sub query match",
+    ),
+    pytest.param(
         """MATCH (e:events) SELECT 4-5,3*foo(c) AS foo,c WHERE a<'stuff\\' "\\" stuff' AND b='"💩\\" \t \\'\\''""",
         LogicalQuery(
             {},
             QueryEntity(
-                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(), "e",
             ),
             selected_columns=[
                 SelectedExpression(
@@ -590,6 +977,28 @@ test_cases = [
 def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> None:
     state.set_config("query_parsing_expand_aliases", 1)
     events = get_dataset("events")
+
+    # TODO: Potentially remove this once entities have actual join relationships
+    mapping = {
+        "contains": (EntityKey.TRANSACTIONS, "event_id"),
+        "assigned": (EntityKey.GROUPASSIGNEE, "group_id"),
+        "bookmark": (EntityKey.GROUPEDMESSAGES, "first_release_id"),
+        "activity": (EntityKey.SESSIONS, "org_id"),
+    }
+
+    def events_mock(relationship: str) -> JoinRelationship:
+        entity_key, rhs_column = mapping[relationship]
+        return JoinRelationship(
+            rhs_entity=entity_key,
+            join_class=JoinClass.ONE_2_ONE,
+            join_type=JoinType.INNER,
+            join_modifier=JoinModifier.SEMI,
+            columns=[("event_id", rhs_column)],
+        )
+
+    events_entity = get_entity(EntityKey.EVENTS)
+    setattr(events_entity, "get_join_relationship", events_mock)
+
     query = parse_snql_query(query_body, events)
 
     eq, reason = query.equals(expected_query)

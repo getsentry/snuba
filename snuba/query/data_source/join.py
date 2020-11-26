@@ -3,9 +3,19 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Generic, Mapping, NamedTuple, Optional, Sequence, TypeVar, Union
+from typing import (
+    Generic,
+    Mapping,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 from snuba.clickhouse.columns import ColumnSet, QualifiedColumnSet
+from snuba.datasets.entities import EntityKey
 from snuba.query import ProcessableQuery, TSimpleDataSource
 from snuba.query.data_source import DataSource
 
@@ -27,6 +37,18 @@ class JoinClass(Enum):
     N_2_ZERO_OR_ONE = "N-0/1"
     N_2_ONE = "N-1"
     N_2_N = "N-N"
+
+
+class JoinRelationship(NamedTuple):
+    """
+    Represent the join relationship between an entity and another entity.
+    """
+
+    rhs_entity: EntityKey
+    join_class: JoinClass
+    join_type: JoinType
+    join_modifier: JoinModifier
+    columns: Sequence[Tuple[str, str]]
 
 
 @dataclass(frozen=True)

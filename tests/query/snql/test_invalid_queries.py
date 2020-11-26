@@ -1,5 +1,5 @@
 import pytest
-from parsimonious.exceptions import IncompleteParseError
+from parsimonious.exceptions import IncompleteParseError, VisitationError
 
 from snuba.datasets.factory import get_dataset
 from snuba.query.snql.parser import parse_snql_query
@@ -26,6 +26,11 @@ test_cases = [
         "MATCH (e: events) SELECT 4-5, 3*g(c), c BY d, ,2+7 WHERE a<3ORb>2  ORDER BY f DESC",
         IncompleteParseError,
         id="mandatory spacing",
+    ),
+    pytest.param(
+        "MATCH (e: Events) -[contains]-> (t: Transactions) SELECT 4-5, c",
+        VisitationError,
+        id="invalid relationship name",
     ),
 ]
 
