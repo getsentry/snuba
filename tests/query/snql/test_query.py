@@ -563,16 +563,13 @@ test_cases = [
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
             ],
             condition=binary_condition(
-                None,
                 "and",
                 binary_condition(
-                    None,
                     "less",
                     Column("_snuba_a", None, "a"),
                     Literal(None, """stuff' "\\" stuff"""),
                 ),
                 binary_condition(
-                    None,
                     "equals",
                     Column("_snuba_b", None, "b"),
                     Literal(None, """"💩\\" \t ''"""),
