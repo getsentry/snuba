@@ -20,11 +20,11 @@ def test_format_clickhouse_specific_query() -> None:
             SelectedExpression("column2", Column(None, "table1", "column2")),
         ],
         condition=binary_condition(
-            None, "eq", lhs=Column(None, None, "column1"), rhs=Literal(None, "blabla"),
+            "eq", lhs=Column(None, None, "column1"), rhs=Literal(None, "blabla"),
         ),
         groupby=[Column(None, None, "column1"), Column(None, "table1", "column2")],
         having=binary_condition(
-            None, "eq", lhs=Column(None, None, "column1"), rhs=Literal(None, 123),
+            "eq", lhs=Column(None, None, "column1"), rhs=Literal(None, 123),
         ),
         order_by=[OrderBy(OrderByDirection.ASC, Column(None, None, "column1"))],
         array_join=Column(None, None, "column1"),

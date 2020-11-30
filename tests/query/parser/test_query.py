@@ -131,7 +131,6 @@ test_cases = [
                 ),
             ],
             condition=binary_condition(
-                None,
                 "in",
                 SubscriptableReference(
                     "_snuba_tags[sentry:dist]",
@@ -143,7 +142,6 @@ test_cases = [
                 ),
             ),
             having=binary_condition(
-                None,
                 "greater",
                 Column("_snuba_times_seen", None, "times_seen"),
                 Literal(None, 1),
@@ -318,7 +316,6 @@ test_cases = [
                 ),
             ],
             condition=binary_condition(
-                None,
                 "equals",
                 FunctionCall(
                     "_snuba_group_id",
@@ -594,7 +591,6 @@ test_cases = [
                 ),
             ],
             condition=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     None,
@@ -709,7 +705,6 @@ test_cases = [
                 ),
             ],
             condition=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     None,
@@ -796,7 +791,6 @@ test_cases = [
                 ),
             ],
             condition=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     None,
@@ -866,7 +860,6 @@ test_cases = [
             ],
             groupby=[Column("_snuba_tags_key", None, "tags_key")],
             condition=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     None,

@@ -138,7 +138,7 @@ test_cases = [
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
             ],
             condition=binary_condition(
-                None, "less", Column("_snuba_a", None, "a"), Literal(None, 3)
+                "less", Column("_snuba_a", None, "a"), Literal(None, 3)
             ),
         ),
         id="Basic query with no spaces and no ambiguous clause content",
@@ -185,7 +185,7 @@ test_cases = [
                 ),
             ],
             condition=binary_condition(
-                None, "less", Column("_snuba_a", None, "a"), Literal(None, 3)
+                "less", Column("_snuba_a", None, "a"), Literal(None, 3)
             ),
             groupby=[
                 Column("_snuba_d", None, "d"),
@@ -239,7 +239,7 @@ test_cases = [
                 ),
             ],
             condition=binary_condition(
-                None, "less", Column("_snuba_a", None, "a"), Literal(None, 3)
+                "less", Column("_snuba_a", None, "a"), Literal(None, 3)
             ),
             groupby=[
                 Column("_snuba_d", None, "d"),
@@ -279,13 +279,11 @@ test_cases = [
             ],
             groupby=[Literal("_snuba_now", datetime.datetime(2020, 1, 1, 0, 0))],
             condition=binary_condition(
-                None,
                 "and",
                 binary_condition(
-                    None, "less", Column("_snuba_a", None, "a"), Literal(None, 3)
+                    "less", Column("_snuba_a", None, "a"), Literal(None, 3)
                 ),
                 binary_condition(
-                    None,
                     "greater",
                     Column("_snuba_timestamp", None, "timestamp"),
                     Literal(None, datetime.datetime(2020, 1, 1, 0, 0)),
@@ -532,10 +530,53 @@ test_cases = [
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
             ],
             condition=binary_condition(
-                None, "less", Column("_snuba_a", None, "a"), Literal(None, 3)
+                "less", Column("_snuba_a", None, "a"), Literal(None, 3)
             ),
         ),
         id="Basic query with new lines and no ambiguous clause content",
+    ),
+    pytest.param(
+        """MATCH (e:events) SELECT 4-5,3*foo(c) AS foo,c WHERE a<'stuff\\' "\\" stuff' AND b='"💩\\" \t \\'\\''""",
+        LogicalQuery(
+            {},
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "4-5",
+                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                ),
+                SelectedExpression(
+                    "3*foo(c) AS foo",
+                    FunctionCall(
+                        None,
+                        "multiply",
+                        (
+                            Literal(None, 3),
+                            FunctionCall(
+                                "_snuba_foo", "foo", (Column("_snuba_c", None, "c"),)
+                            ),
+                        ),
+                    ),
+                ),
+                SelectedExpression("c", Column("_snuba_c", None, "c")),
+            ],
+            condition=binary_condition(
+                "and",
+                binary_condition(
+                    "less",
+                    Column("_snuba_a", None, "a"),
+                    Literal(None, """stuff' "\\" stuff"""),
+                ),
+                binary_condition(
+                    "equals",
+                    Column("_snuba_b", None, "b"),
+                    Literal(None, """"💩\\" \t ''"""),
+                ),
+            ),
+        ),
+        id="Basic query with crazy characters and escaping",
     ),
 ]
 

@@ -65,8 +65,7 @@ parameter             = param_expression space* comma space*
 function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)?
 simple_term           = quoted_literal / numeric_literal / column_name
 literal               = ~r"[a-zA-Z0-9_\.:-]+"
-quoted_literal        = "'" string_literal "'"
-string_literal        = ~r"[a-zA-Z0-9_\.\+\*\/:-]*"
+quoted_literal        = ~r"((?<!\\)')(.(?!(?<!\\)'))*.?'"
 numeric_literal       = ~r"-?[0-9]+(\.[0-9]+)?(e[\+\-][0-9]+)?"
 column_name           = ~r"[a-zA-Z_][a-zA-Z0-9_\.]*"
 function_name         = ~r"{FUNCTION_NAME_REGEX}"
@@ -136,7 +135,7 @@ class ClickhouseVisitor(NodeVisitor):
         return visit_numeric_literal(node, visited_children)
 
     def visit_quoted_literal(
-        self, node: Node, visited_children: Tuple[Any, Node, Any]
+        self, node: Node, visited_children: Tuple[Node]
     ) -> Literal:
         return visit_quoted_literal(node, visited_children)
 

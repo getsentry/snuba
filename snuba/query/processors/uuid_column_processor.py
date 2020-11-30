@@ -1,6 +1,7 @@
 from typing import Optional, Set
 import uuid
 
+from snuba import environment
 from snuba.query.conditions import (
     binary_condition,
     ConditionFunctions,
@@ -19,6 +20,10 @@ from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.request.request_settings import RequestSettings
+from snuba.utils.metrics.wrapper import MetricsWrapper
+
+
+metrics = MetricsWrapper(environment.metrics, "api.query.uuid_processor")
 
 
 class UUIDColumnProcessor(QueryProcessor):
@@ -77,6 +82,7 @@ class UUIDColumnProcessor(QueryProcessor):
                 ),
             ),
         )
+        self.formatted: Optional[str] = None
 
     def parse_uuid(self, lit: Expression) -> Optional[Expression]:
         if not isinstance(lit, Literal):
@@ -118,9 +124,8 @@ class UUIDColumnProcessor(QueryProcessor):
             new_function = FunctionCall(
                 params_fn.alias, params_fn.function_name, tuple(new_fn_params)
             )
-            return binary_condition(
-                exp.alias, exp.function_name, new_column, new_function
-            )
+            self.formatted = "function_wrapped"
+            return binary_condition(exp.function_name, new_column, new_function)
 
         result = self.uuid_condition.match(exp)
         if result is not None:
@@ -139,7 +144,8 @@ class UUIDColumnProcessor(QueryProcessor):
                     new_params.append(column)
 
             left_exp, right_exp = new_params
-            return binary_condition(exp.alias, exp.function_name, left_exp, right_exp)
+            self.formatted = "bare_column"
+            return binary_condition(exp.function_name, left_exp, right_exp)
 
         return exp
 
@@ -151,3 +157,6 @@ class UUIDColumnProcessor(QueryProcessor):
         prewhere = query.get_prewhere_ast()
         if prewhere:
             query.set_prewhere_ast_condition(prewhere.transform(self.process_condition))
+
+        if self.formatted:
+            metrics.increment("query_processed", tags={"type": self.formatted})

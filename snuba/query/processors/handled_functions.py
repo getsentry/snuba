@@ -60,13 +60,11 @@ class HandledFunctionsProcessor(QueryProcessor):
                                 None,
                                 ("x",),
                                 binary_condition(
-                                    None,
                                     BooleanFunctions.OR,
                                     FunctionCall(
                                         None, "isNull", (Argument(None, "x"),)
                                     ),
                                     binary_condition(
-                                        None,
                                         ConditionFunctions.EQ,
                                         FunctionCall(
                                             None,
@@ -90,13 +88,11 @@ class HandledFunctionsProcessor(QueryProcessor):
                                 None,
                                 ("x",),
                                 binary_condition(
-                                    None,
                                     BooleanFunctions.AND,
                                     FunctionCall(
                                         None, "isNotNull", (Argument(None, "x"),)
                                     ),
                                     binary_condition(
-                                        None,
                                         ConditionFunctions.EQ,
                                         FunctionCall(
                                             None,

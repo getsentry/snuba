@@ -165,7 +165,7 @@ class Query(DataSource, ABC):
             self.__condition = condition
         else:
             self.__condition = binary_condition(
-                None, BooleanFunctions.AND, condition, self.__condition
+                BooleanFunctions.AND, condition, self.__condition
             )
 
     def get_arrayjoin_from_ast(self) -> Optional[Expression]:
