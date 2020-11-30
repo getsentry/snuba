@@ -138,7 +138,7 @@ test_cases = [
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
             ],
             condition=binary_condition(
-                None, "less", Column("_snuba_a", None, "a"), Literal(None, 3)
+                "less", Column("_snuba_a", None, "a"), Literal(None, 3)
             ),
         ),
         id="Basic query with no spaces and no ambiguous clause content",
@@ -185,7 +185,7 @@ test_cases = [
                 ),
             ],
             condition=binary_condition(
-                None, "less", Column("_snuba_a", None, "a"), Literal(None, 3)
+                "less", Column("_snuba_a", None, "a"), Literal(None, 3)
             ),
             groupby=[
                 Column("_snuba_d", None, "d"),
@@ -239,7 +239,7 @@ test_cases = [
                 ),
             ],
             condition=binary_condition(
-                None, "less", Column("_snuba_a", None, "a"), Literal(None, 3)
+                "less", Column("_snuba_a", None, "a"), Literal(None, 3)
             ),
             groupby=[
                 Column("_snuba_d", None, "d"),
@@ -279,13 +279,11 @@ test_cases = [
             ],
             groupby=[Literal("_snuba_now", datetime.datetime(2020, 1, 1, 0, 0))],
             condition=binary_condition(
-                None,
                 "and",
                 binary_condition(
-                    None, "less", Column("_snuba_a", None, "a"), Literal(None, 3)
+                    "less", Column("_snuba_a", None, "a"), Literal(None, 3)
                 ),
                 binary_condition(
-                    None,
                     "greater",
                     Column("_snuba_timestamp", None, "timestamp"),
                     Literal(None, datetime.datetime(2020, 1, 1, 0, 0)),
@@ -532,7 +530,7 @@ test_cases = [
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
             ],
             condition=binary_condition(
-                None, "less", Column("_snuba_a", None, "a"), Literal(None, 3)
+                "less", Column("_snuba_a", None, "a"), Literal(None, 3)
             ),
         ),
         id="Basic query with new lines and no ambiguous clause content",
@@ -565,16 +563,13 @@ test_cases = [
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
             ],
             condition=binary_condition(
-                None,
                 "and",
                 binary_condition(
-                    None,
                     "less",
                     Column("_snuba_a", None, "a"),
                     Literal(None, """stuff' "\\" stuff"""),
                 ),
                 binary_condition(
-                    None,
                     "equals",
                     Column("_snuba_b", None, "b"),
                     Literal(None, """"💩\\" \t ''"""),

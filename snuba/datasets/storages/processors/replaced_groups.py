@@ -60,7 +60,6 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                 else:
                     query.add_condition_to_ast(
                         not_in_condition(
-                            None,
                             FunctionCall(
                                 None, "assumeNotNull", (Column(None, None, "group_id"),)
                             ),

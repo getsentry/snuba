@@ -22,16 +22,13 @@ def build_time_condition(
     time_columns: str, from_date: datetime, to_date: datetime
 ) -> Expression:
     return binary_condition(
-        None,
         BooleanFunctions.AND,
         binary_condition(
-            None,
             ConditionFunctions.GTE,
             Column(None, None, time_columns),
             Literal(None, from_date),
         ),
         binary_condition(
-            None,
             ConditionFunctions.LT,
             Column(None, None, time_columns),
             Literal(None, to_date),

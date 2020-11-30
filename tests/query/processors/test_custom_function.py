@@ -23,7 +23,6 @@ TEST_CASES = [
             ],
             groupby=[Column("column1", None, "column1")],
             condition=binary_condition(
-                None,
                 "equals",
                 FunctionCall(
                     "group_id", "f", (Column("something", None, "something"),)
@@ -39,7 +38,6 @@ TEST_CASES = [
             ],
             groupby=[Column("column1", None, "column1")],
             condition=binary_condition(
-                None,
                 "equals",
                 FunctionCall(
                     "group_id", "f", (Column("something", None, "something"),)

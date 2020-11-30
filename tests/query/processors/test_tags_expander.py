@@ -71,14 +71,12 @@ def test_tags_expander() -> None:
     ]
 
     assert query.get_condition_from_ast() == binary_condition(
-        None,
         OPERATOR_TO_FUNCTION["="],
         FunctionCall("_snuba_tags_key", "arrayJoin", (Column(None, None, "tags.key"),)),
         Literal(None, "tags_key"),
     )
 
     assert query.get_having_from_ast() == in_condition(
-        None,
         FunctionCall(
             "_snuba_tags_value", "arrayJoin", (Column(None, None, "tags.value"),)
         ),

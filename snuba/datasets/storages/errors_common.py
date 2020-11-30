@@ -120,7 +120,7 @@ promoted_tag_columns = {
 
 mandatory_conditions = [
     binary_condition(
-        None, ConditionFunctions.EQ, Column(None, None, "deleted"), Literal(None, 0),
+        ConditionFunctions.EQ, Column(None, None, "deleted"), Literal(None, 0),
     ),
 ]
 

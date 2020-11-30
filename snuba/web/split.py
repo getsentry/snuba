@@ -310,7 +310,6 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
 
         query.add_condition_to_ast(
             in_condition(
-                None,
                 ColumnExpr(None, None, self.__id_column),
                 [LiteralExpr(None, e_id) for e_id in event_ids],
             )

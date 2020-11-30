@@ -30,25 +30,20 @@ test_cases = [
                 ),
             ],
             condition=binary_condition(
-                None,
                 BooleanFunctions.AND,
                 binary_condition(
-                    None,
                     ConditionFunctions.GTE,
                     Column(None, None, "timestamp"),
                     Literal(None, datetime(2020, 8, 1)),
                 ),
                 binary_condition(
-                    None,
                     BooleanFunctions.AND,
                     binary_condition(
-                        None,
                         ConditionFunctions.LT,
                         Column(None, None, "timestamp"),
                         Literal(None, datetime(2020, 9, 1)),
                     ),
                     binary_condition(
-                        None,
                         ConditionFunctions.EQ,
                         build_mapping_expr(
                             "tags[asd]", None, "tags", Literal(None, "asd"),
@@ -90,16 +85,13 @@ test_cases = [
                 SelectedExpression("column2", Column("column2", None, "column2")),
             ],
             condition=binary_condition(
-                None,
                 BooleanFunctions.OR,
                 binary_condition(
-                    None,
                     ConditionFunctions.GTE,
                     Column(None, None, "timestamp"),
                     Literal(None, datetime(2020, 8, 1)),
                 ),
                 binary_condition(
-                    None,
                     ConditionFunctions.LT,
                     Column(None, None, "timestamp"),
                     Literal(None, datetime(2020, 9, 1)),

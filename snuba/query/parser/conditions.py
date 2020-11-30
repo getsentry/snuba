@@ -208,7 +208,7 @@ def parse_conditions_to_expr(
                 raise ParsingException(
                     f"Right hand side operand {literal} provided to unary operator {op}"
                 )
-            return unary_condition(None, OPERATOR_TO_FUNCTION[op], lhs)
+            return unary_condition(OPERATOR_TO_FUNCTION[op], lhs)
 
         else:
             if literal is None:
@@ -216,7 +216,7 @@ def parse_conditions_to_expr(
                     f"Missing right hand side operand for binary operator {op}"
                 )
             return binary_condition(
-                None, OPERATOR_TO_FUNCTION[op], lhs, preprocess_literal(op, literal)
+                OPERATOR_TO_FUNCTION[op], lhs, preprocess_literal(op, literal)
             )
 
     return parse_conditions(
