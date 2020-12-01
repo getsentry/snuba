@@ -77,7 +77,7 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     entity = dataset.get_default_entity()
 
     query = _parse_query_impl(body, entity)
-    # These are the post processing phases
+    # TODO: These should support composite queries.
     _validate_empty_table_names(query)
     _validate_aliases(query)
     _parse_subscriptables(query)
