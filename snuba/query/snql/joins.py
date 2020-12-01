@@ -27,7 +27,7 @@ class RelationshipTuple(NamedTuple):
     data: JoinRelationship
 
 
-class Leaf(object):
+class Leaf:
     def __init__(
         self,
         entity: EntityKey,
