@@ -121,7 +121,6 @@ test_data = [
             BooleanFunctions.AND,
             (
                 not_in_condition(
-                    None,
                     Column("_snuba_a", None, "a"),
                     [Literal(None, 1), Literal(None, 2), Literal(None, 3)],
                 ),

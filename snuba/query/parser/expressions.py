@@ -51,12 +51,12 @@ minimal_clickhouse_grammar = Grammar(
 # function field which can mean a clickhouse function expression or the simple
 # name of a clickhouse function.
 
-root_element          = low_pri_arithmetic
-low_pri_arithmetic    = space* high_pri_arithmetic space* (low_pri_tuple)*
-high_pri_arithmetic   = space* arithmetic_term space* (high_pri_tuple)*
-low_pri_tuple         = low_pri_op high_pri_arithmetic
-high_pri_tuple        = high_pri_op arithmetic_term
-arithmetic_term       = (space*) (function_call / numeric_literal / column_name) (space*)
+root_element          = low_pri_arithmetic space*
+low_pri_arithmetic    = space* high_pri_arithmetic (space* low_pri_tuple)*
+high_pri_arithmetic   = space* arithmetic_term (space* high_pri_tuple)*
+low_pri_tuple         = low_pri_op space* high_pri_arithmetic
+high_pri_tuple        = high_pri_op space* arithmetic_term
+arithmetic_term       = space* (function_call / numeric_literal / column_name)
 low_pri_op            = "+" / "-"
 high_pri_op           = "/" / "*"
 param_expression      = low_pri_arithmetic / quoted_literal
@@ -65,8 +65,7 @@ parameter             = param_expression space* comma space*
 function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)?
 simple_term           = quoted_literal / numeric_literal / column_name
 literal               = ~r"[a-zA-Z0-9_\.:-]+"
-quoted_literal        = "'" string_literal "'"
-string_literal        = ~r"[a-zA-Z0-9_\.\+\*\/:-]*"
+quoted_literal        = ~r"((?<!\\)')(.(?!(?<!\\)'))*.?'"
 numeric_literal       = ~r"-?[0-9]+(\.[0-9]+)?(e[\+\-][0-9]+)?"
 column_name           = ~r"[a-zA-Z_][a-zA-Z0-9_\.]*"
 function_name         = ~r"{FUNCTION_NAME_REGEX}"
@@ -83,6 +82,12 @@ class ClickhouseVisitor(NodeVisitor):
     Builds Snuba AST expressions from the Parsimonious parse tree.
     """
 
+    def visit_root_element(
+        self, node: Node, visited_children: Tuple[Expression, Any]
+    ) -> Expression:
+        ret, _ = visited_children
+        return ret
+
     def visit_function_name(self, node: Node, visited_children: Iterable[Any]) -> str:
         return visit_function_name(node, visited_children)
 
@@ -90,12 +95,12 @@ class ClickhouseVisitor(NodeVisitor):
         return visit_column_name(node, visited_children)
 
     def visit_low_pri_tuple(
-        self, node: Node, visited_children: Tuple[LowPriOperator, Expression]
+        self, node: Node, visited_children: Tuple[LowPriOperator, Any, Expression]
     ) -> LowPriTuple:
         return visit_low_pri_tuple(node, visited_children)
 
     def visit_high_pri_tuple(
-        self, node: Node, visited_children: Tuple[HighPriOperator, Expression]
+        self, node: Node, visited_children: Tuple[HighPriOperator, Any, Expression]
     ) -> HighPriTuple:
         return visit_high_pri_tuple(node, visited_children)
 
@@ -110,21 +115,17 @@ class ClickhouseVisitor(NodeVisitor):
         return visit_high_pri_op(node, visited_children)
 
     def visit_arithmetic_term(
-        self, node: Node, visited_children: Tuple[Any, Expression, Any]
+        self, node: Node, visited_children: Tuple[Any, Expression]
     ) -> Expression:
         return visit_arithmetic_term(node, visited_children)
 
     def visit_low_pri_arithmetic(
-        self,
-        node: Node,
-        visited_children: Tuple[Any, Expression, Any, LowPriArithmetic],
+        self, node: Node, visited_children: Tuple[Any, Expression, LowPriArithmetic],
     ) -> Expression:
         return visit_low_pri_arithmetic(node, visited_children)
 
     def visit_high_pri_arithmetic(
-        self,
-        node: Node,
-        visited_children: Tuple[Any, Expression, Any, HighPriArithmetic],
+        self, node: Node, visited_children: Tuple[Any, Expression, HighPriArithmetic],
     ) -> Expression:
         return visit_high_pri_arithmetic(node, visited_children)
 
@@ -134,7 +135,7 @@ class ClickhouseVisitor(NodeVisitor):
         return visit_numeric_literal(node, visited_children)
 
     def visit_quoted_literal(
-        self, node: Node, visited_children: Tuple[Any, Node, Any]
+        self, node: Node, visited_children: Tuple[Node]
     ) -> Literal:
         return visit_quoted_literal(node, visited_children)
 

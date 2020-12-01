@@ -46,19 +46,22 @@ HighPriArithmetic = Union[Node, HighPriTuple, Sequence[HighPriTuple]]
 LowPriArithmetic = Union[Node, LowPriTuple, Sequence[LowPriTuple]]
 
 
+ARITHMETIC_OP_TO_FUNCTION = {
+    HighPriOperator.MULTIPLY: multiply,
+    HighPriOperator.DIVIDE: divide,
+    LowPriOperator.PLUS: plus,
+    LowPriOperator.MINUS: minus,
+}
+
+
 def get_arithmetic_function(
     operator: Enum,
 ) -> Callable[[Expression, Expression, Optional[str]], FunctionCall]:
-    return {
-        HighPriOperator.MULTIPLY: multiply,
-        HighPriOperator.DIVIDE: divide,
-        LowPriOperator.PLUS: plus,
-        LowPriOperator.MINUS: minus,
-    }[operator]
+    return ARITHMETIC_OP_TO_FUNCTION[operator]
 
 
 def get_arithmetic_expression(
-    term: Expression, exp: Union[LowPriArithmetic, HighPriArithmetic],
+    term: Expression, exp: Union[LowPriArithmetic, HighPriArithmetic, Sequence[Any]],
 ) -> Expression:
     if isinstance(exp, Node):
         return term
@@ -66,7 +69,11 @@ def get_arithmetic_expression(
         return get_arithmetic_function(exp.op)(term, exp.arithm, None)
     elif isinstance(exp, list):
         for elem in exp:
-            term = get_arithmetic_function(elem.op)(term, elem.arithm, None)
+            if isinstance(elem, (LowPriTuple, HighPriTuple)):
+                term = get_arithmetic_function(elem.op)(term, elem.arithm, None)
+            elif isinstance(elem, list):
+                _, op_tuple = elem
+                term = get_arithmetic_function(op_tuple.op)(term, op_tuple.arithm, None)
     return term
 
 
@@ -79,51 +86,45 @@ def visit_column_name(node: Node, visited_children: Iterable[Any]) -> Column:
 
 
 def visit_low_pri_tuple(
-    node: Node, visited_children: Tuple[LowPriOperator, Expression]
+    node: Node, visited_children: Tuple[LowPriOperator, Any, Expression]
 ) -> LowPriTuple:
-    left, right = visited_children
-
+    left, _, right = visited_children
     return LowPriTuple(op=left, arithm=right)
 
 
 def visit_high_pri_tuple(
-    node: Node, visited_children: Tuple[HighPriOperator, Expression]
+    node: Node, visited_children: Tuple[HighPriOperator, Any, Expression]
 ) -> HighPriTuple:
-    left, right = visited_children
-
+    left, _, right = visited_children
     return HighPriTuple(op=left, arithm=right)
 
 
 def visit_low_pri_op(node: Node, visited_children: Iterable[Any]) -> LowPriOperator:
-
     return LowPriOperator(node.text)
 
 
 def visit_high_pri_op(node: Node, visited_children: Iterable[Any]) -> HighPriOperator:
-
     return HighPriOperator(node.text)
 
 
 def visit_arithmetic_term(
-    node: Node, visited_children: Tuple[Any, Expression, Any]
+    node: Node, visited_children: Tuple[Any, Expression]
 ) -> Expression:
-    _, term, _ = visited_children
-
+    _, term = visited_children
     return term
 
 
 def visit_low_pri_arithmetic(
-    node: Node, visited_children: Tuple[Any, Expression, Any, LowPriArithmetic],
+    node: Node, visited_children: Tuple[Any, Expression, LowPriArithmetic],
 ) -> Expression:
-    _, term, _, exp = visited_children
-
+    _, term, exp = visited_children
     return get_arithmetic_expression(term, exp)
 
 
 def visit_high_pri_arithmetic(
-    node: Node, visited_children: Tuple[Any, Expression, Any, HighPriArithmetic],
+    node: Node, visited_children: Tuple[Any, Expression, HighPriArithmetic],
 ) -> Expression:
-    _, term, _, exp = visited_children
+    _, term, exp = visited_children
 
     return get_arithmetic_expression(term, exp)
 
@@ -135,17 +136,17 @@ def visit_numeric_literal(node: Node, visited_children: Iterable[Any]) -> Litera
         return Literal(None, float(node.text))
 
 
-def visit_quoted_literal(
-    node: Node, visited_children: Tuple[Any, Node, Any]
-) -> Literal:
-    _, val, _ = visited_children
-    return Literal(None, val.text)
+def visit_quoted_literal(node: Node, visited_children: Tuple[Any]) -> Literal:
+    # In order to match any character except for \' there is a crazy regex that needs to be
+    # stripped and de-escaped.
+    match = node.text[1:-1].replace("\\'", "'")
+    return Literal(None, match)
 
 
 def visit_parameter(
     node: Node, visited_children: Tuple[Expression, Any, Any, Any]
 ) -> Expression:
-    param, _, _, _, = visited_children
+    param, _, _, _ = visited_children
     return param
 
 

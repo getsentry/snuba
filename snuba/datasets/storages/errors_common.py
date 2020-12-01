@@ -73,7 +73,7 @@ all_columns = ColumnSet(
         ("message", String()),
         ("title", String()),
         ("culprit", String()),
-        ("level", String()),
+        ("level", String(Modifiers(nullable=True))),
         ("location", String(Modifiers(nullable=True))),
         ("version", String(Modifiers(nullable=True))),
         ("type", String()),
@@ -120,7 +120,7 @@ promoted_tag_columns = {
 
 mandatory_conditions = [
     binary_condition(
-        None, ConditionFunctions.EQ, Column(None, None, "deleted"), Literal(None, 0),
+        ConditionFunctions.EQ, Column(None, None, "deleted"), Literal(None, 0),
     ),
 ]
 

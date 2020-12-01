@@ -39,7 +39,6 @@ def test_failure_rate_format_expressions() -> None:
                             combine_and_conditions(
                                 [
                                     binary_condition(
-                                        None,
                                         ConditionFunctions.NEQ,
                                         Column(None, None, "transaction_status"),
                                         Literal(None, code),

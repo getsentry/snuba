@@ -76,7 +76,7 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
 
         def func(value: Union[str, List[Any]]) -> str:
             if not isinstance(value, list):
-                return value
+                return f"{value}"
 
             children = ",".join(map(func, value[1]))
             alias = f" AS {value[2]}" if len(value) > 2 else ""
@@ -90,22 +90,25 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
                 float(value)
                 return f"{value}"
             except ValueError:
-                return f"'{value}'"
+                escaped = value.replace("'", "\\'")
+                return f"'{escaped}'"
 
-        match_clause = f"MATCH ({entity[0].lower()}: {entity})"
+        sample = legacy.get("sample")
+        sample_clause = f"SAMPLE {sample}" if sample else ""
+        match_clause = f"MATCH ({entity[0].lower()}: {entity} {sample_clause})"
 
         selected = ", ".join(map(func, legacy.get("selected_columns", [])))
-        select_clause = f"COLLECT {selected}" if selected else ""
+        select_clause = f"SELECT {selected}" if selected else ""
 
         aggregations = []
         for a in legacy.get("aggregations", []):
-            if a[0].endswith(")"):
+            if a[0].endswith(")") and not a[1]:
                 aggregations.append(f"{a[0]} AS {a[2]}")
             else:
                 func_name = a[0]
                 params: List[str] = []
                 if isinstance(a[1], list):
-                    for p in params:
+                    for p in a[1]:
                         params.append(p)
                 elif isinstance(a[1], str) and a[1] != "":
                     params.append(a[1])
@@ -113,7 +116,7 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
                 aggregations.append(f"{func_name}({params_str}) AS {a[2]}")
 
         aggregations_str = ", ".join(aggregations)
-        joined = ", " if select_clause else "COLLECT "
+        joined = ", " if select_clause else "SELECT "
         aggregation_clause = f"{joined}{aggregations_str}" if aggregations_str else ""
 
         groupby = legacy.get("groupby", [])
@@ -127,15 +130,19 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
             if len(cond) != 3 or not isinstance(cond[1], str):
                 or_condition = []
                 for or_cond in cond:
-                    op = " IN " if or_cond[1] == "IN" else or_cond[1]
+                    op = (
+                        f" {or_cond[1]} "
+                        if or_cond[1] in ("IN", "LIKE")
+                        else or_cond[1]
+                    )
                     or_condition.append(
                         f"{func(or_cond[0])}{op}{literal(or_cond[2])}".join(or_cond)
                     )
                 or_condition_str = " OR ".join(or_condition)
-                conditions.append(f"({or_condition_str})")
+                conditions.append(f"{or_condition_str}")
             else:
-                op = " IN " if cond[1] == "IN" else cond[1]
-                conditions.append(f"({func(cond[0])}{op}{literal(cond[2])})")
+                op = f" {cond[1]} " if cond[1] in ("IN", "LIKE") else cond[1]
+                conditions.append(f"{func(cond[0])}{op}{literal(cond[2])}")
 
         project = legacy.get("project")
         if isinstance(project, int):
@@ -175,11 +182,19 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
                 order_by_str = f"{order_by} {sort}"
         order_by_clause = f"ORDER BY {order_by_str}" if order_by else ""
 
-        limit_clause = ""
-        if "limit" in legacy:
-            limit_clause = f"LIMIT {legacy.get('limit')}"
+        limit_by_clause = ""
+        if legacy.get("limitby"):
+            limit, column = legacy.get("limitby")
+            limit_by_clause = f"LIMIT {limit} BY {column}"
 
-        query = f"{match_clause} {where_clause} {select_clause} {aggregation_clause} {groupby_clause} {order_by_clause} {limit_clause}"
+        extras = ("limit", "offset", "granularity", "totals")
+        extra_exps = []
+        for extra in extras:
+            if legacy.get(extra):
+                extra_exps.append(f"{extra.upper()} {legacy.get(extra)}")
+        extras_clause = " ".join(extra_exps)
+
+        query = f"{match_clause} {select_clause} {aggregation_clause} {groupby_clause} {where_clause} {order_by_clause} {limit_by_clause} {extras_clause}"
         body = {"query": query}
         extensions = ["project", "from_date", "to_date", "organization"]
         for ext in extensions:

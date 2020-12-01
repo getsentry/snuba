@@ -117,46 +117,36 @@ test_expressions = [
     ),  # Formatting an array as [...]
     (
         binary_condition(
-            None,
             BooleanFunctions.AND,
             binary_condition(
-                None,
                 BooleanFunctions.OR,
                 binary_condition(
-                    None,
                     BooleanFunctions.OR,
                     binary_condition(
-                        None,
                         BooleanFunctions.AND,
                         binary_condition(
-                            None,
                             ConditionFunctions.EQ,
                             Column(None, None, "c1"),
                             Literal(None, 1),
                         ),
                         binary_condition(
-                            None,
                             ConditionFunctions.EQ,
                             Column(None, None, "c2"),
                             Literal(None, 2),
                         ),
                     ),
                     binary_condition(
-                        None,
                         ConditionFunctions.EQ,
                         Column(None, None, "c3"),
                         Literal(None, 3),
                     ),
                 ),
                 binary_condition(
-                    None,
-                    ConditionFunctions.EQ,
-                    Column(None, None, "c4"),
-                    Literal(None, 4),
+                    ConditionFunctions.EQ, Column(None, None, "c4"), Literal(None, 4),
                 ),
             ),
             binary_condition(
-                None, ConditionFunctions.EQ, Column(None, None, "c5"), Literal(None, 5)
+                ConditionFunctions.EQ, Column(None, None, "c5"), Literal(None, 5)
             ),
         ),
         "(equals(c1, 1) AND equals(c2, 2) OR equals(c3, 3) OR equals(c4, 4)) AND equals(c5, 5)",

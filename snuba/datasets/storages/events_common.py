@@ -249,7 +249,7 @@ def get_promoted_tags() -> Mapping[str, Sequence[str]]:
 
 mandatory_conditions = [
     binary_condition(
-        None, ConditionFunctions.EQ, Column(None, None, "deleted"), Literal(None, 0),
+        ConditionFunctions.EQ, Column(None, None, "deleted"), Literal(None, 0),
     ),
 ]
 

@@ -1,4 +1,4 @@
-from typing import Set, Union
+from typing import Optional, Set, Union
 
 import pytest
 from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
@@ -36,7 +36,7 @@ GROUPS_SCHEMA = ColumnSet(
 )
 
 SIMPLE_QUERY = ClickhouseQuery(
-    Table("errors_local", ERRORS_SCHEMA),
+    Table("errors_local", ERRORS_SCHEMA, final=True, sampling_rate=0.1),
     selected_columns=[
         SelectedExpression(
             "alias",
@@ -46,14 +46,12 @@ SIMPLE_QUERY = ClickhouseQuery(
     ],
     array_join=None,
     condition=binary_condition(
-        None,
         ConditionFunctions.EQ,
         FunctionCall("alias", "tag", (Column(None, None, "group_id"),)),
         Literal(None, "1"),
     ),
     groupby=[FunctionCall("alias", "tag", (Column(None, None, "message"),))],
     prewhere=binary_condition(
-        None,
         ConditionFunctions.EQ,
         FunctionCall("alias", "tag", (Column(None, None, "message"),)),
         Literal(None, "2"),
@@ -62,7 +60,7 @@ SIMPLE_QUERY = ClickhouseQuery(
 )
 
 TEST_CASES = [
-    pytest.param(SIMPLE_QUERY, 3, {"errors_local"}, id="Simple Query",),
+    pytest.param(SIMPLE_QUERY, 3, {"errors_local"}, True, 0.1, id="Simple Query",),
     pytest.param(
         CompositeQuery(
             from_clause=SIMPLE_QUERY,
@@ -75,6 +73,8 @@ TEST_CASES = [
         ),
         3,
         {"errors_local"},
+        True,
+        None,
         id="Nested query. Count the inner query",
     ),
     pytest.param(
@@ -105,20 +105,30 @@ TEST_CASES = [
         ),
         5,  # 3 from errors and 2 from groups
         {"errors_local", "groups_local"},
+        True,
+        None,
         id="Join between a subquery and an individual table.",
     ),
 ]
 
 
-@pytest.mark.parametrize("query, expected_cols, expected_tables", TEST_CASES)
+@pytest.mark.parametrize(
+    "query, expected_cols, expected_tables, expected_final, expected_sampling",
+    TEST_CASES,
+)
 def test_count_columns(
     query: Union[ClickhouseQuery, CompositeQuery[Table]],
     expected_cols: int,
     expected_tables: Set[str],
+    expected_final: bool,
+    expected_sampling: Optional[float],
 ) -> None:
     counter = ReferencedColumnsCounter()
     counter.visit(query)
     assert counter.count_columns() == expected_cols
 
-    tables = TablesCollector().visit(query)
-    assert tables == expected_tables
+    tables_collector = TablesCollector()
+    tables_collector.visit(query)
+    assert tables_collector.get_tables() == expected_tables
+    assert tables_collector.any_final() == expected_final
+    assert tables_collector.get_sample_rate() == expected_sampling

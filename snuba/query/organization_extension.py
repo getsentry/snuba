@@ -28,7 +28,6 @@ class OrganizationExtensionProcessor(ExtensionQueryProcessor):
         organization_id = extension_data["organization"]
         query.add_condition_to_ast(
             binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 Column(None, None, "org_id"),
                 Literal(None, organization_id),

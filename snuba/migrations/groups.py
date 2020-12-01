@@ -99,6 +99,7 @@ class EventsLoader(DirectoryLoader):
             "0009_errors_add_http_fields",
             "0010_groupedmessages_onpremise_compatibility",
             "0011_rebuild_errors",
+            "0012_errors_make_level_nullable",
         ]
 
 

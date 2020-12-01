@@ -53,7 +53,6 @@ def test_events_boolean_context() -> None:
                     "multiIf",
                     (
                         binary_condition(
-                            None,
                             ConditionFunctions.EQ,
                             FunctionCall(
                                 None,
@@ -64,7 +63,6 @@ def test_events_boolean_context() -> None:
                         ),
                         Literal(None, ""),
                         binary_condition(
-                            None,
                             ConditionFunctions.IN,
                             FunctionCall(
                                 None,

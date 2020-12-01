@@ -87,16 +87,13 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
         query.set_granularity(extension_data["granularity"])
         query.add_condition_to_ast(
             binary_condition(
-                None,
                 BooleanFunctions.AND,
                 binary_condition(
-                    None,
                     ConditionFunctions.GTE,
                     Column(None, None, self.__timestamp_column),
                     Literal(None, from_date),
                 ),
                 binary_condition(
-                    None,
                     ConditionFunctions.LT,
                     Column(None, None, self.__timestamp_column),
                     Literal(None, to_date),
