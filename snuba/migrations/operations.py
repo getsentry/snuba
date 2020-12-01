@@ -1,3 +1,4 @@
+import math
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Sequence
 
@@ -272,3 +273,120 @@ class RunPython(Operation):
 
     def execute(self, local: bool) -> None:
         self.__func()
+
+
+class SwapTables(Operation):
+    """
+    Transfer the content of a table into a temporary one that must
+    have been already created.
+    It then swaps the table and removes the temporary ones.
+
+    This is supposed to be done when rebuilding tables. First we
+    create a temporary table that will become the new one, then we
+    use this operation to migrate the content and swap them.
+    """
+
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        current_table_name: str,
+        new_table_name: str,
+        copy_order_by: str,
+        batch_size: int = 100000,
+    ) -> None:
+        self.__storage_set = storage_set
+        self.__current_table_name = current_table_name
+        self.__new_table_name = new_table_name
+        self.__copy_order_by = copy_order_by
+        self.__batch_size = batch_size
+
+    def execute(self, local: bool) -> None:
+        cluster = get_cluster(self.__storage_set)
+
+        if not cluster.is_single_node():
+            return
+
+        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+
+        # Copy over data in batches of 100,000
+        [(row_count,)] = clickhouse.execute(
+            f"SELECT count() FROM {self.__current_table_name}"
+        )
+        batch_count = math.ceil(row_count / self.__batch_size)
+
+        for i in range(batch_count):
+            skip = self.__batch_size * i
+            clickhouse.execute(
+                f"""
+                INSERT INTO {self.__new_table_name}
+                SELECT * FROM {self.__current_table_name}
+                ORDER BY {self.__copy_order_by}
+                LIMIT {self.__batch_size}
+                OFFSET {skip};
+                """
+            )
+
+        # Ensure each table has the same number of rows before deleting the old one
+        assert clickhouse.execute(
+            f"SELECT COUNT() FROM {self.__current_table_name} FINAL;"
+        ) == clickhouse.execute(f"SELECT COUNT() FROM {self.__new_table_name} FINAL;")
+
+        clickhouse.execute(
+            f"RENAME TABLE {self.__current_table_name} TO {self.__current_table_name}_old;"
+        )
+
+        clickhouse.execute(
+            f"RENAME TABLE {self.__new_table_name} TO {self.__current_table_name};"
+        )
+
+        clickhouse.execute(f"DROP TABLE {self.__current_table_name}_old;")
+
+
+class RevertSwap(Operation):
+    """
+    Cleans up a SwapTables operation for as much as we can safely.
+    It does not copy data back into the old table as it may not be
+    possible anymore depending on the schema changes.
+    """
+
+    def __init__(
+        self, storage_set: StorageSetKey, current_table_name: str, new_table_name: str,
+    ) -> None:
+        self.__storage_set = storage_set
+        self.__current_table_name = current_table_name
+        self.__new_table_name = new_table_name
+
+    def execute(self, local: bool) -> None:
+        cluster = get_cluster(self.__storage_set)
+
+        if not cluster.is_single_node():
+            return
+
+        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+
+        def table_exists(table_name: str) -> bool:
+            return clickhouse.execute(f"EXISTS TABLE {table_name};") == [(1,)]
+
+        if table_exists(self.__current_table_name):
+            if table_exists(self.__new_table_name):
+                # We did not make changes to the old table yet. Keep it
+                clickhouse.execute(f"DROP TABLE IF EXISTS {self.__new_table_name};")
+                clickhouse.execute(
+                    f"DROP TABLE IF EXISTS {self.__current_table_name}_old;"
+                )
+            elif table_exists(f"{self.__current_table_name}_old"):
+                # We already swapped. Restore the old one.
+                clickhouse.execute(f"DROP TABLE IF EXISTS {self.current_table_name};")
+                clickhouse.execute(
+                    f"RENAME TABLE {self.__current_table_name}_old TO {self.__current_table_name};"
+                )
+        else:
+            assert table_exists(
+                f"{self.__current_table_name}_old"
+            ), f"Table {self.__current_table_name} is missing and the old table is not there"
+            # We demoted the old table but did not rename the new one yet.
+            # Restore the old.
+            clickhouse.execute(
+                f"RENAME TABLE {self.__current_table_name}_old TO {self.__current_table_name};"
+            )
+            clickhouse.execute(f"DROP TABLE IF EXISTS {self.__new_table_name};")

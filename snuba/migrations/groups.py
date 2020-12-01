@@ -164,7 +164,7 @@ class SpansExperimentalLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.spans_experimental")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_spans_experimental"]
+        return ["0001_spans_experimental", "0002_change_partitioning"]
 
 
 _REGISTERED_GROUPS = {

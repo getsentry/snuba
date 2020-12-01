@@ -1,21 +1,30 @@
 from typing import Sequence
 
 from snuba.clickhouse.columns import Array, Column, UInt
+from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.snuba_migrations.spans_experimental.columns import columns
-from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
+
+TABLE_NAME = "spans_experimental_local"
+TABLE_NAME_NEW = "spans_experimental_local_new"
 
 
 class Migration(migration.MultiStepMigration):
+    """
+    Changes the PARTITION clause of the spans table adding retention_days.
+    Unfortunately this is not an operation that can be done through an
+    ALTER statement and it requires the table to be rebuilt.
+    """
+
     blocking = True
 
     def forwards_local(self) -> Sequence[operations.Operation]:
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.TRANSACTIONS,
-                table_name="spans_experimental_local_new",
+                table_name=TABLE_NAME_NEW,
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
                     storage_set=StorageSetKey.TRANSACTIONS,
@@ -33,18 +42,29 @@ class Migration(migration.MultiStepMigration):
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
-                table_name="spans_experimental_local_new",
+                table_name=TABLE_NAME_NEW,
                 column=Column(
                     "_tags_hash_map",
                     Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN)),
                 ),
                 after="tags.value",
             ),
-            ....
+            operations.SwapTables(
+                storage_set=StorageSetKey.TRANSACTIONS,
+                current_table_name=TABLE_NAME,
+                new_table_name=TABLE_NAME_NEW,
+                copy_order_by="toStartOfDay(finish_ts), project_id, trace_id, span_id",
+            ),
         ]
 
     def backwards_local(self) -> Sequence[operations.Operation]:
-        return []
+        return [
+            operations.RevertSwap(
+                storage_set=StorageSetKey.TRANSACTIONS,
+                current_table_name=TABLE_NAME,
+                new_table_name=TABLE_NAME_NEW,
+            )
+        ]
 
     def forwards_dist(self) -> Sequence[operations.Operation]:
         return []

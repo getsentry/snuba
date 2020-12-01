@@ -1,6 +1,8 @@
+import rapidjson
 from snuba.clickhouse.columns import Column
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
+from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.operations import (
     AddColumn,
@@ -13,8 +15,10 @@ from snuba.migrations.operations import (
     InsertIntoSelect,
     ModifyColumn,
     RenameTable,
+    SwapTables,
 )
 from snuba.migrations.table_engines import ReplacingMergeTree
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
 
 def test_create_table() -> None:
@@ -124,3 +128,56 @@ def test_insert_into_select() -> None:
         ).format_sql()
         == "INSERT INTO dest (a2, b2) SELECT a1, b1 FROM src;"
     )
+
+
+def test_swap_tables() -> None:
+    CreateTable(
+        StorageSetKey.TRANSACTIONS,
+        "test_table",
+        [Column("id", String()), Column("val", UInt(64))],
+        ReplacingMergeTree(
+            storage_set=StorageSetKey.TRANSACTIONS,
+            version_column="val",
+            order_by="id",
+            settings={"index_granularity": "256"},
+        ),
+    ).execute(True)
+
+    CreateTable(
+        StorageSetKey.TRANSACTIONS,
+        "test_table_new",
+        [Column("id", String()), Column("val", UInt(64))],
+        ReplacingMergeTree(
+            storage_set=StorageSetKey.TRANSACTIONS,
+            version_column="val",
+            order_by="(id, val)",
+            settings={"index_granularity": "256"},
+        ),
+    ).execute(True)
+
+    cluster = get_cluster(StorageSetKey.TRANSACTIONS)
+    cluster.get_batch_writer(
+        "test_table", DummyMetricsBackend(strict=True), None, None
+    ).write([rapidjson.dumps({"id": "test", "val": 1}).encode("utf-8")])
+
+    SwapTables(
+        StorageSetKey.TRANSACTIONS, "test_table", "test_table_new", "id"
+    ).execute(True)
+
+    clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+
+    def table_exists(table_name: str) -> bool:
+        return clickhouse.execute(f"EXISTS TABLE {table_name};") == [(1,)]
+
+    assert not table_exists("test_table_new")
+    assert not table_exists("test_table_old")
+    assert table_exists("test_table")
+
+    [(row_count,)] = clickhouse.execute("SELECT count() FROM test_table")
+    assert row_count == 1
+
+    ((curr_create_table_statement,),) = clickhouse.execute(
+        f"SHOW CREATE TABLE {cluster.get_database()}.test_table"
+    )
+
+    assert "ORDER BY (id, val)" in curr_create_table_statement
