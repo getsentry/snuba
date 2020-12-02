@@ -1,4 +1,4 @@
-from typing import Mapping, Optional, Sequence
+from typing import Mapping, Sequence
 
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Expression, FunctionCall, Literal
@@ -68,9 +68,9 @@ BINARY_OPERATORS = [
 
 
 def __set_condition(
-    alias: Optional[str], function: str, lhs: Expression, rhs: Sequence[Literal]
+    function: str, lhs: Expression, rhs: Sequence[Literal]
 ) -> Expression:
-    return binary_condition(alias, function, lhs, literals_tuple(None, rhs))
+    return binary_condition(function, lhs, literals_tuple(None, rhs))
 
 
 def __set_condition_pattern(
@@ -102,10 +102,8 @@ def __is_set_condition(exp: Expression, operator: str) -> bool:
     return False
 
 
-def in_condition(
-    alias: Optional[str], lhs: Expression, rhs: Sequence[Literal],
-) -> Expression:
-    return __set_condition(alias, ConditionFunctions.IN, lhs, rhs)
+def in_condition(lhs: Expression, rhs: Sequence[Literal],) -> Expression:
+    return __set_condition(ConditionFunctions.IN, lhs, rhs)
 
 
 def is_in_condition(exp: Expression) -> bool:
@@ -116,10 +114,8 @@ def is_in_condition_pattern(lhs: Pattern[Expression]) -> FunctionCallPattern:
     return __set_condition_pattern(lhs, ConditionFunctions.IN)
 
 
-def not_in_condition(
-    alias: Optional[str], lhs: Expression, rhs: Sequence[Literal],
-) -> Expression:
-    return __set_condition(alias, ConditionFunctions.NOT_IN, lhs, rhs,)
+def not_in_condition(lhs: Expression, rhs: Sequence[Literal],) -> Expression:
+    return __set_condition(ConditionFunctions.NOT_IN, lhs, rhs,)
 
 
 def is_not_in_condition(exp: Expression) -> bool:
@@ -131,9 +127,9 @@ def is_not_in_condition_pattern(lhs: Pattern[Expression]) -> FunctionCallPattern
 
 
 def binary_condition(
-    alias: Optional[str], function_name: str, lhs: Expression, rhs: Expression
+    function_name: str, lhs: Expression, rhs: Expression
 ) -> FunctionCall:
-    return FunctionCall(alias, function_name, (lhs, rhs))
+    return FunctionCall(None, function_name, (lhs, rhs))
 
 
 binary_condition_patterns = {
@@ -149,10 +145,8 @@ def is_binary_condition(exp: Expression, operator: str) -> bool:
     return False
 
 
-def unary_condition(
-    alias: Optional[str], function_name: str, operand: Expression
-) -> FunctionCall:
-    return FunctionCall(alias, function_name, (operand,))
+def unary_condition(function_name: str, operand: Expression) -> FunctionCall:
+    return FunctionCall(None, function_name, (operand,))
 
 
 unary_condition_patterns = {
@@ -217,7 +211,7 @@ def _combine_conditions(conditions: Sequence[Expression], function: str) -> Expr
         return conditions[0]
 
     return binary_condition(
-        None, function, conditions[0], _combine_conditions(conditions[1:], function)
+        function, conditions[0], _combine_conditions(conditions[1:], function)
     )
 
 

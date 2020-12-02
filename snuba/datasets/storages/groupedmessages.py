@@ -42,7 +42,6 @@ schema = WritableTableSchema(
     storage_set_key=StorageSetKey.EVENTS,
     mandatory_conditions=[
         binary_condition(
-            None,
             ConditionFunctions.EQ,
             Column(None, None, "record_deleted"),
             Literal(None, 0),

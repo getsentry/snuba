@@ -132,6 +132,7 @@ class DiscoverLoader(DirectoryLoader):
         return [
             "0001_discover_merge_table",
             "0002_discover_add_deleted_tags_hash_map",
+            "0003_discover_fix_user_column",
         ]
 
 
@@ -148,7 +149,7 @@ class SessionsLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.sessions")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_sessions"]
+        return ["0001_sessions", "0002_sessions_aggregates"]
 
 
 class QuerylogLoader(DirectoryLoader):

@@ -22,7 +22,7 @@ def test_organization_extension_query_processing_happy_path() -> None:
 
     extension.get_processor().process_query(query, valid_data, request_settings)
     assert query.get_condition_from_ast() == binary_condition(
-        None, ConditionFunctions.EQ, Column(None, None, "org_id"), Literal(None, 2)
+        ConditionFunctions.EQ, Column(None, None, "org_id"), Literal(None, 2)
     )
 
 

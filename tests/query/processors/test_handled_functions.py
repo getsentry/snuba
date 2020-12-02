@@ -44,11 +44,9 @@ def test_handled_processor() -> None:
                             None,
                             ("x",),
                             binary_condition(
-                                None,
                                 BooleanFunctions.OR,
                                 FunctionCall(None, "isNull", (Argument(None, "x"),)),
                                 binary_condition(
-                                    None,
                                     ConditionFunctions.EQ,
                                     FunctionCall(
                                         None, "assumeNotNull", (Argument(None, "x"),)
@@ -128,11 +126,9 @@ def test_not_handled_processor() -> None:
                             None,
                             ("x",),
                             binary_condition(
-                                None,
                                 BooleanFunctions.AND,
                                 FunctionCall(None, "isNotNull", (Argument(None, "x"),)),
                                 binary_condition(
-                                    None,
                                     ConditionFunctions.EQ,
                                     FunctionCall(
                                         None, "assumeNotNull", (Argument(None, "x"),)

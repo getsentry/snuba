@@ -46,14 +46,12 @@ SIMPLE_QUERY = ClickhouseQuery(
     ],
     array_join=None,
     condition=binary_condition(
-        None,
         ConditionFunctions.EQ,
         FunctionCall("alias", "tag", (Column(None, None, "group_id"),)),
         Literal(None, "1"),
     ),
     groupby=[FunctionCall("alias", "tag", (Column(None, None, "message"),))],
     prewhere=binary_condition(
-        None,
         ConditionFunctions.EQ,
         FunctionCall("alias", "tag", (Column(None, None, "message"),)),
         Literal(None, "2"),

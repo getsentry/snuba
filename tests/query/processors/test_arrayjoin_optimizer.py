@@ -65,7 +65,6 @@ tags_filter_tests = [
                 ),
             ],
             condition=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
@@ -84,7 +83,6 @@ tags_filter_tests = [
                 ),
             ],
             condition=in_condition(
-                None,
                 FunctionCall(
                     "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
                 ),
@@ -102,7 +100,6 @@ tags_filter_tests = [
                 ),
             ],
             condition=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
@@ -110,7 +107,6 @@ tags_filter_tests = [
                 Literal(None, "tag"),
             ),
             having=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
@@ -129,13 +125,11 @@ tags_filter_tests = [
                 ),
             ],
             condition=binary_condition(
-                None,
                 BooleanFunctions.OR,
                 FunctionCall(
                     "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
                 ),
                 in_condition(
-                    None,
                     FunctionCall(
                         "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
                     ),
@@ -143,7 +137,6 @@ tags_filter_tests = [
                 ),
             ),
             having=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
@@ -184,7 +177,6 @@ test_data = [
                 )
             ],
             condition=in_condition(
-                None,
                 arrayJoin("_snuba_tags_key", Column(None, None, "tags.key")),
                 [Literal(None, "t1"), Literal(None, "t2")],
             ),
@@ -231,7 +223,6 @@ test_data = [
                 ),
             ],
             condition=in_condition(
-                None,
                 Column("_snuba_col", None, "col"),
                 [Literal(None, "t1"), Literal(None, "t2")],
             ),
@@ -259,7 +250,6 @@ test_data = [
                 )
             ],
             condition=in_condition(
-                None,
                 arrayJoin(
                     "_snuba_tags_key",
                     filter_keys(Column(None, None, "tags.key"), [Literal(None, "t1")]),
@@ -315,7 +305,6 @@ test_data = [
                 ),
             ],
             condition=in_condition(
-                None,
                 tupleElement(
                     "_snuba_tags_key",
                     arrayJoin(
