@@ -57,7 +57,6 @@ from snuba.query.parser import (
     _parse_subscriptables,
     _validate_aliases,
 )
-from snuba.query.schema import POSITIVE_OPERATORS
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
     HighPriOperator,
@@ -640,7 +639,7 @@ def _parse_datetime_literals(query: LogicalQuery) -> None:
 
 
 ARRAY_JOIN_MATCH = FunctionCallMatch(
-    StringMatch("arrayJoinExplode"),
+    Param("function_name", Or([StringMatch("arrayExists"), StringMatch("arrayAll")])),
     (
         Param("column", ColumnMatch(AnyOptionalString(), AnyMatch(str))),
         Param("op", Or([LiteralMatch(StringMatch(op)) for op in OPERATOR_TO_FUNCTION])),
@@ -653,16 +652,13 @@ def _array_join_transformation(query: LogicalQuery) -> None:
     def parse(exp: Expression) -> Expression:
         result = ARRAY_JOIN_MATCH.match(exp)
         if result:
+            function_name = result.string("function_name")
             column = result.expression("column")
             assert isinstance(column, Column)
-
             op_literal = result.expression("op")
             assert isinstance(op_literal, Literal)
             op = str(op_literal.value)
-
             value = result.expression("value")
-
-            function_name = "arrayExists" if op in POSITIVE_OPERATORS else "arrayAll"
 
             return FunctionCall(
                 None,
@@ -697,7 +693,6 @@ def parse_snql_query(body: str, dataset: Dataset) -> LogicalQuery:
 
     # These are the post processing phases
     _parse_datetime_literals(query)
-    _array_join_transformation(query)
 
     # TODO: Update these functions to work with snql queries in a separate PR
     _validate_aliases(query)  # -> needs to recurse through sub queries
@@ -708,4 +703,5 @@ def parse_snql_query(body: str, dataset: Dataset) -> LogicalQuery:
         query
     )  # -> This should not be needed at all, assuming SnQL can properly accept escaped/unicode strings
     _mangle_aliases(query)  # needs to recurse through sub queries
+    _array_join_transformation(query)
     return query

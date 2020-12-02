@@ -564,7 +564,7 @@ test_cases = [
     pytest.param(
         """MATCH (e:events)
         SELECT 4-5,3*foo(c) AS foo,c
-        WHERE or(equals(arrayJoinExplode(a, '=', 'RuntimeException'), 1), equals(arrayJoinExplode(b, 'NOT IN', tuple('Stack', 'Arithmetic')), 1)) = 1""",
+        WHERE or(equals(arrayExists(a, '=', 'RuntimeException'), 1), equals(arrayAll(b, 'NOT IN', tuple('Stack', 'Arithmetic')), 1)) = 1""",
         LogicalQuery(
             {},
             QueryEntity(
