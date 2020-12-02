@@ -63,13 +63,9 @@ test_data = [
     (
         tuplify(["or", [["or", ["a", "b"]], "c"]]),
         binary_condition(
-            None,
             BooleanFunctions.OR,
             binary_condition(
-                None,
-                BooleanFunctions.OR,
-                Column(None, None, "a"),
-                Column(None, None, "b"),
+                BooleanFunctions.OR, Column(None, None, "a"), Column(None, None, "b"),
             ),
             Column(None, None, "c"),
         ),
@@ -77,13 +73,9 @@ test_data = [
     (
         tuplify(["and", [["and", ["a", "b"]], "c"]]),
         binary_condition(
-            None,
             BooleanFunctions.AND,
             binary_condition(
-                None,
-                BooleanFunctions.AND,
-                Column(None, None, "a"),
-                Column(None, None, "b"),
+                BooleanFunctions.AND, Column(None, None, "a"), Column(None, None, "b"),
             ),
             Column(None, None, "c"),
         ),
@@ -92,13 +84,9 @@ test_data = [
     (
         tuplify(["and", [["or", ["a", "b"]], "c"]]),
         binary_condition(
-            None,
             BooleanFunctions.AND,
             binary_condition(
-                None,
-                BooleanFunctions.OR,
-                Column(None, None, "a"),
-                Column(None, None, "b"),
+                BooleanFunctions.OR, Column(None, None, "a"), Column(None, None, "b"),
             ),
             Column(None, None, "c"),
         ),
@@ -107,13 +95,10 @@ test_data = [
     (
         tuplify(["or", [["or", [["or", ["c", "d"]], "b"]], "a"]]),
         binary_condition(
-            None,
             BooleanFunctions.OR,
             binary_condition(
-                None,
                 BooleanFunctions.OR,
                 binary_condition(
-                    None,
                     BooleanFunctions.OR,
                     Column(None, None, "c"),
                     Column(None, None, "d"),
@@ -168,7 +153,6 @@ test_data = [
             ]
         ),
         binary_condition(
-            None,
             BooleanFunctions.OR,
             FunctionCall(
                 alias=None,
@@ -182,7 +166,6 @@ test_data = [
                             function_name="assumeNotNull",
                             parameters=(
                                 binary_condition(
-                                    None,
                                     ConditionFunctions.EQ,
                                     Argument(alias=None, name="x"),
                                     Literal(alias=None, value="b"),
@@ -207,7 +190,6 @@ test_data = [
                             function_name="assumeNotNull",
                             parameters=(
                                 binary_condition(
-                                    None,
                                     ConditionFunctions.EQ,
                                     Argument(alias=None, name="x"),
                                     Literal(alias=None, value="c"),
@@ -233,7 +215,6 @@ test_data = [
             ]
         ),
         binary_condition(
-            None,
             BooleanFunctions.OR,
             FunctionCall(
                 alias=None,
@@ -247,7 +228,6 @@ test_data = [
                             function_name="assumeNotNull",
                             parameters=(
                                 binary_condition(
-                                    None,
                                     ConditionFunctions.EQ,
                                     Argument(alias=None, name="x"),
                                     Literal(alias=None, value="b"),
@@ -270,7 +250,6 @@ test_data = [
                             function_name="assumeNotNull",
                             parameters=(
                                 binary_condition(
-                                    None,
                                     ConditionFunctions.EQ,
                                     Argument(alias=None, name="x"),
                                     Literal(alias=None, value="c"),
@@ -294,16 +273,13 @@ test_data = [
             ]
         ),
         binary_condition(
-            None,
             BooleanFunctions.OR,
             binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 Column(alias=None, table_name=None, column_name="sdk_integrations"),
                 Literal(None, "b"),
             ),
             binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 Column(alias=None, table_name=None, column_name="sdk_integrations"),
                 Literal(None, "c"),
@@ -321,16 +297,13 @@ test_data = [
             ]
         ),
         binary_condition(
-            None,
             BooleanFunctions.AND,
             binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 Column(alias=None, table_name=None, column_name="sdk_integrations"),
                 Literal(None, "b"),
             ),
             binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 Column(alias=None, table_name=None, column_name="tags.key"),
                 Literal(None, "c"),
@@ -348,7 +321,6 @@ test_data = [
             ]
         ),
         binary_condition(
-            None,
             BooleanFunctions.OR,
             FunctionCall(
                 None,
@@ -373,7 +345,6 @@ test_data = [
                 ),
             ),
             binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     None,

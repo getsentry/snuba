@@ -19,7 +19,6 @@ from snuba.request.request_settings import HTTPRequestSettings
 tests = [
     pytest.param(
         binary_condition(
-            "mightaswell",
             ConditionFunctions.EQ,
             FunctionCall(
                 None,
@@ -33,17 +32,15 @@ tests = [
             Literal(None, "a7d67cf796774551a95be6543cacd459"),
         ),
         binary_condition(
-            "mightaswell",
             ConditionFunctions.EQ,
             Column(None, None, "column1"),
             Literal(None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd459"))),
         ),
-        "(equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459') AS mightaswell)",
-        id="(equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459') AS mightaswell)",
+        "equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459')",
+        id="equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459')",
     ),
     pytest.param(
         binary_condition(
-            "mightaswell",
             ConditionFunctions.EQ,
             FunctionCall(
                 None,
@@ -57,7 +54,6 @@ tests = [
             Literal(None, "a7d67cf796774551a95be6543cacd459"),
         ),
         binary_condition(
-            "mightaswell",
             ConditionFunctions.EQ,
             FunctionCall(
                 None,
@@ -70,12 +66,11 @@ tests = [
             ),
             Literal(None, "a7d67cf796774551a95be6543cacd459"),
         ),
-        "(equals(replaceAll(toString(notauuid), '-', ''), 'a7d67cf796774551a95be6543cacd459') AS mightaswell)",
-        id="(equals(replaceAll(toString(notauuid), '-', ''), 'a7d67cf796774551a95be6543cacd459') AS mightaswell)",
+        "equals(replaceAll(toString(notauuid), '-', ''), 'a7d67cf796774551a95be6543cacd459')",
+        id="equals(replaceAll(toString(notauuid), '-', ''), 'a7d67cf796774551a95be6543cacd459')",
     ),
     pytest.param(
         binary_condition(
-            "mightaswell",
             ConditionFunctions.EQ,
             Literal(None, "a7d67cf796774551a95be6543cacd459"),
             FunctionCall(
@@ -89,17 +84,15 @@ tests = [
             ),
         ),
         binary_condition(
-            "mightaswell",
             ConditionFunctions.EQ,
             Literal(None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd459"))),
             Column(None, None, "column1"),
         ),
-        "(equals('a7d67cf7-9677-4551-a95b-e6543cacd459', column1) AS mightaswell)",
-        id="(equals('a7d67cf7-9677-4551-a95b-e6543cacd459', column1) AS mightaswell)",
+        "equals('a7d67cf7-9677-4551-a95b-e6543cacd459', column1)",
+        id="equals('a7d67cf7-9677-4551-a95b-e6543cacd459', column1)",
     ),
     pytest.param(
         binary_condition(
-            "mightaswell",
             ConditionFunctions.IN,
             FunctionCall(
                 None,
@@ -120,7 +113,6 @@ tests = [
             ),
         ),
         binary_condition(
-            "mightaswell",
             ConditionFunctions.IN,
             Column(None, None, "column1"),
             FunctionCall(
@@ -136,12 +128,11 @@ tests = [
                 ),
             ),
         ),
-        "(in(column1, tuple('a7d67cf7-9677-4551-a95b-e6543cacd459', 'a7d67cf7-9677-4551-a95b-e6543cacd45a')) AS mightaswell)",
-        id="(in(column1, tuple('a7d67cf7-9677-4551-a95b-e6543cacd459', 'a7d67cf7-9677-4551-a95b-e6543cacd45a')) AS mightaswell)",
+        "in(column1, tuple('a7d67cf7-9677-4551-a95b-e6543cacd459', 'a7d67cf7-9677-4551-a95b-e6543cacd45a'))",
+        id="in(column1, tuple('a7d67cf7-9677-4551-a95b-e6543cacd459', 'a7d67cf7-9677-4551-a95b-e6543cacd45a'))",
     ),
     pytest.param(
         binary_condition(
-            "mightaswell",
             ConditionFunctions.EQ,
             FunctionCall(
                 None,
@@ -155,17 +146,15 @@ tests = [
             Literal(None, "a7d67cf796774551a95be6543cacd459"),
         ),
         binary_condition(
-            "mightaswell",
             ConditionFunctions.EQ,
             Column(None, None, "column1"),
             Literal(None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd459"))),
         ),
-        "(equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459') AS mightaswell)",
-        id="(equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459') AS mightaswell)",
+        "equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459')",
+        id="equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459')",
     ),
     pytest.param(
         binary_condition(
-            "mightaswell",
             ConditionFunctions.EQ,
             FunctionCall(
                 None,
@@ -179,7 +168,6 @@ tests = [
             Literal(None, "a7d67cf796774551a95be6543cacd459"),
         ),
         binary_condition(
-            "mightaswell",
             ConditionFunctions.EQ,
             FunctionCall(
                 None,
@@ -192,15 +180,13 @@ tests = [
             ),
             Literal(None, "a7d67cf796774551a95be6543cacd459"),
         ),
-        "(equals(replaceAll(toString(notauuid), '-', ''), 'a7d67cf796774551a95be6543cacd459') AS mightaswell)",
-        id="(equals(replaceAll(toString(notauuid), '-', ''), 'a7d67cf796774551a95be6543cacd459') AS mightaswell)",
+        "equals(replaceAll(toString(notauuid), '-', ''), 'a7d67cf796774551a95be6543cacd459')",
+        id="equals(replaceAll(toString(notauuid), '-', ''), 'a7d67cf796774551a95be6543cacd459')",
     ),
     pytest.param(
         binary_condition(
-            None,
             BooleanFunctions.AND,
             binary_condition(
-                "butfirst",
                 ConditionFunctions.EQ,
                 FunctionCall(
                     None,
@@ -216,7 +202,6 @@ tests = [
                 Literal(None, "a7d67cf796774551a95be6543cacd460"),
             ),
             binary_condition(
-                "mightaswell",
                 ConditionFunctions.EQ,
                 FunctionCall(
                     None,
@@ -233,23 +218,50 @@ tests = [
             ),
         ),
         binary_condition(
-            None,
             BooleanFunctions.AND,
             binary_condition(
-                "butfirst",
                 ConditionFunctions.EQ,
                 Column(None, None, "column2"),
                 Literal(None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd460"))),
             ),
             binary_condition(
-                "mightaswell",
                 ConditionFunctions.EQ,
                 Column(None, None, "column1"),
                 Literal(None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd459"))),
             ),
         ),
-        "(equals(column2, 'a7d67cf7-9677-4551-a95b-e6543cacd460') AS butfirst) AND (equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459') AS mightaswell)",
-        id="(equals(column2, 'a7d67cf7-9677-4551-a95b-e6543cacd460') AS butfirst) AND (equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459') AS mightaswell)",
+        "equals(column2, 'a7d67cf7-9677-4551-a95b-e6543cacd460') AND equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459')",
+        id="equals(column2, 'a7d67cf7-9677-4551-a95b-e6543cacd460') AND equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459')",
+    ),
+    pytest.param(
+        binary_condition(
+            ConditionFunctions.EQ,
+            FunctionCall(
+                None,
+                "replaceAll",
+                (
+                    FunctionCall(None, "toString", (Column(None, None, "column1"),)),
+                    Literal(None, "-"),
+                    Literal(None, ""),
+                ),
+            ),
+            Literal(None, "deadbeefabad"),
+        ),
+        binary_condition(
+            ConditionFunctions.EQ,
+            FunctionCall(
+                None,
+                "replaceAll",
+                (
+                    FunctionCall(None, "toString", (Column(None, None, "column1"),)),
+                    Literal(None, "-"),
+                    Literal(None, ""),
+                ),
+            ),
+            Literal(None, "deadbeefabad"),
+        ),
+        "equals(replaceAll(toString(column1), '-', ''), 'deadbeefabad')",
+        id="equals(replaceAll(toString(column1), '-', ''), 'deadbeefabad')",
     ),
 ]
 

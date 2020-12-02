@@ -89,7 +89,6 @@ snql_grammar = Grammar(
     match_clause          = space* "MATCH" space+ entity_match
     select_clause         = space+ "SELECT" space+ select_list
     group_by_clause       = space+ "BY" space+ group_list
-    array_join_clause     = space+ "ARRAY JOIN" space+ column_name
     where_clause          = space+ "WHERE" space+ or_expression
     having_clause         = space+ "HAVING" space+ or_expression
     order_by_clause       = space+ "ORDER BY" space+ order_list
@@ -137,8 +136,7 @@ snql_grammar = Grammar(
     function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)? (space* "AS" space* string_literal)?
     simple_term           = quoted_literal / numeric_literal / column_name
     literal               = ~r"[a-zA-Z0-9_\.:-]+"
-    quoted_literal        = "'" quoted_text "'"
-    quoted_text           = ~r"[^']*"
+    quoted_literal        = ~r"((?<!\\)')(.(?!(?<!\\)'))*.?'"
     string_literal        = ~r"[a-zA-Z0-9_\.\+\*\/:\-]*"
     numeric_literal       = ~r"-?[0-9]+(\.[0-9]+)?(e[\+\-][0-9]+)?"
     integer_literal       = ~r"-?[0-9]+"
@@ -191,7 +189,6 @@ class SnQLVisitor(NodeVisitor):
             data_source,
             args["selected_columns"],
             args["groupby"],
-            args["array_join"],
             args["condition"],
             args["having"],
             args["order_by"],
@@ -336,14 +333,10 @@ class SnQLVisitor(NodeVisitor):
         return Literal(None, False)
 
     def visit_quoted_literal(
-        self, node: Node, visited_children: Tuple[Any, Node, Any]
+        self, node: Node, visited_children: Tuple[Node]
     ) -> Literal:
-        return visit_quoted_literal(node, visited_children)
 
-    def visit_array_join_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Any, Expression]
-    ) -> Expression:
-        return visited_children[-1]
+        return visit_quoted_literal(node, visited_children)
 
     def visit_where_clause(
         self, node: Node, visited_children: Tuple[Any, Any, Any, Expression]
@@ -403,7 +396,7 @@ class SnQLVisitor(NodeVisitor):
         visited_children: Tuple[Expression, Any, str, Any, Expression],
     ) -> Expression:
         exp, _, op, _, literal = visited_children
-        return binary_condition(None, op, exp, literal)
+        return binary_condition(op, exp, literal)
 
     def visit_condition_op(self, node: Node, visited_children: Iterable[Any]) -> str:
         return OPERATOR_TO_FUNCTION[node.text]

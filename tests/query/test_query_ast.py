@@ -29,13 +29,9 @@ def test_iterate_over_query():
     function_1 = FunctionCall("alias", "f1", (column1, column2))
     function_2 = FunctionCall("alias", "f2", (column2,))
 
-    condition = binary_condition(
-        None, ConditionFunctions.EQ, column1, Literal(None, "1")
-    )
+    condition = binary_condition(ConditionFunctions.EQ, column1, Literal(None, "1"))
 
-    prewhere = binary_condition(
-        None, ConditionFunctions.EQ, column2, Literal(None, "2")
-    )
+    prewhere = binary_condition(ConditionFunctions.EQ, column2, Literal(None, "2"))
 
     orderby = OrderBy(OrderByDirection.ASC, function_2)
 
@@ -85,13 +81,9 @@ def test_replace_expression():
     function_1 = FunctionCall("alias", "f1", (column1, column2))
     function_2 = FunctionCall("alias", "f2", (column2,))
 
-    condition = binary_condition(
-        None, ConditionFunctions.EQ, function_1, Literal(None, "1")
-    )
+    condition = binary_condition(ConditionFunctions.EQ, function_1, Literal(None, "1"))
 
-    prewhere = binary_condition(
-        None, ConditionFunctions.EQ, function_1, Literal(None, "2")
-    )
+    prewhere = binary_condition(ConditionFunctions.EQ, function_1, Literal(None, "2"))
 
     orderby = OrderBy(OrderByDirection.ASC, function_2)
 
@@ -122,14 +114,12 @@ def test_replace_expression():
         ],
         array_join=None,
         condition=binary_condition(
-            None,
             ConditionFunctions.EQ,
             FunctionCall("alias", "tag", (Literal(None, "f1"),)),
             Literal(None, "1"),
         ),
         groupby=[FunctionCall("alias", "tag", (Literal(None, "f1"),))],
         prewhere=binary_condition(
-            None,
             ConditionFunctions.EQ,
             FunctionCall("alias", "tag", (Literal(None, "f1"),)),
             Literal(None, "2"),

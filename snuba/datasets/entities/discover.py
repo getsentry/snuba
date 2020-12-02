@@ -1,7 +1,9 @@
+import random
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Mapping, Optional, Sequence, Set
+from typing import List, Mapping, Optional, Sequence, Set, Tuple
 
+from snuba import environment, state
 from snuba.clickhouse.columns import (
     UUID,
     Array,
@@ -29,10 +31,14 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.events import BaseEventsEntity, EventsQueryStorageSelector
 from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.datasets.entity import Entity
-from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
+from snuba.datasets.plans.single_storage import (
+    SelectedStorageQueryPlanBuilder,
+    SingleStorageQueryPlanBuilder,
+)
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
+from snuba.pipeline.pipeline_delegator import PipelineDelegator
+from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.dsl import identity
 from snuba.query.expressions import (
     Column,
@@ -42,6 +48,7 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.extensions import QueryExtension
+from snuba.query.logical import Query
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or
@@ -53,6 +60,11 @@ from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.util import qualified_column
+from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.threaded_function_delegator import Result
+from snuba.web import QueryResult
+
+metrics = MetricsWrapper(environment.metrics, "api.discover.discover_entity")
 
 
 @dataclass(frozen=True)
@@ -317,39 +329,83 @@ class DiscoverEntity(Entity):
 
         events_storage = get_storage(StorageKey.EVENTS)
 
-        super().__init__(
-            storages=[events_storage],
-            query_pipeline_builder=SimplePipelineBuilder(
-                query_plan_builder=SelectedStorageQueryPlanBuilder(
-                    selector=EventsQueryStorageSelector(
-                        mappers=events_translation_mappers.concat(
-                            transaction_translation_mappers
-                        )
-                        .concat(null_function_translation_mappers)
-                        .concat(
-                            TranslationMappers(
-                                # XXX: Remove once we are using errors
-                                columns=[
-                                    ColumnToMapping(
-                                        None, "release", None, "tags", "sentry:release"
-                                    ),
-                                    ColumnToMapping(
-                                        None, "dist", None, "tags", "sentry:dist"
-                                    ),
-                                    ColumnToMapping(
-                                        None, "user", None, "tags", "sentry:user"
-                                    ),
-                                ],
-                                subscriptables=[
-                                    SubscriptableMapper(None, "tags", None, "tags"),
-                                    SubscriptableMapper(
-                                        None, "contexts", None, "contexts"
-                                    ),
-                                ],
-                            )
+        events_pipeline_builder = SimplePipelineBuilder(
+            query_plan_builder=SelectedStorageQueryPlanBuilder(
+                selector=EventsQueryStorageSelector(
+                    mappers=events_translation_mappers.concat(
+                        transaction_translation_mappers
+                    )
+                    .concat(null_function_translation_mappers)
+                    .concat(
+                        TranslationMappers(
+                            # XXX: Remove once we are using errors
+                            columns=[
+                                ColumnToMapping(
+                                    None, "release", None, "tags", "sentry:release"
+                                ),
+                                ColumnToMapping(
+                                    None, "dist", None, "tags", "sentry:dist"
+                                ),
+                                ColumnToMapping(
+                                    None, "user", None, "tags", "sentry:user"
+                                ),
+                            ],
+                            subscriptables=[
+                                SubscriptableMapper(None, "tags", None, "tags"),
+                                SubscriptableMapper(None, "contexts", None, "contexts"),
+                            ],
                         )
                     )
+                )
+            ),
+        )
+
+        discover_storage = get_storage(StorageKey.DISCOVER)
+
+        discover_pipeline_builder = SimplePipelineBuilder(
+            query_plan_builder=SingleStorageQueryPlanBuilder(
+                storage=discover_storage,
+                mappers=events_translation_mappers.concat(
+                    transaction_translation_mappers
+                )
+                .concat(null_function_translation_mappers)
+                .concat(
+                    TranslationMappers(
+                        subscriptables=[
+                            SubscriptableMapper(None, "tags", None, "tags"),
+                            SubscriptableMapper(None, "contexts", None, "contexts"),
+                        ],
+                    )
                 ),
+            )
+        )
+
+        def selector_func(_query: Query) -> Tuple[str, List[str]]:
+            if random.random() < float(
+                state.get_config("discover_query_percentage", 0)
+            ):
+                return "events", ["discover"]
+
+            return "events", []
+
+        def callback_func(results: List[Result[QueryResult]]) -> None:
+            primary_result = results.pop(0)
+
+            for result in results:
+                if result.result.result["data"] == primary_result.result.result["data"]:
+                    metrics.increment("query_result", tags={"match": "true"})
+                else:
+                    metrics.increment("query_result", tags={"match": "false"})
+
+        super().__init__(
+            storages=[events_storage, discover_storage],
+            query_pipeline_builder=PipelineDelegator(
+                query_pipeline_builders={
+                    "events": events_pipeline_builder,
+                    "discover": discover_pipeline_builder,
+                },
+                selector_func=selector_func,
+                callback_func=callback_func,
             ),
             abstract_column_set=(
                 self.__common_columns

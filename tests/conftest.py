@@ -90,7 +90,8 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
                 float(value)
                 return f"{value}"
             except ValueError:
-                return f"'{value}'"
+                escaped = value.replace("'", "\\'")
+                return f"'{escaped}'"
 
         sample = legacy.get("sample")
         sample_clause = f"SAMPLE {sample}" if sample else ""
@@ -98,6 +99,15 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
 
         selected = ", ".join(map(func, legacy.get("selected_columns", [])))
         select_clause = f"SELECT {selected}" if selected else ""
+
+        arrayjoin = legacy.get("arrayjoin")
+        if arrayjoin:
+            array_join_clause = f"arrayJoin({arrayjoin})" if arrayjoin else ""
+            select_clause = (
+                f"SELECT {array_join_clause}"
+                if not select_clause
+                else f"{select_clause}, {array_join_clause}"
+            )
 
         aggregations = []
         for a in legacy.get("aggregations", []):
@@ -186,9 +196,6 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
         if legacy.get("limitby"):
             limit, column = legacy.get("limitby")
             limit_by_clause = f"LIMIT {limit} BY {column}"
-
-        arrayjoin = legacy.get("arrayjoin")
-        array_join_clause = f"ARRAY JOIN {arrayjoin}" if arrayjoin else ""
 
         extras = ("limit", "offset", "granularity", "totals")
         extra_exps = []

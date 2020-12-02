@@ -24,7 +24,6 @@ tests = [
     pytest.param(
         3600,
         binary_condition(
-            None,
             ConditionFunctions.EQ,
             Column("my_time", None, "time"),
             Literal(None, "2020-01-01"),
@@ -35,7 +34,6 @@ tests = [
             (Column(None, None, "finish_ts"), Literal(None, "Universal")),
         ),
         binary_condition(
-            None,
             ConditionFunctions.EQ,
             FunctionCall(
                 "my_time",
@@ -51,16 +49,13 @@ tests = [
     pytest.param(
         60,
         binary_condition(
-            None,
             BooleanFunctions.AND,
             binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 Column("my_time", None, "time"),
                 Literal(None, "2020-01-01"),
             ),
             binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 Column(None, None, "transaction"),
                 Literal(None, "something"),
@@ -72,10 +67,8 @@ tests = [
             (Column(None, None, "finish_ts"), Literal(None, "Universal")),
         ),
         binary_condition(
-            None,
             BooleanFunctions.AND,
             binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     "my_time",
@@ -85,7 +78,6 @@ tests = [
                 Literal(None, parse_datetime("2020-01-01")),
             ),
             binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 Column(None, None, "transaction"),
                 Literal(None, "something"),
@@ -208,10 +200,7 @@ def test_invalid_datetime() -> None:
             ),
         ],
         condition=binary_condition(
-            None,
-            ConditionFunctions.EQ,
-            Column("my_time", None, "time"),
-            Literal(None, ""),
+            ConditionFunctions.EQ, Column("my_time", None, "time"), Literal(None, ""),
         ),
     )
 

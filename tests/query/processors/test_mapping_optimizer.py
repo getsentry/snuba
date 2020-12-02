@@ -50,7 +50,7 @@ def nested_condition(
     column_name: str, operator: str, key: str, val: str,
 ) -> Expression:
     return binary_condition(
-        None, operator, nested_expression(column_name, key), Literal(None, val),
+        operator, nested_expression(column_name, key), Literal(None, val),
     )
 
 
@@ -59,11 +59,11 @@ TEST_CASES = [
         build_query(
             selected_columns=[column("event_id"), nested_expression("tags", "my_tag")],
             condition=binary_condition(
-                None, ConditionFunctions.EQ, column("event_id"), Literal(None, "123123")
+                ConditionFunctions.EQ, column("event_id"), Literal(None, "123123")
             ),
         ),
         binary_condition(
-            None, ConditionFunctions.EQ, column("event_id"), Literal(None, "123123")
+            ConditionFunctions.EQ, column("event_id"), Literal(None, "123123")
         ),
         id="No tag condition",
     ),
@@ -111,7 +111,6 @@ TEST_CASES = [
         build_query(
             selected_columns=[column("event_id")],
             condition=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     None,
@@ -143,14 +142,12 @@ TEST_CASES = [
         build_query(
             selected_columns=[column("event_id")],
             condition=binary_condition(
-                None,
                 BooleanFunctions.OR,
                 nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
                 nested_condition("tags", ConditionFunctions.LIKE, "my_tag2", "b"),
             ),
         ),
         binary_condition(
-            None,
             BooleanFunctions.OR,
             nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
             nested_condition("tags", ConditionFunctions.LIKE, "my_tag2", "b"),
@@ -161,11 +158,9 @@ TEST_CASES = [
         build_query(
             selected_columns=[column("event_id")],
             condition=binary_condition(
-                None,
                 BooleanFunctions.AND,
                 nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
                 binary_condition(
-                    None,
                     ConditionFunctions.LIKE,
                     Column(None, None, "something_else"),
                     Literal(None, "123123"),
@@ -173,7 +168,6 @@ TEST_CASES = [
             ),
         ),
         binary_condition(
-            None,
             BooleanFunctions.AND,
             FunctionCall(
                 None,
@@ -184,7 +178,6 @@ TEST_CASES = [
                 ),
             ),
             binary_condition(
-                None,
                 ConditionFunctions.LIKE,
                 Column(None, None, "something_else"),
                 Literal(None, "123123"),
@@ -196,7 +189,6 @@ TEST_CASES = [
         build_query(
             selected_columns=[column("event_id")],
             condition=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     None,
@@ -207,7 +199,6 @@ TEST_CASES = [
             ),
         ),
         binary_condition(
-            None,
             ConditionFunctions.EQ,
             FunctionCall(
                 None,
@@ -223,7 +214,6 @@ TEST_CASES = [
             selected_columns=[column("event_id")],
             condition=nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
             having=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(None, "arrayjoin", (Column(None, None, "tags.key"),)),
                 Literal(None, "bla"),

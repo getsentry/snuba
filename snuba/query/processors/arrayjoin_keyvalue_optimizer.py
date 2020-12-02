@@ -319,7 +319,6 @@ def filter_key_values(
                 None,
                 ("pair",),
                 in_condition(
-                    None,
                     # A pair here is a tuple with two elements (key
                     # and value) and the index of the first element in
                     # Clickhouse is 1 instead of 0.
@@ -339,8 +338,5 @@ def filter_keys(column: Expression, keys: Sequence[LiteralExpr]) -> Expression:
     return FunctionCallExpr(
         None,
         "arrayFilter",
-        (
-            Lambda(None, ("tag",), in_condition(None, Argument(None, "tag"), keys),),
-            column,
-        ),
+        (Lambda(None, ("tag",), in_condition(Argument(None, "tag"), keys),), column,),
     )

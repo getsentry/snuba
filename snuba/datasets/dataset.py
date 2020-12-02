@@ -6,6 +6,7 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.query_plan import QueryRunner
+from snuba.pipeline.composite import CompositeExecutionPipeline
 from snuba.pipeline.query_pipeline import QueryExecutionPipeline
 from snuba.query.logical import Query
 from snuba.request import Request
@@ -75,5 +76,6 @@ class DatasetQueryPipelineBuilder:
                 request, runner
             )
         else:
-            # TODO: Build the composite part
-            raise NotImplementedError
+            # This is still unreachable since the Request object only
+            # contains a simple query.
+            return CompositeExecutionPipeline(request.query, request.settings, runner)

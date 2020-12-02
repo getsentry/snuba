@@ -1,6 +1,7 @@
-from typing import Set
+from typing import Optional, Set
 import uuid
 
+from snuba import environment
 from snuba.query.conditions import (
     binary_condition,
     ConditionFunctions,
@@ -19,6 +20,10 @@ from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.request.request_settings import RequestSettings
+from snuba.utils.metrics.wrapper import MetricsWrapper
+
+
+metrics = MetricsWrapper(environment.metrics, "api.query.uuid_processor")
 
 
 class UUIDColumnProcessor(QueryProcessor):
@@ -77,16 +82,17 @@ class UUIDColumnProcessor(QueryProcessor):
                 ),
             ),
         )
+        self.formatted: Optional[str] = None
 
-    def parse_uuid(self, lit: Expression) -> Expression:
+    def parse_uuid(self, lit: Expression) -> Optional[Expression]:
         if not isinstance(lit, Literal):
-            return lit
+            return None
 
         try:
             parsed = uuid.UUID(str(lit.value))
             return Literal(lit.alias, str(parsed))
         except Exception:
-            return lit
+            return None
 
     def process_condition(self, exp: Expression) -> Expression:
         if not isinstance(exp, FunctionCall):
@@ -108,30 +114,38 @@ class UUIDColumnProcessor(QueryProcessor):
                     # e.g. event_id IN tuple(toLower(...), toUpper(...))
                     return exp
 
-                new_fn_params.append(self.parse_uuid(param))
+                new_lit = self.parse_uuid(param)
+                if new_lit is None:
+                    # There was a parsing error. Return the expression unchanged.
+                    return exp
+
+                new_fn_params.append(new_lit)
 
             new_function = FunctionCall(
                 params_fn.alias, params_fn.function_name, tuple(new_fn_params)
             )
-            return binary_condition(
-                exp.alias, exp.function_name, new_column, new_function
-            )
+            self.formatted = "function_wrapped"
+            return binary_condition(exp.function_name, new_column, new_function)
 
         result = self.uuid_condition.match(exp)
         if result is not None:
             new_params = []
             for suffix in ["_0", "_1"]:
                 if result.contains("literal" + suffix):
-                    new_params.append(
-                        self.parse_uuid(result.expression("literal" + suffix))
-                    )
+                    new_lit = self.parse_uuid(result.expression("literal" + suffix))
+                    if new_lit is None:
+                        # There was a parsing error. Return the expression unchanged.
+                        return exp
+
+                    new_params.append(new_lit)
                 elif result.contains("formatted_uuid_column" + suffix):
                     column = result.expression("formatted_uuid_column" + suffix)
                     assert isinstance(column, Column)
                     new_params.append(column)
 
             left_exp, right_exp = new_params
-            return binary_condition(exp.alias, exp.function_name, left_exp, right_exp)
+            self.formatted = "bare_column"
+            return binary_condition(exp.function_name, left_exp, right_exp)
 
         return exp
 
@@ -139,3 +153,10 @@ class UUIDColumnProcessor(QueryProcessor):
         condition = query.get_condition_from_ast()
         if condition:
             query.set_ast_condition(condition.transform(self.process_condition))
+
+        prewhere = query.get_prewhere_ast()
+        if prewhere:
+            query.set_prewhere_ast_condition(prewhere.transform(self.process_condition))
+
+        if self.formatted:
+            metrics.increment("query_processed", tags={"type": self.formatted})
