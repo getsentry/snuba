@@ -29,7 +29,7 @@ from snuba.query.conditions import (
     combine_and_conditions,
     combine_or_conditions,
 )
-from snuba.query.data_source.join import JoinClause
+from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
     Column,
@@ -77,7 +77,6 @@ from snuba.query.snql.expression_visitor import (
     visit_quoted_literal,
 )
 from snuba.query.snql.joins import (
-    EntityTuple,
     RelationshipTuple,
     build_join_clause,
 )
@@ -87,7 +86,7 @@ snql_grammar = Grammar(
     r"""
     query_exp             = match_clause select_clause group_by_clause? where_clause? having_clause? order_by_clause? limit_by_clause? limit_clause? offset_clause? granularity_clause? totals_clause? space*
 
-    match_clause          = space* "MATCH" space+ (relationships / entity_match / subquery)
+    match_clause          = space* "MATCH" space+ (relationships / subquery / entity_single )
     select_clause         = space+ "SELECT" space+ select_list
     group_by_clause       = space+ "BY" space+ group_list
     where_clause          = space+ "WHERE" space+ or_expression
@@ -99,6 +98,7 @@ snql_grammar = Grammar(
     granularity_clause    = space+ "GRANULARITY" space+ integer_literal
     totals_clause         = space+ "TOTALS" space+ boolean_literal
 
+    entity_single         = open_paren space* entity_name sample_clause? space* close_paren
     entity_match          = open_paren entity_alias colon space* entity_name sample_clause? space* close_paren
     relationship_link     = ~r"-\[" relationship_name ~r"\]->"
     relationship_match    = space* entity_match space* relationship_link space* entity_match
@@ -225,7 +225,20 @@ class SnQLVisitor(NodeVisitor):
         return LogicalQuery(**args)
 
     def visit_match_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Any, EntityTuple],
+        self,
+        node: Node,
+        visited_children: Tuple[
+            Any,
+            Any,
+            Any,
+            Union[
+                QueryEntity,
+                CompositeQuery[QueryEntity],
+                LogicalQuery,
+                RelationshipTuple,
+                Sequence[RelationshipTuple],
+            ],
+        ],
     ) -> Union[
         CompositeQuery[QueryEntity], LogicalQuery, QueryEntity, JoinClause[QueryEntity],
     ]:
@@ -241,28 +254,45 @@ class SnQLVisitor(NodeVisitor):
             join_clause = build_join_clause(match)
             return join_clause
 
-        assert isinstance(match, EntityTuple)
-        key = EntityKey(match.name)
-        query_entity = QueryEntity(
-            key, get_entity(key).get_data_model(), match.alias, match.sample_rate,
-        )
-        return query_entity
+        assert isinstance(match, QueryEntity)  # mypy
+        return match
+
+    def visit_entity_single(
+        self,
+        node: Node,
+        visited_children: Tuple[
+            Any, Any, EntityKey, Union[Optional[float], Node], Any, Any
+        ],
+    ) -> QueryEntity:
+        _, _, name, sample, _, _ = visited_children
+        if isinstance(sample, Node):
+            sample = None
+
+        return QueryEntity(name, get_entity(name).get_data_model(), sample)
 
     def visit_entity_match(
         self,
         node: Node,
-        visited_children: Tuple[Any, str, Any, Any, str, Optional[float], Any, Any],
-    ) -> EntityTuple:
+        visited_children: Tuple[
+            Any, str, Any, Any, EntityKey, Union[Optional[float], Node], Any, Any
+        ],
+    ) -> IndividualNode[QueryEntity]:
         _, alias, _, _, name, sample, _, _ = visited_children
         if isinstance(sample, Node):
             sample = None
-        return EntityTuple(alias, name.lower(), sample)
+
+        return IndividualNode(
+            alias, QueryEntity(name, get_entity(name).get_data_model(), sample)
+        )
 
     def visit_entity_alias(self, node: Node, visited_children: Tuple[Any]) -> str:
         return str(node.text)
 
-    def visit_entity_name(self, node: Node, visited_children: Tuple[Any]) -> str:
-        return str(node.text)
+    def visit_entity_name(self, node: Node, visited_children: Tuple[Any]) -> EntityKey:
+        try:
+            return EntityKey(node.text)
+        except Exception:
+            raise ParsingException(f"{node.text} is not a valid entity name")
 
     def visit_relationships(
         self, node: Node, visited_children: Tuple[RelationshipTuple, Any],
@@ -282,18 +312,27 @@ class SnQLVisitor(NodeVisitor):
     def visit_relationship_match(
         self,
         node: Node,
-        visited_children: Tuple[Any, EntityTuple, Any, Node, Any, EntityTuple],
+        visited_children: Tuple[
+            Any,
+            IndividualNode[QueryEntity],
+            Any,
+            Node,
+            Any,
+            IndividualNode[QueryEntity],
+        ],
     ) -> RelationshipTuple:
         _, lhs, _, relationship, _, rhs = visited_children
-        lhs_entity = get_entity(EntityKey(lhs.name))
+        assert isinstance(lhs.data_source, QueryEntity)
+        assert isinstance(rhs.data_source, QueryEntity)
+        lhs_entity = get_entity(lhs.data_source.key)
         data = lhs_entity.get_join_relationship(relationship)
         if data is None:
             raise ParsingException(
-                f"{lhs.name} does not have a join relationship {relationship}"
+                f"{lhs.data_source.key.value} does not have a join relationship {relationship}"
             )
-        elif data.rhs_entity != EntityKey(rhs.name):
+        elif data.rhs_entity != rhs.data_source.key:
             raise ParsingException(
-                f"-[{relationship}]-> cannot be used to join {lhs.name} to {rhs.name}"
+                f"-[{relationship}]-> cannot be used to join {lhs.data_source.key.value} to {rhs.data_source.key.value}"
             )
 
         return RelationshipTuple(lhs, relationship, rhs, data)

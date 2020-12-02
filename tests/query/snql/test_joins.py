@@ -15,7 +15,7 @@ from snuba.query.data_source.join import (
     JoinType,
 )
 from snuba.query.data_source.simple import Entity as QueryEntity
-from snuba.query.snql.joins import build_join_clause, EntityTuple, RelationshipTuple
+from snuba.query.snql.joins import build_join_clause, RelationshipTuple
 
 ###################################
 ## Used to build expected result ##
@@ -25,9 +25,7 @@ from snuba.query.snql.joins import build_join_clause, EntityTuple, RelationshipT
 def node(alias: str, name: str) -> IndividualNode[QueryEntity]:
     return IndividualNode(
         alias,
-        QueryEntity(
-            EntityKey(name), get_entity(EntityKey(name)).get_data_model(), alias
-        ),
+        QueryEntity(EntityKey(name), get_entity(EntityKey(name)).get_data_model()),
     )
 
 
@@ -226,10 +224,7 @@ def test_joins(
         )
         relationships.append(
             RelationshipTuple(
-                EntityTuple(lhs_alias, lhs),
-                uuid.uuid4().hex,
-                EntityTuple(rhs_alias, rhs),
-                data,
+                node(lhs_alias, lhs), uuid.uuid4().hex, node(rhs_alias, rhs), data,
             )
         )
 

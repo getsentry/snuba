@@ -31,7 +31,6 @@ class Entity(SimpleDataSource):
 
     key: EntityKey
     schema: ColumnSet
-    alias: Optional[str] = None
     sample: Optional[float] = None
 
     def get_columns(self) -> ColumnSet:

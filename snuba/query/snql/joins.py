@@ -2,7 +2,6 @@ from __future__ import annotations
 from typing import MutableMapping, NamedTuple, Optional, Sequence, Union
 
 from snuba.datasets.entities import EntityKey
-from snuba.datasets.entities.factory import get_entity
 from snuba.query.data_source.join import (
     IndividualNode,
     JoinClause,
@@ -14,47 +13,44 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.parser.exceptions import ParsingException
 
 
-class EntityTuple(NamedTuple):
-    alias: str
-    name: str
-    sample_rate: Optional[float] = None
-
-
 class RelationshipTuple(NamedTuple):
-    lhs: EntityTuple
+    lhs: IndividualNode[QueryEntity]
     relationship: str
-    rhs: EntityTuple
+    rhs: IndividualNode[QueryEntity]
     data: JoinRelationship
 
 
-class Leaf:
+class Node:
     def __init__(
         self,
-        entity: EntityKey,
-        entity_data: EntityTuple,
+        entity_data: IndividualNode[QueryEntity],
         relationship: Optional[JoinRelationship] = None,
     ) -> None:
-        self.entity = entity
         self.entity_data = entity_data
         self.relationship = relationship
-        self.child: Optional[Leaf] = None
+        self.child: Optional[Node] = None
         self.join_conditions: Sequence[JoinCondition] = []
 
-    def push_leaf(self, leaf: Leaf) -> None:
+    @property
+    def entity(self) -> EntityKey:
+        assert isinstance(self.entity_data.data_source, QueryEntity)
+        return self.entity_data.data_source.key
+
+    def push_leaf(self, node: Node) -> None:
         # This happens here to ensure we use the correct alias in the columns.
-        self.build_join_conditions(leaf)
+        self.build_join_conditions(node)
         if not self.child:
-            self.child = leaf
+            self.child = node
             return
 
         old_child = self.child
-        self.child = leaf
-        if leaf.child is None:
-            leaf.child = old_child
+        self.child = node
+        if node.child is None:
+            node.child = old_child
             return
 
         # iterate down list and push old_child to end
-        head = leaf.child
+        head = node.child
         while head.child is not None:
             head = head.child
 
@@ -69,7 +65,7 @@ class Leaf:
 
         return False
 
-    def build_join_conditions(self, rhs: Leaf) -> None:
+    def build_join_conditions(self, rhs: Node) -> None:
         if rhs.relationship is None:
             return
 
@@ -85,18 +81,18 @@ class Leaf:
         rhs.join_conditions = join_conditions
 
 
-def build_tree(relationships: Sequence[RelationshipTuple]) -> Leaf:
-    roots: MutableMapping[EntityKey, Leaf] = {}
-    leafs: MutableMapping[EntityKey, Leaf] = {}
+def build_tree(relationships: Sequence[RelationshipTuple]) -> Node:
+    roots: MutableMapping[EntityKey, Node] = {}
+    leafs: MutableMapping[EntityKey, Node] = {}
 
-    def update_leafs(child: Optional[Leaf]) -> None:
+    def update_leafs(child: Optional[Node]) -> None:
         while child is not None:
             leafs[child.entity] = child
             child = child.child
 
     for rel in relationships:
-        lhs = Leaf(EntityKey(rel.lhs.name), rel.lhs)
-        rhs = Leaf(EntityKey(rel.rhs.name), rel.rhs, rel.data)
+        lhs = Node(rel.lhs)
+        rhs = Node(rel.rhs, rel.data)
         orphan = roots.get(rhs.entity)
         if orphan:
             if not orphan.has_child(lhs.entity):
@@ -127,18 +123,10 @@ def build_tree(relationships: Sequence[RelationshipTuple]) -> Leaf:
 
 
 def build_join_clause_loop(
-    tree: Leaf,
+    tree: Node,
     lhs: Optional[Union[IndividualNode[QueryEntity], JoinClause[QueryEntity]]],
 ) -> Union[IndividualNode[QueryEntity], JoinClause[QueryEntity]]:
-    rhs = IndividualNode(
-        tree.entity_data.alias,
-        QueryEntity(
-            tree.entity,
-            get_entity(tree.entity).get_data_model(),
-            tree.entity_data.alias,
-            tree.entity_data.sample_rate,
-        ),
-    )
+    rhs = tree.entity_data
     if lhs is None:
         lhs = rhs
     else:
