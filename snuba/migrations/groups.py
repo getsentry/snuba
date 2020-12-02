@@ -132,6 +132,7 @@ class DiscoverLoader(DirectoryLoader):
         return [
             "0001_discover_merge_table",
             "0002_discover_add_deleted_tags_hash_map",
+            "0003_discover_fix_user_column",
         ]
 
 
