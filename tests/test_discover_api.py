@@ -1055,7 +1055,8 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_invalid_event_id_condition(self) -> None:
         response = self.app.post(
-            "/query",
+            self.endpoint,
+            "discover_transactions",
             data=json.dumps(
                 {
                     "dataset": "discover",
@@ -1068,7 +1069,7 @@ class TestDiscoverApi(BaseApiTest):
                     "granularity": 3600,
                     "totals": False,
                     "conditions": [
-                        ["event_id", "=", "5897895914504192"],
+                        ["event_id", "=", "5897895a14504192"],
                         ["type", "=", "transaction"],
                     ],
                     "groupby": ["transaction"],

@@ -710,6 +710,78 @@ test_cases = [
         ),
         id="Basic query with crazy characters and escaping",
     ),
+    pytest.param(
+        """MATCH (d: discover_events )
+        SELECT count() AS count BY tags_key
+        WHERE or(equals(ifNull(tags[foo],''),'baz'),equals(ifNull(tags[foo.bar],''),'qux'))=1
+        ORDER BY count DESC,tags_key ASC  LIMIT 10""",
+        LogicalQuery(
+            {},
+            QueryEntity(
+                EntityKey.DISCOVER_EVENTS,
+                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "count", FunctionCall("_snuba_count", "count", tuple()),
+                ),
+                SelectedExpression(
+                    "tags_key", Column("_snuba_tags_key", None, "tags_key"),
+                ),
+            ],
+            groupby=[Column("_snuba_tags_key", None, "tags_key")],
+            order_by=[
+                OrderBy(
+                    OrderByDirection.DESC,
+                    FunctionCall("_snuba_count", "count", tuple()),
+                ),
+                OrderBy(
+                    OrderByDirection.ASC, Column("_snuba_tags_key", None, "tags_key"),
+                ),
+            ],
+            limit=10,
+            condition=binary_condition(
+                "equals",
+                binary_condition(
+                    "or",
+                    binary_condition(
+                        "equals",
+                        FunctionCall(
+                            None,
+                            "ifNull",
+                            (
+                                SubscriptableReference(
+                                    "_snuba_tags[foo]",
+                                    Column("_snuba_tags", None, "tags"),
+                                    Literal(None, "foo"),
+                                ),
+                                Literal(None, ""),
+                            ),
+                        ),
+                        Literal(None, "baz"),
+                    ),
+                    binary_condition(
+                        "equals",
+                        FunctionCall(
+                            None,
+                            "ifNull",
+                            (
+                                SubscriptableReference(
+                                    "_snuba_tags[foo.bar]",
+                                    Column("_snuba_tags", None, "tags"),
+                                    Literal(None, "foo.bar"),
+                                ),
+                                Literal(None, ""),
+                            ),
+                        ),
+                        Literal(None, "qux"),
+                    ),
+                ),
+                Literal(None, 1),
+            ),
+        ),
+        id="Query with nested boolean conditions with multiple empty quoted literals",
+    ),
 ]
 
 

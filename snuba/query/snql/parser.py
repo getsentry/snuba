@@ -84,7 +84,7 @@ from snuba.util import parse_datetime
 
 snql_grammar = Grammar(
     r"""
-    query_exp             = match_clause select_clause group_by_clause? array_join_clause? where_clause? having_clause? order_by_clause? limit_by_clause? limit_clause? offset_clause? granularity_clause? totals_clause? space*
+    query_exp             = match_clause select_clause group_by_clause? where_clause? having_clause? order_by_clause? limit_by_clause? limit_clause? offset_clause? granularity_clause? totals_clause? space*
 
     match_clause          = space* "MATCH" space+ entity_match
     select_clause         = space+ "SELECT" space+ select_list
@@ -136,7 +136,7 @@ snql_grammar = Grammar(
     function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)? (space* "AS" space* string_literal)?
     simple_term           = quoted_literal / numeric_literal / column_name
     literal               = ~r"[a-zA-Z0-9_\.:-]+"
-    quoted_literal        = ~r"((?<!\\)')(.(?!(?<!\\)'))*.?'"
+    quoted_literal        = ~r"((?<!\\)')((?!(?<!\\)').)*.?'"
     string_literal        = ~r"[a-zA-Z0-9_\.\+\*\/:\-]*"
     numeric_literal       = ~r"-?[0-9]+(\.[0-9]+)?(e[\+\-][0-9]+)?"
     integer_literal       = ~r"-?[0-9]+"

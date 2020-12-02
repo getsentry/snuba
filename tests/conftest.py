@@ -102,7 +102,9 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
 
         arrayjoin = legacy.get("arrayjoin")
         if arrayjoin:
-            array_join_clause = f"arrayJoin({arrayjoin})" if arrayjoin else ""
+            array_join_clause = (
+                f"arrayJoin({arrayjoin}) AS {arrayjoin}" if arrayjoin else ""
+            )
             select_clause = (
                 f"SELECT {array_join_clause}"
                 if not select_clause
@@ -204,7 +206,7 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
                 extra_exps.append(f"{extra.upper()} {legacy.get(extra)}")
         extras_clause = " ".join(extra_exps)
 
-        query = f"{match_clause} {select_clause} {aggregation_clause} {groupby_clause} {array_join_clause} {where_clause} {order_by_clause} {limit_by_clause} {extras_clause}"
+        query = f"{match_clause} {select_clause} {aggregation_clause} {groupby_clause} {where_clause} {order_by_clause} {limit_by_clause} {extras_clause}"
         body = {"query": query}
         extensions = ["project", "from_date", "to_date", "organization"]
         for ext in extensions:
