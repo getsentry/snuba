@@ -93,6 +93,29 @@ class Node:
 
 
 def build_list(relationships: Sequence[RelationshipTuple]) -> Node:
+    """
+    Most of the complication of this algorithm is here. This takes a list of joins of the form
+    a -> b, b -> c etc. and converts it to a linked list, where the parent entity is the root node
+    and the children each keep a reference to their join parent.
+
+    Example:
+    [a -> b, b -> c] ==> a() -> b(a) -> c(b), where `b(a)` denotes entity `b` with a reference to `a` as a parent.
+
+    Since joins can be received in any order, we keep track of all the linked lists that are not connected (roots).
+    Once we find a connection between two lists, the child list is inserted into the parent list and removed
+    from the roots. Once all the joins have been added, there should be exactly one root left. New joins that are
+    children of existing roots are pushed into that roots children. We also keep a backreference of the children
+    which keeps a reference to the Node for a given entity. This is to avoid having to scan through the roots
+    every time we want to find a specific Node.
+
+    Example:
+    Input: [a -> b, c -> d, b -> c]
+    After processing the first two joins, we will have two roots: `a() -> b(a)` and `c() -> d(c)`. Once the third
+    join is processed, it will see that `c` is a child of `b`, and add it as a child: `b() -> c(b) -> d(c)`.
+    This tree will then be added to the root `a` list, and `c` will be removed from the roots, resulting in
+    one root: `a() -> b(a) -> c(b) -> d(c)`.
+    """
+
     roots: MutableMapping[EntityKey, Node] = {}
     children: MutableMapping[EntityKey, Node] = {}
 
