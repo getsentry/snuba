@@ -12,6 +12,11 @@ from snuba.query.processors import QueryProcessor
 from snuba.query.validation import FunctionCallValidator
 
 
+class ColumnEquivalence(NamedTuple):
+    left_col: str
+    right_col: str
+
+
 class JoinRelationship(NamedTuple):
     """
     Represents the one way relationship between the owning Entity and another entity.
@@ -20,6 +25,10 @@ class JoinRelationship(NamedTuple):
     rhs_entity: EntityKey
     keys: Sequence[JoinCondition]
     join_class: JoinClass
+    # Keeps track of the semantically equivalent columns between the two
+    # related entities. Example transaction_name on the transactions table
+    # and transaction_name on the spans table.
+    equivalences: Sequence[ColumnEquivalence]
 
 
 class Entity(ABC):
@@ -77,7 +86,13 @@ class Entity(ABC):
         """
         return self.__join_relationships.get(relationship)
 
-    def get_query_pipeline_builder(self) -> QueryPipelineBuilder:
+    def get_all_join_relationships(self) -> Mapping[str, JoinRelationship]:
+        """
+        Returns all the join relationships
+        """
+        return self.__join_relationships
+
+    def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
         """
         Returns the component that orchestrates building and running query plans.
         """
