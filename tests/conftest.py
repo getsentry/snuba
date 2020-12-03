@@ -95,7 +95,7 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
 
         sample = legacy.get("sample")
         sample_clause = f"SAMPLE {sample}" if sample else ""
-        match_clause = f"MATCH ({entity[0].lower()}: {entity} {sample_clause})"
+        match_clause = f"MATCH ({entity} {sample_clause})"
 
         selected = ", ".join(map(func, legacy.get("selected_columns", [])))
         select_clause = f"SELECT {selected}" if selected else ""
