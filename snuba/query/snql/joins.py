@@ -21,6 +21,17 @@ class RelationshipTuple(NamedTuple):
 
 
 class Node:
+    """
+    This class is a linked list of entities to join together. Each Node holds its own IndividualNode
+    that ultimately is added to a JoinClause. If the Node is not the root of the linked list, it
+    will also contain the join conditions that describe which LHS entity the Node should be joined
+    and the specifics of that join.
+
+    As new joins are added, they are inserted into the linked list in the correct order so the join
+    clause will be nested correctly.
+
+    """
+
     def __init__(
         self,
         entity_data: IndividualNode[QueryEntity],
@@ -36,7 +47,7 @@ class Node:
         assert isinstance(self.entity_data.data_source, QueryEntity)
         return self.entity_data.data_source.key
 
-    def push_leaf(self, node: Node) -> None:
+    def push_child(self, node: Node) -> None:
         # This happens here to ensure we use the correct alias in the columns.
         self.build_join_conditions(node)
         if not self.child:
@@ -81,13 +92,13 @@ class Node:
         rhs.join_conditions = join_conditions
 
 
-def build_tree(relationships: Sequence[RelationshipTuple]) -> Node:
+def build_list(relationships: Sequence[RelationshipTuple]) -> Node:
     roots: MutableMapping[EntityKey, Node] = {}
-    leafs: MutableMapping[EntityKey, Node] = {}
+    children: MutableMapping[EntityKey, Node] = {}
 
-    def update_leafs(child: Optional[Node]) -> None:
+    def update_children(child: Optional[Node]) -> None:
         while child is not None:
-            leafs[child.entity] = child
+            children[child.entity] = child
             child = child.child
 
     for rel in relationships:
@@ -98,20 +109,20 @@ def build_tree(relationships: Sequence[RelationshipTuple]) -> Node:
             if not orphan.has_child(lhs.entity):
                 # The orphan is a child of this join. Combine them.
                 if orphan.child:
-                    rhs.push_leaf(orphan.child)
+                    rhs.push_child(orphan.child)
                 del roots[orphan.entity]
 
         if lhs.entity in roots:
-            roots[lhs.entity].push_leaf(rhs)
-            update_leafs(rhs)
+            roots[lhs.entity].push_child(rhs)
+            update_children(rhs)
         else:
-            if lhs.entity in leafs:
-                leafs[lhs.entity].push_leaf(rhs)
-                update_leafs(rhs)
+            if lhs.entity in children:
+                children[lhs.entity].push_child(rhs)
+                update_children(rhs)
             else:
-                lhs.push_leaf(rhs)
+                lhs.push_child(rhs)
                 roots[lhs.entity] = lhs
-                update_leafs(rhs)
+                update_children(rhs)
 
     if len(roots) > 1:
         raise ParsingException("invalid join: join is disconnected")
@@ -123,32 +134,32 @@ def build_tree(relationships: Sequence[RelationshipTuple]) -> Node:
 
 
 def build_join_clause_loop(
-    tree: Node,
+    node_list: Node,
     lhs: Optional[Union[IndividualNode[QueryEntity], JoinClause[QueryEntity]]],
 ) -> Union[IndividualNode[QueryEntity], JoinClause[QueryEntity]]:
-    rhs = tree.entity_data
+    rhs = node_list.entity_data
     if lhs is None:
         lhs = rhs
     else:
-        assert tree.relationship is not None  # mypy
+        assert node_list.relationship is not None  # mypy
         lhs = JoinClause(
             left_node=lhs,
             right_node=rhs,
-            keys=tree.join_conditions,
-            join_type=tree.relationship.join_type,
-            join_modifier=tree.relationship.join_modifier,
+            keys=node_list.join_conditions,
+            join_type=node_list.relationship.join_type,
+            join_modifier=node_list.relationship.join_modifier,
         )
 
-    if tree.child is None:
+    if node_list.child is None:
         return lhs
 
-    return build_join_clause_loop(tree.child, lhs)
+    return build_join_clause_loop(node_list.child, lhs)
 
 
 def build_join_clause(
     relationships: Sequence[RelationshipTuple],
 ) -> JoinClause[QueryEntity]:
-    tree = build_tree(relationships)
-    clause = build_join_clause_loop(tree, None)
+    node_list = build_list(relationships)
+    clause = build_join_clause_loop(node_list, None)
     assert isinstance(clause, JoinClause)  # mypy
     return clause
