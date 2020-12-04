@@ -44,6 +44,10 @@ class JoinNode(ABC, Generic[TSimpleDataSource]):
     def accept(self, visitor: JoinVisitor[TReturn, TSimpleDataSource]) -> TReturn:
         raise NotImplementedError
 
+    @abstractmethod
+    def get_alias_node_map(self) -> Mapping[str, IndividualNode[TSimpleDataSource]]:
+        raise NotImplementedError
+
 
 @dataclass(frozen=True)
 class IndividualNode(JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
@@ -58,6 +62,9 @@ class IndividualNode(JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
 
     alias: str
     data_source: Union[TSimpleDataSource, ProcessableQuery[TSimpleDataSource]]
+
+    def get_alias_node_map(self) -> Mapping[str, IndividualNode[TSimpleDataSource]]:
+        return {self.alias: self}
 
     def get_column_sets(self) -> Mapping[str, ColumnSet]:
         return (
@@ -119,6 +126,12 @@ class JoinClause(DataSource, JoinNode[TSimpleDataSource], Generic[TSimpleDataSou
 
     def get_columns(self) -> ColumnSet:
         return QualifiedColumnSet(self.get_column_sets())
+
+    def get_alias_node_map(self) -> Mapping[str, IndividualNode[TSimpleDataSource]]:
+        return {
+            **self.left_node.get_alias_node_map(),
+            **self.right_node.get_alias_node_map(),
+        }
 
     def __post_init__(self) -> None:
         column_set = self.get_columns()

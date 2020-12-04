@@ -27,7 +27,8 @@ class JoinRelationship(NamedTuple):
     join_class: JoinClass
     # Keeps track of the semantically equivalent columns between the two
     # related entities. Example transaction_name on the transactions table
-    # and transaction_name on the spans table.
+    # and transaction_name on the spans table. These columns are not part
+    # of the join key but are guaranteed to be equivalent.
     equivalences: Sequence[ColumnEquivalence]
 
 
