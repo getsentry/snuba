@@ -100,6 +100,17 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
         selected = ", ".join(map(func, legacy.get("selected_columns", [])))
         select_clause = f"SELECT {selected}" if selected else ""
 
+        arrayjoin = legacy.get("arrayjoin")
+        if arrayjoin:
+            array_join_clause = (
+                f"arrayJoin({arrayjoin}) AS {arrayjoin}" if arrayjoin else ""
+            )
+            select_clause = (
+                f"SELECT {array_join_clause}"
+                if not select_clause
+                else f"{select_clause}, {array_join_clause}"
+            )
+
         aggregations = []
         for a in legacy.get("aggregations", []):
             if a[0].endswith(")") and not a[1]:
@@ -122,6 +133,7 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
         groupby = legacy.get("groupby", [])
         if groupby and not isinstance(groupby, list):
             groupby = [groupby]
+
         groupby = ", ".join(map(func, groupby))
         groupby_clause = f"BY {groupby}" if groupby else ""
 
@@ -148,7 +160,7 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
         if isinstance(project, int):
             conditions.append(f"project_id={project}")
         elif isinstance(project, list):
-            project = ",".join(project)
+            project = ",".join(map(str, project))
             conditions.append(f"project_id IN {project}")
 
         organization = legacy.get("organization")

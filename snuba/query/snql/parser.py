@@ -32,17 +32,23 @@ from snuba.query.conditions import (
 from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
+    Argument,
     Column,
     CurriedFunctionCall,
     Expression,
     FunctionCall,
+    Lambda,
     Literal,
 )
 from snuba.query.matchers import (
     Any as AnyMatch,
+    AnyExpression,
+    AnyOptionalString,
+    Column as ColumnMatch,
     FunctionCall as FunctionCallMatch,
     Literal as LiteralMatch,
     Param,
+    Or,
     String as StringMatch,
 )
 from snuba.query.logical import Query as LogicalQuery
@@ -92,7 +98,7 @@ snql_grammar = Grammar(
     where_clause          = space+ "WHERE" space+ or_expression
     having_clause         = space+ "HAVING" space+ or_expression
     order_by_clause       = space+ "ORDER BY" space+ order_list
-    limit_by_clause       = space+ "LIMIT" space+ integer_literal space* "BY" space* column_name
+    limit_by_clause       = space+ "LIMIT" space+ integer_literal space+ "BY" space+ column_name
     limit_clause          = space+ "LIMIT" space+ integer_literal
     offset_clause         = space+ "OFFSET" space+ integer_literal
     granularity_clause    = space+ "GRANULARITY" space+ integer_literal
@@ -141,7 +147,7 @@ snql_grammar = Grammar(
     function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)? (space* "AS" space* string_literal)?
     simple_term           = quoted_literal / numeric_literal / column_name
     literal               = ~r"[a-zA-Z0-9_\.:-]+"
-    quoted_literal        = ~r"((?<!\\)')(.(?!(?<!\\)'))*.?'"
+    quoted_literal        = ~r"((?<!\\)')((?!(?<!\\)').)*.?'"
     string_literal        = ~r"[a-zA-Z0-9_\.\+\*\/:\-]*"
     numeric_literal       = ~r"-?[0-9]+(\.[0-9]+)?(e[\+\-][0-9]+)?"
     integer_literal       = ~r"-?[0-9]+"
@@ -749,6 +755,58 @@ def _parse_datetime_literals(
     query.transform_expressions(parse)
 
 
+ARRAY_JOIN_MATCH = FunctionCallMatch(
+    Param("function_name", Or([StringMatch("arrayExists"), StringMatch("arrayAll")])),
+    (
+        Param("column", ColumnMatch(AnyOptionalString(), AnyMatch(str))),
+        Param("op", Or([LiteralMatch(StringMatch(op)) for op in OPERATOR_TO_FUNCTION])),
+        Param("value", AnyExpression()),
+    ),
+)
+
+
+def _array_join_transformation(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+) -> None:
+    def parse(exp: Expression) -> Expression:
+        result = ARRAY_JOIN_MATCH.match(exp)
+        if result:
+            function_name = result.string("function_name")
+            column = result.expression("column")
+            assert isinstance(column, Column)
+            op_literal = result.expression("op")
+            assert isinstance(op_literal, Literal)
+            op = str(op_literal.value)
+            value = result.expression("value")
+
+            return FunctionCall(
+                None,
+                function_name,
+                (
+                    Lambda(
+                        None,
+                        ("x",),
+                        FunctionCall(
+                            None,
+                            "assumeNotNull",
+                            (
+                                FunctionCall(
+                                    None,
+                                    OPERATOR_TO_FUNCTION[op],
+                                    (Argument(None, "x"), value,),
+                                ),
+                            ),
+                        ),
+                    ),
+                    column,
+                ),
+            )
+
+        return exp
+
+    query.transform_expressions(parse)
+
+
 def _post_process(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
     funcs: Sequence[Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]],
@@ -777,6 +835,7 @@ def parse_snql_query(
             _apply_column_aliases,
             _expand_aliases,
             _mangle_aliases,
+            _array_join_transformation,
         ],
     )
 
