@@ -55,14 +55,13 @@ class Node:
 
         old_child = self.child
         self.child = node
-        if node.child is None:
+        if node.child is None:  # mypy
             node.child = old_child
             return
 
         head = node.child
         while head.child is not None:
             head = head.child
-
         head.child = old_child
 
     def has_child(self, entity: EntityKey) -> bool:
