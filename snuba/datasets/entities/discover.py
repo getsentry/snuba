@@ -45,6 +45,7 @@ from snuba.query.dsl import identity
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
+    Expression,
     FunctionCall,
     Literal,
     SubscriptableReference,
@@ -133,18 +134,33 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
         expression: FunctionCall,
         children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[FunctionCall]:
-        parameters = tuple(p.accept(children_translator) for p in expression.parameters)
-        for param in parameters:
-            # Handle wrapped functions that have been converted already
-            fmatch = self.function_match.match(param)
-            if fmatch is not None or (
-                isinstance(param, Literal) and param.alias != "" and param.value is None
+        should_be_nulled = False
+        if expression.function_name == "if":
+            # The first argument to "if" is the condition, so only look at the possible resulting
+            # expressions. Both are expected to be Null before it propogates it up.
+            if all(
+                self.is_null_expression(p.accept(children_translator))
+                for p in expression.parameters[1:]
             ):
-                # Currently function mappers require returning other functions. So return this
-                # to keep the mapper happy.
-                return identity(Literal(None, None), expression.alias)
+                should_be_nulled = True
+        elif any(
+            self.is_null_expression(p.accept(children_translator))
+            for p in expression.parameters
+        ):
+            should_be_nulled = True
 
+        if should_be_nulled:
+            # Currently function mappers require returning other functions. So return this
+            # to keep the mapper happy.
+            return identity(Literal(None, None), expression.alias)
         return None
+
+    def is_null_expression(self, param: Expression) -> bool:
+        # Handle wrapped functions that have been converted already
+        fmatch = self.function_match.match(param)
+        return fmatch is not None or (
+            isinstance(param, Literal) and param.alias != "" and param.value is None
+        )
 
 
 @dataclass(frozen=True)
