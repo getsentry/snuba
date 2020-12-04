@@ -47,7 +47,6 @@ class JoinRelationship(NamedTuple):
     rhs_entity: EntityKey
     join_class: JoinClass
     join_type: JoinType
-    join_modifier: JoinModifier
     columns: Sequence[Tuple[str, str]]
 
 

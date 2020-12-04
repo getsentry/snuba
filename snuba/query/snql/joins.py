@@ -48,7 +48,6 @@ class Node:
         return self.entity_data.data_source.key
 
     def push_child(self, node: Node) -> None:
-        # This happens here to ensure we use the correct alias in the columns.
         self.build_join_conditions(node)
         if not self.child:
             self.child = node
@@ -60,7 +59,6 @@ class Node:
             node.child = old_child
             return
 
-        # iterate down list and push old_child to end
         head = node.child
         while head.child is not None:
             head = head.child
@@ -89,6 +87,9 @@ class Node:
                 )
             )
 
+        # The join conditions are put into the right hand side since the left hand side
+        # can have many children, each with different join conditions. This way each child
+        # tracks how it is joined to its parent, since each child has exactly one parent.
         rhs.join_conditions = join_conditions
 
 
@@ -170,7 +171,6 @@ def build_join_clause_loop(
             right_node=rhs,
             keys=node_list.join_conditions,
             join_type=node_list.relationship.join_type,
-            join_modifier=node_list.relationship.join_modifier,
         )
 
     if node_list.child is None:

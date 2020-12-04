@@ -14,7 +14,6 @@ from snuba.query.data_source.join import (
     JoinClass,
     JoinCondition,
     JoinConditionExpression,
-    JoinModifier,
     JoinRelationship,
 )
 from snuba.query.expressions import (
@@ -631,7 +630,7 @@ test_cases = [
         id="Basic query with new lines and no ambiguous clause content",
     ),
     pytest.param(
-        """MATCH (e:events)
+        """MATCH (events)
         SELECT 4-5,3*foo(c) AS foo,c
         WHERE or(equals(arrayExists(a, '=', 'RuntimeException'), 1), equals(arrayAll(b, 'NOT IN', tuple('Stack', 'Arithmetic')), 1)) = 1""",
         LogicalQuery(
@@ -760,7 +759,6 @@ test_cases = [
                     )
                 ],
                 join_type=JoinType.INNER,
-                join_modifier=JoinModifier.SEMI,
             ),
             selected_columns=[
                 SelectedExpression(
@@ -797,7 +795,6 @@ test_cases = [
                     )
                 ],
                 join_type=JoinType.INNER,
-                join_modifier=JoinModifier.SEMI,
             ),
             selected_columns=[
                 SelectedExpression(
@@ -838,7 +835,6 @@ test_cases = [
                         )
                     ],
                     join_type=JoinType.INNER,
-                    join_modifier=JoinModifier.SEMI,
                 ),
                 right_node=IndividualNode(
                     "t",
@@ -854,7 +850,6 @@ test_cases = [
                     )
                 ],
                 join_type=JoinType.INNER,
-                join_modifier=JoinModifier.SEMI,
             ),
             selected_columns=[
                 SelectedExpression(
@@ -899,7 +894,6 @@ test_cases = [
                                 )
                             ],
                             join_type=JoinType.INNER,
-                            join_modifier=JoinModifier.SEMI,
                         ),
                         right_node=IndividualNode(
                             "gm",
@@ -915,7 +909,6 @@ test_cases = [
                             )
                         ],
                         join_type=JoinType.INNER,
-                        join_modifier=JoinModifier.SEMI,
                     ),
                     right_node=IndividualNode(
                         "ga",
@@ -931,7 +924,6 @@ test_cases = [
                         )
                     ],
                     join_type=JoinType.INNER,
-                    join_modifier=JoinModifier.SEMI,
                 ),
                 right_node=IndividualNode(
                     "t",
@@ -947,7 +939,6 @@ test_cases = [
                     )
                 ],
                 join_type=JoinType.INNER,
-                join_modifier=JoinModifier.SEMI,
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1075,7 +1066,7 @@ test_cases = [
         id="Basic query with crazy characters and escaping",
     ),
     pytest.param(
-        """MATCH (d: discover_events )
+        """MATCH (discover_events )
         SELECT count() AS count BY tags_key
         WHERE or(equals(ifNull(tags[foo],''),'baz'),equals(ifNull(tags[foo.bar],''),'qux'))=1
         ORDER BY count DESC,tags_key ASC  LIMIT 10""",
@@ -1168,7 +1159,6 @@ def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> No
             rhs_entity=entity_key,
             join_class=JoinClass.ONE_2_ONE,
             join_type=JoinType.INNER,
-            join_modifier=JoinModifier.SEMI,
             columns=[("event_id", rhs_column)],
         )
 

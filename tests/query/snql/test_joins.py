@@ -10,7 +10,6 @@ from snuba.query.data_source.join import (
     JoinClass,
     JoinCondition,
     JoinConditionExpression,
-    JoinModifier,
     JoinRelationship,
     JoinType,
 )
@@ -43,7 +42,6 @@ def join_clause(
             )
         ],
         join_type=JoinType.INNER,
-        join_modifier=JoinModifier.SEMI,
     )
 
 
@@ -219,7 +217,6 @@ def test_joins(
             rhs_entity=EntityKey(rhs),
             join_class=JoinClass.ONE_2_ONE,
             join_type=JoinType.INNER,
-            join_modifier=JoinModifier.SEMI,
             columns=[("event_id", "event_id")],
         )
         relationships.append(
