@@ -8,8 +8,10 @@ from snuba.datasets.factory import get_dataset
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
+    Argument,
     Column,
     FunctionCall,
+    Lambda,
     Literal,
     SubscriptableReference,
 )
@@ -109,6 +111,30 @@ test_cases = [
             offset=3,
         ),
         id="limit and offset",
+    ),
+    pytest.param(
+        "MATCH (e:events) SELECT 4-5, c, arrayJoin(c) AS x TOTALS true",
+        LogicalQuery(
+            {},
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "4-5",
+                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                ),
+                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression(
+                    "x",
+                    FunctionCall(
+                        "_snuba_x", "arrayJoin", (Column("_snuba_c", None, "c"),)
+                    ),
+                ),
+            ],
+            totals=True,
+        ),
+        id="Array join",
     ),
     pytest.param(
         "MATCH (e: events) SELECT 4-5, 3* foo(c) AS foo, c WHERE a<3",
@@ -536,6 +562,112 @@ test_cases = [
         id="Basic query with new lines and no ambiguous clause content",
     ),
     pytest.param(
+        """MATCH (e:events)
+        SELECT 4-5,3*foo(c) AS foo,c
+        WHERE or(equals(arrayExists(a, '=', 'RuntimeException'), 1), equals(arrayAll(b, 'NOT IN', tuple('Stack', 'Arithmetic')), 1)) = 1""",
+        LogicalQuery(
+            {},
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "4-5",
+                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                ),
+                SelectedExpression(
+                    "3*foo(c) AS foo",
+                    FunctionCall(
+                        None,
+                        "multiply",
+                        (
+                            Literal(None, 3),
+                            FunctionCall(
+                                "_snuba_foo", "foo", (Column("_snuba_c", None, "c"),)
+                            ),
+                        ),
+                    ),
+                ),
+                SelectedExpression("c", Column("_snuba_c", None, "c")),
+            ],
+            condition=binary_condition(
+                "equals",
+                binary_condition(
+                    "or",
+                    binary_condition(
+                        "equals",
+                        FunctionCall(
+                            None,
+                            "arrayExists",
+                            (
+                                Lambda(
+                                    None,
+                                    ("x",),
+                                    FunctionCall(
+                                        None,
+                                        "assumeNotNull",
+                                        (
+                                            FunctionCall(
+                                                None,
+                                                "equals",
+                                                (
+                                                    Argument(None, "x"),
+                                                    Literal(None, "RuntimeException"),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                                Column("_snuba_a", None, "a"),
+                            ),
+                        ),
+                        Literal(None, 1),
+                    ),
+                    binary_condition(
+                        "equals",
+                        FunctionCall(
+                            None,
+                            "arrayAll",
+                            (
+                                Lambda(
+                                    None,
+                                    ("x",),
+                                    FunctionCall(
+                                        None,
+                                        "assumeNotNull",
+                                        (
+                                            FunctionCall(
+                                                None,
+                                                "notIn",
+                                                (
+                                                    Argument(None, "x"),
+                                                    FunctionCall(
+                                                        None,
+                                                        "tuple",
+                                                        (
+                                                            Literal(None, "Stack"),
+                                                            Literal(
+                                                                None, "Arithmetic",
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                                Column("_snuba_b", None, "b"),
+                            ),
+                        ),
+                        Literal(None, 1),
+                    ),
+                ),
+                Literal(None, 1),
+            ),
+        ),
+        id="Special array join functions",
+    ),
+    pytest.param(
         """MATCH (e:events) SELECT 4-5,3*foo(c) AS foo,c WHERE a<'stuff\\' "\\" stuff' AND b='"💩\\" \t \\'\\''""",
         LogicalQuery(
             {},
@@ -577,6 +709,78 @@ test_cases = [
             ),
         ),
         id="Basic query with crazy characters and escaping",
+    ),
+    pytest.param(
+        """MATCH (d: discover_events )
+        SELECT count() AS count BY tags_key
+        WHERE or(equals(ifNull(tags[foo],''),'baz'),equals(ifNull(tags[foo.bar],''),'qux'))=1
+        ORDER BY count DESC,tags_key ASC  LIMIT 10""",
+        LogicalQuery(
+            {},
+            QueryEntity(
+                EntityKey.DISCOVER_EVENTS,
+                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "count", FunctionCall("_snuba_count", "count", tuple()),
+                ),
+                SelectedExpression(
+                    "tags_key", Column("_snuba_tags_key", None, "tags_key"),
+                ),
+            ],
+            groupby=[Column("_snuba_tags_key", None, "tags_key")],
+            order_by=[
+                OrderBy(
+                    OrderByDirection.DESC,
+                    FunctionCall("_snuba_count", "count", tuple()),
+                ),
+                OrderBy(
+                    OrderByDirection.ASC, Column("_snuba_tags_key", None, "tags_key"),
+                ),
+            ],
+            limit=10,
+            condition=binary_condition(
+                "equals",
+                binary_condition(
+                    "or",
+                    binary_condition(
+                        "equals",
+                        FunctionCall(
+                            None,
+                            "ifNull",
+                            (
+                                SubscriptableReference(
+                                    "_snuba_tags[foo]",
+                                    Column("_snuba_tags", None, "tags"),
+                                    Literal(None, "foo"),
+                                ),
+                                Literal(None, ""),
+                            ),
+                        ),
+                        Literal(None, "baz"),
+                    ),
+                    binary_condition(
+                        "equals",
+                        FunctionCall(
+                            None,
+                            "ifNull",
+                            (
+                                SubscriptableReference(
+                                    "_snuba_tags[foo.bar]",
+                                    Column("_snuba_tags", None, "tags"),
+                                    Literal(None, "foo.bar"),
+                                ),
+                                Literal(None, ""),
+                            ),
+                        ),
+                        Literal(None, "qux"),
+                    ),
+                ),
+                Literal(None, 1),
+            ),
+        ),
+        id="Query with nested boolean conditions with multiple empty quoted literals",
     ),
 ]
 
