@@ -220,9 +220,30 @@ def test_first_level_conditions() -> None:
     assert get_first_level_and_conditions(cond) == [c1, c2, c3]
 
     cond = binary_condition(
+        BooleanFunctions.AND,
+        FunctionCall(
+            None, "equals", (FunctionCall(None, "and", (c1, c2)), Literal(None, 1))
+        ),
+        c3,
+    )
+    assert get_first_level_and_conditions(cond) == [c1, c2, c3]
+
+    cond = binary_condition(
         BooleanFunctions.OR, binary_condition(BooleanFunctions.AND, c1, c2), c3,
     )
     assert get_first_level_or_conditions(cond) == [
         binary_condition(BooleanFunctions.AND, c1, c2),
         c3,
+    ]
+
+    cond = binary_condition(
+        ConditionFunctions.EQ,
+        binary_condition(
+            BooleanFunctions.OR, c1, binary_condition(BooleanFunctions.AND, c2, c3)
+        ),
+        Literal(None, 1),
+    )
+    assert get_first_level_or_conditions(cond) == [
+        c1,
+        binary_condition(BooleanFunctions.AND, c2, c3),
     ]
