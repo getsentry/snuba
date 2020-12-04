@@ -23,6 +23,8 @@ from snuba.clickhouse.translators.snuba.allowed import (
     SubscriptableReferenceMapper,
 )
 from snuba.clickhouse.translators.snuba.mappers import (
+    ColumnToColumn,
+    ColumnToFunction,
     ColumnToLiteral,
     ColumnToMapping,
     SubscriptableMapper,
@@ -369,6 +371,34 @@ class DiscoverEntity(Entity):
                     transaction_translation_mappers
                 )
                 .concat(null_function_translation_mappers)
+                .concat(
+                    TranslationMappers(
+                        columns=[
+                            ColumnToFunction(
+                                None,
+                                "ip_address",
+                                "coalesce",
+                                (
+                                    FunctionCall(
+                                        None,
+                                        "IPv4NumToString",
+                                        (Column(None, None, "ip_address_v4"),),
+                                    ),
+                                    FunctionCall(
+                                        None,
+                                        "IPv6NumToString",
+                                        (Column(None, None, "ip_address_v6"),),
+                                    ),
+                                ),
+                            ),
+                            ColumnToColumn(
+                                None, "transaction", None, "transaction_name"
+                            ),
+                            ColumnToColumn(None, "username", None, "user_name"),
+                            ColumnToColumn(None, "email", None, "user_email"),
+                        ]
+                    )
+                )
                 .concat(
                     TranslationMappers(
                         subscriptables=[
