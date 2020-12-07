@@ -21,10 +21,63 @@ from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 
 
-def function_rule(col_name: str, function_name: str) -> ColumnToFunction:
+def function_column(col_name: str, function_name: str) -> ColumnToFunction:
     return ColumnToFunction(
         None, col_name, function_name, (Column(None, None, col_name),),
     )
+
+
+def function_call(col_name: str, function_name: str) -> FunctionCall:
+    return FunctionCall(None, function_name, (Column(None, None, col_name),),)
+
+
+def plus_columns(
+    col_name: str, col_a: FunctionCall, col_b: FunctionCall
+) -> ColumnToFunction:
+    return ColumnToFunction(None, col_name, "plus", (col_a, col_b),)
+
+
+sessions_translators = TranslationMappers(
+    columns=[
+        ColumnToCurriedFunction(
+            None,
+            "duration_quantiles",
+            FunctionCall(
+                None,
+                "quantilesIfMerge",
+                tuple(
+                    Literal(None, quant) for quant in [0.5, 0.75, 0.9, 0.95, 0.99, 1]
+                ),
+            ),
+            (Column(None, None, "duration_quantiles"),),
+        ),
+        function_column("duration_avg", "avgIfMerge"),
+        plus_columns(
+            "sessions",
+            function_call("sessions", "countIfMerge"),
+            function_call("sessions_preaggr", "sumIfMerge"),
+        ),
+        plus_columns(
+            "sessions_crashed",
+            function_call("sessions_crashed", "countIfMerge"),
+            function_call("sessions_crashed_preaggr", "sumIfMerge"),
+        ),
+        plus_columns(
+            "sessions_abnormal",
+            function_call("sessions_abnormal", "countIfMerge"),
+            function_call("sessions_abnormal_preaggr", "sumIfMerge"),
+        ),
+        plus_columns(
+            "sessions_errored",
+            function_call("sessions_errored", "uniqIfMerge"),
+            function_call("sessions_errored_preaggr", "sumIfMerge"),
+        ),
+        function_column("users", "uniqIfMerge"),
+        function_column("users_crashed", "uniqIfMerge"),
+        function_column("users_abnormal", "uniqIfMerge"),
+        function_column("users_errored", "uniqIfMerge"),
+    ]
+)
 
 
 class SessionsEntity(Entity):
@@ -40,29 +93,7 @@ class SessionsEntity(Entity):
             # selector that decides when to use the materialized data.
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=SingleStorageQueryPlanBuilder(
-                    storage=materialized_storage,
-                    mappers=TranslationMappers(
-                        columns=[
-                            ColumnToCurriedFunction(
-                                None,
-                                "duration_quantiles",
-                                FunctionCall(
-                                    None,
-                                    "quantilesIfMerge",
-                                    (Literal(None, 0.5), Literal(None, 0.9)),
-                                ),
-                                (Column(None, None, "duration_quantiles"),),
-                            ),
-                            function_rule("sessions", "countIfMerge"),
-                            function_rule("sessions_crashed", "countIfMerge"),
-                            function_rule("sessions_abnormal", "countIfMerge"),
-                            function_rule("users", "uniqIfMerge"),
-                            function_rule("sessions_errored", "uniqIfMerge"),
-                            function_rule("users_crashed", "uniqIfMerge"),
-                            function_rule("users_abnormal", "uniqIfMerge"),
-                            function_rule("users_errored", "uniqIfMerge"),
-                        ]
-                    ),
+                    storage=materialized_storage, mappers=sessions_translators,
                 ),
             ),
             abstract_column_set=read_schema.get_columns(),
