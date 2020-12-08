@@ -1,4 +1,5 @@
 from __future__ import annotations
+from copy import copy
 
 from typing import Mapping, MutableMapping, NamedTuple, Set
 
@@ -120,8 +121,9 @@ def get_equivalent_columns(
     connected component (directly if there is an edge between two columns
     or transitively).
 
-    The connected components are returned as a Mapping of nodes to their
-    connected component (which is a set of nodes).
+    The connected components are returned as a Mapping of nodes to the
+    set of the nodes in the same component, which means the nodes in the
+    same connected component
     """
 
     def traverse_graph(
@@ -148,6 +150,8 @@ def get_equivalent_columns(
         if node not in connected_components:
             component = traverse_graph(node, set())
             for node in component:
-                connected_components[node] = component
+                equivalent_nodes = copy(component)
+                equivalent_nodes.remove(node)
+                connected_components[node] = equivalent_nodes
 
     return connected_components
