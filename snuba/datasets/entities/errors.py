@@ -3,6 +3,7 @@ from typing import FrozenSet, Mapping, Sequence
 
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToFunction,
+    ColumnToMapping,
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
@@ -10,7 +11,7 @@ from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.errors import promoted_tag_columns
+from snuba.datasets.storages.errors_common import promoted_tag_columns
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
@@ -28,6 +29,9 @@ errors_translators = TranslationMappers(
         ColumnToFunction(
             None, "user", "nullIf", (Column(None, None, "user"), Literal(None, ""))
         ),
+        ColumnToMapping(None, "geo_country_code", None, "contexts", "geo.country_code"),
+        ColumnToMapping(None, "geo_region", None, "contexts", "geo.region"),
+        ColumnToMapping(None, "geo_city", None, "contexts", "geo.city"),
     ],
     subscriptables=[
         SubscriptableMapper(None, "tags", None, "tags"),

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from copy import copy
 
 from typing import Mapping, MutableMapping, NamedTuple, Set
 
@@ -9,6 +10,7 @@ from snuba.query.data_source.join import (
     JoinClause,
     JoinNode,
     JoinVisitor,
+    entity_from_node,
 )
 from snuba.query.data_source.simple import Entity
 
@@ -23,15 +25,10 @@ class QualifiedCol(NamedTuple):
 # Each node is a QualifiedCol instance, which represents entity
 # and column.
 # Each edge represent an equivalence between two nodes.
-EquivalencesGraph = MutableMapping[QualifiedCol, Set[QualifiedCol]]
+EquivalenceGraph = MutableMapping[QualifiedCol, Set[QualifiedCol]]
 
 
-def _entity_from_node(node: IndividualNode[Entity]) -> EntityKey:
-    assert isinstance(node.data_source, Entity)
-    return node.data_source.key
-
-
-class EquivalenceExtractor(JoinVisitor[EquivalencesGraph, Entity]):
+class EquivalenceExtractor(JoinVisitor[EquivalenceGraph, Entity]):
     """
     Visits a JoinClause and extracts the relevant the graph of all the
     semantic equivalences between columns across entities involved in
@@ -43,7 +40,7 @@ class EquivalenceExtractor(JoinVisitor[EquivalencesGraph, Entity]):
     - equivalences declared in the entity that are not part of the join.
       An example if transaction_name on transactions and spans.
 
-    An EquivalencesGraph is produced.
+    An EquivalenceGraph is produced.
     """
 
     def __init__(self, entities_in_join: Set[EntityKey]) -> None:
@@ -55,7 +52,7 @@ class EquivalenceExtractor(JoinVisitor[EquivalencesGraph, Entity]):
 
     def __add_relationship(
         self,
-        graph: EquivalencesGraph,
+        graph: EquivalenceGraph,
         lhs_entity: EntityKey,
         lhs_column: str,
         rhs_entity: EntityKey,
@@ -67,49 +64,40 @@ class EquivalenceExtractor(JoinVisitor[EquivalencesGraph, Entity]):
         """
         left = QualifiedCol(lhs_entity, lhs_column)
         right = QualifiedCol(rhs_entity, rhs_column)
-        if left not in graph:
-            graph[left] = {right}
-        else:
-            graph[left].add(right)
-        if right not in graph:
-            graph[right] = {left}
-        else:
-            graph[right].add(left)
+        graph.setdefault(left, set()).add(right)
+        graph.setdefault(right, set()).add(left)
 
-    def visit_individual_node(self, node: IndividualNode[Entity]) -> EquivalencesGraph:
-        ret: EquivalencesGraph = {}
-        entity = get_entity(_entity_from_node(node))
+    def visit_individual_node(self, node: IndividualNode[Entity]) -> EquivalenceGraph:
+        ret: EquivalenceGraph = {}
+        entity = get_entity(entity_from_node(node))
 
         for relationship in entity.get_all_join_relationships().values():
             if relationship.rhs_entity in self.__entities:
                 for equivalence in relationship.equivalences:
                     self.__add_relationship(
                         ret,
-                        _entity_from_node(node),
+                        entity_from_node(node),
                         equivalence.left_col,
                         relationship.rhs_entity,
                         equivalence.right_col,
                     )
         return ret
 
-    def visit_join_clause(self, node: JoinClause[Entity]) -> EquivalencesGraph:
-        ret: EquivalencesGraph = {}
+    def visit_join_clause(self, node: JoinClause[Entity]) -> EquivalenceGraph:
+        ret: EquivalenceGraph = {}
         mapping = node.get_alias_node_map()
         for condition in node.keys:
             self.__add_relationship(
                 ret,
-                _entity_from_node(mapping[condition.left.table_alias]),
+                entity_from_node(mapping[condition.left.table_alias]),
                 condition.left.column,
-                _entity_from_node(mapping[condition.right.table_alias]),
+                entity_from_node(mapping[condition.right.table_alias]),
                 condition.right.column,
             )
 
         def merge_into_graph(node: JoinNode[Entity]) -> None:
             for col, equivalences in node.accept(self).items():
-                if col not in ret:
-                    ret[col] = equivalences
-                else:
-                    ret[col] |= equivalences
+                ret[col] = ret.get(col, set()) | equivalences
 
         merge_into_graph(node.left_node)
         merge_into_graph(node.right_node)
@@ -133,8 +121,9 @@ def get_equivalent_columns(
     connected component (directly if there is an edge between two columns
     or transitively).
 
-    The connected components are returned as a Mapping of nodes to their
-    connected component (which is a set of nodes).
+    The connected components are returned as a Mapping of nodes to the
+    set of the nodes in the same component, which means the nodes in the
+    same connected component
     """
 
     def traverse_graph(
@@ -152,7 +141,7 @@ def get_equivalent_columns(
         return visited_nodes
 
     entities_in_join = {
-        _entity_from_node(node) for node in join.get_alias_node_map().values()
+        entity_from_node(node) for node in join.get_alias_node_map().values()
     }
     adjacency_sets = join.accept(EquivalenceExtractor(entities_in_join))
     connected_components: MutableMapping[QualifiedCol, Set[QualifiedCol]] = {}
@@ -161,6 +150,8 @@ def get_equivalent_columns(
         if node not in connected_components:
             component = traverse_graph(node, set())
             for node in component:
-                connected_components[node] = component
+                equivalent_nodes = copy(component)
+                equivalent_nodes.remove(node)
+                connected_components[node] = equivalent_nodes
 
     return connected_components

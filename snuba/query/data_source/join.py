@@ -6,8 +6,10 @@ from enum import Enum
 from typing import Generic, Mapping, NamedTuple, Optional, Sequence, TypeVar, Union
 
 from snuba.clickhouse.columns import ColumnSet, QualifiedColumnSet
+from snuba.datasets.entities import EntityKey
 from snuba.query import ProcessableQuery, TSimpleDataSource
 from snuba.query.data_source import DataSource
+from snuba.query.data_source.simple import Entity
 
 
 class JoinType(Enum):
@@ -75,6 +77,11 @@ class IndividualNode(JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
 
     def accept(self, visitor: JoinVisitor[TReturn, TSimpleDataSource]) -> TReturn:
         return visitor.visit_individual_node(self)
+
+
+def entity_from_node(node: IndividualNode[Entity]) -> EntityKey:
+    assert isinstance(node.data_source, Entity)
+    return node.data_source.key
 
 
 class JoinConditionExpression(NamedTuple):
