@@ -1,3 +1,4 @@
+import logging
 import random
 from dataclasses import dataclass
 from datetime import timedelta
@@ -65,6 +66,8 @@ from snuba.util import qualified_column
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.threaded_function_delegator import Result
 from snuba.web import QueryResult
+
+logger = logging.getLogger(__name__)
 
 metrics = MetricsWrapper(environment.metrics, "api.discover.discover_entity")
 
@@ -393,6 +396,19 @@ class DiscoverEntity(Entity):
                             ),
                             ColumnToColumn(None, "username", None, "user_name"),
                             ColumnToColumn(None, "email", None, "user_email"),
+                            ColumnToMapping(
+                                None,
+                                "geo_country_code",
+                                None,
+                                "contexts",
+                                "geo.country_code",
+                            ),
+                            ColumnToMapping(
+                                None, "geo_region", None, "contexts", "geo.region"
+                            ),
+                            ColumnToMapping(
+                                None, "geo_city", None, "contexts", "geo.city"
+                            ),
                         ]
                     )
                 )
@@ -417,12 +433,38 @@ class DiscoverEntity(Entity):
 
         def callback_func(results: List[Result[QueryResult]]) -> None:
             primary_result = results.pop(0)
+            primary_result_data = primary_result.result.result["data"]
 
             for result in results:
-                if result.result.result["data"] == primary_result.result.result["data"]:
+                result_data = result.result.result["data"]
+
+                if result_data == primary_result_data:
                     metrics.increment("query_result", tags={"match": "true"})
                 else:
                     metrics.increment("query_result", tags={"match": "false"})
+
+                    if len(result_data) != len(primary_result_data):
+                        logger.warning(
+                            "Non matching Discover result - different length",
+                            extra={
+                                "discover_result": len(result_data),
+                                "events_result": len(primary_result_data),
+                            },
+                        )
+                        break
+
+                    # Avoid sending too much data to Sentry - just one row for now
+                    logger.warning(
+                        "Non matching Discover result - different result",
+                        extra={
+                            "discover_result": result_data[0]
+                            if len(result_data)
+                            else None,
+                            "events_result": primary_result_data[0]
+                            if len(primary_result_data)
+                            else None,
+                        },
+                    )
 
         super().__init__(
             storages=[events_storage, discover_storage],
