@@ -18,7 +18,7 @@ from snuba.query.data_source.join import (
 from snuba.query.data_source.simple import Entity as EntitySource
 from snuba.query.extensions import QueryExtension
 from snuba.query.joins.pre_processor import (
-    EquivalencesGraph,
+    EquivalenceGraph,
     QualifiedCol,
     get_equivalent_columns,
 )
@@ -335,7 +335,7 @@ TEST_CASES = [
 
 @pytest.mark.parametrize("join, graph", TEST_CASES)
 def test_find_equivalences(
-    join: JoinClause[EntitySource], graph: EquivalencesGraph
+    join: JoinClause[EntitySource], graph: EquivalenceGraph
 ) -> None:
     ENTITY_IMPL[EntityKey.EVENTS] = Events()
     ENTITY_IMPL[EntityKey.GROUPEDMESSAGES] = GroupedMessage()
