@@ -46,7 +46,11 @@ def add_equivalent_conditions(query: CompositeQuery[Entity]) -> None:
         if sole_column is not None:
             for equivalent in column_equivalence.get(sole_column, []):
                 replacer = partial(
-                    _replace_col, alias_to_entity, entity_to_alias, sole_column
+                    _replace_col,
+                    alias_to_entity,
+                    entity_to_alias,
+                    sole_column,
+                    equivalent,
                 )
                 conditions_to_add.append(sub_condition.transform(replacer))
 
