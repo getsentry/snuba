@@ -1079,3 +1079,71 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 0, data
+
+    def test_null_processor_with_if_function(self) -> None:
+        response = self.app.post(
+            self.endpoint,
+            "discover_transactions",
+            data=json.dumps(
+                {
+                    "consistent": False,
+                    "having": [],
+                    "aggregations": [
+                        [
+                            "divide",
+                            [
+                                [
+                                    "countIf",
+                                    [["greaterOrEquals", ["duration", 1000.0]]],
+                                ],
+                                [
+                                    "if",
+                                    [
+                                        [
+                                            "equals",
+                                            [
+                                                [
+                                                    "countIf",
+                                                    [
+                                                        [
+                                                            "greaterOrEquals",
+                                                            ["duration", 500.0],
+                                                        ]
+                                                    ],
+                                                ],
+                                                0.0,
+                                            ],
+                                        ],
+                                        None,
+                                        [
+                                            "countIf",
+                                            [["greaterOrEquals", ["duration", 500.0]]],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                            "divide_count_at_least_transaction_duration_1000_count_at_least_transaction_duration_0",
+                        ],
+                    ],
+                    "dataset": "discover",
+                    "project": [self.project_id],
+                    "selected_columns": ["transaction", "project_id"],
+                    "limit": 5,
+                    "offset": 0,
+                    "conditions": [
+                        ["type", "=", "transaction"],
+                        ["project_id", "IN", [self.project_id]],
+                    ],
+                    "groupby": ["transaction", "project_id"],
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert (
+            data["data"][0][
+                "divide_count_at_least_transaction_duration_1000_count_at_least_transaction_duration_0"
+            ]
+            == 1.0
+        )
