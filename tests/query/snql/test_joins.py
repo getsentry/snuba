@@ -7,7 +7,6 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.query.data_source.join import (
     IndividualNode,
     JoinClause,
-    JoinClass,
     JoinCondition,
     JoinConditionExpression,
     JoinRelationship,
@@ -215,7 +214,6 @@ def test_joins(
         rhs_alias, rhs = rhs.split(":", 1)
         data = JoinRelationship(
             rhs_entity=EntityKey(rhs),
-            join_class=JoinClass.ONE_2_ONE,
             join_type=JoinType.INNER,
             columns=[("event_id", "event_id")],
         )

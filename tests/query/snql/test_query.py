@@ -11,7 +11,6 @@ from snuba.query.data_source.join import (
     IndividualNode,
     JoinClause,
     JoinType,
-    JoinClass,
     JoinCondition,
     JoinConditionExpression,
     JoinRelationship,
@@ -1157,7 +1156,6 @@ def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> No
         entity_key, rhs_column = mapping[relationship]
         return JoinRelationship(
             rhs_entity=entity_key,
-            join_class=JoinClass.ONE_2_ONE,
             join_type=JoinType.INNER,
             columns=[("event_id", rhs_column)],
         )
