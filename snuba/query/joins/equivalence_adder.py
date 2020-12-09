@@ -15,6 +15,29 @@ from snuba.query.joins.pre_processor import QualifiedCol, get_equivalent_columns
 
 
 def add_equivalent_conditions(query: CompositeQuery[Entity]) -> None:
+    """
+    Finds conditions in a join query on columns that have a semantic
+    equivalent in another entity in the join and add the same condition
+    on the equivalent column.
+
+    Example: In a join between events and groupedmessage, if there is
+    a condition on events.project_id, it would replicate the same
+    condition on groupedmessage.project_id as this is a semantically
+    equivalent column.
+
+    The goal is to reduce the amount of data that is loaded by clickhouse
+    for each subquery by adding all the conditions we can to all
+    subqueries.
+
+    Cases we skip:
+    - top level conditions that include columns in multiple tables.
+      These cannot be pushed down to subqueries.
+    - top level conditions containing multiple columns as some may
+      not have a semantic equivalent. TODO: This can be extended by
+      supporting conditions that contain multiple column which all
+      have an equivalent in the same entity
+    """
+
     from_clause = query.get_from_clause()
     if isinstance(from_clause, CompositeQuery):
         add_equivalent_conditions(from_clause)
@@ -32,16 +55,24 @@ def add_equivalent_conditions(query: CompositeQuery[Entity]) -> None:
     for alias, entity in alias_to_entity.items():
         assert (
             entity not in entity_to_alias
-        ), f"Unprocessable join condition. Entity {entity} is present more than once"
+        ), f"Cannot process join condition. Entity {entity} is present more than once"
         entity_to_alias[entity] = alias
 
     column_equivalence = get_equivalent_columns(from_clause)
     condition = query.get_condition_from_ast()
     if condition is None:
         return
+
     and_components = get_first_level_and_conditions(condition)
     conditions_to_add = []
     for sub_condition in and_components:
+        # We duplicate only the top level conditions that reference one
+        # and only one column that has a semantic equivalent.
+        # This excludes top level conditions that contains columns from
+        # multiple entities, and cannot be pushed down to subqueries.
+        #
+        # TODO: Address top level conditions that contain multiple
+        # columns each of which has an equivalent in the same entity.
         sole_column = _classify_single_column_condition(sub_condition, alias_to_entity)
         if sole_column is not None:
             for equivalent in column_equivalence.get(sole_column, []):
