@@ -6,13 +6,14 @@ import pytest
 from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import ENTITY_IMPL
-from snuba.datasets.entity import ColumnEquivalence, Entity, JoinRelationship
+from snuba.datasets.entity import Entity
 from snuba.query.data_source.join import (
+    ColumnEquivalence,
     IndividualNode,
-    JoinClass,
     JoinClause,
     JoinCondition,
     JoinConditionExpression,
+    JoinRelationship,
     JoinType,
 )
 from snuba.query.data_source.simple import Entity as EntitySource
@@ -70,36 +71,21 @@ class Events(FakeEntity):
             join_relationships={
                 "grouped": JoinRelationship(
                     rhs_entity=EntityKey.GROUPEDMESSAGES,
-                    keys=[
-                        JoinCondition(
-                            JoinConditionExpression("", "group_id"),
-                            JoinConditionExpression("", "id"),
-                        )
-                    ],
-                    join_class=JoinClass.N_2_ONE,
+                    columns=[("group_id", "id")],
+                    join_type=JoinType.INNER,
                     equivalences=[ColumnEquivalence("project_id", "project_id")],
                 ),
                 "assigned_group": JoinRelationship(
                     rhs_entity=EntityKey.GROUPASSIGNEE,
-                    keys=[
-                        JoinCondition(
-                            JoinConditionExpression("", "group_id"),
-                            JoinConditionExpression("", "group_id"),
-                        )
-                    ],
-                    join_class=JoinClass.N_2_ONE,
+                    columns=[("group_id", "group_id")],
+                    join_type=JoinType.INNER,
                     equivalences=[ColumnEquivalence("project_id", "project_id")],
                 ),
                 # This makes no sense but it is for the sake of the test
                 "assigned_user": JoinRelationship(
                     rhs_entity=EntityKey.GROUPASSIGNEE,
-                    keys=[
-                        JoinCondition(
-                            JoinConditionExpression("", "user_id"),
-                            JoinConditionExpression("", "user_id"),
-                        )
-                    ],
-                    join_class=JoinClass.N_2_ONE,
+                    columns=[("user_id", "user_id")],
+                    join_type=JoinType.INNER,
                     equivalences=[ColumnEquivalence("project_id", "project_id")],
                 ),
             },
@@ -116,24 +102,14 @@ class GroupedMessage(FakeEntity):
             join_relationships={
                 "events": JoinRelationship(
                     rhs_entity=EntityKey.EVENTS,
-                    keys=[
-                        JoinCondition(
-                            JoinConditionExpression("", "id"),
-                            JoinConditionExpression("", "group_id"),
-                        )
-                    ],
-                    join_class=JoinClass.ONE_2_N,
+                    columns=[("id", "group_id")],
+                    join_type=JoinType.INNER,
                     equivalences=[ColumnEquivalence("project_id", "project_id")],
                 ),
                 "assigned": JoinRelationship(
                     rhs_entity=EntityKey.GROUPASSIGNEE,
-                    keys=[
-                        JoinCondition(
-                            JoinConditionExpression("", "user_id"),
-                            JoinConditionExpression("", "user_id"),
-                        )
-                    ],
-                    join_class=JoinClass.ONE_2_N,
+                    columns=[("user_id", "user_id")],
+                    join_type=JoinType.INNER,
                     equivalences=[],
                 ),
             },
@@ -150,24 +126,14 @@ class GroupAssignee(FakeEntity):
             join_relationships={
                 "events": JoinRelationship(
                     rhs_entity=EntityKey.EVENTS,
-                    keys=[
-                        JoinCondition(
-                            JoinConditionExpression("", "group_id"),
-                            JoinConditionExpression("", "group_id"),
-                        )
-                    ],
-                    join_class=JoinClass.ONE_2_N,
+                    columns=[("group_id", "group_id")],
+                    join_type=JoinType.INNER,
                     equivalences=[ColumnEquivalence("project_id", "project_id")],
                 ),
                 "user_assigned": JoinRelationship(
                     rhs_entity=EntityKey.EVENTS,
-                    keys=[
-                        JoinCondition(
-                            JoinConditionExpression("", "user_id"),
-                            JoinConditionExpression("", "user_id"),
-                        )
-                    ],
-                    join_class=JoinClass.ONE_2_N,
+                    columns=[("user_id", "user_id")],
+                    join_type=JoinType.INNER,
                     equivalences=[ColumnEquivalence("project_id", "project_id")],
                 ),
             },

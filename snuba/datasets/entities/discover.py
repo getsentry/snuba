@@ -85,14 +85,14 @@ class DefaultNoneColumnMapper(ColumnMapper):
 
     def attempt_map(
         self, expression: Column, children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[Literal]:
+    ) -> Optional[FunctionCall]:
         if expression.column_name in self.columns:
-            return Literal(
-                alias=expression.alias
+            return identity(
+                Literal(None, None),
+                expression.alias
                 or qualified_column(
                     expression.column_name, expression.table_name or ""
                 ),
-                value=None,
             )
         else:
             return None
@@ -138,13 +138,11 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
     ) -> Optional[FunctionCall]:
         parameters = tuple(p.accept(children_translator) for p in expression.parameters)
         for param in parameters:
-            # Handle wrapped functions that have been converted already
+            # All impossible columns will have been converted to the identity function.
+            # So we know that if a function has the identity function as a parameter, we can
+            # collapse the entire expression.
             fmatch = self.function_match.match(param)
-            if fmatch is not None or (
-                isinstance(param, Literal) and param.alias != "" and param.value is None
-            ):
-                # Currently function mappers require returning other functions. So return this
-                # to keep the mapper happy.
+            if fmatch is not None:
                 return identity(Literal(None, None), expression.alias)
 
         return None
@@ -167,13 +165,12 @@ class DefaultIfNullCurriedFunctionMapper(CurriedFunctionCallMapper):
         internal_function = expression.internal_function.accept(children_translator)
         assert isinstance(internal_function, FunctionCall)  # mypy
         parameters = tuple(p.accept(children_translator) for p in expression.parameters)
-
         for param in parameters:
-            # Handle wrapped functions that have been converted already
+            # All impossible columns that have been converted to NULL will be the identity function.
+            # So we know that if a function has the identity function as a parameter, we can
+            # collapse the entire expression.
             fmatch = self.function_match.match(param)
-            if fmatch is not None or (
-                isinstance(param, Literal) and param.alias != "" and param.value is None
-            ):
+            if fmatch is not None:
                 return CurriedFunctionCall(
                     alias=expression.alias,
                     internal_function=FunctionCall(
@@ -202,9 +199,9 @@ class DefaultNoneSubscriptMapper(SubscriptableReferenceMapper):
         self,
         expression: SubscriptableReference,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[Literal]:
+    ) -> Optional[FunctionCall]:
         if expression.column.column_name in self.subscript_names:
-            return Literal(alias=expression.alias, value=None)
+            return identity(Literal(None, None), expression.alias)
         else:
             return None
 

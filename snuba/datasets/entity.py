@@ -1,35 +1,14 @@
 from abc import ABC, abstractmethod
-from typing import Mapping, NamedTuple, Optional, Sequence
+from typing import Mapping, Optional, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.entities import EntityKey
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.storage import Storage, WritableStorage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
-from snuba.query.data_source.join import JoinClass, JoinCondition
+from snuba.query.data_source.join import JoinRelationship
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.validation import FunctionCallValidator
-
-
-class ColumnEquivalence(NamedTuple):
-    left_col: str
-    right_col: str
-
-
-class JoinRelationship(NamedTuple):
-    """
-    Represents the one way relationship between the owning Entity and another entity.
-    """
-
-    rhs_entity: EntityKey
-    keys: Sequence[JoinCondition]
-    join_class: JoinClass
-    # Keeps track of the semantically equivalent columns between the two
-    # related entities. Example transaction_name on the transactions table
-    # and transaction_name on the spans table. These columns are not part
-    # of the join key but are guaranteed to be equivalent.
-    equivalences: Sequence[ColumnEquivalence]
 
 
 class Entity(ABC):
