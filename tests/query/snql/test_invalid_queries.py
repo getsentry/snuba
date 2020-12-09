@@ -1,5 +1,5 @@
 import pytest
-from parsimonious.exceptions import IncompleteParseError
+from parsimonious.exceptions import IncompleteParseError, VisitationError
 
 from snuba.datasets.factory import get_dataset
 from snuba.query.snql.parser import parse_snql_query
@@ -8,24 +8,29 @@ test_cases = [
     # below are cases that are not parsed completely
     # i.e. the entire string is not consumed
     pytest.param(
-        "MATCH (e: events) SELECT 4-5,3*g(c),c BY d,2+7 WHEREa<3 ORDERBY f DESC",
+        "MATCH (events) SELECT 4-5,3*g(c),c BY d,2+7 WHEREa<3 ORDERBY f DESC",
         IncompleteParseError,
         id="ORDER BY is two words",
     ),
     pytest.param(
-        "MATCH (e: events) SELECT 4-5, 3*g(c), c BY d,2+7 WHERE a<3  ORDER BY fDESC",
+        "MATCH (events) SELECT 4-5, 3*g(c), c BY d,2+7 WHERE a<3  ORDER BY fDESC",
         IncompleteParseError,
         id="Expression before ASC / DESC needs to be separated from ASC / DESC keyword by space",
     ),
     pytest.param(
-        "MATCH (e: events) SELECT 4-5, 3*g(c), c BY d, ,2+7 WHERE a<3  ORDER BY f DESC",
+        "MATCH (events) SELECT 4-5, 3*g(c), c BY d, ,2+7 WHERE a<3  ORDER BY f DESC",
         IncompleteParseError,
         id="In a list, columns are separated by exactly one comma",
     ),
     pytest.param(
-        "MATCH (e: events) SELECT 4-5, 3*g(c), c BY d, ,2+7 WHERE a<3ORb>2  ORDER BY f DESC",
+        "MATCH (events) SELECT 4-5, 3*g(c), c BY d, ,2+7 WHERE a<3ORb>2  ORDER BY f DESC",
         IncompleteParseError,
         id="mandatory spacing",
+    ),
+    pytest.param(
+        "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, c",
+        VisitationError,
+        id="invalid relationship name",
     ),
 ]
 
