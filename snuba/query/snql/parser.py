@@ -1,5 +1,6 @@
 from typing import (
     Any,
+    Callable,
     Iterable,
     MutableMapping,
     NamedTuple,
@@ -15,12 +16,20 @@ from parsimonious.nodes import Node, NodeVisitor
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.query import (
+    LimitBy,
+    OrderBy,
+    OrderByDirection,
+    SelectedExpression,
+)
+from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     binary_condition,
     combine_and_conditions,
     combine_or_conditions,
 )
+from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
     Argument,
@@ -42,21 +51,15 @@ from snuba.query.matchers import (
     Or,
     String as StringMatch,
 )
-from snuba.query import (
-    LimitBy,
-    OrderBy,
-    OrderByDirection,
-    SelectedExpression,
-)
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.parser import (
     _apply_column_aliases,
-    _deescape_aliases,
     _expand_aliases,
     _mangle_aliases,
     _parse_subscriptables,
     _validate_aliases,
 )
+from snuba.query.parser.exceptions import ParsingException
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
     HighPriOperator,
@@ -79,13 +82,17 @@ from snuba.query.snql.expression_visitor import (
     visit_parameters_list,
     visit_quoted_literal,
 )
+from snuba.query.snql.joins import (
+    RelationshipTuple,
+    build_join_clause,
+)
 from snuba.util import parse_datetime
 
 snql_grammar = Grammar(
     r"""
     query_exp             = match_clause select_clause group_by_clause? where_clause? having_clause? order_by_clause? limit_by_clause? limit_clause? offset_clause? granularity_clause? totals_clause? space*
 
-    match_clause          = space* "MATCH" space+ entity_match
+    match_clause          = space* "MATCH" space+ (relationships / subquery / entity_single )
     select_clause         = space+ "SELECT" space+ select_list
     group_by_clause       = space+ "BY" space+ group_list
     where_clause          = space+ "WHERE" space+ or_expression
@@ -97,7 +104,12 @@ snql_grammar = Grammar(
     granularity_clause    = space+ "GRANULARITY" space+ integer_literal
     totals_clause         = space+ "TOTALS" space+ boolean_literal
 
+    entity_single         = open_paren space* entity_name sample_clause? space* close_paren
     entity_match          = open_paren entity_alias colon space* entity_name sample_clause? space* close_paren
+    relationship_link     = ~r"-\[" relationship_name ~r"\]->"
+    relationship_match    = space* entity_match space* relationship_link space* entity_match
+    relationships         = relationship_match (comma relationship_match)*
+    subquery              = open_brace query_exp close_brace
     sample_clause         = space+ "SAMPLE" space+ numeric_literal
 
     and_expression        = space* condition and_tuple*
@@ -147,6 +159,9 @@ snql_grammar = Grammar(
     function_name         = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     entity_alias          = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     entity_name           = ~r"[a-zA-Z_]+"
+    relationship_name     = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
+    open_brace            = "{"
+    close_brace           = "}"
     open_paren            = "("
     close_paren           = ")"
     open_square           = "["
@@ -169,12 +184,6 @@ class OrTuple(NamedTuple):
     exp: Expression
 
 
-class EntityTuple(NamedTuple):
-    alias: str
-    name: str
-    sample_rate: Optional[float]
-
-
 class SnQLVisitor(NodeVisitor):
     """
     Builds Snuba AST expressions from the Parsimonious parse tree.
@@ -182,7 +191,7 @@ class SnQLVisitor(NodeVisitor):
 
     def visit_query_exp(
         self, node: Node, visited_children: Iterable[Any]
-    ) -> LogicalQuery:
+    ) -> Union[LogicalQuery, CompositeQuery[QueryEntity]]:
         args: MutableMapping[str, Any] = {}
         (
             data_source,
@@ -204,6 +213,10 @@ class SnQLVisitor(NodeVisitor):
             if isinstance(args[k], Node):
                 del args[k]
 
+        if isinstance(data_source, (CompositeQuery, LogicalQuery, JoinClause)):
+            args["from_clause"] = data_source
+            return CompositeQuery(**args)
+
         args.update({"body": {}, "prewhere": None, "from_clause": data_source})
         if isinstance(data_source, QueryEntity):
             # TODO: How sample rate gets stored needs to be addressed in a future PR
@@ -218,30 +231,130 @@ class SnQLVisitor(NodeVisitor):
         return LogicalQuery(**args)
 
     def visit_match_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Any, EntityTuple],
-    ) -> QueryEntity:
+        self,
+        node: Node,
+        visited_children: Tuple[
+            Any,
+            Any,
+            Any,
+            Union[
+                QueryEntity,
+                CompositeQuery[QueryEntity],
+                LogicalQuery,
+                RelationshipTuple,
+                Sequence[RelationshipTuple],
+            ],
+        ],
+    ) -> Union[
+        CompositeQuery[QueryEntity], LogicalQuery, QueryEntity, JoinClause[QueryEntity],
+    ]:
         _, _, _, match = visited_children
-        key = EntityKey(match.name)
-        query_entity = QueryEntity(
-            key, get_entity(key).get_data_model(), match.sample_rate
-        )
-        return query_entity
+        if isinstance(match, (CompositeQuery, LogicalQuery)):
+            return match
+        elif isinstance(match, RelationshipTuple):
+            join_clause = build_join_clause([match])
+            return join_clause
+        if isinstance(match, list) and all(
+            isinstance(m, RelationshipTuple) for m in match
+        ):
+            join_clause = build_join_clause(match)
+            return join_clause
+
+        assert isinstance(match, QueryEntity)  # mypy
+        return match
+
+    def visit_entity_single(
+        self,
+        node: Node,
+        visited_children: Tuple[
+            Any, Any, EntityKey, Union[Optional[float], Node], Any, Any
+        ],
+    ) -> QueryEntity:
+        _, _, name, sample, _, _ = visited_children
+        if isinstance(sample, Node):
+            sample = None
+
+        return QueryEntity(name, get_entity(name).get_data_model(), sample)
 
     def visit_entity_match(
         self,
         node: Node,
-        visited_children: Tuple[Any, str, Any, Any, str, Optional[float], Any, Any],
-    ) -> EntityTuple:
+        visited_children: Tuple[
+            Any, str, Any, Any, EntityKey, Union[Optional[float], Node], Any, Any
+        ],
+    ) -> IndividualNode[QueryEntity]:
         _, alias, _, _, name, sample, _, _ = visited_children
         if isinstance(sample, Node):
             sample = None
-        return EntityTuple(alias, name.lower(), sample)
+
+        return IndividualNode(
+            alias, QueryEntity(name, get_entity(name).get_data_model(), sample)
+        )
 
     def visit_entity_alias(self, node: Node, visited_children: Tuple[Any]) -> str:
         return str(node.text)
 
-    def visit_entity_name(self, node: Node, visited_children: Tuple[Any]) -> str:
-        return str(node.text)
+    def visit_entity_name(self, node: Node, visited_children: Tuple[Any]) -> EntityKey:
+        try:
+            return EntityKey(node.text)
+        except Exception:
+            raise ParsingException(f"{node.text} is not a valid entity name")
+
+    def visit_relationships(
+        self, node: Node, visited_children: Tuple[RelationshipTuple, Any],
+    ) -> Sequence[RelationshipTuple]:
+        relationships = [visited_children[0]]
+        if isinstance(visited_children[1], Node):
+            return relationships
+
+        for child in visited_children[1]:
+            if isinstance(child, RelationshipTuple):
+                relationships.append(child)
+            elif isinstance(child, list):
+                relationships.append(child[1])
+
+        return relationships
+
+    def visit_relationship_match(
+        self,
+        node: Node,
+        visited_children: Tuple[
+            Any,
+            IndividualNode[QueryEntity],
+            Any,
+            Node,
+            Any,
+            IndividualNode[QueryEntity],
+        ],
+    ) -> RelationshipTuple:
+        _, lhs, _, relationship, _, rhs = visited_children
+        assert isinstance(lhs.data_source, QueryEntity)
+        assert isinstance(rhs.data_source, QueryEntity)
+        lhs_entity = get_entity(lhs.data_source.key)
+        data = lhs_entity.get_join_relationship(relationship)
+        if data is None:
+            raise ParsingException(
+                f"{lhs.data_source.key.value} does not have a join relationship {relationship}"
+            )
+        elif data.rhs_entity != rhs.data_source.key:
+            raise ParsingException(
+                f"-[{relationship}]-> cannot be used to join {lhs.data_source.key.value} to {rhs.data_source.key.value}"
+            )
+
+        return RelationshipTuple(lhs, relationship, rhs, data)
+
+    def visit_relationship_link(
+        self, node: Node, visited_children: Tuple[Any, Node, Any]
+    ) -> str:
+        _, relationship, _ = visited_children
+        return str(relationship.text)
+
+    def visit_subquery(
+        self, node: Node, visited_children: Tuple[Any, Node, Any]
+    ) -> Union[LogicalQuery, CompositeQuery[QueryEntity]]:
+        _, query, _ = visited_children
+        assert isinstance(query, (CompositeQuery, LogicalQuery))  # mypy
+        return query
 
     def visit_function_name(self, node: Node, visited_children: Iterable[Any]) -> str:
         return visit_function_name(node, visited_children)
@@ -607,7 +720,9 @@ class SnQLVisitor(NodeVisitor):
         return generic_visit(node, visited_children)
 
 
-def parse_snql_query_initial(body: str) -> LogicalQuery:
+def parse_snql_query_initial(
+    body: str,
+) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
     """
     Parses the query body generating the AST. This only takes into
     account the initial query body. Extensions are parsed by extension
@@ -615,7 +730,7 @@ def parse_snql_query_initial(body: str) -> LogicalQuery:
     """
     exp_tree = snql_grammar.parse(body)
     parsed = SnQLVisitor().visit(exp_tree)
-    assert isinstance(parsed, LogicalQuery)  # mypy
+    assert isinstance(parsed, (CompositeQuery, LogicalQuery))  # mypy
     return parsed
 
 
@@ -624,7 +739,9 @@ DATETIME_MATCH = FunctionCallMatch(
 )
 
 
-def _parse_datetime_literals(query: LogicalQuery) -> None:
+def _parse_datetime_literals(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+) -> None:
     def parse(exp: Expression) -> Expression:
         result = DATETIME_MATCH.match(exp)
         if result is not None:
@@ -648,7 +765,9 @@ ARRAY_JOIN_MATCH = FunctionCallMatch(
 )
 
 
-def _array_join_transformation(query: LogicalQuery) -> None:
+def _array_join_transformation(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+) -> None:
     def parse(exp: Expression) -> Expression:
         result = ARRAY_JOIN_MATCH.match(exp)
         if result:
@@ -688,20 +807,36 @@ def _array_join_transformation(query: LogicalQuery) -> None:
     query.transform_expressions(parse)
 
 
-def parse_snql_query(body: str, dataset: Dataset) -> LogicalQuery:
+def _post_process(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
+    funcs: Sequence[Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]],
+) -> None:
+    for func in funcs:
+        func(query)
+
+    if isinstance(query, CompositeQuery):
+        from_clause = query.get_from_clause()
+        if isinstance(from_clause, (LogicalQuery, CompositeQuery)):
+            _post_process(from_clause, funcs)
+
+
+def parse_snql_query(
+    body: str, dataset: Dataset
+) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
     query = parse_snql_query_initial(body)
 
     # These are the post processing phases
-    _parse_datetime_literals(query)
+    _post_process(
+        query,
+        [
+            _parse_datetime_literals,
+            _validate_aliases,
+            _parse_subscriptables,  # -> This should be part of the grammar
+            _apply_column_aliases,
+            _expand_aliases,
+            _mangle_aliases,
+            _array_join_transformation,
+        ],
+    )
 
-    # TODO: Update these functions to work with snql queries in a separate PR
-    _validate_aliases(query)  # -> needs to recurse through sub queries
-    _parse_subscriptables(query)  # -> This should be part of the grammar
-    _apply_column_aliases(query)  # -> needs to recurse through sub queries
-    _expand_aliases(query)  # -> needs to recurse through sub queries
-    _deescape_aliases(
-        query
-    )  # -> This should not be needed at all, assuming SnQL can properly accept escaped/unicode strings
-    _mangle_aliases(query)  # needs to recurse through sub queries
-    _array_join_transformation(query)
     return query

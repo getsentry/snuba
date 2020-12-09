@@ -22,7 +22,7 @@ test_data = [
     ),
     pytest.param(
         Column(None, None, "primary_hash"),
-        Literal("primary_hash", None),
+        identity(Literal(None, None), "primary_hash"),
         id="basic event translation",
     ),
     pytest.param(
