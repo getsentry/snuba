@@ -3,7 +3,16 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Generic, Mapping, NamedTuple, Optional, Sequence, TypeVar, Union
+from typing import (
+    Generic,
+    Mapping,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 from snuba.clickhouse.columns import ColumnSet, QualifiedColumnSet
 from snuba.datasets.entities import EntityKey
@@ -22,13 +31,24 @@ class JoinModifier(Enum):
     SEMI = "SEMI"
 
 
-class JoinClass(Enum):
-    ONE_2_ZERO_OR_ONE = "1-0/1"
-    ONE_2_ONE = "1-1"
-    ONE_2_N = "1-N"
-    N_2_ZERO_OR_ONE = "N-0/1"
-    N_2_ONE = "N-1"
-    N_2_N = "N-N"
+class ColumnEquivalence(NamedTuple):
+    left_col: str
+    right_col: str
+
+
+class JoinRelationship(NamedTuple):
+    """
+    Represent the join relationship between an entity and another entity.
+    """
+
+    rhs_entity: EntityKey
+    join_type: JoinType
+    columns: Sequence[Tuple[str, str]]
+    # Keeps track of the semantically equivalent columns between the two
+    # related entities. Example transaction_name on the transactions table
+    # and transaction_name on the spans table. These columns are not part
+    # of the join key but are guaranteed to be equivalent.
+    equivalences: Sequence[ColumnEquivalence]
 
 
 @dataclass(frozen=True)
