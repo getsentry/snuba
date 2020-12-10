@@ -1158,6 +1158,7 @@ def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> No
             rhs_entity=entity_key,
             join_type=JoinType.INNER,
             columns=[("event_id", rhs_column)],
+            equivalences=[],
         )
 
     events_entity = get_entity(EntityKey.EVENTS)

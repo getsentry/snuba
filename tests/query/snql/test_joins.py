@@ -216,6 +216,7 @@ def test_joins(
             rhs_entity=EntityKey(rhs),
             join_type=JoinType.INNER,
             columns=[("event_id", "event_id")],
+            equivalences=[],
         )
         relationships.append(
             RelationshipTuple(
