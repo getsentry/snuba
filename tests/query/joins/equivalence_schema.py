@@ -72,6 +72,13 @@ class Events(FakeEntity):
                     join_type=JoinType.INNER,
                     equivalences=[ColumnEquivalence("project_id", "project_id")],
                 ),
+                # This makes even less sense but self referencing joins are possible
+                "self_relationship": JoinRelationship(
+                    rhs_entity=EntityKey.EVENTS,
+                    columns=[("event_id", "event_id")],
+                    join_type=JoinType.INNER,
+                    equivalences=[],
+                ),
             },
             writable_storage=None,
         )

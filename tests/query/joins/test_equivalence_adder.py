@@ -38,18 +38,13 @@ def test_classify_and_replace() -> None:
     condition = binary_condition(
         ConditionFunctions.EQ, Column(None, "ev", "project_id"), Literal(None, 1)
     )
-    assert _classify_single_column_condition(
-        condition, {"ev": EntityKey.EVENTS}
-    ) == QualifiedCol(EntityKey.EVENTS, "project_id")
+    assert _classify_single_column_condition(condition, {"ev": EntityKey.EVENTS}) == (
+        QualifiedCol(EntityKey.EVENTS, "project_id"),
+        "ev",
+    )
 
     assert condition.transform(
-        partial(
-            _replace_col,
-            {"ev": EntityKey.EVENTS, "gr": EntityKey.GROUPEDMESSAGES},
-            {EntityKey.EVENTS: "ev", EntityKey.GROUPEDMESSAGES: "gr"},
-            QualifiedCol(EntityKey.EVENTS, "project_id"),
-            QualifiedCol(EntityKey.GROUPEDMESSAGES, "project_id"),
-        )
+        partial(_replace_col, "ev", "project_id", "gr", "project_id")
     ) == binary_condition(
         ConditionFunctions.EQ, Column(None, "gr", "project_id"), Literal(None, 1)
     )
@@ -79,6 +74,38 @@ TEST_REPLACEMENT = [
             ConditionFunctions.EQ, Column(None, "ev", "event_id"), Literal(None, 1)
         ),
         id="No condition to add",
+    ),
+    pytest.param(
+        binary_condition(
+            ConditionFunctions.EQ, Column(None, "ev", "event_id"), Literal(None, 1)
+        ),
+        JoinClause(
+            IndividualNode("ev", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)),
+            IndividualNode("ev2", EntitySource(EntityKey.EVENTS, EVENTS_SCHEMA, None)),
+            [
+                JoinCondition(
+                    JoinConditionExpression("ev", "event_id"),
+                    JoinConditionExpression("ev2", "event_id"),
+                )
+            ],
+            JoinType.INNER,
+            None,
+        ),
+        combine_and_conditions(
+            [
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    Column(None, "ev", "event_id"),
+                    Literal(None, 1),
+                ),
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    Column(None, "ev2", "event_id"),
+                    Literal(None, 1),
+                ),
+            ]
+        ),
+        id="Self join. Duplicate condition",
     ),
     pytest.param(
         binary_condition(

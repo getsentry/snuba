@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Mapping, Optional
+from typing import Mapping, MutableMapping, Optional, Set, Tuple
 
 from snuba.datasets.entities import EntityKey
 from snuba.query import ProcessableQuery
@@ -51,12 +51,9 @@ def add_equivalent_conditions(query: CompositeQuery[Entity]) -> None:
         alias: entity_from_node(node)
         for alias, node in from_clause.get_alias_node_map().items()
     }
-    entity_to_alias = {}
+    entity_to_alias: MutableMapping[EntityKey, Set[str]] = {}
     for alias, entity in alias_to_entity.items():
-        assert (
-            entity not in entity_to_alias
-        ), f"Cannot process join condition. Entity {entity} is present more than once"
-        entity_to_alias[entity] = alias
+        entity_to_alias.setdefault(entity, set()).add(alias)
 
     column_equivalence = get_equivalent_columns(from_clause)
     condition = query.get_condition_from_ast()
@@ -75,15 +72,35 @@ def add_equivalent_conditions(query: CompositeQuery[Entity]) -> None:
         # columns each of which has an equivalent in the same entity.
         sole_column = _classify_single_column_condition(sub_condition, alias_to_entity)
         if sole_column is not None:
-            for equivalent in column_equivalence.get(sole_column, []):
-                replacer = partial(
-                    _replace_col,
-                    alias_to_entity,
-                    entity_to_alias,
-                    sole_column,
-                    equivalent,
-                )
-                conditions_to_add.append(sub_condition.transform(replacer))
+            column_in_condition, table_alias_in_condition = sole_column
+
+            for equivalent_table_alias in entity_to_alias[column_in_condition.entity]:
+                if equivalent_table_alias != table_alias_in_condition:
+                    # There are multiple occurrences of the entity found.
+                    # Apply the same condition everywhere.
+                    replacer = partial(
+                        _replace_col,
+                        table_alias_in_condition,
+                        column_in_condition.column,
+                        equivalent_table_alias,
+                        column_in_condition.column,
+                    )
+                    conditions_to_add.append(sub_condition.transform(replacer))
+
+            for equivalent in column_equivalence.get(column_in_condition, []):
+                # There are equivalent column on different entities
+                # in the query. Transform the condition and add it
+                # to all entities.
+                equivalent_aliases = entity_to_alias.get(equivalent.entity, set())
+                for table_alias in equivalent_aliases:
+                    replacer = partial(
+                        _replace_col,
+                        table_alias_in_condition,
+                        column_in_condition.column,
+                        table_alias,
+                        equivalent.column,
+                    )
+                    conditions_to_add.append(sub_condition.transform(replacer))
 
     query.set_ast_condition(
         combine_and_conditions([*and_components, *conditions_to_add])
@@ -92,17 +109,20 @@ def add_equivalent_conditions(query: CompositeQuery[Entity]) -> None:
 
 def _classify_single_column_condition(
     condition: Expression, alias_entity_map: Mapping[str, EntityKey]
-) -> Optional[QualifiedCol]:
+) -> Optional[Tuple[QualifiedCol, str]]:
     """
     Inspects a condition to check if it is a condition on a
     single column on a single entity
     """
-    qualified_col: Optional[QualifiedCol] = None
+    qualified_col: Optional[Tuple[QualifiedCol, str]] = None
     for e in condition:
         if isinstance(e, Column):
             if not e.table_name:
                 return None
-            qualified = QualifiedCol(alias_entity_map[e.table_name], e.column_name)
+            qualified = (
+                QualifiedCol(alias_entity_map[e.table_name], e.column_name),
+                e.table_name,
+            )
             if qualified_col is not None and qualified_col != qualified:
                 return None
             qualified_col = qualified
@@ -110,20 +130,17 @@ def _classify_single_column_condition(
 
 
 def _replace_col(
-    alias_entity_map: Mapping[str, EntityKey],
-    entity_alias_map: Mapping[EntityKey, str],
-    old_col: QualifiedCol,
-    new_col: QualifiedCol,
+    old_entity_alias: str,
+    old_col_name: str,
+    new_entity_alias: str,
+    new_col_name: str,
     expression: Expression,
 ) -> Expression:
-    if not isinstance(expression, Column):
-        return expression
-
     if (
-        expression.column_name != old_col.column
+        not isinstance(expression, Column)
+        or expression.column_name != old_col_name
         or expression.table_name is None
-        or expression.table_name not in alias_entity_map
-        or alias_entity_map[expression.table_name] != old_col.entity
+        or expression.table_name != old_entity_alias
     ):
         return expression
 
@@ -131,4 +148,4 @@ def _replace_col(
     # not replacing the old one in the query. A brand new condition will
     # be added with the new column, which should not conflict with the
     # old column that will still be in the query.
-    return Column(None, entity_alias_map[new_col.entity], new_col.column)
+    return Column(None, new_entity_alias, new_col_name)
