@@ -190,6 +190,18 @@ class String(Pattern[str]):
 
 
 @dataclass(frozen=True)
+class Integer(Pattern[int]):
+    """
+    Matches one specific integer.
+    """
+
+    value: int
+
+    def match(self, node: AnyType) -> Optional[MatchResult]:
+        return MatchResult() if node == self.value else None
+
+
+@dataclass(frozen=True)
 class OptionalString(Pattern[Optional[str]]):
     """
     Matches one specific string (or None).
