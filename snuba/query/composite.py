@@ -75,7 +75,9 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
     def set_from_clause(
         self,
         from_clause: Union[
-            ProcessableQuery[TSimpleDataSource], CompositeQuery[TSimpleDataSource]
+            ProcessableQuery[TSimpleDataSource],
+            CompositeQuery[TSimpleDataSource],
+            JoinClause[TSimpleDataSource],
         ],
     ) -> None:
         self.__from_clause = from_clause
