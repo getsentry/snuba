@@ -17,6 +17,7 @@ from snuba.pipeline.composite import (
     CompositeQueryPlanner,
 )
 from snuba.query import SelectedExpression
+from snuba.query import conditions
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.join import (
@@ -27,7 +28,12 @@ from snuba.query.data_source.join import (
     JoinType,
 )
 from snuba.query.data_source.simple import Entity, Table
-from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.expressions import (
+    Column,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
 from snuba.reader import Reader
@@ -35,8 +41,18 @@ from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.web import QueryResult
 
 events_ent = Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model())
+events_storage = get_storage(StorageKey.EVENTS)
 events_table = Table(
-    "sentry_local", get_storage(StorageKey.EVENTS).get_schema().get_columns()
+    "sentry_local",
+    events_storage.get_schema().get_columns(),
+    final=False,
+    sampling_rate=None,
+    mandatory_conditions=events_storage.get_schema()
+    .get_data_source()
+    .get_mandatory_conditions(),
+    prewhere_candidates=events_storage.get_schema()
+    .get_data_source()
+    .get_prewhere_candidates(),
 )
 
 groups_ent = Entity(
@@ -58,7 +74,15 @@ TEST_CASES = [
                     SelectedExpression(
                         "count_release",
                         FunctionCall(
-                            "count_release", "uniq", (Column(None, None, "release"),)
+                            "count_release",
+                            "uniq",
+                            (
+                                SubscriptableReference(
+                                    None,
+                                    Column(None, None, "tags"),
+                                    Literal(None, "sentry:release"),
+                                ),
+                            ),
                         ),
                     ),
                 ],
@@ -90,14 +114,21 @@ TEST_CASES = [
                             "count_release",
                             FunctionCall(
                                 "count_release",
-                                "uniq",
-                                (
-                                    build_mapping_expr(
+                                function_name="ifNull",
+                                parameters=(
+                                    FunctionCall(
                                         None,
-                                        None,
-                                        "tags",
-                                        Literal(None, "sentry:release"),
+                                        "uniq",
+                                        (
+                                            build_mapping_expr(
+                                                None,
+                                                None,
+                                                "tags",
+                                                Literal(None, "sentry:release"),
+                                            ),
+                                        ),
                                     ),
+                                    Literal(alias=None, value=0),
                                 ),
                             ),
                         ),
@@ -138,15 +169,29 @@ TEST_CASES = [
                         "count_release",
                         FunctionCall(
                             "count_release",
-                            "uniq",
-                            (
-                                build_mapping_expr(
-                                    None, None, "tags", Literal(None, "sentry:release"),
+                            function_name="ifNull",
+                            parameters=(
+                                FunctionCall(
+                                    None,
+                                    "uniq",
+                                    (
+                                        Column(
+                                            alias=None,
+                                            table_name=None,
+                                            column_name="sentry:release",
+                                        ),
+                                    ),
                                 ),
+                                Literal(alias=None, value=0),
                             ),
                         ),
                     ),
                 ],
+                condition=binary_condition(
+                    ConditionFunctions.EQ,
+                    Column(alias=None, table_name=None, column_name="deleted"),
+                    Literal(alias=None, value=0),
+                ),
                 groupby=[Column(None, None, "project_id")],
                 prewhere=binary_condition(
                     ConditionFunctions.EQ,
@@ -245,8 +290,22 @@ TEST_CASES = [
                                     "count_release",
                                     FunctionCall(
                                         "count_release",
-                                        "uniq",
-                                        (Column(None, None, "release"),),
+                                        function_name="ifNull",
+                                        parameters=(
+                                            FunctionCall(
+                                                None,
+                                                "uniq",
+                                                (
+                                                    build_mapping_expr(
+                                                        None,
+                                                        None,
+                                                        "tags",
+                                                        Literal(None, "sentry:release"),
+                                                    ),
+                                                ),
+                                            ),
+                                            Literal(alias=None, value=0),
+                                        ),
                                     ),
                                 ),
                             ],
@@ -403,7 +462,8 @@ def test_composite_planner(
     plan = CompositeQueryPlanner(
         deepcopy(logical_query), HTTPRequestSettings()
     ).execute()
-    assert plan.query.equals(composite_plan.query)
+    report = plan.query.equals(composite_plan.query)
+    assert report[0], f"Mismatch: {report[1]}"
 
     # We cannot simply check the equality between the plans because
     # we need to verify processors are of the same type, they can
@@ -436,7 +496,11 @@ def test_composite_planner(
         request_settings: RequestSettings,
         reader: Reader,
     ) -> QueryResult:
-        assert query.equals(processed_query)
+        report = query.get_from_clause().equals(processed_query.get_from_clause())
+        assert report[0], f"Mismatch: {report[1]}"
+
+        report = query.equals(processed_query)
+        assert report[0], f"Mismatch: {report[1]}"
         return QueryResult({"data": []}, {},)
 
     CompositeExecutionPipeline(logical_query, HTTPRequestSettings(), runner).execute()
