@@ -15,6 +15,9 @@ def test_get_time_range() -> None:
     body = {
         "selected_columns": ["event_id"],
         "conditions": [
+            # Cannot test complex conditions based on explicit calls
+            # the `and` and `or` functions, because they would not be
+            # parsed as datetime by the old parser.
             ("timestamp", ">=", "2019-09-18T10:00:00"),
             ("timestamp", ">=", "2000-09-18T10:00:00"),
             ("timestamp", "<", "2019-09-19T12:00:00"),

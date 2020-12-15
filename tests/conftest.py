@@ -76,9 +76,14 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
 
         def func(value: Union[str, List[Any]]) -> str:
             if not isinstance(value, list):
-                return f"{value}"
+                return f"{value}" if value is not None else "NULL"
 
-            children = ",".join(map(func, value[1]))
+            children = ""
+            if isinstance(value[1], list):
+                children = ",".join(map(func, value[1]))
+            elif value[1]:
+                children = func(value[1])
+
             alias = f" AS {value[2]}" if len(value) > 2 else ""
             return f"{value[0]}({children}){alias}"
 
@@ -95,25 +100,29 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
 
         sample = legacy.get("sample")
         sample_clause = f"SAMPLE {sample}" if sample else ""
-        match_clause = f"MATCH ({entity[0].lower()}: {entity} {sample_clause})"
+        match_clause = f"MATCH ({entity} {sample_clause})"
 
         selected = ", ".join(map(func, legacy.get("selected_columns", [])))
         select_clause = f"SELECT {selected}" if selected else ""
+
+        arrayjoin = legacy.get("arrayjoin")
+        if arrayjoin:
+            array_join_clause = (
+                f"arrayJoin({arrayjoin}) AS {arrayjoin}" if arrayjoin else ""
+            )
+            select_clause = (
+                f"SELECT {array_join_clause}"
+                if not select_clause
+                else f"{select_clause}, {array_join_clause}"
+            )
 
         aggregations = []
         for a in legacy.get("aggregations", []):
             if a[0].endswith(")") and not a[1]:
                 aggregations.append(f"{a[0]} AS {a[2]}")
             else:
-                func_name = a[0]
-                params: List[str] = []
-                if isinstance(a[1], list):
-                    for p in a[1]:
-                        params.append(p)
-                elif isinstance(a[1], str) and a[1] != "":
-                    params.append(a[1])
-                params_str = ", ".join(params)
-                aggregations.append(f"{func_name}({params_str}) AS {a[2]}")
+                agg = func(a)
+                aggregations.append(agg)
 
         aggregations_str = ", ".join(aggregations)
         joined = ", " if select_clause else "SELECT "
@@ -122,6 +131,7 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
         groupby = legacy.get("groupby", [])
         if groupby and not isinstance(groupby, list):
             groupby = [groupby]
+
         groupby = ", ".join(map(func, groupby))
         groupby_clause = f"BY {groupby}" if groupby else ""
 
@@ -148,7 +158,7 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
         if isinstance(project, int):
             conditions.append(f"project_id={project}")
         elif isinstance(project, list):
-            project = ",".join(project)
+            project = ",".join(map(str, project))
             conditions.append(f"project_id IN {project}")
 
         organization = legacy.get("organization")
