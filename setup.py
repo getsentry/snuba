@@ -1,6 +1,9 @@
 from setuptools import setup, find_packages
 
 
+VERSION = "20.12.1"
+
+
 def get_requirements():
     with open(u"requirements.txt") as fp:
         return [x.strip() for x in fp.read().split("\n") if not x.startswith("#")]
