@@ -1,12 +1,12 @@
 import logging
 import signal
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 import click
 from snuba import environment, settings
-from snuba.clusters.storage_sets import StorageSetKey
 from snuba.consumer import MultistorageConsumerProcessingStrategyFactory
-from snuba.datasets.storages.factory import WRITABLE_STORAGES
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import WRITABLE_STORAGES, get_writable_storage
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.backends.kafka import (
@@ -23,10 +23,11 @@ logger = logging.getLogger(__name__)
 
 @click.command()
 @click.option(
-    "--storage-set",
-    "storage_set_name",
-    default="events",
-    type=click.Choice([key.value for key in StorageSetKey]),
+    "--storage",
+    "storage_names",
+    default=["events"],
+    type=click.Choice([storage_key.value for storage_key in WRITABLE_STORAGES.keys()]),
+    multiple=True,
 )
 @click.option(
     "--consumer-group", default="snuba-consumers",
@@ -45,7 +46,7 @@ logger = logging.getLogger(__name__)
 )
 @click.option("--log-level")
 def multistorage_consumer(
-    storage_set_name: str,
+    storage_names: Sequence[str],
     consumer_group: str,
     max_batch_size: int,
     max_batch_time_ms: int,
@@ -55,19 +56,10 @@ def multistorage_consumer(
     setup_logging(log_level)
     setup_sentry()
 
-    # XXX: This makes the assumption that the enumeration name/value continue
-    # to be just upper/lowercase variants of the same string. This is not
-    # enforced anywhere and liable to break in the future.
-    storage_set_key = getattr(StorageSetKey, storage_set_name.upper())
-
     storages = {
-        storage_key: storage
-        for storage_key, storage in WRITABLE_STORAGES.items()
-        if storage.get_storage_set_key() is storage_set_key
+        key: get_writable_storage(key)
+        for key in (getattr(StorageKey, name.upper()) for name in storage_names)
     }
-
-    if not storages:
-        raise ValueError("storage set contains no writable storages")
 
     topics = {
         storage.get_table_writer()
