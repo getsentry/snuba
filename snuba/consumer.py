@@ -31,7 +31,10 @@ from snuba.processor import (
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams import Message, Partition, Topic
-from snuba.utils.streams.backends.kafka import KafkaPayload
+from snuba.utils.streams.backends.kafka import (
+    KafkaPayload,
+    build_kafka_producer_configuration,
+)
 from snuba.utils.streams.processing.strategies import (
     ProcessingStrategy,
     ProcessingStrategyFactory,
@@ -512,8 +515,19 @@ class MultistorageConsumerProcessingStrategyFactory(
             storage.get_table_writer().get_stream_loader().get_replacement_topic_spec()
         )
         if replacement_topic_spec is not None:
+            # XXX: The producer is flushed when closed on strategy teardown
+            # after an assignment is revoked, but never explicitly closed.
             replacement_batch_writer = ReplacementBatchWriter(
-                producer, replacement_topic_spec.topic_name,
+                ConfluentKafkaProducer(
+                    build_kafka_producer_configuration(
+                        storage.get_storage_key(),
+                        override_params={
+                            "partitioner": "consistent",
+                            "message.max.bytes": 50000000,  # 50MB, default is 1MB
+                        },
+                    )
+                ),
+                Topic(replacement_topic_spec.topic_name),
             )
         else:
             replacement_batch_writer = None
