@@ -110,7 +110,7 @@ def multistorage_consumer(
     # bit trickier (but also shouldn't be too bad.)
     topic = Topic(topics.pop())
     if topics:
-        raise NotImplementedError("only one topic is supported")
+        raise ValueError("only one topic is supported")
 
     # XXX: The ``CommitLogConsumer`` also only supports a single topic at this
     # time. (It is less easily modified.) This also assumes the commit log
@@ -131,7 +131,7 @@ def multistorage_consumer(
         commit_log_topic = None
 
     if commit_log_topics:
-        raise NotImplementedError("only one commit log topic is supported")
+        raise ValueError("only one commit log topic is supported")
 
     # XXX: This requires that all storages are associated with the same Kafka
     # cluster so that they can be consumed by the same consumer instance.
@@ -149,8 +149,15 @@ def multistorage_consumer(
         queued_max_messages_kbytes=queued_max_messages_kbytes,
         queued_min_messages=queued_min_messages,
     )
+
     for storage_key in storage_keys[1:]:
-        pass  # TODO: actually check configuration equality
+        if (
+            build_kafka_consumer_configuration(storage_key, consumer_group)[
+                "bootstrap.servers"
+            ]
+            != consumer_configuration["bootstrap.servers"]
+        ):
+            raise ValueError("storages cannot be located on different Kafka clusters")
 
     if commit_log_topic is None:
         consumer = KafkaConsumer(consumer_configuration)
