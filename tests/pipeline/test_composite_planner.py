@@ -27,7 +27,12 @@ from snuba.query.data_source.join import (
     JoinType,
 )
 from snuba.query.data_source.simple import Entity, Table
-from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.expressions import (
+    Column,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
 from snuba.reader import Reader
@@ -35,16 +40,35 @@ from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.web import QueryResult
 
 events_ent = Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model())
+events_storage = get_storage(StorageKey.EVENTS)
 events_table = Table(
-    "sentry_local", get_storage(StorageKey.EVENTS).get_schema().get_columns()
+    "sentry_local",
+    events_storage.get_schema().get_columns(),
+    final=False,
+    sampling_rate=None,
+    mandatory_conditions=events_storage.get_schema()
+    .get_data_source()
+    .get_mandatory_conditions(),
+    prewhere_candidates=events_storage.get_schema()
+    .get_data_source()
+    .get_prewhere_candidates(),
 )
 
 groups_ent = Entity(
     EntityKey.GROUPEDMESSAGES, get_entity(EntityKey.GROUPEDMESSAGES).get_data_model()
 )
+groups_storage = get_storage(StorageKey.GROUPEDMESSAGES)
 groups_table = Table(
     "groupedmessage_local",
-    get_storage(StorageKey.GROUPEDMESSAGES).get_schema().get_columns(),
+    groups_storage.get_schema().get_columns(),
+    final=False,
+    sampling_rate=None,
+    mandatory_conditions=groups_storage.get_schema()
+    .get_data_source()
+    .get_mandatory_conditions(),
+    prewhere_candidates=groups_storage.get_schema()
+    .get_data_source()
+    .get_prewhere_candidates(),
 )
 
 TEST_CASES = [
@@ -58,7 +82,15 @@ TEST_CASES = [
                     SelectedExpression(
                         "count_release",
                         FunctionCall(
-                            "count_release", "uniq", (Column(None, None, "release"),)
+                            "count_release",
+                            "uniq",
+                            (
+                                SubscriptableReference(
+                                    None,
+                                    Column(None, None, "tags"),
+                                    Literal(None, "sentry:release"),
+                                ),
+                            ),
                         ),
                     ),
                 ],
@@ -90,14 +122,21 @@ TEST_CASES = [
                             "count_release",
                             FunctionCall(
                                 "count_release",
-                                "uniq",
-                                (
-                                    build_mapping_expr(
+                                function_name="ifNull",
+                                parameters=(
+                                    FunctionCall(
                                         None,
-                                        None,
-                                        "tags",
-                                        Literal(None, "sentry:release"),
+                                        "uniq",
+                                        (
+                                            build_mapping_expr(
+                                                None,
+                                                None,
+                                                "tags",
+                                                Literal(None, "sentry:release"),
+                                            ),
+                                        ),
                                     ),
+                                    Literal(alias=None, value=0),
                                 ),
                             ),
                         ),
@@ -138,15 +177,29 @@ TEST_CASES = [
                         "count_release",
                         FunctionCall(
                             "count_release",
-                            "uniq",
-                            (
-                                build_mapping_expr(
-                                    None, None, "tags", Literal(None, "sentry:release"),
+                            function_name="ifNull",
+                            parameters=(
+                                FunctionCall(
+                                    None,
+                                    "uniq",
+                                    (
+                                        Column(
+                                            alias=None,
+                                            table_name=None,
+                                            column_name="sentry:release",
+                                        ),
+                                    ),
                                 ),
+                                Literal(alias=None, value=0),
                             ),
                         ),
                     ),
                 ],
+                condition=binary_condition(
+                    ConditionFunctions.EQ,
+                    Column(alias=None, table_name=None, column_name="deleted"),
+                    Literal(alias=None, value=0),
+                ),
                 groupby=[Column(None, None, "project_id")],
                 prewhere=binary_condition(
                     ConditionFunctions.EQ,
@@ -231,9 +284,8 @@ TEST_CASES = [
                 from_clause=JoinClause(
                     left_node=IndividualNode(
                         alias="err",
-                        data_source=LogicalQuery(
-                            {},
-                            from_clause=events_ent,
+                        data_source=ClickhouseQuery(
+                            from_clause=events_table,
                             selected_columns=[
                                 SelectedExpression(
                                     "project_id", Column(None, None, "project_id")
@@ -245,8 +297,22 @@ TEST_CASES = [
                                     "count_release",
                                     FunctionCall(
                                         "count_release",
-                                        "uniq",
-                                        (Column(None, None, "release"),),
+                                        function_name="ifNull",
+                                        parameters=(
+                                            FunctionCall(
+                                                None,
+                                                "uniq",
+                                                (
+                                                    build_mapping_expr(
+                                                        None,
+                                                        None,
+                                                        "tags",
+                                                        Literal(None, "sentry:release"),
+                                                    ),
+                                                ),
+                                            ),
+                                            Literal(alias=None, value=0),
+                                        ),
                                     ),
                                 ),
                             ],
@@ -259,9 +325,8 @@ TEST_CASES = [
                     ),
                     right_node=IndividualNode(
                         alias="groups",
-                        data_source=LogicalQuery(
-                            {},
-                            from_clause=groups_ent,
+                        data_source=ClickhouseQuery(
+                            from_clause=groups_table,
                             selected_columns=[
                                 SelectedExpression(
                                     "project_id", Column(None, None, "project_id")
@@ -282,13 +347,7 @@ TEST_CASES = [
                     SelectedExpression(
                         "average",
                         FunctionCall(
-                            "average",
-                            "avg",
-                            (
-                                build_mapping_expr(
-                                    None, None, "tags", Literal(None, "sentry:release"),
-                                ),
-                            ),
+                            "average", "avg", (Column(None, None, "count_release"),)
                         ),
                     ),
                 ],
@@ -317,25 +376,44 @@ TEST_CASES = [
             from_clause=JoinClause(
                 left_node=IndividualNode(
                     alias="err",
-                    data_source=LogicalQuery(
-                        {},
-                        from_clause=events_ent,
+                    data_source=ClickhouseQuery(
+                        from_clause=events_table,
                         selected_columns=[
                             SelectedExpression(
                                 "project_id", Column(None, None, "project_id")
                             ),
                             SelectedExpression(
-                                "group_id", Column(None, None, "group_id")
+                                "group_id",
+                                FunctionCall(
+                                    None,
+                                    function_name="nullIf",
+                                    parameters=(
+                                        Column(None, None, "group_id"),
+                                        Literal(None, 0),
+                                    ),
+                                ),
                             ),
                             SelectedExpression(
                                 "count_release",
                                 FunctionCall(
                                     "count_release",
-                                    "uniq",
-                                    (Column(None, None, "release"),),
+                                    function_name="ifNull",
+                                    parameters=(
+                                        FunctionCall(
+                                            None,
+                                            "uniq",
+                                            (Column(None, None, "sentry:release"),),
+                                        ),
+                                        Literal(None, 0),
+                                    ),
                                 ),
                             ),
                         ],
+                        condition=binary_condition(
+                            ConditionFunctions.EQ,
+                            Column(alias=None, table_name=None, column_name="deleted"),
+                            Literal(alias=None, value=0),
+                        ),
                         prewhere=binary_condition(
                             ConditionFunctions.EQ,
                             Column(None, None, "project_id"),
@@ -345,15 +423,23 @@ TEST_CASES = [
                 ),
                 right_node=IndividualNode(
                     alias="groups",
-                    data_source=LogicalQuery(
-                        {},
-                        from_clause=groups_ent,
+                    data_source=ClickhouseQuery(
+                        from_clause=groups_table,
                         selected_columns=[
                             SelectedExpression(
                                 "project_id", Column(None, None, "project_id")
                             ),
                             SelectedExpression("id", Column(None, None, "id")),
                         ],
+                        condition=binary_condition(
+                            ConditionFunctions.EQ,
+                            Column(
+                                alias=None,
+                                table_name=None,
+                                column_name="record_deleted",
+                            ),
+                            Literal(alias=None, value=0),
+                        ),
                     ),
                 ),
                 keys=[
@@ -368,13 +454,7 @@ TEST_CASES = [
                 SelectedExpression(
                     "average",
                     FunctionCall(
-                        "average",
-                        "avg",
-                        (
-                            build_mapping_expr(
-                                None, None, "tags", Literal(None, "sentry:release"),
-                            ),
-                        ),
+                        "average", "avg", (Column(None, None, "count_release"),)
                     ),
                 ),
             ],
@@ -403,7 +483,8 @@ def test_composite_planner(
     plan = CompositeQueryPlanner(
         deepcopy(logical_query), HTTPRequestSettings()
     ).execute()
-    assert plan.query.equals(composite_plan.query)
+    report = plan.query.equals(composite_plan.query)
+    assert report[0], f"Mismatch: {report[1]}"
 
     # We cannot simply check the equality between the plans because
     # we need to verify processors are of the same type, they can
@@ -436,7 +517,8 @@ def test_composite_planner(
         request_settings: RequestSettings,
         reader: Reader,
     ) -> QueryResult:
-        assert query.equals(processed_query)
+        report = query.equals(processed_query)
+        assert report[0], f"Mismatch: {report[1]}"
         return QueryResult({"data": []}, {},)
 
     CompositeExecutionPipeline(logical_query, HTTPRequestSettings(), runner).execute()

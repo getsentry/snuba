@@ -18,6 +18,7 @@ from snuba.clickhouse.columns import ColumnSet, QualifiedColumnSet
 from snuba.datasets.entities import EntityKey
 from snuba.query import ProcessableQuery, TSimpleDataSource
 from snuba.query.data_source import DataSource
+from snuba.query.data_source.simple import Entity
 
 
 class JoinType(Enum):
@@ -30,6 +31,11 @@ class JoinModifier(Enum):
     SEMI = "SEMI"
 
 
+class ColumnEquivalence(NamedTuple):
+    left_col: str
+    right_col: str
+
+
 class JoinRelationship(NamedTuple):
     """
     Represent the join relationship between an entity and another entity.
@@ -38,6 +44,11 @@ class JoinRelationship(NamedTuple):
     rhs_entity: EntityKey
     join_type: JoinType
     columns: Sequence[Tuple[str, str]]
+    # Keeps track of the semantically equivalent columns between the two
+    # related entities. Example transaction_name on the transactions table
+    # and transaction_name on the spans table. These columns are not part
+    # of the join key but are guaranteed to be equivalent.
+    equivalences: Sequence[ColumnEquivalence]
 
 
 @dataclass(frozen=True)
@@ -55,6 +66,10 @@ class JoinNode(ABC, Generic[TSimpleDataSource]):
     def accept(self, visitor: JoinVisitor[TReturn, TSimpleDataSource]) -> TReturn:
         raise NotImplementedError
 
+    @abstractmethod
+    def get_alias_node_map(self) -> Mapping[str, IndividualNode[TSimpleDataSource]]:
+        raise NotImplementedError
+
 
 @dataclass(frozen=True)
 class IndividualNode(JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
@@ -70,6 +85,9 @@ class IndividualNode(JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
     alias: str
     data_source: Union[TSimpleDataSource, ProcessableQuery[TSimpleDataSource]]
 
+    def get_alias_node_map(self) -> Mapping[str, IndividualNode[TSimpleDataSource]]:
+        return {self.alias: self}
+
     def get_column_sets(self) -> Mapping[str, ColumnSet]:
         return (
             {self.alias: self.data_source.get_columns()}
@@ -79,6 +97,11 @@ class IndividualNode(JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
 
     def accept(self, visitor: JoinVisitor[TReturn, TSimpleDataSource]) -> TReturn:
         return visitor.visit_individual_node(self)
+
+
+def entity_from_node(node: IndividualNode[Entity]) -> EntityKey:
+    assert isinstance(node.data_source, Entity)
+    return node.data_source.key
 
 
 class JoinConditionExpression(NamedTuple):
@@ -130,6 +153,12 @@ class JoinClause(DataSource, JoinNode[TSimpleDataSource], Generic[TSimpleDataSou
 
     def get_columns(self) -> ColumnSet:
         return QualifiedColumnSet(self.get_column_sets())
+
+    def get_alias_node_map(self) -> Mapping[str, IndividualNode[TSimpleDataSource]]:
+        return {
+            **self.left_node.get_alias_node_map(),
+            **self.right_node.get_alias_node_map(),
+        }
 
     def __post_init__(self) -> None:
         column_set = self.get_columns()
