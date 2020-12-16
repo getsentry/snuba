@@ -476,11 +476,17 @@ class MultistorageConsumerProcessingStrategyFactory(
         storages: Sequence[WritableTableStorage],
         max_batch_size: int,
         max_batch_time: float,
+        processes: int,
+        input_block_size: int,
+        output_block_size: int,
         metrics: MetricsBackend,
     ):
         self.__storages = storages
         self.__max_batch_size = max_batch_size
         self.__max_batch_time = max_batch_time
+        self.__processes = processes
+        self.__input_block_size = input_block_size
+        self.__output_block_size = output_block_size
         self.__metrics = metrics
 
     def __find_destination_storages(
@@ -554,11 +560,11 @@ class MultistorageConsumerProcessingStrategyFactory(
                         self.__max_batch_size,
                         self.__max_batch_time,
                     ),
-                    2,
-                    10,
-                    10,
-                    512 * 1000,
-                    512 * 1000,
+                    self.__processes,
+                    self.__max_batch_size,
+                    self.__max_batch_time,
+                    self.__input_block_size,
+                    self.__output_block_size,
                     self.__metrics,
                 ),
             ),

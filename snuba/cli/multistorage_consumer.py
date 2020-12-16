@@ -47,12 +47,45 @@ logger = logging.getLogger(__name__)
     type=int,
     help="Max length of time to buffer messages in memory before writing to Kafka.",
 )
+@click.option(
+    "--auto-offset-reset",
+    default="error",
+    type=click.Choice(["error", "earliest", "latest"]),
+    help="Kafka consumer auto offset reset.",
+)
+@click.option(
+    "--queued-max-messages-kbytes",
+    default=settings.DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
+    type=int,
+    help="Maximum number of kilobytes per topic+partition in the local consumer queue.",
+)
+@click.option(
+    "--queued-min-messages",
+    default=settings.DEFAULT_QUEUED_MIN_MESSAGES,
+    type=int,
+    help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
+)
+@click.option(
+    "--processes", type=int, default=1,
+)
+@click.option(
+    "--input-block-size", type=int, default=int(32 * 1e6),
+)
+@click.option(
+    "--output-block-size", type=int, default=int(32 * 1e6),
+)
 @click.option("--log-level")
 def multistorage_consumer(
     storage_names: Sequence[str],
     consumer_group: str,
     max_batch_size: int,
     max_batch_time_ms: int,
+    auto_offset_reset: str,
+    queued_max_messages_kbytes: int,
+    queued_min_messages: int,
+    processes: int,
+    input_block_size: int,
+    output_block_size: int,
     log_level: Optional[str] = None,
 ) -> None:
 
@@ -109,9 +142,12 @@ def multistorage_consumer(
     # piggybacks on the existing configuration method(s), with the assumption
     # that most deployments are going to be using the default configuration.
     storage_keys = [*storages.keys()]
-    # TODO: Patch in ither configurations from command line arguments.
     consumer_configuration = build_kafka_consumer_configuration(
-        storage_keys[0], consumer_group,
+        storage_keys[0],
+        consumer_group,
+        auto_offset_reset=auto_offset_reset,
+        queued_max_messages_kbytes=queued_max_messages_kbytes,
+        queued_min_messages=queued_min_messages,
     )
     for storage_key in storage_keys[1:]:
         pass  # TODO: actually check configuration equality
@@ -133,7 +169,13 @@ def multistorage_consumer(
         consumer,
         topic,
         MultistorageConsumerProcessingStrategyFactory(
-            [*storages.values()], max_batch_size, max_batch_time_ms / 1000.0, metrics,
+            [*storages.values()],
+            max_batch_size,
+            max_batch_time_ms / 1000.0,
+            processes=processes,
+            input_block_size=input_block_size,
+            output_block_size=output_block_size,
+            metrics=metrics,
         ),
         metrics=metrics,
     )
