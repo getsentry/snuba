@@ -347,8 +347,8 @@ def backfill_errors() -> None:
     events_storage = get_writable_storage(StorageKey.EVENTS)
     errors_storage = get_writable_storage(StorageKey.ERRORS)
 
-    orderby_desc = "project_id DESC, timestamp DESC, event_id DESC"
-    orderby_asc = "project_id ASC, timestamp ASC, event_id ASC"
+    orderby_desc = "timestamp DESC, project_id DESC, event_id DESC"
+    orderby_asc = "timestamp ASC, project_id ASC, event_id ASC"
 
     cluster = events_storage.get_cluster()
 
@@ -385,17 +385,17 @@ def backfill_errors() -> None:
             event_conditions = f"""
             AND (
                 (
-                    project_id = {escape_literal(last_event_project)}
+                    timestamp = {escape_literal(last_event_timestamp)}
                     AND (
-                        timestamp < {escape_literal(last_event_timestamp)}
+                        project_id < {escape_literal(last_event_project)}
                         OR (
-                            timestamp = {escape_literal(last_event_timestamp)}
+                            project_id = {escape_literal(last_event_project)}
                             AND event_id < {escape_literal(last_event_id)}
                         )
                     )
                 )
                 OR (
-                    project_id < {escape_literal(last_event_project)}
+                    timestamp < {escape_literal(last_event_timestamp)}
                 )
             )
             """
