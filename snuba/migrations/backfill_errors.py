@@ -347,9 +347,6 @@ def backfill_errors() -> None:
     events_storage = get_writable_storage(StorageKey.EVENTS)
     errors_storage = get_writable_storage(StorageKey.ERRORS)
 
-    orderby_desc = "timestamp DESC, project_id DESC, event_id DESC"
-    orderby_asc = "timestamp ASC, project_id ASC, event_id ASC"
-
     cluster = events_storage.get_cluster()
 
     clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
@@ -367,7 +364,7 @@ def backfill_errors() -> None:
                 SELECT replaceAll(toString(event_id), '-', ''), project_id, timestamp FROM {errors_table_name}
                 WHERE type != 'transaction'
                 AND NOT deleted
-                ORDER BY {orderby_asc}
+                ORDER BY timestamp ASC, project_id ASC, replaceAll(toString(event_id), '-', '') ASC
                 LIMIT 1
             """
         )[
@@ -420,7 +417,7 @@ def backfill_errors() -> None:
             WHERE type != 'transaction'
             AND NOT deleted
             {event_conditions}
-            ORDER BY {orderby_desc}
+            ORDER BY timestamp DESC, project_id DESC, event_id DESC
             LIMIT {BATCH_SIZE}
             """
         )
