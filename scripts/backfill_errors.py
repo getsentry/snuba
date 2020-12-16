@@ -358,7 +358,11 @@ def backfill_errors() -> None:
     errors_table_name = errors_storage.get_table_writer().get_schema().get_table_name()
 
     try:
-        last_event_id, last_event_project, last_event_timestamp = clickhouse.execute(
+        (
+            last_migrated_event_id,
+            last_migrated_event_project,
+            last_migrated_event_timestamp,
+        ) = clickhouse.execute(
             f"""
                 SELECT replaceAll(toString(event_id), '-', ''), project_id, timestamp FROM {errors_table_name}
                 WHERE type != 'transaction'
@@ -366,12 +370,18 @@ def backfill_errors() -> None:
                 ORDER BY {orderby_asc}
                 LIMIT 1
             """
-        )[0]
+        )[
+            0
+        ]
         print(
-            f"Error data was found; starting migration from {last_event_id} {last_event_project} {last_event_timestamp}"
+            f"Error data was found; starting migration from {last_migrated_event_id} {last_migrated_event_project} {last_migrated_event_timestamp}"
         )
     except IndexError:
-        last_event_id, last_event_project, last_event_timestamp = None, None, None
+        (
+            last_migrated_event_id,
+            last_migrated_event_project,
+            last_migrated_event_timestamp,
+        ) = (None, None, None)
 
     src_columns = ", ".join(
         [cast(str, escape_identifier(field)) for field in Event.field_names()]
@@ -381,21 +391,25 @@ def backfill_errors() -> None:
 
     while True:
         event_conditions = ""
-        if last_event_id and last_event_project and last_event_timestamp:
+        if (
+            last_migrated_event_id
+            and last_migrated_event_project
+            and last_migrated_event_timestamp
+        ):
             event_conditions = f"""
             AND (
                 (
-                    timestamp = {escape_literal(last_event_timestamp)}
+                    timestamp = {escape_literal(last_migrated_event_timestamp)}
                     AND (
-                        project_id < {escape_literal(last_event_project)}
+                        project_id < {escape_literal(last_migrated_event_project)}
                         OR (
-                            project_id = {escape_literal(last_event_project)}
-                            AND event_id < {escape_literal(last_event_id)}
+                            project_id = {escape_literal(last_migrated_event_project)}
+                            AND event_id < {escape_literal(last_migrated_event_id)}
                         )
                     )
                 )
                 OR (
-                    timestamp < {escape_literal(last_event_timestamp)}
+                    timestamp < {escape_literal(last_migrated_event_timestamp)}
                 )
             )
             """
@@ -415,7 +429,11 @@ def backfill_errors() -> None:
             print(f"Done. Migrated {events_migrated} events")
             return
 
-        last_event_id, last_event_project, last_event_timestamp = raw_events[-1][0:3]
+        (
+            last_migrated_event_id,
+            last_migrated_event_project,
+            last_migrated_event_timestamp,
+        ) = raw_events[-1][0:3]
 
         data = [process_event(event) for event in raw_events]
 
