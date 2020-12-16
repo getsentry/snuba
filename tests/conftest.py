@@ -135,23 +135,20 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
         groupby = ", ".join(map(func, groupby))
         groupby_clause = f"BY {groupby}" if groupby else ""
 
+        word_ops = ("NOT IN", "IN", "LIKE", "NOT LIKE")
         conditions = []
         for cond in legacy.get("conditions", []):
             if len(cond) != 3 or not isinstance(cond[1], str):
                 or_condition = []
                 for or_cond in cond:
-                    op = (
-                        f" {or_cond[1]} "
-                        if or_cond[1] in ("IN", "LIKE")
-                        else or_cond[1]
-                    )
+                    op = f" {or_cond[1]} " if or_cond[1] in word_ops else or_cond[1]
                     or_condition.append(
                         f"{func(or_cond[0])}{op}{literal(or_cond[2])}".join(or_cond)
                     )
                 or_condition_str = " OR ".join(or_condition)
                 conditions.append(f"{or_condition_str}")
             else:
-                op = f" {cond[1]} " if cond[1] in ("IN", "LIKE") else cond[1]
+                op = f" {cond[1]} " if cond[1] in word_ops else cond[1]
                 conditions.append(f"{func(cond[0])}{op}{literal(cond[2])}")
 
         project = legacy.get("project")
@@ -170,6 +167,24 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
 
         conditions_str = " AND ".join(conditions)
         where_clause = f"WHERE {conditions_str}" if conditions_str else ""
+
+        having = []
+        for cond in legacy.get("having", []):
+            if len(cond) != 3 or not isinstance(cond[1], str):
+                or_condition = []
+                for or_cond in cond:
+                    op = f" {or_cond[1]} " if or_cond[1] in word_ops else or_cond[1]
+                    or_condition.append(
+                        f"{func(or_cond[0])}{op}{literal(or_cond[2])}".join(or_cond)
+                    )
+                or_condition_str = " OR ".join(or_condition)
+                having.append(f"{or_condition_str}")
+            else:
+                op = f" {cond[1]} " if cond[1] in word_ops else cond[1]
+                having.append(f"{func(cond[0])}{op}{literal(cond[2])}")
+
+        having_str = " AND ".join(having)
+        having_clause = f"HAVING {having_str}" if having_str else ""
 
         order_by = legacy.get("orderby")
         order_by_str = ""
@@ -204,7 +219,7 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
                 extra_exps.append(f"{extra.upper()} {legacy.get(extra)}")
         extras_clause = " ".join(extra_exps)
 
-        query = f"{match_clause} {select_clause} {aggregation_clause} {groupby_clause} {where_clause} {order_by_clause} {limit_by_clause} {extras_clause}"
+        query = f"{match_clause} {select_clause} {aggregation_clause} {groupby_clause} {where_clause} {having_clause} {order_by_clause} {limit_by_clause} {extras_clause}"
         body = {"query": query}
         extensions = ["project", "from_date", "to_date", "organization"]
         for ext in extensions:
