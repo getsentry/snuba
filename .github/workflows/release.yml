@@ -5,14 +5,6 @@ on:
       version:
         description: Version to release (optional)
         required: false
-      skip_prepare:
-        description: Skip preparation step (assume a release branch is ready)
-        required: false
-        default: false
-      dry_run:
-        description: Do not actually cut the release
-        required: false
-        default: false
       force:
         description: Force a release even when there are release-blockers (optional)
         required: false
@@ -32,21 +24,22 @@ jobs:
           force: ${{ github.event.inputs.force }}
       - uses: actions/checkout@v2
         with:
-          token: ${{ secrets.GH_SENTRY_BOT_PAT }}
+          token: ${{ secrets.GH_RELEASE_PAT }}
+          fetch-depth: 0
       - uses: getsentry/craft@master
-        if: ${{ !github.event.inputs.skip_prepare }}
+        name: Craft Prepare
         with:
           action: prepare
           version: ${{ env.RELEASE_VERSION }}
-      # Wait until the builds start. Craft should do this automatically
-      # but it is broken now.
-      - run: sleep 10
-      - uses: getsentry/craft@master
+      - name: Request publish
+        if: success()
+        uses: actions/github-script@v3
         with:
-          action: publish
-          version: ${{ env.RELEASE_VERSION }}
-        env:
-          DRY_RUN: ${{ github.event.inputs.dry_run }}
-          GITHUB_API_TOKEN: ${{ secrets.GH_SENTRY_BOT_PAT }}
-          DOCKER_USERNAME: 'sentrybuilder'
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          github-token: ${{ secrets.GH_RELEASE_PAT }}
+          script: |
+            const repoInfo = context.repo;
+            await github.issues.create({
+              owner: repoInfo.owner,
+              repo: 'publish',
+              title: `publish: ${repoInfo.repo}@${process.env.RELEASE_VERSION}`,
+            });
