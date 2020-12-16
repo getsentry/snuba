@@ -517,6 +517,8 @@ class MultistorageConsumerProcessingStrategyFactory(
         if replacement_topic_spec is not None:
             # XXX: The producer is flushed when closed on strategy teardown
             # after an assignment is revoked, but never explicitly closed.
+            # XXX: This assumes that the Kafka cluster used for the input topic
+            # to the storage is the same as the replacement topic.
             replacement_batch_writer = ReplacementBatchWriter(
                 ConfluentKafkaProducer(
                     build_kafka_producer_configuration(

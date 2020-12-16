@@ -162,6 +162,10 @@ def multistorage_consumer(
     if commit_log_topic is None:
         consumer = KafkaConsumer(consumer_configuration)
     else:
+        # XXX: This relies on the assumptions that a.) the Kafka cluster where
+        # the commit log topic is located is the same as the input topic (there
+        # is no way to specify otherwise, at writing) and b.) all storages are
+        # located on the same Kafka cluster (validated above.)
         producer = ConfluentKafkaProducer(
             build_kafka_producer_configuration(storage_keys[0])
         )
