@@ -2,6 +2,8 @@ import logging
 import signal
 from typing import Any, Optional, Sequence
 
+from confluent_kafka import Producer as ConfluentKafkaProducer
+
 import click
 from snuba import environment, settings
 from snuba.consumer import MultistorageConsumerProcessingStrategyFactory
@@ -13,6 +15,7 @@ from snuba.utils.streams.backends.kafka import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
     build_kafka_consumer_configuration,
+    build_kafka_producer_configuration,
 )
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.types import Topic
@@ -108,15 +111,17 @@ def multistorage_consumer(
     storage_keys = [*storages.keys()]
     # TODO: Patch in ither configurations from command line arguments.
     consumer_configuration = build_kafka_consumer_configuration(
-        storage_keys.pop(), consumer_group,
+        storage_keys[0], consumer_group,
     )
-    for storage_key in storage_keys:
+    for storage_key in storage_keys[1:]:
         pass  # TODO: actually check configuration equality
 
     if commit_log_topic is None:
         consumer = KafkaConsumer(consumer_configuration)
     else:
-        producer = None  # TODO
+        producer = ConfluentKafkaProducer(
+            build_kafka_producer_configuration(storage_keys[0])
+        )
         consumer = KafkaConsumerWithCommitLog(
             consumer_configuration,
             producer=producer,
