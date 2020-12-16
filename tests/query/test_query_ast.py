@@ -15,13 +15,13 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.logical import LogicalQuery
+from snuba.query.logical import Query as LogicalQuery
 from snuba.query.parser import parse_query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 
 
-def test_iterate_over_query():
+def test_iterate_over_query() -> None:
     """
     Creates a query with the new AST and iterate over all expressions.
     """
@@ -72,7 +72,7 @@ def test_iterate_over_query():
     assert list(query.get_all_expressions()) == expected_expressions
 
 
-def test_replace_expression():
+def test_replace_expression() -> None:
     """
     Create a query with the new AST and replaces a function with a different function
     replaces f1(...) with tag(f1)
