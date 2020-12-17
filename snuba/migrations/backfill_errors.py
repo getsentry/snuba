@@ -6,6 +6,7 @@ consumer running in all environments populating new events into both tables.
 
 Errors replacements should be turned off while this script is running.
 """
+import os
 from datetime import datetime, timedelta
 from typing import Any, Mapping, NamedTuple, Optional, Sequence, Union, cast
 from uuid import UUID
@@ -20,7 +21,8 @@ from snuba.processor import _ensure_valid_ip
 from snuba.util import escape_literal
 
 MAX_BATCH_SIZE = 50000
-MAX_BATCH_WINDOW = timedelta(hours=1)
+MAX_BATCH_WINDOW_MINUTES = int(os.environ.get("ERRORS_BACKFILL_WINDOW_MINUTES", 60))
+MAX_BATCH_WINDOW = timedelta(minutes=MAX_BATCH_WINDOW_MINUTES)
 BEGINNING_OF_TIME = (datetime.utcnow() - timedelta(days=90)).replace(
     hour=0, minute=0, second=0, microsecond=0
 )
