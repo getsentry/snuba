@@ -1147,3 +1147,36 @@ class TestDiscoverApi(BaseApiTest):
             ]
             == 1.0
         )
+
+    def test_zero_literal_caching(self) -> None:
+        response = self.app.post(
+            self.endpoint,
+            "discover_transactions",
+            data=json.dumps(
+                {
+                    "selected_columns": [],
+                    "having": [["count_unique_user", ">", 0.0]],
+                    "limit": 51,
+                    "offset": 0,
+                    "project": [self.project_id],
+                    "dataset": "discover",
+                    "groupby": [],
+                    "conditions": [
+                        ["type", "=", "transaction"],
+                        ["project_id", "IN", [self.project_id]],
+                    ],
+                    "aggregations": [
+                        [
+                            "countIf",
+                            [["greaterOrEquals", ["duration", 0.0]]],
+                            "count_at_least_transaction_duration_0",
+                        ],
+                        ["uniq", "user", "count_unique_user"],
+                    ],
+                    "consistent": False,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 0, data
