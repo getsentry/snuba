@@ -220,6 +220,25 @@ test_data = [
         ),
         id="curried function call",
     ),
+    pytest.param(
+        FunctionCall(
+            None,
+            "plus",
+            (
+                Literal(None, 0),
+                FunctionCall(None, "multiply", (Literal(None, 0.0), Literal(None, 0),)),
+            ),
+        ),
+        FunctionCall(
+            None,
+            "plus",
+            (
+                Literal(None, 0),
+                FunctionCall(None, "multiply", (Literal(None, 0.0), Literal(None, 0),)),
+            ),
+        ),
+        id="literals aren't cached",
+    ),
 ]
 
 

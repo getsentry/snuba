@@ -119,7 +119,7 @@ snql_grammar = Grammar(
 
     condition             = main_condition / parenthesized_cdn
     main_condition        = low_pri_arithmetic space* condition_op space* (function_call / column_name / quoted_literal / numeric_literal)
-    condition_op          = "!=" / ">=" / ">" / "<=" / "<" / "=" / "IN" / "LIKE"
+    condition_op          = "!=" / ">=" / ">" / "<=" / "<" / "=" / "NOT IN" / "NOT LIKE" / "IN" / "LIKE"
     parenthesized_cdn     = space* open_paren or_expression close_paren
 
     select_list          = select_columns* (selected_expression)
@@ -457,9 +457,9 @@ class SnQLVisitor(NodeVisitor):
         return conditions
 
     def visit_having_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Expression]
+        self, node: Node, visited_children: Tuple[Any, Any, Any, Expression]
     ) -> Expression:
-        _, _, conditions = visited_children
+        _, _, _, conditions = visited_children
         return conditions
 
     def visit_and_expression(
