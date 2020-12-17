@@ -25,6 +25,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
+from snuba.query.functions import is_aggregation_function
 
 
 def assert_never(value: NoReturn) -> NoReturn:
@@ -141,13 +142,20 @@ def _merge_subexpressions(
                 subquery_alias=subqueries.pop(),
             )
     else:
-        cut_branches: MutableMapping[str, Set[Expression]] = {}
-        parameters = []
-        for v in sub_expressions:
-            cut = v.cut_branch()
-            parameters.append(cut.main_expression)
-            cut_branches = {**cut_branches, **cut.cut_branches}
-        return MainQueryExpression(builder(parameters), cut_branches)
+        return _merge_and_cut(builder, sub_expressions)
+
+
+def _merge_and_cut(
+    builder: Callable[[List[Expression]], Expression],
+    sub_expressions: Sequence[SubExpression],
+) -> SubExpression:
+    cut_branches: MutableMapping[str, Set[Expression]] = {}
+    parameters = []
+    for v in sub_expressions:
+        cut = v.cut_branch()
+        parameters.append(cut.main_expression)
+        cut_branches = {**cut_branches, **cut.cut_branches}
+    return MainQueryExpression(builder(parameters), cut_branches)
 
 
 class BranchCutter(ExpressionVisitor[SubExpression]):
@@ -214,7 +222,12 @@ class BranchCutter(ExpressionVisitor[SubExpression]):
             return FunctionCall(alias, func_name, tuple(params))
 
         visited_params = [p.accept(self) for p in exp.parameters]
-        # TODO: Ensure we cut the branch when we encounter aggregate functions.
+        if is_aggregation_function(exp.function_name):
+            return _merge_and_cut(
+                builder=partial(builder, exp.alias, exp.function_name),
+                sub_expressions=visited_params,
+            )
+
         return _merge_subexpressions(
             builder=partial(builder, exp.alias, exp.function_name),
             sub_expressions=visited_params,

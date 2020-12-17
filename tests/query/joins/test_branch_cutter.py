@@ -254,6 +254,82 @@ TEST_CASES = [
         ),
         id="Curried Function",
     ),
+    pytest.param(
+        FunctionCall("_snuba_f", "avg", (Column("_snuba_col", "events", "column"),)),
+        MainQueryExpression(
+            FunctionCall("_snuba_f", "avg", (Column(None, "events", "_snuba_col"),)),
+            {"events": {Column("_snuba_col", None, "column")}},
+        ),
+        MainQueryExpression(
+            FunctionCall("_snuba_f", "avg", (Column(None, "events", "_snuba_col"),)),
+            {"events": {Column("_snuba_col", None, "column")}},
+        ),
+        id="Aggregate function over a column. Do not push down",
+    ),
+    pytest.param(
+        FunctionCall(
+            "_snuba_f",
+            "countIf",
+            (
+                Column("_snuba_col", "events", "column"),
+                FunctionCall(
+                    "_snuba_eq",
+                    "equals",
+                    (
+                        Column("_snuba_col", "events", "column"),
+                        Literal(None, "something"),
+                    ),
+                ),
+            ),
+        ),
+        MainQueryExpression(
+            FunctionCall(
+                "_snuba_f",
+                "countIf",
+                (
+                    Column(None, "events", "_snuba_col"),
+                    Column(None, "events", "_snuba_eq"),
+                ),
+            ),
+            {
+                "events": {
+                    Column("_snuba_col", None, "column"),
+                    FunctionCall(
+                        "_snuba_eq",
+                        "equals",
+                        (
+                            Column("_snuba_col", None, "column"),
+                            Literal(None, "something"),
+                        ),
+                    ),
+                }
+            },
+        ),
+        MainQueryExpression(
+            FunctionCall(
+                "_snuba_f",
+                "countIf",
+                (
+                    Column(None, "events", "_snuba_col"),
+                    Column(None, "events", "_snuba_eq"),
+                ),
+            ),
+            {
+                "events": {
+                    Column("_snuba_col", None, "column"),
+                    FunctionCall(
+                        "_snuba_eq",
+                        "equals",
+                        (
+                            Column("_snuba_col", None, "column"),
+                            Literal(None, "something"),
+                        ),
+                    ),
+                }
+            },
+        ),
+        id="Aggregation function that contains a function itself",
+    ),
 ]
 
 
