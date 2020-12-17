@@ -6,7 +6,7 @@ consumer running in all environments populating new events into both tables.
 
 Errors replacements should be turned off while this script is running.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Mapping, NamedTuple, Optional, Sequence, Union, cast
 from uuid import UUID
 
@@ -19,7 +19,11 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.processor import _ensure_valid_ip
 from snuba.util import escape_literal
 
-BATCH_SIZE = 50000
+MAX_BATCH_SIZE = 50000
+MAX_BATCH_WINDOW = timedelta(hours=1)
+BEGINNING_OF_TIME = (datetime.utcnow() - timedelta(days=90)).replace(
+    hour=0, minute=0, second=0, microsecond=0
+)
 
 
 class Event(NamedTuple):
@@ -343,6 +347,12 @@ def process_event(event_data: Sequence[Any]) -> Mapping[str, Any]:
     }
 
 
+class MigratedEvent(NamedTuple):
+    event_id: str
+    project_id: int
+    timestamp: datetime
+
+
 def backfill_errors() -> None:
     events_storage = get_writable_storage(StorageKey.EVENTS)
     errors_storage = get_writable_storage(StorageKey.ERRORS)
@@ -354,12 +364,12 @@ def backfill_errors() -> None:
     events_table_name = events_storage.get_table_writer().get_schema().get_table_name()
     errors_table_name = errors_storage.get_table_writer().get_schema().get_table_name()
 
+    # Either the last event that was migrated, or the last timestamp we've checked
+    # after which all events have already been migrated
+    last_migrated: Union[MigratedEvent, datetime]
+
     try:
-        (
-            last_migrated_event_id,
-            last_migrated_event_project,
-            last_migrated_event_timestamp,
-        ) = clickhouse.execute(
+        (event_id, project, timestamp) = clickhouse.execute(
             f"""
                 SELECT replaceAll(toString(event_id), '-', ''), project_id, timestamp FROM {errors_table_name}
                 WHERE type != 'transaction'
@@ -367,18 +377,13 @@ def backfill_errors() -> None:
                 ORDER BY timestamp ASC, project_id ASC, replaceAll(toString(event_id), '-', '') ASC
                 LIMIT 1
             """
-        )[
-            0
-        ]
-        print(
-            f"Error data was found; starting migration from {last_migrated_event_id} {last_migrated_event_project} {last_migrated_event_timestamp}"
-        )
+        )[0]
+
+        last_migrated = MigratedEvent(event_id, project, timestamp)
+
+        print(f"Error data was found; starting migration from {last_migrated}")
     except IndexError:
-        (
-            last_migrated_event_id,
-            last_migrated_event_project,
-            last_migrated_event_timestamp,
-        ) = (None, None, None)
+        last_migrated = datetime.utcnow()
 
     src_columns = ", ".join(
         [cast(str, escape_identifier(field)) for field in Event.field_names()]
@@ -387,28 +392,28 @@ def backfill_errors() -> None:
     events_migrated = 0
 
     while True:
-        event_conditions = ""
-        if (
-            last_migrated_event_id
-            and last_migrated_event_project
-            and last_migrated_event_timestamp
-        ):
+        if isinstance(last_migrated, MigratedEvent):
             event_conditions = f"""
             AND (
                 (
-                    timestamp = {escape_literal(last_migrated_event_timestamp)}
+                    timestamp = {escape_literal(last_migrated.timestamp)}
                     AND (
-                        project_id < {escape_literal(last_migrated_event_project)}
+                        project_id < {escape_literal(last_migrated.project_id)}
                         OR (
-                            project_id = {escape_literal(last_migrated_event_project)}
-                            AND event_id < {escape_literal(last_migrated_event_id)}
+                            project_id = {escape_literal(last_migrated.project_id)}
+                            AND event_id < {escape_literal(last_migrated.event_id)}
                         )
                     )
                 )
                 OR (
-                    timestamp < {escape_literal(last_migrated_event_timestamp)}
+                    timestamp <= {escape_literal(last_migrated.timestamp - MAX_BATCH_WINDOW)}
                 )
             )
+            """
+        else:
+            event_conditions = f"""
+            AND timestamp >= {escape_literal(last_migrated - MAX_BATCH_WINDOW)}
+            AND timestamp <= {escape_literal(last_migrated)}
             """
 
         raw_events = clickhouse.execute(
@@ -418,22 +423,27 @@ def backfill_errors() -> None:
             AND NOT deleted
             {event_conditions}
             ORDER BY timestamp DESC, project_id DESC, event_id DESC
-            LIMIT {BATCH_SIZE}
+            LIMIT {MAX_BATCH_SIZE}
             """
         )
 
         if len(raw_events) == 0:
-            print(f"Done. Migrated {events_migrated} events")
-            return
+            if isinstance(last_migrated, datetime):
+                if last_migrated - MAX_BATCH_WINDOW < BEGINNING_OF_TIME:
+                    print(f"Done. Migrated {events_migrated} events")
+                    return
+                else:
+                    last_migrated -= MAX_BATCH_WINDOW
+            else:
+                last_migrated = last_migrated.timestamp - MAX_BATCH_WINDOW
+        else:
+            (event_id, project, timestamp,) = raw_events[-1][0:3]
+            last_migrated = MigratedEvent(event_id, project, timestamp)
 
-        (
-            last_migrated_event_id,
-            last_migrated_event_project,
-            last_migrated_event_timestamp,
-        ) = raw_events[-1][0:3]
+            data = [process_event(event) for event in raw_events]
 
-        data = [process_event(event) for event in raw_events]
+            clickhouse.execute(
+                f"INSERT INTO {errors_table_name} FORMAT JSONEachRow", data
+            )
 
-        clickhouse.execute(f"INSERT INTO {errors_table_name} FORMAT JSONEachRow", data)
-
-        events_migrated += len(data)
+            events_migrated += len(data)
