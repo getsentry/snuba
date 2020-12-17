@@ -174,6 +174,54 @@ TEST_CASES = [
             "_snuba_f",
             "f",
             (
+                Column("_snuba_col", "events", "column"),
+                Column("_snuba_col2", "groups", "column2"),
+                Column("_snuba_col3", "groups", "column3"),
+            ),
+        ),
+        MainQueryExpression(
+            FunctionCall(
+                "_snuba_f",
+                "f",
+                (
+                    Column(None, "events", "_snuba_col"),
+                    Column(None, "groups", "_snuba_col2"),
+                    Column(None, "groups", "_snuba_col3"),
+                ),
+            ),
+            cut_branches={
+                "events": {Column("_snuba_col", None, "column")},
+                "groups": {
+                    Column("_snuba_col2", None, "column2"),
+                    Column("_snuba_col3", None, "column3"),
+                },
+            },
+        ),
+        MainQueryExpression(
+            FunctionCall(
+                "_snuba_f",
+                "f",
+                (
+                    Column(None, "events", "_snuba_col"),
+                    Column(None, "groups", "_snuba_col2"),
+                    Column(None, "groups", "_snuba_col3"),
+                ),
+            ),
+            cut_branches={
+                "events": {Column("_snuba_col", None, "column")},
+                "groups": {
+                    Column("_snuba_col2", None, "column2"),
+                    Column("_snuba_col3", None, "column3"),
+                },
+            },
+        ),
+        id="Ensure one of the entities has multiple independent branches.",
+    ),
+    pytest.param(
+        FunctionCall(
+            "_snuba_f",
+            "f",
+            (
                 FunctionCall(
                     "_snuba_g",
                     "g",
