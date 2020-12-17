@@ -223,6 +223,15 @@ class BranchCutter(ExpressionVisitor[SubExpression]):
             return FunctionCall(alias, func_name, tuple(params))
 
         visited_params = [p.accept(self) for p in exp.parameters]
+        # In the general case we cannot push down aggregation
+        # expressions (the call to the aggergation function). This
+        # is because the aggregation function needs to be where the
+        # relevant group by is.
+        # A further step will be to push down the group by as well
+        # when possible, and that will allow us to push down those
+        # aggregation functions.
+        #
+        # TODO: Push down group by when possible.
         if is_aggregation_function(exp.function_name):
             return _merge_and_cut(
                 builder=partial(builder, exp.alias, exp.function_name),
