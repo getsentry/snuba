@@ -409,7 +409,7 @@ def backfill_errors() -> None:
                     )
                 )
                 OR (
-                    timestamp <= {escape_literal(last_migrated.timestamp)}
+                    timestamp < {escape_literal(last_migrated.timestamp)}
                 )
             )
             AND timestamp >= {escape_literal(last_migrated.timestamp - MAX_BATCH_WINDOW)}
