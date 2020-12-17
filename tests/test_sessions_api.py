@@ -4,10 +4,8 @@ from functools import partial
 import pytz
 import simplejson as json
 
-from snuba import settings, state
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba import settings
 from snuba.datasets.storages import StorageKey
-from snuba.clusters.cluster import get_cluster
 from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
 from snuba.processor import MAX_UINT32
@@ -29,18 +27,7 @@ class TestSessionsApi(BaseApiTest):
         self.storage = get_writable_storage(StorageKey.SESSIONS_RAW)
         self.generate_manual_session_events()
 
-    def teardown_method(self, test_method):
-        # Reset rate limits
-        state.delete_config("global_concurrent_limit")
-        state.delete_config("global_per_second_limit")
-        state.delete_config("project_concurrent_limit")
-        state.delete_config("project_concurrent_limit_1")
-        state.delete_config("project_per_second_limit")
-        state.delete_config("date_align_seconds")
-
     def generate_manual_session_events(self):
-        cluster = get_cluster(StorageSetKey.SESSIONS)
-
         session_1 = "b3ef3211-58a4-4b36-a9a1-5a55df0d9aae"
         session_2 = "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf"
         user_1 = "b3ef3211-58a4-4b36-a9a1-5a55df0d9aae"
@@ -61,27 +48,27 @@ class TestSessionsApi(BaseApiTest):
 
         sessions = [
             # individual "exited" session with two updates, a user and errors
-            dict(template, session_id=session_1, distinct_id=user_1, status=0),
-            dict(
-                template,
-                session_id=session_1,
-                distinct_id=user_1,
-                seq=123,
-                status=1,
-                errors=123,
-            ),
+            {**template, "session_id": session_1, "distinct_id": user_1, "status": 0},
+            {
+                **template,
+                "session_id": session_1,
+                "distinct_id": user_1,
+                "seq": 123,
+                "status": 1,
+                "errors": 123,
+            },
             # individual "exited" session with just one update, no user, no errors
-            dict(template, session_id=session_2, status=1),
+            {**template, "session_id": session_2, "status": 1},
             # pre-aggregated "errored" sessions, no user
-            dict(template, quantity=9, status=4),
+            {**template, "quantity": 9, "status": 4},
             # pre-aggregated "exited" sessions with user
-            dict(template, quantity=5, distinct_id=user_2, status=1),
+            {**template, "quantity": 5, "distinct_id": user_2, "status": 1},
             # pre-aggregated "exited" session
-            dict(template, quantity=4, status=1),
+            {**template, "quantity": 4, "status": 1},
         ]
 
-        cluster.get_batch_writer(
-            "sessions_raw_local", DummyMetricsBackend(strict=True), None, None
+        self.storage.get_table_writer().get_batch_writer(
+            metrics=DummyMetricsBackend(strict=True)
         ).write([json.dumps(session).encode("utf-8") for session in sessions])
 
     def test_manual_session_aggregation(self):

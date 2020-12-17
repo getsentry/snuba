@@ -59,13 +59,14 @@ SELECT
     os,
 
     -- pre-aggregated sessions dont have a duration, so no more filtering is needed.
-    -- we would have liked to changed the quantiles here to `0.5, 0.75, 0.95, 0.99`:
+    -- we would have liked to changed the quantiles here, but the data structure allows
+    -- querying arbitrary quantiles from the `quantilesState`:
     quantilesIfState(0.5, 0.9)(
         duration,
         duration <> {MAX_UINT32} AND status == 1
     ) as duration_quantiles,
 
-    -- this is new:
+    -- this is new, and similarly as above pre-aggregated sessions dont have a duration:
     avgIfState(duration, duration <> {MAX_UINT32} AND status == 1) as duration_avg,
 
     -- `sum` the session counts based on the new `quantity`:
