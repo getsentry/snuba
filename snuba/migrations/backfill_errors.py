@@ -352,6 +352,9 @@ class MigratedEvent(NamedTuple):
     project_id: int
     timestamp: datetime
 
+    def __repr__(self) -> str:
+        return f"{self.event_id} {self.project_id} {self.timestamp}"
+
 
 def backfill_errors() -> None:
     events_storage = get_writable_storage(StorageKey.EVENTS)
@@ -445,5 +448,7 @@ def backfill_errors() -> None:
             clickhouse.execute(
                 f"INSERT INTO {errors_table_name} FORMAT JSONEachRow", data
             )
+
+            print(f"Copied {len(data)} events; last migrated event: {last_migrated}")
 
             events_migrated += len(data)
