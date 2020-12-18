@@ -1,4 +1,5 @@
 import pytest
+from typing import Generator
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -24,6 +25,15 @@ TEST_CASES = [
             cut_branches={"events": {Column("_snuba_col", None, "column")}},
         ),
         id="Basic Column to push down",
+    ),
+    pytest.param(
+        Column(None, "events", "column"),
+        SubqueryExpression(Column(None, None, "column"), "events"),
+        MainQueryExpression(
+            Column(None, "events", "_snuba_gen_1"),
+            cut_branches={"events": {Column("_snuba_gen_1", None, "column")}},
+        ),
+        id="Basic column with alias generation during branch cut",
     ),
     pytest.param(
         Literal(None, "value"),
@@ -378,6 +388,61 @@ TEST_CASES = [
         ),
         id="Aggregation function that contains a function itself",
     ),
+    pytest.param(
+        FunctionCall(
+            "_snuba_f",
+            "f",
+            (
+                FunctionCall(
+                    None,
+                    "g",
+                    (Column("_snuba_col", "events", "column"), Literal(None, "val")),
+                ),
+                Column(None, "groups", "column2"),
+            ),
+        ),
+        MainQueryExpression(
+            FunctionCall(
+                "_snuba_f",
+                "f",
+                (
+                    Column(None, "events", "_snuba_gen_1"),
+                    Column(None, "groups", "_snuba_gen_2"),
+                ),
+            ),
+            cut_branches={
+                "events": {
+                    FunctionCall(
+                        "_snuba_gen_1",
+                        "g",
+                        (Column("_snuba_col", None, "column"), Literal(None, "val"),),
+                    )
+                },
+                "groups": {Column("_snuba_gen_2", None, "column2")},
+            },
+        ),
+        MainQueryExpression(
+            FunctionCall(
+                "_snuba_f",
+                "f",
+                (
+                    Column(None, "events", "_snuba_gen_1"),
+                    Column(None, "groups", "_snuba_gen_2"),
+                ),
+            ),
+            cut_branches={
+                "events": {
+                    FunctionCall(
+                        "_snuba_gen_1",
+                        "g",
+                        (Column("_snuba_col", None, "column"), Literal(None, "val"),),
+                    )
+                },
+                "groups": {Column("_snuba_gen_2", None, "column2")},
+            },
+        ),
+        id="Nested expressions with alias generation",
+    ),
 ]
 
 
@@ -385,6 +450,12 @@ TEST_CASES = [
 def test_branch_cutter(
     expression: Expression, expected: SubExpression, main_expr: MainQueryExpression
 ) -> None:
-    subexpression = expression.accept(BranchCutter())
+    def alias_generator() -> Generator[str, None, None]:
+        i = 0
+        while True:
+            i += 1
+            yield f"_snuba_gen_{i}"
+
+    subexpression = expression.accept(BranchCutter(alias_generator()))
     assert subexpression == expected
-    assert subexpression.cut_branch() == main_expr
+    assert subexpression.cut_branch(alias_generator()) == main_expr
