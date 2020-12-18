@@ -1,7 +1,6 @@
 .git
 */.gitignore
 docs
-scripts
 cloudbuild.*
 docker-compose.*
 CODEOWNERS
