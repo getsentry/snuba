@@ -125,6 +125,9 @@ TEST_CASES = [
                         from_clause=Entity(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA),
                         selected_columns=[
                             SelectedExpression(
+                                "_snuba_group_id", Column("_snuba_group_id", None, "id")
+                            ),
+                            SelectedExpression(
                                 "_snuba_id", Column("_snuba_id", None, "id")
                             ),
                         ],
@@ -147,7 +150,7 @@ TEST_CASES = [
                         (Column(None, "ev", "_snuba_event_id"),),
                     ),
                 ),
-                SelectedExpression("group_id", Column(None, "gr", "_snuba_id")),
+                SelectedExpression("group_id", Column(None, "gr", "_snuba_group_id")),
             ],
         ),
         id="Basic join with select",
@@ -204,6 +207,10 @@ TEST_CASES = [
                             SelectedExpression(
                                 "_snuba_id", Column("_snuba_id", None, "id")
                             ),
+                            SelectedExpression(
+                                "_snuba_group_id",
+                                Column("_snuba_group_id", None, "id"),
+                            ),
                         ],
                     ),
                 ),
@@ -216,7 +223,7 @@ TEST_CASES = [
                 join_type=JoinType.INNER,
             ),
             selected_columns=[
-                SelectedExpression("group_id", Column(None, "gr", "_snuba_id")),
+                SelectedExpression("group_id", Column(None, "gr", "_snuba_group_id")),
             ],
             condition=binary_condition(
                 ConditionFunctions.EQ,
