@@ -431,15 +431,19 @@ class MultistorageCollector(
             step.join(timeout_remaining)
 
 
+class MultistorageKafkaPayload(NamedTuple):
+    storage_keys: Sequence[StorageKey]
+    payload: KafkaPayload
+
+
 def process_message_multistorage(
-    message: Message[Tuple[Sequence[StorageKey], KafkaPayload]]
+    message: Message[MultistorageKafkaPayload],
 ) -> Sequence[Tuple[StorageKey, Union[None, JSONRowInsertBatch, ReplacementBatch]]]:
     # XXX: Avoid circular import on KafkaMessageMetadata, remove when that type
     # is itself removed.
     from snuba.datasets.storages.factory import get_writable_storage
 
-    storage_keys, payload = message.payload
-    value = rapidjson.loads(payload.value)
+    value = rapidjson.loads(message.payload.payload.value)
     metadata = KafkaMessageMetadata(
         message.offset, message.partition.index, message.timestamp
     )
@@ -448,7 +452,7 @@ def process_message_multistorage(
         Tuple[StorageKey, Union[None, JSONRowInsertBatch, ReplacementBatch]]
     ] = []
 
-    for storage_key in storage_keys:
+    for storage_key in message.payload.storage_keys:
         result = (
             get_writable_storage(storage_key)
             .get_table_writer()
@@ -494,18 +498,18 @@ class MultistorageConsumerProcessingStrategyFactory(
 
     def __find_destination_storages(
         self, message: Message[KafkaPayload]
-    ) -> Tuple[Sequence[StorageKey], KafkaPayload]:
-        storages: MutableSequence[StorageKey] = []
+    ) -> MultistorageKafkaPayload:
+        storage_keys: MutableSequence[StorageKey] = []
         for storage in self.__storages:
             filter = storage.get_table_writer().get_stream_loader().get_pre_filter()
             if filter is None or not filter.should_drop(message):
-                storages.append(storage.get_storage_key())
-        return (storages, message.payload)
+                storage_keys.append(storage.get_storage_key())
+        return MultistorageKafkaPayload(storage_keys, message.payload)
 
     def __has_destination_storages(
-        self, message: Message[Tuple[Sequence[StorageKey], KafkaPayload]]
+        self, message: Message[MultistorageKafkaPayload]
     ) -> bool:
-        return len(message.payload[0]) > 0
+        return len(message.payload.storage_keys) > 0
 
     def __build_batch_writer(
         self, storage: WritableTableStorage
