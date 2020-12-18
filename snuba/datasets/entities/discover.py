@@ -431,7 +431,7 @@ class DiscoverEntity(Entity):
 
             return "events", []
 
-        def callback_func(results: List[Result[QueryResult]]) -> None:
+        def callback_func(query: Query, results: List[Result[QueryResult]]) -> None:
             primary_result = results.pop(0)
             primary_result_data = primary_result.result.result["data"]
 
@@ -447,6 +447,7 @@ class DiscoverEntity(Entity):
                         logger.warning(
                             "Non matching Discover result - different length",
                             extra={
+                                "query": query.get_body(),
                                 "discover_result": len(result_data),
                                 "events_result": len(primary_result_data),
                             },
@@ -459,6 +460,7 @@ class DiscoverEntity(Entity):
                             logger.warning(
                                 "Non matching Discover result - different result",
                                 extra={
+                                    "query": query.get_body(),
                                     "discover_result": result_data[idx],
                                     "events_result": primary_result_data[idx],
                                 },

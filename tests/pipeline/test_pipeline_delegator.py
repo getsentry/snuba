@@ -60,5 +60,6 @@ def test() -> None:
     assert mock_query_runner.call_count == 2
 
     assert mock_callback.call_args == call(
-        [Result("events", query_result, ANY), Result("errors", query_result, ANY)]
+        query,
+        [Result("events", query_result, ANY), Result("errors", query_result, ANY)],
     )
