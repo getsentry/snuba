@@ -15,9 +15,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.logical import Query as LogicalQuery
 from snuba.query.parser import parse_query
-from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 
 
@@ -224,13 +222,12 @@ def test_alias_validation(
 ) -> None:
     events = get_dataset("events")
     query = parse_query(query_body, events)
-    request = Request("", query, HTTPRequestSettings(), {}, "")
-    assert isinstance(request.query, LogicalQuery)
+    settings = HTTPRequestSettings()
     query_plan = (
         events.get_default_entity()
         .get_query_pipeline_builder()
-        .build_planner(request.query, request.settings)
+        .build_planner(query, settings)
     ).execute()
-    execute_all_clickhouse_processors(query_plan, request.settings)
+    execute_all_clickhouse_processors(query_plan, settings)
 
     assert query_plan.query.validate_aliases() == expected_result
