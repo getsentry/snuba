@@ -3,15 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import (
-    Callable,
-    List,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Set,
-)
+from typing import Callable, List, Mapping, MutableMapping, Optional, Sequence, Set
 
 from snuba.query.expressions import (
     Argument,
@@ -24,6 +16,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
+from snuba.query.functions import is_aggregation_function
 
 
 @dataclass(frozen=True)
@@ -136,14 +129,21 @@ def _merge_subexpressions(
                 subquery_alias=subqueries.pop(),
             )
     else:
-        cut_branches: MutableMapping[str, Set[Expression]] = {}
-        parameters = []
-        for v in sub_expressions:
-            cut = v.cut_branch()
-            parameters.append(cut.main_expression)
-            for entity, branches in cut.cut_branches.items():
-                cut_branches.setdefault(entity, branches).add(*branches)
-        return MainQueryExpression(builder(parameters), cut_branches)
+        return _merge_and_cut(builder, sub_expressions)
+
+
+def _merge_and_cut(
+    builder: Callable[[List[Expression]], Expression],
+    sub_expressions: Sequence[SubExpression],
+) -> SubExpression:
+    cut_branches: MutableMapping[str, Set[Expression]] = {}
+    parameters = []
+    for v in sub_expressions:
+        cut = v.cut_branch()
+        parameters.append(cut.main_expression)
+        for entity, branches in cut.cut_branches.items():
+            cut_branches.setdefault(entity, branches).add(*branches)
+    return MainQueryExpression(builder(parameters), cut_branches)
 
 
 class BranchCutter(ExpressionVisitor[SubExpression]):
@@ -210,7 +210,21 @@ class BranchCutter(ExpressionVisitor[SubExpression]):
             return FunctionCall(alias, func_name, tuple(params))
 
         visited_params = [p.accept(self) for p in exp.parameters]
-        # TODO: Ensure we cut the branch when we encounter aggregate functions.
+        # In the general case we cannot push down aggregation
+        # expressions (the call to the aggergation function). This
+        # is because the aggregation function needs to be where the
+        # relevant group by is.
+        # A further step will be to push down the group by as well
+        # when possible, and that will allow us to push down those
+        # aggregation functions.
+        #
+        # TODO: Push down group by when possible.
+        if is_aggregation_function(exp.function_name):
+            return _merge_and_cut(
+                builder=partial(builder, exp.alias, exp.function_name),
+                sub_expressions=visited_params,
+            )
+
         return _merge_subexpressions(
             builder=partial(builder, exp.alias, exp.function_name),
             sub_expressions=visited_params,
