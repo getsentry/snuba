@@ -8,7 +8,6 @@ from typing import (
     List,
     Mapping,
     MutableMapping,
-    NoReturn,
     Optional,
     Sequence,
     Set,
@@ -25,10 +24,6 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-
-
-def assert_never(value: NoReturn) -> NoReturn:
-    assert False, f"Unhandled value: {value} ({type(value).__name__})"
 
 
 @dataclass(frozen=True)
