@@ -378,6 +378,66 @@ TEST_CASES = [
         ),
         id="Aggregation function that contains a function itself",
     ),
+    pytest.param(
+        FunctionCall(
+            "_snuba_f",
+            "countIf",
+            (
+                Column("_snuba_col", "events", "column"),
+                FunctionCall(
+                    "_snuba_eq",
+                    "equals",
+                    (
+                        Column("_snuba_col", "groups", "column"),
+                        Column("_snuba_col", "events", "column"),
+                    ),
+                ),
+            ),
+        ),
+        MainQueryExpression(
+            FunctionCall(
+                "_snuba_f",
+                "countIf",
+                (
+                    Column(None, "events", "_snuba_col"),
+                    FunctionCall(
+                        "_snuba_eq",
+                        "equals",
+                        (
+                            Column(None, "groups", "_snuba_col"),
+                            Column(None, "events", "_snuba_col"),
+                        ),
+                    ),
+                ),
+            ),
+            {
+                "events": {Column("_snuba_col", None, "column")},
+                "groups": {Column("_snuba_col", None, "column")},
+            },
+        ),
+        MainQueryExpression(
+            FunctionCall(
+                "_snuba_f",
+                "countIf",
+                (
+                    Column(None, "events", "_snuba_col"),
+                    FunctionCall(
+                        "_snuba_eq",
+                        "equals",
+                        (
+                            Column(None, "groups", "_snuba_col"),
+                            Column(None, "events", "_snuba_col"),
+                        ),
+                    ),
+                ),
+            ),
+            {
+                "events": {Column("_snuba_col", None, "column")},
+                "groups": {Column("_snuba_col", None, "column")},
+            },
+        ),
+        id="Aggregation function that contains a function that is mixed",
+    ),
 ]
 
 
