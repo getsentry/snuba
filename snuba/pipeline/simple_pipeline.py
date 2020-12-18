@@ -75,6 +75,7 @@ class SimplePipelineBuilder(QueryPipelineBuilder[ClickhouseQueryPlan]):
     def build_execution_pipeline(
         self, request: Request, runner: QueryRunner
     ) -> QueryExecutionPipeline:
+        assert isinstance(request.query, LogicalQuery)
         return SimpleExecutionPipeline(
             request, runner, self.build_planner(request.query, request.settings),
         )

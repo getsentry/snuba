@@ -15,8 +15,9 @@ from snuba.clickhouse.query import Query
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
-from snuba.query.composite import CompositeQuery
 from snuba.query import ProcessableQuery
+from snuba.query.composite import CompositeQuery
+from snuba.query.logical import Query as LogicalQuery
 from snuba.query.timeseries_extension import TimeSeriesExtensionProcessor
 from snuba.querylog import record_query
 from snuba.querylog.query_metadata import SnubaQueryMetadata
@@ -81,7 +82,7 @@ def _run_query_pipeline(
     - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
       to the QueryExecutionStrategy to actually run the DB Query.
     """
-
+    assert isinstance(request.query, LogicalQuery)
     query_entity = request.query.get_from_clause()
     entity = get_entity(query_entity.key)
 
