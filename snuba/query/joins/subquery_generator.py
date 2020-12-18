@@ -1,8 +1,7 @@
-from typing import Mapping, Set
+from typing import Mapping, Set, Generator
 
 from dataclasses import replace
 from snuba.query import ProcessableQuery, SelectedExpression
-from snuba.query import expressions
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import (
     IndividualNode,
@@ -15,7 +14,7 @@ from snuba.query.data_source.join import (
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, Expression
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.joins.classifier import BranchCutter
+from snuba.query.joins.classifier import AliasGenerator, BranchCutter
 from snuba.query.conditions import (
     get_first_level_and_conditions,
     combine_and_conditions,
@@ -138,9 +137,13 @@ class SubqueriesReplacer(JoinVisitor[JoinNode[Entity], Entity]):
 
 
 def _process_root(
-    expression: Expression, subqueries: Mapping[str, SubqueryDraft]
+    expression: Expression,
+    subqueries: Mapping[str, SubqueryDraft],
+    alias_generator: AliasGenerator,
 ) -> Expression:
-    subexpressions = expression.accept(BranchCutter()).cut_branch()
+    subexpressions = expression.accept(BranchCutter(alias_generator)).cut_branch(
+        alias_generator
+    )
     for entity_alias, branches in subexpressions.cut_branches.items():
         for branch in branches:
             subqueries[entity_alias].add_select_expression(
@@ -148,6 +151,13 @@ def _process_root(
             )
 
     return subexpressions.main_expression
+
+
+def _alias_generator() -> Generator[str, None, None]:
+    i = 0
+    while True:
+        i += 1
+        yield f"_snuba_gen_{i}"
 
 
 def generate_subqueries(query: CompositeQuery[Entity]) -> None:
@@ -192,6 +202,7 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
     # Now this has to be a join, so we can work with it.
     subqueries = from_clause.accept(SubqueriesInitializer())
 
+    alias_generator = _alias_generator()
     # def transform_expression(exp: Expression) -> Expression:
     #    if isinstance(exp, Column):
     #        table_alias = exp.table_name
@@ -212,7 +223,8 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
     query.set_ast_selected_columns(
         [
             SelectedExpression(
-                name=s.name, expression=_process_root(s.expression, subqueries)
+                name=s.name,
+                expression=_process_root(s.expression, subqueries, alias_generator),
             )
             for s in query.get_selected_columns_from_ast()
         ]
@@ -220,29 +232,32 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
 
     array_join = query.get_arrayjoin_from_ast()
     if array_join is not None:
-        query.set_arrayjoin(_process_root(array_join, subqueries))
+        query.set_arrayjoin(_process_root(array_join, subqueries, alias_generator))
 
     ast_condition = query.get_condition_from_ast()
     if ast_condition is not None:
         query.set_ast_condition(
             combine_and_conditions(
                 [
-                    _process_root(c, subqueries)
+                    _process_root(c, subqueries, alias_generator)
                     for c in get_first_level_and_conditions(ast_condition)
                 ]
             )
         )
 
     query.set_ast_groupby(
-        [_process_root(e, subqueries) for e in query.get_groupby_from_ast()]
+        [
+            _process_root(e, subqueries, alias_generator)
+            for e in query.get_groupby_from_ast()
+        ]
     )
 
-    having = query.get_condition_from_ast()
+    having = query.get_having_from_ast()
     if having is not None:
         query.set_ast_having(
             combine_and_conditions(
                 [
-                    _process_root(c, subqueries)
+                    _process_root(c, subqueries, alias_generator)
                     for c in get_first_level_and_conditions(having)
                 ]
             )
@@ -250,7 +265,12 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
 
     query.set_ast_orderby(
         [
-            replace(orderby, expression=_process_root(orderby.expression, subqueries))
+            replace(
+                orderby,
+                expression=_process_root(
+                    orderby.expression, subqueries, alias_generator
+                ),
+            )
             for orderby in query.get_orderby_from_ast()
         ]
     )
@@ -258,7 +278,12 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
     limitby = query.get_limitby()
     if limitby is not None:
         query.set_limitby(
-            replace(limitby, expression=_process_root(limitby.expression, subqueries))
+            replace(
+                limitby,
+                expression=_process_root(
+                    limitby.expression, subqueries, alias_generator
+                ),
+            )
         )
 
     query.set_from_clause(SubqueriesReplacer(subqueries).visit_join_clause(from_clause))
