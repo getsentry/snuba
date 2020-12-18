@@ -1,6 +1,8 @@
 from typing import Mapping, Set
 
+from dataclasses import replace
 from snuba.query import ProcessableQuery, SelectedExpression
+from snuba.query import expressions
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import (
     IndividualNode,
@@ -13,6 +15,11 @@ from snuba.query.data_source.join import (
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, Expression
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.joins.classifier import BranchCutter
+from snuba.query.conditions import (
+    get_first_level_and_conditions,
+    combine_and_conditions,
+)
 
 
 class SubqueryDraft:
@@ -130,6 +137,19 @@ class SubqueriesReplacer(JoinVisitor[JoinNode[Entity], Entity]):
         return JoinClause(left, right, keys, node.join_type, node.join_modifier)
 
 
+def _process_root(
+    expression: Expression, subqueries: Mapping[str, SubqueryDraft]
+) -> Expression:
+    subexpressions = expression.accept(BranchCutter()).cut_branch()
+    for entity_alias, branches in subexpressions.cut_branches.items():
+        for branch in branches:
+            subqueries[entity_alias].add_select_expression(
+                SelectedExpression(name=branch.alias, expression=branch)
+            )
+
+    return subexpressions.main_expression
+
+
 def generate_subqueries(query: CompositeQuery[Entity]) -> None:
     """
     Generates correct subqueries for each of the entities referenced in
@@ -172,23 +192,73 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
     # Now this has to be a join, so we can work with it.
     subqueries = from_clause.accept(SubqueriesInitializer())
 
-    def transform_expression(exp: Expression) -> Expression:
-        if isinstance(exp, Column):
-            table_alias = exp.table_name
-            # All columns in a joined query need to be qualified. We do
-            # not guess the right subquery for unqualified columns as of
-            # now.
-            assert table_alias is not None, f"Invalid query, unqualified column {exp}"
-            subqueries[table_alias].add_select_expression(
-                SelectedExpression(
-                    aliasify_column(exp.column_name),
-                    Column(aliasify_column(exp.column_name), None, exp.column_name),
-                )
+    # def transform_expression(exp: Expression) -> Expression:
+    #    if isinstance(exp, Column):
+    #        table_alias = exp.table_name
+    #        # All columns in a joined query need to be qualified. We do
+    #        # not guess the right subquery for unqualified columns as of
+    #        # now.
+    #        assert table_alias is not None, f"Invalid query, unqualified column {exp}"
+    #        subqueries[table_alias].add_select_expression(
+    #            SelectedExpression(
+    #                aliasify_column(exp.column_name),
+    #                Column(aliasify_column(exp.column_name), None, exp.column_name),
+    #            )
+    #        )
+    #        return Column(None, exp.table_name, aliasify_column(exp.column_name))
+    #
+    #    return exp
+    # query.transform_expressions(transform_expression)
+    query.set_ast_selected_columns(
+        [
+            SelectedExpression(
+                name=s.name, expression=_process_root(s.expression, subqueries)
             )
-            return Column(None, exp.table_name, aliasify_column(exp.column_name))
+            for s in query.get_selected_columns_from_ast()
+        ]
+    )
 
-        return exp
+    array_join = query.get_arrayjoin_from_ast()
+    if array_join is not None:
+        query.set_arrayjoin(_process_root(array_join, subqueries))
 
-    query.transform_expressions(transform_expression)
+    ast_condition = query.get_condition_from_ast()
+    if ast_condition is not None:
+        query.set_ast_condition(
+            combine_and_conditions(
+                [
+                    _process_root(c, subqueries)
+                    for c in get_first_level_and_conditions(ast_condition)
+                ]
+            )
+        )
+
+    query.set_ast_groupby(
+        [_process_root(e, subqueries) for e in query.get_groupby_from_ast()]
+    )
+
+    having = query.get_condition_from_ast()
+    if having is not None:
+        query.set_ast_having(
+            combine_and_conditions(
+                [
+                    _process_root(c, subqueries)
+                    for c in get_first_level_and_conditions(having)
+                ]
+            )
+        )
+
+    query.set_ast_orderby(
+        [
+            replace(orderby, expression=_process_root(orderby.expression, subqueries))
+            for orderby in query.get_orderby_from_ast()
+        ]
+    )
+
+    limitby = query.get_limitby()
+    if limitby is not None:
+        query.set_limitby(
+            replace(limitby, expression=_process_root(limitby.expression, subqueries))
+        )
 
     query.set_from_clause(SubqueriesReplacer(subqueries).visit_join_clause(from_clause))
