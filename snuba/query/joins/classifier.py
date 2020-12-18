@@ -3,16 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import (
-    Callable,
-    List,
-    Mapping,
-    MutableMapping,
-    NoReturn,
-    Optional,
-    Sequence,
-    Set,
-)
+from typing import Callable, List, Mapping, MutableMapping, Optional, Sequence, Set
 
 from snuba.query.expressions import (
     Argument,
@@ -26,10 +17,6 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.functions import is_aggregation_function
-
-
-def assert_never(value: NoReturn) -> NoReturn:
-    assert False, f"Unhandled value: {value} ({type(value).__name__})"
 
 
 @dataclass(frozen=True)
