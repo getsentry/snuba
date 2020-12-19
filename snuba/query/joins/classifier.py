@@ -9,7 +9,6 @@ from typing import (
     List,
     Mapping,
     MutableMapping,
-    NoReturn,
     Optional,
     Sequence,
     Set,
@@ -27,11 +26,6 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.functions import is_aggregation_function
-
-
-def assert_never(value: NoReturn) -> NoReturn:
-    assert False, f"Unhandled value: {value} ({type(value).__name__})"
-
 
 AliasGenerator = Generator[str, None, None]
 
