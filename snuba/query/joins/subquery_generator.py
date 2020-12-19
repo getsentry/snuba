@@ -1,8 +1,12 @@
-from typing import Mapping, Set, Generator
-
 from dataclasses import replace
+from typing import Generator, Mapping, Set
+
 from snuba.query import ProcessableQuery, SelectedExpression
 from snuba.query.composite import CompositeQuery
+from snuba.query.conditions import (
+    combine_and_conditions,
+    get_first_level_and_conditions,
+)
 from snuba.query.data_source.join import (
     IndividualNode,
     JoinClause,
@@ -13,12 +17,8 @@ from snuba.query.data_source.join import (
 )
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, Expression
-from snuba.query.logical import Query as LogicalQuery
 from snuba.query.joins.classifier import AliasGenerator, BranchCutter
-from snuba.query.conditions import (
-    get_first_level_and_conditions,
-    combine_and_conditions,
-)
+from snuba.query.logical import Query as LogicalQuery
 
 
 class SubqueryDraft:
@@ -203,23 +203,6 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
     subqueries = from_clause.accept(SubqueriesInitializer())
 
     alias_generator = _alias_generator()
-    # def transform_expression(exp: Expression) -> Expression:
-    #    if isinstance(exp, Column):
-    #        table_alias = exp.table_name
-    #        # All columns in a joined query need to be qualified. We do
-    #        # not guess the right subquery for unqualified columns as of
-    #        # now.
-    #        assert table_alias is not None, f"Invalid query, unqualified column {exp}"
-    #        subqueries[table_alias].add_select_expression(
-    #            SelectedExpression(
-    #                aliasify_column(exp.column_name),
-    #                Column(aliasify_column(exp.column_name), None, exp.column_name),
-    #            )
-    #        )
-    #        return Column(None, exp.table_name, aliasify_column(exp.column_name))
-    #
-    #    return exp
-    # query.transform_expressions(transform_expression)
     query.set_ast_selected_columns(
         [
             SelectedExpression(
