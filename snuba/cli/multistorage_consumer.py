@@ -24,7 +24,7 @@ from snuba.utils.streams.types import Topic
 logger = logging.getLogger(__name__)
 
 
-@click.command()
+@click.command(hidden=True)
 @click.option(
     "--storage",
     "storage_names",
