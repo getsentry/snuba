@@ -460,7 +460,7 @@ class DiscoverEntity(Entity):
                             logger.warning(
                                 "Non matching Discover result - different result",
                                 extra={
-                                    "query": query.get_body(),
+                                    "query": [*query.get_all_expressions()],
                                     "discover_result": result_data[idx],
                                     "events_result": primary_result_data[idx],
                                 },
