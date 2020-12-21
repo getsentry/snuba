@@ -141,6 +141,10 @@ def _process_root(
     subqueries: Mapping[str, SubqueryDraft],
     alias_generator: AliasGenerator,
 ) -> Expression:
+    """
+    Takes a root expression in the main query, runs the branch cutter
+    and pushes down the subexpressions.
+    """
     subexpressions = expression.accept(BranchCutter(alias_generator)).cut_branch(
         alias_generator
     )
@@ -163,19 +167,15 @@ def _alias_generator() -> Generator[str, None, None]:
 def generate_subqueries(query: CompositeQuery[Entity]) -> None:
     """
     Generates correct subqueries for each of the entities referenced in
-    a join query.
-
-    At this stage it pushes down only the columns referenced in the
-    external query so that all the referenced columns are present in
-    the select clause of the subqueries. We need to push down complex
-    expressions to be able to properly process the subqueries.
+    a join query, and pushes down all expressions that can be executed
+    in the subquery.
 
     Columns in the select clause of the subqueries are referenced
     by providing them a mangled alias that is referenced in the external
     query.
 
     ```
-    SELECT e.a, g.b FROM Events e INNER JOIN Groups g ON ...
+    SELECT e.a, f(g.b) FROM Events e INNER JOIN Groups g ON ...
     ```
 
     becomes
@@ -186,7 +186,7 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
         SELECT a as _snuba_a
         FROM events
     ) e INNER JOIN (
-        SELECT b as _snuba_b
+        SELECT f(b) as _snuba_b
         FROM groups
     ) g ON ....
     ```
@@ -217,6 +217,9 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
     if array_join is not None:
         query.set_arrayjoin(_process_root(array_join, subqueries, alias_generator))
 
+    # TODO: Push down conditions into the condition section of the
+    # subquery when possible instead of pushing them into the select
+    # and referencing them from the main query.
     ast_condition = query.get_condition_from_ast()
     if ast_condition is not None:
         query.set_ast_condition(
