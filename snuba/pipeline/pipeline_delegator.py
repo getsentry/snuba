@@ -7,7 +7,6 @@ from snuba.pipeline.query_pipeline import (
     QueryPipelineBuilder,
     QueryPlanner,
 )
-from snuba.query.logical import Query
 from snuba.query.logical import Query as LogicalQuery
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
@@ -18,8 +17,8 @@ BuilderId = str
 Timing = float
 QueryPipelineBuilders = Mapping[BuilderId, QueryPipelineBuilder[ClickhouseQueryPlan]]
 QueryResults = List[Result[QueryResult]]
-SelectorFunc = Callable[[Query], Tuple[BuilderId, List[BuilderId]]]
-CallbackFunc = Callable[[Query, QueryResults], None]
+SelectorFunc = Callable[[LogicalQuery], Tuple[BuilderId, List[BuilderId]]]
+CallbackFunc = Callable[[LogicalQuery, QueryResults], None]
 
 
 class MultipleConcurrentPipeline(QueryExecutionPipeline):
@@ -63,7 +62,7 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
         )
 
     def execute(self) -> QueryResult:
-        executor = ThreadedFunctionDelegator[Query, QueryResult](
+        executor = ThreadedFunctionDelegator[LogicalQuery, QueryResult](
             callables={
                 builder_id: builder.build_execution_pipeline(
                     self.__request, self.__runner
@@ -73,6 +72,7 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
             selector_func=self.__selector_func,
             callback_func=self.__callback_func,
         )
+        assert isinstance(self.__request.query, LogicalQuery)
         return executor.execute(self.__request.query)
 
 
