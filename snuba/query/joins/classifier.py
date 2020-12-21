@@ -3,7 +3,16 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import Callable, List, Mapping, MutableMapping, Optional, Sequence, Set
+from typing import (
+    Callable,
+    Generator,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Set,
+)
 
 from snuba.query.expressions import (
     Argument,
@@ -18,6 +27,8 @@ from snuba.query.expressions import (
 )
 from snuba.query.functions import is_aggregation_function
 
+AliasGenerator = Generator[str, None, None]
+
 
 @dataclass(frozen=True)
 class SubExpression(ABC):
@@ -31,7 +42,7 @@ class SubExpression(ABC):
     main_expression: Expression
 
     @abstractmethod
-    def cut_branch(self) -> MainQueryExpression:
+    def cut_branch(self, alias_generator: AliasGenerator) -> MainQueryExpression:
         """
         Cut the expression tree dividing the subtree/s that need to be
         pushed down into the subqueries from the expression that must
@@ -50,7 +61,7 @@ class MainQueryExpression(SubExpression):
 
     cut_branches: Mapping[str, Set[Expression]]
 
-    def cut_branch(self) -> MainQueryExpression:
+    def cut_branch(self, alias_generator: AliasGenerator) -> MainQueryExpression:
         return self
 
 
@@ -63,19 +74,20 @@ class SubqueryExpression(SubExpression):
 
     subquery_alias: str
 
-    def cut_branch(self) -> MainQueryExpression:
+    def cut_branch(self, alias_generator: AliasGenerator) -> MainQueryExpression:
         """
         This Returns a simple column that references the expression in
         the subquery and cut the entire expression tree.
         """
-        assert (
-            self.main_expression.alias
-        ), f"Invalid expression in join query {self.main_expression}. Missing alias"
+        alias = self.main_expression.alias or next(alias_generator)
+        branch = (
+            self.main_expression
+            if self.main_expression.alias
+            else replace(self.main_expression, alias=alias)
+        )
         return MainQueryExpression(
-            main_expression=Column(
-                None, self.subquery_alias, self.main_expression.alias
-            ),
-            cut_branches={self.subquery_alias: {self.main_expression}},
+            main_expression=Column(None, self.subquery_alias, alias),
+            cut_branches={self.subquery_alias: {branch}},
         )
 
 
@@ -86,7 +98,7 @@ class UnclassifiedExpression(SubExpression):
     anywhere.
     """
 
-    def cut_branch(self) -> MainQueryExpression:
+    def cut_branch(self, alias_generator: AliasGenerator) -> MainQueryExpression:
         return MainQueryExpression(
             main_expression=self.main_expression, cut_branches={}
         )
@@ -95,6 +107,7 @@ class UnclassifiedExpression(SubExpression):
 def _merge_subexpressions(
     builder: Callable[[List[Expression]], Expression],
     sub_expressions: Sequence[SubExpression],
+    alias_generator: AliasGenerator,
 ) -> SubExpression:
     """
     Merges multiple Subexpressions into one depending on the type of the
@@ -129,17 +142,18 @@ def _merge_subexpressions(
                 subquery_alias=subqueries.pop(),
             )
     else:
-        return _merge_and_cut(builder, sub_expressions)
+        return _merge_and_cut(builder, sub_expressions, alias_generator)
 
 
 def _merge_and_cut(
     builder: Callable[[List[Expression]], Expression],
     sub_expressions: Sequence[SubExpression],
+    alias_generator: AliasGenerator,
 ) -> SubExpression:
     cut_branches: MutableMapping[str, Set[Expression]] = {}
     parameters = []
     for v in sub_expressions:
-        cut = v.cut_branch()
+        cut = v.cut_branch(alias_generator)
         parameters.append(cut.main_expression)
         for entity, branches in cut.cut_branches.items():
             cut_branches.setdefault(entity, branches).add(*branches)
@@ -176,6 +190,9 @@ class BranchCutter(ExpressionVisitor[SubExpression]):
     `a AS _snuba_a`
     `g(b as _snuba_b) AS _snuba_g`
     """
+
+    def __init__(self, alias_generator: AliasGenerator) -> None:
+        self.__alias_generator = alias_generator
 
     def visit_literal(self, exp: Literal) -> SubExpression:
         return UnclassifiedExpression(exp)
@@ -223,11 +240,13 @@ class BranchCutter(ExpressionVisitor[SubExpression]):
             return _merge_and_cut(
                 builder=partial(builder, exp.alias, exp.function_name),
                 sub_expressions=visited_params,
+                alias_generator=self.__alias_generator,
             )
 
         return _merge_subexpressions(
             builder=partial(builder, exp.alias, exp.function_name),
             sub_expressions=visited_params,
+            alias_generator=self.__alias_generator,
         )
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> SubExpression:
@@ -244,6 +263,7 @@ class BranchCutter(ExpressionVisitor[SubExpression]):
         return _merge_subexpressions(
             builder=partial(builder, exp.alias),
             sub_expressions=[visited_inner, *visited_params],
+            alias_generator=self.__alias_generator,
         )
 
     def visit_argument(self, exp: Argument) -> SubExpression:
