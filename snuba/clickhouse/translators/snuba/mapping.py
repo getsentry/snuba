@@ -121,11 +121,11 @@ class SnubaClickhouseMappingTranslator(SnubaClickhouseStrictTranslator):
         self.__cache: MutableMapping[Expression, Expression] = {}
 
     def visit_literal(self, exp: Literal) -> Expression:
-        if exp in self.__cache:
-            return self.__cache[exp]
-
+        # We can't use the cache for literals because Python hashes
+        # Literal(None, 0) and Literal(None, 0.0) equivalently, which can then
+        # break Clickhouse since it expects the correct type. This isn't a major
+        # performance hit though since Literals can't contain other expressions.
         ret = apply_mappers(exp, self.__translation_rules.literals, self)
-        self.__cache[exp] = ret
         return ret
 
     def visit_column(self, exp: Column) -> Expression:
