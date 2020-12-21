@@ -17,7 +17,7 @@ from snuba.datasets.storage import (
     WritableTableStorage,
 )
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.prewhere import PrewhereProcessor
 
 
@@ -107,8 +107,10 @@ raw_storage = WritableTableStorage(
     storage_set_key=StorageSetKey.SESSIONS,
     schema=raw_schema,
     query_processors=[],
-    stream_loader=KafkaStreamLoader(
-        processor=SessionsProcessor(), default_topic="ingest-sessions",
+    stream_loader=build_kafka_stream_loader_from_settings(
+        StorageKey.SESSIONS_RAW.name,
+        processor=SessionsProcessor(),
+        default_topic_name="ingest-sessions",
     ),
 )
 # The materialized view we query aggregate data from.

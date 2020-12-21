@@ -6,7 +6,7 @@ from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.spans_processor import SpansMessageProcessor
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.web.split import TimeSplitQueryStrategy
 
@@ -46,8 +46,10 @@ storage = WritableTableStorage(
     storage_set_key=StorageSetKey.TRANSACTIONS,
     schema=schema,
     query_processors=[PrewhereProcessor()],
-    stream_loader=KafkaStreamLoader(
-        processor=SpansMessageProcessor(), default_topic="events",
+    stream_loader=build_kafka_stream_loader_from_settings(
+        StorageKey.SPANS.name,
+        processor=SpansMessageProcessor(),
+        default_topic_name="events",
     ),
     query_splitters=[TimeSplitQueryStrategy(timestamp_col="finish_ts")],
 )

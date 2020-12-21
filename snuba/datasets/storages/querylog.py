@@ -7,7 +7,7 @@ from snuba.datasets.querylog_processor import QuerylogProcessor
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 
 columns = ColumnSet(
     [
@@ -69,7 +69,9 @@ storage = WritableTableStorage(
     storage_set_key=StorageSetKey.QUERYLOG,
     schema=schema,
     query_processors=[],
-    stream_loader=KafkaStreamLoader(
-        processor=QuerylogProcessor(), default_topic=settings.QUERIES_TOPIC,
+    stream_loader=build_kafka_stream_loader_from_settings(
+        StorageKey.QUERYLOG.name,
+        processor=QuerylogProcessor(),
+        default_topic_name=settings.QUERIES_TOPIC,
     ),
 )

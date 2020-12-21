@@ -84,8 +84,8 @@ def build_kafka_topic_spec_from_settings(topic_name: str) -> KafkaTopicSpec:
 
 def build_kafka_stream_loader_from_settings(
     storage_name: str,
-    default_topic_name: str,
     processor: MessageProcessor,
+    default_topic_name: str,
     pre_filter: Optional[StreamMessageFilter[KafkaPayload]] = None,
     replacement_topic_name: Optional[str] = None,
     commit_log_topic_name: Optional[str] = None,
