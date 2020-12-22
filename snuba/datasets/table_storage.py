@@ -10,6 +10,7 @@ from snuba.clusters.cluster import (
 )
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
+from snuba.datasets.storages import StorageKey
 from snuba.processor import MessageProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.snapshots import BulkLoadSource
@@ -36,36 +37,15 @@ class KafkaStreamLoader:
     def __init__(
         self,
         processor: MessageProcessor,
-        default_topic: str,
+        default_topic_spec: KafkaTopicSpec,
         pre_filter: Optional[StreamMessageFilter[KafkaPayload]] = None,
-        replacement_topic: Optional[str] = None,
-        commit_log_topic: Optional[str] = None,
+        replacement_topic_spec: Optional[KafkaTopicSpec] = None,
+        commit_log_topic_spec: Optional[KafkaTopicSpec] = None,
     ) -> None:
         self.__processor = processor
-        self.__default_topic_spec = KafkaTopicSpec(
-            topic_name=default_topic,
-            partitions_number=settings.TOPIC_PARTITION_COUNTS.get(default_topic, 1),
-        )
-        self.__replacement_topic_spec = (
-            KafkaTopicSpec(
-                topic_name=replacement_topic,
-                partitions_number=settings.TOPIC_PARTITION_COUNTS.get(
-                    replacement_topic, 1
-                ),
-            )
-            if replacement_topic
-            else None
-        )
-        self.__commit_log_topic_spec = (
-            KafkaTopicSpec(
-                topic_name=commit_log_topic,
-                partitions_number=settings.TOPIC_PARTITION_COUNTS.get(
-                    commit_log_topic, 1
-                ),
-            )
-            if commit_log_topic
-            else None
-        )
+        self.__default_topic_spec = default_topic_spec
+        self.__replacement_topic_spec = replacement_topic_spec
+        self.__commit_log_topic_spec = commit_log_topic_spec
         self.__pre_filter = pre_filter
 
     def get_processor(self) -> MessageProcessor:
@@ -89,11 +69,70 @@ class KafkaStreamLoader:
 
     def get_all_topic_specs(self) -> Sequence[KafkaTopicSpec]:
         ret = [self.__default_topic_spec]
-        if self.__replacement_topic_spec:
+        if self.__replacement_topic_spec is not None:
             ret.append(self.__replacement_topic_spec)
-        if self.__commit_log_topic_spec:
+        if self.__commit_log_topic_spec is not None:
             ret.append(self.__commit_log_topic_spec)
         return ret
+
+
+def build_kafka_topic_spec_from_settings(topic_name: str) -> KafkaTopicSpec:
+    return KafkaTopicSpec(
+        topic_name=topic_name,
+        partitions_number=settings.TOPIC_PARTITION_COUNTS.get(topic_name, 1),
+    )
+
+
+def build_kafka_stream_loader_from_settings(
+    storage_key: StorageKey,
+    processor: MessageProcessor,
+    default_topic_name: str,
+    pre_filter: Optional[StreamMessageFilter[KafkaPayload]] = None,
+    replacement_topic_name: Optional[str] = None,
+    commit_log_topic_name: Optional[str] = None,
+) -> KafkaStreamLoader:
+    storage_topics = {**settings.STORAGE_TOPICS[storage_key.name]}
+
+    default_topic_spec = build_kafka_topic_spec_from_settings(
+        storage_topics.pop("default", default_topic_name)
+    )
+
+    replacement_topic_spec: Optional[KafkaTopicSpec]
+    if replacement_topic_name is not None:
+        replacement_topic_spec = build_kafka_topic_spec_from_settings(
+            storage_topics.pop("replacements", replacement_topic_name)
+        )
+    elif "replacements" in storage_topics:
+        raise ValueError(
+            f"invalid topic configuration for {storage_key!r}: replacements unsupported"
+        )
+    else:
+        replacement_topic_spec = None
+
+    commit_log_topic_spec: Optional[KafkaTopicSpec]
+    if commit_log_topic_name is not None:
+        commit_log_topic_spec = build_kafka_topic_spec_from_settings(
+            storage_topics.pop("commit-log", commit_log_topic_name)
+        )
+    elif "commit-log" in storage_topics:
+        raise ValueError(
+            f"invalid topic configuration for {storage_key!r}: commit log unsupported"
+        )
+    else:
+        commit_log_topic_spec = None
+
+    if storage_topics.keys():
+        raise ValueError(
+            f"invalid topic configuration for {storage_key!r}: unknown keys {[*storage_topics.keys()]!r}"
+        )
+
+    return KafkaStreamLoader(
+        processor,
+        default_topic_spec,
+        pre_filter,
+        replacement_topic_spec,
+        commit_log_topic_spec,
+    )
 
 
 class TableWriter:
