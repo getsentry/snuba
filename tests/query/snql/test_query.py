@@ -971,7 +971,7 @@ test_cases = [
                     FunctionCall(
                         "_snuba_max_count",
                         "max",
-                        (Column("_snuba_count", None, "count"),),
+                        (Column("_snuba_count", None, "_snuba_count"),),
                     ),
                 ),
             ],
@@ -1003,7 +1003,7 @@ test_cases = [
                         FunctionCall(
                             "_snuba_max_count",
                             "max",
-                            (Column("_snuba_count", None, "count"),),
+                            (Column("_snuba_count", None, "_snuba_count"),),
                         ),
                     ),
                 ],
@@ -1014,7 +1014,7 @@ test_cases = [
                     FunctionCall(
                         "_snuba_min_count",
                         "min",
-                        (Column("_snuba_count", None, "count"),),
+                        (Column("_snuba_count", None, "_snuba_count"),),
                     ),
                 ),
             ],
