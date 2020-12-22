@@ -108,7 +108,7 @@ raw_storage = WritableTableStorage(
     schema=raw_schema,
     query_processors=[],
     stream_loader=build_kafka_stream_loader_from_settings(
-        StorageKey.SESSIONS_RAW.name,
+        StorageKey.SESSIONS_RAW,
         processor=SessionsProcessor(),
         default_topic_name="ingest-sessions",
     ),

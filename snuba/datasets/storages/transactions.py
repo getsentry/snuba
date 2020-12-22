@@ -96,7 +96,7 @@ storage = WritableTableStorage(
         PrewhereProcessor(),
     ],
     stream_loader=build_kafka_stream_loader_from_settings(
-        StorageKey.TRANSACTIONS.name,
+        StorageKey.TRANSACTIONS,
         processor=TransactionsMessageProcessor(),
         default_topic_name="events",
     ),

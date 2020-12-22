@@ -10,6 +10,7 @@ from snuba.clusters.cluster import (
 )
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
+from snuba.datasets.storages import StorageKey
 from snuba.processor import MessageProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.snapshots import BulkLoadSource
@@ -83,14 +84,14 @@ def build_kafka_topic_spec_from_settings(topic_name: str) -> KafkaTopicSpec:
 
 
 def build_kafka_stream_loader_from_settings(
-    storage_name: str,
+    storage_key: StorageKey,
     processor: MessageProcessor,
     default_topic_name: str,
     pre_filter: Optional[StreamMessageFilter[KafkaPayload]] = None,
     replacement_topic_name: Optional[str] = None,
     commit_log_topic_name: Optional[str] = None,
 ) -> KafkaStreamLoader:
-    storage_topics = {**settings.STORAGE_TOPICS[storage_name]}
+    storage_topics = {**settings.STORAGE_TOPICS[storage_key.name]}
 
     default_topic_spec = build_kafka_topic_spec_from_settings(
         storage_topics.pop("default", default_topic_name)
@@ -103,7 +104,7 @@ def build_kafka_stream_loader_from_settings(
         )
     elif "replacements" in storage_topics:
         raise ValueError(
-            f"invalid topic configuration for {storage_name!r}: replacements unsupported"
+            f"invalid topic configuration for {storage_key!r}: replacements unsupported"
         )
     else:
         replacement_topic_spec = None
@@ -115,14 +116,14 @@ def build_kafka_stream_loader_from_settings(
         )
     elif "commit-log" in storage_topics:
         raise ValueError(
-            f"invalid topic configuration for {storage_name!r}: commit log unsupported"
+            f"invalid topic configuration for {storage_key!r}: commit log unsupported"
         )
     else:
         commit_log_topic_spec = None
 
     if storage_topics.keys():
         raise ValueError(
-            f"invalid topic configuration for {storage_name!r}: unknown keys {[*storage_topics.keys()]!r}"
+            f"invalid topic configuration for {storage_key!r}: unknown keys {[*storage_topics.keys()]!r}"
         )
 
     return KafkaStreamLoader(

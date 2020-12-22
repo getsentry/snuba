@@ -47,7 +47,7 @@ storage = WritableTableStorage(
     schema=schema,
     query_processors=[PrewhereProcessor()],
     stream_loader=build_kafka_stream_loader_from_settings(
-        StorageKey.SPANS.name,
+        StorageKey.SPANS,
         processor=SpansMessageProcessor(),
         default_topic_name="events",
     ),

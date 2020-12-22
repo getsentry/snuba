@@ -34,7 +34,7 @@ storage = WritableTableStorage(
     schema=schema,
     query_processors=query_processors,
     stream_loader=build_kafka_stream_loader_from_settings(
-        StorageKey.EVENTS.name,
+        StorageKey.EVENTS,
         processor=EventsProcessor(promoted_tag_columns),
         default_topic_name="events",
         replacement_topic_name="event-replacements",

@@ -43,7 +43,7 @@ storage = CdcStorage(
     schema=schema,
     query_processors=[PrewhereProcessor()],
     stream_loader=build_kafka_stream_loader_from_settings(
-        StorageKey.GROUPASSIGNEES.name,
+        StorageKey.GROUPASSIGNEES,
         processor=GroupAssigneeProcessor(POSTGRES_TABLE),
         default_topic_name="cdc",
         pre_filter=CdcTableNameMessageFilter(POSTGRES_TABLE),
