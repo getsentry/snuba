@@ -7,6 +7,7 @@ from typing import (
     List,
     Optional,
     Sequence,
+    Set,
     Tuple,
     Union,
 )
@@ -734,6 +735,44 @@ def parse_snql_query_initial(
     return parsed
 
 
+def _qualify_columns(query: Union[CompositeQuery[QueryEntity], LogicalQuery]) -> None:
+    """
+    All columns in a join query should be qualified with the entity alias, e.g. e.event_id
+    Take those aliases and put them in the table name. This has to be done in a post
+    process since we need to have all the aliases from the join clause.
+    """
+
+    from_clause = query.get_from_clause()
+    if isinstance(query, LogicalQuery) or not isinstance(from_clause, JoinClause):
+        print("REJECTED")
+        return  # We don't qualify columns that have a single source
+
+    # mypy makes this difficult to do non-recursively
+    def find_aliases(aliases: Set[str], join_clause: JoinClause[QueryEntity]) -> None:
+        aliases.add(join_clause.right_node.alias)
+        if isinstance(join_clause.left_node, JoinClause):
+            find_aliases(aliases, join_clause.left_node)
+        elif isinstance(join_clause.left_node, IndividualNode):
+            aliases.add(join_clause.left_node.alias)
+
+    aliases: Set[str] = set()
+    find_aliases(aliases, from_clause)
+
+    def transform(exp: Expression) -> Expression:
+        if not isinstance(exp, Column):
+            return exp
+
+        parts = exp.column_name.split(".", 1)
+        if len(parts) != 2 or parts[0] not in aliases:
+            raise ParsingException(
+                f"column {exp.column_name} must be qualified in a join query"
+            )
+
+        return Column(exp.alias, parts[0], parts[1])
+
+    query.transform_expressions(transform)
+
+
 DATETIME_MATCH = FunctionCallMatch(
     StringMatch("toDateTime"), (Param("date_string", LiteralMatch(AnyMatch(str))),)
 )
@@ -836,6 +875,7 @@ def parse_snql_query(
             _expand_aliases,
             _mangle_aliases,
             _array_join_transformation,
+            _qualify_columns,
         ],
     )
 
