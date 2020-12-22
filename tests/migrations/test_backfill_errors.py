@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
@@ -17,7 +15,6 @@ def get_errors_count() -> int:
     return clickhouse.execute(f"SELECT count() from {errors_table_name}")[0][0]
 
 
-@patch("snuba.migrations.backfill_errors.MAX_BATCH_SIZE", 5)
 def test_backfill_errors() -> None:
     raw_events = []
     for i in range(10):
