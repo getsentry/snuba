@@ -374,13 +374,23 @@ def backfill_errors() -> None:
     last_migrated: Union[MigratedEvent, datetime]
 
     try:
-        (event_id, project, timestamp) = clickhouse.execute(
+        (timestamp, project) = clickhouse.execute(
             f"""
-                SELECT replaceAll(toString(event_id), '-', ''), project_id, timestamp FROM {errors_table_name}
-                WHERE type != 'transaction'
-                AND NOT deleted
-                ORDER BY timestamp ASC, project_id ASC, replaceAll(toString(event_id), '-', '') ASC
+                SELECT timestamp, project_id FROM {errors_table_name}
+                WHERE NOT deleted
+                ORDER BY timestamp ASC, project_id ASC
                 LIMIT 1
+            """
+        )[0]
+
+        (event_id,) = clickhouse.execute(
+            f"""
+            SELECT replaceAll(toString(event_id), '-', '') FROM {errors_table_name}
+            WHERE NOT deleted
+            AND project_id = {escape_literal(project)}
+            AND timestamp = {escape_literal(timestamp)}
+            ORDER BY timestamp ASC, project_id ASC, replaceAll(toString(event_id), '-', '') ASC
+            LIMIT 1
             """
         )[0]
 
