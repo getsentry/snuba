@@ -7,7 +7,6 @@ from typing import (
     List,
     Optional,
     Sequence,
-    Set,
     Tuple,
     Union,
 )
@@ -743,20 +742,10 @@ def _qualify_columns(query: Union[CompositeQuery[QueryEntity], LogicalQuery]) ->
     """
 
     from_clause = query.get_from_clause()
-    if isinstance(query, LogicalQuery) or not isinstance(from_clause, JoinClause):
-        print("REJECTED")
+    if not isinstance(from_clause, JoinClause):
         return  # We don't qualify columns that have a single source
 
-    # mypy makes this difficult to do non-recursively
-    def find_aliases(aliases: Set[str], join_clause: JoinClause[QueryEntity]) -> None:
-        aliases.add(join_clause.right_node.alias)
-        if isinstance(join_clause.left_node, JoinClause):
-            find_aliases(aliases, join_clause.left_node)
-        elif isinstance(join_clause.left_node, IndividualNode):
-            aliases.add(join_clause.left_node.alias)
-
-    aliases: Set[str] = set()
-    find_aliases(aliases, from_clause)
+    aliases = set(from_clause.get_alias_node_map().keys())
 
     def transform(exp: Expression) -> Expression:
         if not isinstance(exp, Column):
