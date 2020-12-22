@@ -1,11 +1,11 @@
+from functools import partial
 from typing import Callable, List, Mapping, Optional, Tuple
 
-from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
-from snuba.datasets.plans.query_plan import QueryRunner
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan, QueryRunner
 from snuba.pipeline.query_pipeline import (
-    QueryPlanner,
     QueryExecutionPipeline,
     QueryPipelineBuilder,
+    QueryPlanner,
 )
 from snuba.query.logical import Query as LogicalQuery
 from snuba.request import Request
@@ -18,7 +18,7 @@ Timing = float
 QueryPipelineBuilders = Mapping[BuilderId, QueryPipelineBuilder[ClickhouseQueryPlan]]
 QueryResults = List[Result[QueryResult]]
 SelectorFunc = Callable[[LogicalQuery], Tuple[BuilderId, List[BuilderId]]]
-CallbackFunc = Callable[[QueryResults], None]
+CallbackFunc = Callable[[LogicalQuery, QueryResults], None]
 
 
 class MultipleConcurrentPipeline(QueryExecutionPipeline):
@@ -57,7 +57,9 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
         self.__runner = runner
         self.__query_pipeline_builders = query_pipeline_builders
         self.__selector_func = selector_func
-        self.__callback_func = callback_func
+        self.__callback_func = (
+            partial(callback_func, self.__request.query) if callback_func else None
+        )
 
     def execute(self) -> QueryResult:
         executor = ThreadedFunctionDelegator[LogicalQuery, QueryResult](
