@@ -37,7 +37,9 @@ arrayMap(
                 arrayZip(contexts.key, contexts.value),
                 [('geo_city', geo_city)],
                 [('geo_country_code', geo_country_code)],
-                [('geo_region', geo_region)]
+                [('geo_region', geo_region)],
+                [('os_build', os_build)],
+                [('os_kernel_version', os_kernel_version)]
             )
         )
     ) AS tuplesArray

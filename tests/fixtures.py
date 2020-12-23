@@ -70,7 +70,8 @@ def get_raw_event() -> InsertEvent:
                 "geo": {"city": "San Francisco", "region": "CA", "country_code": "US"},
             },
             "contexts": {
-                "device": {"online": True, "charging": True, "model_id": "Galaxy"}
+                "device": {"online": True, "charging": True, "model_id": "Galaxy"},
+                "os": {"kernel_version": "1.1.1"},
             },
             "sentry.interfaces.Exception": {
                 "exc_omitted": None,

@@ -34,6 +34,6 @@ def test_backfill_errors() -> None:
     assert clickhouse.execute(
         f"SELECT contexts.key, contexts.value from {errors_table_name} LIMIT 1;"
     )[0] == (
-        ("geo_city", "geo_country_code", "geo_region"),
-        ("San Francisco", "US", "CA"),
+        ("geo_city", "geo_country_code", "geo_region", "os_kernel_version"),
+        ("San Francisco", "US", "CA", "1.1.1"),
     )
