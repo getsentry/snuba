@@ -35,9 +35,9 @@ arrayMap(
             t -> tupleElement(t, 2) IS NOT NULL,
             arrayConcat(
                 arrayZip(contexts.key, contexts.value),
-                [('geo_city', geo_city)]
+                [('geo_city', geo_city)],
                 [('geo_country_code', geo_country_code)],
-                [('geo_region', geo_region)],
+                [('geo_region', geo_region)]
             )
         )
     ) AS tuplesArray
