@@ -340,7 +340,7 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
 
     query_plan = SingleStorageQueryPlanBuilder(
         storage=entity.get_writable_storage(), mappers=transaction_translator,
-    ).build_plan(query, request.settings)
+    ).build_and_rank_plans(query, request.settings)[0]
 
     return query_plan.query
 
