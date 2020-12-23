@@ -6,16 +6,16 @@ from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
 
 
-def get_errors_count() -> int:
+def test_backfill_errors() -> None:
     errors_storage = get_writable_storage(StorageKey.ERRORS)
-    errors_table_name = errors_storage.get_table_writer().get_schema().get_table_name()
     clickhouse = errors_storage.get_cluster().get_query_connection(
         ClickhouseClientSettings.QUERY
     )
-    return clickhouse.execute(f"SELECT count() from {errors_table_name}")[0][0]
+    errors_table_name = errors_storage.get_table_writer().get_schema().get_table_name()
 
+    def get_errors_count() -> int:
+        return clickhouse.execute(f"SELECT count() from {errors_table_name}")[0][0]
 
-def test_backfill_errors() -> None:
     raw_events = []
     for i in range(10):
         event = get_raw_event()
@@ -30,3 +30,10 @@ def test_backfill_errors() -> None:
     backfill_errors()
 
     assert get_errors_count() == 10
+
+    assert clickhouse.execute(
+        f"SELECT contexts.key, contexts.value from {errors_table_name} LIMIT 1;"
+    )[0] == (
+        ("geo_city", "geo_country_code", "geo_region"),
+        ("San Francisco", "US", "CA"),
+    )

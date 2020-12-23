@@ -27,6 +27,31 @@ WINDOW = timedelta(days=7)
 BEGINNING_OF_TIME = get_monday((datetime.utcnow() - timedelta(days=90)).date())
 
 
+contexts_key = """
+arrayMap(
+    t -> tupleElement(t, 1),
+    arraySort(
+        arrayFilter(
+            t -> tupleElement(t, 2) IS NOT NULL,
+            arrayConcat(
+                arrayZip(contexts.key, contexts.value),
+                [('geo_city', geo_city)]
+                [('geo_country_code', geo_country_code)],
+                [('geo_region', geo_region)],
+            )
+        )
+    ) AS tuplesArray
+)
+"""
+
+contexts_value = """
+    arrayMap(
+        t -> tupleElement(t, 2),
+        tuplesArray
+    )
+"""
+
+
 COLUMNS = [
     ("project_id", "project_id"),
     ("timestamp", "timestamp"),
@@ -50,8 +75,8 @@ COLUMNS = [
     ("http_referer", "http_referer"),
     ("tags.key", "tags.key"),
     ("tags.value", "tags.value"),
-    ("contexts.key", "contexts.key"),
-    ("contexts.value", "contexts.value"),
+    ("contexts.key", contexts_key),
+    ("contexts.value", contexts_value),
     ("transaction_name", "ifNull(`transaction`, '')"),
     (
         "span_id",
