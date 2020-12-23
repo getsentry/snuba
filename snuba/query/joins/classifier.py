@@ -96,12 +96,12 @@ class SubqueryExpression(SubExpression):
             #
             # Example:
             # ```
-            # SELECT avg(a.id) FROM (SELECT id FROM ... join ...) a
+            # SELECT avg(id) FROM (SELECT a.id FROM ... join ...)
             # ```
             # after branch cutting becomes:
             # ```
-            # SELECT avg(a._snuba_a.id) FROM
-            #    SELECT a._snuba_a.id as _snuba_a.id
+            # SELECT avg(_snuba_id) FROM
+            #    SELECT a._snuba_a.id as _snuba_id
             #        FROM
             #           (SELECT id as _snuba_a.id FROM ...) a
             #           JOIN
