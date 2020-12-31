@@ -29,7 +29,7 @@ def test_expressions_from_basic_condition() -> None:
     f1 = FunctionCall(None, "f", (c,))
     c2 = Column(None, "t1", "c2")
 
-    condition = binary_condition(None, ConditionFunctions.EQ, f1, c2)
+    condition = binary_condition(ConditionFunctions.EQ, f1, c2)
     ret = list(condition)
     expected = [c, f1, c2, condition]
 
@@ -48,7 +48,7 @@ def test_aliased_expressions_from_basic_condition() -> None:
     f1 = FunctionCall("a", "f", (c,))
     c2 = Column("a2", "t1", "c2")
 
-    condition = binary_condition(None, ConditionFunctions.EQ, f1, c2)
+    condition = binary_condition(ConditionFunctions.EQ, f1, c2)
     ret = list(condition)
     expected = [c, f1, c2, condition]
 
@@ -70,11 +70,11 @@ def test_map_expressions_in_basic_condition() -> None:
             return c3
         return e
 
-    condition = binary_condition(None, ConditionFunctions.EQ, f1, c2)
+    condition = binary_condition(ConditionFunctions.EQ, f1, c2)
     condition = condition.transform(replace_col)
 
     condition_b = binary_condition(
-        None, ConditionFunctions.EQ, FunctionCall(None, "f", (c3,)), c2,
+        ConditionFunctions.EQ, FunctionCall(None, "f", (c3,)), c2,
     )
     ret = list(condition)
     expected = [c3, FunctionCall(None, "f", (c3,)), c2, condition_b]
@@ -90,35 +90,35 @@ def test_nested_simple_condition() -> None:
 
     c1 = Column(None, "t1", "c1")
     c2 = Column(None, "t1", "c2")
-    co1 = binary_condition(None, ConditionFunctions.EQ, c1, c2)
+    co1 = binary_condition(ConditionFunctions.EQ, c1, c2)
 
     c3 = Column(None, "t1", "c1")
     c4 = Column(None, "t1", "c2")
-    co2 = binary_condition(None, ConditionFunctions.EQ, c3, c4)
-    or1 = binary_condition(None, BooleanFunctions.OR, co1, co2)
+    co2 = binary_condition(ConditionFunctions.EQ, c3, c4)
+    or1 = binary_condition(BooleanFunctions.OR, co1, co2)
 
     c5 = Column(None, "t1", "c1")
     c6 = Column(None, "t1", "c2")
-    co4 = binary_condition(None, ConditionFunctions.EQ, c5, c6)
+    co4 = binary_condition(ConditionFunctions.EQ, c5, c6)
 
     c7 = Column(None, "t1", "c1")
     c8 = Column(None, "t1", "c2")
-    co5 = binary_condition(None, ConditionFunctions.EQ, c7, c8)
-    or2 = binary_condition(None, BooleanFunctions.OR, co4, co5)
-    and1 = binary_condition(None, BooleanFunctions.AND, or1, or2)
+    co5 = binary_condition(ConditionFunctions.EQ, c7, c8)
+    or2 = binary_condition(BooleanFunctions.OR, co4, co5)
+    and1 = binary_condition(BooleanFunctions.AND, or1, or2)
 
     ret = list(and1)
     expected = [c1, c2, co1, c3, c4, co2, or1, c5, c6, co4, c7, c8, co5, or2, and1]
     assert ret == expected
 
     cX = Column(None, "t1", "cX")
-    co1_b = binary_condition(None, ConditionFunctions.EQ, c1, cX)
-    co2_b = binary_condition(None, ConditionFunctions.EQ, c3, cX)
-    or1_b = binary_condition(None, BooleanFunctions.OR, co1_b, co2_b)
-    co4_b = binary_condition(None, ConditionFunctions.EQ, c5, cX)
-    co5_b = binary_condition(None, ConditionFunctions.EQ, c7, cX)
-    or2_b = binary_condition(None, BooleanFunctions.OR, co4_b, co5_b)
-    and1_b = binary_condition(None, BooleanFunctions.AND, or1_b, or2_b)
+    co1_b = binary_condition(ConditionFunctions.EQ, c1, cX)
+    co2_b = binary_condition(ConditionFunctions.EQ, c3, cX)
+    or1_b = binary_condition(BooleanFunctions.OR, co1_b, co2_b)
+    co4_b = binary_condition(ConditionFunctions.EQ, c5, cX)
+    co5_b = binary_condition(ConditionFunctions.EQ, c7, cX)
+    or2_b = binary_condition(BooleanFunctions.OR, co4_b, co5_b)
+    and1_b = binary_condition(BooleanFunctions.AND, or1_b, or2_b)
 
     def replace_col(e: Expression) -> Expression:
         if isinstance(e, Column) and e.column_name == "c2":
@@ -149,7 +149,6 @@ def test_nested_simple_condition() -> None:
 
 def test_in_condition() -> None:
     in_condition = binary_condition(
-        None,
         ConditionFunctions.IN,
         Column(None, None, "tags_key"),
         literals_tuple(None, [Literal(None, "t1"), Literal(None, "t2")]),
@@ -168,7 +167,6 @@ def test_in_condition() -> None:
 
 def test_not_in_condition() -> None:
     not_in_condition = binary_condition(
-        None,
         ConditionFunctions.NOT_IN,
         Column(None, None, "tags_key"),
         literals_tuple(None, [Literal(None, "t1"), Literal(None, "t2")]),
@@ -187,13 +185,13 @@ def test_not_in_condition() -> None:
 
 def test_is_x_condition_functions() -> None:
     eq_condition = binary_condition(
-        None, ConditionFunctions.EQ, Column(None, None, "test"), Literal(None, "1")
+        ConditionFunctions.EQ, Column(None, None, "test"), Literal(None, "1")
     )
     assert is_binary_condition(eq_condition, ConditionFunctions.EQ)
     assert not is_binary_condition(eq_condition, ConditionFunctions.NEQ)
 
     un_condition = unary_condition(
-        None, ConditionFunctions.IS_NOT_NULL, Column(None, None, "test")
+        ConditionFunctions.IS_NOT_NULL, Column(None, None, "test")
     )
     assert is_unary_condition(un_condition, ConditionFunctions.IS_NOT_NULL)
     assert not is_unary_condition(un_condition, ConditionFunctions.IS_NULL)
@@ -207,39 +205,45 @@ def test_is_x_condition_functions() -> None:
 
 def test_first_level_conditions() -> None:
     c1 = binary_condition(
-        None,
-        ConditionFunctions.EQ,
-        Column(None, "table1", "column1"),
-        Literal(None, "test"),
+        ConditionFunctions.EQ, Column(None, "table1", "column1"), Literal(None, "test"),
     )
     c2 = binary_condition(
-        None,
-        ConditionFunctions.EQ,
-        Column(None, "table2", "column2"),
-        Literal(None, "test"),
+        ConditionFunctions.EQ, Column(None, "table2", "column2"), Literal(None, "test"),
     )
     c3 = binary_condition(
-        None,
-        ConditionFunctions.EQ,
-        Column(None, "table3", "column3"),
-        Literal(None, "test"),
+        ConditionFunctions.EQ, Column(None, "table3", "column3"), Literal(None, "test"),
     )
 
     cond = binary_condition(
-        None,
+        BooleanFunctions.AND, binary_condition(BooleanFunctions.AND, c1, c2), c3,
+    )
+    assert get_first_level_and_conditions(cond) == [c1, c2, c3]
+
+    cond = binary_condition(
         BooleanFunctions.AND,
-        binary_condition(None, BooleanFunctions.AND, c1, c2),
+        FunctionCall(
+            None, "equals", (FunctionCall(None, "and", (c1, c2)), Literal(None, 1))
+        ),
         c3,
     )
     assert get_first_level_and_conditions(cond) == [c1, c2, c3]
 
     cond = binary_condition(
-        None,
-        BooleanFunctions.OR,
-        binary_condition(None, BooleanFunctions.AND, c1, c2),
-        c3,
+        BooleanFunctions.OR, binary_condition(BooleanFunctions.AND, c1, c2), c3,
     )
     assert get_first_level_or_conditions(cond) == [
-        binary_condition(None, BooleanFunctions.AND, c1, c2),
+        binary_condition(BooleanFunctions.AND, c1, c2),
         c3,
+    ]
+
+    cond = binary_condition(
+        ConditionFunctions.EQ,
+        binary_condition(
+            BooleanFunctions.OR, c1, binary_condition(BooleanFunctions.AND, c2, c3)
+        ),
+        Literal(None, 1),
+    )
+    assert get_first_level_or_conditions(cond) == [
+        c1,
+        binary_condition(BooleanFunctions.AND, c2, c3),
     ]

@@ -1,17 +1,17 @@
 import pytest
-
-from snuba.clickhouse.columns import ColumnSet, Nested, Nullable, String, UInt
+from snuba.clickhouse.columns import ColumnSet, Nested
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.datasets.schemas.tables import TableSource
+from snuba.query import SelectedExpression
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.logical import Query as LogicalQuery
-from snuba.query.logical import SelectedExpression
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.request.request_settings import HTTPRequestSettings
 
 columns = ColumnSet(
     [
-        ("promoted", Nullable(UInt(8))),
+        ("promoted", UInt(8, Modifiers(nullable=True))),
         ("tags", Nested([("key", String()), ("value", String())])),
     ]
 )
@@ -20,101 +20,83 @@ test_cases = [
     (
         "not promoted",
         ClickhouseQuery(
-            LogicalQuery(
-                {},
-                TableSource("events", columns),
-                selected_columns=[
-                    SelectedExpression(
+            Table("events", columns),
+            selected_columns=[
+                SelectedExpression(
+                    "tags[foo]",
+                    FunctionCall(
                         "tags[foo]",
-                        FunctionCall(
-                            "tags[foo]",
-                            "arrayValue",
-                            (
-                                Column(None, None, "tags.value"),
-                                FunctionCall(
-                                    None,
-                                    "indexOf",
-                                    (
-                                        Column(None, None, "tags.key"),
-                                        Literal(None, "foo"),
-                                    ),
-                                ),
+                        "arrayValue",
+                        (
+                            Column(None, None, "tags.value"),
+                            FunctionCall(
+                                None,
+                                "indexOf",
+                                (Column(None, None, "tags.key"), Literal(None, "foo"),),
                             ),
                         ),
-                    )
-                ],
-            )
+                    ),
+                )
+            ],
         ),
         ClickhouseQuery(
-            LogicalQuery(
-                {},
-                TableSource("events", columns),
-                selected_columns=[
-                    SelectedExpression(
+            Table("events", columns),
+            selected_columns=[
+                SelectedExpression(
+                    "tags[foo]",
+                    FunctionCall(
                         "tags[foo]",
-                        FunctionCall(
-                            "tags[foo]",
-                            "arrayValue",
-                            (
-                                Column(None, None, "tags.value"),
-                                FunctionCall(
-                                    None,
-                                    "indexOf",
-                                    (
-                                        Column(None, None, "tags.key"),
-                                        Literal(None, "foo"),
-                                    ),
-                                ),
+                        "arrayValue",
+                        (
+                            Column(None, None, "tags.value"),
+                            FunctionCall(
+                                None,
+                                "indexOf",
+                                (Column(None, None, "tags.key"), Literal(None, "foo"),),
                             ),
                         ),
-                    )
-                ],
-            )
+                    ),
+                )
+            ],
         ),
     ),
     (
         "replaced with promoted col",
         ClickhouseQuery(
-            LogicalQuery(
-                {},
-                TableSource("events", columns),
-                selected_columns=[
-                    SelectedExpression(
+            Table("events", columns),
+            selected_columns=[
+                SelectedExpression(
+                    "tags[promoted_tag]",
+                    FunctionCall(
                         "tags[promoted_tag]",
-                        FunctionCall(
-                            "tags[promoted_tag]",
-                            "arrayElement",
-                            (
-                                Column(None, "table", "tags.value"),
-                                FunctionCall(
-                                    None,
-                                    "indexOf",
-                                    (
-                                        Column(None, "table", "tags.key"),
-                                        Literal(None, "promoted_tag"),
-                                    ),
+                        "arrayElement",
+                        (
+                            Column(None, "table", "tags.value"),
+                            FunctionCall(
+                                None,
+                                "indexOf",
+                                (
+                                    Column(None, "table", "tags.key"),
+                                    Literal(None, "promoted_tag"),
                                 ),
                             ),
                         ),
-                    )
-                ],
-            )
+                    ),
+                )
+            ],
         ),
         ClickhouseQuery(
-            LogicalQuery(
-                {},
-                TableSource("events", columns),
-                selected_columns=[
-                    SelectedExpression(
+            Table("events", columns),
+            selected_columns=[
+                SelectedExpression(
+                    "tags[promoted_tag]",
+                    FunctionCall(
                         "tags[promoted_tag]",
-                        FunctionCall(
-                            "tags[promoted_tag]",
-                            "toString",
-                            (Column(None, "table", "promoted"),),
-                        ),
-                    )
-                ],
-            )
+                        "toString",
+                        (Column(None, "table", "promoted"),),
+                    ),
+                )
+            ],
         ),
     ),
 ]

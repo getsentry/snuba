@@ -1,5 +1,4 @@
 import pytest
-
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import (
@@ -8,8 +7,11 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities import EntityKey
 from snuba.datasets.plans.translator.query import QueryTranslator
-from snuba.datasets.schemas.tables import TableSource
+from snuba.query import SelectedExpression
+from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import (
     Column,
     FunctionCall,
@@ -17,14 +19,13 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query as SnubaQuery
-from snuba.query.logical import SelectedExpression
 
 test_cases = [
     pytest.param(
         TranslationMappers(),
         SnubaQuery(
             body={},
-            data_source=TableSource("my_table", ColumnSet([])),
+            from_clause=QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression("alias", Column("alias", "table", "column")),
                 SelectedExpression(
@@ -44,30 +45,24 @@ test_cases = [
             ],
         ),
         ClickhouseQuery(
-            SnubaQuery(
-                body={},
-                data_source=TableSource("my_table", ColumnSet([])),
-                selected_columns=[
-                    SelectedExpression("alias", Column("alias", "table", "column")),
-                    SelectedExpression(
+            from_clause=Table("my_table", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression("alias", Column("alias", "table", "column")),
+                SelectedExpression(
+                    "alias2",
+                    FunctionCall(
                         "alias2",
-                        FunctionCall(
-                            "alias2",
-                            "f1",
-                            (
-                                Column(None, None, "column2"),
-                                Column(None, None, "column3"),
-                            ),
-                        ),
+                        "f1",
+                        (Column(None, None, "column2"), Column(None, None, "column3"),),
                     ),
-                    SelectedExpression(
-                        name=None,
-                        expression=SubscriptableReference(
-                            None, Column(None, None, "tags"), Literal(None, "myTag")
-                        ),
+                ),
+                SelectedExpression(
+                    name=None,
+                    expression=SubscriptableReference(
+                        None, Column(None, None, "tags"), Literal(None, "myTag")
                     ),
-                ],
-            )
+                ),
+            ],
         ),
         id="default - no change",
     ),
@@ -78,7 +73,7 @@ test_cases = [
         ),
         SnubaQuery(
             body={},
-            data_source=TableSource("my_table", ColumnSet([])),
+            from_clause=QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression("alias", Column("alias", "table", "column")),
                 SelectedExpression(
@@ -103,42 +98,39 @@ test_cases = [
             ],
         ),
         ClickhouseQuery(
-            SnubaQuery(
-                body={},
-                data_source=TableSource("my_table", ColumnSet([])),
-                selected_columns=[
-                    SelectedExpression("alias", Column("alias", "table", "column")),
-                    SelectedExpression(
+            from_clause=Table("my_table", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression("alias", Column("alias", "table", "column")),
+                SelectedExpression(
+                    "alias2",
+                    FunctionCall(
                         "alias2",
-                        FunctionCall(
-                            "alias2",
-                            "f1",
-                            (
-                                Column("column2", None, "not_column2"),
-                                Column("column3", None, "column3"),
-                            ),
+                        "f1",
+                        (
+                            Column("column2", None, "not_column2"),
+                            Column("column3", None, "column3"),
                         ),
                     ),
-                    SelectedExpression(
+                ),
+                SelectedExpression(
+                    "tags[myTag]",
+                    FunctionCall(
                         "tags[myTag]",
-                        FunctionCall(
-                            "tags[myTag]",
-                            "arrayElement",
-                            (
-                                Column(None, None, "tags.value"),
-                                FunctionCall(
-                                    None,
-                                    "indexOf",
-                                    (
-                                        Column(None, None, "tags.key"),
-                                        Literal(None, "myTag"),
-                                    ),
+                        "arrayElement",
+                        (
+                            Column(None, None, "tags.value"),
+                            FunctionCall(
+                                None,
+                                "indexOf",
+                                (
+                                    Column(None, None, "tags.key"),
+                                    Literal(None, "myTag"),
                                 ),
                             ),
                         ),
                     ),
-                ],
-            )
+                ),
+            ],
         ),
         id="some basic rules",
     ),
@@ -155,7 +147,7 @@ test_cases = [
         ),
         SnubaQuery(
             body={},
-            data_source=TableSource("my_table", ColumnSet([])),
+            from_clause=QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     "alias",
@@ -172,32 +164,29 @@ test_cases = [
             ],
         ),
         ClickhouseQuery(
-            SnubaQuery(
-                body={},
-                data_source=TableSource("my_table", ColumnSet([])),
-                selected_columns=[
-                    SelectedExpression(
+            from_clause=Table("my_table", ColumnSet([])),
+            selected_columns=[
+                SelectedExpression(
+                    "alias",
+                    FunctionCall(
                         "alias",
-                        FunctionCall(
-                            "alias",
-                            "f",
-                            (
-                                FunctionCall(
-                                    None,
-                                    "uniqIfMerge",
-                                    (
-                                        Column(
-                                            alias=None,
-                                            table_name=None,
-                                            column_name="users_crashed",
-                                        ),
+                        "f",
+                        (
+                            FunctionCall(
+                                None,
+                                "uniqIfMerge",
+                                (
+                                    Column(
+                                        alias=None,
+                                        table_name=None,
+                                        column_name="users_crashed",
                                     ),
                                 ),
                             ),
                         ),
                     ),
-                ],
-            )
+                ),
+            ],
         ),
         id="non idempotent rule",
     ),

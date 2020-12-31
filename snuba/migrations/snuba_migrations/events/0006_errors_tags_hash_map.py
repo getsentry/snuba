@@ -1,9 +1,10 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import Array, Column, Materialized, UInt
+from snuba.clickhouse.columns import Array, Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages.tags_hash_map import TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
 class Migration(migration.MultiStepMigration):
@@ -26,7 +27,7 @@ class Migration(migration.MultiStepMigration):
                 table_name="errors_local",
                 column=Column(
                     "_tags_hash_map",
-                    Materialized(Array(UInt(64)), TAGS_HASH_MAP_COLUMN),
+                    Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN)),
                 ),
                 after="_tags_flattened",
             ),

@@ -1,38 +1,31 @@
 from typing import Sequence
-from snuba.clickhouse.columns import (
-    Column,
-    DateTime,
-    LowCardinality,
-    Nullable,
-    String,
-    UInt,
-    UUID,
-)
+
+from snuba.clickhouse.columns import UUID, Column, DateTime, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-
-raw_columns = [
+raw_columns: Sequence[Column[Modifiers]] = [
     Column("org_id", UInt(64)),
     Column("project_id", UInt(64)),
-    Column("key_id", Nullable(UInt(64))),
+    Column("key_id", UInt(64, Modifiers(nullable=True))),
     Column("timestamp", DateTime()),
     Column("outcome", UInt(8)),
-    Column("reason", LowCardinality(Nullable(String()))),
-    Column("event_id", Nullable(UUID())),
+    Column("reason", String(Modifiers(nullable=True, low_cardinality=True))),
+    Column("event_id", UUID(Modifiers(nullable=True))),
 ]
 
-hourly_columns = [
+hourly_columns: Sequence[Column[Modifiers]] = [
     Column("org_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("key_id", UInt(64)),
     Column("timestamp", DateTime()),
     Column("outcome", UInt(8)),
-    Column("reason", LowCardinality(String())),
+    Column("reason", String(Modifiers(low_cardinality=True))),
     Column("times_seen", UInt(64)),
 ]
 
-materialized_view_columns = [
+materialized_view_columns: Sequence[Column[Modifiers]] = [
     Column("org_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("key_id", UInt(64)),

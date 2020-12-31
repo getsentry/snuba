@@ -1,13 +1,16 @@
 from snuba.clickhouse.columns import ColumnSet
-from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
-from snuba.datasets.schemas.tables import TableSource
+from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
+from snuba.datasets.entities import EntityKey
+from snuba.query import SelectedExpression
 from snuba.query.conditions import (
-    binary_condition,
     ConditionFunctions,
+    binary_condition,
+    combine_and_conditions,
 )
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.dsl import count, divide
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.logical import Query, SelectedExpression
+from snuba.query.logical import Query
 from snuba.query.processors.performance_expressions import failure_rate_processor
 from snuba.request.request_settings import HTTPRequestSettings
 
@@ -15,7 +18,7 @@ from snuba.request.request_settings import HTTPRequestSettings
 def test_failure_rate_format_expressions() -> None:
     unprocessed = Query(
         {},
-        TableSource("events", ColumnSet([])),
+        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
             SelectedExpression(name=None, expression=Column(None, None, "column2")),
             SelectedExpression("perf", FunctionCall("perf", "failure_rate", ())),
@@ -23,7 +26,7 @@ def test_failure_rate_format_expressions() -> None:
     )
     expected = Query(
         {},
-        TableSource("events", ColumnSet([])),
+        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
             SelectedExpression(name=None, expression=Column(None, None, "column2")),
             SelectedExpression(
@@ -33,19 +36,15 @@ def test_failure_rate_format_expressions() -> None:
                         None,
                         "countIf",
                         (
-                            binary_condition(
-                                None,
-                                ConditionFunctions.NOT_IN,
-                                Column(None, None, "transaction_status"),
-                                FunctionCall(
-                                    None,
-                                    "tuple",
-                                    (
-                                        Literal(alias=None, value=0),
-                                        Literal(alias=None, value=1),
-                                        Literal(alias=None, value=2),
-                                    ),
-                                ),
+                            combine_and_conditions(
+                                [
+                                    binary_condition(
+                                        ConditionFunctions.NEQ,
+                                        Column(None, None, "transaction_status"),
+                                        Literal(None, code),
+                                    )
+                                    for code in [0, 1, 2]
+                                ]
                             ),
                         ),
                     ),
@@ -68,5 +67,5 @@ def test_failure_rate_format_expressions() -> None:
         ClickhouseExpressionFormatter()
     )
     assert ret == (
-        "(divide(countIf(notIn(transaction_status, tuple(0, 1, 2))), count()) AS perf)"
+        "(divide(countIf(notEquals(transaction_status, 0) AND notEquals(transaction_status, 1) AND notEquals(transaction_status, 2)), count()) AS perf)"
     )

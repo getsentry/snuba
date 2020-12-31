@@ -52,7 +52,7 @@ def divide(
 
 
 # aggregate functions
-def count(column: Optional[Column] = None, alias: Optional[str] = None):
+def count(column: Optional[Column] = None, alias: Optional[str] = None) -> FunctionCall:
     return FunctionCall(alias, "count", (column,) if column else ())
 
 
@@ -60,7 +60,11 @@ def countIf(
     condition: FunctionCall,
     column: Optional[Column] = None,
     alias: Optional[str] = None,
-):
+) -> FunctionCall:
     return FunctionCall(
         alias, "countIf", (condition, column) if column else (condition,)
     )
+
+
+def identity(expression: Expression, alias: Optional[str]) -> FunctionCall:
+    return FunctionCall(alias, "identity", (expression,))

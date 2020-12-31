@@ -1,7 +1,8 @@
 import logging
+import random
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, Mapping, Optional, Sequence, Set, Tuple, Union
+from typing import List, Mapping, Optional, Sequence, Set, Tuple
 
 from snuba import environment, state
 from snuba.clickhouse.columns import (
@@ -12,217 +13,63 @@ from snuba.clickhouse.columns import (
     FixedString,
     Float,
     Nested,
-    Nullable,
-    String,
-    UInt,
 )
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.clickhouse.translators.snuba.allowed import (
     ColumnMapper,
+    CurriedFunctionCallMapper,
+    FunctionCallMapper,
     SubscriptableReferenceMapper,
 )
-from snuba.clickhouse.translators.snuba.mappers import ColumnToLiteral, ColumnToMapping
+from snuba.clickhouse.translators.snuba.mappers import (
+    ColumnToColumn,
+    ColumnToFunction,
+    ColumnToLiteral,
+    ColumnToMapping,
+    SubscriptableMapper,
+)
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities.events import BaseEventsEntity, EventsQueryStorageSelector
+from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.datasets.entity import Entity
-from snuba.datasets.entities.factory import EntityKey
-from snuba.datasets.entities.events import event_translator
-from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
-from snuba.datasets.storage import (
-    QueryStorageSelector,
-    ReadableStorage,
-    StorageAndMappers,
+from snuba.datasets.plans.single_storage import (
+    SelectedStorageQueryPlanBuilder,
+    SingleStorageQueryPlanBuilder,
 )
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.entities.transactions import transaction_translator
-from snuba.query.conditions import (
-    BINARY_OPERATORS,
-    ConditionFunctions,
-    get_first_level_and_conditions,
+from snuba.pipeline.pipeline_delegator import PipelineDelegator
+from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
+from snuba.query.dsl import identity
+from snuba.query.expressions import (
+    Column,
+    CurriedFunctionCall,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
 )
-from snuba.query.expressions import Column, Literal, SubscriptableReference
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
-from snuba.query.matchers import Column as ColumnMatch
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
+from snuba.query.matchers import Or
 from snuba.query.matchers import String as StringMatch
-from snuba.query.matchers import Or, Param
 from snuba.query.processors import QueryProcessor
-from snuba.query.processors.performance_expressions import (
-    apdex_processor,
-    failure_rate_processor,
-)
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.handled_functions import HandledFunctionsProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
-from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
+from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
-from snuba.query.subscripts import subscript_key_column_name
 from snuba.query.timeseries_extension import TimeSeriesExtension
-from snuba.request.request_settings import RequestSettings
-from snuba.util import parse_datetime, qualified_column
+from snuba.util import qualified_column
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.threaded_function_delegator import Result
+from snuba.web import QueryResult
 
-EVENTS = EntityKey.EVENTS
-TRANSACTIONS = EntityKey.TRANSACTIONS
-EVENTS_AND_TRANSACTIONS = "events_and_transactions"
-
-metrics = MetricsWrapper(environment.metrics, "api.discover")
 logger = logging.getLogger(__name__)
 
-EVENT_CONDITION = FunctionCallMatch(
-    Param("function", Or([StringMatch(op) for op in BINARY_OPERATORS])),
-    (
-        Or([ColumnMatch(None, StringMatch("type")), LiteralMatch(None)]),
-        Param("event_type", Or([ColumnMatch(), LiteralMatch()])),
-    ),
-)
-
-
-def match_query_to_table(
-    query: Query, events_only_columns: ColumnSet, transactions_only_columns: ColumnSet
-) -> Union[EntityKey, str]:
-    # First check for a top level condition on the event type
-    condition = query.get_condition_from_ast()
-    event_types = set()
-    if condition:
-        top_level_condition = get_first_level_and_conditions(condition)
-
-        for cond in top_level_condition:
-            result = EVENT_CONDITION.match(cond)
-            if not result:
-                continue
-
-            event_type_param = result.expression("event_type")
-
-            if isinstance(event_type_param, Column):
-                event_type = event_type_param.column_name
-            elif isinstance(event_type_param, Literal):
-                event_type = str(event_type_param.value)
-            if result:
-                if result.string("function") == ConditionFunctions.EQ:
-                    event_types.add(event_type)
-                elif result.string("function") == ConditionFunctions.NEQ:
-                    if event_type == "transaction":
-                        return EVENTS
-
-    if len(event_types) == 1 and "transaction" in event_types:
-        return TRANSACTIONS
-
-    if len(event_types) > 0 and "transaction" not in event_types:
-        return EVENTS
-
-    # If we cannot clearly pick a table from the top level conditions, then
-    # inspect the columns requested to infer a selection.
-    has_event_columns = False
-    has_transaction_columns = False
-    for col in query.get_all_ast_referenced_columns():
-        if events_only_columns.get(col.column_name):
-            has_event_columns = True
-        elif transactions_only_columns.get(col.column_name):
-            has_transaction_columns = True
-
-    for subscript in query.get_all_ast_referenced_subscripts():
-        # Subscriptable references will not be properly recognized above
-        # through get_all_ast_referenced_columns since the columns that
-        # method will find will look like `tags` or `measurements`, while
-        # the column sets contains `tags.key` and `tags.value`.
-        schema_col_name = subscript_key_column_name(subscript)
-        if events_only_columns.get(schema_col_name):
-            has_event_columns = True
-        if transactions_only_columns.get(schema_col_name):
-            has_transaction_columns = True
-
-    if has_event_columns and has_transaction_columns:
-        # Impossible query, use the merge table
-        return EVENTS_AND_TRANSACTIONS
-    elif has_event_columns:
-        return EVENTS
-    elif has_transaction_columns:
-        return TRANSACTIONS
-    else:
-        return EVENTS_AND_TRANSACTIONS
-
-
-def detect_table(
-    query: Query,
-    events_only_columns: ColumnSet,
-    transactions_only_columns: ColumnSet,
-    track_bad_queries: bool,
-) -> EntityKey:
-    """
-    Given a query, we attempt to guess whether it is better to fetch data from the
-    "events", "transactions" or future merged storage.
-
-    The merged storage resolves to the events storage until errors and transactions
-    are split into separate physical tables.
-    """
-    selected_table = match_query_to_table(
-        query, events_only_columns, transactions_only_columns
-    )
-
-    if track_bad_queries:
-        event_columns = set()
-        transaction_columns = set()
-        for col in query.get_all_ast_referenced_columns():
-            if events_only_columns.get(col.column_name):
-                event_columns.add(col.column_name)
-            elif transactions_only_columns.get(col.column_name):
-                transaction_columns.add(col.column_name)
-
-        for subscript in query.get_all_ast_referenced_subscripts():
-            schema_col_name = subscript_key_column_name(subscript)
-            if events_only_columns.get(schema_col_name):
-                event_columns.add(schema_col_name)
-            if transactions_only_columns.get(schema_col_name):
-                transaction_columns.add(schema_col_name)
-
-        event_mismatch = event_columns and selected_table == TRANSACTIONS
-        transaction_mismatch = transaction_columns and selected_table in [
-            EVENTS,
-            EVENTS_AND_TRANSACTIONS,
-        ]
-
-        if event_mismatch or transaction_mismatch:
-            missing_columns = ",".join(
-                sorted(event_columns if event_mismatch else transaction_columns)
-            )
-            metrics.increment(
-                "query.impossible",
-                tags={
-                    "selected_table": (
-                        str(selected_table.value)
-                        if isinstance(selected_table, EntityKey)
-                        else selected_table
-                    ),
-                    "missing_columns": missing_columns,
-                },
-            )
-            logger.warning("Discover generated impossible query", exc_info=True)
-
-        if selected_table == EVENTS_AND_TRANSACTIONS and (
-            event_columns or transaction_columns
-        ):
-            # Not possible in future with merge table
-            metrics.increment(
-                "query.impossible-merge-table",
-                tags={
-                    "missing_events_columns": ",".join(sorted(event_columns)),
-                    "missing_transactions_columns": ",".join(
-                        sorted(transaction_columns)
-                    ),
-                },
-            )
-
-        else:
-            metrics.increment("query.success")
-
-    # Default for events and transactions is events
-    final_table = (
-        EntityKey.EVENTS if selected_table != TRANSACTIONS else EntityKey.TRANSACTIONS
-    )
-    return final_table
+metrics = MetricsWrapper(environment.metrics, "api.discover.discover_entity")
 
 
 @dataclass(frozen=True)
@@ -238,17 +85,103 @@ class DefaultNoneColumnMapper(ColumnMapper):
 
     def attempt_map(
         self, expression: Column, children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[Literal]:
+    ) -> Optional[FunctionCall]:
         if expression.column_name in self.columns:
-            return Literal(
-                alias=expression.alias
+            return identity(
+                Literal(None, None),
+                expression.alias
                 or qualified_column(
                     expression.column_name, expression.table_name or ""
                 ),
-                value=None,
             )
         else:
             return None
+
+
+@dataclass
+class DefaultNoneFunctionMapper(FunctionCallMapper):
+    """
+    Maps the list of function names to NULL.
+    """
+
+    function_names: Set[str]
+
+    def __post_init__(self) -> None:
+        self.function_match = FunctionCallMatch(
+            Or([StringMatch(func) for func in self.function_names])
+        )
+
+    def attempt_map(
+        self,
+        expression: FunctionCall,
+        children_translator: SnubaClickhouseStrictTranslator,
+    ) -> Optional[FunctionCall]:
+        if self.function_match.match(expression):
+            return identity(Literal(None, None), expression.alias)
+
+        return None
+
+
+@dataclass(frozen=True)
+class DefaultIfNullFunctionMapper(FunctionCallMapper):
+    """
+    If a function is being called on a column that doesn't exist, or is being
+    called on NULL, change the entire function to be NULL.
+    """
+
+    function_match = FunctionCallMatch(StringMatch("identity"), (LiteralMatch(),))
+
+    def attempt_map(
+        self,
+        expression: FunctionCall,
+        children_translator: SnubaClickhouseStrictTranslator,
+    ) -> Optional[FunctionCall]:
+        parameters = tuple(p.accept(children_translator) for p in expression.parameters)
+        for param in parameters:
+            # All impossible columns will have been converted to the identity function.
+            # So we know that if a function has the identity function as a parameter, we can
+            # collapse the entire expression.
+            fmatch = self.function_match.match(param)
+            if fmatch is not None:
+                return identity(Literal(None, None), expression.alias)
+
+        return None
+
+
+@dataclass(frozen=True)
+class DefaultIfNullCurriedFunctionMapper(CurriedFunctionCallMapper):
+    """
+    If a curried function is being called on a column that doesn't exist, or is being
+    called on NULL, change the entire function to be NULL.
+    """
+
+    function_match = FunctionCallMatch(StringMatch("identity"), (LiteralMatch(),))
+
+    def attempt_map(
+        self,
+        expression: CurriedFunctionCall,
+        children_translator: SnubaClickhouseStrictTranslator,
+    ) -> Optional[CurriedFunctionCall]:
+        internal_function = expression.internal_function.accept(children_translator)
+        assert isinstance(internal_function, FunctionCall)  # mypy
+        parameters = tuple(p.accept(children_translator) for p in expression.parameters)
+        for param in parameters:
+            # All impossible columns that have been converted to NULL will be the identity function.
+            # So we know that if a function has the identity function as a parameter, we can
+            # collapse the entire expression.
+            fmatch = self.function_match.match(param)
+            if fmatch is not None:
+                return CurriedFunctionCall(
+                    alias=expression.alias,
+                    internal_function=FunctionCall(
+                        None,
+                        f"{internal_function.function_name}OrNull",
+                        internal_function.parameters,
+                    ),
+                    parameters=tuple(Literal(None, None) for p in parameters),
+                )
+
+        return None
 
 
 @dataclass(frozen=True)
@@ -266,86 +199,97 @@ class DefaultNoneSubscriptMapper(SubscriptableReferenceMapper):
         self,
         expression: SubscriptableReference,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[Literal]:
+    ) -> Optional[FunctionCall]:
         if expression.column.column_name in self.subscript_names:
-            return Literal(alias=expression.alias, value=None)
+            return identity(Literal(None, None), expression.alias)
         else:
             return None
 
 
-class DiscoverQueryStorageSelector(QueryStorageSelector):
-    def __init__(
-        self,
-        events_table: ReadableStorage,
-        events_ro_table: ReadableStorage,
-        abstract_events_columns: ColumnSet,
-        transactions_table: ReadableStorage,
-        abstract_transactions_columns: ColumnSet,
-    ) -> None:
-        self.__events_table = events_table
-        self.__events_ro_table = events_ro_table
-        # Columns from the abstract model that map to storage columns present only
-        # in the Events table
-        self.__abstract_events_columns = abstract_events_columns
-        self.__transactions_table = transactions_table
-        # Columns from the abstract model that map to storage columns present only
-        # in the Transactions table
-        self.__abstract_transactions_columns = abstract_transactions_columns
-
-        self.__event_translator = event_translator.concat(
-            TranslationMappers(
-                columns=[
-                    ColumnToMapping(None, "release", None, "tags", "sentry:release"),
-                    ColumnToMapping(None, "dist", None, "tags", "sentry:dist"),
-                    ColumnToMapping(None, "user", None, "tags", "sentry:user"),
-                    DefaultNoneColumnMapper(self.__abstract_transactions_columns),
-                ],
-                subscriptables=[DefaultNoneSubscriptMapper({"measurements"})],
-            )
-        )
-
-        self.__transaction_translator = transaction_translator.concat(
-            TranslationMappers(
-                columns=[
-                    ColumnToLiteral(None, "group_id", 0),
-                    DefaultNoneColumnMapper(self.__abstract_events_columns),
+EVENTS_COLUMNS = ColumnSet(
+    [
+        ("group_id", UInt(64, Modifiers(nullable=True))),
+        ("primary_hash", FixedString(32, Modifiers(nullable=True))),
+        # Promoted tags
+        ("level", String(Modifiers(nullable=True))),
+        ("logger", String(Modifiers(nullable=True))),
+        ("server_name", String(Modifiers(nullable=True))),
+        ("site", String(Modifiers(nullable=True))),
+        ("url", String(Modifiers(nullable=True))),
+        ("location", String(Modifiers(nullable=True))),
+        ("culprit", String(Modifiers(nullable=True))),
+        ("received", DateTime(Modifiers(nullable=True))),
+        ("sdk_integrations", Array(String(), Modifiers(nullable=True))),
+        ("version", String(Modifiers(nullable=True))),
+        # exception interface
+        (
+            "exception_stacks",
+            Nested(
+                [
+                    ("type", String(Modifiers(nullable=True))),
+                    ("value", String(Modifiers(nullable=True))),
+                    ("mechanism_type", String(Modifiers(nullable=True))),
+                    ("mechanism_handled", UInt(8, Modifiers(nullable=True))),
                 ]
-            )
-        )
+            ),
+        ),
+        (
+            "exception_frames",
+            Nested(
+                [
+                    ("abs_path", String(Modifiers(nullable=True))),
+                    ("filename", String(Modifiers(nullable=True))),
+                    ("package", String(Modifiers(nullable=True))),
+                    ("module", String(Modifiers(nullable=True))),
+                    ("function", String(Modifiers(nullable=True))),
+                    ("in_app", UInt(8, Modifiers(nullable=True))),
+                    ("colno", UInt(32, Modifiers(nullable=True))),
+                    ("lineno", UInt(32, Modifiers(nullable=True))),
+                    ("stack_level", UInt(16)),
+                ]
+            ),
+        ),
+        ("modules", Nested([("name", String()), ("version", String())])),
+    ]
+)
 
-    def select_storage(
-        self, query: Query, request_settings: RequestSettings
-    ) -> StorageAndMappers:
-        table = detect_table(
-            query,
-            self.__abstract_events_columns,
-            self.__abstract_transactions_columns,
-            True,
-        )
+TRANSACTIONS_COLUMNS = ColumnSet(
+    [
+        ("trace_id", UUID(Modifiers(nullable=True))),
+        ("span_id", UInt(64, Modifiers(nullable=True))),
+        ("transaction_hash", UInt(64, Modifiers(nullable=True))),
+        ("transaction_op", String(Modifiers(nullable=True))),
+        ("transaction_status", UInt(8, Modifiers(nullable=True))),
+        ("duration", UInt(32, Modifiers(nullable=True))),
+        ("measurements", Nested([("key", String()), ("value", Float(64))]),),
+    ]
+)
 
-        if table == TRANSACTIONS:
-            return StorageAndMappers(
-                self.__transactions_table, self.__transaction_translator
-            )
-        else:
-            use_readonly_storage = (
-                state.get_config("enable_events_readonly_table", False)
-                and not request_settings.get_consistent()
-            )
-            return (
-                StorageAndMappers(self.__events_ro_table, self.__event_translator)
-                if use_readonly_storage
-                else StorageAndMappers(self.__events_table, self.__event_translator)
-            )
+
+events_translation_mappers = TranslationMappers(
+    columns=[DefaultNoneColumnMapper(TRANSACTIONS_COLUMNS)],
+    functions=[DefaultNoneFunctionMapper({"apdex", "failure_rate"})],
+    subscriptables=[DefaultNoneSubscriptMapper({"measurements"})],
+)
+
+transaction_translation_mappers = TranslationMappers(
+    columns=[
+        ColumnToLiteral(None, "group_id", 0),
+        DefaultNoneColumnMapper(EVENTS_COLUMNS),
+    ],
+    functions=[DefaultNoneFunctionMapper({"isHandled", "notHandled"})],
+)
+
+null_function_translation_mappers = TranslationMappers(
+    curried_functions=[DefaultIfNullCurriedFunctionMapper()],
+    functions=[DefaultIfNullFunctionMapper()],
+)
 
 
 class DiscoverEntity(Entity):
     """
-    Entity for the Discover product that maps the columns of Events and
-    Transactions into a standard format and sends a query to one of the 2 tables
-    depending on the conditions detected.
-
-    It is based on two storages. One for events and one for transactions.
+    Entity that represents both errors and transactions. This is currently backed
+    by the events storage but will eventually be switched to use use the merge table storage.
     """
 
     def __init__(self) -> None:
@@ -353,133 +297,200 @@ class DiscoverEntity(Entity):
             [
                 ("event_id", FixedString(32)),
                 ("project_id", UInt(64)),
-                ("type", Nullable(String())),
+                ("type", String(Modifiers(nullable=True))),
                 ("timestamp", DateTime()),
-                ("platform", Nullable(String())),
-                ("environment", Nullable(String())),
-                ("release", Nullable(String())),
-                ("dist", Nullable(String())),
-                ("user", Nullable(String())),
-                ("transaction", Nullable(String())),
-                ("message", Nullable(String())),
-                ("title", Nullable(String())),
+                ("platform", String(Modifiers(nullable=True))),
+                ("environment", String(Modifiers(nullable=True))),
+                ("release", String(Modifiers(nullable=True))),
+                ("dist", String(Modifiers(nullable=True))),
+                ("user", String(Modifiers(nullable=True))),
+                ("transaction", String(Modifiers(nullable=True))),
+                ("message", String(Modifiers(nullable=True))),
+                ("title", String(Modifiers(nullable=True))),
                 # User
-                ("user_id", Nullable(String())),
-                ("username", Nullable(String())),
-                ("email", Nullable(String())),
-                ("ip_address", Nullable(String())),
+                ("user_id", String(Modifiers(nullable=True))),
+                ("username", String(Modifiers(nullable=True))),
+                ("email", String(Modifiers(nullable=True))),
+                ("ip_address", String(Modifiers(nullable=True))),
                 # SDK
-                ("sdk_name", Nullable(String())),
-                ("sdk_version", Nullable(String())),
+                ("sdk_name", String(Modifiers(nullable=True))),
+                ("sdk_version", String(Modifiers(nullable=True))),
                 # geo location context
-                ("geo_country_code", Nullable(String())),
-                ("geo_region", Nullable(String())),
-                ("geo_city", Nullable(String())),
-                ("http_method", Nullable(String())),
-                ("http_referer", Nullable(String())),
+                ("geo_country_code", String(Modifiers(nullable=True))),
+                ("geo_region", String(Modifiers(nullable=True))),
+                ("geo_city", String(Modifiers(nullable=True))),
+                ("http_method", String(Modifiers(nullable=True))),
+                ("http_referer", String(Modifiers(nullable=True))),
                 # Other tags and context
                 ("tags", Nested([("key", String()), ("value", String())])),
                 ("contexts", Nested([("key", String()), ("value", String())])),
             ]
         )
-
-        self.__events_columns = ColumnSet(
-            [
-                ("group_id", Nullable(UInt(64))),
-                ("primary_hash", Nullable(FixedString(32))),
-                # Promoted tags
-                ("level", Nullable(String())),
-                ("logger", Nullable(String())),
-                ("server_name", Nullable(String())),
-                ("site", Nullable(String())),
-                ("url", Nullable(String())),
-                ("location", Nullable(String())),
-                ("culprit", Nullable(String())),
-                ("received", Nullable(DateTime())),
-                ("sdk_integrations", Nullable(Array(String()))),
-                ("version", Nullable(String())),
-                # exception interface
-                (
-                    "exception_stacks",
-                    Nested(
-                        [
-                            ("type", Nullable(String())),
-                            ("value", Nullable(String())),
-                            ("mechanism_type", Nullable(String())),
-                            ("mechanism_handled", Nullable(UInt(8))),
-                        ]
-                    ),
-                ),
-                (
-                    "exception_frames",
-                    Nested(
-                        [
-                            ("abs_path", Nullable(String())),
-                            ("filename", Nullable(String())),
-                            ("package", Nullable(String())),
-                            ("module", Nullable(String())),
-                            ("function", Nullable(String())),
-                            ("in_app", Nullable(UInt(8))),
-                            ("colno", Nullable(UInt(32))),
-                            ("lineno", Nullable(UInt(32))),
-                            ("stack_level", UInt(16)),
-                        ]
-                    ),
-                ),
-                ("modules", Nested([("name", String()), ("version", String())])),
-            ]
-        )
-
-        self.__transactions_columns = ColumnSet(
-            [
-                ("trace_id", Nullable(UUID())),
-                ("span_id", Nullable(UInt(64))),
-                ("transaction_hash", Nullable(UInt(64))),
-                ("transaction_op", Nullable(String())),
-                ("transaction_status", Nullable(UInt(8))),
-                ("duration", Nullable(UInt(32))),
-                ("measurements", Nested([("key", String()), ("value", Float(64))]),),
-            ]
-        )
+        self.__events_columns = EVENTS_COLUMNS
+        self.__transactions_columns = TRANSACTIONS_COLUMNS
 
         events_storage = get_storage(StorageKey.EVENTS)
-        events_ro_storage = get_storage(StorageKey.EVENTS_RO)
-        transactions_storage = get_storage(StorageKey.TRANSACTIONS)
 
-        self.__time_group_columns: Mapping[str, str] = {}
-        self.__time_parse_columns = ("timestamp",)
+        events_pipeline_builder = SimplePipelineBuilder(
+            query_plan_builder=SelectedStorageQueryPlanBuilder(
+                selector=EventsQueryStorageSelector(
+                    mappers=events_translation_mappers.concat(
+                        transaction_translation_mappers
+                    )
+                    .concat(null_function_translation_mappers)
+                    .concat(
+                        TranslationMappers(
+                            # XXX: Remove once we are using errors
+                            columns=[
+                                ColumnToMapping(
+                                    None, "release", None, "tags", "sentry:release"
+                                ),
+                                ColumnToMapping(
+                                    None, "dist", None, "tags", "sentry:dist"
+                                ),
+                                ColumnToMapping(
+                                    None, "user", None, "tags", "sentry:user"
+                                ),
+                            ],
+                            subscriptables=[
+                                SubscriptableMapper(None, "tags", None, "tags"),
+                                SubscriptableMapper(None, "contexts", None, "contexts"),
+                            ],
+                        )
+                    )
+                )
+            ),
+        )
+
+        discover_storage = get_storage(StorageKey.DISCOVER)
+
+        discover_pipeline_builder = SimplePipelineBuilder(
+            query_plan_builder=SingleStorageQueryPlanBuilder(
+                storage=discover_storage,
+                mappers=events_translation_mappers.concat(
+                    transaction_translation_mappers
+                )
+                .concat(null_function_translation_mappers)
+                .concat(
+                    TranslationMappers(
+                        columns=[
+                            ColumnToFunction(
+                                None,
+                                "ip_address",
+                                "coalesce",
+                                (
+                                    FunctionCall(
+                                        None,
+                                        "IPv4NumToString",
+                                        (Column(None, None, "ip_address_v4"),),
+                                    ),
+                                    FunctionCall(
+                                        None,
+                                        "IPv6NumToString",
+                                        (Column(None, None, "ip_address_v6"),),
+                                    ),
+                                ),
+                            ),
+                            ColumnToColumn(
+                                None, "transaction", None, "transaction_name"
+                            ),
+                            ColumnToColumn(None, "username", None, "user_name"),
+                            ColumnToColumn(None, "email", None, "user_email"),
+                            ColumnToMapping(
+                                None,
+                                "geo_country_code",
+                                None,
+                                "contexts",
+                                "geo.country_code",
+                            ),
+                            ColumnToMapping(
+                                None, "geo_region", None, "contexts", "geo.region"
+                            ),
+                            ColumnToMapping(
+                                None, "geo_city", None, "contexts", "geo.city"
+                            ),
+                        ]
+                    )
+                )
+                .concat(
+                    TranslationMappers(
+                        subscriptables=[
+                            SubscriptableMapper(None, "tags", None, "tags"),
+                            SubscriptableMapper(None, "contexts", None, "contexts"),
+                        ],
+                    )
+                ),
+            )
+        )
+
+        def selector_func(_query: Query) -> Tuple[str, List[str]]:
+            if random.random() < float(
+                state.get_config("discover_query_percentage", 0)
+            ):
+                return "events", ["discover"]
+
+            return "events", []
+
+        def callback_func(query: Query, results: List[Result[QueryResult]]) -> None:
+            primary_result = results.pop(0)
+            primary_result_data = primary_result.result.result["data"]
+
+            for result in results:
+                result_data = result.result.result["data"]
+
+                if result_data == primary_result_data:
+                    metrics.increment("query_result", tags={"match": "true"})
+                else:
+                    metrics.increment("query_result", tags={"match": "false"})
+
+                    if len(result_data) != len(primary_result_data):
+                        logger.warning(
+                            "Non matching Discover result - different length",
+                            extra={
+                                "query": query.get_body(),
+                                "discover_result": len(result_data),
+                                "events_result": len(primary_result_data),
+                            },
+                        )
+                        break
+
+                    # Avoid sending too much data to Sentry - just one row for now
+                    for idx in range(len(result_data)):
+                        if result_data[idx] != primary_result_data[idx]:
+                            logger.warning(
+                                "Non matching Discover result - different result",
+                                extra={
+                                    "query": query.get_body(),
+                                    "discover_result": result_data[idx],
+                                    "events_result": primary_result_data[idx],
+                                },
+                            )
+                            break
 
         super().__init__(
-            storages=[events_storage, transactions_storage],
-            query_plan_builder=SelectedStorageQueryPlanBuilder(
-                selector=DiscoverQueryStorageSelector(
-                    events_table=events_storage,
-                    events_ro_table=events_ro_storage,
-                    abstract_events_columns=self.__events_columns,
-                    transactions_table=transactions_storage,
-                    abstract_transactions_columns=self.__transactions_columns,
-                ),
+            storages=[events_storage, discover_storage],
+            query_pipeline_builder=PipelineDelegator(
+                query_pipeline_builders={
+                    "events": events_pipeline_builder,
+                    "discover": discover_pipeline_builder,
+                },
+                selector_func=selector_func,
+                callback_func=callback_func,
             ),
             abstract_column_set=(
                 self.__common_columns
                 + self.__events_columns
                 + self.__transactions_columns
             ),
+            join_relationships={},
             writable_storage=None,
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        columnset = self.get_data_model()
         return [
+            TimeSeriesProcessor({"time": "timestamp"}, ("timestamp",)),
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
-            # Apdex and Impact seem very good candidates for
-            # being defined by the Transaction entity when it will
-            # exist, so it would run before Storage selection.
-            apdex_processor(columnset),
-            failure_rate_processor(columnset),
-            HandledFunctionsProcessor("exception_stacks.mechanism_handled", columnset),
-            TimeSeriesColumnProcessor({"time": "timestamp"}),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
@@ -492,17 +503,32 @@ class DiscoverEntity(Entity):
             ),
         }
 
-    # TODO: This needs to burned with fire, for so many reasons.
-    # It's here now to reduce the scope of the initial entity changes
-    # but can be moved to a processor if not removed entirely.
-    def process_condition(
-        self, condition: Tuple[str, str, Any]
-    ) -> Tuple[str, str, Any]:
-        lhs, op, lit = condition
-        if (
-            lhs in self.__time_parse_columns
-            and op in (">", "<", ">=", "<=", "=", "!=")
-            and isinstance(lit, str)
-        ):
-            lit = parse_datetime(lit)
-        return lhs, op, lit
+
+class DiscoverEventsEntity(BaseEventsEntity):
+    """
+    Identical to EventsEntity except it maps columns and functions present in the
+    transactions entity to null. This logic will eventually move to Sentry and this
+    entity can be deleted and replaced with the EventsEntity directly.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            custom_mappers=events_translation_mappers.concat(
+                null_function_translation_mappers
+            )
+        )
+
+
+class DiscoverTransactionsEntity(BaseTransactionsEntity):
+    """
+    Identical to TransactionsEntity except it maps columns and functions present
+    in the events entity to null. This logic will eventually move to Sentry and this
+    entity can be deleted and replaced with the TransactionsEntity directly.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            custom_mappers=transaction_translation_mappers.concat(
+                null_function_translation_mappers
+            )
+        )

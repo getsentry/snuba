@@ -1,28 +1,36 @@
 from abc import ABC, abstractmethod
-from typing import Any, Mapping, Optional, Sequence, Tuple
+from typing import Mapping, Optional, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.storage import Storage, WritableStorage, WritableTableStorage
+from snuba.pipeline.query_pipeline import QueryPipelineBuilder
+from snuba.query.data_source.join import JoinRelationship
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.validation import FunctionCallValidator
 
 
 class Entity(ABC):
+    """
+    The Entity has access to multiple Storage objects, which represent the physical
+    data model. Each one represents a table/view on the DB we can query.
+    """
+
     def __init__(
         self,
         *,
         storages: Sequence[Storage],
-        query_plan_builder: ClickhouseQueryPlanBuilder,
+        query_pipeline_builder: QueryPipelineBuilder[ClickhouseQueryPlan],
         abstract_column_set: ColumnSet,
+        join_relationships: Mapping[str, JoinRelationship],
         writable_storage: Optional[WritableStorage],
     ) -> None:
         self.__storages = storages
-        self.__query_plan_builder = query_plan_builder
+        self.__query_pipeline_builder = query_pipeline_builder
         self.__writable_storage = writable_storage
-        # TODO: This data model will change as we add more functionality
         self.__data_model = abstract_column_set
+        self.__join_relationships = join_relationships
 
     @abstractmethod
     def get_extensions(self) -> Mapping[str, QueryExtension]:
@@ -52,12 +60,23 @@ class Entity(ABC):
         """
         return self.__data_model
 
-    def get_query_plan_builder(self) -> ClickhouseQueryPlanBuilder:
+    def get_join_relationship(self, relationship: str) -> Optional[JoinRelationship]:
         """
-        Returns the component that transforms a Snuba query in a Storage query by selecting
-        the storage and provides the directions on how to run the query.
+        Fetch the join relationship specified by the relationship string.
         """
-        return self.__query_plan_builder
+        return self.__join_relationships.get(relationship)
+
+    def get_all_join_relationships(self) -> Mapping[str, JoinRelationship]:
+        """
+        Returns all the join relationships
+        """
+        return self.__join_relationships
+
+    def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
+        """
+        Returns the component that orchestrates building and running query plans.
+        """
+        return self.__query_pipeline_builder
 
     def get_all_storages(self) -> Sequence[Storage]:
         """
@@ -75,23 +94,10 @@ class Entity(ABC):
         """
         return {}
 
-    # TODO: I just copied this over because I haven't investigated what it does. It can
-    # probably be refactored/removed but I need to dig into it.
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
         """
         Temporarily support getting the writable storage from an entity.
         Once consumers/replacers no longer reference entity, this can be removed
         and entity can have more than one writable storage.
         """
-        # TODO: mypy complains here about WritableStorage vs WritableTableStorage.
         return self.__writable_storage
-
-    def process_condition(
-        self, condition: Tuple[str, str, Any]
-    ) -> Tuple[str, str, Any]:
-        """
-        Return a processed condition tuple.
-        This enables a dataset to do any parsing/transformations
-        a condition before it is added to the query.
-        """
-        return condition

@@ -1,4 +1,6 @@
-from snuba.clickhouse.columns import Column, Nullable, String, UInt
+from snuba.clickhouse.columns import Column
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.operations import (
     AddColumn,
@@ -18,7 +20,7 @@ from snuba.migrations.table_engines import ReplacingMergeTree
 def test_create_table() -> None:
     columns = [
         Column("id", String()),
-        Column("name", Nullable(String())),
+        Column("name", String(Modifiers(nullable=True))),
         Column("version", UInt(64)),
     ]
 
@@ -70,7 +72,7 @@ def test_add_column() -> None:
         AddColumn(
             StorageSetKey.EVENTS,
             "test_table",
-            Column("test", Nullable(String())),
+            Column("test", String(Modifiers(nullable=True))),
             after="id",
         ).format_sql()
         == "ALTER TABLE test_table ADD COLUMN IF NOT EXISTS test Nullable(String) AFTER id;"
@@ -111,7 +113,7 @@ def test_add_index() -> None:
 def test_drop_index() -> None:
     assert (
         DropIndex(StorageSetKey.EVENTS, "test_table", "index_1").format_sql()
-        == "ALTER TABLE test_table DROP INDEX index_1;"
+        == "ALTER TABLE test_table DROP INDEX IF EXISTS index_1;"
     )
 
 

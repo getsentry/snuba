@@ -30,7 +30,7 @@ from snuba.query.exceptions import InvalidQueryException
 from snuba.redis import redis_client
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.request_settings import HTTPRequestSettings
-from snuba.request.schema import RequestSchema
+from snuba.request.schema import Language, RequestSchema
 from snuba.request.validation import build_request
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
@@ -75,17 +75,17 @@ def check_clickhouse() -> bool:
     try:
         for name in get_enabled_dataset_names():
             dataset = get_dataset(name)
-
-            for storage in dataset.get_all_storages():
-                clickhouse = storage.get_cluster().get_query_connection(
-                    ClickhouseClientSettings.QUERY
-                )
-                clickhouse_tables = clickhouse.execute("show tables")
-                source = storage.get_schema()
-                if isinstance(source, TableSchema):
-                    table_name = source.get_table_name()
-                    if (table_name,) not in clickhouse_tables:
-                        return False
+            for entity in dataset.get_all_entities():
+                for storage in entity.get_all_storages():
+                    clickhouse = storage.get_cluster().get_query_connection(
+                        ClickhouseClientSettings.QUERY
+                    )
+                    clickhouse_tables = clickhouse.execute("show tables")
+                    source = storage.get_schema()
+                    if isinstance(source, TableSchema):
+                        table_name = source.get_table_name()
+                        if (table_name,) not in clickhouse_tables:
+                            return False
 
         return True
 
@@ -94,19 +94,20 @@ def check_clickhouse() -> bool:
 
 
 def truncate_dataset(dataset: Dataset) -> None:
-    for storage in dataset.get_all_storages():
-        cluster = storage.get_cluster()
-        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
-        database = cluster.get_database()
+    for entity in dataset.get_all_entities():
+        for storage in entity.get_all_storages():
+            cluster = storage.get_cluster()
+            clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+            database = cluster.get_database()
 
-        schema = storage.get_schema()
+            schema = storage.get_schema()
 
-        if not isinstance(schema, TableSchema):
-            return
+            if not isinstance(schema, TableSchema):
+                return
 
-        table = schema.get_local_table_name()
+            table = schema.get_local_table_name()
 
-        clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
+            clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
 
 
 application = Flask(__name__, static_url_path="")
@@ -273,6 +274,9 @@ def _trace_transaction(dataset: Dataset) -> None:
             scope.span.set_tag("dataset", get_dataset_name(dataset))
             scope.span.set_tag("referrer", http_request.referrer)
 
+        if scope.transaction:
+            scope.transaction = f"{scope.transaction.name}__{get_dataset_name(dataset)}__{http_request.referrer}"
+
 
 @application.route("/query", methods=["GET", "POST"])
 @util.time_request("query")
@@ -283,7 +287,8 @@ def unqualified_query_view(*, timer: Timer):
         body = parse_request_body(http_request)
         dataset = get_dataset(body.pop("dataset", settings.DEFAULT_DATASET_NAME))
         _trace_transaction(dataset)
-        return dataset_query(dataset, body, timer)
+        # Not sure what language to pass into dataset_query here
+        return dataset_query(dataset, body, timer, Language.LEGACY)
     else:
         assert False, "unexpected fallthrough"
 
@@ -293,7 +298,9 @@ def unqualified_query_view(*, timer: Timer):
 def dataset_query_view(*, dataset: Dataset, timer: Timer):
     if http_request.method == "GET":
         schema = RequestSchema.build_with_extensions(
-            dataset.get_extensions(), HTTPRequestSettings
+            dataset.get_default_entity().get_extensions(),
+            HTTPRequestSettings,
+            Language.LEGACY,
         )
         return render_template(
             "query.html",
@@ -302,18 +309,37 @@ def dataset_query_view(*, dataset: Dataset, timer: Timer):
     elif http_request.method == "POST":
         body = parse_request_body(http_request)
         _trace_transaction(dataset)
-        return dataset_query(dataset, body, timer)
+        return dataset_query(dataset, body, timer, Language.LEGACY)
+    else:
+        assert False, "unexpected fallthrough"
+
+
+@application.route("/<dataset:dataset>/snql", methods=["GET", "POST"])
+@util.time_request("snql")
+def snql_dataset_query_view(*, dataset: Dataset, timer: Timer):
+    if http_request.method == "GET":
+        schema = RequestSchema.build_with_extensions(
+            dataset.get_extensions(), HTTPRequestSettings, Language.SNQL
+        )
+        return render_template(
+            "query.html",
+            query_template=json.dumps(schema.generate_template(), indent=4,),
+        )
+    elif http_request.method == "POST":
+        body = parse_request_body(http_request)
+        _trace_transaction(dataset)
+        return dataset_query(dataset, body, timer, Language.SNQL)
     else:
         assert False, "unexpected fallthrough"
 
 
 @with_span()
-def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
+def dataset_query(dataset: Dataset, body, timer: Timer, language: Language) -> Response:
     assert http_request.method == "POST"
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build_with_extensions(
-            dataset.get_extensions(), HTTPRequestSettings
+            dataset.get_default_entity().get_extensions(), HTTPRequestSettings, language
         )
 
     request = build_request(body, schema, timer, dataset, http_request.referrer)
@@ -441,22 +467,36 @@ if application.debug or application.testing:
 
         type_ = record[1]
 
-        storage = dataset.get_writable_storage()
+        storage = dataset.get_default_entity().get_writable_storage()
         assert storage is not None
 
         if type_ == "insert":
-            from snuba.consumer import ConsumerWorker
+            from snuba.consumer import StreamingConsumerStrategyFactory
 
-            worker = ConsumerWorker(storage, metrics=metrics)
+            table_writer = storage.get_table_writer()
+            stream_loader = table_writer.get_stream_loader()
+            strategy = StreamingConsumerStrategyFactory(
+                stream_loader.get_pre_filter(),
+                stream_loader.get_processor(),
+                table_writer.get_batch_writer(metrics),
+                metrics,
+                max_batch_size=1,
+                max_batch_time=1.0,
+                processes=None,
+                input_block_size=None,
+                output_block_size=None,
+            ).create(lambda offsets: None)
+            strategy.submit(message)
+            strategy.close()
+            strategy.join()
         else:
             from snuba.replacer import ReplacerWorker
 
             worker = ReplacerWorker(storage, metrics=metrics)
-
-        processed = worker.process_message(message)
-        if processed is not None:
-            batch = [processed]
-            worker.flush_batch(batch)
+            processed = worker.process_message(message)
+            if processed is not None:
+                batch = [processed]
+                worker.flush_batch(batch)
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 

@@ -1,22 +1,41 @@
+import pytest
 import uuid
 from datetime import datetime, timedelta
 
 import pytz
 import simplejson as json
 
-from snuba.datasets.factory import enforce_table_writer
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
+from tests.helpers import write_processed_messages
 
 
 class TestOutcomesApi(BaseApiTest):
-    def setup_method(self, test_method, dataset_name="outcomes"):
-        super().setup_method(test_method, dataset_name)
+    @pytest.fixture(
+        autouse=True, params=["/query", "/outcomes/snql"], ids=["legacy", "snql"]
+    )
+    def _set_endpoint(self, request, convert_legacy_to_snql):
+        self.endpoint = request.param
+        self.multiplier = 1
+        if request.param == "/outcomes/snql":
+            self.multiplier = 2
+            old_post = self.app.post
+
+            def new_post(endpoint, data=None):
+                return old_post(endpoint, data=convert_legacy_to_snql(data, "outcomes"))
+
+            self.app.post = new_post
+
+    def setup_method(self, test_method):
+        super().setup_method(test_method)
 
         self.skew_minutes = 180
         self.skew = timedelta(minutes=self.skew_minutes)
         self.base_time = (
             datetime.utcnow().replace(minute=0, second=0, microsecond=0) - self.skew
         )
+        self.storage = get_writable_storage(StorageKey.OUTCOMES_RAW)
 
     def generate_outcomes(
         self,
@@ -29,7 +48,7 @@ class TestOutcomesApi(BaseApiTest):
         outcomes = []
         for _ in range(num_outcomes):
             processed = (
-                enforce_table_writer(self.dataset)
+                self.storage.get_table_writer()
                 .get_stream_loader()
                 .get_processor()
                 .process_message(
@@ -50,7 +69,7 @@ class TestOutcomesApi(BaseApiTest):
 
             outcomes.append(processed)
 
-        self.write_processed_messages(outcomes)
+        write_processed_messages(self.storage, outcomes)
 
     def format_time(self, time: datetime) -> str:
         return time.replace(tzinfo=pytz.utc).isoformat()
@@ -108,7 +127,7 @@ class TestOutcomesApi(BaseApiTest):
         to_date = self.format_time(self.base_time + self.skew)
 
         response = self.app.post(
-            "/query",
+            self.endpoint,
             data=json.dumps(
                 {
                     "dataset": "outcomes",
@@ -126,5 +145,5 @@ class TestOutcomesApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200
         assert len(data["data"]) == 3
-        assert all([row["aggregate"] == 10 for row in data["data"]])
+        assert all([row["aggregate"] == 10 * self.multiplier for row in data["data"]])
         assert sorted([row["project_id"] for row in data["data"]]) == [1, 1, 2]

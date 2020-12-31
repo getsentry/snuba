@@ -7,28 +7,23 @@ from snuba.clickhouse.columns import (
     IPv4,
     IPv6,
     Nested,
-    Nullable,
-    ReadOnly,
-    String,
-    UInt,
 )
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.transaction_column_processor import (
-    TransactionColumnProcessor,
-)
-from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.datasets.storages.event_id_column_processor import EventIdColumnProcessor
+from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
-from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
-from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
+from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.uuid_column_processor import UUIDColumnProcessor
 from snuba.web.split import TimeSplitQueryStrategy
-
 
 columns = ColumnSet(
     [
@@ -37,7 +32,7 @@ columns = ColumnSet(
         ("trace_id", UUID()),
         ("span_id", UInt(64)),
         ("transaction_name", String()),
-        ("transaction_hash", ReadOnly(UInt(64))),
+        ("transaction_hash", UInt(64, Modifiers(readonly=True))),
         ("transaction_op", String()),
         ("transaction_status", UInt(8)),
         ("start_ts", DateTime()),
@@ -46,23 +41,23 @@ columns = ColumnSet(
         ("finish_ms", UInt(16)),
         ("duration", UInt(32)),
         ("platform", String()),
-        ("environment", Nullable(String())),
-        ("release", Nullable(String())),
-        ("dist", Nullable(String())),
-        ("ip_address_v4", Nullable(IPv4())),
-        ("ip_address_v6", Nullable(IPv6())),
+        ("environment", String(Modifiers(nullable=True))),
+        ("release", String(Modifiers(nullable=True))),
+        ("dist", String(Modifiers(nullable=True))),
+        ("ip_address_v4", IPv4(Modifiers(nullable=True))),
+        ("ip_address_v6", IPv6(Modifiers(nullable=True))),
         ("user", String()),
-        ("user_hash", ReadOnly(UInt(64))),
-        ("user_id", Nullable(String())),
-        ("user_name", Nullable(String())),
-        ("user_email", Nullable(String())),
+        ("user_hash", UInt(64, Modifiers(readonly=True))),
+        ("user_id", String(Modifiers(nullable=True))),
+        ("user_name", String(Modifiers(nullable=True))),
+        ("user_email", String(Modifiers(nullable=True))),
         ("sdk_name", String()),
         ("sdk_version", String()),
-        ("http_method", Nullable(String())),
-        ("http_referer", Nullable(String())),
+        ("http_method", String(Modifiers(nullable=True))),
+        ("http_referer", String(Modifiers(nullable=True))),
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
-        ("_tags_hash_map", ReadOnly(Array(UInt(64)))),
+        ("_tags_hash_map", Array(UInt(64), Modifiers(readonly=True))),
         ("contexts", Nested([("key", String()), ("value", String())])),
         ("_contexts_flattened", String()),
         ("measurements", Nested([("key", String()), ("value", Float(64))]),),
@@ -71,6 +66,10 @@ columns = ColumnSet(
         ("message_timestamp", DateTime()),
         ("retention_days", UInt(16)),
         ("deleted", UInt(8)),
+        ("type", String(Modifiers(readonly=True))),
+        ("message", String(Modifiers(readonly=True))),
+        ("title", String(Modifiers(readonly=True))),
+        ("timestamp", DateTime(Modifiers(readonly=True))),
     ]
 )
 
@@ -89,17 +88,18 @@ storage = WritableTableStorage(
     storage_set_key=StorageSetKey.TRANSACTIONS,
     schema=schema,
     query_processors=[
-        NestedFieldConditionOptimizer(
-            "contexts", "_contexts_flattened", {"start_ts", "finish_ts"},
-        ),
         MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
-        TransactionColumnProcessor(),
+        EventIdColumnProcessor(),
         ArrayJoinKeyValueOptimizer("tags"),
         ArrayJoinKeyValueOptimizer("measurements"),
+        UUIDColumnProcessor(set(["event_id", "trace_id"])),
         PrewhereProcessor(),
     ],
-    stream_loader=KafkaStreamLoader(
-        processor=TransactionsMessageProcessor(), default_topic="events",
+    stream_loader=build_kafka_stream_loader_from_settings(
+        StorageKey.TRANSACTIONS,
+        processor=TransactionsMessageProcessor(),
+        default_topic_name="events",
+        commit_log_topic_name="snuba-commit-log",
     ),
     query_splitters=[TimeSplitQueryStrategy(timestamp_col="finish_ts")],
     writer_options={"insert_allow_materialized_columns": 1},

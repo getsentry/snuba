@@ -6,7 +6,6 @@ from typing import Any, Mapping, Optional, Tuple
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.processor import InsertBatch
-from tests.base import BaseTest
 
 
 @dataclass
@@ -206,12 +205,6 @@ class TransactionEvent:
             "offset": meta.offset,
             "partition": meta.partition,
             "retention_days": 90,
-            "_tags_flattened": f"|environment={self.environment}||sentry:release={self.release}||sentry:user={self.user_id}||we\\|r\\=d=tag|",
-            "_contexts_flattened": (
-                f"|geo.city={self.geo['city']}||geo.country_code={self.geo['country_code']}||geo.region={self.geo['region']}|"
-                f"|trace.op={self.op}||trace.sampled=True||trace.span_id={self.span_id}||trace.status={str(self.status)}|"
-                f"|trace.trace_id={self.trace_id}|"
-            ),
             "measurements.key": ["lcp", "lcp.elementSize"],
             "measurements.value": [32.129, 4242.0],
         }
@@ -223,7 +216,7 @@ class TransactionEvent:
         return ret
 
 
-class TestTransactionsProcessor(BaseTest):
+class TestTransactionsProcessor:
     def __get_timestamps(slef) -> Tuple[float, float]:
         timestamp = datetime.now(tz=timezone.utc) - timedelta(seconds=5)
         start_timestamp = timestamp - timedelta(seconds=5)

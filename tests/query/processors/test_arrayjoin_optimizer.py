@@ -1,11 +1,14 @@
 from typing import Any, MutableMapping, Optional, Sequence, Set
 
 import pytest
-
-from snuba.clickhouse.astquery import AstSqlQuery
-from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
+from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
+from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entities.transactions import transaction_translator
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
@@ -14,8 +17,6 @@ from snuba.query.conditions import (
 )
 from snuba.query.dsl import arrayJoin, tupleElement
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.logical import Query as SnubaQuery
-from snuba.query.logical import SelectedExpression
 from snuba.query.parser import parse_query
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
@@ -34,16 +35,13 @@ def build_query(
     having: Optional[Expression] = None,
 ) -> ClickhouseQuery:
     return ClickhouseQuery(
-        SnubaQuery(
-            {},
-            None,
-            selected_columns=[
-                SelectedExpression(name=s.alias, expression=s)
-                for s in selected_columns or []
-            ],
-            condition=condition,
-            having=having,
-        )
+        None,
+        selected_columns=[
+            SelectedExpression(name=s.alias, expression=s)
+            for s in selected_columns or []
+        ],
+        condition=condition,
+        having=having,
     )
 
 
@@ -67,7 +65,6 @@ tags_filter_tests = [
                 ),
             ],
             condition=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
@@ -86,7 +83,6 @@ tags_filter_tests = [
                 ),
             ],
             condition=in_condition(
-                None,
                 FunctionCall(
                     "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
                 ),
@@ -104,7 +100,6 @@ tags_filter_tests = [
                 ),
             ],
             condition=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
@@ -112,7 +107,6 @@ tags_filter_tests = [
                 Literal(None, "tag"),
             ),
             having=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
@@ -131,13 +125,11 @@ tags_filter_tests = [
                 ),
             ],
             condition=binary_condition(
-                None,
                 BooleanFunctions.OR,
                 FunctionCall(
                     "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
                 ),
                 in_condition(
-                    None,
                     FunctionCall(
                         "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
                     ),
@@ -145,7 +137,6 @@ tags_filter_tests = [
                 ),
             ),
             having=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
@@ -178,11 +169,15 @@ test_data = [
             "selected_columns": ["col1"],
             "conditions": [["tags_key", "IN", ["t1", "t2"]]],
         },
-        build_query(
-            selected_columns=[Column("col1", None, "col1")],
+        ClickhouseQuery(
+            None,
+            selected_columns=[
+                SelectedExpression(
+                    name="col1", expression=Column("_snuba_col1", None, "col1")
+                )
+            ],
             condition=in_condition(
-                None,
-                arrayJoin("tags_key", Column(None, None, "tags.key")),
+                arrayJoin("_snuba_tags_key", Column(None, None, "tags.key")),
                 [Literal(None, "t1"), Literal(None, "t2")],
             ),
         ),
@@ -195,34 +190,40 @@ test_data = [
             "selected_columns": ["tags_key", "tags_value"],
             "conditions": [["col", "IN", ["t1", "t2"]]],
         },
-        build_query(
+        ClickhouseQuery(
+            None,
             selected_columns=[
-                tupleElement(
-                    "tags_key",
-                    arrayJoin(
-                        "snuba_all_tags",
-                        zip_columns(
-                            Column(None, None, "tags.key"),
-                            Column(None, None, "tags.value"),
+                SelectedExpression(
+                    name="tags_key",
+                    expression=tupleElement(
+                        "_snuba_tags_key",
+                        arrayJoin(
+                            "snuba_all_tags",
+                            zip_columns(
+                                Column(None, None, "tags.key"),
+                                Column(None, None, "tags.value"),
+                            ),
                         ),
+                        Literal(None, 1),
                     ),
-                    Literal(None, 1),
                 ),
-                tupleElement(
-                    "tags_value",
-                    arrayJoin(
-                        "snuba_all_tags",
-                        zip_columns(
-                            Column(None, None, "tags.key"),
-                            Column(None, None, "tags.value"),
+                SelectedExpression(
+                    name="tags_value",
+                    expression=tupleElement(
+                        "_snuba_tags_value",
+                        arrayJoin(
+                            "snuba_all_tags",
+                            zip_columns(
+                                Column(None, None, "tags.key"),
+                                Column(None, None, "tags.value"),
+                            ),
                         ),
+                        Literal(None, 2),
                     ),
-                    Literal(None, 2),
                 ),
             ],
             condition=in_condition(
-                None,
-                Column("col", None, "col"),
+                Column("_snuba_col", None, "col"),
                 [Literal(None, "t1"), Literal(None, "t2")],
             ),
         ),
@@ -235,17 +236,22 @@ test_data = [
             "selected_columns": ["tags_key"],
             "conditions": [["tags_key", "IN", ["t1"]]],
         },
-        build_query(
+        ClickhouseQuery(
+            None,
             selected_columns=[
-                arrayJoin(
-                    "tags_key",
-                    filter_keys(Column(None, None, "tags.key"), [Literal(None, "t1")]),
-                ),
+                SelectedExpression(
+                    name="tags_key",
+                    expression=arrayJoin(
+                        "_snuba_tags_key",
+                        filter_keys(
+                            Column(None, None, "tags.key"), [Literal(None, "t1")]
+                        ),
+                    ),
+                )
             ],
             condition=in_condition(
-                None,
                 arrayJoin(
-                    "tags_key",
+                    "_snuba_tags_key",
                     filter_keys(Column(None, None, "tags.key"), [Literal(None, "t1")]),
                 ),
                 [Literal(None, "t1")],
@@ -260,41 +266,47 @@ test_data = [
             "selected_columns": ["tags_key", "tags_value"],
             "conditions": [["tags_key", "IN", ["t1"]]],
         },
-        build_query(
+        ClickhouseQuery(
+            None,
             selected_columns=[
-                tupleElement(
-                    "tags_key",
-                    arrayJoin(
-                        "snuba_all_tags",
-                        filter_key_values(
-                            zip_columns(
-                                Column(None, None, "tags.key"),
-                                Column(None, None, "tags.value"),
+                SelectedExpression(
+                    name="tags_key",
+                    expression=tupleElement(
+                        "_snuba_tags_key",
+                        arrayJoin(
+                            "snuba_all_tags",
+                            filter_key_values(
+                                zip_columns(
+                                    Column(None, None, "tags.key"),
+                                    Column(None, None, "tags.value"),
+                                ),
+                                [Literal(None, "t1")],
                             ),
-                            [Literal(None, "t1")],
                         ),
+                        Literal(None, 1),
                     ),
-                    Literal(None, 1),
                 ),
-                tupleElement(
-                    "tags_value",
-                    arrayJoin(
-                        "snuba_all_tags",
-                        filter_key_values(
-                            zip_columns(
-                                Column(None, None, "tags.key"),
-                                Column(None, None, "tags.value"),
+                SelectedExpression(
+                    name="tags_value",
+                    expression=tupleElement(
+                        "_snuba_tags_value",
+                        arrayJoin(
+                            "snuba_all_tags",
+                            filter_key_values(
+                                zip_columns(
+                                    Column(None, None, "tags.key"),
+                                    Column(None, None, "tags.value"),
+                                ),
+                                [Literal(None, "t1")],
                             ),
-                            [Literal(None, "t1")],
                         ),
+                        Literal(None, 2),
                     ),
-                    Literal(None, 2),
                 ),
             ],
             condition=in_condition(
-                None,
                 tupleElement(
-                    "tags_key",
+                    "_snuba_tags_key",
                     arrayJoin(
                         "snuba_all_tags",
                         filter_key_values(
@@ -320,12 +332,17 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     dataset = get_dataset("transactions")
     query = parse_query(query_body, dataset)
     request = Request("a", query, HTTPRequestSettings(), {}, "r")
-    for p in dataset.get_query_processors():
+    entity = get_entity(query.get_from_clause().key)
+    for p in entity.get_query_processors():
         p.process_query(query, request.settings)
-    plan = dataset.get_query_plan_builder().build_plan(request)
 
-    ArrayJoinKeyValueOptimizer("tags").process_query(plan.query, request.settings)
-    return plan.query
+    ArrayJoinKeyValueOptimizer("tags").process_query(query, request.settings)
+
+    query_plan = SingleStorageQueryPlanBuilder(
+        storage=entity.get_writable_storage(), mappers=transaction_translator,
+    ).build_plan(query, request.settings)
+
+    return query_plan.query
 
 
 @pytest.mark.parametrize("query_body, expected_query", test_data)
@@ -394,11 +411,11 @@ def test_aliasing() -> None:
             "conditions": [["tags_key", "IN", ["t1", "t2"]]],
         }
     )
-    sql = AstSqlQuery(processed, HTTPRequestSettings()).format_sql()
+    sql = format_query(processed, HTTPRequestSettings()).get_sql()
 
     assert sql == (
         "SELECT (tupleElement((arrayJoin(arrayMap((x, y -> tuple(x, y)), "
-        "tags.key, tags.value)) AS snuba_all_tags), 2) AS tags_value) "
+        "tags.key, tags.value)) AS snuba_all_tags), 2) AS _snuba_tags_value) "
         "FROM transactions_local "
-        "WHERE in((tupleElement(snuba_all_tags, 1) AS tags_key), tuple('t1', 't2'))"
+        "WHERE in((tupleElement(snuba_all_tags, 1) AS _snuba_tags_key), tuple('t1', 't2'))"
     )

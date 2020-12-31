@@ -1,24 +1,12 @@
-from snuba.clickhouse.columns import (
-    ColumnSet,
-    DateTime,
-    Nullable,
-    String,
-    UInt,
-    UUID,
-)
+from snuba.clickhouse.columns import UUID, ColumnSet, DateTime
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.outcomes_processor import OutcomesProcessor
-from snuba.datasets.storage import (
-    ReadableTableStorage,
-    WritableTableStorage,
-)
-
-from snuba.datasets.schemas.tables import (
-    TableSchema,
-    WritableTableSchema,
-)
+from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
+from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.prewhere import PrewhereProcessor
 
 WRITE_LOCAL_TABLE_NAME = "outcomes_raw_local"
@@ -30,11 +18,11 @@ write_columns = ColumnSet(
     [
         ("org_id", UInt(64)),
         ("project_id", UInt(64)),
-        ("key_id", Nullable(UInt(64))),
+        ("key_id", UInt(64, Modifiers(nullable=True))),
         ("timestamp", DateTime()),
         ("outcome", UInt(8)),
-        ("reason", Nullable(String())),
-        ("event_id", Nullable(UUID())),
+        ("reason", String(Modifiers(nullable=True))),
+        ("event_id", UUID(Modifiers(nullable=True))),
     ]
 )
 
@@ -90,8 +78,10 @@ raw_storage = WritableTableStorage(
     storage_set_key=StorageSetKey.OUTCOMES,
     schema=raw_schema,
     query_processors=[],
-    stream_loader=KafkaStreamLoader(
-        processor=OutcomesProcessor(), default_topic="outcomes",
+    stream_loader=build_kafka_stream_loader_from_settings(
+        StorageKey.OUTCOMES_RAW,
+        processor=OutcomesProcessor(),
+        default_topic_name="outcomes",
     ),
 )
 

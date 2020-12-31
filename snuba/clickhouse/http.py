@@ -156,6 +156,9 @@ class HTTPBatchWriter(BatchWriter[JSONRow]):
         self.__database = database
         self.__chunk_size = chunk_size
 
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__}: {self.__database}.{self.__table_name} on {self.__pool.host}:{self.__pool.port}>"
+
     def write(self, values: Iterable[JSONRow]) -> None:
         batch = HTTPWriteBatch(
             self.__executor,

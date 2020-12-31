@@ -1,15 +1,13 @@
 import pytest
-
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.schemas.tables import TableSource
+from snuba.datasets.entities import EntityKey
+from snuba.query import SelectedExpression
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.logical import Query, SelectedExpression
-from snuba.query.matchers import (
-    Column as ColumnMatch,
-    String as StringMatch,
-    MatchResult,
-    Param,
-)
+from snuba.query.logical import Query
+from snuba.query.matchers import Column as ColumnMatch
+from snuba.query.matchers import MatchResult, Param
+from snuba.query.matchers import String as StringMatch
 from snuba.query.processors.pattern_replacer import PatternReplacer
 from snuba.request.request_settings import HTTPRequestSettings
 
@@ -17,7 +15,7 @@ test_data = [
     pytest.param(
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(name=None, expression=Column(None, None, "column1")),
                 SelectedExpression(name=None, expression=Column(None, None, "column2")),
@@ -25,7 +23,7 @@ test_data = [
         ),
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     name=None,
@@ -43,7 +41,7 @@ test_data = [
     pytest.param(
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     name=None, expression=Column("some_alias", None, "column1")
@@ -53,7 +51,7 @@ test_data = [
         ),
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
                     name=None,

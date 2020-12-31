@@ -24,7 +24,6 @@ from snuba.processor import (
     _boolify,
     _collapse_uint32,
     _ensure_valid_date,
-    _hashify,
     _unicodify,
 )
 
@@ -40,6 +39,8 @@ REPLACEMENT_EVENT_TYPES = frozenset(
         "end_merge",
         "end_unmerge",
         "end_delete_tag",
+        "tombstone_events",
+        "exclude_groups",
     ]
 )
 
@@ -104,16 +105,6 @@ class EventsProcessorBase(MessageProcessor, ABC):
         output: MutableMapping[str, Any],
         contexts: Mapping[str, Any],
         tags: Mapping[str, Any],
-    ) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    def extract_contexts_custom(
-        self,
-        output: MutableMapping[str, Any],
-        event: InsertEvent,
-        contexts: Mapping[str, Any],
-        metadata: KafkaMessageMetadata,
     ) -> None:
         raise NotImplementedError
 
@@ -182,7 +173,6 @@ class EventsProcessorBase(MessageProcessor, ABC):
             return None
 
         processed: MutableMapping[str, Any] = {"deleted": 0}
-
         extract_project_id(processed, event)
         self._extract_event_id(processed, event)
         processed["retention_days"] = enforce_retention(
@@ -209,13 +199,11 @@ class EventsProcessorBase(MessageProcessor, ABC):
 
         contexts = data.get("contexts", None) or {}
         self.extract_promoted_contexts(processed, contexts, tags)
-        self.extract_contexts_custom(processed, event, contexts, metadata)
 
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             contexts
         )
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
-        processed["_tags_flattened"] = ""
 
         exception = (
             data.get(
@@ -242,7 +230,6 @@ class EventsProcessorBase(MessageProcessor, ABC):
         # Properties we get from the top level of the message payload
         data = event.get("data", {})
         output["platform"] = _unicodify(event["platform"])
-        output["primary_hash"] = _hashify(event["primary_hash"])
 
         # Properties we get from the "data" dict, which is the actual event body.
 
@@ -250,11 +237,8 @@ class EventsProcessorBase(MessageProcessor, ABC):
         output["received"] = (
             datetime.utcfromtimestamp(received) if received is not None else None
         )
-        output["culprit"] = _unicodify(data.get("culprit", None))
-        output["type"] = _unicodify(data.get("type", None))
         output["version"] = _unicodify(data.get("version", None))
-        output["title"] = _unicodify(data.get("title", None))  # type: ignore
-        output["location"] = _unicodify(data.get("location", None))  # type: ignore
+        output["location"] = _unicodify(data.get("location", None))
 
         module_names = []
         module_versions = []

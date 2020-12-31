@@ -1,10 +1,10 @@
 from datetime import datetime
 
-from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.plans.translator.query import identity_translate
 from snuba.query.parser import parse_query
-from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
+from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.request.request_settings import HTTPRequestSettings
 
 
@@ -15,6 +15,9 @@ def test_get_time_range() -> None:
     body = {
         "selected_columns": ["event_id"],
         "conditions": [
+            # Cannot test complex conditions based on explicit calls
+            # the `and` and `or` functions, because they would not be
+            # parsed as datetime by the old parser.
             ("timestamp", ">=", "2019-09-18T10:00:00"),
             ("timestamp", ">=", "2000-09-18T10:00:00"),
             ("timestamp", "<", "2019-09-19T12:00:00"),
@@ -25,12 +28,12 @@ def test_get_time_range() -> None:
 
     events = get_dataset("events")
     query = parse_query(body, events)
-    processors = events.get_query_processors()
+    processors = events.get_default_entity().get_query_processors()
     for processor in processors:
-        if isinstance(processor, TimeSeriesColumnProcessor):
+        if isinstance(processor, TimeSeriesProcessor):
             processor.process_query(query, HTTPRequestSettings())
 
-    from_date_ast, to_date_ast = get_time_range(ClickhouseQuery(query), "timestamp")
+    from_date_ast, to_date_ast = get_time_range(identity_translate(query), "timestamp")
     assert (
         from_date_ast is not None
         and isinstance(from_date_ast, datetime)

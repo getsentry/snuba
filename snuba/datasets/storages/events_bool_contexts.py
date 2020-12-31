@@ -57,11 +57,10 @@ class EventsBooleanContextsProcessor(QueryProcessor):
                     "multiIf",
                     (
                         binary_condition(
-                            None, ConditionFunctions.EQ, inner, Literal(None, "")
+                            ConditionFunctions.EQ, inner, Literal(None, "")
                         ),
                         Literal(None, ""),
                         binary_condition(
-                            None,
                             ConditionFunctions.IN,
                             inner,
                             literals_tuple(

@@ -1,16 +1,12 @@
 import logging
 from typing import Optional, Set
 
-from confluent_kafka import Producer
-
-from snuba.consumer import ConsumerWorker, KafkaMessageMetadata
+from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.cdc.types import Event as CDCEvent
-from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import MessageProcessor, ProcessedMessage
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
-from snuba.utils.metrics import MetricsBackend
-from snuba.utils.streams import Topic
+
 
 logger = logging.getLogger("snuba.snapshot-consumer")
 
@@ -142,32 +138,3 @@ class SnapshotProcessor(MessageProcessor):
                         return self.__drop_message(xid)
 
         return self.__accept_message(xid, message, metadata)
-
-
-class SnapshotAwareWorker(ConsumerWorker):
-    def __init__(
-        self,
-        storage: WritableTableStorage,
-        producer: Producer,
-        snapshot_id: SnapshotId,
-        transaction_data: TransactionData,
-        metrics: MetricsBackend,
-        replacements_topic: Optional[Topic] = None,
-    ) -> None:
-        super().__init__(
-            storage=storage,
-            producer=producer,
-            replacements_topic=replacements_topic,
-            metrics=metrics,
-        )
-        self.__snapshot_id = snapshot_id
-        self.__transaction_data = transaction_data
-
-    def _get_processor(self) -> MessageProcessor:
-        try:
-            return self.__processor
-        except AttributeError:
-            self.__processor = SnapshotProcessor(
-                super()._get_processor(), self.__snapshot_id, self.__transaction_data
-            )
-            return self.__processor

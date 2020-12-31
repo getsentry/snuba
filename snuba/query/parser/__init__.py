@@ -1,12 +1,21 @@
 import logging
 import re
 from dataclasses import replace
-from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Tuple
+from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Tuple, Union
 
 from snuba import environment
 from snuba.clickhouse.escaping import NEGATE_RE
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity import Entity
+from snuba.query import (
+    LimitBy,
+    OrderBy,
+    OrderByDirection,
+    SelectedExpression,
+)
+from snuba.query.composite import CompositeQuery
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -18,11 +27,9 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
-from snuba.query.matchers import (
-    FunctionCall as FunctionCallMatch,
-    String as StringMatch,
-)
+from snuba.query.logical import Query
+from snuba.query.matchers import FunctionCall as FunctionCallMatch
+from snuba.query.matchers import String as StringMatch
 from snuba.query.parser.conditions import parse_conditions_to_expr
 from snuba.query.parser.exceptions import (
     AliasShadowingException,
@@ -67,10 +74,10 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
       Alias references are packaged back at the end of processing.
     """
     # TODO: Parse the entity out of the query body and select the correct one from the dataset
-    entity = dataset.get_entity(None)
+    entity = dataset.get_default_entity()
 
     query = _parse_query_impl(body, entity)
-    # These are the post processing phases
+    # TODO: These should support composite queries.
     _validate_empty_table_names(query)
     _validate_aliases(query)
     _parse_subscriptables(query)
@@ -79,8 +86,18 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     # WARNING: These steps above assume table resolution did not happen
     # yet. If it is put earlier than here (unlikely), we need to adapt them.
     _deescape_aliases(query)
+    _mangle_aliases(query)
     _validate_arrayjoin(query)
     validate_query(query, entity)
+
+    # XXX: Select the entity to be used for the query. This step is temporary. Eventually
+    # entity selection will be moved to Sentry and specified for all SnQL queries.
+    selected_entity = dataset.select_entity(query)
+    query_entity = QueryEntity(
+        selected_entity, get_entity(selected_entity).get_data_model()
+    )
+    query.set_from_clause(query_entity)
+
     return query
 
 
@@ -224,6 +241,15 @@ def _parse_query_impl(body: MutableMapping[str, Any], entity: Entity) -> Query:
             )
         )
 
+    limitby_clause: Optional[LimitBy] = None
+
+    if body.get("limitby"):
+        limitby_limit, limitby_expr = body["limitby"]
+        limitby_clause = LimitBy(
+            limitby_limit,
+            parse_expression(limitby_expr, entity.get_data_model(), set()),
+        )
+
     return Query(
         body,
         None,
@@ -233,6 +259,12 @@ def _parse_query_impl(body: MutableMapping[str, Any], entity: Entity) -> Query:
         groupby=[g.expression for g in groupby_clause],
         having=having_expr,
         order_by=orderby_exprs,
+        limitby=limitby_clause,
+        sample=body.get("sample"),
+        limit=body.get("limit", None),
+        offset=body.get("offset", 0),
+        totals=body.get("totals", False),
+        granularity=body.get("granularity"),
     )
 
 
@@ -249,7 +281,7 @@ def _validate_empty_table_names(query: Query) -> None:
         )
 
 
-def _validate_aliases(query: Query) -> None:
+def _validate_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
     """
     Ensures that no alias has been defined multiple times for different
     expressions in the query. Thus rejecting queries with shadowing.
@@ -280,7 +312,7 @@ def _validate_aliases(query: Query) -> None:
 NESTED_COL_EXPR_RE = re.compile(r"^([a-zA-Z0-9_\.]+)\[([a-zA-Z0-9_\.:-]+)\]$")
 
 
-def _parse_subscriptables(query: Query) -> None:
+def _parse_subscriptables(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
     """
     Turns columns formatted as tags[asd] into SubscriptableReference.
     """
@@ -304,7 +336,7 @@ def _parse_subscriptables(query: Query) -> None:
     query.transform_expressions(transform)
 
 
-def _apply_column_aliases(query: Query) -> None:
+def _apply_column_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
     """
     Applies an alias to all the columns in the query equal to the column
     name unless a column already has one or the alias is already defined.
@@ -329,7 +361,7 @@ def _apply_column_aliases(query: Query) -> None:
     query.transform_expressions(apply_aliases)
 
 
-def _expand_aliases(query: Query) -> None:
+def _expand_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
     """
     Recursively expand all the references to aliases in the query. This
     makes life easy to query processors and translators that only have to
@@ -357,7 +389,31 @@ def _expand_aliases(query: Query) -> None:
 ARRAYJOIN_FUNCTION_MATCH = FunctionCallMatch(StringMatch("arrayJoin"), None)
 
 
-def _validate_arrayjoin(query: Query) -> None:
+def _mangle_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
+    alias_prefix = "_snuba_"
+
+    def transform_alias(expression: Expression) -> Expression:
+        alias = expression.alias
+        if alias is not None:
+            return replace(expression, alias=f"{alias_prefix}{alias}")
+        return expression
+
+    query.transform_expressions(transform_alias)
+
+    # HACK: This reverts the mangle of arrayjoin since we cannot reference aliases
+    # there
+    arrayjoin = query.get_arrayjoin_from_ast()
+
+    def transform_arrayjoin(expr: Expression) -> Expression:
+        if isinstance(expr, Column):
+            return replace(expr, alias=None)
+        return expr
+
+    if arrayjoin:
+        query.set_arrayjoin(arrayjoin.transform(transform_arrayjoin))
+
+
+def _validate_arrayjoin(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
     # TODO: Actually validate arrayjoin. For now log how it is used.
     body_arrayjoin = ""
     arrayjoin = query.get_arrayjoin_from_ast()
@@ -371,10 +427,7 @@ def _validate_arrayjoin(query: Query) -> None:
     for exp in query.get_all_expressions():
         match = ARRAYJOIN_FUNCTION_MATCH.match(exp)
         if match is not None:
-            if isinstance(exp, Column):
-                array_joins.add(exp.column_name)
-            else:
-                array_joins.add(f"{type(exp)}")
+            array_joins.add(f"{type(exp)}")
 
     if len(array_joins) > 0:
         join_type = "body" if body_arrayjoin else "function"
@@ -388,7 +441,7 @@ def _validate_arrayjoin(query: Query) -> None:
 DEESCAPER_RE = re.compile(r"^`(.+)`$")
 
 
-def _deescape_aliases(query: Query) -> None:
+def _deescape_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
     """
     The legacy query processing does not escape user declared aliases
     thus aliases like project.name would make the query fail. So Sentry

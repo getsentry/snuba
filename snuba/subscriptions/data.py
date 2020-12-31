@@ -10,7 +10,7 @@ from snuba.query.logical import Aggregation
 from snuba.query.types import Condition
 from snuba.request import Request
 from snuba.request.request_settings import SubscriptionRequestSettings
-from snuba.request.schema import RequestSchema
+from snuba.request.schema import Language, RequestSchema
 from snuba.request.validation import build_request
 from snuba.utils.metrics.timer import Timer
 
@@ -78,7 +78,9 @@ class SubscriptionData:
         :param offset: Maximum offset we should query for
         """
         schema = RequestSchema.build_with_extensions(
-            dataset.get_extensions(), SubscriptionRequestSettings,
+            dataset.get_default_entity().get_extensions(),
+            SubscriptionRequestSettings,
+            Language.LEGACY,
         )
         extra_conditions: Sequence[Condition] = []
         if offset is not None:

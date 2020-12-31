@@ -1,15 +1,9 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import (
-    Array,
-    Column,
-    LowCardinality,
-    String,
-    UInt,
-    WithDefault,
-)
+from snuba.clickhouse.columns import Array, Column, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
 class Migration(migration.MultiStepMigration):
@@ -26,9 +20,11 @@ class Migration(migration.MultiStepMigration):
                 table_name=table_name,
                 column=Column(
                     "clickhouse_queries.all_columns",
-                    WithDefault(
-                        Array(Array(LowCardinality(String()))),
-                        "arrayResize([['']], length(clickhouse_queries.sql))",
+                    Array(
+                        Array((String(Modifiers(low_cardinality=True)))),
+                        Modifiers(
+                            default="arrayResize([['']], length(clickhouse_queries.sql))"
+                        ),
                     ),
                 ),
                 after="clickhouse_queries.consistent",
@@ -38,9 +34,11 @@ class Migration(migration.MultiStepMigration):
                 table_name=table_name,
                 column=Column(
                     "clickhouse_queries.or_conditions",
-                    WithDefault(
-                        Array(UInt(8)),
-                        "arrayResize([0], length(clickhouse_queries.sql))",
+                    Array(
+                        UInt(8),
+                        Modifiers(
+                            default="arrayResize([0], length(clickhouse_queries.sql))"
+                        ),
                     ),
                 ),
                 after="clickhouse_queries.all_columns",
@@ -50,9 +48,11 @@ class Migration(migration.MultiStepMigration):
                 table_name=table_name,
                 column=Column(
                     "clickhouse_queries.where_columns",
-                    WithDefault(
-                        Array(Array(LowCardinality(String()))),
-                        "arrayResize([['']], length(clickhouse_queries.sql))",
+                    Array(
+                        Array(String(Modifiers(low_cardinality=True))),
+                        Modifiers(
+                            default="arrayResize([['']], length(clickhouse_queries.sql))"
+                        ),
                     ),
                 ),
                 after="clickhouse_queries.or_conditions",
@@ -62,9 +62,11 @@ class Migration(migration.MultiStepMigration):
                 table_name=table_name,
                 column=Column(
                     "clickhouse_queries.where_mapping_columns",
-                    WithDefault(
-                        Array(Array(LowCardinality(String()))),
-                        "arrayResize([['']], length(clickhouse_queries.sql))",
+                    Array(
+                        Array(String(Modifiers(low_cardinality=True))),
+                        Modifiers(
+                            default="arrayResize([['']], length(clickhouse_queries.sql))"
+                        ),
                     ),
                 ),
                 after="clickhouse_queries.where_columns",
@@ -74,9 +76,11 @@ class Migration(migration.MultiStepMigration):
                 table_name=table_name,
                 column=Column(
                     "clickhouse_queries.groupby_columns",
-                    WithDefault(
-                        Array(Array(LowCardinality(String()))),
-                        "arrayResize([['']], length(clickhouse_queries.sql))",
+                    Array(
+                        Array(String(Modifiers(low_cardinality=True))),
+                        Modifiers(
+                            default="arrayResize([['']], length(clickhouse_queries.sql))"
+                        ),
                     ),
                 ),
                 after="clickhouse_queries.where_mapping_columns",
@@ -86,9 +90,11 @@ class Migration(migration.MultiStepMigration):
                 table_name=table_name,
                 column=Column(
                     "clickhouse_queries.array_join_columns",
-                    WithDefault(
-                        Array(Array(LowCardinality(String()))),
-                        "arrayResize([['']], length(clickhouse_queries.sql))",
+                    Array(
+                        Array(String(Modifiers(low_cardinality=True))),
+                        Modifiers(
+                            default="arrayResize([['']], length(clickhouse_queries.sql))"
+                        ),
                     ),
                 ),
                 after="clickhouse_queries.groupby_columns",

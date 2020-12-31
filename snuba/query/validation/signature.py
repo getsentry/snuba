@@ -1,7 +1,7 @@
 import logging
 from abc import ABC
 from datetime import date, datetime
-from typing import cast, Sequence, Set, Type, Union
+from typing import Sequence, Set, Type, Union
 
 from snuba.clickhouse.columns import (
     UUID,
@@ -17,16 +17,12 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.query.expressions import (
-    Expression,
-    Literal as LiteralType,
-)
-from snuba.query.matchers import (
-    Any as AnyMatcher,
-    Column as ColumnMatcher,
-    Literal as LiteralMatcher,
-    Param,
-)
+from snuba.query.expressions import Expression
+from snuba.query.expressions import Literal as LiteralType
+from snuba.query.matchers import Any as AnyMatcher
+from snuba.query.matchers import Column as ColumnMatcher
+from snuba.query.matchers import Literal as LiteralMatcher
+from snuba.query.matchers import Param
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
 
 logger = logging.getLogger(__name__)
@@ -110,19 +106,14 @@ class Column(ParamType):
             # case.
             return
 
-        column_type = column.type.get_raw()
+        nullable = column.type.has_modifier(Nullable)
 
-        nullable = isinstance(column_type, Nullable)
-
-        if nullable:
-            column_type = cast(Nullable, column_type).inner_type
-
-        if not isinstance(column_type, tuple(self.__valid_types)) or (
+        if not isinstance(column.type, tuple(self.__valid_types)) or (
             nullable and not self.__allow_nullable
         ):
             raise InvalidFunctionCall(
                 (
-                    f"Illegal type {'Nullable ' if nullable else ''}{str(column_type)} "
+                    f"Illegal type {'Nullable ' if nullable else ''}{str(column.type)} "
                     f"of argument `{column_name}`. Required types {self.__valid_types}"
                 )
             )

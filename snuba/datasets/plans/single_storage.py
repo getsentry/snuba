@@ -1,7 +1,6 @@
 from typing import Optional, Sequence
 
 import sentry_sdk
-
 from snuba import state
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
@@ -15,8 +14,12 @@ from snuba.datasets.plans.query_plan import (
 )
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy
 from snuba.datasets.plans.translator.query import QueryTranslator
+from snuba.datasets.schemas import RelationalSource
+from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
-from snuba.request import Request
+from snuba.query.data_source.simple import Table
+from snuba.query.logical import Query as LogicalQuery
+from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
 from snuba.request.request_settings import RequestSettings
 
 # TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
@@ -26,10 +29,8 @@ from snuba.request.request_settings import RequestSettings
 from snuba.util import with_span
 from snuba.web import QueryResult
 
-from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
 
-
-class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
+class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
     def __init__(
         self,
         cluster: ClickhouseCluster,
@@ -69,6 +70,20 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
         return process_and_run_query(query, request_settings)
 
 
+def get_query_data_source(
+    relational_source: RelationalSource, final: bool, sampling_rate: Optional[float]
+) -> Table:
+    assert isinstance(relational_source, TableSource)
+    return Table(
+        table_name=relational_source.get_table_name(),
+        schema=relational_source.get_columns(),
+        final=final,
+        sampling_rate=sampling_rate,
+        mandatory_conditions=relational_source.get_mandatory_conditions(),
+        prewhere_candidates=relational_source.get_prewhere_candidates(),
+    )
+
+
 class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     """
     Builds the Clickhouse Query Execution Plan for a dataset that is based on
@@ -97,22 +112,43 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         self.__post_processors = post_processors or []
 
     @with_span()
-    def build_plan(self, request: Request) -> ClickhouseQueryPlan:
-        clickhouse_query = QueryTranslator(self.__mappers).translate(request.query)
-        clickhouse_query.set_data_source(self.__storage.get_schema().get_data_source())
+    def build_plan(
+        self, query: LogicalQuery, settings: RequestSettings
+    ) -> ClickhouseQueryPlan:
+        with sentry_sdk.start_span(
+            op="build_plan.single_storage", description="translate"
+        ):
+            # The QueryTranslator class should be instantiated once for each call to build_plan,
+            # to avoid cache conflicts.
+            clickhouse_query = QueryTranslator(self.__mappers).translate(query)
+
+        with sentry_sdk.start_span(
+            op="build_plan.single_storage", description="set_from_clause"
+        ):
+            clickhouse_query.set_from_clause(
+                get_query_data_source(
+                    self.__storage.get_schema().get_data_source(),
+                    final=query.get_final(),
+                    sampling_rate=query.get_sample(),
+                )
+            )
 
         cluster = self.__storage.get_cluster()
 
+        db_query_processors = [
+            *self.__storage.get_query_processors(),
+            *self.__post_processors,
+            MandatoryConditionApplier(),
+        ]
+
         return ClickhouseQueryPlan(
             query=clickhouse_query,
-            plan_processors=[],
+            plan_query_processors=[],
+            db_query_processors=db_query_processors,
+            storage_set_key=self.__storage.get_storage_set_key(),
             execution_strategy=SimpleQueryPlanExecutionStrategy(
                 cluster=cluster,
-                db_query_processors=[
-                    *self.__storage.get_query_processors(),
-                    *self.__post_processors,
-                    MandatoryConditionApplier(),
-                ],
+                db_query_processors=db_query_processors,
                 splitters=self.__storage.get_query_splitters(),
             ),
         )
@@ -132,25 +168,48 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         self.__post_processors = post_processors or []
 
     @with_span()
-    def build_plan(self, request: Request) -> ClickhouseQueryPlan:
-        storage, mappers = self.__selector.select_storage(
-            request.query, request.settings
-        )
-        clickhouse_query = QueryTranslator(mappers).translate(request.query)
-        clickhouse_query.set_data_source(storage.get_schema().get_data_source())
+    def build_plan(
+        self, query: LogicalQuery, settings: RequestSettings
+    ) -> ClickhouseQueryPlan:
+        with sentry_sdk.start_span(
+            op="build_plan.selected_storage", description="select_storage"
+        ):
+            storage, mappers = self.__selector.select_storage(query, settings)
+
+        with sentry_sdk.start_span(
+            op="build_plan.selected_storage", description="translate"
+        ):
+            # The QueryTranslator class should be instantiated once for each call to build_plan,
+            # to avoid cache conflicts.
+            clickhouse_query = QueryTranslator(mappers).translate(query)
+
+        with sentry_sdk.start_span(
+            op="build_plan.selected_storage", description="set_from_clause"
+        ):
+            clickhouse_query.set_from_clause(
+                get_query_data_source(
+                    storage.get_schema().get_data_source(),
+                    final=query.get_final(),
+                    sampling_rate=query.get_sample(),
+                )
+            )
 
         cluster = storage.get_cluster()
 
+        db_query_processors = [
+            *storage.get_query_processors(),
+            *self.__post_processors,
+            MandatoryConditionApplier(),
+        ]
+
         return ClickhouseQueryPlan(
             query=clickhouse_query,
-            plan_processors=[],
+            plan_query_processors=[],
+            db_query_processors=db_query_processors,
+            storage_set_key=storage.get_storage_set_key(),
             execution_strategy=SimpleQueryPlanExecutionStrategy(
                 cluster=cluster,
-                db_query_processors=[
-                    *storage.get_query_processors(),
-                    *self.__post_processors,
-                    MandatoryConditionApplier(),
-                ],
+                db_query_processors=db_query_processors,
                 splitters=storage.get_query_splitters(),
             ),
         )

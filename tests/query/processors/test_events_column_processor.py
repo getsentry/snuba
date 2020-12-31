@@ -1,16 +1,16 @@
 from snuba.clickhouse.columns import ColumnSet
-from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
-from snuba.datasets.schemas.tables import TableSource
-from snuba.datasets.storages.events_column_processor import EventsColumnProcessor
+from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
+from snuba.query.data_source.simple import Table
+from snuba.datasets.storages.group_id_column_processor import GroupIdColumnProcessor
+from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.logical import Query, SelectedExpression
+from snuba.clickhouse.query import Query
 from snuba.request.request_settings import HTTPRequestSettings
 
 
 def test_events_column_format_expressions() -> None:
     unprocessed = Query(
-        {},
-        TableSource("events", ColumnSet([])),
+        Table("events", ColumnSet([])),
         selected_columns=[
             SelectedExpression("dr_claw", Column("dr_claw", None, "culprit")),
             SelectedExpression(
@@ -20,8 +20,7 @@ def test_events_column_format_expressions() -> None:
         ],
     )
     expected = Query(
-        {},
-        TableSource("events", ColumnSet([])),
+        Table("events", ColumnSet([])),
         selected_columns=[
             SelectedExpression("dr_claw", Column("dr_claw", None, "culprit")),
             SelectedExpression(
@@ -32,21 +31,11 @@ def test_events_column_format_expressions() -> None:
                     (Column(None, None, "group_id"), Literal(None, 0),),
                 ),
             ),
-            SelectedExpression(
-                "the_message",
-                FunctionCall(
-                    "the_message",
-                    "coalesce",
-                    (
-                        Column(None, None, "search_message"),
-                        Column(None, None, "message"),
-                    ),
-                ),
-            ),
+            SelectedExpression("the_message", Column("the_message", None, "message"),),
         ],
     )
 
-    EventsColumnProcessor().process_query(unprocessed, HTTPRequestSettings())
+    GroupIdColumnProcessor().process_query(unprocessed, HTTPRequestSettings())
     assert (
         expected.get_selected_columns_from_ast()
         == unprocessed.get_selected_columns_from_ast()
@@ -54,7 +43,7 @@ def test_events_column_format_expressions() -> None:
 
     expected = (
         "(nullIf(group_id, 0) AS the_group_id)",
-        "(coalesce(search_message, message) AS the_message)",
+        "(message AS the_message)",
     )
 
     for idx, column in enumerate(unprocessed.get_selected_columns_from_ast()[1:]):

@@ -1,11 +1,13 @@
 from typing import Any, MutableMapping
 
 import pytest
-
 from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.schemas.tables import TableSource
+from snuba.pipeline.processors import execute_all_clickhouse_processors
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import (
     Column,
     Expression,
@@ -13,13 +15,11 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
 from snuba.query.parser import parse_query
-from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 
 
-def test_iterate_over_query():
+def test_iterate_over_query() -> None:
     """
     Creates a query with the new AST and iterate over all expressions.
     """
@@ -28,19 +28,19 @@ def test_iterate_over_query():
     function_1 = FunctionCall("alias", "f1", (column1, column2))
     function_2 = FunctionCall("alias", "f2", (column2,))
 
-    condition = binary_condition(
-        None, ConditionFunctions.EQ, column1, Literal(None, "1")
-    )
+    condition = binary_condition(ConditionFunctions.EQ, column1, Literal(None, "1"))
+
+    prewhere = binary_condition(ConditionFunctions.EQ, column2, Literal(None, "2"))
 
     orderby = OrderBy(OrderByDirection.ASC, function_2)
 
     query = Query(
-        {},
-        TableSource("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([])),
         selected_columns=[SelectedExpression("alias", function_1)],
         array_join=None,
         condition=condition,
         groupby=[function_1],
+        prewhere=prewhere,
         having=None,
         order_by=[orderby],
     )
@@ -61,12 +61,16 @@ def test_iterate_over_query():
         # order by
         column2,
         function_2,
+        # prewhere
+        column2,
+        Literal(None, "2"),
+        prewhere,
     ]
 
     assert list(query.get_all_expressions()) == expected_expressions
 
 
-def test_replace_expression():
+def test_replace_expression() -> None:
     """
     Create a query with the new AST and replaces a function with a different function
     replaces f1(...) with tag(f1)
@@ -76,20 +80,20 @@ def test_replace_expression():
     function_1 = FunctionCall("alias", "f1", (column1, column2))
     function_2 = FunctionCall("alias", "f2", (column2,))
 
-    condition = binary_condition(
-        None, ConditionFunctions.EQ, function_1, Literal(None, "1")
-    )
+    condition = binary_condition(ConditionFunctions.EQ, function_1, Literal(None, "1"))
+
+    prewhere = binary_condition(ConditionFunctions.EQ, function_1, Literal(None, "2"))
 
     orderby = OrderBy(OrderByDirection.ASC, function_2)
 
     query = Query(
-        {},
-        TableSource("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([])),
         selected_columns=[SelectedExpression("alias", function_1)],
         array_join=None,
         condition=condition,
         groupby=[function_1],
         having=None,
+        prewhere=prewhere,
         order_by=[orderby],
     )
 
@@ -101,8 +105,7 @@ def test_replace_expression():
     query.transform_expressions(replace)
 
     expected_query = Query(
-        {},
-        TableSource("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([])),
         selected_columns=[
             SelectedExpression(
                 "alias", FunctionCall("alias", "tag", (Literal(None, "f1"),))
@@ -110,12 +113,16 @@ def test_replace_expression():
         ],
         array_join=None,
         condition=binary_condition(
-            None,
             ConditionFunctions.EQ,
             FunctionCall("alias", "tag", (Literal(None, "f1"),)),
             Literal(None, "1"),
         ),
         groupby=[FunctionCall("alias", "tag", (Literal(None, "f1"),))],
+        prewhere=binary_condition(
+            ConditionFunctions.EQ,
+            FunctionCall("alias", "tag", (Literal(None, "f1"),)),
+            Literal(None, "2"),
+        ),
         having=None,
         order_by=[orderby],
     )
@@ -154,20 +161,20 @@ def test_get_all_columns() -> None:
     query = parse_query(query_body, events)
 
     assert query.get_all_ast_referenced_columns() == {
-        Column("column1", None, "column1"),
-        Column("column2", None, "column2"),
-        Column("platform", None, "platform"),
-        Column("field2", None, "field2"),
-        Column("tags", None, "tags"),
-        Column("times_seen", None, "times_seen"),
-        Column("event_id", None, "event_id"),
-        Column("timestamp", None, "timestamp"),
+        Column("_snuba_column1", None, "column1"),
+        Column("_snuba_column2", None, "column2"),
+        Column("_snuba_platform", None, "platform"),
+        Column("_snuba_field2", None, "field2"),
+        Column("_snuba_tags", None, "tags"),
+        Column("_snuba_times_seen", None, "times_seen"),
+        Column("_snuba_event_id", None, "event_id"),
+        Column("_snuba_timestamp", None, "timestamp"),
     }
 
     assert query.get_all_ast_referenced_subscripts() == {
         SubscriptableReference(
-            "tags[sentry:dist]",
-            Column("tags", None, "tags"),
+            "_snuba_tags[sentry:dist]",
+            Column("_snuba_tags", None, "tags"),
             Literal(None, "sentry:dist"),
         )
     }
@@ -215,8 +222,12 @@ def test_alias_validation(
 ) -> None:
     events = get_dataset("events")
     query = parse_query(query_body, events)
-    query_plan = events.get_query_plan_builder().build_plan(
-        Request("", query, HTTPRequestSettings(), {}, "")
-    )
+    settings = HTTPRequestSettings()
+    query_plan = (
+        events.get_default_entity()
+        .get_query_pipeline_builder()
+        .build_planner(query, settings)
+    ).execute()
+    execute_all_clickhouse_processors(query_plan, settings)
 
     assert query_plan.query.validate_aliases() == expected_result

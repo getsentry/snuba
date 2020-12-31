@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Sequence
+from typing import MutableMapping, Sequence
 
 from snuba.clickhouse.query import Expression
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
@@ -102,6 +102,9 @@ class SnubaClickhouseMappingTranslator(SnubaClickhouseStrictTranslator):
     This relies on a visitor so that we can statically enforce that no
     expression subtype is added to the code base without properly support
     it in all translators. The downside is verbosity.
+
+    This class should only be used once per query, since values are cached
+    as they are translated.
     """
 
     def __init__(self, translation_rules: TranslationMappers) -> None:
@@ -115,27 +118,63 @@ class SnubaClickhouseMappingTranslator(SnubaClickhouseStrictTranslator):
             lambdas=[DefaultLambdaMapper()],
         )
         self.__translation_rules = translation_rules.concat(default_rules)
+        self.__cache: MutableMapping[Expression, Expression] = {}
 
     def visit_literal(self, exp: Literal) -> Expression:
-        return apply_mappers(exp, self.__translation_rules.literals, self)
+        # We can't use the cache for literals because Python hashes
+        # Literal(None, 0) and Literal(None, 0.0) equivalently, which can then
+        # break Clickhouse since it expects the correct type. This isn't a major
+        # performance hit though since Literals can't contain other expressions.
+        ret = apply_mappers(exp, self.__translation_rules.literals, self)
+        return ret
 
     def visit_column(self, exp: Column) -> Expression:
-        return apply_mappers(exp, self.__translation_rules.columns, self)
+        if exp in self.__cache:
+            return self.__cache[exp]
+
+        ret = apply_mappers(exp, self.__translation_rules.columns, self)
+        self.__cache[exp] = ret
+        return ret
 
     def visit_subscriptable_reference(self, exp: SubscriptableReference) -> Expression:
-        return apply_mappers(exp, self.__translation_rules.subscriptables, self)
+        if exp in self.__cache:
+            return self.__cache[exp]
+
+        ret = apply_mappers(exp, self.__translation_rules.subscriptables, self)
+        self.__cache[exp] = ret
+        return ret
 
     def visit_function_call(self, exp: FunctionCall) -> Expression:
-        return apply_mappers(exp, self.__translation_rules.functions, self)
+        if exp in self.__cache:
+            return self.__cache[exp]
+
+        ret = apply_mappers(exp, self.__translation_rules.functions, self)
+        self.__cache[exp] = ret
+        return ret
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> Expression:
-        return apply_mappers(exp, self.__translation_rules.curried_functions, self)
+        if exp in self.__cache:
+            return self.__cache[exp]
+
+        ret = apply_mappers(exp, self.__translation_rules.curried_functions, self)
+        self.__cache[exp] = ret
+        return ret
 
     def visit_argument(self, exp: Argument) -> Expression:
-        return apply_mappers(exp, self.__translation_rules.arguments, self)
+        if exp in self.__cache:
+            return self.__cache[exp]
+
+        ret = apply_mappers(exp, self.__translation_rules.arguments, self)
+        self.__cache[exp] = ret
+        return ret
 
     def visit_lambda(self, exp: Lambda) -> Expression:
-        return apply_mappers(exp, self.__translation_rules.lambdas, self)
+        if exp in self.__cache:
+            return self.__cache[exp]
+
+        ret = apply_mappers(exp, self.__translation_rules.lambdas, self)
+        self.__cache[exp] = ret
+        return ret
 
     def translate_function_strict(self, exp: FunctionCall) -> FunctionCall:
         """

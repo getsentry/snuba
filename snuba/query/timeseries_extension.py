@@ -85,24 +85,15 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
     ) -> None:
         from_date, to_date = self.get_time_limit(extension_data)
         query.set_granularity(extension_data["granularity"])
-        query.add_conditions(
-            [
-                (self.__timestamp_column, ">=", from_date.isoformat()),
-                (self.__timestamp_column, "<", to_date.isoformat()),
-            ]
-        )
         query.add_condition_to_ast(
             binary_condition(
-                None,
                 BooleanFunctions.AND,
                 binary_condition(
-                    None,
                     ConditionFunctions.GTE,
                     Column(None, None, self.__timestamp_column),
                     Literal(None, from_date),
                 ),
                 binary_condition(
-                    None,
                     ConditionFunctions.LT,
                     Column(None, None, self.__timestamp_column),
                     Literal(None, to_date),

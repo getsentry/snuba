@@ -28,6 +28,9 @@ class MatchResult:
 
     results: Mapping[str, MatchType] = field(default_factory=dict)
 
+    def contains(self, name: str) -> bool:
+        return name in self.results and self.results[name] is not None
+
     def expression(self, name: str) -> Expression:
         """
         Return an expression from the results given the name of the
@@ -181,6 +184,18 @@ class String(Pattern[str]):
     """
 
     value: str
+
+    def match(self, node: AnyType) -> Optional[MatchResult]:
+        return MatchResult() if node == self.value else None
+
+
+@dataclass(frozen=True)
+class Integer(Pattern[int]):
+    """
+    Matches one specific integer.
+    """
+
+    value: int
 
     def match(self, node: AnyType) -> Optional[MatchResult]:
         return MatchResult() if node == self.value else None

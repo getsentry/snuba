@@ -10,6 +10,7 @@ from snuba.datasets.events_processor_base import EventsProcessorBase, InsertEven
 from snuba.processor import (
     _as_dict_safe,
     _ensure_valid_ip,
+    _hashify,
     _unicodify,
 )
 
@@ -76,6 +77,12 @@ class ErrorsProcessor(EventsProcessorBase):
 
         output["message"] = _unicodify(event["message"])
 
+        output["primary_hash"] = str(uuid.UUID(_hashify(event["primary_hash"])))
+
+        output["culprit"] = _unicodify(data.get("culprit", ""))
+        output["type"] = _unicodify(data.get("type", ""))
+        output["title"] = _unicodify(data.get("title", ""))
+
     def extract_tags_custom(
         self,
         output: MutableMapping[str, Any],
@@ -90,15 +97,6 @@ class ErrorsProcessor(EventsProcessorBase):
         # often have transaction_name set to NULL, so we need to replace that with
         # an empty string.
         output["transaction_name"] = tags.get("transaction", "") or ""
-
-    def extract_contexts_custom(
-        self,
-        output: MutableMapping[str, Any],
-        event: InsertEvent,
-        contexts: Mapping[str, Any],
-        metadata: KafkaMessageMetadata,
-    ) -> None:
-        output["_contexts_flattened"] = ""
 
     def extract_promoted_contexts(
         self,

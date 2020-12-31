@@ -1,20 +1,12 @@
-from snuba.clickhouse.columns import (
-    UUID,
-    Array,
-    ColumnSet,
-    DateTime,
-    Nested,
-    Nullable,
-    ReadOnly,
-    String,
-    UInt,
-)
+from snuba.clickhouse.columns import UUID, Array, ColumnSet, DateTime, Nested
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.spans_processor import SpansMessageProcessor
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.web.split import TimeSplitQueryStrategy
 
@@ -25,7 +17,7 @@ columns = ColumnSet(
         ("trace_id", UUID()),
         ("transaction_span_id", UInt(64)),
         ("span_id", UInt(64)),
-        ("parent_span_id", Nullable(UInt(64))),
+        ("parent_span_id", UInt(64, Modifiers(nullable=True))),
         ("transaction_name", String()),
         ("description", String()),  # description in span
         ("op", String()),
@@ -36,7 +28,7 @@ columns = ColumnSet(
         ("finish_ns", UInt(32)),
         ("duration_ms", UInt(32)),
         ("tags", Nested([("key", String()), ("value", String())])),
-        ("_tags_hash_map", ReadOnly(Array(UInt(64)))),
+        ("_tags_hash_map", Array(UInt(64), Modifiers(readonly=True))),
         ("retention_days", UInt(16)),
         ("deleted", UInt(8)),
     ]
@@ -54,8 +46,11 @@ storage = WritableTableStorage(
     storage_set_key=StorageSetKey.TRANSACTIONS,
     schema=schema,
     query_processors=[PrewhereProcessor()],
-    stream_loader=KafkaStreamLoader(
-        processor=SpansMessageProcessor(), default_topic="events",
+    stream_loader=build_kafka_stream_loader_from_settings(
+        StorageKey.SPANS,
+        processor=SpansMessageProcessor(),
+        default_topic_name="events",
+        commit_log_topic_name="snuba-commit-log",
     ),
     query_splitters=[TimeSplitQueryStrategy(timestamp_col="finish_ts")],
 )

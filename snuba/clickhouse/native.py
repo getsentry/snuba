@@ -8,12 +8,10 @@ from uuid import UUID
 
 from clickhouse_driver import Client, errors
 from dateutil.tz import tz
-
 from snuba import settings
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.sql import SqlQuery
+from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.reader import Reader, Result, build_result_transformer
-
 
 logger = logging.getLogger("snuba.clickhouse")
 
@@ -189,7 +187,7 @@ transform_column_types = build_result_transformer(
 )
 
 
-class NativeDriverReader(Reader[SqlQuery]):
+class NativeDriverReader(Reader):
     def __init__(self, client: ClickhousePool) -> None:
         self.__client = client
 
@@ -227,7 +225,7 @@ class NativeDriverReader(Reader[SqlQuery]):
 
     def execute(
         self,
-        query: SqlQuery,
+        query: FormattedQuery,
         # TODO: move Clickhouse specific arguments into clickhouse.query.Query
         settings: Optional[Mapping[str, str]] = None,
         with_totals: bool = False,
@@ -240,7 +238,7 @@ class NativeDriverReader(Reader[SqlQuery]):
 
         return self.__transform_result(
             self.__client.execute(
-                query.format_sql(), with_column_types=True, settings=settings, **kwargs
+                query.get_sql(), with_column_types=True, settings=settings, **kwargs
             ),
             with_totals=with_totals,
         )

@@ -1,1 +1,16 @@
+# Use owners-snuba by default
 * @getsentry/owners-snuba
+
+# Legal
+/LICENSE  @getsentry/owners-legal
+
+# Build & Releases
+/.github/workflows/release.yml  @getsentry/releases
+/.craft.yml                     @getsentry/releases
+/docker-compose.gcb.yml         @getsentry/releases
+/docker-compose.yml             @getsentry/releases
+/docker_entrypoint.sh           @getsentry/releases
+/cloudbuild.yaml                @getsentry/releases
+/scripts/bump-version.sh        @getsentry/releases
+/scripts/post-release.sh        @getsentry/releases
+

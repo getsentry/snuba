@@ -3,7 +3,9 @@ from typing import Mapping
 from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.discover import storage as discover_storage
 from snuba.datasets.storages.errors import storage as errors_storage
+from snuba.datasets.storages.errors_ro import storage as errors_ro_storage
 from snuba.datasets.storages.events import storage as events_storage
 from snuba.datasets.storages.events_ro import storage as events_ro_storage
 from snuba.datasets.storages.groupassignees import storage as groupassignees_storage
@@ -43,7 +45,13 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
 
 NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
     storage.get_storage_key(): storage
-    for storage in [events_ro_storage, outcomes_hourly_storage, sessions_hourly_storage]
+    for storage in [
+        discover_storage,
+        errors_ro_storage,
+        events_ro_storage,
+        outcomes_hourly_storage,
+        sessions_hourly_storage,
+    ]
 }
 
 STORAGES: Mapping[StorageKey, ReadableTableStorage] = {

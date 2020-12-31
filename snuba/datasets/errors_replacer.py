@@ -1,5 +1,6 @@
 import logging
 import time
+import uuid
 
 from collections import deque
 from datetime import datetime
@@ -8,7 +9,7 @@ from typing import Any, Deque, Mapping, Optional, Sequence, Tuple
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
-from snuba.clickhouse.columns import FlattenedColumn, ReadOnly
+from snuba.clickhouse.columns import FlattenedColumn, ReadOnly, Nullable
 from snuba.clickhouse.escaping import escape_identifier, escape_string
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import InvalidMessageType, _hashify
@@ -129,16 +130,19 @@ class ErrorsReplacer(ReplacerProcessor):
         tag_column_map: Mapping[str, Mapping[str, str]],
         promoted_tags: Mapping[str, Sequence[str]],
         state_name: ReplacerState,
+        use_promoted_prewhere: bool,
     ) -> None:
         super().__init__(schema=schema)
         self.__required_columns = required_columns
         self.__all_columns = [
-            col for col in schema.get_columns() if not isinstance(col.type, ReadOnly)
+            col for col in schema.get_columns() if not col.type.has_modifier(ReadOnly)
         ]
 
         self.__tag_column_map = tag_column_map
         self.__promoted_tags = promoted_tags
         self.__state_name = state_name
+        self.__use_promoted_prewhere = use_promoted_prewhere
+        self.__schema = schema
 
     def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
         type_ = message.action_type
@@ -156,11 +160,20 @@ class ErrorsReplacer(ReplacerProcessor):
         elif type_ == "end_merge":
             processed = process_merge(event, self.__all_columns)
         elif type_ == "end_unmerge":
-            processed = process_unmerge(event, self.__all_columns)
+            processed = process_unmerge(event, self.__all_columns, self.__state_name)
         elif type_ == "end_delete_tag":
             processed = process_delete_tag(
-                event, self.__all_columns, self.__tag_column_map, self.__promoted_tags,
+                event,
+                self.__all_columns,
+                self.__tag_column_map,
+                self.__promoted_tags,
+                self.__use_promoted_prewhere,
+                self.__schema,
             )
+        elif type_ == "tombstone_events":
+            processed = process_tombstone_events(event, self.__required_columns)
+        elif type_ == "exclude_groups":
+            processed = process_exclude_groups(event)
         else:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
 
@@ -192,24 +205,14 @@ class ErrorsReplacer(ReplacerProcessor):
         return False
 
 
-def process_delete_groups(
-    message: Mapping[str, Any], required_columns: Sequence[str]
-) -> Optional[Replacement]:
-    group_ids = message["group_ids"]
-    if not group_ids:
-        return None
-
-    assert all(isinstance(gid, int) for gid in group_ids)
-    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+def _build_event_tombstone_replacement(
+    message: Mapping[str, Any],
+    required_columns: Sequence[str],
+    where: str,
+    query_args: Mapping[str, str],
+    query_time_flags: Tuple[Any, ...],
+) -> Replacement:
     select_columns = map(lambda i: i if i != "deleted" else "1", required_columns)
-
-    where = """\
-        PREWHERE group_id IN (%(group_ids)s)
-        WHERE project_id = %(project_id)s
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
-
     count_query_template = (
         """\
         SELECT count()
@@ -227,19 +230,84 @@ def process_delete_groups(
         + where
     )
 
-    query_args = {
+    final_query_args = {
         "required_columns": ", ".join(required_columns),
         "select_columns": ", ".join(select_columns),
         "project_id": message["project_id"],
+    }
+    final_query_args.update(query_args)
+
+    return Replacement(
+        count_query_template, insert_query_template, final_query_args, query_time_flags
+    )
+
+
+def process_delete_groups(
+    message: Mapping[str, Any], required_columns: Sequence[str]
+) -> Optional[Replacement]:
+    group_ids = message["group_ids"]
+    if not group_ids:
+        return None
+
+    assert all(isinstance(gid, int) for gid in group_ids)
+    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+
+    where = """\
+        PREWHERE group_id IN (%(group_ids)s)
+        WHERE project_id = %(project_id)s
+        AND received <= CAST('%(timestamp)s' AS DateTime)
+        AND NOT deleted
+    """
+
+    query_args = {
         "group_ids": ", ".join(str(gid) for gid in group_ids),
         "timestamp": timestamp.strftime(DATETIME_FORMAT),
     }
 
     query_time_flags = (EXCLUDE_GROUPS, message["project_id"], group_ids)
 
-    return Replacement(
-        count_query_template, insert_query_template, query_args, query_time_flags
+    return _build_event_tombstone_replacement(
+        message, required_columns, where, query_args, query_time_flags
     )
+
+
+def process_tombstone_events(
+    message: Mapping[str, Any], required_columns: Sequence[str]
+) -> Optional[Replacement]:
+    event_ids = message["event_ids"]
+    if not event_ids:
+        return None
+
+    # XXX: We need to construct a query that works on both event_id columns,
+    # either represented as UUID or as hyphenless FixedString. That's why we
+    # use replaceAll(toString()).
+    where = """\
+        PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s)
+        WHERE project_id = %(project_id)s
+        AND NOT deleted
+    """
+
+    query_args = {
+        "event_ids": ", ".join(
+            "'%s'" % str(uuid.UUID(eid)).replace("-", "")
+            for eid in message["event_ids"]
+        ),
+    }
+
+    query_time_flags = (None, message["project_id"])
+
+    return _build_event_tombstone_replacement(
+        message, required_columns, where, query_args, query_time_flags
+    )
+
+
+def process_exclude_groups(message: Mapping[str, Any]) -> Optional[Replacement]:
+    group_ids = message["group_ids"]
+    if not group_ids:
+        return None
+
+    query_time_flags = (EXCLUDE_GROUPS, message["project_id"], group_ids)
+    return Replacement(None, None, {}, query_time_flags)
 
 
 SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
@@ -309,13 +377,16 @@ def process_merge(
 
 
 def process_unmerge(
-    message: Mapping[str, Any], all_columns: Sequence[FlattenedColumn]
+    message: Mapping[str, Any],
+    all_columns: Sequence[FlattenedColumn],
+    state_name: ReplacerState,
 ) -> Optional[Replacement]:
     hashes = message["hashes"]
     if not hashes:
         return None
 
     assert all(isinstance(h, str) for h in hashes)
+
     timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
     all_column_names = [c.escaped for c in all_columns]
     select_columns = map(
@@ -353,9 +424,15 @@ def process_unmerge(
         "select_columns": ", ".join(select_columns),
         "previous_group_id": message["previous_group_id"],
         "project_id": message["project_id"],
-        "hashes": ", ".join("'%s'" % _hashify(h) for h in hashes),
         "timestamp": timestamp.strftime(DATETIME_FORMAT),
     }
+
+    if state_name == ReplacerState.ERRORS:
+        query_args["hashes"] = ", ".join(
+            ["'%s'" % str(uuid.UUID(_hashify(h))) for h in hashes]
+        )
+    else:
+        query_args["hashes"] = ", ".join("'%s'" % _hashify(h) for h in hashes)
 
     query_time_flags = (NEEDS_FINAL, message["project_id"])
 
@@ -364,40 +441,13 @@ def process_unmerge(
     )
 
 
-# This obnoxious amount backslashes is sadly required.
-# replaceRegexpAll(tuple.1, '(\\\\||\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1')
-# means running this on Clickhouse:
-# replaceRegexpAll(tuple.1, '(\\||\\=|\\\\)', '\\\\\\1')
-# The (\\||\\=|\\\\) pattern should be actually this: (\||\=|\\). The additional
-# backslashes are because of Clickhouse escaping.
-FLATTENED_COLUMN_TEMPLATE = """
-concat(
-    '|',
-    arrayStringConcat(
-        arrayMap(tuple -> concat(
-                replaceRegexpAll(tuple.1, '(\\\\||\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1'),
-                '=',
-                replaceRegexpAll(tuple.2, '(\\\\||\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1')
-            ),
-            arraySort(
-                arrayFilter(
-                    tuple -> tuple.1 != %s,
-                    arrayMap((k, v) -> tuple(k, v), `tags.key`, `tags.value`)
-                )
-            )
-        ),
-        '||'
-    ),
-    '|'
-)
-"""
-
-
 def process_delete_tag(
     message: Mapping[str, Any],
     all_columns: Sequence[FlattenedColumn],
     tag_column_map: Mapping[str, Mapping[str, str]],
     promoted_tags: Mapping[str, Sequence[str]],
+    use_promoted_prewhere: bool,
+    schema: WritableTableSchema,
 ) -> Optional[Replacement]:
     tag = message["tag"]
     if not tag:
@@ -414,7 +464,7 @@ def process_delete_tag(
         AND NOT deleted
     """
 
-    if is_promoted:
+    if is_promoted and use_promoted_prewhere:
         prewhere = " PREWHERE %(tag_column)s IS NOT NULL "
     else:
         prewhere = " PREWHERE has(`tags.key`, %(tag_str)s) "
@@ -432,7 +482,16 @@ def process_delete_tag(
     select_columns = []
     for col in all_columns:
         if is_promoted and col.flattened == tag_column_name:
-            select_columns.append("NULL")
+            # The promoted tag columns of events are non nullable, but those of
+            # errors are non nullable. We check the column against the schema
+            # to determine whether to write an empty string or NULL.
+            column_type = schema.get_data_source().get_columns().get(tag_column_name)
+            assert column_type is not None
+            is_nullable = column_type.type.has_modifier(Nullable)
+            if is_nullable:
+                select_columns.append("NULL")
+            else:
+                select_columns.append("''")
         elif col.flattened == "tags.key":
             select_columns.append(
                 "arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, %s)), `tags.key`)"
@@ -443,8 +502,6 @@ def process_delete_tag(
                 "arrayMap(x -> arrayElement(`tags.value`, x), arrayFilter(x -> x != indexOf(`tags.key`, %s), arrayEnumerate(`tags.value`)))"
                 % escape_string(tag)
             )
-        elif col.flattened == "_tags_flattened":
-            select_columns.append(FLATTENED_COLUMN_TEMPLATE % escape_string(tag))
         else:
             select_columns.append(col.escaped)
 

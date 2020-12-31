@@ -1,30 +1,12 @@
-from enum import Enum
 from typing import Callable, MutableMapping
 
+from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.util import with_span
 
 
 class InvalidEntityError(Exception):
     """Exception raised on invalid entity access."""
-
-
-class EntityKey(Enum):
-    """
-    A entity key is a unique identifier for an entity.
-    """
-
-    DISCOVER = "discover"
-    ERRORS = "errors"
-    EVENTS = "events"
-    GROUPS = "groups"
-    GROUPASSIGNEE = "groupassignee"
-    # TODO: This has an S on the end in solidarity with storages, but it's got to go
-    GROUPEDMESSAGES = "groupedmessage"
-    OUTCOMES = "outcomes"
-    OUTCOMES_RAW = "outcomes_raw"
-    SESSIONS = "sessions"
-    TRANSACTIONS = "transactions"
 
 
 ENTITY_IMPL: MutableMapping[EntityKey, Entity] = {}
@@ -38,10 +20,13 @@ def get_entity(name: EntityKey) -> Entity:
 
     from snuba.datasets.cdc.groupassignee_entity import GroupAssigneeEntity
     from snuba.datasets.cdc.groupedmessage_entity import GroupedMessageEntity
-    from snuba.datasets.entities.discover import DiscoverEntity
+    from snuba.datasets.entities.discover import (
+        DiscoverEntity,
+        DiscoverEventsEntity,
+        DiscoverTransactionsEntity,
+    )
     from snuba.datasets.entities.errors import ErrorsEntity
     from snuba.datasets.entities.events import EventsEntity
-    from snuba.datasets.entities.groups import GroupsEntity
     from snuba.datasets.entities.outcomes import OutcomesEntity
     from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
     from snuba.datasets.entities.sessions import SessionsEntity
@@ -51,13 +36,14 @@ def get_entity(name: EntityKey) -> Entity:
         EntityKey.DISCOVER: DiscoverEntity,
         EntityKey.ERRORS: ErrorsEntity,
         EntityKey.EVENTS: EventsEntity,
-        EntityKey.GROUPS: GroupsEntity,
         EntityKey.GROUPASSIGNEE: GroupAssigneeEntity,
         EntityKey.GROUPEDMESSAGES: GroupedMessageEntity,
         EntityKey.OUTCOMES: OutcomesEntity,
         EntityKey.OUTCOMES_RAW: OutcomesRawEntity,
         EntityKey.SESSIONS: SessionsEntity,
         EntityKey.TRANSACTIONS: TransactionsEntity,
+        EntityKey.DISCOVER_TRANSACTIONS: DiscoverTransactionsEntity,
+        EntityKey.DISCOVER_EVENTS: DiscoverEventsEntity,
     }
 
     try:

@@ -6,7 +6,13 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.events_format import extract_http, extract_user
 from snuba.datasets.events_processor_base import EventsProcessorBase, InsertEvent
-from snuba.processor import _boolify, _floatify, _unicodify
+from snuba.processor import (
+    _boolify,
+    _floatify,
+    _hashify,
+    _unicodify,
+)
+
 
 logger = logging.getLogger("snuba.processor")
 
@@ -59,6 +65,11 @@ class EventsProcessor(EventsProcessorBase):
         extract_http(http_data, request)
         output["http_method"] = http_data["http_method"]
         output["http_referer"] = http_data["http_referer"]
+
+        output["primary_hash"] = _hashify(event["primary_hash"])
+        output["culprit"] = _unicodify(data.get("culprit", None))
+        output["type"] = _unicodify(data.get("type", None))
+        output["title"] = _unicodify(data.get("title", None))
 
     def extract_tags_custom(
         self,
@@ -119,15 +130,6 @@ class EventsProcessor(EventsProcessorBase):
         output["device_simulator"] = _boolify(device_ctx.pop("simulator", None))
         output["device_online"] = _boolify(device_ctx.pop("online", None))
         output["device_charging"] = _boolify(device_ctx.pop("charging", None))
-
-    def extract_contexts_custom(
-        self,
-        output: MutableMapping[str, Any],
-        event: InsertEvent,
-        tags: Mapping[str, Any],
-        metadata: KafkaMessageMetadata,
-    ) -> None:
-        pass
 
     def extract_geo(self, output, geo):
         output["geo_country_code"] = _unicodify(geo.get("country_code", None))

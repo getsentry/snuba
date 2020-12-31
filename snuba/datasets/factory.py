@@ -42,7 +42,6 @@ def get_dataset(name: str) -> Dataset:
     from snuba.datasets.discover import DiscoverDataset
     from snuba.datasets.events import EventsDataset
     from snuba.datasets.errors import ErrorsDataset
-    from snuba.datasets.groups import Groups
     from snuba.datasets.outcomes import OutcomesDataset
     from snuba.datasets.outcomes_raw import OutcomesRawDataset
     from snuba.datasets.sessions import SessionsDataset
@@ -54,7 +53,6 @@ def get_dataset(name: str) -> Dataset:
         "events_migration": ErrorsDataset,
         "groupassignee": GroupAssigneeDataset,
         "groupedmessage": GroupedMessageDataset,
-        "groups": Groups,
         "outcomes": OutcomesDataset,
         "outcomes_raw": OutcomesRawDataset,
         "sessions": SessionsDataset,
@@ -81,8 +79,10 @@ def get_enabled_dataset_names() -> Sequence[str]:
     return [name for name in DATASET_NAMES if name not in settings.DISABLED_DATASETS]
 
 
+# TODO: This should be removed and moved to the Entity since Datasets no longer control
+# storages.
 def enforce_table_writer(dataset: Dataset) -> TableWriter:
-    writable_storage = dataset.get_writable_storage()
+    writable_storage = dataset.get_default_entity().get_writable_storage()
 
     assert (
         writable_storage is not None

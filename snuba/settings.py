@@ -1,4 +1,5 @@
 import os
+from collections import defaultdict
 from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
 
 
@@ -25,6 +26,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
         "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
         "storage_sets": {
+            "discover",
             "events",
             "events_ro",
             "migrations",
@@ -69,8 +71,17 @@ SNAPSHOT_CONTROL_TOPIC_INIT_TIMEOUT = 30
 BULK_CLICKHOUSE_BUFFER = 10000
 
 # Processor/Writer Options
-DEFAULT_BROKERS = ["localhost:9092"]
+# DEPRECATED, please use BROKER_CONFIG instead
+DEFAULT_BROKERS: Sequence[str] = []
+# DEPRECATED, please use STORAGE_BROKER_CONFIG instead
 DEFAULT_STORAGE_BROKERS: Mapping[str, Sequence[str]] = {}
+
+BROKER_CONFIG: Mapping[str, Any] = {
+    # See snuba/utils/streams/backends/kafka.py for the supported options
+    "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092"),
+}
+STORAGE_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
+STORAGE_TOPICS: Mapping[str, Mapping[str, Any]] = defaultdict(dict)
 
 DEFAULT_MAX_BATCH_SIZE = 50000
 DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000
@@ -108,6 +119,7 @@ AST_REFERRER_ROLLOUT: Mapping[
     str, Mapping[Optional[str], int]
 ] = {}  # (dataset name: (referrer: percentage))
 
+COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 

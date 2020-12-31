@@ -11,6 +11,7 @@ from typing import (
     NamedTuple,
     Optional,
     Sequence,
+    Tuple,
     Union,
     cast,
 )
@@ -21,16 +22,19 @@ from confluent_kafka import Producer as ConfluentKafkaProducer
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storages import StorageKey
 from snuba.processor import (
     InsertBatch,
     MessageProcessor,
-    ProcessedMessage,
     ReplacementBatch,
 )
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams import Message, Partition, Topic
-from snuba.utils.streams.backends.kafka import KafkaPayload
+from snuba.utils.streams.backends.kafka import (
+    KafkaPayload,
+    build_kafka_producer_configuration,
+)
 from snuba.utils.streams.processing.strategies import (
     ProcessingStrategy,
     ProcessingStrategyFactory,
@@ -38,14 +42,13 @@ from snuba.utils.streams.processing.strategies import (
 from snuba.utils.streams.processing.strategies import (
     ProcessingStrategy as ProcessingStep,
 )
-from snuba.utils.streams.processing.strategies.batching import AbstractBatchWorker
 from snuba.utils.streams.processing.strategies.streaming import (
     CollectStep,
     FilterStep,
     ParallelTransformStep,
     TransformStep,
 )
-from snuba.writer import BatchWriter, BatchWriterEncoderWrapper, WriterTableRow
+from snuba.writer import BatchWriter
 
 
 logger = logging.getLogger("snuba.consumer")
@@ -55,96 +58,6 @@ class KafkaMessageMetadata(NamedTuple):
     offset: int
     partition: int
     timestamp: datetime
-
-
-class InvalidActionType(Exception):
-    pass
-
-
-class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
-    def __init__(
-        self,
-        storage: WritableTableStorage,
-        metrics: MetricsBackend,
-        producer: Optional[ConfluentKafkaProducer] = None,
-        replacements_topic: Optional[Topic] = None,
-    ) -> None:
-        self.__storage = storage
-        self.producer = producer
-        self.replacements_topic = replacements_topic
-        self.metrics = metrics
-        table_writer = storage.get_table_writer()
-        self.__writer = BatchWriterEncoderWrapper(
-            table_writer.get_batch_writer(
-                metrics, {"load_balancing": "in_order", "insert_distributed_sync": 1}
-            ),
-            JSONRowEncoder(),
-        )
-
-        self.__processor: MessageProcessor
-        self.__pre_filter = table_writer.get_stream_loader().get_pre_filter()
-
-    def _get_processor(self) -> MessageProcessor:
-        try:
-            return self.__processor
-        except AttributeError:
-            self.__processor = (
-                self.__storage.get_table_writer().get_stream_loader().get_processor()
-            )
-            return self.__processor
-
-    def process_message(
-        self, message: Message[KafkaPayload]
-    ) -> Optional[ProcessedMessage]:
-
-        if self.__pre_filter and self.__pre_filter.should_drop(message):
-            return None
-
-        return self._get_processor().process_message(
-            rapidjson.loads(message.payload.value),
-            KafkaMessageMetadata(
-                offset=message.offset,
-                partition=message.partition.index,
-                timestamp=message.timestamp,
-            ),
-        )
-
-    def delivery_callback(self, error, message):
-        if error is not None:
-            # errors are KafkaError objects and inherit from BaseException
-            raise error
-
-    def flush_batch(self, batch: Sequence[ProcessedMessage]):
-        """First write out all new INSERTs as a single batch, then reproduce any
-        event replacements such as deletions, merges and unmerges."""
-        inserts: MutableSequence[WriterTableRow] = []
-        replacements: MutableSequence[ReplacementBatch] = []
-
-        for item in batch:
-            if isinstance(item, InsertBatch):
-                inserts.extend(item.rows)
-            elif isinstance(item, ReplacementBatch):
-                replacements.append(item)
-            else:
-                raise TypeError(f"unexpected type: {type(item)!r}")
-
-        if inserts:
-            self.__writer.write(inserts)
-
-            self.metrics.timing("inserts", len(inserts))
-
-        if replacements:
-            for replacement in replacements:
-                key = replacement.key.encode("utf-8")
-                for value in replacement.values:
-                    self.producer.produce(
-                        self.replacements_topic.name,
-                        key=key,
-                        value=rapidjson.dumps(value).encode("utf-8"),
-                        on_delivery=self.delivery_callback,
-                    )
-
-            self.producer.flush()
 
 
 class JSONRowInsertBatch(NamedTuple):
@@ -449,3 +362,230 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             strategy = FilterStep(self.__should_accept, strategy)
 
         return strategy
+
+
+class MultistorageCollector(
+    ProcessingStep[
+        Sequence[Tuple[StorageKey, Union[None, JSONRowInsertBatch, ReplacementBatch]]]
+    ]
+):
+    def __init__(
+        self,
+        steps: Mapping[
+            StorageKey,
+            ProcessingStep[Union[None, JSONRowInsertBatch, ReplacementBatch]],
+        ],
+    ):
+        self.__steps = steps
+
+        self.__closed = False
+
+    def poll(self) -> None:
+        for step in self.__steps.values():
+            step.poll()
+
+    def submit(
+        self,
+        message: Message[
+            Sequence[
+                Tuple[StorageKey, Union[None, JSONRowInsertBatch, ReplacementBatch]]
+            ]
+        ],
+    ) -> None:
+        assert not self.__closed
+
+        for storage_key, payload in message.payload:
+            self.__steps[storage_key].submit(
+                Message(
+                    message.partition,
+                    message.offset,
+                    payload,
+                    message.timestamp,
+                    message.next_offset,
+                )
+            )
+
+    def close(self) -> None:
+        self.__closed = True
+
+        for step in self.__steps.values():
+            step.close()
+
+    def terminate(self) -> None:
+        self.__closed = True
+
+        for step in self.__steps.values():
+            step.terminate()
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        start = time.time()
+
+        for step in self.__steps.values():
+            if timeout is not None:
+                timeout_remaining: Optional[float] = max(
+                    timeout - (time.time() - start), 0
+                )
+            else:
+                timeout_remaining = None
+
+            step.join(timeout_remaining)
+
+
+class MultistorageKafkaPayload(NamedTuple):
+    storage_keys: Sequence[StorageKey]
+    payload: KafkaPayload
+
+
+def process_message_multistorage(
+    message: Message[MultistorageKafkaPayload],
+) -> Sequence[Tuple[StorageKey, Union[None, JSONRowInsertBatch, ReplacementBatch]]]:
+    # XXX: Avoid circular import on KafkaMessageMetadata, remove when that type
+    # is itself removed.
+    from snuba.datasets.storages.factory import get_writable_storage
+
+    value = rapidjson.loads(message.payload.payload.value)
+    metadata = KafkaMessageMetadata(
+        message.offset, message.partition.index, message.timestamp
+    )
+
+    results: MutableSequence[
+        Tuple[StorageKey, Union[None, JSONRowInsertBatch, ReplacementBatch]]
+    ] = []
+
+    for storage_key in message.payload.storage_keys:
+        result = (
+            get_writable_storage(storage_key)
+            .get_table_writer()
+            .get_stream_loader()
+            .get_processor()
+            .process_message(value, metadata)
+        )
+        if isinstance(result, InsertBatch):
+            results.append(
+                (
+                    storage_key,
+                    JSONRowInsertBatch(
+                        [json_row_encoder.encode(row) for row in result.rows]
+                    ),
+                )
+            )
+        else:
+            results.append((storage_key, result))
+
+    return results
+
+
+class MultistorageConsumerProcessingStrategyFactory(
+    ProcessingStrategyFactory[KafkaPayload]
+):
+    def __init__(
+        self,
+        storages: Sequence[WritableTableStorage],
+        max_batch_size: int,
+        max_batch_time: float,
+        processes: int,
+        input_block_size: int,
+        output_block_size: int,
+        metrics: MetricsBackend,
+    ):
+        self.__storages = storages
+        self.__max_batch_size = max_batch_size
+        self.__max_batch_time = max_batch_time
+        self.__processes = processes
+        self.__input_block_size = input_block_size
+        self.__output_block_size = output_block_size
+        self.__metrics = metrics
+
+    def __find_destination_storages(
+        self, message: Message[KafkaPayload]
+    ) -> MultistorageKafkaPayload:
+        storage_keys: MutableSequence[StorageKey] = []
+        for storage in self.__storages:
+            filter = storage.get_table_writer().get_stream_loader().get_pre_filter()
+            if filter is None or not filter.should_drop(message):
+                storage_keys.append(storage.get_storage_key())
+        return MultistorageKafkaPayload(storage_keys, message.payload)
+
+    def __has_destination_storages(
+        self, message: Message[MultistorageKafkaPayload]
+    ) -> bool:
+        return len(message.payload.storage_keys) > 0
+
+    def __build_batch_writer(
+        self, storage: WritableTableStorage
+    ) -> ProcessedMessageBatchWriter:
+        replacement_batch_writer: Optional[ReplacementBatchWriter]
+        replacement_topic_spec = (
+            storage.get_table_writer().get_stream_loader().get_replacement_topic_spec()
+        )
+        if replacement_topic_spec is not None:
+            # XXX: The producer is flushed when closed on strategy teardown
+            # after an assignment is revoked, but never explicitly closed.
+            # XXX: This assumes that the Kafka cluster used for the input topic
+            # to the storage is the same as the replacement topic.
+            replacement_batch_writer = ReplacementBatchWriter(
+                ConfluentKafkaProducer(
+                    build_kafka_producer_configuration(
+                        storage.get_storage_key(),
+                        override_params={
+                            "partitioner": "consistent",
+                            "message.max.bytes": 50000000,  # 50MB, default is 1MB
+                        },
+                    )
+                ),
+                Topic(replacement_topic_spec.topic_name),
+            )
+        else:
+            replacement_batch_writer = None
+
+        return ProcessedMessageBatchWriter(
+            InsertBatchWriter(
+                storage.get_table_writer().get_batch_writer(
+                    self.__metrics,
+                    {"load_balancing": "in_order", "insert_distributed_sync": 1},
+                ),
+                self.__metrics,
+            ),
+            replacement_batch_writer,
+        )
+
+    def __build_collector(
+        self,
+    ) -> ProcessingStep[
+        Sequence[Tuple[StorageKey, Union[None, JSONRowInsertBatch, ReplacementBatch]]]
+    ]:
+        return MultistorageCollector(
+            {
+                storage.get_storage_key(): self.__build_batch_writer(storage)
+                for storage in self.__storages
+            }
+        )
+
+    def create(
+        self, commit: Callable[[Mapping[Partition, int]], None]
+    ) -> ProcessingStrategy[KafkaPayload]:
+        # 1. Identify the storages that should be used for the input message.
+        # 2. Filter out any messages that do not apply to any storage.
+        # 3. Transform the messages using the selected storages.
+        # 4. Route the messages to the collector for each storage.
+        return TransformStep(
+            self.__find_destination_storages,
+            FilterStep(
+                self.__has_destination_storages,
+                ParallelTransformStep(
+                    process_message_multistorage,
+                    CollectStep(
+                        self.__build_collector,
+                        commit,
+                        self.__max_batch_size,
+                        self.__max_batch_time,
+                    ),
+                    self.__processes,
+                    self.__max_batch_size,
+                    self.__max_batch_time,
+                    self.__input_block_size,
+                    self.__output_block_size,
+                    self.__metrics,
+                ),
+            ),
+        )

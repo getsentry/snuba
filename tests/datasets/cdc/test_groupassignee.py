@@ -1,23 +1,21 @@
 from datetime import datetime
 
 import pytz
-from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.cdc.groupassignee_processor import (
     GroupAssigneeProcessor,
     GroupAssigneeRow,
 )
 from snuba.datasets.cdc.types import DeleteEvent, InsertEvent, UpdateEvent
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.processor import InsertBatch
-from tests.base import BaseDatasetTest
+from tests.helpers import write_processed_messages
 
 
-class TestGroupassignee(BaseDatasetTest):
-    def setup_method(self, test_method):
-        super().setup_method(
-            test_method, "groupassignee",
-        )
+class TestGroupassignee:
+    storage = get_writable_storage(StorageKey.GROUPASSIGNEES)
 
     UPDATE_MSG_NO_KEY_CHANGE = UpdateEvent(
         {
@@ -167,9 +165,9 @@ class TestGroupassignee(BaseDatasetTest):
 
         ret = processor.process_message(self.INSERT_MSG, metadata)
         assert ret == InsertBatch([self.PROCESSED])
-        self.write_processed_messages([ret])
+        write_processed_messages(self.storage, [ret])
         ret = (
-            get_cluster(StorageSetKey.EVENTS)
+            self.storage.get_cluster()
             .get_query_connection(ClickhouseClientSettings.QUERY)
             .execute("SELECT * FROM groupassignee_local;")
         )
@@ -204,9 +202,9 @@ class TestGroupassignee(BaseDatasetTest):
                 "team_id": "",
             }
         )
-        self.write_rows([row.to_clickhouse()])
+        write_processed_messages(self.storage, [InsertBatch([row.to_clickhouse()])])
         ret = (
-            get_cluster(StorageSetKey.EVENTS)
+            self.storage.get_cluster()
             .get_query_connection(ClickhouseClientSettings.QUERY)
             .execute("SELECT * FROM groupassignee_local;")
         )

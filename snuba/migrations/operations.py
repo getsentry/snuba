@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Sequence
 
-
 from snuba.clickhouse.columns import Column
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.migrations.columns import MigrationModifiers
 from snuba.migrations.table_engines import TableEngine
 
 
@@ -67,7 +67,7 @@ class CreateTable(SqlOperation):
         self,
         storage_set: StorageSetKey,
         table_name: str,
-        columns: Sequence[Column],
+        columns: Sequence[Column[MigrationModifiers]],
         engine: TableEngine,
     ):
         super().__init__(storage_set)
@@ -89,7 +89,7 @@ class CreateMaterializedView(SqlOperation):
         storage_set: StorageSetKey,
         view_name: str,
         destination_table_name: str,
-        columns: Sequence[Column],
+        columns: Sequence[Column[MigrationModifiers]],
         query: str,
     ) -> None:
         self.__view_name = view_name
@@ -129,7 +129,7 @@ class AddColumn(SqlOperation):
         self,
         storage_set: StorageSetKey,
         table_name: str,
-        column: Column,
+        column: Column[MigrationModifiers],
         after: Optional[str],
     ):
         super().__init__(storage_set)
@@ -172,7 +172,12 @@ class ModifyColumn(SqlOperation):
     type from DateTime to UInt32.
     """
 
-    def __init__(self, storage_set: StorageSetKey, table_name: str, column: Column):
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        column: Column[MigrationModifiers],
+    ):
         super().__init__(storage_set)
         self.__table_name = table_name
         self.__column = column
@@ -200,7 +205,7 @@ class AddIndex(SqlOperation):
         index_expression: str,
         index_type: str,
         granularity: int,
-        after: Optional[str],
+        after: Optional[str] = None,
     ):
         super().__init__(storage_set)
         self.__table_name = table_name
@@ -226,7 +231,9 @@ class DropIndex(SqlOperation):
         self.__index_name = index_name
 
     def format_sql(self) -> str:
-        return f"ALTER TABLE {self.__table_name} DROP INDEX {self.__index_name};"
+        return (
+            f"ALTER TABLE {self.__table_name} DROP INDEX IF EXISTS {self.__index_name};"
+        )
 
 
 class InsertIntoSelect(SqlOperation):

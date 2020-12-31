@@ -3,9 +3,9 @@ from typing import Any, MutableMapping
 import pytest
 
 from snuba import state
-from snuba.clickhouse.columns import ColumnSet
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.schemas.tables import TableSource
 from snuba.query.conditions import binary_condition, ConditionFunctions
 from snuba.query.expressions import (
     Argument,
@@ -15,7 +15,9 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.logical import OrderBy, OrderByDirection, Query, SelectedExpression
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.logical import Query
 from snuba.query.parser import parse_query
 from snuba.query.parser.exceptions import AliasShadowingException, CyclicAliasException
 
@@ -28,23 +30,31 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
-                SelectedExpression("column2", Column("column2", None, "column2")),
-                SelectedExpression("column3", Column("column3", None, "column3")),
+                SelectedExpression(
+                    "column2", Column("_snuba_column2", None, "column2")
+                ),
+                SelectedExpression(
+                    "column3", Column("_snuba_column3", None, "column3")
+                ),
                 SelectedExpression(
                     "test_func_alias",
                     FunctionCall(
-                        "test_func_alias",
+                        "_snuba_test_func_alias",
                         "test_func",
-                        (Column("column4", None, "column4"),),
+                        (Column("_snuba_column4", None, "column4"),),
                     ),
                 ),
-                SelectedExpression("column1", Column("column1", None, "column1")),
+                SelectedExpression(
+                    "column1", Column("_snuba_column1", None, "column1")
+                ),
             ],
             groupby=[
-                Column("column2", None, "column2"),
-                Column("column3", None, "column3"),
+                Column("_snuba_column2", None, "column2"),
+                Column("_snuba_column3", None, "column3"),
             ],
         ),
         id="Select composed by select, groupby and aggregations",
@@ -66,58 +76,65 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression(
                     None,
                     FunctionCall(
-                        None, "format_eventid", (Column("event_id", None, "event_id"),)
+                        None,
+                        "format_eventid",
+                        (Column("_snuba_event_id", None, "event_id"),),
                     ),
                 ),
                 SelectedExpression(
                     "platforms",
                     FunctionCall(
-                        "platforms", "count", (Column("platform", None, "platform"),)
+                        "_snuba_platforms",
+                        "count",
+                        (Column("_snuba_platform", None, "platform"),),
                     ),
                 ),
                 SelectedExpression(
                     "uniq_platforms",
                     FunctionCall(
-                        "uniq_platforms",
+                        "_snuba_uniq_platforms",
                         "uniq",
-                        (Column("platform", None, "platform"),),
+                        (Column("_snuba_platform", None, "platform"),),
                     ),
                 ),
                 SelectedExpression(
                     "top_platforms",
                     FunctionCall(
-                        "top_platforms",
+                        "_snuba_top_platforms",
                         "testF",
                         (
-                            Column("platform", None, "platform"),
-                            Column("field2", None, "field2"),
+                            Column("_snuba_platform", None, "platform"),
+                            Column("_snuba_field2", None, "field2"),
                         ),
                     ),
                 ),
                 SelectedExpression(
                     "f1_alias",
                     FunctionCall(
-                        "f1_alias",
+                        "_snuba_f1_alias",
                         "f1",
                         (
-                            Column("column1", None, "column1"),
-                            Column("column2", None, "column2"),
+                            Column("_snuba_column1", None, "column1"),
+                            Column("_snuba_column2", None, "column2"),
                         ),
                     ),
                 ),
-                SelectedExpression("f2_alias", FunctionCall("f2_alias", "f2", ())),
+                SelectedExpression(
+                    "f2_alias", FunctionCall("_snuba_f2_alias", "f2", ())
+                ),
             ],
             condition=binary_condition(
-                None,
                 "in",
                 SubscriptableReference(
-                    "tags[sentry:dist]",
-                    Column("tags", None, "tags"),
+                    "_snuba_tags[sentry:dist]",
+                    Column("_snuba_tags", None, "tags"),
                     Literal(None, "sentry:dist"),
                 ),
                 FunctionCall(
@@ -125,14 +142,15 @@ test_cases = [
                 ),
             ),
             having=binary_condition(
-                None,
                 "greater",
-                Column("times_seen", None, "times_seen"),
+                Column("_snuba_times_seen", None, "times_seen"),
                 Literal(None, 1),
             ),
             groupby=[
                 FunctionCall(
-                    None, "format_eventid", (Column("event_id", None, "event_id"),)
+                    None,
+                    "format_eventid",
+                    (Column("_snuba_event_id", None, "event_id"),),
                 )
             ],
         ),
@@ -145,20 +163,32 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
-                SelectedExpression("column1", Column("column1", None, "column1")),
-                SelectedExpression("column2", Column("column2", None, "column2")),
+                SelectedExpression(
+                    "column1", Column("_snuba_column1", None, "column1")
+                ),
+                SelectedExpression(
+                    "column2", Column("_snuba_column2", None, "column2")
+                ),
             ],
             condition=None,
             groupby=None,
             having=None,
             order_by=[
-                OrderBy(OrderByDirection.ASC, Column("column1", None, "column1")),
-                OrderBy(OrderByDirection.DESC, Column("column2", None, "column2")),
+                OrderBy(
+                    OrderByDirection.ASC, Column("_snuba_column1", None, "column1")
+                ),
+                OrderBy(
+                    OrderByDirection.DESC, Column("_snuba_column2", None, "column2")
+                ),
                 OrderBy(
                     OrderByDirection.DESC,
-                    FunctionCall(None, "func", (Column("column3", None, "column3"),)),
+                    FunctionCall(
+                        None, "func", (Column("_snuba_column3", None, "column3"),)
+                    ),
                 ),
             ],
         ),
@@ -168,15 +198,19 @@ test_cases = [
         {"selected_columns": [], "groupby": "column1", "orderby": "-column1"},
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
-                SelectedExpression("column1", Column("column1", None, "column1"))
+                SelectedExpression("column1", Column("_snuba_column1", None, "column1"))
             ],
             condition=None,
-            groupby=[Column("column1", None, "column1")],
+            groupby=[Column("_snuba_column1", None, "column1")],
             having=None,
             order_by=[
-                OrderBy(OrderByDirection.DESC, Column("column1", None, "column1"))
+                OrderBy(
+                    OrderByDirection.DESC, Column("_snuba_column1", None, "column1")
+                )
             ],
         ),
         id="Order and group by provided as string",
@@ -188,7 +222,9 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression(
                     name=None,
@@ -197,19 +233,21 @@ test_cases = [
                         "f",
                         (
                             SubscriptableReference(
-                                "tags[test2]",
-                                Column("tags", None, "tags"),
+                                "_snuba_tags[test2]",
+                                Column("_snuba_tags", None, "tags"),
                                 Literal(None, "test2"),
                             ),
                         ),
                     ),
                 ),
-                SelectedExpression("column1", Column("column1", None, "column1")),
+                SelectedExpression(
+                    "column1", Column("_snuba_column1", None, "column1")
+                ),
                 SelectedExpression(
                     "tags[test]",
                     SubscriptableReference(
-                        "tags[test]",
-                        Column("tags", None, "tags"),
+                        "_snuba_tags[test]",
+                        Column("_snuba_tags", None, "tags"),
                         Literal(None, "test"),
                     ),
                 ),
@@ -220,8 +258,8 @@ test_cases = [
                     "f",
                     (
                         SubscriptableReference(
-                            "tags[test2]",
-                            Column("tags", None, "tags"),
+                            "_snuba_tags[test2]",
+                            Column("_snuba_tags", None, "tags"),
                             Literal(None, "test2"),
                         ),
                     ),
@@ -242,18 +280,20 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression(
                     "group_id",
                     FunctionCall(
-                        "group_id",
+                        "_snuba_group_id",
                         "f",
                         (
                             FunctionCall(
-                                "issue_id",
+                                "_snuba_issue_id",
                                 "g",
-                                (Column("something", None, "something"),),
+                                (Column("_snuba_something", None, "something"),),
                             ),
                         ),
                     ),
@@ -261,25 +301,30 @@ test_cases = [
                 SelectedExpression(
                     "issue_id",
                     FunctionCall(
-                        "issue_id", "g", (Column("something", None, "something"),)
+                        "_snuba_issue_id",
+                        "g",
+                        (Column("_snuba_something", None, "something"),),
                     ),
                 ),
                 SelectedExpression(
                     "a",
                     FunctionCall(
-                        "a", "f", (FunctionCall(None, "z", (Column(None, None, "a"),)),)
+                        "_snuba_a",
+                        "f",
+                        (FunctionCall(None, "z", (Column(None, None, "a"),)),),
                     ),
                 ),
             ],
             condition=binary_condition(
-                None,
                 "equals",
                 FunctionCall(
-                    "group_id",
+                    "_snuba_group_id",
                     "f",
                     (
                         FunctionCall(
-                            "issue_id", "g", (Column("something", None, "something"),)
+                            "_snuba_issue_id",
+                            "g",
+                            (Column("_snuba_something", None, "something"),),
                         ),
                     ),
                 ),
@@ -289,13 +334,13 @@ test_cases = [
                 OrderBy(
                     OrderByDirection.ASC,
                     FunctionCall(
-                        "group_id",
+                        "_snuba_group_id",
                         "f",
                         (
                             FunctionCall(
-                                "issue_id",
+                                "_snuba_issue_id",
                                 "g",
-                                (Column("something", None, "something"),),
+                                (Column("_snuba_something", None, "something"),),
                             ),
                         ),
                     ),
@@ -308,15 +353,21 @@ test_cases = [
         {"selected_columns": [["f", ["column3"], "exp"], ["f", ["column3"], "exp"]]},
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression(
                     "exp",
-                    FunctionCall("exp", "f", (Column("column3", None, "column3"),)),
+                    FunctionCall(
+                        "_snuba_exp", "f", (Column("_snuba_column3", None, "column3"),)
+                    ),
                 ),
                 SelectedExpression(
                     "exp",
-                    FunctionCall("exp", "f", (Column("column3", None, "column3"),)),
+                    FunctionCall(
+                        "_snuba_exp", "f", (Column("_snuba_column3", None, "column3"),)
+                    ),
                 ),
             ],
         ),
@@ -326,15 +377,21 @@ test_cases = [
         {"selected_columns": [["f", ["column"], "`exp`"], "`exp`"]},
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression(
                     "exp",
-                    FunctionCall("exp", "f", (Column("column", None, "column"),)),
+                    FunctionCall(
+                        "_snuba_exp", "f", (Column("_snuba_column", None, "column"),)
+                    ),
                 ),
                 SelectedExpression(
                     "exp",
-                    FunctionCall("exp", "f", (Column("column", None, "column"),)),
+                    FunctionCall(
+                        "_snuba_exp", "f", (Column("_snuba_column", None, "column"),)
+                    ),
                 ),
             ],
         ),
@@ -351,15 +408,19 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
-                SelectedExpression("count", FunctionCall("count", "count", ())),
+                SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
                 SelectedExpression(
                     "exception_stacks.type",
-                    Column("exception_stacks.type", None, "exception_stacks.type"),
+                    Column(
+                        "_snuba_exception_stacks.type", None, "exception_stacks.type"
+                    ),
                 ),
             ],
-            array_join=Column("exception_stacks.type", None, "exception_stacks.type"),
+            array_join=Column(None, None, "exception_stacks.type"),
         ),
         id="Format a query with array join",
     ),
@@ -373,12 +434,16 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
-                SelectedExpression("count", FunctionCall("count", "count", ())),
+                SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
                 SelectedExpression(
                     "exception_stacks.type",
-                    Column("exception_stacks.type", None, "exception_stacks.type"),
+                    Column(
+                        "_snuba_exception_stacks.type", None, "exception_stacks.type"
+                    ),
                 ),
             ],
             condition=FunctionCall(
@@ -403,7 +468,9 @@ test_cases = [
                             ),
                         ),
                     ),
-                    Column("exception_stacks.type", None, "exception_stacks.type"),
+                    Column(
+                        "_snuba_exception_stacks.type", None, "exception_stacks.type"
+                    ),
                 ),
             ),
         ),
@@ -420,20 +487,26 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
-                SelectedExpression("count", FunctionCall("count", "count", ())),
+                SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
                 SelectedExpression(
                     "exception_stacks.type",
-                    Column("exception_stacks.type", None, "exception_stacks.type"),
+                    Column(
+                        "_snuba_exception_stacks.type", None, "exception_stacks.type"
+                    ),
                 ),
             ],
-            array_join=Column("exception_stacks.type", None, "exception_stacks.type"),
+            array_join=Column(None, None, "exception_stacks.type"),
             condition=FunctionCall(
                 None,
                 "like",
                 (
-                    Column("exception_stacks.type", None, "exception_stacks.type"),
+                    Column(
+                        "_snuba_exception_stacks.type", None, "exception_stacks.type"
+                    ),
                     Literal(None, "Arithmetic%"),
                 ),
             ),
@@ -450,15 +523,17 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
-                SelectedExpression("count", FunctionCall("count", "count", ())),
+                SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
                 SelectedExpression(
                     None,
                     FunctionCall(
                         None,
                         "arrayJoin",
-                        (Column("exception_stacks", None, "exception_stacks"),),
+                        (Column("_snuba_exception_stacks", None, "exception_stacks"),),
                     ),
                 ),
             ],
@@ -466,7 +541,9 @@ test_cases = [
                 None,
                 "like",
                 (
-                    Column("exception_stacks.type", None, "exception_stacks.type"),
+                    Column(
+                        "_snuba_exception_stacks.type", None, "exception_stacks.type"
+                    ),
                     Literal(None, "Arithmetic%"),
                 ),
             ),
@@ -501,16 +578,19 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
-                SelectedExpression("count", FunctionCall("count", "count", ())),
+                SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
                 SelectedExpression(
                     "exception_stacks.type",
-                    Column("exception_stacks.type", None, "exception_stacks.type"),
+                    Column(
+                        "_snuba_exception_stacks.type", None, "exception_stacks.type"
+                    ),
                 ),
             ],
             condition=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     None,
@@ -541,7 +621,7 @@ test_cases = [
                                     ),
                                 ),
                                 Column(
-                                    "exception_stacks.type",
+                                    "_snuba_exception_stacks.type",
                                     None,
                                     "exception_stacks.type",
                                 ),
@@ -570,7 +650,7 @@ test_cases = [
                                     ),
                                 ),
                                 Column(
-                                    "exception_stacks.type",
+                                    "_snuba_exception_stacks.type",
                                     None,
                                     "exception_stacks.type",
                                 ),
@@ -612,16 +692,19 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
-                SelectedExpression("count", FunctionCall("count", "count", ())),
+                SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
                 SelectedExpression(
                     "exception_stacks.type",
-                    Column("exception_stacks.type", None, "exception_stacks.type"),
+                    Column(
+                        "_snuba_exception_stacks.type", None, "exception_stacks.type"
+                    ),
                 ),
             ],
             condition=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     None,
@@ -632,7 +715,7 @@ test_cases = [
                             "equals",
                             (
                                 Column(
-                                    "exception_stacks.type",
+                                    "_snuba_exception_stacks.type",
                                     None,
                                     "exception_stacks.type",
                                 ),
@@ -644,7 +727,7 @@ test_cases = [
                             "equals",
                             (
                                 Column(
-                                    "exception_stacks.type",
+                                    "_snuba_exception_stacks.type",
                                     None,
                                     "exception_stacks.type",
                                 ),
@@ -655,7 +738,7 @@ test_cases = [
                 ),
                 Literal(None, 1),
             ),
-            array_join=Column("exception_stacks", None, "exception_stacks"),
+            array_join=Column(None, None, "exception_stacks"),
         ),
         id="Format a query with array join field in a boolean condition",
     ),
@@ -687,9 +770,11 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
-                SelectedExpression("count", FunctionCall("count", "count", ())),
+                SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
                 SelectedExpression(
                     None,
                     FunctionCall(
@@ -697,14 +782,15 @@ test_cases = [
                         "arrayJoin",
                         (
                             Column(
-                                "exception_stacks.type", None, "exception_stacks.type"
+                                "_snuba_exception_stacks.type",
+                                None,
+                                "exception_stacks.type",
                             ),
                         ),
                     ),
                 ),
             ],
             condition=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     None,
@@ -715,7 +801,7 @@ test_cases = [
                             "equals",
                             (
                                 Column(
-                                    "exception_stacks.type",
+                                    "_snuba_exception_stacks.type",
                                     None,
                                     "exception_stacks.type",
                                 ),
@@ -727,7 +813,7 @@ test_cases = [
                             "equals",
                             (
                                 Column(
-                                    "exception_stacks.type",
+                                    "_snuba_exception_stacks.type",
                                     None,
                                     "exception_stacks.type",
                                 ),
@@ -762,16 +848,18 @@ test_cases = [
         },
         Query(
             {},
-            TableSource("events", ColumnSet([])),
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
             selected_columns=[
                 SelectedExpression(
-                    name="tags_key", expression=Column("tags_key", None, "tags_key"),
+                    name="tags_key",
+                    expression=Column("_snuba_tags_key", None, "tags_key"),
                 ),
-                SelectedExpression("count", FunctionCall("count", "count", ())),
+                SelectedExpression("count", FunctionCall("_snuba_count", "count", ())),
             ],
-            groupby=[Column("tags_key", None, "tags_key")],
+            groupby=[Column("_snuba_tags_key", None, "tags_key")],
             condition=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     None,
@@ -786,8 +874,8 @@ test_cases = [
                                     "ifNull",
                                     (
                                         SubscriptableReference(
-                                            "tags[foo]",
-                                            Column("tags", None, "tags"),
+                                            "_snuba_tags[foo]",
+                                            Column("_snuba_tags", None, "tags"),
                                             Literal(None, "foo"),
                                         ),
                                         Literal(None, ""),
@@ -805,8 +893,8 @@ test_cases = [
                                     "ifNull",
                                     (
                                         SubscriptableReference(
-                                            "tags[foo.bar]",
-                                            Column("tags", None, "tags"),
+                                            "_snuba_tags[foo.bar]",
+                                            Column("_snuba_tags", None, "tags"),
                                             Literal(None, "foo.bar"),
                                         ),
                                         Literal(None, ""),
@@ -833,17 +921,8 @@ def test_format_expressions(
     events = get_dataset("events")
     query = parse_query(query_body, events)
 
-    # We cannot just run == on the query objects. The content of the two
-    # objects is different, being one the AST and the ont the AST + raw body
-    assert (
-        query.get_selected_columns_from_ast()
-        == expected_query.get_selected_columns_from_ast()
-    )
-    assert query.get_groupby_from_ast() == expected_query.get_groupby_from_ast()
-    assert query.get_condition_from_ast() == expected_query.get_condition_from_ast()
-    assert query.get_arrayjoin_from_ast() == expected_query.get_arrayjoin_from_ast()
-    assert query.get_having_from_ast() == expected_query.get_having_from_ast()
-    assert query.get_orderby_from_ast() == expected_query.get_orderby_from_ast()
+    eq, reason = query.equals(expected_query)
+    assert eq, reason
 
 
 def test_shadowing() -> None:

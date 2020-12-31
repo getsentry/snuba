@@ -1,17 +1,15 @@
 from typing import Optional, Sequence
 
 import pytest
-
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
+from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
     binary_condition,
 )
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.logical import Query as SnubaQuery
-from snuba.query.logical import SelectedExpression
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.state import set_config
@@ -23,16 +21,13 @@ def build_query(
     having: Optional[Expression] = None,
 ) -> ClickhouseQuery:
     return ClickhouseQuery(
-        SnubaQuery(
-            {},
-            None,
-            selected_columns=[
-                SelectedExpression(name=s.alias, expression=s)
-                for s in selected_columns or []
-            ],
-            condition=condition,
-            having=having,
-        )
+        None,
+        selected_columns=[
+            SelectedExpression(name=s.alias, expression=s)
+            for s in selected_columns or []
+        ],
+        condition=condition,
+        having=having,
     )
 
 
@@ -55,7 +50,7 @@ def nested_condition(
     column_name: str, operator: str, key: str, val: str,
 ) -> Expression:
     return binary_condition(
-        None, operator, nested_expression(column_name, key), Literal(None, val),
+        operator, nested_expression(column_name, key), Literal(None, val),
     )
 
 
@@ -64,11 +59,11 @@ TEST_CASES = [
         build_query(
             selected_columns=[column("event_id"), nested_expression("tags", "my_tag")],
             condition=binary_condition(
-                None, ConditionFunctions.EQ, column("event_id"), Literal(None, "123123")
+                ConditionFunctions.EQ, column("event_id"), Literal(None, "123123")
             ),
         ),
         binary_condition(
-            None, ConditionFunctions.EQ, column("event_id"), Literal(None, "123123")
+            ConditionFunctions.EQ, column("event_id"), Literal(None, "123123")
         ),
         id="No tag condition",
     ),
@@ -116,7 +111,6 @@ TEST_CASES = [
         build_query(
             selected_columns=[column("event_id")],
             condition=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     None,
@@ -148,14 +142,12 @@ TEST_CASES = [
         build_query(
             selected_columns=[column("event_id")],
             condition=binary_condition(
-                None,
                 BooleanFunctions.OR,
                 nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
                 nested_condition("tags", ConditionFunctions.LIKE, "my_tag2", "b"),
             ),
         ),
         binary_condition(
-            None,
             BooleanFunctions.OR,
             nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
             nested_condition("tags", ConditionFunctions.LIKE, "my_tag2", "b"),
@@ -166,11 +158,9 @@ TEST_CASES = [
         build_query(
             selected_columns=[column("event_id")],
             condition=binary_condition(
-                None,
                 BooleanFunctions.AND,
                 nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
                 binary_condition(
-                    None,
                     ConditionFunctions.LIKE,
                     Column(None, None, "something_else"),
                     Literal(None, "123123"),
@@ -178,7 +168,6 @@ TEST_CASES = [
             ),
         ),
         binary_condition(
-            None,
             BooleanFunctions.AND,
             FunctionCall(
                 None,
@@ -189,7 +178,6 @@ TEST_CASES = [
                 ),
             ),
             binary_condition(
-                None,
                 ConditionFunctions.LIKE,
                 Column(None, None, "something_else"),
                 Literal(None, "123123"),
@@ -201,7 +189,6 @@ TEST_CASES = [
         build_query(
             selected_columns=[column("event_id")],
             condition=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(
                     None,
@@ -212,7 +199,6 @@ TEST_CASES = [
             ),
         ),
         binary_condition(
-            None,
             ConditionFunctions.EQ,
             FunctionCall(
                 None,
@@ -228,7 +214,6 @@ TEST_CASES = [
             selected_columns=[column("event_id")],
             condition=nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
             having=binary_condition(
-                None,
                 ConditionFunctions.EQ,
                 FunctionCall(None, "arrayjoin", (Column(None, None, "tags.key"),)),
                 Literal(None, "bla"),

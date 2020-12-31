@@ -1,8 +1,7 @@
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.factory import EntityKey, get_entity
+from snuba.datasets.entities import EntityKey
 
 
 class ErrorsDataset(Dataset):
     def __init__(self) -> None:
-        errors_entity = get_entity(EntityKey.ERRORS)
-        super().__init__(default_entity=errors_entity)
+        super().__init__(default_entity=EntityKey.ERRORS)

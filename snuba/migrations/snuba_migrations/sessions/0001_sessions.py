@@ -1,20 +1,19 @@
 from typing import Sequence
 
 from snuba.clickhouse.columns import (
+    UUID,
     AggregateFunction,
     Column,
     DateTime,
-    LowCardinality,
     String,
     UInt,
-    UUID,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
+from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.processor import MAX_UINT32, NIL_UUID
 
-
-raw_columns = [
+raw_columns: Sequence[Column[Modifiers]] = [
     Column("session_id", UUID()),
     Column("distinct_id", UUID()),
     Column("seq", UInt(64)),
@@ -26,29 +25,29 @@ raw_columns = [
     Column("errors", UInt(16)),
     Column("received", DateTime()),
     Column("started", DateTime()),
-    Column("release", LowCardinality(String())),
-    Column("environment", LowCardinality(String())),
+    Column("release", String(Modifiers(low_cardinality=True))),
+    Column("environment", String(Modifiers(low_cardinality=True))),
 ]
 
 
-aggregate_columns = [
+aggregate_columns: Sequence[Column[Modifiers]] = [
     Column("org_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("started", DateTime()),
-    Column("release", LowCardinality(String())),
-    Column("environment", LowCardinality(String())),
+    Column("release", String(Modifiers(low_cardinality=True))),
+    Column("environment", String(Modifiers(low_cardinality=True))),
     Column(
         "duration_quantiles",
-        AggregateFunction("quantilesIf(0.5, 0.9)", UInt(32), UInt(8)),
+        AggregateFunction("quantilesIf(0.5, 0.9)", [UInt(32), UInt(8)]),
     ),
-    Column("sessions", AggregateFunction("countIf", UUID(), UInt(8))),
-    Column("users", AggregateFunction("uniqIf", UUID(), UInt(8))),
-    Column("sessions_crashed", AggregateFunction("countIf", UUID(), UInt(8)),),
-    Column("sessions_abnormal", AggregateFunction("countIf", UUID(), UInt(8)),),
-    Column("sessions_errored", AggregateFunction("uniqIf", UUID(), UInt(8))),
-    Column("users_crashed", AggregateFunction("uniqIf", UUID(), UInt(8))),
-    Column("users_abnormal", AggregateFunction("uniqIf", UUID(), UInt(8))),
-    Column("users_errored", AggregateFunction("uniqIf", UUID(), UInt(8))),
+    Column("sessions", AggregateFunction("countIf", [UUID(), UInt(8)])),
+    Column("users", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
+    Column("sessions_crashed", AggregateFunction("countIf", [UUID(), UInt(8)]),),
+    Column("sessions_abnormal", AggregateFunction("countIf", [UUID(), UInt(8)]),),
+    Column("sessions_errored", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
+    Column("users_crashed", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
+    Column("users_abnormal", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
+    Column("users_errored", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
 ]
 
 

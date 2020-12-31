@@ -2,15 +2,22 @@ import copy
 import logging
 from datetime import datetime
 from functools import partial
+from typing import MutableMapping, Optional, Set, Union
+
+from snuba.query.data_source.visitor import DataSourceVisitor
+from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
+from snuba.query.data_source.simple import Table
 
 import sentry_sdk
-
 from snuba import environment
-from snuba.clickhouse.astquery import AstSqlQuery
+from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
+from snuba.query import ProcessableQuery
+from snuba.query.composite import CompositeQuery
+from snuba.query.logical import Query as LogicalQuery
 from snuba.query.timeseries_extension import TimeSeriesExtensionProcessor
 from snuba.querylog import record_query
 from snuba.querylog.query_metadata import SnubaQueryMetadata
@@ -20,7 +27,7 @@ from snuba.request.request_settings import RequestSettings
 from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.web import QueryException, QueryResult
+from snuba.web import QueryException, QueryResult, transform_column_names
 from snuba.web.db_query import raw_query
 
 logger = logging.getLogger("snuba.query")
@@ -75,6 +82,9 @@ def _run_query_pipeline(
     - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
       to the QueryExecutionStrategy to actually run the DB Query.
     """
+    assert isinstance(request.query, LogicalQuery)
+    query_entity = request.query.get_from_clause()
+    entity = get_entity(query_entity.key)
 
     # TODO: this will work perfectly with datasets that are not time series. Remove it.
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
@@ -86,7 +96,8 @@ def _run_query_pipeline(
     ) and not request.settings.get_turbo():
         metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
 
-    extensions = dataset.get_extensions()
+    extensions = entity.get_extensions()
+
     for name, extension in extensions.items():
         with sentry_sdk.start_span(
             description=type(extension.get_processor()).__name__, op="extension"
@@ -100,29 +111,8 @@ def _run_query_pipeline(
     if request.settings.get_turbo():
         request.query.set_final(False)
 
-    for processor in dataset.get_query_processors():
-        with sentry_sdk.start_span(
-            description=type(processor).__name__, op="processor"
-        ):
-            processor.process_query(request.query, request.settings)
-
-    query_plan = dataset.get_query_plan_builder().build_plan(request)
-    # From this point on. The logical query should not be used anymore by anyone.
-    # The Clickhouse Query is the one to be used to run the rest of the query pipeline.
-
-    # TODO: Break the Query Plan execution out of this method. With the division
-    # between plan specific processors and DB query specific processors and with
-    # the soon to come ClickhouseCluster, there is more coupling between the
-    # components of the query plan.
-
-    for clickhouse_processor in query_plan.plan_processors:
-        with sentry_sdk.start_span(
-            description=type(clickhouse_processor).__name__, op="processor"
-        ):
-            clickhouse_processor.process_query(query_plan.query, request.settings)
-
     query_runner = partial(
-        _format_storage_query_and_run,
+        _run_and_apply_column_names,
         timer,
         query_metadata,
         from_date,
@@ -130,9 +120,119 @@ def _run_query_pipeline(
         request.referrer,
     )
 
-    return query_plan.execution_strategy.execute(
-        query_plan.query, request.settings, query_runner
+    return (
+        dataset.get_query_pipeline_builder()
+        .build_execution_pipeline(request, query_runner)
+        .execute()
     )
+
+
+def _run_and_apply_column_names(
+    timer: Timer,
+    query_metadata: SnubaQueryMetadata,
+    from_date: datetime,
+    to_date: datetime,
+    referrer: str,
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    request_settings: RequestSettings,
+    reader: Reader,
+) -> QueryResult:
+    """
+    Executes the query and, after that, replaces the column names in
+    QueryResult with the names the user expects and that are stored in
+    the SelectedExpression objects in the Query.
+    This happens so that we can remove aliases from the Query AST since
+    those aliases now are needed to produce the names the user expects
+    in the output.
+    """
+
+    result = _format_storage_query_and_run(
+        timer,
+        query_metadata,
+        from_date,
+        to_date,
+        referrer,
+        clickhouse_query,
+        request_settings,
+        reader,
+    )
+
+    alias_name_mapping: MutableMapping[str, str] = {}
+    for select_col in clickhouse_query.get_selected_columns_from_ast():
+        alias = select_col.expression.alias
+        name = select_col.name
+        if alias is None or name is None:
+            logger.warning(
+                "Missing alias or name for selected expression",
+                extra={
+                    "selected_expression_name": name,
+                    "selected_expression_alias": alias,
+                },
+                exc_info=True,
+            )
+        elif alias in alias_name_mapping and alias_name_mapping[alias] != name:
+            logger.warning(
+                "Duplicated alias definition in select clause",
+                extra={
+                    "alias": alias,
+                    "name": name,
+                    "existing_name": alias_name_mapping[alias],
+                },
+                exc_info=True,
+            )
+        else:
+            alias_name_mapping[alias] = name
+
+    transform_column_names(result, alias_name_mapping)
+
+    return result
+
+
+class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
+    """
+    Traverses the data source of a composite query and collects
+    all the referenced table names, final state and sampling rate
+    to fill stats.
+    """
+
+    def __init__(self) -> None:
+        self.__tables: Set[str] = set()
+        self.__final: bool = False
+        self.__sample_rate: Optional[float] = None
+
+    def get_tables(self) -> Set[str]:
+        return self.__tables
+
+    def any_final(self) -> bool:
+        return self.__final
+
+    def get_sample_rate(self) -> Optional[float]:
+        return self.__sample_rate
+
+    def _visit_simple_source(self, data_source: Table) -> None:
+        self.__tables.add(data_source.table_name)
+        self.__sample_rate = data_source.sampling_rate
+        if data_source.final:
+            self.__final = True
+
+    def _visit_join(self, data_source: JoinClause[Table]) -> None:
+        self.visit_join_clause(data_source)
+
+    def _visit_simple_query(self, data_source: ProcessableQuery[Table]) -> None:
+        self.visit(data_source.get_from_clause())
+
+    def _visit_composite_query(self, data_source: CompositeQuery[Table]) -> None:
+        self.visit(data_source.get_from_clause())
+        # stats do not yet support sampling rate (there is only one field)
+        # so if we have a composite query we set it to None.
+        self.__sample_rate = None
+
+    def visit_individual_node(self, node: IndividualNode[Table]) -> None:
+        self.visit(node.data_source)
+
+    def visit_join_clause(self, node: JoinClause[Table]) -> None:
+        node.left_node.accept(self)
+        node.right_node.accept(self)
 
 
 def _format_storage_query_and_run(
@@ -141,39 +241,34 @@ def _format_storage_query_and_run(
     from_date: datetime,
     to_date: datetime,
     referrer: str,
-    clickhouse_query: Query,
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
-    reader: Reader[SqlQuery],
+    reader: Reader,
 ) -> QueryResult:
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
     """
-
-    # TODO: This function (well, it will be a wrapper of this function)
-    # where we will transform the result according to the SelectedExpression
-    # object in the query to ensure the fields in the QueryResult have
-    # the same name the user expects.
-
-    source = clickhouse_query.get_data_source().format_from()
+    from_clause = clickhouse_query.get_from_clause()
+    visitor = TablesCollector()
+    visitor.visit(from_clause)
+    table_names = ",".join(sorted(visitor.get_tables()))
     with sentry_sdk.start_span(description="create_query", op="db") as span:
-        formatted_query = AstSqlQuery(clickhouse_query, request_settings)
-        span.set_data("query", formatted_query.sql_data())
+        formatted_query = format_query(clickhouse_query, request_settings)
+        span.set_data("query", formatted_query.structured())
         metrics.increment("execute")
 
     timer.mark("prepare_query")
 
     stats = {
-        "clickhouse_table": source,
-        "final": clickhouse_query.get_final(),
+        "clickhouse_table": table_names,
+        "final": visitor.any_final(),
         "referrer": referrer,
         "num_days": (to_date - from_date).days,
-        "sample": clickhouse_query.get_sample(),
+        "sample": visitor.get_sample_rate(),
     }
 
-    with sentry_sdk.start_span(
-        description=formatted_query.format_sql(), op="db"
-    ) as span:
-        span.set_tag("table", source)
+    with sentry_sdk.start_span(description=formatted_query.get_sql(), op="db") as span:
+        span.set_tag("table", table_names)
 
         return raw_query(
             clickhouse_query,

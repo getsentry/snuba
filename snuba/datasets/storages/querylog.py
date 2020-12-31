@@ -1,20 +1,13 @@
 from snuba import settings
-from snuba.clickhouse.columns import (
-    UUID,
-    Array,
-    ColumnSet,
-    DateTime,
-    Float,
-    Nullable,
-    String,
-    UInt,
-)
+from snuba.clickhouse.columns import UUID, Array, ColumnSet, DateTime, Float
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.querylog_processor import QuerylogProcessor
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 
 columns = ColumnSet(
     [
@@ -23,7 +16,7 @@ columns = ColumnSet(
         ("referrer", String()),
         ("dataset", String()),
         ("projects", Array(UInt(64))),
-        ("organization", Nullable(UInt(64))),
+        ("organization", UInt(64, Modifiers(nullable=True))),
         ("timestamp", DateTime()),
         ("duration_ms", UInt(32)),
         ("status", String()),
@@ -38,7 +31,7 @@ columns = ColumnSet(
         # by the migration framework (or by any ALTER statement).
         ("clickhouse_queries.sql", Array(String())),
         ("clickhouse_queries.status", Array(String())),
-        ("clickhouse_queries.trace_id", Array(Nullable(UUID()))),
+        ("clickhouse_queries.trace_id", Array(UUID(Modifiers(nullable=True)))),
         ("clickhouse_queries.duration_ms", Array(UInt(32))),
         ("clickhouse_queries.stats", Array(String())),
         ("clickhouse_queries.final", Array(UInt(8))),
@@ -76,7 +69,9 @@ storage = WritableTableStorage(
     storage_set_key=StorageSetKey.QUERYLOG,
     schema=schema,
     query_processors=[],
-    stream_loader=KafkaStreamLoader(
-        processor=QuerylogProcessor(), default_topic=settings.QUERIES_TOPIC,
+    stream_loader=build_kafka_stream_loader_from_settings(
+        StorageKey.QUERYLOG,
+        processor=QuerylogProcessor(),
+        default_topic_name=settings.QUERIES_TOPIC,
     ),
 )

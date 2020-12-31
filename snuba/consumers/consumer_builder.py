@@ -1,13 +1,13 @@
-from enum import Enum
-from typing import Optional, Sequence
+from typing import Callable, Optional, Sequence
 
 from confluent_kafka import KafkaError, KafkaException, Producer
 
 from snuba import environment
-from snuba.consumer import ConsumerWorker, StreamingConsumerStrategyFactory
-from snuba.consumers.snapshot_worker import SnapshotAwareWorker
+from snuba.consumer import StreamingConsumerStrategyFactory
+from snuba.consumers.snapshot_worker import SnapshotProcessor
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.processor import MessageProcessor
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -19,16 +19,12 @@ from snuba.utils.streams.backends.kafka import (
     KafkaPayload,
     TransportError,
     build_kafka_consumer_configuration,
+    get_default_kafka_configuration,
+    build_kafka_producer_configuration,
 )
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.processing.strategies import ProcessingStrategyFactory
-from snuba.utils.streams.processing.strategies.batching import (
-    BatchProcessingStrategyFactory,
-)
 from snuba.utils.streams.profiler import ProcessingStrategyProfilerWrapperFactory
-
-
-StrategyFactoryType = Enum("StrategyFactoryType", ["BATCHING", "STREAMING"])
 
 
 class ConsumerBuilder:
@@ -51,7 +47,6 @@ class ConsumerBuilder:
         auto_offset_reset: str,
         queued_max_messages_kbytes: int,
         queued_min_messages: int,
-        strategy_factory_type: StrategyFactoryType,
         processes: Optional[int],
         input_block_size: Optional[int],
         output_block_size: Optional[int],
@@ -60,6 +55,17 @@ class ConsumerBuilder:
     ) -> None:
         self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = bootstrap_servers
+        self.broker_config = get_default_kafka_configuration(
+            storage_key, bootstrap_servers=bootstrap_servers
+        )
+        self.producer_broker_config = build_kafka_producer_configuration(
+            storage_key,
+            bootstrap_servers=bootstrap_servers,
+            override_params={
+                "partitioner": "consistent",
+                "message.max.bytes": 50000000,  # 50MB, default is 1MB
+            },
+        )
 
         stream_loader = self.storage.get_table_writer().get_stream_loader()
 
@@ -91,13 +97,7 @@ class ConsumerBuilder:
 
         # XXX: This can result in a producer being built in cases where it's
         # not actually required.
-        self.producer = Producer(
-            {
-                "bootstrap.servers": ",".join(self.bootstrap_servers),
-                "partitioner": "consistent",
-                "message.max.bytes": 50000000,  # 50MB, default is 1MB
-            }
-        )
+        self.producer = Producer(self.producer_broker_config)
 
         self.metrics = MetricsWrapper(
             environment.metrics,
@@ -111,19 +111,10 @@ class ConsumerBuilder:
         self.auto_offset_reset = auto_offset_reset
         self.queued_max_messages_kbytes = queued_max_messages_kbytes
         self.queued_min_messages = queued_min_messages
-        self.strategy_factory_type = strategy_factory_type
         self.processes = processes
         self.input_block_size = input_block_size
         self.output_block_size = output_block_size
         self.__profile_path = profile_path
-
-        if (
-            self.processes is not None
-            and self.strategy_factory_type is not StrategyFactoryType.STREAMING
-        ):
-            raise ValueError(
-                "process count can only be specified when using streaming strategy"
-            )
 
         if commit_retry_policy is None:
             commit_retry_policy = BasicRetryPolicy(
@@ -133,7 +124,7 @@ class ConsumerBuilder:
                 and e.args[0].code()
                 in (
                     KafkaError.REQUEST_TIMED_OUT,
-                    KafkaError.NOT_COORDINATOR_FOR_GROUP,
+                    KafkaError.NOT_COORDINATOR,
                     KafkaError._WAIT_COORD,
                 ),
             )
@@ -143,7 +134,9 @@ class ConsumerBuilder:
     def __build_consumer(
         self, strategy_factory: ProcessingStrategyFactory[KafkaPayload]
     ) -> StreamProcessor[KafkaPayload]:
+        storage_key = self.storage.get_storage_key()
         configuration = build_kafka_consumer_configuration(
+            storage_key,
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
             auto_offset_reset=self.auto_offset_reset,
@@ -171,27 +164,24 @@ class ConsumerBuilder:
             recoverable_errors=[TransportError],
         )
 
-    def __build_batching_strategy_factory(
+    def __build_streaming_strategy_factory(
         self,
-    ) -> BatchProcessingStrategyFactory[KafkaPayload]:
-        return BatchProcessingStrategyFactory(
-            worker=ConsumerWorker(
-                storage=self.storage,
-                producer=self.producer,
-                replacements_topic=self.replacements_topic,
-                metrics=self.metrics,
-            ),
-            max_batch_size=self.max_batch_size,
-            max_batch_time=self.max_batch_time_ms,
-            metrics=self.metrics,
-        )
-
-    def __build_streaming_strategy_factory(self) -> StreamingConsumerStrategyFactory:
+        processor_wrapper: Optional[
+            Callable[[MessageProcessor], MessageProcessor]
+        ] = None,
+    ) -> ProcessingStrategyFactory[KafkaPayload]:
         table_writer = self.storage.get_table_writer()
         stream_loader = table_writer.get_stream_loader()
-        return StreamingConsumerStrategyFactory(
+
+        processor = stream_loader.get_processor()
+        if processor_wrapper is not None:
+            processor = processor_wrapper(processor)
+
+        strategy_factory: ProcessingStrategyFactory[
+            KafkaPayload
+        ] = StreamingConsumerStrategyFactory(
             stream_loader.get_pre_filter(),
-            stream_loader.get_processor(),
+            processor,
             table_writer.get_batch_writer(
                 self.metrics,
                 {"load_balancing": "in_order", "insert_distributed_sync": 1},
@@ -208,43 +198,29 @@ class ConsumerBuilder:
             replacements_topic=self.replacements_topic,
         )
 
-    def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
-        """
-        Builds the consumer with the defined processing strategy.
-        """
-        strategy_factory: ProcessingStrategyFactory[KafkaPayload]
-        if self.strategy_factory_type is StrategyFactoryType.BATCHING:
-            strategy_factory = self.__build_batching_strategy_factory()
-        elif self.strategy_factory_type is StrategyFactoryType.STREAMING:
-            strategy_factory = self.__build_streaming_strategy_factory()
-        else:
-            raise ValueError("unexpected strategy factory type")
-
         if self.__profile_path is not None:
             strategy_factory = ProcessingStrategyProfilerWrapperFactory(
                 strategy_factory, self.__profile_path,
             )
 
-        return self.__build_consumer(strategy_factory)
+        return strategy_factory
+
+    def build_base_consumer(self) -> StreamProcessor[KafkaPayload]:
+        """
+        Builds the consumer.
+        """
+        return self.__build_consumer(self.__build_streaming_strategy_factory())
 
     def build_snapshot_aware_consumer(
         self, snapshot_id: SnapshotId, transaction_data: TransactionData,
     ) -> StreamProcessor[KafkaPayload]:
         """
-        Builds the consumer with a ConsumerWorker able to handle snapshots.
+        Builds the consumer with a processor that is able to handle snapshots.
         """
         return self.__build_consumer(
-            BatchProcessingStrategyFactory(
-                worker=SnapshotAwareWorker(
-                    storage=self.storage,
-                    producer=self.producer,
-                    snapshot_id=snapshot_id,
-                    transaction_data=transaction_data,
-                    metrics=self.metrics,
-                    replacements_topic=self.replacements_topic,
-                ),
-                max_batch_size=self.max_batch_size,
-                max_batch_time=self.max_batch_time_ms,
-                metrics=self.metrics,
+            self.__build_streaming_strategy_factory(
+                lambda processor: SnapshotProcessor(
+                    processor, snapshot_id, transaction_data
+                )
             )
         )

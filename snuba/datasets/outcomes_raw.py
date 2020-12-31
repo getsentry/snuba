@@ -1,5 +1,5 @@
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.factory import EntityKey, get_entity
+from snuba.datasets.entities import EntityKey
 
 
 class OutcomesRawDataset(Dataset):
@@ -8,5 +8,4 @@ class OutcomesRawDataset(Dataset):
     """
 
     def __init__(self) -> None:
-        outcomes_raw_entity = get_entity(EntityKey.OUTCOMES_RAW)
-        super().__init__(default_entity=outcomes_raw_entity)
+        super().__init__(default_entity=EntityKey.OUTCOMES_RAW)

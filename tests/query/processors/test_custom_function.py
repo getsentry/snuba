@@ -1,9 +1,9 @@
 import pytest
-
 from snuba.clickhouse.columns import ColumnSet, String, UInt
+from snuba.query import SelectedExpression
 from snuba.query.conditions import binary_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.logical import Query, SelectedExpression
+from snuba.query.logical import Query
 from snuba.query.processors.custom_function import (
     CustomFunction,
     InvalidCustomFunctionCall,
@@ -23,7 +23,6 @@ TEST_CASES = [
             ],
             groupby=[Column("column1", None, "column1")],
             condition=binary_condition(
-                None,
                 "equals",
                 FunctionCall(
                     "group_id", "f", (Column("something", None, "something"),)
@@ -39,7 +38,6 @@ TEST_CASES = [
             ],
             groupby=[Column("column1", None, "column1")],
             condition=binary_condition(
-                None,
                 "equals",
                 FunctionCall(
                     "group_id", "f", (Column("something", None, "something"),)

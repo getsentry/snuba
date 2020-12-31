@@ -1,4 +1,5 @@
 import logging
+from dataclasses import replace
 from typing import Optional
 
 from snuba import environment, settings
@@ -59,7 +60,6 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                 else:
                     query.add_condition_to_ast(
                         not_in_condition(
-                            None,
                             FunctionCall(
                                 None, "assumeNotNull", (Column(None, None, "group_id"),)
                             ),
@@ -69,4 +69,4 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             else:
                 set_final = final
 
-        query.set_final(set_final)
+        query.set_from_clause(replace(query.get_from_clause(), final=set_final))

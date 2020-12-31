@@ -1,5 +1,5 @@
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.factory import EntityKey, get_entity
+from snuba.datasets.entities import EntityKey
 
 
 class GroupAssigneeDataset(Dataset):
@@ -12,5 +12,4 @@ class GroupAssigneeDataset(Dataset):
     """
 
     def __init__(self) -> None:
-        groupassignees_entity = get_entity(EntityKey.GROUPASSIGNEE)
-        super().__init__(default_entity=groupassignees_entity)
+        super().__init__(default_entity=EntityKey.GROUPASSIGNEE)

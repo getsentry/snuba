@@ -1,9 +1,12 @@
-from typing import Mapping, Optional, Sequence
+from typing import Mapping, Sequence
 
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Expression, FunctionCall, Literal
+from snuba.query.matchers import AnyExpression
 from snuba.query.matchers import FunctionCall as FunctionCallPattern
-from snuba.query.matchers import AnyExpression, Or, Param, Pattern, String
+from snuba.query.matchers import Integer
+from snuba.query.matchers import Literal as LiteralPattern
+from snuba.query.matchers import Or, Param, Pattern, String
 
 
 class ConditionFunctions:
@@ -68,9 +71,9 @@ BINARY_OPERATORS = [
 
 
 def __set_condition(
-    alias: Optional[str], function: str, lhs: Expression, rhs: Sequence[Literal]
+    function: str, lhs: Expression, rhs: Sequence[Literal]
 ) -> Expression:
-    return binary_condition(alias, function, lhs, literals_tuple(None, rhs))
+    return binary_condition(function, lhs, literals_tuple(None, rhs))
 
 
 def __set_condition_pattern(
@@ -102,10 +105,8 @@ def __is_set_condition(exp: Expression, operator: str) -> bool:
     return False
 
 
-def in_condition(
-    alias: Optional[str], lhs: Expression, rhs: Sequence[Literal],
-) -> Expression:
-    return __set_condition(alias, ConditionFunctions.IN, lhs, rhs)
+def in_condition(lhs: Expression, rhs: Sequence[Literal],) -> Expression:
+    return __set_condition(ConditionFunctions.IN, lhs, rhs)
 
 
 def is_in_condition(exp: Expression) -> bool:
@@ -116,10 +117,8 @@ def is_in_condition_pattern(lhs: Pattern[Expression]) -> FunctionCallPattern:
     return __set_condition_pattern(lhs, ConditionFunctions.IN)
 
 
-def not_in_condition(
-    alias: Optional[str], lhs: Expression, rhs: Sequence[Literal],
-) -> Expression:
-    return __set_condition(alias, ConditionFunctions.NOT_IN, lhs, rhs,)
+def not_in_condition(lhs: Expression, rhs: Sequence[Literal],) -> Expression:
+    return __set_condition(ConditionFunctions.NOT_IN, lhs, rhs,)
 
 
 def is_not_in_condition(exp: Expression) -> bool:
@@ -131,9 +130,9 @@ def is_not_in_condition_pattern(lhs: Pattern[Expression]) -> FunctionCallPattern
 
 
 def binary_condition(
-    alias: Optional[str], function_name: str, lhs: Expression, rhs: Expression
+    function_name: str, lhs: Expression, rhs: Expression
 ) -> FunctionCall:
-    return FunctionCall(alias, function_name, (lhs, rhs))
+    return FunctionCall(None, function_name, (lhs, rhs))
 
 
 binary_condition_patterns = {
@@ -149,10 +148,8 @@ def is_binary_condition(exp: Expression, operator: str) -> bool:
     return False
 
 
-def unary_condition(
-    alias: Optional[str], function_name: str, operand: Expression
-) -> FunctionCall:
-    return FunctionCall(alias, function_name, (operand,))
+def unary_condition(function_name: str, operand: Expression) -> FunctionCall:
+    return FunctionCall(None, function_name, (operand,))
 
 
 unary_condition_patterns = {
@@ -175,6 +172,32 @@ def get_first_level_or_conditions(condition: Expression) -> Sequence[Expression]
     return _get_first_level_conditions(condition, BooleanFunctions.OR)
 
 
+TOP_LEVEL_CONDITIONS = {
+    func_name: Or(
+        [
+            FunctionCallPattern(
+                String(func_name),
+                (Param("left", AnyExpression()), Param("right", AnyExpression())),
+            ),
+            FunctionCallPattern(
+                String("equals"),
+                (
+                    FunctionCallPattern(
+                        String(func_name),
+                        (
+                            Param("left", AnyExpression()),
+                            Param("right", AnyExpression()),
+                        ),
+                    ),
+                    LiteralPattern(Integer(1)),
+                ),
+            ),
+        ]
+    )
+    for func_name in [BooleanFunctions.AND, BooleanFunctions.OR]
+}
+
+
 def _get_first_level_conditions(
     condition: Expression, function: str
 ) -> Sequence[Expression]:
@@ -186,10 +209,11 @@ def _get_first_level_conditions(
     In the AST, the condition is a tree, so we need some additional
     logic to extract the operands of the top level AND condition.
     """
-    if isinstance(condition, FunctionCall) and condition.function_name == function:
+    match = TOP_LEVEL_CONDITIONS[function].match(condition)
+    if match is not None:
         return [
-            *_get_first_level_conditions(condition.parameters[0], function),
-            *_get_first_level_conditions(condition.parameters[1], function),
+            *_get_first_level_conditions(match.expression("left"), function),
+            *_get_first_level_conditions(match.expression("right"), function),
         ]
     else:
         return [condition]
@@ -217,7 +241,7 @@ def _combine_conditions(conditions: Sequence[Expression], function: str) -> Expr
         return conditions[0]
 
     return binary_condition(
-        None, function, conditions[0], _combine_conditions(conditions[1:], function)
+        function, conditions[0], _combine_conditions(conditions[1:], function)
     )
 
 

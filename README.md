@@ -36,7 +36,7 @@ Note that Snuba assumes that everything is running on UTC time. Otherwise you ma
 
 ## Install / Run (Only required if you are developing against Snuba)
 
-    mkvirtualenv snuba --python=python3.7
+    mkvirtualenv snuba --python=python3.8
     workon snuba
     make develop
 

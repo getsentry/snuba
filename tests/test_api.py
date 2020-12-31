@@ -12,18 +12,22 @@ from dateutil.parser import parse as parse_datetime
 from sentry_sdk import Client, Hub
 
 from snuba import settings, state
+from snuba.consumer import KafkaMessageMetadata
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.events_processor_base import InsertEvent
+from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.processor import InsertBatch
 from snuba.redis import redis_client
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.base import BaseApiTest
+from tests.helpers import write_processed_messages
 
 
 class TestApi(BaseApiTest):
-    def setup_method(self, test_method, dataset_name="events"):
-        super().setup_method(test_method, dataset_name)
+    def setup_method(self, test_method):
+        super().setup_method(test_method)
         self.app.post = partial(self.app.post, headers={"referer": "test"})
 
         # values for test data
@@ -37,6 +41,8 @@ class TestApi(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0
         ) - timedelta(minutes=self.minutes)
+        self.storage = get_writable_storage(StorageKey.EVENTS)
+        self.table = self.storage.get_table_writer().get_schema().get_table_name()
         self.generate_fizzbuzz_events()
 
     def teardown_method(self, test_method):
@@ -47,6 +53,19 @@ class TestApi(BaseApiTest):
         state.delete_config("project_concurrent_limit_1")
         state.delete_config("project_per_second_limit")
         state.delete_config("date_align_seconds")
+
+    def write_events(self, events):
+        processor = self.storage.get_table_writer().get_stream_loader().get_processor()
+
+        processed_messages = []
+        for i, event in enumerate(events):
+            processed_message = processor.process_message(
+                (2, "insert", event, {}), KafkaMessageMetadata(i, 0, datetime.now())
+            )
+            assert processed_message is not None
+            processed_messages.append(processed_message)
+
+        write_processed_messages(self.storage, processed_messages)
 
     def generate_fizzbuzz_events(self) -> None:
         """
@@ -402,7 +421,7 @@ class TestApi(BaseApiTest):
                 ),
             ).data
         )
-        assert "LIMIT 100 BY environment" in result["sql"]
+        assert "LIMIT 100 BY _snuba_environment" in result["sql"]
 
         # Stress nullable totals column, making sure we get results as expected
         result = json.loads(
@@ -768,13 +787,9 @@ class TestApi(BaseApiTest):
                 ),
             ).data
         )
+
         assert (
-            # legacy representation
-            "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc') != 0"
-            in result["sql"]
-        ) or (
-            # ast representation
-            "PREWHERE notEquals(positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc'), 0)"
+            "PREWHERE notEquals(positionCaseInsensitive((message AS _snuba_message), 'abc'), 0)"
             in result["sql"]
         )
 
@@ -799,12 +814,7 @@ class TestApi(BaseApiTest):
             ).data
         )
         assert (
-            # legacy representation
-            "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message"
-            in result["sql"]
-        ) or (
-            # ast representation
-            "PREWHERE notEquals(positionCaseInsensitive((coalesce(search_message, message) AS message"
+            "PREWHERE notEquals(positionCaseInsensitive((message AS _snuba_message)"
             in result["sql"]
         )
 
@@ -827,12 +837,7 @@ class TestApi(BaseApiTest):
             ).data
         )
         assert (
-            # legacy representation
-            "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc') != 0 AND project_id IN (1)"
-            in result["sql"]
-        ) or (
-            # ast representation
-            "PREWHERE notEquals(positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc'), 0) AND in(project_id, tuple(1))"
+            "PREWHERE notEquals(positionCaseInsensitive((message AS _snuba_message), 'abc'), 0) AND in(project_id, tuple(1))"
             in result["sql"]
         )
 
@@ -854,16 +859,8 @@ class TestApi(BaseApiTest):
         )
 
         # make sure the conditions is in PREWHERE and nowhere else
-        assert (
-            "PREWHERE project_id IN (1)" in result["sql"]  # legacy representation
-            or "PREWHERE in(project_id, tuple(1))"
-            in result["sql"]  # ast representation
-        )
-        assert (
-            result["sql"].count("project_id IN (1)") == 1  # legacy representation
-            or result["sql"].count("in(project_id, tuple(1))")
-            == 1  # ast representation
-        )
+        assert "PREWHERE in(project_id, tuple(1))" in result["sql"]
+        assert result["sql"].count("in(project_id, tuple(1))") == 1
 
     def test_aggregate(self):
         result = json.loads(
@@ -988,20 +985,6 @@ class TestApi(BaseApiTest):
         )
         assert len(result["data"]) == 0
 
-        # HAVING fails with no GROUP BY
-        result = self.app.post(
-            "/query",
-            data=json.dumps(
-                {
-                    "project": 2,
-                    "groupby": [],
-                    "having": [["times_seen", ">", 1]],
-                    "aggregations": [["count()", "", "times_seen"]],
-                }
-            ),
-        )
-        assert result.status_code == 500
-
         # unknown field times_seen
         result = json.loads(
             self.app.post(
@@ -1112,14 +1095,8 @@ class TestApi(BaseApiTest):
             ).data
         )
         # Issue is expanded once, and alias used subsequently
-        assert (
-            "group_id = 0" in response["sql"]  # legacy representation
-            or "equals(group_id, 0)" in response["sql"]  # ast representation
-        )
-        assert (
-            "group_id = 1" in response["sql"]  # legacy representation
-            or "equals(group_id, 1)" in response["sql"]  # ast representation
-        )
+        assert "equals(_snuba_group_id, 0)" in response["sql"]
+        assert "equals(_snuba_group_id, 1)" in response["sql"]
 
     def test_sampling_expansion(self):
         response = json.loads(
@@ -1262,17 +1239,22 @@ class TestApi(BaseApiTest):
         }
         result1 = json.loads(self.app.post("/query", data=json.dumps(query)).data)
 
-        self.write_rows(
+        write_processed_messages(
+            self.storage,
             [
-                {
-                    "event_id": "9" * 32,
-                    "project_id": 1,
-                    "group_id": 1,
-                    "timestamp": self.base_time,
-                    "deleted": 1,
-                    "retention_days": settings.DEFAULT_RETENTION_DAYS,
-                }
-            ]
+                InsertBatch(
+                    [
+                        {
+                            "event_id": "9" * 32,
+                            "project_id": 1,
+                            "group_id": 1,
+                            "timestamp": self.base_time,
+                            "deleted": 1,
+                            "retention_days": settings.DEFAULT_RETENTION_DAYS,
+                        }
+                    ]
+                )
+            ],
         )
 
         result2 = json.loads(self.app.post("/query", data=json.dumps(query)).data)
@@ -1831,6 +1813,8 @@ class TestApi(BaseApiTest):
 
 
 class TestCreateSubscriptionApi(BaseApiTest):
+    dataset_name = "events"
+
     def test(self):
         expected_uuid = uuid.uuid1()
 
@@ -1880,6 +1864,9 @@ class TestCreateSubscriptionApi(BaseApiTest):
 
 
 class TestDeleteSubscriptionApi(BaseApiTest):
+    dataset_name = "events"
+    dataset = get_dataset(dataset_name)
+
     def test(self):
         resp = self.app.post(
             "{}/subscriptions".format(self.dataset_name),

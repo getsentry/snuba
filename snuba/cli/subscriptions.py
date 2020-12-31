@@ -24,6 +24,7 @@ from snuba.utils.streams.backends.kafka import (
     KafkaConsumer,
     KafkaProducer,
     build_kafka_consumer_configuration,
+    build_kafka_producer_configuration,
 )
 from snuba.utils.streams.encoding import ProducerEncodingWrapper
 from snuba.utils.streams.processing import StreamProcessor
@@ -31,7 +32,6 @@ from snuba.utils.streams.processing.strategies.batching import (
     BatchProcessingStrategyFactory,
 )
 from snuba.utils.streams.synchronized import SynchronizedConsumer
-
 
 logger = logging.getLogger(__name__)
 
@@ -118,13 +118,8 @@ def subscriptions(
 
     dataset = get_dataset(dataset_name)
 
-    if not bootstrap_servers:
-        storage = dataset.get_writable_storage()
-        assert storage is not None
-        storage_key = storage.get_storage_key().value
-        bootstrap_servers = settings.DEFAULT_STORAGE_BROKERS.get(
-            storage_key, settings.DEFAULT_BROKERS
-        )
+    storage = dataset.get_default_entity().get_writable_storage()
+    storage_key = storage.get_storage_key()
 
     loader = enforce_table_writer(dataset).get_stream_loader()
 
@@ -138,16 +133,18 @@ def subscriptions(
         SynchronizedConsumer(
             KafkaConsumer(
                 build_kafka_consumer_configuration(
-                    bootstrap_servers,
+                    storage_key,
                     consumer_group,
                     auto_offset_reset=auto_offset_reset,
+                    bootstrap_servers=bootstrap_servers,
                 ),
             ),
             KafkaConsumer(
                 build_kafka_consumer_configuration(
-                    bootstrap_servers,
+                    storage_key,
                     f"subscriptions-commit-log-{uuid.uuid1().hex}",
                     auto_offset_reset="earliest",
+                    bootstrap_servers=bootstrap_servers,
                 ),
             ),
             (
@@ -164,11 +161,14 @@ def subscriptions(
 
     producer = ProducerEncodingWrapper(
         KafkaProducer(
-            {
-                "bootstrap.servers": ",".join(bootstrap_servers),
-                "partitioner": "consistent",
-                "message.max.bytes": 50000000,  # 50MB, default is 1MB
-            }
+            build_kafka_producer_configuration(
+                storage_key,
+                bootstrap_servers=bootstrap_servers,
+                override_params={
+                    "partitioner": "consistent",
+                    "message.max.bytes": 50000000,  # 50MB, default is 1MB
+                },
+            )
         ),
         SubscriptionTaskResultEncoder(),
     )

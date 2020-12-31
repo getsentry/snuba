@@ -10,15 +10,14 @@ from snuba.datasets.cdc.groupedmessage_processor import (
     GroupedMessageRow,
 )
 from snuba.datasets.cdc.types import DeleteEvent, InsertEvent, UpdateEvent
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.processor import InsertBatch
-from tests.base import BaseDatasetTest
+from tests.helpers import write_processed_messages
 
 
-class TestGroupedMessage(BaseDatasetTest):
-    def setup_method(self, test_method):
-        super(TestGroupedMessage, self).setup_method(
-            test_method, "groupedmessage",
-        )
+class TestGroupedMessage:
+    storage = get_writable_storage(StorageKey.GROUPEDMESSAGES)
 
     UPDATE_MSG = UpdateEvent(
         {
@@ -232,7 +231,7 @@ class TestGroupedMessage(BaseDatasetTest):
 
         ret = processor.process_message(self.INSERT_MSG, metadata)
         assert ret == InsertBatch([self.PROCESSED])
-        self.write_processed_messages([ret])
+        write_processed_messages(self.storage, [ret])
         ret = (
             get_cluster(StorageSetKey.EVENTS)
             .get_query_connection(ClickhouseClientSettings.INSERT)
@@ -268,7 +267,7 @@ class TestGroupedMessage(BaseDatasetTest):
                 "first_release_id": "26",
             }
         )
-        self.write_rows([row.to_clickhouse()])
+        write_processed_messages(self.storage, [InsertBatch([row.to_clickhouse()])])
         ret = (
             get_cluster(StorageSetKey.EVENTS)
             .get_query_connection(ClickhouseClientSettings.QUERY)

@@ -97,7 +97,7 @@ class MappingColumnPromoter(QueryProcessor):
                 )
                 if promoted_col_name is not None:
                     col_type = (
-                        query.get_data_source()
+                        query.get_from_clause()
                         .get_columns()
                         .get(promoted_col_name, None)
                     )

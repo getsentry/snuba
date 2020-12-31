@@ -4,9 +4,8 @@ import pickle
 import signal
 import time
 from collections import deque
-from multiprocessing import Pool
 from multiprocessing.managers import SharedMemoryManager
-from multiprocessing.pool import AsyncResult
+from multiprocessing.pool import AsyncResult, Pool
 from multiprocessing.shared_memory import SharedMemory
 from pickle import PickleBuffer
 from typing import (
@@ -226,14 +225,26 @@ def parallel_transform_worker_apply(
     i = start_index
     while i < len(input_batch):
         message = input_batch[i]
+
+        try:
+            result = function(message)
+        except Exception:
+            # The remote traceback thrown when retrieving the result from the
+            # pool elides a lot of useful data (and usually includes a
+            # truncated traceback), logging it here allows us to get this
+            # information at the expense of sending duplicate events to Sentry
+            # (one from the child and one from the parent.)
+            logger.warning(
+                "Caught exception while applying %r to %r!",
+                function,
+                message,
+                exc_info=True,
+            )
+            raise
+
         try:
             output_batch.append(
-                Message(
-                    message.partition,
-                    message.offset,
-                    function(message),
-                    message.timestamp,
-                )
+                Message(message.partition, message.offset, result, message.timestamp)
             )
         except ValueTooLarge:
             # If the output batch cannot accept the transformed message when
@@ -270,7 +281,11 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         self.__shared_memory_manager = SharedMemoryManager()
         self.__shared_memory_manager.start()
 
-        self.__pool = Pool(processes, initializer=parallel_transform_worker_initializer)
+        self.__pool = Pool(
+            processes,
+            initializer=parallel_transform_worker_initializer,
+            context=multiprocessing.get_context("spawn"),
+        )
 
         self.__input_blocks = [
             self.__shared_memory_manager.SharedMemory(input_block_size)
