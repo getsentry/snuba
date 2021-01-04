@@ -39,7 +39,14 @@ arrayMap(
                 [('geo_country_code', geo_country_code)],
                 [('geo_region', geo_region)],
                 [('os_build', os_build)],
-                [('os_kernel_version', os_kernel_version)]
+                [('os_kernel_version', os_kernel_version)],
+                [('device_name', device_name)],
+                [('device_brand', device_brand)],
+                [('device_locale', device_locale)],
+                [('device_uuid', device_uuid)],
+                [('device_model_id', device_model_id)],
+                [('device_arch', device_arch)],
+                [('device_battery_level', toString(device_battery_level))]
             )
         )
     ) AS tuplesArray
