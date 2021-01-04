@@ -28,7 +28,7 @@ test_cases = [
         id="mandatory spacing",
     ),
     pytest.param(
-        "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, c",
+        "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c",
         VisitationError,
         id="invalid relationship name",
     ),
