@@ -29,10 +29,10 @@ BEGINNING_OF_TIME = get_monday((datetime.utcnow() - timedelta(days=90)).date())
 
 contexts_key = """
 arrayMap(
-    t -> tupleElement(t, 1),
+    t -> t.1,
     arraySort(
         arrayFilter(
-            t -> tupleElement(t, 2) IS NOT NULL,
+            t -> t.2 IS NOT NULL,
             arrayConcat(
                 arrayZip(contexts.key, contexts.value),
                 [('geo_city', geo_city)],
@@ -48,7 +48,7 @@ arrayMap(
 
 contexts_value = """
     arrayMap(
-        t -> tupleElement(t, 2),
+        t -> t.2,
         tuplesArray
     )
 """
