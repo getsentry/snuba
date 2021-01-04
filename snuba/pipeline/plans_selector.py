@@ -55,4 +55,5 @@ def select_best_plans(
         key=lambda candidate: candidate.total_cost,
     )
 
+    assert len(candidates) > 0, "Cannot build a valid query plan for this query."
     return candidates[0].get_plans_mapping()
