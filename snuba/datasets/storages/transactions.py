@@ -99,6 +99,7 @@ storage = WritableTableStorage(
         StorageKey.TRANSACTIONS,
         processor=TransactionsMessageProcessor(),
         default_topic_name="events",
+        commit_log_topic_name="snuba-commit-log",
     ),
     query_splitters=[TimeSplitQueryStrategy(timestamp_col="finish_ts")],
     writer_options={"insert_allow_materialized_columns": 1},
