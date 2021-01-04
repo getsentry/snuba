@@ -131,7 +131,7 @@ TEST_CASES = [
                     FunctionCall(
                         "_snuba_count_ev_id",
                         "count",
-                        (Column("_snuba_event_id", "ev", "event_id"),),
+                        (Column("_snuba_ev.event_id", "ev", "event_id"),),
                     ),
                 ),
                 SelectedExpression("group_id", Column("_snuba_group_id", "gr", "id")),
@@ -142,8 +142,8 @@ TEST_CASES = [
                 events_node(
                     [
                         SelectedExpression(
-                            "_snuba_event_id",
-                            Column("_snuba_event_id", None, "event_id"),
+                            "_snuba_ev.event_id",
+                            Column("_snuba_ev.event_id", None, "event_id"),
                         ),
                         SelectedExpression(
                             "_snuba_group_id",
@@ -168,10 +168,12 @@ TEST_CASES = [
                     FunctionCall(
                         "_snuba_count_ev_id",
                         "count",
-                        (Column(None, "ev", "_snuba_event_id"),),
+                        (Column("_snuba_ev.event_id", "ev", "_snuba_ev.event_id"),),
                     ),
                 ),
-                SelectedExpression("group_id", Column(None, "gr", "_snuba_group_id")),
+                SelectedExpression(
+                    "group_id", Column("_snuba_group_id", "gr", "_snuba_group_id")
+                ),
             ],
         ),
         id="Basic join with select",
@@ -215,7 +217,9 @@ TEST_CASES = [
                 ),
             ),
             selected_columns=[
-                SelectedExpression("group_id", Column(None, "gr", "_snuba_group_id")),
+                SelectedExpression(
+                    "group_id", Column("_snuba_group_id", "gr", "_snuba_group_id")
+                ),
             ],
         ),
         id="Query with condition",
@@ -277,12 +281,14 @@ TEST_CASES = [
                 ),
             ),
             selected_columns=[
-                SelectedExpression("group_id", Column(None, "gr", "_snuba_group_id")),
+                SelectedExpression(
+                    "group_id", Column("_snuba_group_id", "gr", "_snuba_group_id")
+                ),
             ],
             condition=binary_condition(
                 ConditionFunctions.EQ,
-                Column(None, "gr", "_snuba_group_id"),
-                Column(None, "ev", "_snuba_gen_1"),
+                Column("_snuba_group_id", "gr", "_snuba_group_id"),
+                Column("_snuba_gen_1", "ev", "_snuba_gen_1"),
             ),
         ),
         id="Query with condition across entities",
@@ -351,7 +357,9 @@ TEST_CASES = [
                 join_type=JoinType.INNER,
             ),
             selected_columns=[
-                SelectedExpression("group_id", Column(None, "gr", "_snuba_group_id")),
+                SelectedExpression(
+                    "group_id", Column("_snuba_group_id", "gr", "_snuba_group_id")
+                ),
             ],
         ),
         id="Multi entity join",
@@ -424,23 +432,26 @@ TEST_CASES = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "project_id", Column(None, "ev", "_snuba_project_id"),
+                    "project_id",
+                    Column("_snuba_project_id", "ev", "_snuba_project_id"),
                 ),
                 SelectedExpression(
                     "max_timestamp",
                     FunctionCall(
                         "_snuba_max_timestamp",
                         "max",
-                        (Column(None, "ev", "_snuba_gen_1"),),
+                        (Column("_snuba_gen_1", "ev", "_snuba_gen_1"),),
                     ),
                 ),
             ],
-            groupby=[Column(None, "ev", "_snuba_project_id")],
+            groupby=[Column("_snuba_project_id", "ev", "_snuba_project_id")],
             having=FunctionCall(
                 None,
                 "greater",
                 (
-                    FunctionCall(None, "min", (Column(None, "ev", "_snuba_gen_2"),)),
+                    FunctionCall(
+                        None, "min", (Column("_snuba_gen_2", "ev", "_snuba_gen_2"),)
+                    ),
                     Literal(None, "sometime"),
                 ),
             ),
@@ -514,23 +525,26 @@ TEST_CASES = [
                 ),
             ),
             selected_columns=[
-                SelectedExpression("a_col", Column(None, "ev", "_snuba_a_col")),
+                SelectedExpression(
+                    "a_col", Column("_snuba_a_col", "ev", "_snuba_a_col")
+                ),
                 SelectedExpression(
                     "a_func",
                     FunctionCall(
                         "_snuba_a_func",
                         "f",
                         (
-                            Column(None, "ev", "_snuba_a_col"),
-                            Column(None, "gr", "_snuba_another_col"),
+                            Column("_snuba_a_col", "ev", "_snuba_a_col"),
+                            Column("_snuba_another_col", "gr", "_snuba_another_col"),
                         ),
                     ),
                 ),
                 SelectedExpression(
-                    "another_func", Column(None, "ev", "_snuba_another_func")
+                    "another_func",
+                    Column("_snuba_another_func", "ev", "_snuba_another_func"),
                 ),
             ],
-            groupby=[Column(None, "ev", "_snuba_another_func")],
+            groupby=[Column("_snuba_another_func", "ev", "_snuba_another_func")],
         ),
         id="Identical expressions are pushed down only once [generated aliases are excluded]",
     ),
