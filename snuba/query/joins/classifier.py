@@ -86,7 +86,32 @@ class SubqueryExpression(SubExpression):
             else replace(self.main_expression, alias=alias)
         )
         return MainQueryExpression(
-            main_expression=Column(None, self.subquery_alias, alias),
+            # The main expression is replacing the cut branch in the main
+            # query, while the branch we cut will go into a subquery, thus
+            # will be out of the namespace.
+            # The replacing expression preserves the alias of the branch.
+            # This allows external query (in case the main query is itself
+            # a subquery) to still be able to reference the expression we
+            # pushed down.
+            #
+            # Example:
+            # ```
+            # SELECT avg(id) FROM (SELECT a.id FROM ... join ...)
+            # ```
+            # after branch cutting becomes:
+            # ```
+            # SELECT avg(_snuba_id) FROM
+            #    SELECT a._snuba_a.id as _snuba_id
+            #        FROM
+            #           (SELECT id as _snuba_a.id FROM ...) a
+            #           JOIN
+            #           (SELECT .....) b
+            # ```
+            # When we cut the branch containing id, it is replaced by the
+            # column `a._snuba_a.id`, which is still referenced from
+            # the `avg` function thus it needs to preserve the original
+            # mangled alias it had after parsing.
+            main_expression=Column(alias, self.subquery_alias, alias),
             cut_branches={self.subquery_alias: {branch}},
         )
 
