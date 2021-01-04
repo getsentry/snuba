@@ -629,8 +629,6 @@ SUPPORTED_KAFKA_CONFIGURATION = (
     "sasl.username",
     "sasl.password",
     "security.protocol",
-    "ssl.client.auth",
-    "ssl.endpoint.identification.algorithm",
     "ssl.key.location",
     "ssl.key.password",
     "ssl.key.pem",
@@ -638,7 +636,6 @@ SUPPORTED_KAFKA_CONFIGURATION = (
     "ssl.keystore.password",
     "ssl.truststore.location",
     "ssl.truststore.password",
-    "ssl_key",
 )
 
 
