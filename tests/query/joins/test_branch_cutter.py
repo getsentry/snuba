@@ -21,7 +21,7 @@ TEST_CASES = [
         Column("_snuba_col", "events", "column"),
         SubqueryExpression(Column("_snuba_col", None, "column"), "events"),
         MainQueryExpression(
-            Column(None, "events", "_snuba_col"),
+            Column("_snuba_col", "events", "_snuba_col"),
             cut_branches={"events": {Column("_snuba_col", None, "column")}},
         ),
         id="Basic Column to push down",
@@ -30,7 +30,7 @@ TEST_CASES = [
         Column(None, "events", "column"),
         SubqueryExpression(Column(None, None, "column"), "events"),
         MainQueryExpression(
-            Column(None, "events", "_snuba_gen_1"),
+            Column("_snuba_gen_1", "events", "_snuba_gen_1"),
             cut_branches={"events": {Column("_snuba_gen_1", None, "column")}},
         ),
         id="Basic column with alias generation during branch cut",
@@ -62,7 +62,7 @@ TEST_CASES = [
             "events",
         ),
         MainQueryExpression(
-            Column(None, "events", "_snuba_tag"),
+            Column("_snuba_tag", "events", "_snuba_tag"),
             {
                 "events": {
                     SubscriptableReference(
@@ -90,7 +90,7 @@ TEST_CASES = [
             subquery_alias="events",
         ),
         MainQueryExpression(
-            Column(None, "events", "_snuba_f"),
+            Column("_snuba_f", "events", "_snuba_f"),
             {
                 "events": {
                     FunctionCall(
@@ -124,7 +124,7 @@ TEST_CASES = [
             subquery_alias="events",
         ),
         MainQueryExpression(
-            Column(None, "events", "_snuba_f"),
+            Column("_snuba_f", "events", "_snuba_f"),
             {
                 "events": {
                     FunctionCall(
@@ -154,8 +154,8 @@ TEST_CASES = [
                 "_snuba_f",
                 "f",
                 (
-                    Column(None, "events", "_snuba_col"),
-                    Column(None, "groups", "_snuba_col2"),
+                    Column("_snuba_col", "events", "_snuba_col"),
+                    Column("_snuba_col2", "groups", "_snuba_col2"),
                 ),
             ),
             cut_branches={
@@ -168,8 +168,8 @@ TEST_CASES = [
                 "_snuba_f",
                 "f",
                 (
-                    Column(None, "events", "_snuba_col"),
-                    Column(None, "groups", "_snuba_col2"),
+                    Column("_snuba_col", "events", "_snuba_col"),
+                    Column("_snuba_col2", "groups", "_snuba_col2"),
                 ),
             ),
             cut_branches={
@@ -194,9 +194,9 @@ TEST_CASES = [
                 "_snuba_f",
                 "f",
                 (
-                    Column(None, "events", "_snuba_col"),
-                    Column(None, "groups", "_snuba_col2"),
-                    Column(None, "groups", "_snuba_col3"),
+                    Column("_snuba_col", "events", "_snuba_col"),
+                    Column("_snuba_col2", "groups", "_snuba_col2"),
+                    Column("_snuba_col3", "groups", "_snuba_col3"),
                 ),
             ),
             cut_branches={
@@ -212,9 +212,9 @@ TEST_CASES = [
                 "_snuba_f",
                 "f",
                 (
-                    Column(None, "events", "_snuba_col"),
-                    Column(None, "groups", "_snuba_col2"),
-                    Column(None, "groups", "_snuba_col3"),
+                    Column("_snuba_col", "events", "_snuba_col"),
+                    Column("_snuba_col2", "groups", "_snuba_col2"),
+                    Column("_snuba_col3", "groups", "_snuba_col3"),
                 ),
             ),
             cut_branches={
@@ -245,8 +245,8 @@ TEST_CASES = [
                 "_snuba_f",
                 "f",
                 (
-                    Column(None, "events", "_snuba_g"),
-                    Column(None, "groups", "_snuba_col2"),
+                    Column("_snuba_g", "events", "_snuba_g"),
+                    Column("_snuba_col2", "groups", "_snuba_col2"),
                 ),
             ),
             cut_branches={
@@ -265,8 +265,8 @@ TEST_CASES = [
                 "_snuba_f",
                 "f",
                 (
-                    Column(None, "events", "_snuba_g"),
-                    Column(None, "groups", "_snuba_col2"),
+                    Column("_snuba_g", "events", "_snuba_g"),
+                    Column("_snuba_col2", "groups", "_snuba_col2"),
                 ),
             ),
             cut_branches={
@@ -297,7 +297,7 @@ TEST_CASES = [
             subquery_alias="events",
         ),
         MainQueryExpression(
-            Column(None, "events", "_snuba_cf"),
+            Column("_snuba_cf", "events", "_snuba_cf"),
             {
                 "events": {
                     CurriedFunctionCall(
@@ -315,11 +315,15 @@ TEST_CASES = [
     pytest.param(
         FunctionCall("_snuba_f", "avg", (Column("_snuba_col", "events", "column"),)),
         MainQueryExpression(
-            FunctionCall("_snuba_f", "avg", (Column(None, "events", "_snuba_col"),)),
+            FunctionCall(
+                "_snuba_f", "avg", (Column("_snuba_col", "events", "_snuba_col"),)
+            ),
             {"events": {Column("_snuba_col", None, "column")}},
         ),
         MainQueryExpression(
-            FunctionCall("_snuba_f", "avg", (Column(None, "events", "_snuba_col"),)),
+            FunctionCall(
+                "_snuba_f", "avg", (Column("_snuba_col", "events", "_snuba_col"),)
+            ),
             {"events": {Column("_snuba_col", None, "column")}},
         ),
         id="Aggregate function over a column. Do not push down",
@@ -345,8 +349,8 @@ TEST_CASES = [
                 "_snuba_f",
                 "countIf",
                 (
-                    Column(None, "events", "_snuba_col"),
-                    Column(None, "events", "_snuba_eq"),
+                    Column("_snuba_col", "events", "_snuba_col"),
+                    Column("_snuba_eq", "events", "_snuba_eq"),
                 ),
             ),
             {
@@ -368,8 +372,8 @@ TEST_CASES = [
                 "_snuba_f",
                 "countIf",
                 (
-                    Column(None, "events", "_snuba_col"),
-                    Column(None, "events", "_snuba_eq"),
+                    Column("_snuba_col", "events", "_snuba_col"),
+                    Column("_snuba_eq", "events", "_snuba_eq"),
                 ),
             ),
             {
@@ -406,8 +410,8 @@ TEST_CASES = [
                 "_snuba_f",
                 "f",
                 (
-                    Column(None, "events", "_snuba_gen_1"),
-                    Column(None, "groups", "_snuba_gen_2"),
+                    Column("_snuba_gen_1", "events", "_snuba_gen_1"),
+                    Column("_snuba_gen_2", "groups", "_snuba_gen_2"),
                 ),
             ),
             cut_branches={
@@ -426,8 +430,8 @@ TEST_CASES = [
                 "_snuba_f",
                 "f",
                 (
-                    Column(None, "events", "_snuba_gen_1"),
-                    Column(None, "groups", "_snuba_gen_2"),
+                    Column("_snuba_gen_1", "events", "_snuba_gen_1"),
+                    Column("_snuba_gen_2", "groups", "_snuba_gen_2"),
                 ),
             ),
             cut_branches={
@@ -448,13 +452,13 @@ TEST_CASES = [
             "_snuba_countif",
             "countIf",
             (
-                Column("_snuba_col", "events", "column"),
+                Column("_snuba_events.col", "events", "column"),
                 FunctionCall(
                     "_snuba_eq",
                     "equals",
                     (
-                        Column("_snuba_col", "groups", "column"),
-                        Column("_snuba_col", "events", "column"),
+                        Column("_snuba_groups.col", "groups", "column"),
+                        Column("_snuba_events.col", "events", "column"),
                     ),
                 ),
             ),
@@ -464,20 +468,20 @@ TEST_CASES = [
                 "_snuba_countif",
                 "countIf",
                 (
-                    Column(None, "events", "_snuba_col"),
+                    Column("_snuba_events.col", "events", "_snuba_events.col"),
                     FunctionCall(
                         "_snuba_eq",
                         "equals",
                         (
-                            Column(None, "groups", "_snuba_col"),
-                            Column(None, "events", "_snuba_col"),
+                            Column("_snuba_groups.col", "groups", "_snuba_groups.col"),
+                            Column("_snuba_events.col", "events", "_snuba_events.col"),
                         ),
                     ),
                 ),
             ),
             {
-                "events": {Column("_snuba_col", None, "column")},
-                "groups": {Column("_snuba_col", None, "column")},
+                "events": {Column("_snuba_events.col", None, "column")},
+                "groups": {Column("_snuba_groups.col", None, "column")},
             },
         ),
         MainQueryExpression(
@@ -485,20 +489,20 @@ TEST_CASES = [
                 "_snuba_countif",
                 "countIf",
                 (
-                    Column(None, "events", "_snuba_col"),
+                    Column("_snuba_events.col", "events", "_snuba_events.col"),
                     FunctionCall(
                         "_snuba_eq",
                         "equals",
                         (
-                            Column(None, "groups", "_snuba_col"),
-                            Column(None, "events", "_snuba_col"),
+                            Column("_snuba_groups.col", "groups", "_snuba_groups.col"),
+                            Column("_snuba_events.col", "events", "_snuba_events.col"),
                         ),
                     ),
                 ),
             ),
             {
-                "events": {Column("_snuba_col", None, "column")},
-                "groups": {Column("_snuba_col", None, "column")},
+                "events": {Column("_snuba_events.col", None, "column")},
+                "groups": {Column("_snuba_groups.col", None, "column")},
             },
         ),
         id="Aggregation function that contains a function that is mixed",
