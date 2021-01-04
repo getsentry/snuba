@@ -629,13 +629,18 @@ SUPPORTED_KAFKA_CONFIGURATION = (
     "sasl.username",
     "sasl.password",
     "security.protocol",
+    "ssl.cipher.suites",
+    "ssl.enabled.protocols",
     "ssl.key.location",
     "ssl.key.password",
     "ssl.key.pem",
     "ssl.keystore.location",
     "ssl.keystore.password",
+    "ssl.keystore.type",
+    "ssl.provider",
     "ssl.truststore.location",
     "ssl.truststore.password",
+    "ssl.truststore.type",
 )
 
 
