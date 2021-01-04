@@ -1,11 +1,15 @@
-from typing import Sequence, cast
+from typing import Optional, Sequence, cast
 
 import pytest
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import ENTITY_IMPL
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
-from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.conditions import (
+    BooleanFunctions,
+    ConditionFunctions,
+    binary_condition,
+)
 from snuba.query.data_source.join import (
     IndividualNode,
     JoinClause,
@@ -14,7 +18,7 @@ from snuba.query.data_source.join import (
     JoinType,
 )
 from snuba.query.data_source.simple import Entity
-from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.joins.subquery_generator import generate_subqueries
 from snuba.query.logical import Query as LogicalQuery
 from tests.query.joins.equivalence_schema import (
@@ -44,27 +48,40 @@ BASIC_JOIN = JoinClause(
 
 
 def build_node(
-    alias: str, from_clause: Entity, selected_columns: Sequence[SelectedExpression]
+    alias: str,
+    from_clause: Entity,
+    selected_columns: Sequence[SelectedExpression],
+    condition: Optional[Expression],
 ) -> IndividualNode[Entity]:
     return IndividualNode(
         alias=alias,
         data_source=LogicalQuery(
-            {}, from_clause=from_clause, selected_columns=selected_columns
+            {},
+            from_clause=from_clause,
+            selected_columns=selected_columns,
+            condition=condition,
         ),
     )
 
 
 def events_node(
     selected_columns: Sequence[SelectedExpression],
+    condition: Optional[Expression] = None,
 ) -> IndividualNode[Entity]:
-    return build_node("ev", Entity(EntityKey.EVENTS, EVENTS_SCHEMA), selected_columns)
+    return build_node(
+        "ev", Entity(EntityKey.EVENTS, EVENTS_SCHEMA), selected_columns, condition
+    )
 
 
 def groups_node(
     selected_columns: Sequence[SelectedExpression],
+    condition: Optional[Expression] = None,
 ) -> IndividualNode[Entity]:
     return build_node(
-        "gr", Entity(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA), selected_columns
+        "gr",
+        Entity(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA),
+        selected_columns,
+        condition,
     )
 
 
@@ -184,16 +201,67 @@ TEST_CASES = [
                 groups_node(
                     [
                         SelectedExpression(
+                            "_snuba_group_id", Column("_snuba_group_id", None, "id"),
+                        ),
+                        SelectedExpression(
+                            "_snuba_id", Column("_snuba_id", None, "id")
+                        ),
+                    ],
+                    condition=binary_condition(
+                        ConditionFunctions.EQ,
+                        Column("_snuba_group_id", None, "id"),
+                        Literal(None, 123),
+                    ),
+                ),
+            ),
+            selected_columns=[
+                SelectedExpression("group_id", Column(None, "gr", "_snuba_group_id")),
+            ],
+        ),
+        id="Query with condition",
+    ),
+    pytest.param(
+        CompositeQuery(
+            from_clause=BASIC_JOIN,
+            selected_columns=[
+                SelectedExpression("group_id", Column("_snuba_group_id", "gr", "id")),
+            ],
+            condition=binary_condition(
+                BooleanFunctions.AND,
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    Column("_snuba_group_id", "gr", "id"),
+                    Literal(None, 123),
+                ),
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    Column("_snuba_group_id", "gr", "id"),
+                    FunctionCall(
+                        None, "f", (Column("_snuba_e_group_id", "ev", "group_id"),)
+                    ),
+                ),
+            ),
+        ),
+        CompositeQuery(
+            from_clause=events_groups_join(
+                events_node(
+                    [
+                        SelectedExpression(
                             "_snuba_gen_1",
                             FunctionCall(
                                 "_snuba_gen_1",
-                                "equals",
-                                (
-                                    Column("_snuba_group_id", None, "id"),
-                                    Literal(None, 123),
-                                ),
+                                "f",
+                                (Column("_snuba_e_group_id", None, "group_id"),),
                             ),
                         ),
+                        SelectedExpression(
+                            "_snuba_group_id",
+                            Column("_snuba_group_id", None, "group_id"),
+                        ),
+                    ],
+                ),
+                groups_node(
+                    [
                         SelectedExpression(
                             "_snuba_group_id", Column("_snuba_group_id", None, "id"),
                         ),
@@ -201,14 +269,23 @@ TEST_CASES = [
                             "_snuba_id", Column("_snuba_id", None, "id")
                         ),
                     ],
+                    binary_condition(
+                        ConditionFunctions.EQ,
+                        Column("_snuba_group_id", None, "id"),
+                        Literal(None, 123),
+                    ),
                 ),
             ),
             selected_columns=[
                 SelectedExpression("group_id", Column(None, "gr", "_snuba_group_id")),
             ],
-            condition=Column(None, "gr", "_snuba_gen_1"),
+            condition=binary_condition(
+                ConditionFunctions.EQ,
+                Column(None, "gr", "_snuba_group_id"),
+                Column(None, "ev", "_snuba_gen_1"),
+            ),
         ),
-        id="Query with condition",
+        id="Query with condition across entities",
     ),
     pytest.param(
         CompositeQuery(

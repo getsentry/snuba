@@ -1,5 +1,5 @@
 from dataclasses import replace
-from typing import Generator, Mapping, Set
+from typing import Generator, List, Mapping, Set
 
 from snuba.query import ProcessableQuery, SelectedExpression
 from snuba.query.composite import CompositeQuery
@@ -17,7 +17,12 @@ from snuba.query.data_source.join import (
 )
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, Expression
-from snuba.query.joins.classifier import AliasGenerator, BranchCutter
+from snuba.query.joins.classifier import (
+    AliasGenerator,
+    BranchCutter,
+    SubExpression,
+    SubqueryExpression,
+)
 from snuba.query.logical import Query as LogicalQuery
 
 
@@ -29,9 +34,13 @@ class SubqueryDraft:
     def __init__(self, data_source: Entity) -> None:
         self.__data_source = data_source
         self.__selected_expressions: Set[SelectedExpression] = set()
+        self.__conditions: List[Expression] = []
 
     def add_select_expression(self, expression: SelectedExpression) -> None:
         self.__selected_expressions.add(expression)
+
+    def add_condition(self, condition: Expression) -> None:
+        self.__conditions.append(condition)
 
     def build_query(self) -> ProcessableQuery[Entity]:
         return LogicalQuery(
@@ -40,6 +49,9 @@ class SubqueryDraft:
             selected_columns=list(
                 sorted(self.__selected_expressions, key=lambda selected: selected.name)
             ),
+            condition=combine_and_conditions(self.__conditions)
+            if self.__conditions
+            else None,
         )
 
 
@@ -145,16 +157,27 @@ def _process_root(
     Takes a root expression in the main query, runs the branch cutter
     and pushes down the subexpressions.
     """
-    subexpressions = expression.accept(BranchCutter(alias_generator)).cut_branch(
-        alias_generator
-    )
-    for entity_alias, branches in subexpressions.cut_branches.items():
+    subexpressions = expression.accept(BranchCutter(alias_generator))
+    return _push_down_branches(subexpressions, subqueries, alias_generator)
+
+
+def _push_down_branches(
+    subexpressions: SubExpression,
+    subqueries: Mapping[str, SubqueryDraft],
+    alias_generator: AliasGenerator,
+) -> Expression:
+    """
+    Pushes the branches of a SubExpression into subqueries and
+    returns the main expression for the main query.
+    """
+    cut_subexpression = subexpressions.cut_branch(alias_generator)
+    for entity_alias, branches in cut_subexpression.cut_branches.items():
         for branch in branches:
             subqueries[entity_alias].add_select_expression(
                 SelectedExpression(name=branch.alias, expression=branch)
             )
 
-    return subexpressions.main_expression
+    return cut_subexpression.main_expression
 
 
 def _alias_generator() -> Generator[str, None, None]:
@@ -190,6 +213,11 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
         FROM groups
     ) g ON ....
     ```
+
+    Conditions are treated differently compared to other expressions. If
+    a condition is entirely contained in a single subquery, we push it
+    down entirely in the condition clause of the subquery and remove it
+    from the main query entirely.
     """
 
     from_clause = query.get_from_clause()
@@ -217,20 +245,35 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
     if array_join is not None:
         query.set_arrayjoin(_process_root(array_join, subqueries, alias_generator))
 
-    # TODO: Push down conditions into the condition section of the
-    # subquery when possible instead of pushing them into the select
-    # and referencing them from the main query.
     ast_condition = query.get_condition_from_ast()
     if ast_condition is not None:
-        query.set_ast_condition(
-            combine_and_conditions(
-                [
-                    _process_root(c, subqueries, alias_generator)
-                    for c in get_first_level_and_conditions(ast_condition)
-                ]
-            )
-        )
+        main_conditions = []
+        for c in get_first_level_and_conditions(ast_condition):
+            subexpression = c.accept(BranchCutter(alias_generator))
+            if isinstance(subexpression, SubqueryExpression):
+                # The expression is entirely contained in a single subquery
+                # after we tried to cut subquery branches with the
+                # BranchCutter visitor.
+                # so push down the entire condition and remove it from
+                # the main query.
+                subqueries[subexpression.subquery_alias].add_condition(
+                    subexpression.main_expression
+                )
+            else:
+                # This condition has references to multiple subqueries.
+                # We cannot push down the condition. We push down the
+                # branches into the select clauses and we reference them
+                # from the main query condition.
+                main_conditions.append(
+                    _push_down_branches(subexpression, subqueries, alias_generator)
+                )
 
+        if main_conditions:
+            query.set_ast_condition(combine_and_conditions(main_conditions))
+        else:
+            query.set_ast_condition(None)
+
+    # TODO: push down the group by when it is the same as the join key.
     query.set_ast_groupby(
         [
             _process_root(e, subqueries, alias_generator)
