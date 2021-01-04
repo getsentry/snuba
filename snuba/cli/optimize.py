@@ -17,7 +17,6 @@ from snuba.environment import setup_logging
 @click.option(
     "--clickhouse-port", type=int, help="Clickhouse native port to write to.",
 )
-@click.option("--database", default="default", help="Name of the database to target.")
 @click.option(
     "--storage",
     "storage_name",
@@ -30,7 +29,6 @@ def optimize(
     *,
     clickhouse_host: Optional[str],
     clickhouse_port: Optional[int],
-    database: str,
     storage_name: str,
     log_level: Optional[str] = None,
 ) -> None:
@@ -55,12 +53,14 @@ def optimize(
 
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
+    database = storage.get_cluster().get_database()
+
     # TODO: In distributed mode, optimize currently must be run once for each node
     # with the host and port of that node provided via the CLI. In the future,
     # passing this information won't be necessary, and running this command once
     # will ensure that optimize is performed on all of the individual nodes for
     # that cluster.
-    if clickhouse_host and clickhouse_port and database:
+    if clickhouse_host and clickhouse_port:
         connection = ClickhousePool(
             clickhouse_host,
             clickhouse_port,
