@@ -18,7 +18,7 @@ Timing = float
 QueryPipelineBuilders = Mapping[BuilderId, QueryPipelineBuilder[ClickhouseQueryPlan]]
 QueryResults = List[Result[QueryResult]]
 SelectorFunc = Callable[[LogicalQuery], Tuple[BuilderId, List[BuilderId]]]
-CallbackFunc = Callable[[LogicalQuery, QueryResults], None]
+CallbackFunc = Callable[[LogicalQuery, str, QueryResults], None]
 
 
 class MultipleConcurrentPipeline(QueryExecutionPipeline):
@@ -58,7 +58,9 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
         self.__query_pipeline_builders = query_pipeline_builders
         self.__selector_func = selector_func
         self.__callback_func = (
-            partial(callback_func, self.__request.query) if callback_func else None
+            partial(callback_func, self.__request.query, self.__request.referrer)
+            if callback_func
+            else None
         )
 
     def execute(self) -> QueryResult:

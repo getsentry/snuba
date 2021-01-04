@@ -183,8 +183,14 @@ class Query(DataSource, ABC):
     def get_orderby_from_ast(self) -> Sequence[OrderBy]:
         return self.__order_by
 
+    def set_ast_orderby(self, orderby: Sequence[OrderBy]) -> None:
+        self.__order_by = orderby
+
     def get_limitby(self) -> Optional[LimitBy]:
         return self.__limitby
+
+    def set_limitby(self, limitby: LimitBy) -> None:
+        self.__limitby = limitby
 
     def get_limit(self) -> Optional[int]:
         return self.__limit
