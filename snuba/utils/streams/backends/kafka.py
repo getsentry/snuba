@@ -631,6 +631,7 @@ SUPPORTED_KAFKA_CONFIGURATION = (
     "security.protocol",
     "ssl.cipher.suites",
     "ssl.enabled.protocols",
+    "ssl.endpoint.identification.algorithm",
     "ssl.key.location",
     "ssl.key.password",
     "ssl.key.pem",
