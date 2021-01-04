@@ -735,7 +735,7 @@ test_cases = [
         id="Special array join functions",
     ),
     pytest.param(
-        "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, c",
+        "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c",
         CompositeQuery(
             from_clause=JoinClause(
                 left_node=IndividualNode(
@@ -764,13 +764,13 @@ test_cases = [
                     "4-5",
                     FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression("e.c", Column("_snuba_e.c", "e", "c")),
             ],
         ),
         id="Basic join match",
     ),
     pytest.param(
-        "MATCH (e: events) -[contains]-> (t: transactions SAMPLE 0.5) SELECT 4-5, c",
+        "MATCH (e: events) -[contains]-> (t: transactions SAMPLE 0.5) SELECT 4-5, t.c",
         CompositeQuery(
             from_clause=JoinClause(
                 left_node=IndividualNode(
@@ -800,7 +800,7 @@ test_cases = [
                     "4-5",
                     FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression("t.c", Column("_snuba_t.c", "t", "c")),
             ],
         ),
         id="Basic join match with sample",
@@ -809,7 +809,7 @@ test_cases = [
         """MATCH
             (e: events) -[contains]-> (t: transactions),
             (e: events) -[assigned]-> (ga: groupassignee)
-        SELECT 4-5, c""",
+        SELECT 4-5, ga.c""",
         CompositeQuery(
             from_clause=JoinClause(
                 left_node=JoinClause(
@@ -855,7 +855,7 @@ test_cases = [
                     "4-5",
                     FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression("ga.c", Column("_snuba_ga.c", "ga", "c")),
             ],
         ),
         id="Multi join match",
@@ -866,7 +866,7 @@ test_cases = [
             (e: events) -[assigned]-> (ga: groupassignee),
             (e: events) -[bookmark]-> (gm: groupedmessage),
             (e: events) -[activity]-> (se: sessions)
-        SELECT 4-5, c""",
+        SELECT 4-5, e.a, t.b, ga.c, gm.d, se.e""",
         CompositeQuery(
             from_clause=JoinClause(
                 left_node=JoinClause(
@@ -944,7 +944,11 @@ test_cases = [
                     "4-5",
                     FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
                 ),
-                SelectedExpression("c", Column("_snuba_c", None, "c")),
+                SelectedExpression("e.a", Column("_snuba_e.a", "e", "a")),
+                SelectedExpression("t.b", Column("_snuba_t.b", "t", "b")),
+                SelectedExpression("ga.c", Column("_snuba_ga.c", "ga", "c")),
+                SelectedExpression("gm.d", Column("_snuba_gm.d", "gm", "d")),
+                SelectedExpression("se.e", Column("_snuba_se.e", "se", "e")),
             ],
         ),
         id="Multi multi join match",

@@ -50,6 +50,7 @@ storage = WritableTableStorage(
         StorageKey.SPANS,
         processor=SpansMessageProcessor(),
         default_topic_name="events",
+        commit_log_topic_name="snuba-commit-log",
     ),
     query_splitters=[TimeSplitQueryStrategy(timestamp_col="finish_ts")],
 )

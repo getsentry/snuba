@@ -734,6 +734,34 @@ def parse_snql_query_initial(
     return parsed
 
 
+def _qualify_columns(query: Union[CompositeQuery[QueryEntity], LogicalQuery]) -> None:
+    """
+    All columns in a join query should be qualified with the entity alias, e.g. e.event_id
+    Take those aliases and put them in the table name. This has to be done in a post
+    process since we need to have all the aliases from the join clause.
+    """
+
+    from_clause = query.get_from_clause()
+    if not isinstance(from_clause, JoinClause):
+        return  # We don't qualify columns that have a single source
+
+    aliases = set(from_clause.get_alias_node_map().keys())
+
+    def transform(exp: Expression) -> Expression:
+        if not isinstance(exp, Column):
+            return exp
+
+        parts = exp.column_name.split(".", 1)
+        if len(parts) != 2 or parts[0] not in aliases:
+            raise ParsingException(
+                f"column {exp.column_name} must be qualified in a join query"
+            )
+
+        return Column(exp.alias, parts[0], parts[1])
+
+    query.transform_expressions(transform)
+
+
 DATETIME_MATCH = FunctionCallMatch(
     StringMatch("toDateTime"), (Param("date_string", LiteralMatch(AnyMatch(str))),)
 )
@@ -872,6 +900,7 @@ def parse_snql_query(
             _expand_aliases,
             _mangle_query_aliases,
             _array_join_transformation,
+            _qualify_columns,
         ],
     )
 
