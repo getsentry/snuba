@@ -844,6 +844,8 @@ def _mangle_query_aliases(
     selected expression values.
 
     So, we mangle the outer query column names to match the inner query aliases as well.
+    There's no way around this since the inner queries are not executed separately from
+    the outer queries in Clickhouse, so we only receive one set of results.
     """
 
     alias_prefix = "_snuba_"
