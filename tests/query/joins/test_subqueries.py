@@ -1,4 +1,4 @@
-from typing import cast
+from typing import Sequence, cast
 
 import pytest
 from snuba.datasets.entities import EntityKey
@@ -42,43 +42,64 @@ BASIC_JOIN = JoinClause(
     join_type=JoinType.INNER,
 )
 
+
+def build_node(
+    alias: str, from_clause: Entity, selected_columns: Sequence[SelectedExpression]
+) -> IndividualNode[Entity]:
+    return IndividualNode(
+        alias=alias,
+        data_source=LogicalQuery(
+            {}, from_clause=from_clause, selected_columns=selected_columns
+        ),
+    )
+
+
+def events_node(
+    selected_columns: Sequence[SelectedExpression],
+) -> IndividualNode[Entity]:
+    return build_node("ev", Entity(EntityKey.EVENTS, EVENTS_SCHEMA), selected_columns)
+
+
+def groups_node(
+    selected_columns: Sequence[SelectedExpression],
+) -> IndividualNode[Entity]:
+    return build_node(
+        "gr", Entity(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA), selected_columns
+    )
+
+
+def events_groups_join(
+    left: IndividualNode[Entity], right: IndividualNode[Entity],
+) -> JoinClause[Entity]:
+    return JoinClause(
+        left_node=left,
+        right_node=right,
+        keys=[
+            JoinCondition(
+                left=JoinConditionExpression("ev", "_snuba_group_id"),
+                right=JoinConditionExpression("gr", "_snuba_id"),
+            )
+        ],
+        join_type=JoinType.INNER,
+    )
+
+
 TEST_CASES = [
     pytest.param(
         CompositeQuery(from_clause=BASIC_JOIN, selected_columns=[],),
         CompositeQuery(
-            from_clause=JoinClause(
-                left_node=IndividualNode(
-                    alias="ev",
-                    data_source=LogicalQuery(
-                        {},
-                        from_clause=Entity(EntityKey.EVENTS, EVENTS_SCHEMA),
-                        selected_columns=[
-                            SelectedExpression(
-                                "_snuba_group_id",
-                                Column("_snuba_group_id", None, "group_id"),
-                            ),
-                        ],
-                    ),
+            from_clause=events_groups_join(
+                events_node(
+                    [
+                        SelectedExpression(
+                            "_snuba_group_id",
+                            Column("_snuba_group_id", None, "group_id"),
+                        ),
+                    ]
                 ),
-                right_node=IndividualNode(
-                    alias="gr",
-                    data_source=LogicalQuery(
-                        {},
-                        from_clause=Entity(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA),
-                        selected_columns=[
-                            SelectedExpression(
-                                "_snuba_id", Column("_snuba_id", None, "id")
-                            ),
-                        ],
-                    ),
+                groups_node(
+                    [SelectedExpression("_snuba_id", Column("_snuba_id", None, "id"))],
                 ),
-                keys=[
-                    JoinCondition(
-                        left=JoinConditionExpression("ev", "_snuba_group_id"),
-                        right=JoinConditionExpression("gr", "_snuba_id"),
-                    )
-                ],
-                join_type=JoinType.INNER,
             ),
             selected_columns=[],
         ),
@@ -100,43 +121,29 @@ TEST_CASES = [
             ],
         ),
         CompositeQuery(
-            from_clause=JoinClause(
-                left_node=IndividualNode(
-                    alias="ev",
-                    data_source=LogicalQuery(
-                        {},
-                        from_clause=Entity(EntityKey.EVENTS, EVENTS_SCHEMA),
-                        selected_columns=[
-                            SelectedExpression(
-                                "_snuba_event_id",
-                                Column("_snuba_event_id", None, "event_id"),
-                            ),
-                            SelectedExpression(
-                                "_snuba_group_id",
-                                Column("_snuba_group_id", None, "group_id"),
-                            ),
-                        ],
-                    ),
+            from_clause=events_groups_join(
+                events_node(
+                    [
+                        SelectedExpression(
+                            "_snuba_event_id",
+                            Column("_snuba_event_id", None, "event_id"),
+                        ),
+                        SelectedExpression(
+                            "_snuba_group_id",
+                            Column("_snuba_group_id", None, "group_id"),
+                        ),
+                    ]
                 ),
-                right_node=IndividualNode(
-                    alias="gr",
-                    data_source=LogicalQuery(
-                        {},
-                        from_clause=Entity(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA),
-                        selected_columns=[
-                            SelectedExpression(
-                                "_snuba_id", Column("_snuba_id", None, "id")
-                            ),
-                        ],
-                    ),
+                groups_node(
+                    [
+                        SelectedExpression(
+                            "_snuba_group_id", Column("_snuba_group_id", None, "id"),
+                        ),
+                        SelectedExpression(
+                            "_snuba_id", Column("_snuba_id", None, "id")
+                        ),
+                    ],
                 ),
-                keys=[
-                    JoinCondition(
-                        left=JoinConditionExpression("ev", "_snuba_group_id"),
-                        right=JoinConditionExpression("gr", "_snuba_id"),
-                    )
-                ],
-                join_type=JoinType.INNER,
             ),
             selected_columns=[
                 SelectedExpression(
@@ -147,30 +154,14 @@ TEST_CASES = [
                         (Column(None, "ev", "_snuba_event_id"),),
                     ),
                 ),
-                SelectedExpression("group_id", Column(None, "gr", "_snuba_id")),
+                SelectedExpression("group_id", Column(None, "gr", "_snuba_group_id")),
             ],
         ),
         id="Basic join with select",
     ),
     pytest.param(
         CompositeQuery(
-            from_clause=JoinClause(
-                left_node=IndividualNode(
-                    alias="ev",
-                    data_source=Entity(EntityKey.EVENTS, EVENTS_SCHEMA, None),
-                ),
-                right_node=IndividualNode(
-                    alias="gr",
-                    data_source=Entity(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA, None),
-                ),
-                keys=[
-                    JoinCondition(
-                        left=JoinConditionExpression("ev", "group_id"),
-                        right=JoinConditionExpression("gr", "id"),
-                    )
-                ],
-                join_type=JoinType.INNER,
-            ),
+            from_clause=BASIC_JOIN,
             selected_columns=[
                 SelectedExpression("group_id", Column("_snuba_group_id", "gr", "id")),
             ],
@@ -181,48 +172,41 @@ TEST_CASES = [
             ),
         ),
         CompositeQuery(
-            from_clause=JoinClause(
-                left_node=IndividualNode(
-                    alias="ev",
-                    data_source=LogicalQuery(
-                        {},
-                        from_clause=Entity(EntityKey.EVENTS, EVENTS_SCHEMA),
-                        selected_columns=[
-                            SelectedExpression(
-                                "_snuba_group_id",
-                                Column("_snuba_group_id", None, "group_id"),
-                            ),
-                        ],
-                    ),
+            from_clause=events_groups_join(
+                events_node(
+                    [
+                        SelectedExpression(
+                            "_snuba_group_id",
+                            Column("_snuba_group_id", None, "group_id"),
+                        ),
+                    ],
                 ),
-                right_node=IndividualNode(
-                    alias="gr",
-                    data_source=LogicalQuery(
-                        {},
-                        from_clause=Entity(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA),
-                        selected_columns=[
-                            SelectedExpression(
-                                "_snuba_id", Column("_snuba_id", None, "id")
+                groups_node(
+                    [
+                        SelectedExpression(
+                            "_snuba_gen_1",
+                            FunctionCall(
+                                "_snuba_gen_1",
+                                "equals",
+                                (
+                                    Column("_snuba_group_id", None, "id"),
+                                    Literal(None, 123),
+                                ),
                             ),
-                        ],
-                    ),
+                        ),
+                        SelectedExpression(
+                            "_snuba_group_id", Column("_snuba_group_id", None, "id"),
+                        ),
+                        SelectedExpression(
+                            "_snuba_id", Column("_snuba_id", None, "id")
+                        ),
+                    ],
                 ),
-                keys=[
-                    JoinCondition(
-                        left=JoinConditionExpression("ev", "_snuba_group_id"),
-                        right=JoinConditionExpression("gr", "_snuba_id"),
-                    )
-                ],
-                join_type=JoinType.INNER,
             ),
             selected_columns=[
-                SelectedExpression("group_id", Column(None, "gr", "_snuba_id")),
+                SelectedExpression("group_id", Column(None, "gr", "_snuba_group_id")),
             ],
-            condition=binary_condition(
-                ConditionFunctions.EQ,
-                Column(None, "gr", "_snuba_id"),
-                Literal(None, 123),
-            ),
+            condition=Column(None, "gr", "_snuba_gen_1"),
         ),
         id="Query with condition",
     ),
@@ -247,41 +231,26 @@ TEST_CASES = [
         ),
         CompositeQuery(
             from_clause=JoinClause(
-                left_node=JoinClause(
-                    left_node=IndividualNode(
-                        alias="ev",
-                        data_source=LogicalQuery(
-                            {},
-                            from_clause=Entity(EntityKey.EVENTS, EVENTS_SCHEMA),
-                            selected_columns=[
-                                SelectedExpression(
-                                    "_snuba_group_id",
-                                    Column("_snuba_group_id", None, "group_id"),
-                                ),
-                            ],
-                        ),
-                    ),
-                    right_node=IndividualNode(
-                        alias="gr",
-                        data_source=LogicalQuery(
-                            {},
-                            from_clause=Entity(
-                                EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA
+                left_node=events_groups_join(
+                    events_node(
+                        [
+                            SelectedExpression(
+                                "_snuba_group_id",
+                                Column("_snuba_group_id", None, "group_id"),
                             ),
-                            selected_columns=[
-                                SelectedExpression(
-                                    "_snuba_id", Column("_snuba_id", None, "id")
-                                ),
-                            ],
-                        ),
+                        ],
                     ),
-                    keys=[
-                        JoinCondition(
-                            left=JoinConditionExpression("ev", "_snuba_group_id"),
-                            right=JoinConditionExpression("gr", "_snuba_id"),
-                        )
-                    ],
-                    join_type=JoinType.INNER,
+                    groups_node(
+                        [
+                            SelectedExpression(
+                                "_snuba_group_id",
+                                Column("_snuba_group_id", None, "id"),
+                            ),
+                            SelectedExpression(
+                                "_snuba_id", Column("_snuba_id", None, "id")
+                            ),
+                        ],
+                    ),
                 ),
                 right_node=IndividualNode(
                     alias="as",
@@ -305,10 +274,188 @@ TEST_CASES = [
                 join_type=JoinType.INNER,
             ),
             selected_columns=[
-                SelectedExpression("group_id", Column(None, "gr", "_snuba_id")),
+                SelectedExpression("group_id", Column(None, "gr", "_snuba_group_id")),
             ],
         ),
         id="Multi entity join",
+    ),
+    pytest.param(
+        CompositeQuery(
+            from_clause=BASIC_JOIN,
+            selected_columns=[
+                SelectedExpression(
+                    "project_id",
+                    FunctionCall(
+                        "_snuba_project_id",
+                        "f",
+                        (Column("_snuba_project_id", "ev", "project_id"),),
+                    ),
+                ),
+                SelectedExpression(
+                    "max_timestamp",
+                    FunctionCall(
+                        "_snuba_max_timestamp",
+                        "max",
+                        (Column(None, "ev", "timestamp"),),
+                    ),
+                ),
+            ],
+            groupby=[
+                FunctionCall(
+                    "_snuba_project_id",
+                    "f",
+                    (Column("_snuba_project_id", "ev", "project_id"),),
+                ),
+            ],
+            having=FunctionCall(
+                None,
+                "greater",
+                (
+                    FunctionCall(None, "min", (Column(None, "ev", "timestamp"),)),
+                    Literal(None, "sometime"),
+                ),
+            ),
+        ),
+        CompositeQuery(
+            from_clause=events_groups_join(
+                events_node(
+                    [
+                        # TODO: We should deduplicate the next two expressions
+                        SelectedExpression(
+                            "_snuba_gen_1", Column("_snuba_gen_1", None, "timestamp")
+                        ),
+                        SelectedExpression(
+                            "_snuba_gen_2", Column("_snuba_gen_2", None, "timestamp")
+                        ),
+                        SelectedExpression(
+                            "_snuba_group_id",
+                            Column("_snuba_group_id", None, "group_id"),
+                        ),
+                        SelectedExpression(
+                            "_snuba_project_id",
+                            FunctionCall(
+                                "_snuba_project_id",
+                                "f",
+                                (Column("_snuba_project_id", None, "project_id"),),
+                            ),
+                        ),
+                    ]
+                ),
+                groups_node(
+                    [SelectedExpression("_snuba_id", Column("_snuba_id", None, "id"))],
+                ),
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "project_id", Column(None, "ev", "_snuba_project_id"),
+                ),
+                SelectedExpression(
+                    "max_timestamp",
+                    FunctionCall(
+                        "_snuba_max_timestamp",
+                        "max",
+                        (Column(None, "ev", "_snuba_gen_1"),),
+                    ),
+                ),
+            ],
+            groupby=[Column(None, "ev", "_snuba_project_id")],
+            having=FunctionCall(
+                None,
+                "greater",
+                (
+                    FunctionCall(None, "min", (Column(None, "ev", "_snuba_gen_2"),)),
+                    Literal(None, "sometime"),
+                ),
+            ),
+        ),
+        id="Query with group by, aggregation and having clause",
+    ),
+    pytest.param(
+        CompositeQuery(
+            from_clause=BASIC_JOIN,
+            selected_columns=[
+                SelectedExpression("a_col", Column("_snuba_a_col", "ev", "column")),
+                SelectedExpression(
+                    "a_func",
+                    FunctionCall(
+                        "_snuba_a_func",
+                        "f",
+                        (
+                            Column("_snuba_a_col", "ev", "column"),
+                            Column("_snuba_another_col", "gr", "another_column"),
+                        ),
+                    ),
+                ),
+                SelectedExpression(
+                    "another_func",
+                    FunctionCall(
+                        "_snuba_another_func",
+                        "f",
+                        (Column("_snuba_col3", "ev", "column3"),),
+                    ),
+                ),
+            ],
+            groupby=[
+                FunctionCall(
+                    "_snuba_another_func",
+                    "f",
+                    (Column("_snuba_col3", "ev", "column3"),),
+                )
+            ],
+        ),
+        CompositeQuery(
+            from_clause=events_groups_join(
+                events_node(
+                    [
+                        SelectedExpression(
+                            "_snuba_a_col", Column("_snuba_a_col", None, "column")
+                        ),
+                        SelectedExpression(
+                            "_snuba_another_func",
+                            FunctionCall(
+                                "_snuba_another_func",
+                                "f",
+                                (Column("_snuba_col3", None, "column3"),),
+                            ),
+                        ),
+                        SelectedExpression(
+                            "_snuba_group_id",
+                            Column("_snuba_group_id", None, "group_id"),
+                        ),
+                    ]
+                ),
+                groups_node(
+                    [
+                        SelectedExpression(
+                            "_snuba_another_col",
+                            Column("_snuba_another_col", None, "another_column"),
+                        ),
+                        SelectedExpression(
+                            "_snuba_id", Column("_snuba_id", None, "id")
+                        ),
+                    ]
+                ),
+            ),
+            selected_columns=[
+                SelectedExpression("a_col", Column(None, "ev", "_snuba_a_col")),
+                SelectedExpression(
+                    "a_func",
+                    FunctionCall(
+                        "_snuba_a_func",
+                        "f",
+                        (
+                            Column(None, "ev", "_snuba_a_col"),
+                            Column(None, "gr", "_snuba_another_col"),
+                        ),
+                    ),
+                ),
+                SelectedExpression(
+                    "another_func", Column(None, "ev", "_snuba_another_func")
+                ),
+            ],
+            groupby=[Column(None, "ev", "_snuba_another_func")],
+        ),
+        id="Identical expressions are pushed down only once [generated aliases are excluded]",
     ),
 ]
 
