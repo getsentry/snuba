@@ -482,7 +482,7 @@ def test_composite_planner(
 
     plan = CompositeQueryPlanner(
         deepcopy(logical_query), HTTPRequestSettings()
-    ).execute()
+    ).build_best_plan()
     report = plan.query.equals(composite_plan.query)
     assert report[0], f"Mismatch: {report[1]}"
 

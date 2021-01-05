@@ -64,8 +64,14 @@ def get_raw_event() -> InsertEvent:
                 "method": "POST",
                 "env": {"SERVER_PORT": "1010", "SERVER_NAME": "snuba"},
             },
+            "user": {
+                "email": "sally@example.org",
+                "ip_address": "8.8.8.8",
+                "geo": {"city": "San Francisco", "region": "CA", "country_code": "US"},
+            },
             "contexts": {
-                "device": {"online": True, "charging": True, "model_id": "Galaxy"}
+                "device": {"online": True, "charging": True, "model_id": "Galaxy"},
+                "os": {"kernel_version": "1.1.1"},
             },
             "sentry.interfaces.Exception": {
                 "exc_omitted": None,

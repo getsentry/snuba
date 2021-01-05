@@ -1,3 +1,4 @@
+from dataclasses import replace
 from typing import (
     Any,
     Callable,
@@ -55,7 +56,6 @@ from snuba.query.logical import Query as LogicalQuery
 from snuba.query.parser import (
     _apply_column_aliases,
     _expand_aliases,
-    _mangle_aliases,
     _parse_subscriptables,
     _validate_aliases,
 )
@@ -835,6 +835,42 @@ def _array_join_transformation(
     query.transform_expressions(parse)
 
 
+def _mangle_query_aliases(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
+) -> None:
+    """
+    If a query has a subquery, the inner query will get its aliases mangled. This is
+    a problem because the outer query is using the inner aliases, not the inner
+    selected expression values.
+
+    So, we mangle the outer query column names to match the inner query aliases as well.
+    There's no way around this since the inner queries are not executed separately from
+    the outer queries in Clickhouse, so we only receive one set of results.
+    """
+
+    alias_prefix = "_snuba_"
+
+    def mangle_aliases(exp: Expression) -> Expression:
+        alias = exp.alias
+        if alias is not None:
+            return replace(exp, alias=f"{alias_prefix}{alias}")
+
+        return exp
+
+    def mangle_column_value(exp: Expression) -> Expression:
+        if not isinstance(exp, Column):
+            return exp
+
+        return replace(exp, column_name=f"{alias_prefix}{exp.column_name}")
+
+    query.transform_expressions(mangle_aliases)
+
+    # Check if this query has a subquery. If it does, we need to mangle the column name as well
+    # and keep track of what we mangled by updating the mappings in memory.
+    if isinstance(query.get_from_clause(), LogicalQuery):
+        query.transform_expressions(mangle_column_value)
+
+
 def _post_process(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
     funcs: Sequence[Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]],
@@ -862,7 +898,7 @@ def parse_snql_query(
             _parse_subscriptables,  # -> This should be part of the grammar
             _apply_column_aliases,
             _expand_aliases,
-            _mangle_aliases,
+            _mangle_query_aliases,
             _array_join_transformation,
             _qualify_columns,
         ],

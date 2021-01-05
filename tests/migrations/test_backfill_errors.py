@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
@@ -8,17 +6,16 @@ from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
 
 
-def get_errors_count() -> int:
+def test_backfill_errors() -> None:
     errors_storage = get_writable_storage(StorageKey.ERRORS)
-    errors_table_name = errors_storage.get_table_writer().get_schema().get_table_name()
     clickhouse = errors_storage.get_cluster().get_query_connection(
         ClickhouseClientSettings.QUERY
     )
-    return clickhouse.execute(f"SELECT count() from {errors_table_name}")[0][0]
+    errors_table_name = errors_storage.get_table_writer().get_schema().get_table_name()
 
+    def get_errors_count() -> int:
+        return clickhouse.execute(f"SELECT count() from {errors_table_name}")[0][0]
 
-@patch("snuba.migrations.backfill_errors.MAX_BATCH_SIZE", 5)
-def test_backfill_errors() -> None:
     raw_events = []
     for i in range(10):
         event = get_raw_event()
@@ -33,3 +30,16 @@ def test_backfill_errors() -> None:
     backfill_errors()
 
     assert get_errors_count() == 10
+
+    assert clickhouse.execute(
+        f"SELECT contexts.key, contexts.value from {errors_table_name} LIMIT 1;"
+    )[0] == (
+        (
+            "device.model_id",
+            "geo.city",
+            "geo.country_code",
+            "geo.region",
+            "os.kernel_version",
+        ),
+        ("Galaxy", "San Francisco", "US", "CA", "1.1.1"),
+    )
