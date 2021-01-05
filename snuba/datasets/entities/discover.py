@@ -1,8 +1,9 @@
-import logging
 import random
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import List, Mapping, Optional, Sequence, Set, Tuple
+
+import sentry_sdk
 
 from snuba import environment, state
 from snuba.clickhouse.columns import (
@@ -66,8 +67,6 @@ from snuba.util import qualified_column
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.threaded_function_delegator import Result
 from snuba.web import QueryResult
-
-logger = logging.getLogger(__name__)
 
 metrics = MetricsWrapper(environment.metrics, "api.discover.discover_entity")
 
@@ -446,29 +445,35 @@ class DiscoverEntity(Entity):
                     metrics.increment("query_result", tags={"match": "false"})
 
                     if len(result_data) != len(primary_result_data):
-                        logger.warning(
+
+                        sentry_sdk.capture_message(
                             "Non matching Discover result - different length",
+                            level="warning",
+                            tags={"referrer": referrer},
                             extra={
                                 "query": query.get_body(),
-                                "referrer": referrer,
                                 "discover_result": len(result_data),
                                 "events_result": len(primary_result_data),
                             },
                         )
+
                         break
 
                     # Avoid sending too much data to Sentry - just one row for now
                     for idx in range(len(result_data)):
                         if result_data[idx] != primary_result_data[idx]:
-                            logger.warning(
+
+                            sentry_sdk.capture_message(
                                 "Non matching Discover result - different result",
+                                level="warning",
+                                tags={"referrer": referrer},
                                 extra={
                                     "query": query.get_body(),
-                                    "referrer": referrer,
                                     "discover_result": result_data[idx],
                                     "events_result": primary_result_data[idx],
                                 },
                             )
+
                             break
 
         super().__init__(
