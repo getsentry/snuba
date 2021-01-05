@@ -983,7 +983,7 @@ test_cases = [
         id="sub query match",
     ),
     pytest.param(
-        "MATCH { MATCH { MATCH (events) SELECT count() AS count BY title } SELECT max(count) AS max_count } SELECT min(count) AS min_count",
+        "MATCH { MATCH { MATCH (events) SELECT count() AS count BY title } SELECT max(count) AS max_count } SELECT min(max_count) AS min_count",
         CompositeQuery(
             from_clause=CompositeQuery(
                 from_clause=LogicalQuery(
@@ -1018,7 +1018,7 @@ test_cases = [
                     FunctionCall(
                         "_snuba_min_count",
                         "min",
-                        (Column("_snuba_count", None, "_snuba_count"),),
+                        (Column("_snuba_max_count", None, "max_count"),),
                     ),
                 ),
             ],
