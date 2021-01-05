@@ -409,6 +409,12 @@ class DiscoverEntity(Entity):
                             ColumnToMapping(
                                 None, "geo_city", None, "contexts", "geo.city"
                             ),
+                            ColumnToFunction(
+                                None,
+                                "user",
+                                "nullIf",
+                                (Column(None, None, "user"), Literal(None, "")),
+                            ),
                         ]
                     )
                 )
