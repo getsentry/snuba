@@ -1,20 +1,39 @@
-from datetime import timedelta
-from typing import Sequence
+from datetime import datetime, timedelta
+from typing import Optional, Sequence
 import logging
 
 from snuba import util
+from snuba.clickhouse.native import ClickhousePool
+from snuba.datasets.schemas.tables import TableSchema
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_storage
 
 logger = logging.getLogger("snuba.optimize")
 
 
-def run_optimize(clickhouse, database, table, before=None):
-    parts = get_partitions_to_optimize(clickhouse, database, table, before)
-    optimize_partitions(clickhouse, database, table, parts)
+def run_optimize(
+    clickhouse: ClickhousePool,
+    storage_key: StorageKey,
+    database: str,
+    before: Optional[datetime] = None,
+) -> int:
+    storage = get_storage(storage_key)
+    schema = storage.get_schema()
+    assert isinstance(schema, TableSchema)
+    table = schema.get_local_table_name()
+    database = storage.get_cluster().get_database()
+
+    parts = get_partitions_to_optimize(clickhouse, storage_key, database, table, before)
+    optimize_partitions(clickhouse, storage_key, database, table, parts)
     return len(parts)
 
 
 def get_partitions_to_optimize(
-    clickhouse, database, table, before=None
+    clickhouse: ClickhousePool,
+    storage_key: StorageKey,
+    database: str,
+    table: str,
+    before: Optional[datetime] = None,
 ) -> Sequence[util.Part]:
     engine = clickhouse.execute(
         """
@@ -62,7 +81,7 @@ def get_partitions_to_optimize(
         {"database": database, "table": table},
     )
 
-    parts = [util.decode_part_str(part) for part, count in active_parts]
+    parts = [util.decode_part_str(part, storage_key) for part, count in active_parts]
 
     if before:
         parts = [
@@ -72,11 +91,29 @@ def get_partitions_to_optimize(
     return parts
 
 
-def optimize_partitions(clickhouse, database, table, parts):
-    query_template = """\
+def optimize_partitions(
+    clickhouse: ClickhousePool,
+    storage_key: StorageKey,
+    database: str,
+    table: str,
+    parts: Sequence[util.Part],
+) -> None:
+
+    events_query_template = """\
         OPTIMIZE TABLE %(database)s.%(table)s
         PARTITION ('%(date_str)s', %(retention_days)s) FINAL
     """
+
+    errors_transactions_query_template = """\
+        OPTIMIZE TABLE %(database)s.%(table)s
+        PARTITION (%(retention_days)s, '%(date_str)s') FINAL
+    """
+
+    query_template = {
+        StorageKey.EVENTS: events_query_template,
+        StorageKey.ERRORS: errors_transactions_query_template,
+        StorageKey.TRANSACTIONS: errors_transactions_query_template,
+    }[storage_key]
 
     for part_date, retention_days in parts:
         date_str = part_date.strftime("%Y-%m-%d")

@@ -23,6 +23,7 @@ from dateutil.parser import parse as dateutil_parse
 import _strptime  # NOQA fixes _strptime deferred import issue
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
+from snuba.datasets.storages import StorageKey
 from snuba.query.parsing import ParsingContext
 from snuba.query.schema import CONDITION_OPERATORS
 from snuba.utils.metrics import MetricsBackend
@@ -34,9 +35,19 @@ logger = logging.getLogger("snuba.util")
 
 T = TypeVar("T")
 
+# example partition name: "(90, '2018-03-13 00:00:00')"
+ERRORS_TRANSACTIONS_PART_RE = re.compile(
+    r"\((?P<retention>\d+),\s*('(?P<timestamp>\d{4}-\d{2}-\d{2})')\)"
+)
+PART_RE = {
+    StorageKey.EVENTS: re.compile(
+        r"\('(?P<timestamp>\d{4}-\d{2}-\d{2})',\s*(?P<retention>\d+)\)"
+    ),
+    StorageKey.ERRORS: ERRORS_TRANSACTIONS_PART_RE,
+    StorageKey.TRANSACTIONS: ERRORS_TRANSACTIONS_PART_RE,
+}
 
-# example partition name: "('2018-03-13 00:00:00', 90)"
-PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})',\s*(\d+)\)")
+
 QUOTED_LITERAL_RE = re.compile(r"^'[\s\S]*'$")
 SAFE_FUNCTION_RE = re.compile(r"-?[a-zA-Z_][a-zA-Z0-9_]*$")
 
@@ -197,12 +208,13 @@ class Part(NamedTuple):
     retention_days: int
 
 
-def decode_part_str(part_str: str) -> Part:
-    match = PART_RE.match(part_str)
+def decode_part_str(part_str: str, storage: StorageKey) -> Part:
+    match = PART_RE[storage].match(part_str)
+
     if not match:
         raise ValueError("Unknown part name/format: " + str(part_str))
-
-    date_str, retention_days = match.groups()
+    date_str = match.group("timestamp")
+    retention_days = match.group("retention")
     date = datetime.strptime(date_str, "%Y-%m-%d")
 
     return Part(date, int(retention_days))
