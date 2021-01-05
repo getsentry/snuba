@@ -35,11 +35,11 @@ def test_backfill_errors() -> None:
         f"SELECT contexts.key, contexts.value from {errors_table_name} LIMIT 1;"
     )[0] == (
         (
-            "device_model_id",
-            "geo_city",
-            "geo_country_code",
-            "geo_region",
-            "os_kernel_version",
+            "device.model_id",
+            "geo.city",
+            "geo.country_code",
+            "geo.region",
+            "os.kernel_version",
         ),
         ("Galaxy", "San Francisco", "US", "CA", "1.1.1"),
     )

@@ -35,18 +35,18 @@ arrayMap(
             t -> t.2 IS NOT NULL,
             arrayConcat(
                 arrayZip(contexts.key, contexts.value),
-                [('geo_city', geo_city)],
-                [('geo_country_code', geo_country_code)],
-                [('geo_region', geo_region)],
-                [('os_build', os_build)],
-                [('os_kernel_version', os_kernel_version)],
-                [('device_name', device_name)],
-                [('device_brand', device_brand)],
-                [('device_locale', device_locale)],
-                [('device_uuid', device_uuid)],
-                [('device_model_id', device_model_id)],
-                [('device_arch', device_arch)],
-                [('device_battery_level', toString(device_battery_level))]
+                [('geo.city', geo_city)],
+                [('geo.country_code', geo_country_code)],
+                [('geo.region', geo_region)],
+                [('os.build', os_build)],
+                [('os.kernel_version', os_kernel_version)],
+                [('device.name', device_name)],
+                [('device.brand', device_brand)],
+                [('device.locale', device_locale)],
+                [('device.uuid', device_uuid)],
+                [('device.model_id', device_model_id)],
+                [('device.arch', device_arch)],
+                [('device.battery_level', toString(device_battery_level))]
             )
         )
     ) AS tuplesArray
