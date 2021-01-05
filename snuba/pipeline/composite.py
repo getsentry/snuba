@@ -15,6 +15,7 @@ from snuba.datasets.plans.query_plan import (
     QueryRunner,
     SubqueryProcessors,
 )
+from snuba.pipeline.plans_selector import select_best_plans
 from snuba.pipeline.query_pipeline import QueryExecutionPipeline, QueryPlanner
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
@@ -52,8 +53,11 @@ class CompositeQueryPlanner(QueryPlanner[CompositeQueryPlan]):
         self.__query = query
         self.__settings = settings
 
-    def execute(self) -> CompositeQueryPlan:
-        return _plan_composite_query(self.__query, self.__settings)
+    def build_best_plan(self) -> CompositeQueryPlan:
+        return self.build_and_rank_plans()[0]
+
+    def build_and_rank_plans(self) -> Sequence[CompositeQueryPlan]:
+        return [_plan_composite_query(self.__query, self.__settings)]
 
 
 def _plan_composite_query(
@@ -104,25 +108,38 @@ def _plan_composite_query(
     )
 
 
-def _plan_simple_query(
-    query: ProcessableQuery[Entity], settings: RequestSettings
-) -> ClickhouseQueryPlan:
+class JoinPlansRanker(JoinVisitor[Mapping[str, Sequence[ClickhouseQueryPlan]], Entity]):
     """
-    Uses the Entity query planner to plan a simple single entity subquery.
-    This means translating the query and identifying all the query
-    processors we need to apply.
+    Produces all the viable ClickhouseQueryPlans for each subquery
+    in the join.
     """
 
-    assert isinstance(
-        query, LogicalQuery
-    ), f"Only subqueries are allowed at query planning stage. {type(query)} found."
+    def __init__(self, settings: RequestSettings) -> None:
+        self.__settings = settings
 
-    return (
-        get_entity(query.get_from_clause().key)
-        .get_query_pipeline_builder()
-        .build_planner(query, settings)
-        .execute()
-    )
+    def visit_individual_node(
+        self, node: IndividualNode[Entity]
+    ) -> Mapping[str, Sequence[ClickhouseQueryPlan]]:
+        assert isinstance(
+            node.data_source, LogicalQuery
+        ), "Invalid composite query. All nodes must be subqueries."
+
+        plans = (
+            get_entity(node.data_source.get_from_clause().key)
+            .get_query_pipeline_builder()
+            .build_planner(node.data_source, self.__settings)
+            .build_and_rank_plans()
+        )
+
+        return {node.alias: plans}
+
+    def visit_join_clause(
+        self, node: JoinClause[Entity]
+    ) -> Mapping[str, Sequence[ClickhouseQueryPlan]]:
+        return {
+            **node.left_node.accept(self),
+            **node.right_node.accept(self),
+        }
 
 
 class JoinDataSourcePlan(NamedTuple):
@@ -153,15 +170,18 @@ class JoinDataSourcePlanner(JoinVisitor[JoinDataSourcePlan, Entity]):
     These processors are stored in a mapping with their table alias.
     """
 
-    def __init__(self, settings: RequestSettings) -> None:
+    def __init__(
+        self, settings: RequestSettings, plans: Mapping[str, ClickhouseQueryPlan]
+    ) -> None:
         self.__settings = settings
+        self.__plans = plans
 
     def visit_individual_node(self, node: IndividualNode[Entity]) -> JoinDataSourcePlan:
         assert isinstance(
             node.data_source, ProcessableQuery
         ), "Invalid composite query. All nodes must be subqueries."
 
-        sub_query_plan = _plan_simple_query(node.data_source, self.__settings)
+        sub_query_plan = self.__plans[node.alias]
         return JoinDataSourcePlan(
             translated_source=IndividualNode(
                 alias=node.alias, data_source=sub_query_plan.query
@@ -278,7 +298,10 @@ class CompositeDataSourcePlanner(DataSourceVisitor[CompositeDataSourcePlan, Enti
         raise ValueError("Cannot translate a simple Entity")
 
     def _visit_join(self, data_source: JoinClause[Entity]) -> CompositeDataSourcePlan:
-        join_visitor = JoinDataSourcePlanner(self.__settings)
+        best_plans = select_best_plans(
+            data_source.accept(JoinPlansRanker(self.__settings))
+        )
+        join_visitor = JoinDataSourcePlanner(self.__settings, best_plans)
         plan = data_source.accept(join_visitor)
 
         assert isinstance(plan.translated_source, JoinClause)
@@ -291,8 +314,15 @@ class CompositeDataSourcePlanner(DataSourceVisitor[CompositeDataSourcePlan, Enti
     def _visit_simple_query(
         self, data_source: ProcessableQuery[Entity]
     ) -> CompositeDataSourcePlan:
+        assert isinstance(
+            data_source, LogicalQuery
+        ), f"Only subqueries are allowed at query planning stage. {type(data_source)} found."
+
         return CompositeDataSourcePlan.from_simple_query_plan(
-            _plan_simple_query(data_source, self.__settings)
+            get_entity(data_source.get_from_clause().key)
+            .get_query_pipeline_builder()
+            .build_planner(data_source, self.__settings)
+            .build_best_plan()
         )
 
     def _visit_composite_query(
@@ -405,7 +435,7 @@ class CompositeExecutionPipeline(QueryExecutionPipeline):
         self.__runner = runner
 
     def execute(self) -> QueryResult:
-        plan = CompositeQueryPlanner(self.__query, self.__settings).execute()
+        plan = CompositeQueryPlanner(self.__query, self.__settings).build_best_plan()
         root_processors, aliased_processors = plan.get_plan_processors()
         ProcessorsExecutor(root_processors, aliased_processors, self.__settings,).visit(
             plan.query
