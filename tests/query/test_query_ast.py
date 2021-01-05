@@ -16,11 +16,10 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.parser import parse_query
-from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 
 
-def test_iterate_over_query():
+def test_iterate_over_query() -> None:
     """
     Creates a query with the new AST and iterate over all expressions.
     """
@@ -71,7 +70,7 @@ def test_iterate_over_query():
     assert list(query.get_all_expressions()) == expected_expressions
 
 
-def test_replace_expression():
+def test_replace_expression() -> None:
     """
     Create a query with the new AST and replaces a function with a different function
     replaces f1(...) with tag(f1)
@@ -223,12 +222,12 @@ def test_alias_validation(
 ) -> None:
     events = get_dataset("events")
     query = parse_query(query_body, events)
-    request = Request("", query, HTTPRequestSettings(), {}, "")
+    settings = HTTPRequestSettings()
     query_plan = (
         events.get_default_entity()
         .get_query_pipeline_builder()
-        .build_planner(request.query, request.settings)
-    ).execute()
-    execute_all_clickhouse_processors(query_plan, request.settings)
+        .build_planner(query, settings)
+    ).build_best_plan()
+    execute_all_clickhouse_processors(query_plan, settings)
 
     assert query_plan.query.validate_aliases() == expected_result

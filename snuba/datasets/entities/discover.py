@@ -431,7 +431,9 @@ class DiscoverEntity(Entity):
 
             return "events", []
 
-        def callback_func(results: List[Result[QueryResult]]) -> None:
+        def callback_func(
+            query: Query, referrer: str, results: List[Result[QueryResult]]
+        ) -> None:
             primary_result = results.pop(0)
             primary_result_data = primary_result.result.result["data"]
 
@@ -447,6 +449,8 @@ class DiscoverEntity(Entity):
                         logger.warning(
                             "Non matching Discover result - different length",
                             extra={
+                                "query": query.get_body(),
+                                "referrer": referrer,
                                 "discover_result": len(result_data),
                                 "events_result": len(primary_result_data),
                             },
@@ -454,17 +458,18 @@ class DiscoverEntity(Entity):
                         break
 
                     # Avoid sending too much data to Sentry - just one row for now
-                    logger.warning(
-                        "Non matching Discover result - different result",
-                        extra={
-                            "discover_result": result_data[0]
-                            if len(result_data)
-                            else None,
-                            "events_result": primary_result_data[0]
-                            if len(primary_result_data)
-                            else None,
-                        },
-                    )
+                    for idx in range(len(result_data)):
+                        if result_data[idx] != primary_result_data[idx]:
+                            logger.warning(
+                                "Non matching Discover result - different result",
+                                extra={
+                                    "query": query.get_body(),
+                                    "referrer": referrer,
+                                    "discover_result": result_data[idx],
+                                    "events_result": primary_result_data[idx],
+                                },
+                            )
+                            break
 
         super().__init__(
             storages=[events_storage, discover_storage],

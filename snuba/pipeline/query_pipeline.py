@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar, Union
+from typing import Generic, Sequence, TypeVar, Union
 
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
@@ -27,7 +27,11 @@ class QueryPlanner(ABC, Generic[TPlan]):
     """
 
     @abstractmethod
-    def execute(self) -> TPlan:
+    def build_best_plan(self) -> TPlan:
+        raise NotImplementedError
+
+    @abstractmethod
+    def build_and_rank_plans(self) -> Sequence[TPlan]:
         raise NotImplementedError
 
 

@@ -140,7 +140,7 @@ class RequestSchema:
             request_id, query, self.__setting_class(**settings), extensions, referrer
         )
 
-    def __generate_template_impl(self, schema) -> Any:
+    def __generate_template_impl(self, schema: Mapping[str, Any]) -> Any:
         """
         Generate a (not necessarily valid) object that can be used as a template
         from the provided schema

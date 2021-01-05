@@ -15,7 +15,7 @@ from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.event_id_column_processor import EventIdColumnProcessor
-from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
@@ -95,8 +95,11 @@ storage = WritableTableStorage(
         UUIDColumnProcessor(set(["event_id", "trace_id"])),
         PrewhereProcessor(),
     ],
-    stream_loader=KafkaStreamLoader(
-        processor=TransactionsMessageProcessor(), default_topic="events",
+    stream_loader=build_kafka_stream_loader_from_settings(
+        StorageKey.TRANSACTIONS,
+        processor=TransactionsMessageProcessor(),
+        default_topic_name="events",
+        commit_log_topic_name="snuba-commit-log",
     ),
     query_splitters=[TimeSplitQueryStrategy(timestamp_col="finish_ts")],
     writer_options={"insert_allow_materialized_columns": 1},

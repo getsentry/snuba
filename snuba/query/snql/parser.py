@@ -1,3 +1,4 @@
+from dataclasses import replace
 from typing import (
     Any,
     Callable,
@@ -55,7 +56,6 @@ from snuba.query.logical import Query as LogicalQuery
 from snuba.query.parser import (
     _apply_column_aliases,
     _expand_aliases,
-    _mangle_aliases,
     _parse_subscriptables,
     _validate_aliases,
 )
@@ -119,7 +119,7 @@ snql_grammar = Grammar(
 
     condition             = main_condition / parenthesized_cdn
     main_condition        = low_pri_arithmetic space* condition_op space* (function_call / column_name / quoted_literal / numeric_literal)
-    condition_op          = "!=" / ">=" / ">" / "<=" / "<" / "=" / "IN" / "LIKE"
+    condition_op          = "!=" / ">=" / ">" / "<=" / "<" / "=" / "NOT IN" / "NOT LIKE" / "IN" / "LIKE"
     parenthesized_cdn     = space* open_paren or_expression close_paren
 
     select_list          = select_columns* (selected_expression)
@@ -457,9 +457,9 @@ class SnQLVisitor(NodeVisitor):
         return conditions
 
     def visit_having_clause(
-        self, node: Node, visited_children: Tuple[Any, Any, Expression]
+        self, node: Node, visited_children: Tuple[Any, Any, Any, Expression]
     ) -> Expression:
-        _, _, conditions = visited_children
+        _, _, _, conditions = visited_children
         return conditions
 
     def visit_and_expression(
@@ -734,6 +734,34 @@ def parse_snql_query_initial(
     return parsed
 
 
+def _qualify_columns(query: Union[CompositeQuery[QueryEntity], LogicalQuery]) -> None:
+    """
+    All columns in a join query should be qualified with the entity alias, e.g. e.event_id
+    Take those aliases and put them in the table name. This has to be done in a post
+    process since we need to have all the aliases from the join clause.
+    """
+
+    from_clause = query.get_from_clause()
+    if not isinstance(from_clause, JoinClause):
+        return  # We don't qualify columns that have a single source
+
+    aliases = set(from_clause.get_alias_node_map().keys())
+
+    def transform(exp: Expression) -> Expression:
+        if not isinstance(exp, Column):
+            return exp
+
+        parts = exp.column_name.split(".", 1)
+        if len(parts) != 2 or parts[0] not in aliases:
+            raise ParsingException(
+                f"column {exp.column_name} must be qualified in a join query"
+            )
+
+        return Column(exp.alias, parts[0], parts[1])
+
+    query.transform_expressions(transform)
+
+
 DATETIME_MATCH = FunctionCallMatch(
     StringMatch("toDateTime"), (Param("date_string", LiteralMatch(AnyMatch(str))),)
 )
@@ -807,6 +835,42 @@ def _array_join_transformation(
     query.transform_expressions(parse)
 
 
+def _mangle_query_aliases(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
+) -> None:
+    """
+    If a query has a subquery, the inner query will get its aliases mangled. This is
+    a problem because the outer query is using the inner aliases, not the inner
+    selected expression values.
+
+    So, we mangle the outer query column names to match the inner query aliases as well.
+    There's no way around this since the inner queries are not executed separately from
+    the outer queries in Clickhouse, so we only receive one set of results.
+    """
+
+    alias_prefix = "_snuba_"
+
+    def mangle_aliases(exp: Expression) -> Expression:
+        alias = exp.alias
+        if alias is not None:
+            return replace(exp, alias=f"{alias_prefix}{alias}")
+
+        return exp
+
+    def mangle_column_value(exp: Expression) -> Expression:
+        if not isinstance(exp, Column):
+            return exp
+
+        return replace(exp, column_name=f"{alias_prefix}{exp.column_name}")
+
+    query.transform_expressions(mangle_aliases)
+
+    # Check if this query has a subquery. If it does, we need to mangle the column name as well
+    # and keep track of what we mangled by updating the mappings in memory.
+    if isinstance(query.get_from_clause(), LogicalQuery):
+        query.transform_expressions(mangle_column_value)
+
+
 def _post_process(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
     funcs: Sequence[Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]],
@@ -834,8 +898,9 @@ def parse_snql_query(
             _parse_subscriptables,  # -> This should be part of the grammar
             _apply_column_aliases,
             _expand_aliases,
-            _mangle_aliases,
+            _mangle_query_aliases,
             _array_join_transformation,
+            _qualify_columns,
         ],
     )
 

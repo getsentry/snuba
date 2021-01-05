@@ -167,11 +167,23 @@ class ClickhouseQueryPlanBuilder(ABC):
     Embeds the dataset specific logic that selects which storage to use
     to execute the query and produces the storage query.
     This is provided by a dataset and, when executed, it returns a
-    ClickhouseQueryPlan that embeds what is needed to run the storage query.
+    sequence of valid ClickhouseQueryPlans that embeds what is needed to
+    run the storage query.
     """
 
     @abstractmethod
-    def build_plan(
+    def build_and_rank_plans(
+        self, query: LogicalQuery, request_settings: RequestSettings
+    ) -> Sequence[ClickhouseQueryPlan]:
+        """
+        Returns all the valid plans for this query sorted in ranking
+        order.
+        """
+        raise NotImplementedError
+
+    def build_best_plan(
         self, query: LogicalQuery, request_settings: RequestSettings
     ) -> ClickhouseQueryPlan:
-        raise NotImplementedError
+        plans = self.build_and_rank_plans(query, request_settings)
+        assert plans, "Query planner did not produce a plan"
+        return plans[0]

@@ -1,3 +1,5 @@
+from typing import Sequence
+
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
@@ -39,10 +41,17 @@ class EntityQueryPlanner(QueryPlanner[ClickhouseQueryPlan]):
         self.__settings = settings
         self.__query_plan_builder = query_plan_builder
 
-    def execute(self) -> ClickhouseQueryPlan:
+    def build_best_plan(self) -> ClickhouseQueryPlan:
         execute_entity_processors(self.__query, self.__settings)
 
-        return self.__query_plan_builder.build_plan(self.__query, self.__settings)
+        return self.__query_plan_builder.build_best_plan(self.__query, self.__settings)
+
+    def build_and_rank_plans(self) -> Sequence[ClickhouseQueryPlan]:
+        execute_entity_processors(self.__query, self.__settings)
+
+        return self.__query_plan_builder.build_and_rank_plans(
+            self.__query, self.__settings
+        )
 
 
 class SimpleExecutionPipeline(QueryExecutionPipeline):
@@ -60,7 +69,7 @@ class SimpleExecutionPipeline(QueryExecutionPipeline):
     def execute(self) -> QueryResult:
         settings = self.__request.settings
 
-        query_plan = self.__query_planner.execute()
+        query_plan = self.__query_planner.build_best_plan()
         execute_plan_processors(query_plan, settings)
 
         return query_plan.execution_strategy.execute(
@@ -75,6 +84,7 @@ class SimplePipelineBuilder(QueryPipelineBuilder[ClickhouseQueryPlan]):
     def build_execution_pipeline(
         self, request: Request, runner: QueryRunner
     ) -> QueryExecutionPipeline:
+        assert isinstance(request.query, LogicalQuery)
         return SimpleExecutionPipeline(
             request, runner, self.build_planner(request.query, request.settings),
         )

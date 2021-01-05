@@ -112,9 +112,9 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         self.__post_processors = post_processors or []
 
     @with_span()
-    def build_plan(
+    def build_and_rank_plans(
         self, query: LogicalQuery, settings: RequestSettings
-    ) -> ClickhouseQueryPlan:
+    ) -> Sequence[ClickhouseQueryPlan]:
         with sentry_sdk.start_span(
             op="build_plan.single_storage", description="translate"
         ):
@@ -141,17 +141,19 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             MandatoryConditionApplier(),
         ]
 
-        return ClickhouseQueryPlan(
-            query=clickhouse_query,
-            plan_query_processors=[],
-            db_query_processors=db_query_processors,
-            storage_set_key=self.__storage.get_storage_set_key(),
-            execution_strategy=SimpleQueryPlanExecutionStrategy(
-                cluster=cluster,
+        return [
+            ClickhouseQueryPlan(
+                query=clickhouse_query,
+                plan_query_processors=[],
                 db_query_processors=db_query_processors,
-                splitters=self.__storage.get_query_splitters(),
-            ),
-        )
+                storage_set_key=self.__storage.get_storage_set_key(),
+                execution_strategy=SimpleQueryPlanExecutionStrategy(
+                    cluster=cluster,
+                    db_query_processors=db_query_processors,
+                    splitters=self.__storage.get_query_splitters(),
+                ),
+            )
+        ]
 
 
 class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
@@ -168,9 +170,9 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         self.__post_processors = post_processors or []
 
     @with_span()
-    def build_plan(
+    def build_and_rank_plans(
         self, query: LogicalQuery, settings: RequestSettings
-    ) -> ClickhouseQueryPlan:
+    ) -> Sequence[ClickhouseQueryPlan]:
         with sentry_sdk.start_span(
             op="build_plan.selected_storage", description="select_storage"
         ):
@@ -202,14 +204,16 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             MandatoryConditionApplier(),
         ]
 
-        return ClickhouseQueryPlan(
-            query=clickhouse_query,
-            plan_query_processors=[],
-            db_query_processors=db_query_processors,
-            storage_set_key=storage.get_storage_set_key(),
-            execution_strategy=SimpleQueryPlanExecutionStrategy(
-                cluster=cluster,
+        return [
+            ClickhouseQueryPlan(
+                query=clickhouse_query,
+                plan_query_processors=[],
                 db_query_processors=db_query_processors,
-                splitters=storage.get_query_splitters(),
-            ),
-        )
+                storage_set_key=storage.get_storage_set_key(),
+                execution_strategy=SimpleQueryPlanExecutionStrategy(
+                    cluster=cluster,
+                    db_query_processors=db_query_processors,
+                    splitters=storage.get_query_splitters(),
+                ),
+            )
+        ]
