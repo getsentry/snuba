@@ -1,4 +1,5 @@
 import sentry_sdk
+from typing import Any, MutableMapping
 
 from snuba.datasets.dataset import Dataset
 from snuba.query.exceptions import InvalidQueryException
@@ -10,7 +11,11 @@ from snuba.utils.metrics.timer import Timer
 
 
 def build_request(
-    body, schema: RequestSchema, timer: Timer, dataset: Dataset, referrer: str
+    body: MutableMapping[str, Any],
+    schema: RequestSchema,
+    timer: Timer,
+    dataset: Dataset,
+    referrer: str,
 ) -> Request:
     with sentry_sdk.start_span(description="build_request", op="validate") as span:
         try:

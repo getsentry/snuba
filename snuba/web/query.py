@@ -1,8 +1,7 @@
 import copy
 import logging
-from datetime import datetime
 from functools import partial
-from typing import MutableMapping, Optional, Set, Union
+from typing import Mapping, MutableMapping, Optional, Set, Union
 
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
@@ -17,12 +16,12 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
+from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.timeseries_extension import TimeSeriesExtensionProcessor
 from snuba.querylog import record_query
 from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.reader import Reader
-from snuba.request import Request
+from snuba.request import Language, Request
 from snuba.request.request_settings import RequestSettings
 from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
@@ -86,17 +85,14 @@ def _run_query_pipeline(
     query_entity = request.query.get_from_clause()
     entity = get_entity(query_entity.key)
 
-    # TODO: this will work perfectly with datasets that are not time series. Remove it.
-    from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
-        request.extensions["timeseries"]
-    )
-
     if (
         request.query.get_sample() is not None and request.query.get_sample() != 1.0
     ) and not request.settings.get_turbo():
         metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
 
-    extensions = entity.get_extensions()
+    extensions: Mapping[str, QueryExtension] = {}
+    if request.language != Language.SNQL:
+        extensions = entity.get_extensions()
 
     for name, extension in extensions.items():
         with sentry_sdk.start_span(
@@ -112,12 +108,7 @@ def _run_query_pipeline(
         request.query.set_final(False)
 
     query_runner = partial(
-        _run_and_apply_column_names,
-        timer,
-        query_metadata,
-        from_date,
-        to_date,
-        request.referrer,
+        _run_and_apply_column_names, timer, query_metadata, request.referrer,
     )
 
     return (
@@ -130,8 +121,6 @@ def _run_query_pipeline(
 def _run_and_apply_column_names(
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
-    from_date: datetime,
-    to_date: datetime,
     referrer: str,
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
@@ -147,14 +136,7 @@ def _run_and_apply_column_names(
     """
 
     result = _format_storage_query_and_run(
-        timer,
-        query_metadata,
-        from_date,
-        to_date,
-        referrer,
-        clickhouse_query,
-        request_settings,
-        reader,
+        timer, query_metadata, referrer, clickhouse_query, request_settings, reader,
     )
 
     alias_name_mapping: MutableMapping[str, str] = {}
@@ -238,8 +220,6 @@ class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
 def _format_storage_query_and_run(
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
-    from_date: datetime,
-    to_date: datetime,
     referrer: str,
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
@@ -263,7 +243,6 @@ def _format_storage_query_and_run(
         "clickhouse_table": table_names,
         "final": visitor.any_final(),
         "referrer": referrer,
-        "num_days": (to_date - from_date).days,
         "sample": visitor.get_sample_rate(),
     }
 
