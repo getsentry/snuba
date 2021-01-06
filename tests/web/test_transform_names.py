@@ -14,7 +14,7 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.reader import Column as MetaColumn
-from snuba.request import Request
+from snuba.request import Language, Request
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import parse_and_run_query
@@ -93,6 +93,7 @@ def test_transform_column_names() -> None:
                 "project": {"project": [1]},
             },
             referrer="asd",
+            language=Language.LEGACY,
         ),
         timer,
     )

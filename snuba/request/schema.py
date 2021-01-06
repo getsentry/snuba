@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from enum import Enum
 import itertools
 import uuid
-from typing import Any, Mapping, Type
+from typing import Any, Mapping, MutableMapping, Type
 
 import jsonschema
 
@@ -14,7 +13,7 @@ from snuba.query.parser import parse_query
 from snuba.query.schema import GENERIC_QUERY_SCHEMA
 from snuba.query.schema import SNQL_QUERY_SCHEMA
 from snuba.query.snql.parser import parse_snql_query
-from snuba.request import Request
+from snuba.request import Language, Request
 from snuba.request.exceptions import JsonSchemaValidationException
 from snuba.request.request_settings import (
     HTTPRequestSettings,
@@ -27,15 +26,6 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 metrics = MetricsWrapper(environment.metrics, "parser")
 
 
-class Language(Enum):
-    """
-    Which language is being used in the Snuba request.
-    """
-
-    LEGACY = "legacy"
-    SNQL = "snql"
-
-
 class RequestSchema:
     def __init__(
         self,
@@ -43,10 +33,12 @@ class RequestSchema:
         settings_schema: Schema,
         extensions_schemas: Mapping[str, Schema],
         settings_class: Type[RequestSettings] = HTTPRequestSettings,
+        language: Language = Language.LEGACY,
     ):
         self.__query_schema = query_schema
         self.__settings_schema = settings_schema
         self.__extension_schemas = extensions_schemas
+        self.__language = language
 
         self.__composite_schema = {
             "type": "object",
@@ -94,18 +86,26 @@ class RequestSchema:
     ) -> RequestSchema:
         if language == Language.SNQL:
             generic_schema = SNQL_QUERY_SCHEMA
+            extensions_schemas = {}
         else:
             generic_schema = GENERIC_QUERY_SCHEMA
-
-        extensions_schemas = {
-            extension_key: extension.get_schema()
-            for extension_key, extension in extensions.items()
-        }
+            extensions_schemas = {
+                extension_key: extension.get_schema()
+                for extension_key, extension in extensions.items()
+            }
 
         settings_schema = SETTINGS_SCHEMAS[settings_class]
-        return cls(generic_schema, settings_schema, extensions_schemas, settings_class)
+        return cls(
+            generic_schema,
+            settings_schema,
+            extensions_schemas,
+            settings_class,
+            language,
+        )
 
-    def validate(self, value, dataset: Dataset, referrer: str) -> Request:
+    def validate(
+        self, value: MutableMapping[str, Any], dataset: Dataset, referrer: str
+    ) -> Request:
         try:
             value = validate_jsonschema(value, self.__composite_schema)
         except jsonschema.ValidationError as error:
@@ -130,14 +130,19 @@ class RequestSchema:
                 if key in value
             }
 
-        if "query" in query_body:
+        if self.__language == Language.SNQL:
             query = parse_snql_query(query_body["query"], dataset)
         else:
             query = parse_query(query_body, dataset)
 
         request_id = uuid.uuid4().hex
         return Request(
-            request_id, query, self.__setting_class(**settings), extensions, referrer
+            request_id,
+            query,
+            self.__setting_class(**settings),
+            extensions,
+            referrer,
+            self.__language,
         )
 
     def __generate_template_impl(self, schema: Mapping[str, Any]) -> Any:
