@@ -5,6 +5,7 @@ from typing import List, Mapping, Optional, Sequence, Tuple
 
 import sentry_sdk
 
+from functools import partial
 from snuba import environment, state
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToFunction,
@@ -34,8 +35,6 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.threaded_function_delegator import Result
 from snuba.web import QueryResult
 
-metrics = MetricsWrapper(environment.metrics, "events_entity")
-
 event_translator = TranslationMappers(
     columns=[
         ColumnToMapping(None, "release", None, "tags", "sentry:release"),
@@ -62,6 +61,57 @@ errors_translators = TranslationMappers(
         SubscriptableMapper(None, "contexts", None, "contexts"),
     ],
 )
+
+metrics = MetricsWrapper(environment.metrics, "snuplicator")
+
+
+def callback_func(
+    storage: str, query: Query, referrer: str, results: List[Result[QueryResult]]
+) -> None:
+    primary_result = results.pop(0)
+    primary_result_data = primary_result.result.result["data"]
+
+    for result in results:
+        result_data = result.result.result["data"]
+
+        if result_data == primary_result_data:
+            metrics.increment(
+                "query_result", tags={"storage": storage, "match": "true"}
+            )
+        else:
+            metrics.increment(
+                "query_result", tags={"storage": storage, "match": "false"}
+            )
+
+            if len(result_data) != len(primary_result_data):
+                sentry_sdk.capture_message(
+                    f"Non matching {storage} result - different length",
+                    level="warning",
+                    tags={"referrer": referrer, "storage": storage},
+                    extras={
+                        "query": query.get_body(),
+                        "primary_result": len(primary_result_data),
+                        "other_result": len(result_data),
+                    },
+                )
+
+                break
+
+            # Avoid sending too much data to Sentry - just one row for now
+            for idx in range(len(result_data)):
+                if result_data[idx] != primary_result_data[idx]:
+                    sentry_sdk.capture_message(
+                        "Non matching result - different result",
+                        level="warning",
+                        tags={"referrer": referrer, "storage": storage},
+                        extras={
+                            "query": query.get_body(),
+                            "primary_result": primary_result_data[idx],
+                            "other_result": result_data[idx],
+                        },
+                    )
+
+                    break
 
 
 class EventsQueryStorageSelector(QueryStorageSelector):
@@ -141,50 +191,6 @@ class BaseEventsEntity(Entity, ABC):
 
             return "events", []
 
-        def callback_func(
-            query: Query, referrer: str, results: List[Result[QueryResult]]
-        ) -> None:
-            primary_result = results.pop(0)
-            primary_result_data = primary_result.result.result["data"]
-
-            for result in results:
-                result_data = result.result.result["data"]
-
-                if result_data == primary_result_data:
-                    metrics.increment("query_result", tags={"match": "true"})
-                else:
-                    metrics.increment("query_result", tags={"match": "false"})
-
-                    if len(result_data) != len(primary_result_data):
-                        sentry_sdk.capture_message(
-                            "Non matching Events result - different length",
-                            level="warning",
-                            tags={
-                                "referrer": referrer,
-                                "query": query.get_body(),
-                                "errors_result": len(result_data),
-                                "events_result": len(primary_result_data),
-                            },
-                        )
-
-                        break
-
-                    # Avoid sending too much data to Sentry - just one row for now
-                    for idx in range(len(result_data)):
-                        if result_data[idx] != primary_result_data[idx]:
-                            sentry_sdk.capture_message(
-                                "Non matching Events result - different result",
-                                level="warning",
-                                tags={
-                                    "referrer": referrer,
-                                    "query": query.get_body(),
-                                    "errors_result": result_data[idx],
-                                    "events_result": primary_result_data[idx],
-                                },
-                            )
-
-                            break
-
         super().__init__(
             storages=[storage],
             query_pipeline_builder=PipelineDelegator(
@@ -193,7 +199,7 @@ class BaseEventsEntity(Entity, ABC):
                     "errors": errors_pipeline_builder,
                 },
                 selector_func=selector_func,
-                callback_func=callback_func,
+                callback_func=partial(callback_func, "errors"),
             ),
             abstract_column_set=columns,
             join_relationships={},
