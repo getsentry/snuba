@@ -22,6 +22,8 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Entity, Table
 from snuba.query.data_source.visitor import DataSourceVisitor
+from snuba.query.joins.equivalence_adder import add_equivalent_conditions
+from snuba.query.joins.subquery_generator import generate_subqueries
 from snuba.query.logical import Query as LogicalQuery
 from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
@@ -57,6 +59,8 @@ class CompositeQueryPlanner(QueryPlanner[CompositeQueryPlan]):
         return self.build_and_rank_plans()[0]
 
     def build_and_rank_plans(self) -> Sequence[CompositeQueryPlan]:
+        add_equivalent_conditions(self.__query)
+        generate_subqueries(self.__query)
         return [_plan_composite_query(self.__query, self.__settings)]
 
 
