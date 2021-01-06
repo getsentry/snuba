@@ -221,10 +221,6 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
 
         query = f"{match_clause} {select_clause} {aggregation_clause} {groupby_clause} {where_clause} {having_clause} {order_by_clause} {limit_by_clause} {extras_clause}"
         body = {"query": query}
-        extensions = ["project", "from_date", "to_date", "organization"]
-        for ext in extensions:
-            if ext in legacy:
-                body[ext] = legacy.get(ext)
 
         return json.dumps(body)
 
