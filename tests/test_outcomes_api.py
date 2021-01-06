@@ -136,7 +136,12 @@ class TestOutcomesApi(BaseApiTest):
                     "selected_columns": [],
                     "to_date": to_date,
                     "organization": 1,
-                    "conditions": [["outcome", "=", 0], ["project_id", "IN", [1, 2]]],
+                    "conditions": [
+                        ["outcome", "=", 0],
+                        ["project_id", "IN", [1, 2]],
+                        ["timestamp", ">", from_date],
+                        ["timestamp", "<=", to_date],
+                    ],
                     "groupby": ["project_id", "time"],
                 }
             ),
