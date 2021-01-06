@@ -68,7 +68,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.threaded_function_delegator import Result
 from snuba.web import QueryResult
 
-metrics = MetricsWrapper(environment.metrics, "api.discover.discover_entity")
+metrics = MetricsWrapper(environment.metrics, "discover_entity")
 
 
 @dataclass(frozen=True)
