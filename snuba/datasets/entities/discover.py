@@ -472,8 +472,8 @@ class DiscoverEntity(Entity):
                             sentry_sdk.capture_message(
                                 "Non matching Discover result - different result",
                                 level="warning",
-                                tags={
-                                    "referrer": referrer,
+                                tags={"referrer": referrer},
+                                extras={
                                     "query": query.get_body(),
                                     "discover_result": result_data[idx],
                                     "events_result": primary_result_data[idx],
