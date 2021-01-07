@@ -1,4 +1,4 @@
-name: Snuba Tests
+name: Snuba Checks
 on:
   push:
     branches:
@@ -8,12 +8,11 @@ on:
 
 jobs:
   tests:
-    name: Snuba tests
+    name: Tests and code coverage
     runs-on: ubuntu-18.04
     timeout-minutes: 20
     env:
       CODECOV_TOKEN: 5338c540-6be8-4c46-beb0-bad8a1eb71bf
-
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
@@ -30,8 +29,9 @@ jobs:
           bash <(curl -s https://codecov.io/bash)
 
   linting:
-    name: 'pre-commit hooks (includes Python formatting + linting)'
+    name: 'pre-commit hooks' # (includes Python formatting + linting)
     runs-on: ubuntu-18.04
+    timeout-minutes: 2
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
