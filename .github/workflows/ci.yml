@@ -7,25 +7,6 @@ on:
   pull_request:
 
 jobs:
-  tests:
-    name: Tests and code coverage
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v2
-        name: Checkout code
-      - name: Docker set up
-        run: |
-          docker pull getsentry/snuba:latest || true
-          docker build --build-arg PYTHON_VERSION=3.8 -t getsentry/snuba . --cache-from getsentry/snuba:latest
-          docker network create --attachable cloudbuild
-      - name: Docker Snuba tests
-        run: |
-          SNUBA_IMAGE=getsentry/snuba docker-compose -f docker-compose.gcb.yml run --rm snuba-test
-      - name: Upload to codecov
-        run: |
-          bash <(curl -s https://codecov.io/bash)
-
   linting:
     name: 'pre-commit hooks' # (includes Python formatting + linting)
     runs-on: ubuntu-latest
@@ -44,3 +25,22 @@ jobs:
         #      `getconf ARG_MAX` - max # bytes of args + environ for exec()
         run: |
           pre-commit run --files $(git diff --diff-filter=d --name-only master)
+  tests:
+    needs: linting
+    name: Tests and code coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v2
+        name: Checkout code
+      - name: Docker set up
+        run: |
+          docker pull getsentry/snuba:latest || true
+          docker build --build-arg PYTHON_VERSION=3.8 -t getsentry/snuba . --cache-from getsentry/snuba:latest
+          docker network create --attachable cloudbuild
+      - name: Docker Snuba tests
+        run: |
+          SNUBA_IMAGE=getsentry/snuba docker-compose -f docker-compose.gcb.yml run --rm snuba-test
+      - name: Upload to codecov
+        run: |
+          bash <(curl -s https://codecov.io/bash)
