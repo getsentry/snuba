@@ -68,6 +68,10 @@ metrics = MetricsWrapper(environment.metrics, "snuplicator")
 def callback_func(
     storage: str, query: Query, referrer: str, results: List[Result[QueryResult]]
 ) -> None:
+    if not results:
+        metrics.increment("query_result", tags={"storage": storage, "match": "empty"})
+        return
+
     primary_result = results.pop(0)
     primary_result_data = primary_result.result.result["data"]
 
