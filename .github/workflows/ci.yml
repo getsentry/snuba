@@ -11,8 +11,6 @@ jobs:
     name: Tests and code coverage
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      CODECOV_TOKEN: 5338c540-6be8-4c46-beb0-bad8a1eb71bf
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
