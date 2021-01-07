@@ -1,10 +1,10 @@
-import logging
 import random
 from dataclasses import dataclass
 from datetime import timedelta
+from functools import partial
 from typing import List, Mapping, Optional, Sequence, Set, Tuple
 
-from snuba import environment, state
+from snuba import state
 from snuba.clickhouse.columns import (
     UUID,
     Array,
@@ -31,7 +31,11 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entities.events import BaseEventsEntity, EventsQueryStorageSelector
+from snuba.datasets.entities.events import (
+    BaseEventsEntity,
+    EventsQueryStorageSelector,
+    callback_func,
+)
 from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import (
@@ -63,13 +67,6 @@ from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.util import qualified_column
-from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.threaded_function_delegator import Result
-from snuba.web import QueryResult
-
-logger = logging.getLogger(__name__)
-
-metrics = MetricsWrapper(environment.metrics, "api.discover.discover_entity")
 
 
 @dataclass(frozen=True)
@@ -409,6 +406,12 @@ class DiscoverEntity(Entity):
                             ColumnToMapping(
                                 None, "geo_city", None, "contexts", "geo.city"
                             ),
+                            ColumnToFunction(
+                                None,
+                                "user",
+                                "nullIf",
+                                (Column(None, None, "user"), Literal(None, "")),
+                            ),
                         ]
                     )
                 )
@@ -431,46 +434,6 @@ class DiscoverEntity(Entity):
 
             return "events", []
 
-        def callback_func(
-            query: Query, referrer: str, results: List[Result[QueryResult]]
-        ) -> None:
-            primary_result = results.pop(0)
-            primary_result_data = primary_result.result.result["data"]
-
-            for result in results:
-                result_data = result.result.result["data"]
-
-                if result_data == primary_result_data:
-                    metrics.increment("query_result", tags={"match": "true"})
-                else:
-                    metrics.increment("query_result", tags={"match": "false"})
-
-                    if len(result_data) != len(primary_result_data):
-                        logger.warning(
-                            "Non matching Discover result - different length",
-                            extra={
-                                "query": query.get_body(),
-                                "referrer": referrer,
-                                "discover_result": len(result_data),
-                                "events_result": len(primary_result_data),
-                            },
-                        )
-                        break
-
-                    # Avoid sending too much data to Sentry - just one row for now
-                    for idx in range(len(result_data)):
-                        if result_data[idx] != primary_result_data[idx]:
-                            logger.warning(
-                                "Non matching Discover result - different result",
-                                extra={
-                                    "query": query.get_body(),
-                                    "referrer": referrer,
-                                    "discover_result": result_data[idx],
-                                    "events_result": primary_result_data[idx],
-                                },
-                            )
-                            break
-
         super().__init__(
             storages=[events_storage, discover_storage],
             query_pipeline_builder=PipelineDelegator(
@@ -479,7 +442,7 @@ class DiscoverEntity(Entity):
                     "discover": discover_pipeline_builder,
                 },
                 selector_func=selector_func,
-                callback_func=callback_func,
+                callback_func=partial(callback_func, "discover"),
             ),
             abstract_column_set=(
                 self.__common_columns
