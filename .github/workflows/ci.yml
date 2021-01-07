@@ -33,6 +33,8 @@ jobs:
     name: 'pre-commit hooks (includes Python formatting + linting)'
     runs-on: ubuntu-18.04
     steps:
+      - uses: actions/checkout@v2
+        name: Checkout code
       - uses: actions/setup-python@v2
         with:
           python-version: 3.8
