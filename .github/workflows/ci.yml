@@ -1,15 +1,14 @@
-name: ci
+name: Snuba Tests
 on:
   push:
-    # To make sure it runs on my fork
-    # branches:
-    #   - master
-    #   - releases/**
+    branches:
+      - master
+      - releases/**
   pull_request:
 
 jobs:
   tests:
-    name: frontend tests
+    name: Snuba tests
     runs-on: ubuntu-18.04
     timeout-minutes: 20
 
@@ -24,8 +23,24 @@ jobs:
       - name: Docker Snuba tests
         run: |
           SNUBA_IMAGE=getsentry/snuba docker-compose -f docker-compose.gcb.yml run --rm snuba-test
+      - uses: volta-cli/action@v1 # This configures node/npm
       - name: Submit articfacts to Zeus
         run: |
           npm install -g @zeus-ci/cli
           $(npm bin -g)/zeus upload -t "application/x-junit+xml" .artifacts/*.junit.xml
           $(npm bin -g)/zeus upload -t "application/x-cobertura+xml" .artifacts/coverage.xml
+  linting:
+    name: 'pre-commit hooks (includes Python formatting + linting)'
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+      - name: Setup pre-commit
+        run: make setup-git
+      - name: Run pre-commit checks
+        # Run pre-commit to lint and format check files that were changed (but not deleted) compared to master.
+        # XXX: there is a very small chance that it'll expand to exceed Linux's limits
+        #      `getconf ARG_MAX` - max # bytes of args + environ for exec()
+        run: |
+          pre-commit run --files $(git diff --diff-filter=d --name-only master)
