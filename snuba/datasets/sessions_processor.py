@@ -58,6 +58,7 @@ class SessionsProcessor(MessageProcessor):
         processed = {
             "session_id": str(uuid.UUID(message["session_id"])),
             "distinct_id": str(uuid.UUID(message.get("distinct_id") or NIL_UUID)),
+            "quantity": 1,
             "seq": message["seq"],
             "org_id": message["org_id"],
             "project_id": message["project_id"],
