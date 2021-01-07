@@ -1,4 +1,4 @@
-name: Snuba Checks
+name: ci
 on:
   push:
     branches:
