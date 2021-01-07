@@ -36,6 +36,7 @@ class TestSessionProcessor:
             [
                 {
                     "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf",
+                    "quantity": 1,
                     "duration": 1947490,
                     "environment": "production",
                     "org_id": 1,
@@ -82,6 +83,7 @@ class TestSessionProcessor:
             [
                 {
                     "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf",
+                    "quantity": 1,
                     "duration": 1947490,
                     "environment": "production",
                     "org_id": 1,
@@ -129,6 +131,7 @@ class TestSessionProcessor:
             [
                 {
                     "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf",
+                    "quantity": 1,
                     "duration": 1947490,
                     "environment": "production",
                     "org_id": 1,
