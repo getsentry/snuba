@@ -637,11 +637,9 @@ SUPPORTED_KAFKA_CONFIGURATION = (
     "ssl.key.pem",
     "ssl.keystore.location",
     "ssl.keystore.password",
-    "ssl.keystore.type",
     "ssl.provider",
     "ssl.truststore.location",
     "ssl.truststore.password",
-    "ssl.truststore.type",
 )
 
 
