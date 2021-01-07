@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 
 from snuba.clickhouse.query import Query
+from snuba.query.composite import CompositeQuery
+from snuba.query.data_source.simple import Table
 from snuba.request.request_settings import RequestSettings
 
 
@@ -22,4 +24,22 @@ class QueryProcessor(ABC):
     @abstractmethod
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         # TODO: Consider making the Query immutable.
+        raise NotImplementedError
+
+
+class CompositeQueryProcessor(ABC):
+    """
+    A transformation applied to a Clickhouse Composite Query.
+    This transformation mutates the Query object in place.
+
+    The same rules defined above for QueryProcessor still apply:
+    - composite query processor are stateless
+    - they are independent from each other
+    - they must keep the query in a valid state.
+    """
+
+    @abstractmethod
+    def process_query(
+        self, query: CompositeQuery[Table], request_settings: RequestSettings
+    ) -> None:
         raise NotImplementedError
