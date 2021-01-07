@@ -11,6 +11,8 @@ jobs:
     name: Snuba tests
     runs-on: ubuntu-18.04
     timeout-minutes: 20
+    env:
+      CODECOV_TOKEN: 5338c540-6be8-4c46-beb0-bad8a1eb71bf
 
     steps:
       - uses: actions/checkout@v2
@@ -23,11 +25,10 @@ jobs:
       - name: Docker Snuba tests
         run: |
           SNUBA_IMAGE=getsentry/snuba docker-compose -f docker-compose.gcb.yml run --rm snuba-test
-      - name: Submit articfacts to Zeus
+      - name: Upload to codecov
         run: |
-          npm install @zeus-ci/cli
-          $(npm bin)/zeus upload -t "application/x-junit+xml" .artifacts/*.junit.xml
-          $(npm bin)/zeus upload -t "application/x-cobertura+xml" .artifacts/coverage.xml
+          bash <(curl -s https://codecov.io/bash)
+
   linting:
     name: 'pre-commit hooks (includes Python formatting + linting)'
     runs-on: ubuntu-18.04
