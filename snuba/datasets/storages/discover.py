@@ -32,7 +32,7 @@ columns = ColumnSet(
         ("environment", String(Modifiers(nullable=True))),
         ("release", String(Modifiers(nullable=True))),
         ("dist", String(Modifiers(nullable=True))),
-        ("transaction_name", String(Modifiers(nullable=True))),
+        ("transaction_name", String()),
         ("message", String()),
         ("title", String()),
         ("user", String()),

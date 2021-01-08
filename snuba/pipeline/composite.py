@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
 import sentry_sdk
-from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.processors import CompositeQueryProcessor, QueryProcessor
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clusters.cluster import ClickhouseCluster, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
@@ -105,6 +105,7 @@ def _plan_composite_query(
             get_cluster(planned_data_source.storage_set_key),
             root_db_processors,
             aliased_db_processors,
+            composite_processors=[],
         ),
         storage_set_key=planned_data_source.storage_set_key,
         root_processors=planned_data_source.root_processors,
@@ -404,10 +405,15 @@ class CompositeExecutionStrategy(QueryPlanExecutionStrategy[CompositeQuery[Table
         cluster: ClickhouseCluster,
         root_processors: Sequence[QueryProcessor],
         aliased_processors: Mapping[str, Sequence[QueryProcessor]],
+        composite_processors: Sequence[CompositeQueryProcessor],
     ) -> None:
         self.__cluster = cluster
         self.__root_processors = root_processors
         self.__aliased_processors = aliased_processors
+        # Processors that are applied to the entire composite query
+        # by the execution strategy before running the query on the DB
+        # and after all subquery processors have been executed
+        self.__composite_processors = composite_processors
 
     def execute(
         self,
@@ -418,6 +424,10 @@ class CompositeExecutionStrategy(QueryPlanExecutionStrategy[CompositeQuery[Table
         ProcessorsExecutor(
             self.__root_processors, self.__aliased_processors, request_settings
         ).visit(query)
+
+        for p in self.__composite_processors:
+            p.process_query(query, request_settings)
+
         return runner(query, request_settings, self.__cluster.get_reader())
 
 
