@@ -254,17 +254,32 @@ class InsertIntoSelect(SqlOperation):
         dest_columns: Sequence[str],
         src_table_name: str,
         src_columns: Sequence[str],
+        prewhere: Optional[str] = None,
+        where: Optional[str] = None,
     ):
         super().__init__(storage_set)
         self.__dest_table_name = dest_table_name
         self.__dest_columns = dest_columns
         self.__src_table_name = src_table_name
         self.__src_columns = src_columns
+        self.__prewhere = prewhere
+        self.__where = where
 
     def format_sql(self) -> str:
         src_columns = ", ".join(self.__src_columns)
         dest_columns = ", ".join(self.__dest_columns)
-        return f"INSERT INTO {self.__dest_table_name} ({dest_columns}) SELECT {src_columns} FROM {self.__src_table_name};"
+
+        if self.__prewhere:
+            prewhere_clause = f" PREWHERE {self.__prewhere}"
+        else:
+            prewhere_clause = ""
+
+        if self.__where:
+            where_clause = f" WHERE {self.__where}"
+        else:
+            where_clause = ""
+
+        return f"INSERT INTO {self.__dest_table_name} ({dest_columns}) SELECT {src_columns} FROM {self.__src_table_name}{prewhere_clause}{where_clause};"
 
 
 class RunPython(Operation):

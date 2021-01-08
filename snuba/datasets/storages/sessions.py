@@ -17,7 +17,7 @@ from snuba.datasets.storage import (
     WritableTableStorage,
 )
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.prewhere import PrewhereProcessor
 
 
@@ -33,6 +33,7 @@ all_columns = ColumnSet(
     [
         ("session_id", UUID()),
         ("distinct_id", UUID()),
+        ("quantity", UInt(32)),
         ("seq", UInt(64)),
         ("org_id", UInt(64)),
         ("project_id", UInt(64)),
@@ -44,6 +45,8 @@ all_columns = ColumnSet(
         ("started", DateTime()),
         ("release", String()),
         ("environment", String()),
+        ("user_agent", String()),
+        ("os", String()),
     ]
 )
 
@@ -61,15 +64,22 @@ read_columns = ColumnSet(
         ("started", DateTime()),
         ("release", String()),
         ("environment", String()),
+        ("user_agent", String()),
+        ("os", String()),
         (
             "duration_quantiles",
             AggregateFunction("quantilesIf(0.5, 0.9)", [UInt(32), UInt(8)]),
         ),
+        ("duration_avg", AggregateFunction("avgIf", [UInt(32), UInt(8)])),
         ("sessions", AggregateFunction("countIf", [UUID(), UInt(8)])),
-        ("users", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
+        ("sessions_preaggr", AggregateFunction("sumIf", [UInt(32), UInt(8)])),
         ("sessions_crashed", AggregateFunction("countIf", [UUID(), UInt(8)]),),
+        ("sessions_crashed_preaggr", AggregateFunction("sumIf", [UInt(32), UInt(8)])),
         ("sessions_abnormal", AggregateFunction("countIf", [UUID(), UInt(8)]),),
+        ("sessions_abnormal_preaggr", AggregateFunction("sumIf", [UInt(32), UInt(8)])),
         ("sessions_errored", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
+        ("sessions_errored_preaggr", AggregateFunction("sumIf", [UInt(32), UInt(8)])),
+        ("users", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
         ("users_crashed", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
         ("users_abnormal", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
         ("users_errored", AggregateFunction("uniqIf", [UUID(), UInt(8)])),
@@ -97,8 +107,10 @@ raw_storage = WritableTableStorage(
     storage_set_key=StorageSetKey.SESSIONS,
     schema=raw_schema,
     query_processors=[],
-    stream_loader=KafkaStreamLoader(
-        processor=SessionsProcessor(), default_topic="ingest-sessions",
+    stream_loader=build_kafka_stream_loader_from_settings(
+        StorageKey.SESSIONS_RAW,
+        processor=SessionsProcessor(),
+        default_topic_name="ingest-sessions",
     ),
 )
 # The materialized view we query aggregate data from.

@@ -15,7 +15,7 @@ from snuba.datasets.storages.events_common import (
     query_splitters,
     required_columns,
 )
-from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 
 
 schema = WritableTableSchema(
@@ -33,11 +33,12 @@ storage = WritableTableStorage(
     storage_set_key=StorageSetKey.EVENTS,
     schema=schema,
     query_processors=query_processors,
-    stream_loader=KafkaStreamLoader(
+    stream_loader=build_kafka_stream_loader_from_settings(
+        StorageKey.EVENTS,
         processor=EventsProcessor(promoted_tag_columns),
-        default_topic="events",
-        replacement_topic="event-replacements",
-        commit_log_topic="snuba-commit-log",
+        default_topic_name="events",
+        replacement_topic_name="event-replacements",
+        commit_log_topic_name="snuba-commit-log",
     ),
     query_splitters=query_splitters,
     replacer_processor=ErrorsReplacer(

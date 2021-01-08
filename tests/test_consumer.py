@@ -1,19 +1,23 @@
 import itertools
+import json
 import pickle
 from datetime import datetime
 from pickle import PickleBuffer
 from typing import MutableSequence
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import pytest
-
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumer import (
     JSONRowInsertBatch,
+    MultistorageConsumerProcessingStrategyFactory,
     StreamingConsumerStrategyFactory,
 )
+from snuba.datasets.storage import Storage
 from snuba.processor import InsertBatch, ReplacementBatch
 from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.kafka import KafkaPayload
+
 from tests.assertions import assert_changes
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 from tests.backends.metrics import TestingMetricsBackend, Timing
@@ -74,8 +78,8 @@ def test_streaming_consumer_strategy() -> None:
 
     def get_number_of_insertion_metrics() -> int:
         count = 0
-        for call in metrics.calls:
-            if isinstance(call, Timing) and call.name == "insertions.latency_ms":
+        for c in metrics.calls:
+            if isinstance(c, Timing) and c.name == "insertions.latency_ms":
                 count += 1
         return count
 
@@ -103,3 +107,62 @@ def test_json_row_batch_pickle_out_of_band() -> None:
     buffers: MutableSequence[PickleBuffer] = []
     data = pickle.dumps(batch, protocol=5, buffer_callback=buffers.append)
     assert pickle.loads(data, buffers=[b.raw() for b in buffers]) == batch
+
+
+def get_row_count(storage: Storage) -> int:
+    return (
+        storage.get_cluster()
+        .get_query_connection(ClickhouseClientSettings.INSERT)
+        .execute(f"SELECT count() FROM {storage.get_schema().get_local_table_name()}")[
+            0
+        ][0]
+    )
+
+
+def test_multistorage_strategy() -> None:
+    from snuba.datasets.storages import groupassignees, groupedmessages
+
+    from tests.datasets.cdc.test_groupassignee import TestGroupassignee
+    from tests.datasets.cdc.test_groupedmessage import TestGroupedMessage
+
+    commit = Mock()
+
+    storages = [groupassignees.storage, groupedmessages.storage]
+
+    strategy = MultistorageConsumerProcessingStrategyFactory(
+        storages, 10, 10, 1, int(32 * 1e6), int(64 * 1e6), TestingMetricsBackend(),
+    ).create(commit)
+
+    payloads = [
+        KafkaPayload(None, b"{}", [("table", b"ignored")]),
+        KafkaPayload(
+            None,
+            json.dumps(TestGroupassignee.INSERT_MSG).encode("utf8"),
+            [("table", groupassignees.storage.get_postgres_table().encode("utf8"))],
+        ),
+        KafkaPayload(
+            None,
+            json.dumps(TestGroupedMessage.INSERT_MSG).encode("utf8"),
+            [("table", groupedmessages.storage.get_postgres_table().encode("utf8"))],
+        ),
+    ]
+
+    messages = [
+        Message(
+            Partition(Topic("topic"), 0), offset, payload, datetime.now(), offset + 1
+        )
+        for offset, payload in enumerate(payloads)
+    ]
+
+    with assert_changes(
+        lambda: get_row_count(groupassignees.storage), 0, 1
+    ), assert_changes(lambda: get_row_count(groupedmessages.storage), 0, 1):
+
+        for message in messages:
+            strategy.submit(message)
+
+        with assert_changes(
+            lambda: commit.call_args_list, [], [call({Partition(Topic("topic"), 0): 3})]
+        ):
+            strategy.close()
+            strategy.join()

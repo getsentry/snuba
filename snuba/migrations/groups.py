@@ -117,6 +117,7 @@ class TransactionsLoader(DirectoryLoader):
             "0006_transactions_add_http_fields",
             "0007_transactions_add_discover_cols",
             "0008_transactions_add_timestamp_index",
+            "0009_transactions_fix_title_and_message",
         ]
 
 
@@ -132,6 +133,8 @@ class DiscoverLoader(DirectoryLoader):
         return [
             "0001_discover_merge_table",
             "0002_discover_add_deleted_tags_hash_map",
+            "0003_discover_fix_user_column",
+            "0004_discover_fix_title_and_message",
         ]
 
 
@@ -148,7 +151,7 @@ class SessionsLoader(DirectoryLoader):
         super().__init__("snuba.migrations.snuba_migrations.sessions")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_sessions"]
+        return ["0001_sessions", "0002_sessions_aggregates"]
 
 
 class QuerylogLoader(DirectoryLoader):

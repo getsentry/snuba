@@ -22,7 +22,7 @@ test_data = [
     ),
     pytest.param(
         Column(None, None, "primary_hash"),
-        Literal("primary_hash", None),
+        identity(Literal(None, None), "primary_hash"),
         id="basic event translation",
     ),
     pytest.param(
@@ -219,6 +219,25 @@ test_data = [
             (Literal(None, None),),
         ),
         id="curried function call",
+    ),
+    pytest.param(
+        FunctionCall(
+            None,
+            "plus",
+            (
+                Literal(None, 0),
+                FunctionCall(None, "multiply", (Literal(None, 0.0), Literal(None, 0),)),
+            ),
+        ),
+        FunctionCall(
+            None,
+            "plus",
+            (
+                Literal(None, 0),
+                FunctionCall(None, "multiply", (Literal(None, 0.0), Literal(None, 0),)),
+            ),
+        ),
+        id="literals aren't cached",
     ),
 ]
 

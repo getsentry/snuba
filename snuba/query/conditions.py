@@ -2,8 +2,11 @@ from typing import Mapping, Sequence
 
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Expression, FunctionCall, Literal
+from snuba.query.matchers import AnyExpression
 from snuba.query.matchers import FunctionCall as FunctionCallPattern
-from snuba.query.matchers import AnyExpression, Or, Param, Pattern, String
+from snuba.query.matchers import Integer
+from snuba.query.matchers import Literal as LiteralPattern
+from snuba.query.matchers import Or, Param, Pattern, String
 
 
 class ConditionFunctions:
@@ -169,6 +172,32 @@ def get_first_level_or_conditions(condition: Expression) -> Sequence[Expression]
     return _get_first_level_conditions(condition, BooleanFunctions.OR)
 
 
+TOP_LEVEL_CONDITIONS = {
+    func_name: Or(
+        [
+            FunctionCallPattern(
+                String(func_name),
+                (Param("left", AnyExpression()), Param("right", AnyExpression())),
+            ),
+            FunctionCallPattern(
+                String("equals"),
+                (
+                    FunctionCallPattern(
+                        String(func_name),
+                        (
+                            Param("left", AnyExpression()),
+                            Param("right", AnyExpression()),
+                        ),
+                    ),
+                    LiteralPattern(Integer(1)),
+                ),
+            ),
+        ]
+    )
+    for func_name in [BooleanFunctions.AND, BooleanFunctions.OR]
+}
+
+
 def _get_first_level_conditions(
     condition: Expression, function: str
 ) -> Sequence[Expression]:
@@ -180,10 +209,11 @@ def _get_first_level_conditions(
     In the AST, the condition is a tree, so we need some additional
     logic to extract the operands of the top level AND condition.
     """
-    if isinstance(condition, FunctionCall) and condition.function_name == function:
+    match = TOP_LEVEL_CONDITIONS[function].match(condition)
+    if match is not None:
         return [
-            *_get_first_level_conditions(condition.parameters[0], function),
-            *_get_first_level_conditions(condition.parameters[1], function),
+            *_get_first_level_conditions(match.expression("left"), function),
+            *_get_first_level_conditions(match.expression("right"), function),
         ]
     else:
         return [condition]

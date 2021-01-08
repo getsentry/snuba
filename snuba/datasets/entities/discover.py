@@ -1,9 +1,10 @@
 import random
 from dataclasses import dataclass
 from datetime import timedelta
+from functools import partial
 from typing import List, Mapping, Optional, Sequence, Set, Tuple
 
-from snuba import environment, state
+from snuba import state
 from snuba.clickhouse.columns import (
     UUID,
     Array,
@@ -23,12 +24,18 @@ from snuba.clickhouse.translators.snuba.allowed import (
     SubscriptableReferenceMapper,
 )
 from snuba.clickhouse.translators.snuba.mappers import (
+    ColumnToColumn,
+    ColumnToFunction,
     ColumnToLiteral,
     ColumnToMapping,
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entities.events import BaseEventsEntity, EventsQueryStorageSelector
+from snuba.datasets.entities.events import (
+    BaseEventsEntity,
+    EventsQueryStorageSelector,
+    callback_func,
+)
 from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import (
@@ -60,11 +67,6 @@ from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.util import qualified_column
-from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.threaded_function_delegator import Result
-from snuba.web import QueryResult
-
-metrics = MetricsWrapper(environment.metrics, "api.discover.discover_entity")
 
 
 @dataclass(frozen=True)
@@ -80,14 +82,14 @@ class DefaultNoneColumnMapper(ColumnMapper):
 
     def attempt_map(
         self, expression: Column, children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[Literal]:
+    ) -> Optional[FunctionCall]:
         if expression.column_name in self.columns:
-            return Literal(
-                alias=expression.alias
+            return identity(
+                Literal(None, None),
+                expression.alias
                 or qualified_column(
                     expression.column_name, expression.table_name or ""
                 ),
-                value=None,
             )
         else:
             return None
@@ -133,13 +135,11 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
     ) -> Optional[FunctionCall]:
         parameters = tuple(p.accept(children_translator) for p in expression.parameters)
         for param in parameters:
-            # Handle wrapped functions that have been converted already
+            # All impossible columns will have been converted to the identity function.
+            # So we know that if a function has the identity function as a parameter, we can
+            # collapse the entire expression.
             fmatch = self.function_match.match(param)
-            if fmatch is not None or (
-                isinstance(param, Literal) and param.alias != "" and param.value is None
-            ):
-                # Currently function mappers require returning other functions. So return this
-                # to keep the mapper happy.
+            if fmatch is not None:
                 return identity(Literal(None, None), expression.alias)
 
         return None
@@ -162,13 +162,12 @@ class DefaultIfNullCurriedFunctionMapper(CurriedFunctionCallMapper):
         internal_function = expression.internal_function.accept(children_translator)
         assert isinstance(internal_function, FunctionCall)  # mypy
         parameters = tuple(p.accept(children_translator) for p in expression.parameters)
-
         for param in parameters:
-            # Handle wrapped functions that have been converted already
+            # All impossible columns that have been converted to NULL will be the identity function.
+            # So we know that if a function has the identity function as a parameter, we can
+            # collapse the entire expression.
             fmatch = self.function_match.match(param)
-            if fmatch is not None or (
-                isinstance(param, Literal) and param.alias != "" and param.value is None
-            ):
+            if fmatch is not None:
                 return CurriedFunctionCall(
                     alias=expression.alias,
                     internal_function=FunctionCall(
@@ -197,9 +196,9 @@ class DefaultNoneSubscriptMapper(SubscriptableReferenceMapper):
         self,
         expression: SubscriptableReference,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[Literal]:
+    ) -> Optional[FunctionCall]:
         if expression.column.column_name in self.subscript_names:
-            return Literal(alias=expression.alias, value=None)
+            return identity(Literal(None, None), expression.alias)
         else:
             return None
 
@@ -371,6 +370,53 @@ class DiscoverEntity(Entity):
                 .concat(null_function_translation_mappers)
                 .concat(
                     TranslationMappers(
+                        columns=[
+                            ColumnToFunction(
+                                None,
+                                "ip_address",
+                                "coalesce",
+                                (
+                                    FunctionCall(
+                                        None,
+                                        "IPv4NumToString",
+                                        (Column(None, None, "ip_address_v4"),),
+                                    ),
+                                    FunctionCall(
+                                        None,
+                                        "IPv6NumToString",
+                                        (Column(None, None, "ip_address_v6"),),
+                                    ),
+                                ),
+                            ),
+                            ColumnToColumn(
+                                None, "transaction", None, "transaction_name"
+                            ),
+                            ColumnToColumn(None, "username", None, "user_name"),
+                            ColumnToColumn(None, "email", None, "user_email"),
+                            ColumnToMapping(
+                                None,
+                                "geo_country_code",
+                                None,
+                                "contexts",
+                                "geo.country_code",
+                            ),
+                            ColumnToMapping(
+                                None, "geo_region", None, "contexts", "geo.region"
+                            ),
+                            ColumnToMapping(
+                                None, "geo_city", None, "contexts", "geo.city"
+                            ),
+                            ColumnToFunction(
+                                None,
+                                "user",
+                                "nullIf",
+                                (Column(None, None, "user"), Literal(None, "")),
+                            ),
+                        ]
+                    )
+                )
+                .concat(
+                    TranslationMappers(
                         subscriptables=[
                             SubscriptableMapper(None, "tags", None, "tags"),
                             SubscriptableMapper(None, "contexts", None, "contexts"),
@@ -388,15 +434,6 @@ class DiscoverEntity(Entity):
 
             return "events", []
 
-        def callback_func(results: List[Result[QueryResult]]) -> None:
-            primary_result = results.pop(0)
-
-            for result in results:
-                if result.result.result["data"] == primary_result.result.result["data"]:
-                    metrics.increment("query_result", tags={"match": "true"})
-                else:
-                    metrics.increment("query_result", tags={"match": "false"})
-
         super().__init__(
             storages=[events_storage, discover_storage],
             query_pipeline_builder=PipelineDelegator(
@@ -405,7 +442,7 @@ class DiscoverEntity(Entity):
                     "discover": discover_pipeline_builder,
                 },
                 selector_func=selector_func,
-                callback_func=callback_func,
+                callback_func=partial(callback_func, "discover"),
             ),
             abstract_column_set=(
                 self.__common_columns

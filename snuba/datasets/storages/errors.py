@@ -13,7 +13,7 @@ from snuba.datasets.storages.errors_common import (
     query_splitters,
     required_columns,
 )
-from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 
 schema = WritableTableSchema(
     columns=all_columns,
@@ -30,10 +30,11 @@ storage = WritableTableStorage(
     schema=schema,
     query_processors=query_processors,
     query_splitters=query_splitters,
-    stream_loader=KafkaStreamLoader(
+    stream_loader=build_kafka_stream_loader_from_settings(
+        StorageKey.ERRORS,
         processor=ErrorsProcessor(promoted_tag_columns),
-        default_topic="events",
-        replacement_topic="errors-replacements",
+        default_topic_name="events",
+        replacement_topic_name="errors-replacements",
     ),
     replacer_processor=ErrorsReplacer(
         schema=schema,

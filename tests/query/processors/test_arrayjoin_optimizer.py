@@ -25,7 +25,7 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     get_filtered_mapping_keys,
     zip_columns,
 )
-from snuba.request import Request
+from snuba.request import Language, Request
 from snuba.request.request_settings import HTTPRequestSettings
 
 
@@ -331,7 +331,7 @@ test_data = [
 def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     dataset = get_dataset("transactions")
     query = parse_query(query_body, dataset)
-    request = Request("a", query, HTTPRequestSettings(), {}, "r")
+    request = Request("a", query, HTTPRequestSettings(), {}, "r", Language.LEGACY)
     entity = get_entity(query.get_from_clause().key)
     for p in entity.get_query_processors():
         p.process_query(query, request.settings)
@@ -340,7 +340,7 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
 
     query_plan = SingleStorageQueryPlanBuilder(
         storage=entity.get_writable_storage(), mappers=transaction_translator,
-    ).build_plan(query, request.settings)
+    ).build_and_rank_plans(query, request.settings)[0]
 
     return query_plan.query
 

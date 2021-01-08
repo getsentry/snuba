@@ -68,7 +68,7 @@ test_data = [
                 ]
             ]
         },
-        EntityKey.DISCOVER,
+        EntityKey.DISCOVER_EVENTS,
     ),
     ({"conditions": [["type", "!=", "transaction"]]}, EntityKey.DISCOVER_EVENTS),
     ({"conditions": []}, EntityKey.DISCOVER),
@@ -98,7 +98,7 @@ test_data = [
                 ["duration", "=", 0],
             ]
         },
-        EntityKey.DISCOVER_TRANSACTIONS,
+        EntityKey.DISCOVER_EVENTS,
     ),
     (
         {

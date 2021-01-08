@@ -1,18 +1,12 @@
 from datetime import timedelta
 from typing import FrozenSet, Mapping, Sequence
 
-from snuba.clickhouse.translators.snuba.mappers import (
-    ColumnToFunction,
-    SubscriptableMapper,
-)
-from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.errors import promoted_tag_columns
+from snuba.datasets.storages.errors_common import promoted_tag_columns
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
@@ -21,26 +15,14 @@ from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
+from snuba.datasets.entities.events import errors_translators
 
 
-errors_translators = TranslationMappers(
-    columns=[
-        ColumnToFunction(
-            None, "user", "nullIf", (Column(None, None, "user"), Literal(None, ""))
-        ),
-    ],
-    subscriptables=[
-        SubscriptableMapper(None, "tags", None, "tags"),
-        SubscriptableMapper(None, "contexts", None, "contexts"),
-    ],
-)
-
-
+# TODO: Remove this entity once it is no longer being used by tests.
+# The errors storage will be used via the existing events entity.
 class ErrorsEntity(Entity):
     """
     Represents the collections of all event types that are not transactions.
-
-    This is meant to replace Events. They will both exist during the migration.
     """
 
     def __init__(self) -> None:
