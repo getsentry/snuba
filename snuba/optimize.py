@@ -1,6 +1,6 @@
+import logging
 from datetime import datetime, timedelta
 from typing import Optional, Sequence
-import logging
 
 from snuba import util
 from snuba.clickhouse.native import ClickhousePool
@@ -9,6 +9,13 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 
 logger = logging.getLogger("snuba.optimize")
+
+
+STORAGE_PARTITION_KEYS = {
+    StorageKey.EVENTS: [util.PartSegment.DATE, util.PartSegment.RETENTION_DAYS],
+    StorageKey.ERRORS: [util.PartSegment.RETENTION_DAYS, util.PartSegment.DATE],
+    StorageKey.TRANSACTIONS: [util.PartSegment.RETENTION_DAYS, util.PartSegment.DATE],
+}
 
 
 def run_optimize(
@@ -81,11 +88,13 @@ def get_partitions_to_optimize(
         {"database": database, "table": table},
     )
 
-    parts = [util.decode_part_str(part, storage_key) for part, count in active_parts]
+    part_format = STORAGE_PARTITION_KEYS[storage_key]
+
+    parts = [util.decode_part_str(part, part_format) for part, count in active_parts]
 
     if before:
         parts = [
-            p for p in parts if (p[0] + timedelta(days=6 - p[0].weekday())) < before
+            p for p in parts if (p.date + timedelta(days=6 - p.date.weekday())) < before
         ]
 
     return parts
@@ -99,31 +108,18 @@ def optimize_partitions(
     parts: Sequence[util.Part],
 ) -> None:
 
-    events_query_template = """\
+    query_template = """\
         OPTIMIZE TABLE %(database)s.%(table)s
-        PARTITION ('%(date_str)s', %(retention_days)s) FINAL
+        PARTITION %(partition)s FINAL
     """
 
-    errors_transactions_query_template = """\
-        OPTIMIZE TABLE %(database)s.%(table)s
-        PARTITION (%(retention_days)s, '%(date_str)s') FINAL
-    """
-
-    query_template = {
-        StorageKey.EVENTS: events_query_template,
-        StorageKey.ERRORS: errors_transactions_query_template,
-        StorageKey.TRANSACTIONS: errors_transactions_query_template,
-    }[storage_key]
-
-    for part_date, retention_days in parts:
-        date_str = part_date.strftime("%Y-%m-%d")
+    for part in parts:
         args = {
             "database": database,
             "table": table,
-            "date_str": date_str,
-            "retention_days": retention_days,
+            "partition": part.name,
         }
 
         query = (query_template % args).strip()
-        logger.info("Optimizing partition: ('%s', %s)" % (date_str, retention_days))
+        logger.info(f"Optimizing partition: {part.name}")
         clickhouse.execute(query)

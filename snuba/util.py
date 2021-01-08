@@ -3,6 +3,7 @@ import logging
 import numbers
 import re
 from datetime import date, datetime, timedelta
+from enum import Enum
 from functools import partial, wraps
 from typing import (
     Any,
@@ -17,13 +18,12 @@ from typing import (
     cast,
 )
 
+import _strptime  # NOQA fixes _strptime deferred import issue
 import sentry_sdk
 from dateutil.parser import parse as dateutil_parse
 
-import _strptime  # NOQA fixes _strptime deferred import issue
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
-from snuba.datasets.storages import StorageKey
 from snuba.query.parsing import ParsingContext
 from snuba.query.schema import CONDITION_OPERATORS
 from snuba.utils.metrics import MetricsBackend
@@ -35,18 +35,8 @@ logger = logging.getLogger("snuba.util")
 
 T = TypeVar("T")
 
-# example partition name: "(90, '2018-03-13 00:00:00')"
-ERRORS_TRANSACTIONS_PART_RE = re.compile(
-    r"\((?P<retention>\d+),\s*('(?P<timestamp>\d{4}-\d{2}-\d{2})')\)"
-)
-PART_RE = {
-    StorageKey.EVENTS: re.compile(
-        r"\('(?P<timestamp>\d{4}-\d{2}-\d{2})',\s*(?P<retention>\d+)\)"
-    ),
-    StorageKey.ERRORS: ERRORS_TRANSACTIONS_PART_RE,
-    StorageKey.TRANSACTIONS: ERRORS_TRANSACTIONS_PART_RE,
-}
-
+# example partition name: "('2018-03-13 00:00:00', 90)"
+PART_RE = r"\('(?P<timestamp>\d{4}-\d{2}-\d{2})',\s*(?P<retention>\d+)\)"
 
 QUOTED_LITERAL_RE = re.compile(r"^'[\s\S]*'$")
 SAFE_FUNCTION_RE = re.compile(r"-?[a-zA-Z_][a-zA-Z0-9_]*$")
@@ -204,20 +194,41 @@ def time_request(name):
 
 
 class Part(NamedTuple):
+    name: str
     date: datetime
     retention_days: int
 
 
-def decode_part_str(part_str: str, storage: StorageKey) -> Part:
-    match = PART_RE[storage].match(part_str)
+class PartSegment(Enum):
+    RETENTION_DAYS = "retention_days"
+    DATE = "date"
+
+
+def decode_part_str(part_str: str, part_format: Sequence[PartSegment]) -> Part:
+    PARTSEGMENT_RE = {
+        PartSegment.DATE: "('(?P<date>\d{4}-\d{2}-\d{2})')",
+        PartSegment.RETENTION_DAYS: "(?P<retention_days>\d+)",
+    }
+
+    SEP = ",\s*"
+
+    RE = re.compile(f"\({SEP.join([PARTSEGMENT_RE[s] for s in part_format])}\)")
+
+    match = RE.match(part_str)
 
     if not match:
         raise ValueError("Unknown part name/format: " + str(part_str))
-    date_str = match.group("timestamp")
-    retention_days = match.group("retention")
-    date = datetime.strptime(date_str, "%Y-%m-%d")
 
-    return Part(date, int(retention_days))
+    date_str = match.group("date")
+    retention_days = match.group("retention_days")
+
+    if date_str and retention_days:
+        return Part(
+            part_str, datetime.strptime(date_str, "%Y-%m-%d"), int(retention_days)
+        )
+
+    else:
+        raise ValueError("Unknown part name/format: " + str(part_str))
 
 
 def force_bytes(s: Union[bytes, str]) -> bytes:
@@ -247,6 +258,7 @@ def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
         )
 
     from datadog import DogStatsd
+
     from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend
 
     return DatadogMetricsBackend(

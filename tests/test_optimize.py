@@ -99,14 +99,14 @@ class TestOptimize:
         parts = optimize.get_partitions_to_optimize(
             clickhouse, storage_key, database, table
         )
-        assert parts == [(base_monday, 90)]
+        assert [(p.date, p.retention_days) for p in parts] == [(base_monday, 90)]
 
         # 3 events in the same part, 1 unoptimized part
         write_processed_messages(storage, [create_event_row_for_date(base)])
         parts = optimize.get_partitions_to_optimize(
             clickhouse, storage_key, database, table
         )
-        assert parts == [(base_monday, 90)]
+        assert [(p.date, p.retention_days) for p in parts] == [(base_monday, 90)]
 
         # 3 events in one part, 2 in another, 2 unoptimized parts
         a_month_earlier = base_monday - timedelta(days=31)
@@ -122,14 +122,20 @@ class TestOptimize:
         parts = optimize.get_partitions_to_optimize(
             clickhouse, storage_key, database, table
         )
-        assert parts == [(base_monday, 90), (a_month_earlier_monday, 90)]
+        assert [(p.date, p.retention_days) for p in parts] == [
+            (base_monday, 90),
+            (a_month_earlier_monday, 90),
+        ]
 
         # respects before (base is properly excluded)
-        assert list(
-            optimize.get_partitions_to_optimize(
-                clickhouse, storage_key, database, table, before=base
+        assert [
+            (p.date, p.retention_days)
+            for p in list(
+                optimize.get_partitions_to_optimize(
+                    clickhouse, storage_key, database, table, before=base
+                )
             )
-        ) == [(a_month_earlier_monday, 90)]
+        ] == [(a_month_earlier_monday, 90)]
 
         optimize.optimize_partitions(clickhouse, storage_key, database, table, parts)
 
