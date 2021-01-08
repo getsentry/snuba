@@ -135,6 +135,7 @@ class DiscoverLoader(DirectoryLoader):
             "0002_discover_add_deleted_tags_hash_map",
             "0003_discover_fix_user_column",
             "0004_discover_fix_title_and_message",
+            "0005_discover_fix_transaction_name",
         ]
 
 
