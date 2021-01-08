@@ -157,7 +157,7 @@ TEST_CASES = [
                     ),
                 ],
             ),
-            CompositeExecutionStrategy(get_cluster(StorageSetKey.EVENTS), [], {}),
+            CompositeExecutionStrategy(get_cluster(StorageSetKey.EVENTS), [], {}, []),
             StorageSetKey.EVENTS,
             SubqueryProcessors(
                 [],
@@ -221,47 +221,8 @@ TEST_CASES = [
     pytest.param(
         CompositeQuery(
             from_clause=JoinClause(
-                left_node=IndividualNode(
-                    alias="err",
-                    data_source=LogicalQuery(
-                        {},
-                        from_clause=events_ent,
-                        selected_columns=[
-                            SelectedExpression(
-                                "project_id", Column(None, None, "project_id")
-                            ),
-                            SelectedExpression(
-                                "group_id", Column(None, None, "group_id")
-                            ),
-                            SelectedExpression(
-                                "count_release",
-                                FunctionCall(
-                                    "count_release",
-                                    "uniq",
-                                    (Column(None, None, "release"),),
-                                ),
-                            ),
-                        ],
-                        condition=binary_condition(
-                            ConditionFunctions.EQ,
-                            Column(None, None, "project_id"),
-                            Literal(None, 1),
-                        ),
-                    ),
-                ),
-                right_node=IndividualNode(
-                    alias="groups",
-                    data_source=LogicalQuery(
-                        {},
-                        from_clause=groups_ent,
-                        selected_columns=[
-                            SelectedExpression(
-                                "project_id", Column(None, None, "project_id")
-                            ),
-                            SelectedExpression("id", Column(None, None, "id")),
-                        ],
-                    ),
-                ),
+                left_node=IndividualNode(alias="err", data_source=events_ent,),
+                right_node=IndividualNode(alias="groups", data_source=groups_ent,),
                 keys=[
                     JoinCondition(
                         left=JoinConditionExpression("err", "group_id"),
@@ -272,12 +233,15 @@ TEST_CASES = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "average",
-                    FunctionCall(
-                        "average", "avg", (Column(None, None, "count_release"),)
-                    ),
+                    "f_release",
+                    FunctionCall("f_release", "f", (Column(None, "err", "release"),),),
                 ),
             ],
+            condition=binary_condition(
+                ConditionFunctions.EQ,
+                Column(None, "err", "project_id"),
+                Literal(None, 1),
+            ),
         ),
         CompositeQueryPlan(
             CompositeQuery(
@@ -288,30 +252,21 @@ TEST_CASES = [
                             from_clause=events_table,
                             selected_columns=[
                                 SelectedExpression(
-                                    "project_id", Column(None, None, "project_id")
+                                    "_snuba_group_id",
+                                    Column("_snuba_group_id", None, "group_id"),
                                 ),
                                 SelectedExpression(
-                                    "group_id", Column(None, None, "group_id")
-                                ),
-                                SelectedExpression(
-                                    "count_release",
+                                    "f_release",
                                     FunctionCall(
-                                        "count_release",
-                                        function_name="ifNull",
+                                        "f_release",
+                                        function_name="f",
                                         parameters=(
-                                            FunctionCall(
+                                            build_mapping_expr(
                                                 None,
-                                                "uniq",
-                                                (
-                                                    build_mapping_expr(
-                                                        None,
-                                                        None,
-                                                        "tags",
-                                                        Literal(None, "sentry:release"),
-                                                    ),
-                                                ),
+                                                None,
+                                                "tags",
+                                                Literal(None, "sentry:release"),
                                             ),
-                                            Literal(alias=None, value=0),
                                         ),
                                     ),
                                 ),
@@ -329,30 +284,26 @@ TEST_CASES = [
                             from_clause=groups_table,
                             selected_columns=[
                                 SelectedExpression(
-                                    "project_id", Column(None, None, "project_id")
+                                    "_snuba_id", Column("_snuba_id", None, "id")
                                 ),
-                                SelectedExpression("id", Column(None, None, "id")),
                             ],
                         ),
                     ),
                     keys=[
                         JoinCondition(
-                            left=JoinConditionExpression("err", "group_id"),
-                            right=JoinConditionExpression("groups", "id"),
+                            left=JoinConditionExpression("err", "_snuba_group_id"),
+                            right=JoinConditionExpression("groups", "_snuba_id"),
                         )
                     ],
                     join_type=JoinType.INNER,
                 ),
                 selected_columns=[
                     SelectedExpression(
-                        "average",
-                        FunctionCall(
-                            "average", "avg", (Column(None, None, "count_release"),)
-                        ),
+                        "f_release", Column("f_release", "err", "f_release"),
                     ),
                 ],
             ),
-            CompositeExecutionStrategy(get_cluster(StorageSetKey.EVENTS), [], {}),
+            CompositeExecutionStrategy(get_cluster(StorageSetKey.EVENTS), [], {}, []),
             StorageSetKey.EVENTS,
             None,
             {
@@ -380,12 +331,9 @@ TEST_CASES = [
                         from_clause=events_table,
                         selected_columns=[
                             SelectedExpression(
-                                "project_id", Column(None, None, "project_id")
-                            ),
-                            SelectedExpression(
-                                "group_id",
+                                "_snuba_group_id",
                                 FunctionCall(
-                                    None,
+                                    "_snuba_group_id",
                                     function_name="nullIf",
                                     parameters=(
                                         Column(None, None, "group_id"),
@@ -394,18 +342,11 @@ TEST_CASES = [
                                 ),
                             ),
                             SelectedExpression(
-                                "count_release",
+                                "f_release",
                                 FunctionCall(
-                                    "count_release",
-                                    function_name="ifNull",
-                                    parameters=(
-                                        FunctionCall(
-                                            None,
-                                            "uniq",
-                                            (Column(None, None, "sentry:release"),),
-                                        ),
-                                        Literal(None, 0),
-                                    ),
+                                    "f_release",
+                                    function_name="f",
+                                    parameters=(Column(None, None, "sentry:release"),),
                                 ),
                             ),
                         ],
@@ -427,9 +368,8 @@ TEST_CASES = [
                         from_clause=groups_table,
                         selected_columns=[
                             SelectedExpression(
-                                "project_id", Column(None, None, "project_id")
+                                "_snuba_id", Column("_snuba_id", None, "id")
                             ),
-                            SelectedExpression("id", Column(None, None, "id")),
                         ],
                         condition=binary_condition(
                             ConditionFunctions.EQ,
@@ -444,22 +384,19 @@ TEST_CASES = [
                 ),
                 keys=[
                     JoinCondition(
-                        left=JoinConditionExpression("err", "group_id"),
-                        right=JoinConditionExpression("groups", "id"),
+                        left=JoinConditionExpression("err", "_snuba_group_id"),
+                        right=JoinConditionExpression("groups", "_snuba_id"),
                     )
                 ],
                 join_type=JoinType.INNER,
             ),
             selected_columns=[
                 SelectedExpression(
-                    "average",
-                    FunctionCall(
-                        "average", "avg", (Column(None, None, "count_release"),)
-                    ),
+                    "f_release", Column("f_release", "err", "f_release"),
                 ),
             ],
         ),
-        id="Join of two subqueries",
+        id="Simple join turned into a join of subqueries",
     ),
 ]
 
@@ -482,13 +419,13 @@ def test_composite_planner(
 
     plan = CompositeQueryPlanner(
         deepcopy(logical_query), HTTPRequestSettings()
-    ).execute()
+    ).build_best_plan()
     report = plan.query.equals(composite_plan.query)
     assert report[0], f"Mismatch: {report[1]}"
 
     # We cannot simply check the equality between the plans because
     # we need to verify processors are of the same type, they can
-    # be different innstances, thus making the simple equality fail.
+    # be different instances, thus making the simple equality fail.
     query_processors = plan.root_processors is not None
     expected_processors = composite_plan.root_processors is not None
     assert query_processors == expected_processors

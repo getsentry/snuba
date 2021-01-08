@@ -227,7 +227,7 @@ def test_alias_validation(
         events.get_default_entity()
         .get_query_pipeline_builder()
         .build_planner(query, settings)
-    ).execute()
+    ).build_best_plan()
     execute_all_clickhouse_processors(query_plan, settings)
 
     assert query_plan.query.validate_aliases() == expected_result

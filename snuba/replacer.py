@@ -30,6 +30,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             processor
         ), f"This storage writer does not support replacements {storage.get_storage_key().value}"
         self.__replacer_processor = processor
+        self.__database_name = storage.get_cluster().get_database()
         self.__table_name = (
             storage.get_table_writer().get_schema().get_local_table_name()
         )
@@ -87,7 +88,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
             today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
             num_dropped = run_optimize(
-                self.clickhouse, "default", self.__table_name, before=today,
+                self.clickhouse, self.__database_name, self.__table_name, before=today,
             )
             logger.info(
                 "Optimized %s partitions on %s" % (num_dropped, self.clickhouse.host)
