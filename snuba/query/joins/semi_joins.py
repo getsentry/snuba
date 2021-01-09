@@ -66,11 +66,9 @@ class SemiJoinGenerator(JoinVisitor[JoinNode[Table], Table]):
         return node
 
     def visit_join_clause(self, node: JoinClause[Table]) -> JoinClause[Table]:
-        # TODO: Introduce the cardinality in the relationship on the
-        # entities declaration so we can ensure we apply SEMI join
-        # only to n:1 relationship, which avoid some false positive
-        # on queries with aggregations on columns that are on the left
-        # side.
+        # TODO: Skip this optimization if the left side of the query
+        # runs aggregations that imply the cardinality of the right
+        # side is important.
 
         join_cols = set()
 
