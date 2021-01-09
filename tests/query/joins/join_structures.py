@@ -13,7 +13,11 @@ from snuba.query.data_source.join import (
 from snuba.query.data_source.simple import Entity, SimpleDataSource, Table
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query as LogicalQuery
-from tests.query.joins.equivalence_schema import EVENTS_SCHEMA, GROUPS_SCHEMA
+from tests.query.joins.equivalence_schema import (
+    EVENTS_SCHEMA,
+    GROUPS_SCHEMA,
+    GROUPS_ASSIGNEE,
+)
 
 TNode = TypeVar("TNode", bound=SimpleDataSource)
 
@@ -87,6 +91,18 @@ def clickhouse_groups_node(
 ) -> IndividualNode[Table]:
     return build_clickhouse_node(
         "gr", Table("groupedmessage_local", GROUPS_SCHEMA), selected_columns, condition,
+    )
+
+
+def clickhouse_assignees_node(
+    selected_columns: Sequence[SelectedExpression],
+    condition: Optional[Expression] = None,
+) -> IndividualNode[Table]:
+    return build_clickhouse_node(
+        "as",
+        Table("groupassignee_local", GROUPS_ASSIGNEE),
+        selected_columns,
+        condition,
     )
 
 
