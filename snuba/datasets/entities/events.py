@@ -67,6 +67,8 @@ errors_translators = TranslationMappers(
             ),
         ),
         ColumnToColumn(None, "transaction", None, "transaction_name"),
+        ColumnToColumn(None, "username", None, "user_name"),
+        ColumnToColumn(None, "email", None, "user_email"),
         ColumnToMapping(None, "geo_country_code", None, "contexts", "geo.country_code"),
         ColumnToMapping(None, "geo_region", None, "contexts", "geo.region"),
         ColumnToMapping(None, "geo_city", None, "contexts", "geo.city"),

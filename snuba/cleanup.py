@@ -32,7 +32,8 @@ def get_active_partitions(
         {"database": database, "table": table},
     )
 
-    return [util.decode_part_str(part) for part, in response]
+    events_part_format = [util.PartSegment.DATE, util.PartSegment.RETENTION_DAYS]
+    return [util.decode_part_str(part, events_part_format) for part, in response]
 
 
 def filter_stale_partitions(
@@ -45,7 +46,9 @@ def filter_stale_partitions(
         as_of = datetime.utcnow()
 
     stale_parts = []
-    for part_date, retention_days in parts:
+    for part in parts:
+        part_date = part.date
+        retention_days = part.retention_days
         part_last_day = part_date + timedelta(days=6 - part_date.weekday())
 
         if part_last_day < (as_of - timedelta(days=retention_days)):

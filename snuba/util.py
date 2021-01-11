@@ -3,13 +3,16 @@ import logging
 import numbers
 import re
 from datetime import date, datetime, timedelta
+from enum import Enum
 from functools import partial, wraps
 from typing import (
     Any,
     Callable,
     List,
+    MutableMapping,
     NamedTuple,
     Optional,
+    Pattern,
     Sequence,
     Tuple,
     TypeVar,
@@ -17,10 +20,10 @@ from typing import (
     cast,
 )
 
+import _strptime  # NOQA fixes _strptime deferred import issue
 import sentry_sdk
 from dateutil.parser import parse as dateutil_parse
 
-import _strptime  # NOQA fixes _strptime deferred import issue
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
 from snuba.query.parsing import ParsingContext
@@ -34,9 +37,9 @@ logger = logging.getLogger("snuba.util")
 
 T = TypeVar("T")
 
-
 # example partition name: "('2018-03-13 00:00:00', 90)"
-PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})',\s*(\d+)\)")
+PART_RE = r"\('(?P<timestamp>\d{4}-\d{2}-\d{2})',\s*(?P<retention>\d+)\)"
+
 QUOTED_LITERAL_RE = re.compile(r"^'[\s\S]*'$")
 SAFE_FUNCTION_RE = re.compile(r"-?[a-zA-Z_][a-zA-Z0-9_]*$")
 
@@ -193,19 +196,54 @@ def time_request(name):
 
 
 class Part(NamedTuple):
+    name: str
     date: datetime
     retention_days: int
 
 
-def decode_part_str(part_str: str) -> Part:
-    match = PART_RE.match(part_str)
+class PartSegment(Enum):
+    RETENTION_DAYS = "retention_days"
+    DATE = "date"
+
+
+re_cache: MutableMapping[str, Pattern[Any]] = {}
+
+
+def decode_part_str(part_str: str, part_format: Sequence[PartSegment]) -> Part:
+    def get_re(format: Sequence[PartSegment]) -> Pattern[Any]:
+        cache_key = ",".join([segment.value for segment in format])
+
+        PARTSEGMENT_RE = {
+            PartSegment.DATE: "('(?P<date>\d{4}-\d{2}-\d{2})')",
+            PartSegment.RETENTION_DAYS: "(?P<retention_days>\d+)",
+        }
+
+        SEP = ",\s*"
+
+        try:
+            return re_cache[cache_key]
+        except KeyError:
+            re_cache[cache_key] = re.compile(
+                f"\({SEP.join([PARTSEGMENT_RE[s] for s in part_format])}\)"
+            )
+
+        return re_cache[cache_key]
+
+    match = get_re(part_format).match(part_str)
+
     if not match:
         raise ValueError("Unknown part name/format: " + str(part_str))
 
-    date_str, retention_days = match.groups()
-    date = datetime.strptime(date_str, "%Y-%m-%d")
+    date_str = match.group("date")
+    retention_days = match.group("retention_days")
 
-    return Part(date, int(retention_days))
+    if date_str and retention_days:
+        return Part(
+            part_str, datetime.strptime(date_str, "%Y-%m-%d"), int(retention_days)
+        )
+
+    else:
+        raise ValueError("Unknown part name/format: " + str(part_str))
 
 
 def force_bytes(s: Union[bytes, str]) -> bytes:
@@ -235,6 +273,7 @@ def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
         )
 
     from datadog import DogStatsd
+
     from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend
 
     return DatadogMetricsBackend(
