@@ -50,6 +50,9 @@ event_translator = TranslationMappers(
 
 errors_translators = TranslationMappers(
     columns=[
+        ColumnToMapping(None, "release", None, "tags", "sentry:release"),
+        ColumnToMapping(None, "dist", None, "tags", "sentry:dist"),
+        ColumnToMapping(None, "user", None, "tags", "sentry:user"),
         ColumnToFunction(
             None,
             "ip_address",
