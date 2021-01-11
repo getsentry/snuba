@@ -3,10 +3,9 @@ from typing import Optional
 import click
 
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import STORAGES, get_storage
+from snuba.datasets.storages.factory import get_storage
 from snuba.environment import setup_logging
 
 
@@ -21,7 +20,7 @@ from snuba.environment import setup_logging
     "--storage",
     "storage_name",
     default="events",
-    type=click.Choice([storage_key.value for storage_key in STORAGES.keys()]),
+    type=click.Choice(["events", "errors", "transactions"]),
     help="The storage to target",
 )
 @click.option("--log-level", help="Logging level to use.")
@@ -44,12 +43,6 @@ def optimize(
     storage = get_storage(storage_key)
 
     (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
-
-    schema = storage.get_schema()
-
-    assert isinstance(schema, TableSchema)
-
-    table_to_optimize = schema.get_local_table_name()
 
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -76,5 +69,5 @@ def optimize(
             ClickhouseClientSettings.OPTIMIZE
         )
 
-    num_dropped = run_optimize(connection, database, table_to_optimize, before=today)
+    num_dropped = run_optimize(connection, storage, database, before=today)
     logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))
