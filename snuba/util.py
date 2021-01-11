@@ -9,8 +9,10 @@ from typing import (
     Any,
     Callable,
     List,
+    MutableMapping,
     NamedTuple,
     Optional,
+    Pattern,
     Sequence,
     Tuple,
     TypeVar,
@@ -204,17 +206,30 @@ class PartSegment(Enum):
     DATE = "date"
 
 
+re_cache: MutableMapping[str, Pattern[Any]] = {}
+
+
 def decode_part_str(part_str: str, part_format: Sequence[PartSegment]) -> Part:
-    PARTSEGMENT_RE = {
-        PartSegment.DATE: "('(?P<date>\d{4}-\d{2}-\d{2})')",
-        PartSegment.RETENTION_DAYS: "(?P<retention_days>\d+)",
-    }
+    def get_re(format: Sequence[PartSegment]) -> Pattern[Any]:
+        cache_key = ",".join([segment.value for segment in format])
 
-    SEP = ",\s*"
+        PARTSEGMENT_RE = {
+            PartSegment.DATE: "('(?P<date>\d{4}-\d{2}-\d{2})')",
+            PartSegment.RETENTION_DAYS: "(?P<retention_days>\d+)",
+        }
 
-    RE = re.compile(f"\({SEP.join([PARTSEGMENT_RE[s] for s in part_format])}\)")
+        SEP = ",\s*"
 
-    match = RE.match(part_str)
+        try:
+            return re_cache[cache_key]
+        except KeyError:
+            re_cache[cache_key] = re.compile(
+                f"\({SEP.join([PARTSEGMENT_RE[s] for s in part_format])}\)"
+            )
+
+        return re_cache[cache_key]
+
+    match = get_re(part_format).match(part_str)
 
     if not match:
         raise ValueError("Unknown part name/format: " + str(part_str))
