@@ -80,7 +80,7 @@ class TestOptimize:
 
         # no data, 0 partitions to optimize
         parts = optimize.get_partitions_to_optimize(
-            clickhouse, storage_key, database, table
+            clickhouse, storage, database, table
         )
         assert parts == []
 
@@ -90,21 +90,21 @@ class TestOptimize:
         # 1 event, 0 unoptimized parts
         write_processed_messages(storage, [create_event_row_for_date(base)])
         parts = optimize.get_partitions_to_optimize(
-            clickhouse, storage_key, database, table
+            clickhouse, storage, database, table
         )
         assert parts == []
 
         # 2 events in the same part, 1 unoptimized part
         write_processed_messages(storage, [create_event_row_for_date(base)])
         parts = optimize.get_partitions_to_optimize(
-            clickhouse, storage_key, database, table
+            clickhouse, storage, database, table
         )
         assert [(p.date, p.retention_days) for p in parts] == [(base_monday, 90)]
 
         # 3 events in the same part, 1 unoptimized part
         write_processed_messages(storage, [create_event_row_for_date(base)])
         parts = optimize.get_partitions_to_optimize(
-            clickhouse, storage_key, database, table
+            clickhouse, storage, database, table
         )
         assert [(p.date, p.retention_days) for p in parts] == [(base_monday, 90)]
 
@@ -120,7 +120,7 @@ class TestOptimize:
             storage, [create_event_row_for_date(a_month_earlier_monday)]
         )
         parts = optimize.get_partitions_to_optimize(
-            clickhouse, storage_key, database, table
+            clickhouse, storage, database, table
         )
         assert [(p.date, p.retention_days) for p in parts] == [
             (base_monday, 90),
@@ -132,15 +132,15 @@ class TestOptimize:
             (p.date, p.retention_days)
             for p in list(
                 optimize.get_partitions_to_optimize(
-                    clickhouse, storage_key, database, table, before=base
+                    clickhouse, storage, database, table, before=base
                 )
             )
         ] == [(a_month_earlier_monday, 90)]
 
-        optimize.optimize_partitions(clickhouse, storage_key, database, table, parts)
+        optimize.optimize_partitions(clickhouse, database, table, parts)
 
         # all parts should be optimized
         parts = optimize.get_partitions_to_optimize(
-            clickhouse, storage_key, database, table
+            clickhouse, storage, database, table
         )
         assert parts == []

@@ -5,8 +5,8 @@ from typing import Optional, Sequence
 from snuba import util
 from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.schemas.tables import TableSchema
+from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_storage
 
 logger = logging.getLogger("snuba.optimize")
 
@@ -20,24 +20,23 @@ STORAGE_PARTITION_KEYS = {
 
 def run_optimize(
     clickhouse: ClickhousePool,
-    storage_key: StorageKey,
+    storage: ReadableTableStorage,
     database: str,
     before: Optional[datetime] = None,
 ) -> int:
-    storage = get_storage(storage_key)
     schema = storage.get_schema()
     assert isinstance(schema, TableSchema)
     table = schema.get_local_table_name()
     database = storage.get_cluster().get_database()
 
-    parts = get_partitions_to_optimize(clickhouse, storage_key, database, table, before)
-    optimize_partitions(clickhouse, storage_key, database, table, parts)
+    parts = get_partitions_to_optimize(clickhouse, storage, database, table, before)
+    optimize_partitions(clickhouse, database, table, parts)
     return len(parts)
 
 
 def get_partitions_to_optimize(
     clickhouse: ClickhousePool,
-    storage_key: StorageKey,
+    storage: ReadableTableStorage,
     database: str,
     table: str,
     before: Optional[datetime] = None,
@@ -88,7 +87,7 @@ def get_partitions_to_optimize(
         {"database": database, "table": table},
     )
 
-    part_format = STORAGE_PARTITION_KEYS[storage_key]
+    part_format = STORAGE_PARTITION_KEYS[storage.get_storage_key()]
 
     parts = [util.decode_part_str(part, part_format) for part, count in active_parts]
 
@@ -101,11 +100,7 @@ def get_partitions_to_optimize(
 
 
 def optimize_partitions(
-    clickhouse: ClickhousePool,
-    storage_key: StorageKey,
-    database: str,
-    table: str,
-    parts: Sequence[util.Part],
+    clickhouse: ClickhousePool, database: str, table: str, parts: Sequence[util.Part],
 ) -> None:
 
     query_template = """\
