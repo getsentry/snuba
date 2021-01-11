@@ -157,7 +157,7 @@ TEST_CASES = [
                     ),
                 ],
             ),
-            CompositeExecutionStrategy(get_cluster(StorageSetKey.EVENTS), [], {}),
+            CompositeExecutionStrategy(get_cluster(StorageSetKey.EVENTS), [], {}, []),
             StorageSetKey.EVENTS,
             SubqueryProcessors(
                 [],
@@ -303,7 +303,7 @@ TEST_CASES = [
                     ),
                 ],
             ),
-            CompositeExecutionStrategy(get_cluster(StorageSetKey.EVENTS), [], {}),
+            CompositeExecutionStrategy(get_cluster(StorageSetKey.EVENTS), [], {}, []),
             StorageSetKey.EVENTS,
             None,
             {

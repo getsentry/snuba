@@ -21,7 +21,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-from snuba.query.expressions import Column, Literal
+from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
@@ -51,6 +51,20 @@ event_translator = TranslationMappers(
 errors_translators = TranslationMappers(
     columns=[
         ColumnToFunction(
+            None,
+            "ip_address",
+            "coalesce",
+            (
+                FunctionCall(
+                    None, "IPv4NumToString", (Column(None, None, "ip_address_v4"),),
+                ),
+                FunctionCall(
+                    None, "IPv6NumToString", (Column(None, None, "ip_address_v6"),),
+                ),
+            ),
+        ),
+        ColumnToColumn(None, "transaction", None, "transaction_name"),
+        ColumnToFunction(
             None, "user", "nullIf", (Column(None, None, "user"), Literal(None, ""))
         ),
         ColumnToColumn(None, "username", None, "user_name"),
@@ -71,6 +85,10 @@ metrics = MetricsWrapper(environment.metrics, "snuplicator")
 def callback_func(
     storage: str, query: Query, referrer: str, results: List[Result[QueryResult]]
 ) -> None:
+    if not results:
+        metrics.increment("query_result", tags={"storage": storage, "match": "empty"})
+        return
+
     primary_result = results.pop(0)
     primary_result_data = primary_result.result.result["data"]
 
