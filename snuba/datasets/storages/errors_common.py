@@ -13,6 +13,7 @@ from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets.storages.event_id_column_processor import EventIdColumnProcessor
 from snuba.datasets.storages.group_id_column_processor import GroupIdColumnProcessor
+from snuba.datasets.storages.user_column_processor import UserColumnProcessor
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
@@ -138,6 +139,7 @@ query_processors = [
         project_column="project_id", replacer_state_name=ReplacerState.ERRORS,
     ),
     MappingColumnPromoter(mapping_specs={"tags": promoted_tag_columns}),
+    UserColumnProcessor(),
     EventIdColumnProcessor(),
     GroupIdColumnProcessor(),
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),

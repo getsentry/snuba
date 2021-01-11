@@ -21,7 +21,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.expressions import Column, FunctionCall
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
@@ -64,9 +64,6 @@ errors_translators = TranslationMappers(
             ),
         ),
         ColumnToColumn(None, "transaction", None, "transaction_name"),
-        ColumnToFunction(
-            None, "user", "nullIf", (Column(None, None, "user"), Literal(None, ""))
-        ),
         ColumnToMapping(None, "geo_country_code", None, "contexts", "geo.country_code"),
         ColumnToMapping(None, "geo_region", None, "contexts", "geo.region"),
         ColumnToMapping(None, "geo_city", None, "contexts", "geo.city"),
