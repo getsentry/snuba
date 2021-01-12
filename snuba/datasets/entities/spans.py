@@ -1,4 +1,3 @@
-from datetime import timedelta
 from typing import Mapping, Sequence
 
 from snuba.clickhouse.columns import UUID, ColumnSet, DateTime, Nested
@@ -16,8 +15,6 @@ from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, Jo
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.project_extension import ProjectExtension
-from snuba.query.timeseries_extension import TimeSeriesExtension
 
 
 class SpansEntity(Entity):
@@ -73,14 +70,7 @@ class SpansEntity(Entity):
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
-        return {
-            "project": ProjectExtension(project_column="project_id"),
-            "timeseries": TimeSeriesExtension(
-                default_granularity=3600,
-                default_window=timedelta(days=5),
-                timestamp_column="finish_ts",
-            ),
-        }
+        return {}
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
