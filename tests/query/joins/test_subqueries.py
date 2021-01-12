@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, cast
+from typing import cast
 
 import pytest
 from snuba.datasets.entities import EntityKey
@@ -18,7 +18,7 @@ from snuba.query.data_source.join import (
     JoinType,
 )
 from snuba.query.data_source.simple import Entity
-from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.joins.subquery_generator import generate_subqueries
 from snuba.query.logical import Query as LogicalQuery
 from tests.query.joins.equivalence_schema import (
@@ -28,6 +28,11 @@ from tests.query.joins.equivalence_schema import (
     Events,
     GroupAssignee,
     GroupedMessage,
+)
+from tests.query.joins.join_structures import (
+    events_groups_join,
+    events_node,
+    groups_node,
 )
 
 BASIC_JOIN = JoinClause(
@@ -45,61 +50,6 @@ BASIC_JOIN = JoinClause(
     ],
     join_type=JoinType.INNER,
 )
-
-
-def build_node(
-    alias: str,
-    from_clause: Entity,
-    selected_columns: Sequence[SelectedExpression],
-    condition: Optional[Expression],
-) -> IndividualNode[Entity]:
-    return IndividualNode(
-        alias=alias,
-        data_source=LogicalQuery(
-            {},
-            from_clause=from_clause,
-            selected_columns=selected_columns,
-            condition=condition,
-        ),
-    )
-
-
-def events_node(
-    selected_columns: Sequence[SelectedExpression],
-    condition: Optional[Expression] = None,
-) -> IndividualNode[Entity]:
-    return build_node(
-        "ev", Entity(EntityKey.EVENTS, EVENTS_SCHEMA), selected_columns, condition
-    )
-
-
-def groups_node(
-    selected_columns: Sequence[SelectedExpression],
-    condition: Optional[Expression] = None,
-) -> IndividualNode[Entity]:
-    return build_node(
-        "gr",
-        Entity(EntityKey.GROUPEDMESSAGES, GROUPS_SCHEMA),
-        selected_columns,
-        condition,
-    )
-
-
-def events_groups_join(
-    left: IndividualNode[Entity], right: IndividualNode[Entity],
-) -> JoinClause[Entity]:
-    return JoinClause(
-        left_node=left,
-        right_node=right,
-        keys=[
-            JoinCondition(
-                left=JoinConditionExpression("ev", "_snuba_group_id"),
-                right=JoinConditionExpression("gr", "_snuba_id"),
-            )
-        ],
-        join_type=JoinType.INNER,
-    )
-
 
 TEST_CASES = [
     pytest.param(

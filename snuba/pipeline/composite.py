@@ -16,6 +16,7 @@ from snuba.datasets.plans.query_plan import (
     SubqueryProcessors,
 )
 from snuba.pipeline.plans_selector import select_best_plans
+from snuba.query.joins.semi_joins import SemiJoinOptimizer
 from snuba.pipeline.query_pipeline import QueryExecutionPipeline, QueryPlanner
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
@@ -105,7 +106,7 @@ def _plan_composite_query(
             get_cluster(planned_data_source.storage_set_key),
             root_db_processors,
             aliased_db_processors,
-            composite_processors=[],
+            composite_processors=[SemiJoinOptimizer()],
         ),
         storage_set_key=planned_data_source.storage_set_key,
         root_processors=planned_data_source.root_processors,
