@@ -2,16 +2,15 @@ from __future__ import annotations
 
 import itertools
 import uuid
+from collections import ChainMap
 from typing import Any, Mapping, MutableMapping, Type
 
 import jsonschema
-
 from snuba import environment
 from snuba.datasets.dataset import Dataset
 from snuba.query.extensions import QueryExtension
 from snuba.query.parser import parse_query
-from snuba.query.schema import GENERIC_QUERY_SCHEMA
-from snuba.query.schema import SNQL_QUERY_SCHEMA
+from snuba.query.schema import GENERIC_QUERY_SCHEMA, SNQL_QUERY_SCHEMA
 from snuba.query.snql.parser import parse_snql_query
 from snuba.request import Language, Request
 from snuba.request.exceptions import JsonSchemaValidationException
@@ -138,6 +137,10 @@ class RequestSchema:
         request_id = uuid.uuid4().hex
         return Request(
             request_id,
+            # TODO: Replace this with the actual query raw body.
+            # this can have an impact on subscriptions so we need
+            # to be careful with the change.
+            ChainMap(query_body, *extensions.values()),
             query,
             self.__setting_class(**settings),
             extensions,
