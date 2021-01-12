@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
 import sentry_sdk
-from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.processors import CompositeQueryProcessor, QueryProcessor
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clusters.cluster import ClickhouseCluster, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
@@ -16,12 +16,15 @@ from snuba.datasets.plans.query_plan import (
     SubqueryProcessors,
 )
 from snuba.pipeline.plans_selector import select_best_plans
+from snuba.query.joins.semi_joins import SemiJoinOptimizer
 from snuba.pipeline.query_pipeline import QueryExecutionPipeline, QueryPlanner
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Entity, Table
 from snuba.query.data_source.visitor import DataSourceVisitor
+from snuba.query.joins.equivalence_adder import add_equivalent_conditions
+from snuba.query.joins.subquery_generator import generate_subqueries
 from snuba.query.logical import Query as LogicalQuery
 from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
@@ -57,6 +60,8 @@ class CompositeQueryPlanner(QueryPlanner[CompositeQueryPlan]):
         return self.build_and_rank_plans()[0]
 
     def build_and_rank_plans(self) -> Sequence[CompositeQueryPlan]:
+        add_equivalent_conditions(self.__query)
+        generate_subqueries(self.__query)
         return [_plan_composite_query(self.__query, self.__settings)]
 
 
@@ -101,6 +106,7 @@ def _plan_composite_query(
             get_cluster(planned_data_source.storage_set_key),
             root_db_processors,
             aliased_db_processors,
+            composite_processors=[SemiJoinOptimizer()],
         ),
         storage_set_key=planned_data_source.storage_set_key,
         root_processors=planned_data_source.root_processors,
@@ -400,10 +406,15 @@ class CompositeExecutionStrategy(QueryPlanExecutionStrategy[CompositeQuery[Table
         cluster: ClickhouseCluster,
         root_processors: Sequence[QueryProcessor],
         aliased_processors: Mapping[str, Sequence[QueryProcessor]],
+        composite_processors: Sequence[CompositeQueryProcessor],
     ) -> None:
         self.__cluster = cluster
         self.__root_processors = root_processors
         self.__aliased_processors = aliased_processors
+        # Processors that are applied to the entire composite query
+        # by the execution strategy before running the query on the DB
+        # and after all subquery processors have been executed
+        self.__composite_processors = composite_processors
 
     def execute(
         self,
@@ -414,6 +425,10 @@ class CompositeExecutionStrategy(QueryPlanExecutionStrategy[CompositeQuery[Table
         ProcessorsExecutor(
             self.__root_processors, self.__aliased_processors, request_settings
         ).visit(query)
+
+        for p in self.__composite_processors:
+            p.process_query(query, request_settings)
+
         return runner(query, request_settings, self.__cluster.get_reader())
 
 

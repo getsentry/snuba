@@ -28,9 +28,10 @@ from snuba.datasets.factory import (
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.query.exceptions import InvalidQueryException
 from snuba.redis import redis_client
+from snuba.request import Language
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.request_settings import HTTPRequestSettings
-from snuba.request.schema import Language, RequestSchema
+from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
@@ -319,7 +320,7 @@ def dataset_query_view(*, dataset: Dataset, timer: Timer):
 def snql_dataset_query_view(*, dataset: Dataset, timer: Timer):
     if http_request.method == "GET":
         schema = RequestSchema.build_with_extensions(
-            dataset.get_extensions(), HTTPRequestSettings, Language.SNQL
+            {}, HTTPRequestSettings, Language.SNQL,
         )
         return render_template(
             "query.html",
@@ -336,13 +337,14 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer):
 @with_span()
 def dataset_query(dataset: Dataset, body, timer: Timer, language: Language) -> Response:
     assert http_request.method == "POST"
+    referrer = http_request.referrer or "<unknown>"  # mypy
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build_with_extensions(
             dataset.get_default_entity().get_extensions(), HTTPRequestSettings, language
         )
 
-    request = build_request(body, schema, timer, dataset, http_request.referrer)
+    request = build_request(body, schema, timer, dataset, referrer)
 
     try:
         result = parse_and_run_query(dataset, request, timer)

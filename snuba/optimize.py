@@ -1,20 +1,45 @@
-from datetime import timedelta
-from typing import Sequence
 import logging
+from datetime import datetime, timedelta
+from typing import Optional, Sequence
 
 from snuba import util
+from snuba.clickhouse.native import ClickhousePool
+from snuba.datasets.schemas.tables import TableSchema
+from snuba.datasets.storage import ReadableTableStorage
+from snuba.datasets.storages import StorageKey
 
 logger = logging.getLogger("snuba.optimize")
 
 
-def run_optimize(clickhouse, database, table, before=None):
-    parts = get_partitions_to_optimize(clickhouse, database, table, before)
+STORAGE_PARTITION_KEYS = {
+    StorageKey.EVENTS: [util.PartSegment.DATE, util.PartSegment.RETENTION_DAYS],
+    StorageKey.ERRORS: [util.PartSegment.RETENTION_DAYS, util.PartSegment.DATE],
+    StorageKey.TRANSACTIONS: [util.PartSegment.RETENTION_DAYS, util.PartSegment.DATE],
+}
+
+
+def run_optimize(
+    clickhouse: ClickhousePool,
+    storage: ReadableTableStorage,
+    database: str,
+    before: Optional[datetime] = None,
+) -> int:
+    schema = storage.get_schema()
+    assert isinstance(schema, TableSchema)
+    table = schema.get_local_table_name()
+    database = storage.get_cluster().get_database()
+
+    parts = get_partitions_to_optimize(clickhouse, storage, database, table, before)
     optimize_partitions(clickhouse, database, table, parts)
     return len(parts)
 
 
 def get_partitions_to_optimize(
-    clickhouse, database, table, before=None
+    clickhouse: ClickhousePool,
+    storage: ReadableTableStorage,
+    database: str,
+    table: str,
+    before: Optional[datetime] = None,
 ) -> Sequence[util.Part]:
     engine = clickhouse.execute(
         """
@@ -62,31 +87,34 @@ def get_partitions_to_optimize(
         {"database": database, "table": table},
     )
 
-    parts = [util.decode_part_str(part) for part, count in active_parts]
+    part_format = STORAGE_PARTITION_KEYS[storage.get_storage_key()]
+
+    parts = [util.decode_part_str(part, part_format) for part, count in active_parts]
 
     if before:
         parts = [
-            p for p in parts if (p[0] + timedelta(days=6 - p[0].weekday())) < before
+            p for p in parts if (p.date + timedelta(days=6 - p.date.weekday())) < before
         ]
 
     return parts
 
 
-def optimize_partitions(clickhouse, database, table, parts):
+def optimize_partitions(
+    clickhouse: ClickhousePool, database: str, table: str, parts: Sequence[util.Part],
+) -> None:
+
     query_template = """\
         OPTIMIZE TABLE %(database)s.%(table)s
-        PARTITION ('%(date_str)s', %(retention_days)s) FINAL
+        PARTITION %(partition)s FINAL
     """
 
-    for part_date, retention_days in parts:
-        date_str = part_date.strftime("%Y-%m-%d")
+    for part in parts:
         args = {
             "database": database,
             "table": table,
-            "date_str": date_str,
-            "retention_days": retention_days,
+            "partition": part.name,
         }
 
         query = (query_template % args).strip()
-        logger.info("Optimizing partition: ('%s', %s)" % (date_str, retention_days))
+        logger.info(f"Optimizing partition: {part.name}")
         clickhouse.execute(query)

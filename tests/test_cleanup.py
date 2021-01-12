@@ -30,7 +30,7 @@ class TestCleanup:
         # base, 90 retention
         write_processed_messages(storage, [self.create_event_row_for_date(base)])
         parts = cleanup.get_active_partitions(clickhouse, database, table)
-        assert parts == [(to_monday(base), 90)]
+        assert [(p.date, p.retention_days) for p in parts] == [(to_monday(base), 90)]
         stale = cleanup.filter_stale_partitions(parts, as_of=base)
         assert stale == []
 
@@ -40,7 +40,10 @@ class TestCleanup:
             storage, [self.create_event_row_for_date(three_weeks_ago)]
         )
         parts = cleanup.get_active_partitions(clickhouse, database, table)
-        assert parts == [(to_monday(three_weeks_ago), 90), (to_monday(base), 90)]
+        assert [(p.date, p.retention_days) for p in parts] == [
+            (to_monday(three_weeks_ago), 90),
+            (to_monday(base), 90),
+        ]
         stale = cleanup.filter_stale_partitions(parts, as_of=base)
         assert stale == []
 
@@ -50,7 +53,7 @@ class TestCleanup:
             storage, [self.create_event_row_for_date(thirteen_weeks_ago)]
         )
         parts = cleanup.get_active_partitions(clickhouse, database, table)
-        assert parts == [
+        assert [(p.date, p.retention_days) for p in parts] == [
             (to_monday(thirteen_weeks_ago), 90),
             (to_monday(three_weeks_ago), 90),
             (to_monday(base), 90),
@@ -64,7 +67,7 @@ class TestCleanup:
             storage, [self.create_event_row_for_date(one_week_ago, 30)]
         )
         parts = cleanup.get_active_partitions(clickhouse, database, table)
-        assert parts == [
+        assert [(p.date, p.retention_days) for p in parts] == [
             (to_monday(thirteen_weeks_ago), 90),
             (to_monday(three_weeks_ago), 90),
             (to_monday(one_week_ago), 30),
@@ -79,7 +82,7 @@ class TestCleanup:
             storage, [self.create_event_row_for_date(five_weeks_ago, 30)]
         )
         parts = cleanup.get_active_partitions(clickhouse, database, table)
-        assert parts == [
+        assert [(p.date, p.retention_days) for p in parts] == [
             (to_monday(thirteen_weeks_ago), 90),
             (to_monday(five_weeks_ago), 30),
             (to_monday(three_weeks_ago), 90),
@@ -95,7 +98,7 @@ class TestCleanup:
         cleanup.drop_partitions(clickhouse, database, table, stale, dry_run=False)
 
         parts = cleanup.get_active_partitions(clickhouse, database, table)
-        assert parts == [
+        assert [(p.date, p.retention_days) for p in parts] == [
             (to_monday(three_weeks_ago), 90),
             (to_monday(one_week_ago), 30),
             (to_monday(base), 90),
