@@ -236,6 +236,9 @@ TEST_CASES = [
                     "f_release",
                     FunctionCall("f_release", "f", (Column(None, "err", "release"),),),
                 ),
+                SelectedExpression(
+                    "_snuba_right", Column("_snuba_right", "groups", "right_col"),
+                ),
             ],
             condition=binary_condition(
                 ConditionFunctions.EQ,
@@ -286,6 +289,10 @@ TEST_CASES = [
                                 SelectedExpression(
                                     "_snuba_id", Column("_snuba_id", None, "id")
                                 ),
+                                SelectedExpression(
+                                    "_snuba_right",
+                                    Column("_snuba_right", None, "right_col"),
+                                ),
                             ],
                         ),
                     ),
@@ -300,6 +307,10 @@ TEST_CASES = [
                 selected_columns=[
                     SelectedExpression(
                         "f_release", Column("f_release", "err", "f_release"),
+                    ),
+                    SelectedExpression(
+                        "_snuba_right",
+                        Column("_snuba_right", "groups", "_snuba_right"),
                     ),
                 ],
             ),
@@ -370,6 +381,10 @@ TEST_CASES = [
                             SelectedExpression(
                                 "_snuba_id", Column("_snuba_id", None, "id")
                             ),
+                            SelectedExpression(
+                                "_snuba_right",
+                                Column("_snuba_right", None, "right_col"),
+                            ),
                         ],
                         condition=binary_condition(
                             ConditionFunctions.EQ,
@@ -393,6 +408,9 @@ TEST_CASES = [
             selected_columns=[
                 SelectedExpression(
                     "f_release", Column("f_release", "err", "f_release"),
+                ),
+                SelectedExpression(
+                    "_snuba_right", Column("_snuba_right", "groups", "_snuba_right"),
                 ),
             ],
         ),
