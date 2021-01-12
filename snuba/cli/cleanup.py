@@ -21,7 +21,6 @@ from snuba.environment import setup_logging
     default=True,
     help="If true, only print which partitions would be dropped.",
 )
-@click.option("--database", default="default", help="Name of the database to target.")
 @click.option(
     "--storage",
     "storage_name",
@@ -35,7 +34,6 @@ def cleanup(
     clickhouse_host: Optional[str],
     clickhouse_port: Optional[int],
     dry_run: bool,
-    database: str,
     storage_name: str,
     log_level: Optional[str] = None,
 ) -> None:
@@ -48,16 +46,15 @@ def cleanup(
     from snuba.cleanup import run_cleanup, logger
     from snuba.clickhouse.native import ClickhousePool
 
-    writable_storage = get_writable_storage(StorageKey(storage_name))
+    storage = get_writable_storage(StorageKey(storage_name))
 
-    (
-        clickhouse_user,
-        clickhouse_password,
-    ) = writable_storage.get_cluster().get_credentials()
+    (clickhouse_user, clickhouse_password,) = storage.get_cluster().get_credentials()
 
-    table = writable_storage.get_table_writer().get_schema().get_local_table_name()
+    table = storage.get_table_writer().get_schema().get_local_table_name()
 
-    if clickhouse_host and clickhouse_port and database:
+    database = storage.get_cluster().get_database()
+
+    if clickhouse_host and clickhouse_port:
         connection = ClickhousePool(
             clickhouse_host,
             clickhouse_port,
@@ -65,10 +62,10 @@ def cleanup(
             clickhouse_password,
             database,
         )
-    elif not writable_storage.get_cluster().is_single_node():
+    elif not storage.get_cluster().is_single_node():
         raise click.ClickException("Provide ClickHouse host and port for cleanup")
     else:
-        connection = writable_storage.get_cluster().get_query_connection(
+        connection = storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.CLEANUP
         )
 
