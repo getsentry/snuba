@@ -63,6 +63,7 @@ class SpansEntity(Entity):
                     equivalences=[
                         ColumnEquivalence("transaction_id", "event_id"),
                         ColumnEquivalence("transaction_name", "transaction_name"),
+                        ColumnEquivalence("trace_id", "trace_id"),
                     ],
                 )
             },

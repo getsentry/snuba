@@ -99,6 +99,7 @@ class BaseTransactionsEntity(Entity, ABC):
                     equivalences=[
                         ColumnEquivalence("event_id", "transaction_id"),
                         ColumnEquivalence("transaction_name", "transaction_name"),
+                        ColumnEquivalence("trace_id", "trace_id"),
                     ],
                 )
             },
