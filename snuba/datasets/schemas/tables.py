@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Optional, Sequence
 
+from snuba import util
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clusters.cluster import get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
@@ -55,6 +56,7 @@ class TableSchema(Schema):
         storage_set_key: StorageSetKey,
         mandatory_conditions: Optional[Sequence[FunctionCall]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
+        part_format: Optional[Sequence[util.PartSegment]] = None,
     ):
         self.__local_table_name = local_table_name
         self.__table_name = (
@@ -65,6 +67,7 @@ class TableSchema(Schema):
         self.__table_source = TableSource(
             self.get_table_name(), columns, mandatory_conditions, prewhere_candidates,
         )
+        self.__part_format = part_format
 
     def get_data_source(self) -> TableSource:
         """
@@ -86,6 +89,12 @@ class TableSchema(Schema):
         In distributed mode this will be a distributed table. In local mode it is a local table.
         """
         return self.__table_name
+
+    def get_part_format(self) -> Optional[Sequence[util.PartSegment]]:
+        """
+        Partition format required for cleanup and optimize.
+        """
+        return self.__part_format
 
 
 class WritableTableSchema(TableSchema):

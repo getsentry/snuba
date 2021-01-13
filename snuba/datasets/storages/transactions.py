@@ -1,3 +1,4 @@
+from snuba import util
 from snuba.clickhouse.columns import (
     UUID,
     Array,
@@ -80,6 +81,7 @@ schema = WritableTableSchema(
     storage_set_key=StorageSetKey.TRANSACTIONS,
     mandatory_conditions=[],
     prewhere_candidates=["event_id", "transaction_name", "transaction", "title"],
+    part_format=[util.PartSegment.RETENTION_DAYS, util.PartSegment.DATE],
 )
 
 

@@ -4,7 +4,7 @@ import click
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_writable_storage, WRITABLE_STORAGES
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.environment import setup_logging
 
 
@@ -25,7 +25,7 @@ from snuba.environment import setup_logging
     "--storage",
     "storage_name",
     default="events",
-    type=click.Choice([storage_key.value for storage_key in WRITABLE_STORAGES.keys()]),
+    type=click.Choice(["events", "errors", "transactions"]),
     help="The storage to target",
 )
 @click.option("--log-level", help="Logging level to use.")
@@ -50,8 +50,6 @@ def cleanup(
 
     (clickhouse_user, clickhouse_password,) = storage.get_cluster().get_credentials()
 
-    table = storage.get_table_writer().get_schema().get_local_table_name()
-
     database = storage.get_cluster().get_database()
 
     if clickhouse_host and clickhouse_port:
@@ -69,5 +67,5 @@ def cleanup(
             ClickhouseClientSettings.CLEANUP
         )
 
-    num_dropped = run_cleanup(connection, database, table, dry_run=dry_run)
+    num_dropped = run_cleanup(connection, storage, database, dry_run=dry_run)
     logger.info("Dropped %s partitions on %s" % (num_dropped, clickhouse_host))
