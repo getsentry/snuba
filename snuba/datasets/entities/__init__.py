@@ -16,6 +16,7 @@ class EntityKey(Enum):
     OUTCOMES = "outcomes"
     OUTCOMES_RAW = "outcomes_raw"
     SESSIONS = "sessions"
+    SPANS = "spans"
     TRANSACTIONS = "transactions"
     DISCOVER_TRANSACTIONS = "discover_transactions"
     DISCOVER_EVENTS = "discover_events"
