@@ -172,6 +172,8 @@ class ErrorsReplacer(ReplacerProcessor):
             )
         elif type_ == "tombstone_events":
             processed = process_tombstone_events(event, self.__required_columns)
+        elif type_ == "merge_events":
+            processed = process_merge_events(event, self.__all_columns)
         elif type_ == "exclude_groups":
             processed = process_exclude_groups(event)
         else:
@@ -242,6 +244,100 @@ def _build_event_tombstone_replacement(
     )
 
 
+def _build_event_merge_replacement(
+    message: Mapping[str, Any],
+    where: str,
+    query_args: Mapping[str, str],
+    query_time_flags: Tuple[Any, ...],
+    all_columns: Sequence[FlattenedColumn],
+) -> Optional[Replacement]:
+    # HACK: We were sending duplicates of the `end_merge` message from Sentry,
+    # this is only for performance of the backlog.
+    txn = message.get("transaction_id")
+    if txn:
+        if txn in SEEN_MERGE_TXN_CACHE:
+            return None
+        else:
+            SEEN_MERGE_TXN_CACHE.append(txn)
+
+    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+    all_column_names = [c.escaped for c in all_columns]
+    select_columns = map(
+        lambda i: i if i != "group_id" else str(message["new_group_id"]),
+        all_column_names,
+    )
+
+    count_query_template = (
+        """\
+        SELECT count()
+        FROM %(table_name)s FINAL
+    """
+        + where
+    )
+
+    insert_query_template = (
+        """\
+        INSERT INTO %(table_name)s (%(all_columns)s)
+        SELECT %(select_columns)s
+        FROM %(table_name)s FINAL
+    """
+        + where
+    )
+
+    final_query_args = {
+        "all_columns": ", ".join(all_column_names),
+        "select_columns": ", ".join(select_columns),
+        "project_id": message["project_id"],
+        "timestamp": timestamp.strftime(DATETIME_FORMAT),
+    }
+    final_query_args.update(query_args)
+
+    return Replacement(
+        count_query_template, insert_query_template, final_query_args, query_time_flags
+    )
+
+
+def process_merge_events(
+    message: Mapping[str, Any], all_columns: Sequence[FlattenedColumn]
+) -> Optional[Replacement]:
+    """
+    Merge individual events into new group. The old group will have to be
+    manually excluded from search queries.
+
+    See docstring of process_exclude_groups for an explanation of how this is used.
+
+    Note that events merged this way cannot be cleanly unmerged by
+    process_unmerge, as their group hashes possibly stand in no correlation to
+    how the merging was done.
+    """
+
+    event_ids = message["event_ids"]
+    if not event_ids:
+        return None
+
+    # XXX: We need to construct a query that works on both event_id columns,
+    # either represented as UUID or as hyphenless FixedString. That's why we
+    # use replaceAll(toString()).
+    where = """\
+        PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s)
+        WHERE project_id = %(project_id)s
+        AND received <= CAST('%(timestamp)s' AS DateTime)
+        AND NOT deleted
+    """
+
+    query_args = {
+        "event_ids": ", ".join(
+            "'%s'" % str(uuid.UUID(eid)).replace("-", "") for eid in event_ids
+        ),
+    }
+
+    query_time_flags = (None, message["project_id"])
+
+    return _build_event_merge_replacement(
+        message, where, query_args, query_time_flags, all_columns
+    )
+
+
 def process_delete_groups(
     message: Mapping[str, Any], required_columns: Sequence[str]
 ) -> Optional[Replacement]:
@@ -289,8 +385,7 @@ def process_tombstone_events(
 
     query_args = {
         "event_ids": ", ".join(
-            "'%s'" % str(uuid.UUID(eid)).replace("-", "")
-            for eid in message["event_ids"]
+            "'%s'" % str(uuid.UUID(eid)).replace("-", "") for eid in event_ids
         ),
     }
 
@@ -302,6 +397,22 @@ def process_tombstone_events(
 
 
 def process_exclude_groups(message: Mapping[str, Any]) -> Optional[Replacement]:
+    """
+    Exclude a group ID from being searched.
+
+    This together with process_tombstone_events and process_merge_events is
+    used by reprocessing to split up a group into multiple, event by event.
+    Assuming a group with n events:
+
+    1. insert m events that have been selected for reprocessing (with same event ID).
+    2. process_merge_events for n - m events that have not been selected, i.e.
+       move them into a new group ID
+    3. exclude old group ID from search queries. This group ID must not receive
+       new events.
+
+    See docstring in `sentry.reprocessing2` for more information.
+    """
+
     group_ids = message["group_ids"]
     if not group_ids:
         return None
@@ -316,26 +427,17 @@ SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
 def process_merge(
     message: Mapping[str, Any], all_columns: Sequence[FlattenedColumn]
 ) -> Optional[Replacement]:
-    # HACK: We were sending duplicates of the `end_merge` message from Sentry,
-    # this is only for performance of the backlog.
-    txn = message.get("transaction_id")
-    if txn:
-        if txn in SEEN_MERGE_TXN_CACHE:
-            return None
-        else:
-            SEEN_MERGE_TXN_CACHE.append(txn)
+    """
+    Merge all events of one group into another group.
 
-    previous_group_ids = message["previous_group_ids"]
-    if not previous_group_ids:
-        return None
+    The old group ID should not receive new events, as the group ID will be
+    excluded from queries and the new events will not be able to be queried.
 
-    assert all(isinstance(gid, int) for gid in previous_group_ids)
-    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
-    all_column_names = [c.escaped for c in all_columns]
-    select_columns = map(
-        lambda i: i if i != "group_id" else str(message["new_group_id"]),
-        all_column_names,
-    )
+    This is roughly equivalent to sending:
+
+        process_merge_events (for each event)
+        process_exclude_groups
+    """
 
     where = """\
         PREWHERE group_id IN (%(previous_group_ids)s)
@@ -344,35 +446,19 @@ def process_merge(
         AND NOT deleted
     """
 
-    count_query_template = (
-        """\
-        SELECT count()
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
+    previous_group_ids = message["previous_group_ids"]
+    if not previous_group_ids:
+        return None
 
-    insert_query_template = (
-        """\
-        INSERT INTO %(table_name)s (%(all_columns)s)
-        SELECT %(select_columns)s
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
+    assert all(isinstance(gid, int) for gid in previous_group_ids)
 
     query_args = {
-        "all_columns": ", ".join(all_column_names),
-        "select_columns": ", ".join(select_columns),
-        "project_id": message["project_id"],
         "previous_group_ids": ", ".join(str(gid) for gid in previous_group_ids),
-        "timestamp": timestamp.strftime(DATETIME_FORMAT),
     }
 
     query_time_flags = (EXCLUDE_GROUPS, message["project_id"], previous_group_ids)
-
-    return Replacement(
-        count_query_template, insert_query_template, query_args, query_time_flags
+    return _build_event_merge_replacement(
+        message, where, query_args, query_time_flags, all_columns
     )
 
 
