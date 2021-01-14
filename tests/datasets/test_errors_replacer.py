@@ -158,12 +158,12 @@ class TestReplacer:
 
         assert (
             re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == "SELECT count() FROM %(table_name)s FINAL PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "SELECT count() FROM %(table_name)s FINAL PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted"
         )
 
         assert (
             re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == "INSERT INTO %(table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "INSERT INTO %(table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted"
         )
         assert replacement.query_args == {
             "event_ids": "'00e24a150d7f4ee4b142b61b4d893b6d'",
