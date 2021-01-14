@@ -260,7 +260,6 @@ def _build_event_merge_replacement(
         else:
             SEEN_MERGE_TXN_CACHE.append(txn)
 
-    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
     all_column_names = [c.escaped for c in all_columns]
     select_columns = map(
         lambda i: i if i != "group_id" else str(message["new_group_id"]),
@@ -288,7 +287,6 @@ def _build_event_merge_replacement(
         "all_columns": ", ".join(all_column_names),
         "select_columns": ", ".join(select_columns),
         "project_id": message["project_id"],
-        "timestamp": timestamp.strftime(DATETIME_FORMAT),
     }
     final_query_args.update(query_args)
 
@@ -321,7 +319,6 @@ def process_merge_events(
     where = """\
         PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s)
         WHERE project_id = %(project_id)s
-        AND received <= CAST('%(timestamp)s' AS DateTime)
         AND NOT deleted
     """
 
@@ -452,8 +449,11 @@ def process_merge(
 
     assert all(isinstance(gid, int) for gid in previous_group_ids)
 
+    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+
     query_args = {
         "previous_group_ids": ", ".join(str(gid) for gid in previous_group_ids),
+        "timestamp": timestamp.strftime(DATETIME_FORMAT),
     }
 
     query_time_flags = (EXCLUDE_GROUPS, message["project_id"], previous_group_ids)
