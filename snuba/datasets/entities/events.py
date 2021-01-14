@@ -86,7 +86,10 @@ def callback_func(
     storage: str, query: Query, referrer: str, results: List[Result[QueryResult]]
 ) -> None:
     if not results:
-        metrics.increment("query_result", tags={"storage": storage, "match": "empty"})
+        metrics.increment(
+            "query_result",
+            tags={"storage": storage, "match": "empty", "referrer": referrer},
+        )
         return
 
     primary_result = results.pop(0)
@@ -97,11 +100,13 @@ def callback_func(
 
         if result_data == primary_result_data:
             metrics.increment(
-                "query_result", tags={"storage": storage, "match": "true"}
+                "query_result",
+                tags={"storage": storage, "match": "true", "referrer": referrer},
             )
         else:
             metrics.increment(
-                "query_result", tags={"storage": storage, "match": "false"}
+                "query_result",
+                tags={"storage": storage, "match": "false", "referrer": referrer},
             )
 
             if len(result_data) != len(primary_result_data):
