@@ -1,11 +1,10 @@
 import random
 from abc import ABC
 from datetime import timedelta
+from functools import partial
 from typing import List, Mapping, Optional, Sequence, Tuple
 
 import sentry_sdk
-
-from functools import partial
 from snuba import environment, state
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
@@ -23,6 +22,7 @@ from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.expressions import Column, FunctionCall
 from snuba.query.extensions import QueryExtension
+from snuba.query.formatters.tracing import format_query
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
@@ -115,7 +115,7 @@ def callback_func(
                     level="warning",
                     tags={"referrer": referrer, "storage": storage},
                     extras={
-                        "query": query.get_body(),
+                        "query": format_query(query),
                         "primary_result": len(primary_result_data),
                         "other_result": len(result_data),
                     },
@@ -131,7 +131,7 @@ def callback_func(
                         level="warning",
                         tags={"referrer": referrer, "storage": storage},
                         extras={
-                            "query": query.get_body(),
+                            "query": format_query(query),
                             "primary_result": primary_result_data[idx],
                             "other_result": result_data[idx],
                         },
