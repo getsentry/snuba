@@ -1,3 +1,4 @@
+from snuba import util
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
@@ -25,6 +26,7 @@ schema = WritableTableSchema(
     storage_set_key=StorageSetKey.EVENTS,
     mandatory_conditions=mandatory_conditions,
     prewhere_candidates=prewhere_candidates,
+    part_format=[util.PartSegment.DATE, util.PartSegment.RETENTION_DAYS],
 )
 
 

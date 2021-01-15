@@ -6,16 +6,8 @@ from snuba import util
 from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
-from snuba.datasets.storages import StorageKey
 
 logger = logging.getLogger("snuba.optimize")
-
-
-STORAGE_PARTITION_KEYS = {
-    StorageKey.EVENTS: [util.PartSegment.DATE, util.PartSegment.RETENTION_DAYS],
-    StorageKey.ERRORS: [util.PartSegment.RETENTION_DAYS, util.PartSegment.DATE],
-    StorageKey.TRANSACTIONS: [util.PartSegment.RETENTION_DAYS, util.PartSegment.DATE],
-}
 
 
 def run_optimize(
@@ -87,7 +79,10 @@ def get_partitions_to_optimize(
         {"database": database, "table": table},
     )
 
-    part_format = STORAGE_PARTITION_KEYS[storage.get_storage_key()]
+    schema = storage.get_schema()
+    assert isinstance(schema, TableSchema)
+    part_format = schema.get_part_format()
+    assert part_format is not None
 
     parts = [util.decode_part_str(part, part_format) for part, count in active_parts]
 

@@ -3,26 +3,28 @@ from datetime import timedelta
 from typing import Mapping, Optional, Sequence
 
 from snuba.clickhouse.translators.snuba.mappers import (
+    ColumnToColumn,
     ColumnToFunction,
     ColumnToLiteral,
     ColumnToMapping,
-    ColumnToColumn,
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
-from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
+from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
+from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.performance_expressions import (
     apdex_processor,
     failure_rate_processor,
 )
-from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
@@ -86,7 +88,21 @@ class BaseTransactionsEntity(Entity, ABC):
                 ),
             ),
             abstract_column_set=schema.get_columns(),
-            join_relationships={},
+            join_relationships={
+                "contains": JoinRelationship(
+                    rhs_entity=EntityKey.SPANS,
+                    columns=[
+                        ("project_id", "project_id"),
+                        ("span_id", "transaction_span_id"),
+                    ],
+                    join_type=JoinType.INNER,
+                    equivalences=[
+                        ColumnEquivalence("event_id", "transaction_id"),
+                        ColumnEquivalence("transaction_name", "transaction_name"),
+                        ColumnEquivalence("trace_id", "trace_id"),
+                    ],
+                )
+            },
             writable_storage=storage,
         )
 
