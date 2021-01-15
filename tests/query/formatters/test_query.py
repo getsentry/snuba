@@ -38,7 +38,6 @@ BASIC_JOIN = JoinClause(
 )
 
 LOGICAL_QUERY = LogicalQuery(
-    {},
     from_clause=Entity(EntityKey.EVENTS, EVENTS_SCHEMA, 0.5),
     selected_columns=[
         SelectedExpression("c1", Column("_snuba_c1", "t", "c")),
