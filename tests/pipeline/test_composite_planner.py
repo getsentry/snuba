@@ -16,6 +16,7 @@ from snuba.pipeline.composite import (
     CompositeExecutionStrategy,
     CompositeQueryPlanner,
 )
+from snuba.pipeline.preprocessors import noop_request_processor
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import ConditionFunctions, binary_condition
@@ -475,4 +476,6 @@ def test_composite_planner(
         assert report[0], f"Mismatch: {report[1]}"
         return QueryResult({"data": []}, {},)
 
-    CompositeExecutionPipeline(logical_query, HTTPRequestSettings(), runner).execute()
+    CompositeExecutionPipeline(
+        logical_query, HTTPRequestSettings(), noop_request_processor, runner
+    ).execute()

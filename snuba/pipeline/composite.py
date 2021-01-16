@@ -15,6 +15,7 @@ from snuba.datasets.plans.query_plan import (
     QueryRunner,
     SubqueryProcessors,
 )
+from snuba.request import RequestPreprocessor
 from snuba.pipeline.plans_selector import select_best_plans
 from snuba.query.joins.semi_joins import SemiJoinOptimizer
 from snuba.pipeline.query_pipeline import QueryExecutionPipeline, QueryPlanner
@@ -443,13 +444,16 @@ class CompositeExecutionPipeline(QueryExecutionPipeline):
         self,
         query: CompositeQuery[Entity],
         request_settings: RequestSettings,
+        preprocessor: RequestPreprocessor,
         runner: QueryRunner,
     ):
         self.__query = query
         self.__settings = request_settings
         self.__runner = runner
+        self.__preprocessor = preprocessor
 
     def execute(self) -> QueryResult:
+        self.__preprocessor(self.__query, self.__settings)
         plan = CompositeQueryPlanner(self.__query, self.__settings).build_best_plan()
         root_processors, aliased_processors = plan.get_plan_processors()
         ProcessorsExecutor(root_processors, aliased_processors, self.__settings,).visit(

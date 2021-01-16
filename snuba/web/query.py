@@ -107,10 +107,6 @@ def _run_query_pipeline(
     ):
         metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
 
-    # Mypy does not like this because of this bug
-    # https://github.com/python/mypy/issues/5485
-    request.preprocessor(request.query, request.settings)
-
     query_runner = partial(
         _run_and_apply_column_names, timer, query_metadata, request.referrer,
     )
