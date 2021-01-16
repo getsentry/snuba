@@ -1,10 +1,11 @@
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
+from snuba.pipeline.preprocessors import noop_request_processor
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
 from snuba.query.parser import parse_query
 from snuba.reader import Reader
-from snuba.request import Language, Request
+from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.web import QueryResult
 
@@ -15,7 +16,7 @@ def test_sessions_processing() -> None:
     sessions = get_dataset("sessions")
     query = parse_query(query_body, sessions)
     request = Request(
-        "", query_body, query, HTTPRequestSettings(), {}, "", Language.LEGACY
+        "", query_body, query, HTTPRequestSettings(), "", noop_request_processor,
     )
 
     def query_runner(

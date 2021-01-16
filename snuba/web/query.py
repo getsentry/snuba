@@ -1,27 +1,23 @@
 import copy
 import logging
 from functools import partial
-from typing import Mapping, MutableMapping, Optional, Set, Union
-
-from snuba.query.data_source.visitor import DataSourceVisitor
-from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
-from snuba.query.data_source.simple import Table
+from typing import MutableMapping, Optional, Set, Union
 
 import sentry_sdk
 from snuba import environment
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
-from snuba.query.extensions import QueryExtension
-from snuba.query.logical import Query as LogicalQuery
+from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
+from snuba.query.data_source.simple import Entity, Table
+from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.querylog import record_query
 from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.reader import Reader
-from snuba.request import Language, Request
+from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
@@ -32,6 +28,31 @@ from snuba.web.db_query import raw_query
 logger = logging.getLogger("snuba.query")
 
 metrics = MetricsWrapper(environment.metrics, "api")
+
+
+class SampleClauseFinder(DataSourceVisitor[bool, Entity], JoinVisitor[bool, Entity]):
+    """
+    Traverses a query to find FROM clauses that have a sampling
+    rate set to check if turbo is set as well.
+    """
+
+    def _visit_simple_source(self, data_source: Entity) -> bool:
+        return data_source.sample is not None and data_source.sample != 1.0
+
+    def _visit_join(self, data_source: JoinClause[Entity]) -> bool:
+        return self.visit_join_clause(data_source)
+
+    def _visit_simple_query(self, data_source: ProcessableQuery[Entity]) -> bool:
+        return self.visit(data_source.get_from_clause())
+
+    def _visit_composite_query(self, data_source: CompositeQuery[Entity]) -> bool:
+        return self.visit(data_source.get_from_clause())
+
+    def visit_individual_node(self, node: IndividualNode[Entity]) -> bool:
+        return self.visit(node.data_source)
+
+    def visit_join_clause(self, node: JoinClause[Entity]) -> bool:
+        return node.left_node.accept(self) or node.right_node.accept(self)
 
 
 @with_span()
@@ -81,26 +102,14 @@ def _run_query_pipeline(
     - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
       to the QueryExecutionStrategy to actually run the DB Query.
     """
-    assert isinstance(request.query, LogicalQuery)
-    query_entity = request.query.get_from_clause()
-    entity = get_entity(query_entity.key)
-
-    if (
-        request.query.get_sample() is not None and request.query.get_sample() != 1.0
-    ) and not request.settings.get_turbo():
+    if not request.settings.get_turbo() and SampleClauseFinder().visit(
+        request.query.get_from_clause()
+    ):
         metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
 
-    extensions: Mapping[str, QueryExtension] = {}
-    if request.language != Language.SNQL:
-        extensions = entity.get_extensions()
-
-    for name, extension in extensions.items():
-        with sentry_sdk.start_span(
-            description=type(extension.get_processor()).__name__, op="extension"
-        ):
-            extension.get_processor().process_query(
-                request.query, request.extensions[name], request.settings
-            )
+    # Mypy does not like this because of this bug
+    # https://github.com/python/mypy/issues/5485
+    request.preprocessor(request.query, request.settings)
 
     query_runner = partial(
         _run_and_apply_column_names, timer, query_metadata, request.referrer,

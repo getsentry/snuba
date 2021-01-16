@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import partial
 import itertools
 import uuid
 from collections import ChainMap
@@ -21,6 +22,10 @@ from snuba.request.request_settings import (
 )
 from snuba.schemas import Schema, validate_jsonschema
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.pipeline.preprocessors import (
+    legacy_request_preprocessor,
+    noop_request_processor,
+)
 
 metrics = MetricsWrapper(environment.metrics, "parser")
 
@@ -131,8 +136,10 @@ class RequestSchema:
 
         if self.__language == Language.SNQL:
             query = parse_snql_query(query_body["query"], dataset)
+            preprocessor = noop_request_processor
         else:
             query = parse_query(query_body, dataset)
+            preprocessor = partial(legacy_request_preprocessor, extensions)
 
         request_id = uuid.uuid4().hex
         return Request(
@@ -143,9 +150,8 @@ class RequestSchema:
             ChainMap(query_body, *extensions.values()),
             query,
             self.__setting_class(**settings),
-            extensions,
             referrer,
-            self.__language,
+            preprocessor,
         )
 
     def __generate_template_impl(self, schema: Mapping[str, Any]) -> Any:
