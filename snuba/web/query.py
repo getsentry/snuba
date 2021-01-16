@@ -102,11 +102,6 @@ def _run_query_pipeline(
                 request.query, request.extensions[name], request.settings
             )
 
-    # TODO: Fit this in a query processor. All query transformations should be driven by
-    # datasets/storages and never hardcoded.
-    if request.settings.get_turbo():
-        request.query.set_final(False)
-
     query_runner = partial(
         _run_and_apply_column_names, timer, query_metadata, request.referrer,
     )
