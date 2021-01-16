@@ -141,11 +141,11 @@ class TestReplacer:
         }
         assert replacement.query_time_flags == (None, self.project_id,)
 
-    def test_merge_events_process(self):
+    def test_replace_group_process(self):
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
-            "merge_events",
+            "replace_group",
             {
                 "project_id": self.project_id,
                 "event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"],
@@ -170,7 +170,6 @@ class TestReplacer:
             "project_id": self.project_id,
             "all_columns": "project_id, timestamp, event_id, platform, environment, release, dist, ip_address_v4, ip_address_v6, user, user_id, user_name, user_email, sdk_name, sdk_version, http_method, http_referer, tags.key, tags.value, contexts.key, contexts.value, transaction_name, span_id, trace_id, partition, offset, message_timestamp, retention_days, deleted, group_id, primary_hash, received, message, title, culprit, level, location, version, type, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.colno, exception_frames.filename, exception_frames.function, exception_frames.lineno, exception_frames.in_app, exception_frames.package, exception_frames.module, exception_frames.stack_level, sdk_integrations, modules.name, modules.version",
             "select_columns": "project_id, timestamp, event_id, platform, environment, release, dist, ip_address_v4, ip_address_v6, user, user_id, user_name, user_email, sdk_name, sdk_version, http_method, http_referer, tags.key, tags.value, contexts.key, contexts.value, transaction_name, span_id, trace_id, partition, offset, message_timestamp, retention_days, deleted, 2, primary_hash, received, message, title, culprit, level, location, version, type, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.colno, exception_frames.filename, exception_frames.function, exception_frames.lineno, exception_frames.in_app, exception_frames.package, exception_frames.module, exception_frames.stack_level, sdk_integrations, modules.name, modules.version",
-            "timestamp": timestamp.strftime(DATETIME_FORMAT),
         }
         assert replacement.query_time_flags == (None, self.project_id,)
 

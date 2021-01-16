@@ -172,8 +172,8 @@ class ErrorsReplacer(ReplacerProcessor):
             )
         elif type_ == "tombstone_events":
             processed = process_tombstone_events(event, self.__required_columns)
-        elif type_ == "merge_events":
-            processed = process_merge_events(event, self.__all_columns)
+        elif type_ == "replace_group":
+            processed = process_replace_group(event, self.__all_columns)
         elif type_ == "exclude_groups":
             processed = process_exclude_groups(event)
         else:
@@ -244,8 +244,10 @@ def _build_event_tombstone_replacement(
     )
 
 
-def _build_event_merge_replacement(
-    message: Mapping[str, Any],
+def _build_group_replacement(
+    txn: Optional[str],
+    project_id: int,
+    new_group_id: str,
     where: str,
     query_args: Mapping[str, str],
     query_time_flags: Tuple[Any, ...],
@@ -253,7 +255,6 @@ def _build_event_merge_replacement(
 ) -> Optional[Replacement]:
     # HACK: We were sending duplicates of the `end_merge` message from Sentry,
     # this is only for performance of the backlog.
-    txn = message.get("transaction_id")
     if txn:
         if txn in SEEN_MERGE_TXN_CACHE:
             return None
@@ -262,8 +263,7 @@ def _build_event_merge_replacement(
 
     all_column_names = [c.escaped for c in all_columns]
     select_columns = map(
-        lambda i: i if i != "group_id" else str(message["new_group_id"]),
-        all_column_names,
+        lambda i: i if i != "group_id" else str(new_group_id), all_column_names,
     )
 
     count_query_template = (
@@ -286,7 +286,7 @@ def _build_event_merge_replacement(
     final_query_args = {
         "all_columns": ", ".join(all_column_names),
         "select_columns": ", ".join(select_columns),
-        "project_id": message["project_id"],
+        "project_id": project_id,
     }
     final_query_args.update(query_args)
 
@@ -295,7 +295,7 @@ def _build_event_merge_replacement(
     )
 
 
-def process_merge_events(
+def process_replace_group(
     message: Mapping[str, Any], all_columns: Sequence[FlattenedColumn]
 ) -> Optional[Replacement]:
     """
@@ -328,10 +328,17 @@ def process_merge_events(
         ),
     }
 
-    query_time_flags = (None, message["project_id"])
+    project_id: int = message["project_id"]
+    query_time_flags = (None, project_id)
 
-    return _build_event_merge_replacement(
-        message, where, query_args, query_time_flags, all_columns
+    return _build_group_replacement(
+        message.get("transaction_id"),
+        project_id,
+        message["new_group_id"],
+        where,
+        query_args,
+        query_time_flags,
+        all_columns,
     )
 
 
@@ -456,9 +463,17 @@ def process_merge(
         "timestamp": timestamp.strftime(DATETIME_FORMAT),
     }
 
-    query_time_flags = (EXCLUDE_GROUPS, message["project_id"], previous_group_ids)
-    return _build_event_merge_replacement(
-        message, where, query_args, query_time_flags, all_columns
+    project_id: int = message["project_id"]
+    query_time_flags = (EXCLUDE_GROUPS, project_id, previous_group_ids)
+
+    return _build_group_replacement(
+        message.get("transaction_id"),
+        project_id,
+        message["new_group_id"],
+        where,
+        query_args,
+        query_time_flags,
+        all_columns,
     )
 
 
