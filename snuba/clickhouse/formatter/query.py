@@ -215,7 +215,7 @@ class JoinFormatter(JoinVisitor[FormattedNode, Table]):
         return SequenceNode(
             [
                 node.left_node.accept(self),
-                StringNode(f"{join_type}{modifier}JOIN"),
+                StringNode(f"{modifier}{join_type}JOIN"),
                 node.right_node.accept(self),
                 StringNode("ON"),
                 SequenceNode(
