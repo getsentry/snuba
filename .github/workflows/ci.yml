@@ -4,8 +4,6 @@ on:
     branches:
       - master
   pull_request:
-  # This allows forks to execute Github actions
-  pull_request_target:
 
 jobs:
   linting:
