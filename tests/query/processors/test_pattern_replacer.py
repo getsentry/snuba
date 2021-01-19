@@ -14,7 +14,6 @@ from snuba.request.request_settings import HTTPRequestSettings
 test_data = [
     pytest.param(
         Query(
-            {},
             QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(name=None, expression=Column(None, None, "column1")),
@@ -22,7 +21,6 @@ test_data = [
             ],
         ),
         Query(
-            {},
             QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
@@ -40,7 +38,6 @@ test_data = [
     ),
     pytest.param(
         Query(
-            {},
             QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
@@ -50,7 +47,6 @@ test_data = [
             ],
         ),
         Query(
-            {},
             QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(

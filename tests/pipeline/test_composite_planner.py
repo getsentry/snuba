@@ -75,7 +75,6 @@ TEST_CASES = [
     pytest.param(
         CompositeQuery(
             from_clause=LogicalQuery(
-                {},
                 from_clause=events_ent,
                 selected_columns=[
                     SelectedExpression("project_id", Column(None, None, "project_id")),

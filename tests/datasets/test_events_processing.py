@@ -14,7 +14,9 @@ def test_events_processing() -> None:
 
     events = get_dataset("events")
     query = parse_query(query_body, events)
-    request = Request("", query, HTTPRequestSettings(), {}, "", Language.LEGACY)
+    request = Request(
+        "", query_body, query, HTTPRequestSettings(), {}, "", Language.LEGACY
+    )
 
     def query_runner(
         query: Query, settings: RequestSettings, reader: Reader

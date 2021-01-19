@@ -17,7 +17,6 @@ from snuba.request.request_settings import HTTPRequestSettings
 
 def test_failure_rate_format_expressions() -> None:
     unprocessed = Query(
-        {},
         QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
             SelectedExpression(name=None, expression=Column(None, None, "column2")),
@@ -25,7 +24,6 @@ def test_failure_rate_format_expressions() -> None:
         ],
     )
     expected = Query(
-        {},
         QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
             SelectedExpression(name=None, expression=Column(None, None, "column2")),

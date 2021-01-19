@@ -29,12 +29,11 @@ def test_simple() -> None:
         "project": 1,
     }
 
-    query = Query(
-        request_body, get_storage(StorageKey.EVENTS).get_schema().get_data_source(),
-    )
+    query = Query(get_storage(StorageKey.EVENTS).get_schema().get_data_source())
 
     request = Request(
         uuid.UUID("a" * 32).hex,
+        request_body,
         query,
         HTTPRequestSettings(),
         {},
