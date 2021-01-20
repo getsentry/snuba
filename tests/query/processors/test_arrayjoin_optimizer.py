@@ -8,7 +8,6 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entities.transactions import transaction_translator
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.pipeline.preprocessors import noop_request_processor
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -332,9 +331,7 @@ test_data = [
 def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     dataset = get_dataset("transactions")
     query = parse_query(query_body, dataset)
-    request = Request(
-        "a", query_body, query, HTTPRequestSettings(), "r", noop_request_processor
-    )
+    request = Request("a", query_body, query, HTTPRequestSettings(), "r")
     entity = get_entity(query.get_from_clause().key)
     for p in entity.get_query_processors():
         p.process_query(query, request.settings)

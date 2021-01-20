@@ -4,7 +4,6 @@ from datetime import datetime
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
-from snuba.pipeline.preprocessors import noop_request_processor
 from snuba.processor import InsertBatch
 from snuba.query.logical import Query
 from snuba.querylog.query_metadata import (
@@ -33,12 +32,7 @@ def test_simple() -> None:
     query = Query(get_storage(StorageKey.EVENTS).get_schema().get_data_source())
 
     request = Request(
-        uuid.UUID("a" * 32).hex,
-        request_body,
-        query,
-        HTTPRequestSettings(),
-        "search",
-        noop_request_processor,
+        uuid.UUID("a" * 32).hex, request_body, query, HTTPRequestSettings(), "search",
     )
 
     time = TestingClock()

@@ -26,6 +26,8 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
+from snuba.query.composite import CompositeQuery
+from snuba.query.data_source.join import JoinClause
 from snuba.query.exceptions import InvalidQueryException
 from snuba.redis import redis_client
 from snuba.request import Language
@@ -339,6 +341,9 @@ def dataset_query(dataset: Dataset, body, timer: Timer, language: Language) -> R
     assert http_request.method == "POST"
     referrer = http_request.referrer or "<unknown>"  # mypy
 
+    if language == Language.SNQL:
+        metrics.increment("snql.query.incoming", tags={"referrer": referrer})
+
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build_with_extensions(
             dataset.get_default_entity().get_extensions(), HTTPRequestSettings, language
@@ -348,6 +353,20 @@ def dataset_query(dataset: Dataset, body, timer: Timer, language: Language) -> R
 
     try:
         result = parse_and_run_query(dataset, request, timer)
+
+        # Some metrics to track the adoption of SnQL
+        query_type = "simple"
+        if language == Language.SNQL:
+            if isinstance(request.query, CompositeQuery):
+                if isinstance(request.query.get_from_clause(), JoinClause):
+                    query_type = "join"
+                else:
+                    query_type = "subquery"
+
+            metrics.increment(
+                "snql.query.success", tags={"referrer": referrer, "type": query_type}
+            )
+
     except QueryException as exception:
         status = 500
         details: Mapping[str, Any]
@@ -372,6 +391,12 @@ def dataset_query(dataset: Dataset, body, timer: Timer, language: Language) -> R
             }
         else:
             raise  # exception should have been chained
+
+        if language == Language.SNQL:
+            metrics.increment(
+                "snql.query.failed",
+                tags={"referrer": referrer, "type": query_type, "status": f"{status}"},
+            )
 
         return Response(
             json.dumps(

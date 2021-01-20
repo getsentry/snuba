@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from functools import partial
 import itertools
 import uuid
 from collections import ChainMap
 from typing import Any, Mapping, MutableMapping, Type
 
 import jsonschema
+import sentry_sdk
 from snuba import environment
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities.factory import get_entity
 from snuba.query.extensions import QueryExtension
+from snuba.query.logical import Query
 from snuba.query.parser import parse_query
 from snuba.query.schema import GENERIC_QUERY_SCHEMA, SNQL_QUERY_SCHEMA
 from snuba.query.snql.parser import parse_snql_query
@@ -22,10 +24,6 @@ from snuba.request.request_settings import (
 )
 from snuba.schemas import Schema, validate_jsonschema
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.pipeline.preprocessors import (
-    legacy_request_preprocessor,
-    noop_request_processor,
-)
 
 metrics = MetricsWrapper(environment.metrics, "parser")
 
@@ -126,6 +124,7 @@ class RequestSchema:
             if key in value
         }
 
+        settings_obj = self.__setting_class(**settings)
         extensions = {}
         for extension_name, extension_schema in self.__extension_schemas.items():
             extensions[extension_name] = {
@@ -136,10 +135,9 @@ class RequestSchema:
 
         if self.__language == Language.SNQL:
             query = parse_snql_query(query_body["query"], dataset)
-            preprocessor = noop_request_processor
         else:
             query = parse_query(query_body, dataset)
-            preprocessor = partial(legacy_request_preprocessor, extensions)
+            apply_query_extensions(query, extensions, settings_obj)
 
         request_id = uuid.uuid4().hex
         return Request(
@@ -149,9 +147,8 @@ class RequestSchema:
             # to be careful with the change.
             ChainMap(query_body, *extensions.values()),
             query,
-            self.__setting_class(**settings),
+            settings_obj,
             referrer,
-            preprocessor,
         )
 
     def __generate_template_impl(self, schema: Mapping[str, Any]) -> Any:
@@ -199,3 +196,21 @@ SETTINGS_SCHEMAS: Mapping[Type[RequestSettings], Schema] = {
         "additionalProperties": False,
     },
 }
+
+
+def apply_query_extensions(
+    query: Query, extensions: Mapping[str, Mapping[str, Any]], settings: RequestSettings
+) -> None:
+    """
+    Applies query extensions in place on an already parsed query.
+    """
+
+    query_entity = query.get_from_clause()
+    entity = get_entity(query_entity.key)
+
+    extensions_processors = entity.get_extensions()
+    for name, extension in extensions_processors.items():
+        with sentry_sdk.start_span(
+            description=type(extension.get_processor()).__name__, op="extension"
+        ):
+            extension.get_processor().process_query(query, extensions[name], settings)

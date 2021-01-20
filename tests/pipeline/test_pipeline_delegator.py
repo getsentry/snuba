@@ -7,7 +7,6 @@ from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
-from snuba.pipeline.preprocessors import noop_request_processor
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.parser import parse_query
 from snuba.request import Request
@@ -54,14 +53,7 @@ def test() -> None:
 
     with cv:
         delegator.build_execution_pipeline(
-            Request(
-                "",
-                query_body,
-                query,
-                HTTPRequestSettings(),
-                "ref",
-                noop_request_processor,
-            ),
+            Request("", query_body, query, HTTPRequestSettings(), "ref",),
             mock_query_runner,
         ).execute()
         cv.wait(timeout=5)
