@@ -1,6 +1,5 @@
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
-from snuba.pipeline.preprocessors import noop_request_processor
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.parser import parse_query
@@ -15,9 +14,7 @@ def test_events_processing() -> None:
 
     events = get_dataset("events")
     query = parse_query(query_body, events)
-    request = Request(
-        "", query_body, query, HTTPRequestSettings(), "", noop_request_processor
-    )
+    request = Request("", query_body, query, HTTPRequestSettings(), "")
 
     def query_runner(
         query: Query, settings: RequestSettings, reader: Reader

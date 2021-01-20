@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Mapping, Union
+from typing import Any, Mapping, Union
 
 from snuba.query.logical import Query
 from snuba.query.composite import CompositeQuery
@@ -26,10 +26,3 @@ class Request:
     query: Union[Query, CompositeQuery[Entity]]
     settings: RequestSettings  # settings provided by the request
     referrer: str
-    preprocessor: RequestPreprocessor
-
-
-# Allows the parser and validator to provide some operations
-# to be performed on the query at the beginning of the pipeline
-# that are not dataset specific.
-RequestPreprocessor = Callable[[Query, RequestSettings], None]

@@ -69,10 +69,6 @@ class SimpleExecutionPipeline(QueryExecutionPipeline):
     def execute(self) -> QueryResult:
         settings = self.__request.settings
 
-        # Mypy does not like this because of this bug
-        # https://github.com/python/mypy/issues/5485
-        self.__request.preprocessor(self.__request.query, settings)
-
         query_plan = self.__query_planner.build_best_plan()
         execute_plan_processors(query_plan, settings)
 

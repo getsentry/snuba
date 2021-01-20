@@ -1,7 +1,7 @@
+from snuba.request.schema import apply_query_extensions
 import time
 import uuid
 from datetime import datetime, timedelta
-from functools import partial
 
 from snuba import settings
 from snuba.datasets.entities import EntityKey
@@ -10,7 +10,6 @@ from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.pipeline.preprocessors import legacy_request_preprocessor
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -71,6 +70,23 @@ def test_transform_column_names() -> None:
             ),
         ],
     )
+    query_settings = HTTPRequestSettings()
+    apply_query_extensions(
+        query,
+        {
+            "timeseries": {
+                "from_date": (event_date - timedelta(minutes=5)).strftime(
+                    settings.PAYLOAD_DATETIME_FORMAT
+                ),
+                "to_date": (event_date + timedelta(minutes=1)).strftime(
+                    settings.PAYLOAD_DATETIME_FORMAT
+                ),
+                "granularity": 3600,
+            },
+            "project": {"project": [1]},
+        },
+        query_settings,
+    )
 
     dataset = get_dataset("events")
     timer = Timer("test")
@@ -78,26 +94,7 @@ def test_transform_column_names() -> None:
     result = parse_and_run_query(
         dataset,
         Request(
-            id="asd",
-            body={},
-            query=query,
-            settings=HTTPRequestSettings(),
-            referrer="asd",
-            preprocessor=partial(
-                legacy_request_preprocessor,
-                {
-                    "timeseries": {
-                        "from_date": (event_date - timedelta(minutes=5)).strftime(
-                            settings.PAYLOAD_DATETIME_FORMAT
-                        ),
-                        "to_date": (event_date + timedelta(minutes=1)).strftime(
-                            settings.PAYLOAD_DATETIME_FORMAT
-                        ),
-                        "granularity": 3600,
-                    },
-                    "project": {"project": [1]},
-                },
-            ),
+            id="asd", body={}, query=query, settings=query_settings, referrer="asd",
         ),
         timer,
     )
