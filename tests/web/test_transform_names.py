@@ -1,3 +1,4 @@
+from snuba.request.schema import apply_query_extensions
 import time
 import uuid
 from datetime import datetime, timedelta
@@ -14,7 +15,7 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.reader import Column as MetaColumn
-from snuba.request import Language, Request
+from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import parse_and_run_query
@@ -69,6 +70,23 @@ def test_transform_column_names() -> None:
             ),
         ],
     )
+    query_settings = HTTPRequestSettings()
+    apply_query_extensions(
+        query,
+        {
+            "timeseries": {
+                "from_date": (event_date - timedelta(minutes=5)).strftime(
+                    settings.PAYLOAD_DATETIME_FORMAT
+                ),
+                "to_date": (event_date + timedelta(minutes=1)).strftime(
+                    settings.PAYLOAD_DATETIME_FORMAT
+                ),
+                "granularity": 3600,
+            },
+            "project": {"project": [1]},
+        },
+        query_settings,
+    )
 
     dataset = get_dataset("events")
     timer = Timer("test")
@@ -76,24 +94,7 @@ def test_transform_column_names() -> None:
     result = parse_and_run_query(
         dataset,
         Request(
-            id="asd",
-            body={},
-            query=query,
-            settings=HTTPRequestSettings(),
-            extensions={
-                "timeseries": {
-                    "from_date": (event_date - timedelta(minutes=5)).strftime(
-                        settings.PAYLOAD_DATETIME_FORMAT
-                    ),
-                    "to_date": (event_date + timedelta(minutes=1)).strftime(
-                        settings.PAYLOAD_DATETIME_FORMAT
-                    ),
-                    "granularity": 3600,
-                },
-                "project": {"project": [1]},
-            },
-            referrer="asd",
-            language=Language.LEGACY,
+            id="asd", body={}, query=query, settings=query_settings, referrer="asd",
         ),
         timer,
     )
