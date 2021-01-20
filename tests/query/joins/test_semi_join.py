@@ -39,7 +39,7 @@ TEST_CASES = [
             ),
             selected_columns=[],
         ),
-        {"gr": JoinModifier.SEMI},
+        {"gr": JoinModifier.ANY},
         id="Simple two table query with no reference. Semi join",
     ),
     pytest.param(
@@ -61,7 +61,7 @@ TEST_CASES = [
                 SelectedExpression("group_id", Column("_snuba_col1", "gr", "_snuba_id"))
             ],
         ),
-        {"gr": JoinModifier.SEMI},
+        {"gr": JoinModifier.ANY},
         id="Query with reference to the join key. Semi join",
     ),
     pytest.param(
@@ -88,7 +88,7 @@ TEST_CASES = [
                 )
             ],
         ),
-        {"gr": JoinModifier.SEMI},
+        {"gr": JoinModifier.ANY},
         id="Query with reference to columns on the left side. Semi join",
     ),
     pytest.param(
@@ -170,7 +170,7 @@ TEST_CASES = [
                 )
             ],
         ),
-        {"gr": None, "as": JoinModifier.SEMI},
+        {"gr": None, "as": JoinModifier.ANY},
         id="Multi table join, make only the right one a semi join.",
     ),
     pytest.param(
@@ -217,7 +217,7 @@ TEST_CASES = [
             ),
             selected_columns=[],
         ),
-        {"gr": JoinModifier.SEMI, "as": JoinModifier.SEMI},
+        {"gr": JoinModifier.ANY, "as": JoinModifier.ANY},
         id="Multi table join, make both joins semi join.",
     ),
 ]
