@@ -395,12 +395,7 @@ def dataset_query(dataset: Dataset, body, timer: Timer, language: Language) -> R
         if language == Language.SNQL:
             metrics.increment(
                 "snql.query.failed",
-                tags={
-                    "referrer": referrer,
-                    "type": query_type,
-                    "status": f"{status}",
-                    "message": details["message"],
-                },
+                tags={"referrer": referrer, "type": query_type, "status": f"{status}"},
             )
 
         return Response(
