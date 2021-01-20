@@ -29,7 +29,6 @@ test_cases = [
             "aggregations": [["test_func", "column4", "test_func_alias"]],
         },
         Query(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -75,7 +74,6 @@ test_cases = [
             "groupby": [["format_eventid", ["event_id"]]],
         },
         Query(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -162,7 +160,6 @@ test_cases = [
             "orderby": ["column1", "-column2", ["-func", ["column3"]]],
         },
         Query(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -197,7 +194,6 @@ test_cases = [
     pytest.param(
         {"selected_columns": [], "groupby": "column1", "orderby": "-column1"},
         Query(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -221,7 +217,6 @@ test_cases = [
             "groupby": [["f", ["tags[test2]"]]],
         },
         Query(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -279,7 +274,6 @@ test_cases = [
             "orderby": ["group_id"],
         },
         Query(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -352,7 +346,6 @@ test_cases = [
     pytest.param(
         {"selected_columns": [["f", ["column3"], "exp"], ["f", ["column3"], "exp"]]},
         Query(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -376,7 +369,6 @@ test_cases = [
     pytest.param(
         {"selected_columns": [["f", ["column"], "`exp`"], "`exp`"]},
         Query(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -407,7 +399,6 @@ test_cases = [
             "arrayjoin": "exception_stacks.type",
         },
         Query(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -433,7 +424,6 @@ test_cases = [
             "groupby": [],
         },
         Query(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -486,7 +476,6 @@ test_cases = [
             "arrayjoin": "exception_stacks.type",
         },
         Query(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -522,7 +511,6 @@ test_cases = [
             "groupby": [],
         },
         Query(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -577,7 +565,6 @@ test_cases = [
             "groupby": [],
         },
         Query(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -691,7 +678,6 @@ test_cases = [
             "arrayjoin": "exception_stacks",
         },
         Query(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -769,7 +755,6 @@ test_cases = [
             "groupby": [],
         },
         Query(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -847,7 +832,6 @@ test_cases = [
             "groupby": ["tags_key"],
         },
         Query(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),

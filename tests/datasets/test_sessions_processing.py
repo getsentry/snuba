@@ -14,7 +14,9 @@ def test_sessions_processing() -> None:
 
     sessions = get_dataset("sessions")
     query = parse_query(query_body, sessions)
-    request = Request("", query, HTTPRequestSettings(), {}, "", Language.LEGACY)
+    request = Request(
+        "", query_body, query, HTTPRequestSettings(), {}, "", Language.LEGACY
+    )
 
     def query_runner(
         query: Query, settings: RequestSettings, reader: Reader

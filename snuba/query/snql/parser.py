@@ -217,7 +217,7 @@ class SnQLVisitor(NodeVisitor):
             args["from_clause"] = data_source
             return CompositeQuery(**args)
 
-        args.update({"body": {}, "prewhere": None, "from_clause": data_source})
+        args.update({"prewhere": None, "from_clause": data_source})
         if isinstance(data_source, QueryEntity):
             # TODO: How sample rate gets stored needs to be addressed in a future PR
             args["sample"] = data_source.sample

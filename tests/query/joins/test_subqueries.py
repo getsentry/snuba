@@ -288,7 +288,6 @@ TEST_CASES = [
                 right_node=IndividualNode(
                     alias="as",
                     data_source=LogicalQuery(
-                        {},
                         from_clause=Entity(EntityKey.GROUPASSIGNEE, GROUPS_ASSIGNEE),
                         selected_columns=[
                             SelectedExpression(

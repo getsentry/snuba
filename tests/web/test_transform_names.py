@@ -53,7 +53,6 @@ def test_transform_column_names() -> None:
     )
 
     query = Query(
-        {},
         Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
         selected_columns=[
             # The selected expression names are those provided by the
@@ -78,6 +77,7 @@ def test_transform_column_names() -> None:
         dataset,
         Request(
             id="asd",
+            body={},
             query=query,
             settings=HTTPRequestSettings(),
             extensions={

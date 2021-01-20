@@ -16,7 +16,6 @@ from snuba.request.request_settings import HTTPRequestSettings
 TEST_CASES = [
     pytest.param(
         Query(
-            {},
             None,
             selected_columns=[
                 SelectedExpression("column1", Column("column1", None, "column1")),
@@ -31,7 +30,6 @@ TEST_CASES = [
             ),
         ),
         Query(
-            {},
             None,
             selected_columns=[
                 SelectedExpression("column1", Column("column1", None, "column1")),
@@ -49,7 +47,6 @@ TEST_CASES = [
     ),
     pytest.param(
         Query(
-            {},
             None,
             selected_columns=[
                 SelectedExpression(
@@ -63,7 +60,6 @@ TEST_CASES = [
             ],
         ),
         Query(
-            {},
             None,
             selected_columns=[
                 SelectedExpression(
@@ -86,7 +82,6 @@ TEST_CASES = [
     ),
     pytest.param(
         Query(
-            {},
             None,
             selected_columns=[
                 SelectedExpression(
@@ -107,7 +102,6 @@ TEST_CASES = [
             ],
         ),
         Query(
-            {},
             None,
             selected_columns=[
                 SelectedExpression(
@@ -166,7 +160,6 @@ def test_format_expressions(query: Query, expected_query: Query) -> None:
 INVALID_QUERIES = [
     pytest.param(
         Query(
-            {},
             None,
             selected_columns=[
                 SelectedExpression(
@@ -181,7 +174,6 @@ INVALID_QUERIES = [
     ),
     pytest.param(
         Query(
-            {},
             None,
             selected_columns=[
                 SelectedExpression(
