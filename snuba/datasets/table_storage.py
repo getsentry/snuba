@@ -91,7 +91,7 @@ def build_kafka_stream_loader_from_settings(
     replacement_topic_name: Optional[str] = None,
     commit_log_topic_name: Optional[str] = None,
 ) -> KafkaStreamLoader:
-    storage_topics = {**settings.STORAGE_TOPICS[storage_key.name]}
+    storage_topics = {**settings.STORAGE_TOPICS.get(storage_key.value, {})}
 
     default_topic_spec = build_kafka_topic_spec_from_settings(
         storage_topics.pop("default", default_topic_name)

@@ -1,5 +1,4 @@
 import os
-from collections import defaultdict
 from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
 
 
@@ -81,7 +80,7 @@ BROKER_CONFIG: Mapping[str, Any] = {
     "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092"),
 }
 STORAGE_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
-STORAGE_TOPICS: Mapping[str, Mapping[str, Any]] = defaultdict(dict)
+STORAGE_TOPICS: Mapping[str, Mapping[str, Any]] = {}
 
 DEFAULT_MAX_BATCH_SIZE = 50000
 DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000

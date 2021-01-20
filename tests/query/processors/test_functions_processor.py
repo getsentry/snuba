@@ -13,7 +13,6 @@ from snuba.request.request_settings import HTTPRequestSettings
 test_data = [
     (
         Query(
-            {},
             QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
@@ -29,7 +28,6 @@ test_data = [
             ],
         ),
         Query(
-            {},
             QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
@@ -63,7 +61,6 @@ test_data = [
     ),  # Single simple uniq + emptyIfNull
     (
         Query(
-            {},
             QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(name=None, expression=Column(None, None, "column1")),
@@ -87,7 +84,6 @@ test_data = [
             ],
         ),
         Query(
-            {},
             QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(name=None, expression=Column(None, None, "column1")),
@@ -145,7 +141,6 @@ test_data = [
     ),  # Complex query with both uniq and emptyIfNull
     (
         Query(
-            {},
             QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(
@@ -159,7 +154,6 @@ test_data = [
             ],
         ),
         Query(
-            {},
             QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(

@@ -144,7 +144,6 @@ def test_timeseries_format_expressions(
     formatted_condition: str,
 ) -> None:
     unprocessed = Query(
-        {},
         QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
             SelectedExpression(
@@ -156,7 +155,6 @@ def test_timeseries_format_expressions(
         granularity=granularity,
     )
     expected = Query(
-        {"granularity": granularity},
         QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
             SelectedExpression(
@@ -192,7 +190,6 @@ def test_timeseries_format_expressions(
 
 def test_invalid_datetime() -> None:
     unprocessed = Query(
-        {},
         QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
             SelectedExpression(
