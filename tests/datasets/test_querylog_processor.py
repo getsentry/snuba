@@ -13,7 +13,7 @@ from snuba.querylog.query_metadata import (
     QueryStatus,
     SnubaQueryMetadata,
 )
-from snuba.request import Language, Request
+from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.utils.clock import TestingClock
 from snuba.utils.metrics.timer import Timer
@@ -32,13 +32,7 @@ def test_simple() -> None:
     query = Query(get_storage(StorageKey.EVENTS).get_schema().get_data_source())
 
     request = Request(
-        uuid.UUID("a" * 32).hex,
-        request_body,
-        query,
-        HTTPRequestSettings(),
-        {},
-        "search",
-        Language.LEGACY,
+        uuid.UUID("a" * 32).hex, request_body, query, HTTPRequestSettings(), "search",
     )
 
     time = TestingClock()

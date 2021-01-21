@@ -556,7 +556,7 @@ TEST_JOIN = [
         SequenceNode(
             [
                 PaddingNode(None, StringNode("errors_local"), "err"),
-                StringNode("INNER SEMI JOIN"),
+                StringNode("SEMI INNER JOIN"),
                 PaddingNode(None, StringNode("groupedmessage_local"), "groups"),
                 StringNode("ON"),
                 SequenceNode(
@@ -569,7 +569,7 @@ TEST_JOIN = [
             ]
         ),
         (
-            "errors_local err INNER SEMI JOIN groupedmessage_local groups "
+            "errors_local err SEMI INNER JOIN groupedmessage_local groups "
             "ON err.group_id=groups.id AND err.project_id=groups.project_id"
         ),
         id="Simple join",
@@ -602,7 +602,7 @@ TEST_JOIN = [
                 SequenceNode(
                     [
                         PaddingNode(None, StringNode("errors_local"), "err"),
-                        StringNode("INNER SEMI JOIN"),
+                        StringNode("SEMI INNER JOIN"),
                         PaddingNode(None, StringNode("groupedmessage_local"), "groups"),
                         StringNode("ON"),
                         SequenceNode([StringNode("err.group_id=groups.id")], " AND "),
@@ -615,7 +615,7 @@ TEST_JOIN = [
             ]
         ),
         (
-            "errors_local err INNER SEMI JOIN groupedmessage_local groups "
+            "errors_local err SEMI INNER JOIN groupedmessage_local groups "
             "ON err.group_id=groups.id INNER JOIN groupassignee_local assignee "
             "ON err.group_id=assignee.id"
         ),

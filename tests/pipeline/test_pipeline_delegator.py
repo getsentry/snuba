@@ -1,6 +1,6 @@
 import threading
 from typing import List, Tuple
-from unittest.mock import Mock, call, ANY
+from unittest.mock import ANY, Mock, call
 
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -9,7 +9,7 @@ from snuba.datasets.storages.factory import get_storage
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.parser import parse_query
-from snuba.request import Language, Request
+from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.utils.threaded_function_delegator import Result
 from snuba.web import QueryResult
@@ -53,9 +53,7 @@ def test() -> None:
 
     with cv:
         delegator.build_execution_pipeline(
-            Request(
-                "", query_body, query, HTTPRequestSettings(), {}, "ref", Language.LEGACY
-            ),
+            Request("", query_body, query, HTTPRequestSettings(), "ref",),
             mock_query_runner,
         ).execute()
         cv.wait(timeout=5)

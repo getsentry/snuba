@@ -8,6 +8,7 @@ from snuba.query.data_source.join import (
     JoinClause,
     JoinModifier,
     JoinNode,
+    JoinType,
     JoinVisitor,
 )
 from snuba.query.data_source.simple import Table
@@ -87,5 +88,7 @@ class SemiJoinGenerator(JoinVisitor[JoinNode[Table], Table]):
             right_node=node.right_node,
             keys=node.keys,
             join_type=node.join_type,
-            join_modifier=JoinModifier.SEMI,
+            join_modifier=JoinModifier.ANY
+            if node.join_type == JoinType.INNER
+            else JoinModifier.SEMI,
         )

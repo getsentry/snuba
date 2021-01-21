@@ -25,6 +25,4 @@ class Request:
     body: Mapping[str, Any]
     query: Union[Query, CompositeQuery[Entity]]
     settings: RequestSettings  # settings provided by the request
-    extensions: Mapping[str, Mapping[str, Any]]
     referrer: str
-    language: Language

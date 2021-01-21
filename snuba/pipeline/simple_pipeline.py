@@ -68,7 +68,6 @@ class SimpleExecutionPipeline(QueryExecutionPipeline):
 
     def execute(self) -> QueryResult:
         settings = self.__request.settings
-
         query_plan = self.__query_planner.build_best_plan()
         execute_plan_processors(query_plan, settings)
 
