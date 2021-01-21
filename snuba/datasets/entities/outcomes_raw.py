@@ -6,6 +6,7 @@ from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
+from snuba.query.conditions import ConditionFunctions
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.processors import QueryProcessor
@@ -26,6 +27,15 @@ class OutcomesRawEntity(Entity):
             abstract_column_set=storage.get_schema().get_columns(),
             join_relationships={},
             writable_storage=None,
+            required_conditions={
+                "org_id": [ConditionFunctions.EQ],
+                "timestamp": [
+                    ConditionFunctions.LT,
+                    ConditionFunctions.LTE,
+                    ConditionFunctions.GT,
+                    ConditionFunctions.GTE,
+                ],
+            },
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

@@ -20,6 +20,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
+from snuba.query.conditions import ConditionFunctions
 from snuba.query.expressions import Column, FunctionCall
 from snuba.query.extensions import QueryExtension
 from snuba.query.formatters.tracing import format_query
@@ -230,6 +231,15 @@ class BaseEventsEntity(Entity, ABC):
             abstract_column_set=columns,
             join_relationships={},
             writable_storage=storage,
+            required_conditions={
+                "project_id": [ConditionFunctions.EQ, ConditionFunctions.IN],
+                "timestamp": [
+                    ConditionFunctions.LT,
+                    ConditionFunctions.LTE,
+                    ConditionFunctions.GT,
+                    ConditionFunctions.GTE,
+                ],
+            },
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

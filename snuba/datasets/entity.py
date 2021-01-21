@@ -25,12 +25,14 @@ class Entity(ABC):
         abstract_column_set: ColumnSet,
         join_relationships: Mapping[str, JoinRelationship],
         writable_storage: Optional[WritableStorage],
+        required_conditions: Mapping[str, Sequence[str]]
     ) -> None:
         self.__storages = storages
         self.__query_pipeline_builder = query_pipeline_builder
         self.__writable_storage = writable_storage
         self.__data_model = abstract_column_set
         self.__join_relationships = join_relationships
+        self.__required_conditions = required_conditions
 
     @abstractmethod
     def get_extensions(self) -> Mapping[str, QueryExtension]:
@@ -71,6 +73,9 @@ class Entity(ABC):
         Returns all the join relationships
         """
         return self.__join_relationships
+
+    def get_required_conditions(self) -> Mapping[str, Sequence[str]]:
+        return self.__required_conditions
 
     def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
         """

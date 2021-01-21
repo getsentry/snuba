@@ -81,6 +81,7 @@ class Events(FakeEntity):
                 ),
             },
             writable_storage=None,
+            required_conditions={},
         )
 
 
@@ -105,6 +106,7 @@ class GroupedMessage(FakeEntity):
                 ),
             },
             writable_storage=None,
+            required_conditions={},
         )
 
 
@@ -129,4 +131,5 @@ class GroupAssignee(FakeEntity):
                 ),
             },
             writable_storage=None,
+            required_conditions={},
         )

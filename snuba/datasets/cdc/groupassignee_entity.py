@@ -31,6 +31,7 @@ class GroupAssigneeEntity(Entity):
             abstract_column_set=schema.get_columns(),
             join_relationships={},
             writable_storage=storage,
+            required_conditions={},
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
