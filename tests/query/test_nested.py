@@ -20,7 +20,6 @@ def test_nested_query() -> None:
     """
 
     nested = LogicalQuery(
-        {},
         Entity(EntityKey.EVENTS, ColumnSet([("event_id", String())])),
         selected_columns=[
             SelectedExpression(
@@ -50,7 +49,6 @@ def test_nested_query() -> None:
 
 def test_join_query() -> None:
     events_query = LogicalQuery(
-        {},
         Entity(
             EntityKey.EVENTS,
             ColumnSet([("event_id", String()), ("group_id", UInt(32))]),
@@ -64,7 +62,6 @@ def test_join_query() -> None:
     )
 
     groups_query = LogicalQuery(
-        {},
         Entity(
             EntityKey.GROUPEDMESSAGES,
             ColumnSet([("id", UInt(32)), ("message", String())]),

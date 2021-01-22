@@ -31,7 +31,6 @@ def build_node(
     return IndividualNode(
         alias=alias,
         data_source=LogicalQuery(
-            {},
             from_clause=from_clause,
             selected_columns=selected_columns,
             condition=condition,

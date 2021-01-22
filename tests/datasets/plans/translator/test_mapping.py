@@ -24,7 +24,6 @@ test_cases = [
     pytest.param(
         TranslationMappers(),
         SnubaQuery(
-            body={},
             from_clause=QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression("alias", Column("alias", "table", "column")),
@@ -72,7 +71,6 @@ test_cases = [
             subscriptables=[SubscriptableMapper(None, "tags", None, "tags")],
         ),
         SnubaQuery(
-            body={},
             from_clause=QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression("alias", Column("alias", "table", "column")),
@@ -146,7 +144,6 @@ test_cases = [
             ],
         ),
         SnubaQuery(
-            body={},
             from_clause=QueryEntity(EntityKey.EVENTS, ColumnSet([])),
             selected_columns=[
                 SelectedExpression(

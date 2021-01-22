@@ -43,6 +43,7 @@ REPLACEMENT_EVENT_TYPES = frozenset(
         "end_delete_tag",
         "tombstone_events",
         "exclude_groups",
+        "replace_group",
     ]
 )
 

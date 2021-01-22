@@ -81,7 +81,6 @@ def test_complex_joins() -> None:
 
     a = Entity(key=EntityKey.GROUPASSIGNEE, schema=GROUPS_ASSIGNEE)
     query = Query(
-        body={},
         from_clause=a,
         selected_columns=[
             SelectedExpression("id", Column("id", None, "id")),

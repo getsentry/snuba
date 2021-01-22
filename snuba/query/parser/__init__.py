@@ -251,7 +251,6 @@ def _parse_query_impl(body: MutableMapping[str, Any], entity: Entity) -> Query:
         )
 
     return Query(
-        body,
         None,
         selected_columns=select_clause,
         array_join=array_join_expr,

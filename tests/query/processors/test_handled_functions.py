@@ -19,7 +19,6 @@ from snuba.request.request_settings import HTTPRequestSettings
 def test_handled_processor() -> None:
     columnset = ColumnSet([])
     unprocessed = Query(
-        {},
         QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
             SelectedExpression(name=None, expression=Column(None, None, "id")),
@@ -30,7 +29,6 @@ def test_handled_processor() -> None:
     )
 
     expected = Query(
-        {},
         QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
             SelectedExpression(name=None, expression=Column(None, None, "id")),
@@ -82,7 +80,6 @@ def test_handled_processor() -> None:
 def test_handled_processor_invalid() -> None:
     columnset = ColumnSet([])
     unprocessed = Query(
-        {},
         QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
             SelectedExpression(
@@ -101,7 +98,6 @@ def test_handled_processor_invalid() -> None:
 def test_not_handled_processor() -> None:
     columnset = ColumnSet([])
     unprocessed = Query(
-        {},
         QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
             SelectedExpression(name=None, expression=Column(None, None, "id")),
@@ -112,7 +108,6 @@ def test_not_handled_processor() -> None:
     )
 
     expected = Query(
-        {},
         QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
             SelectedExpression(name=None, expression=Column(None, None, "id")),
@@ -164,7 +159,6 @@ def test_not_handled_processor() -> None:
 def test_not_handled_processor_invalid() -> None:
     columnset = ColumnSet([])
     unprocessed = Query(
-        {},
         QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
             SelectedExpression(

@@ -44,7 +44,6 @@ class SubqueryDraft:
 
     def build_query(self) -> ProcessableQuery[Entity]:
         return LogicalQuery(
-            {},
             from_clause=self.__data_source,
             selected_columns=list(
                 sorted(self.__selected_expressions, key=lambda selected: selected.name)

@@ -33,7 +33,6 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT 4-5, c GRANULARITY 60",
         LogicalQuery(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -51,7 +50,6 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT 4-5, c TOTALS true",
         LogicalQuery(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -69,7 +67,6 @@ test_cases = [
     pytest.param(
         "MATCH (events SAMPLE 0.5) SELECT 4-5, c",
         LogicalQuery(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(), 0.5,
             ),
@@ -87,7 +84,6 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT 4-5, c LIMIT 5 BY c",
         LogicalQuery(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -105,7 +101,6 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT 4-5, c LIMIT 5 OFFSET 3",
         LogicalQuery(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -124,7 +119,6 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT 4-5, c, arrayJoin(c) AS x TOTALS true",
         LogicalQuery(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -148,7 +142,6 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT 4-5, 3* foo(c) AS foo, c WHERE a<3",
         LogicalQuery(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -181,7 +174,6 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT count() AS count BY tags[key], measurements[lcp.elementSize] WHERE a<3 AND measurements[lcp.elementSize] > 1",
         LogicalQuery(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -239,7 +231,6 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT (2*(4-5)+3), g(c) AS goo, c BY d, 2+7 WHERE a<3  ORDER BY f DESC",
         LogicalQuery(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -291,7 +282,6 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT (2*(4-5)+3), foo(c) AS thing2, c BY d, 2+7 WHERE a<3 ORDER BY f DESC",
         LogicalQuery(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -345,7 +335,6 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT toDateTime('2020-01-01') AS now, 3*foo(c) AS foo BY toDateTime('2020-01-01') AS now WHERE a<3 AND timestamp>toDateTime('2020-01-01')",
         LogicalQuery(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -388,7 +377,6 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT a WHERE time_seen<3 AND last_seen=2 AND c=2 AND d=3",
         LogicalQuery(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -449,7 +437,6 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT a WHERE (time_seen<3 OR last_seen=afternoon) OR name=bob",
         LogicalQuery(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -496,7 +483,6 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT a WHERE name!=bob OR last_seen<afternoon AND (location=gps(x,y,z) OR times_seen>0)",
         LogicalQuery(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -567,7 +553,6 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT a, b[c] WHERE project_id IN tuple( 2 , 3)",
         LogicalQuery(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -598,7 +583,6 @@ test_cases = [
         SELECT 4-5,3*foo(c) AS foo,c
         WHERE a<3""",
         LogicalQuery(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -633,7 +617,6 @@ test_cases = [
         SELECT 4-5,3*foo(c) AS foo,c
         WHERE or(equals(arrayExists(a, '=', 'RuntimeException'), 1), equals(arrayAll(b, 'NOT IN', tuple('Stack', 'Arithmetic')), 1)) = 1""",
         LogicalQuery(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -957,7 +940,6 @@ test_cases = [
         "MATCH { MATCH (events) SELECT count() AS count BY title } SELECT max(count) AS max_count",
         CompositeQuery(
             from_clause=LogicalQuery(
-                {},
                 QueryEntity(
                     EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
                 ),
@@ -987,7 +969,6 @@ test_cases = [
         CompositeQuery(
             from_clause=CompositeQuery(
                 from_clause=LogicalQuery(
-                    {},
                     QueryEntity(
                         EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
                     ),
@@ -1028,7 +1009,6 @@ test_cases = [
     pytest.param(
         """MATCH (events) SELECT 4-5,3*foo(c) AS foo,c WHERE a<'stuff\\' "\\" stuff' AND b='"💩\\" \t \\'\\''""",
         LogicalQuery(
-            {},
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
@@ -1074,7 +1054,6 @@ test_cases = [
         WHERE or(equals(ifNull(tags[foo],''),'baz'),equals(ifNull(tags[foo.bar],''),'qux'))=1
         ORDER BY count DESC,tags_key ASC  LIMIT 10""",
         LogicalQuery(
-            {},
             QueryEntity(
                 EntityKey.DISCOVER_EVENTS,
                 get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),

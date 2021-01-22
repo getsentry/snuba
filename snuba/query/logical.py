@@ -4,15 +4,12 @@ from typing import (
     Any,
     Callable,
     Iterable,
-    Mapping,
-    MutableMapping,
     Optional,
     Sequence,
     Tuple,
     Union,
 )
 
-from deprecation import deprecated
 from snuba.query import LimitBy, OrderBy
 from snuba.query import ProcessableQuery as AbstractQuery
 from snuba.query import SelectedExpression
@@ -35,7 +32,6 @@ class Query(AbstractQuery[Entity]):
 
     def __init__(
         self,
-        body: MutableMapping[str, Any],  # Temporary
         from_clause: Optional[Entity],
         # New data model to replace the one based on the dictionary
         selected_columns: Optional[Sequence[SelectedExpression]] = None,
@@ -57,7 +53,6 @@ class Query(AbstractQuery[Entity]):
         """
         # TODO: make the parser produce this data structure directly
         # in order not to expose the internal representation.
-        self.__body = body
         self.__final = False
         self.__sample = sample
 
@@ -90,13 +85,6 @@ class Query(AbstractQuery[Entity]):
 
     def _eq_functions(self) -> Sequence[str]:
         return tuple(super()._eq_functions()) + ("get_final", "get_sample")
-
-    @deprecated(
-        details="Do not access the internal query representation "
-        "use the specific accessor methods instead."
-    )
-    def get_body(self) -> Mapping[str, Any]:
-        return self.__body
 
     def _get_expressions_impl(self) -> Iterable[Expression]:
         return []
