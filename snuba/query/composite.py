@@ -82,6 +82,9 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
     ) -> None:
         self.__from_clause = from_clause
 
+    def get_final(self) -> bool:
+        return False
+
     def _get_expressions_impl(self) -> Iterable[Expression]:
         return []
 
