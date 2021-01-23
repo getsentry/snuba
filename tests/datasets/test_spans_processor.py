@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, NamedTuple, Sequence, Tuple
 
 from snuba.consumer import KafkaMessageMetadata
@@ -19,10 +19,10 @@ class SpanData(NamedTuple):
     def serialize(self) -> Mapping[str, Any]:
         return {
             "sampled": True,
-            "start_timestamp": self.start_timestamp.timestamp(),
+            "start_timestamp": self.start_timestamp,
             "same_process_as_parent": None,
             "description": "GET /api/0/organizations/sentry/tags/?project=1",
-            "timestamp": self.timestamp.timestamp(),
+            "timestamp": self.timestamp,
             "parent_span_id": self.parent_span_id,
             "trace_id": self.trace_id,
             "span_id": self.span_id,
@@ -39,8 +39,8 @@ class SpanEvent:
     parent_span_id: str
     transaction_name: str
     op: str
-    start_timestamp: datetime
-    timestamp: datetime
+    start_timestamp: float
+    timestamp: float
     spans: Sequence[SpanData]
 
     def serialize(self) -> Tuple[int, str, Mapping[str, Any]]:
@@ -72,8 +72,8 @@ class SpanEvent:
                     "type": "transaction",
                     "retention_days": None,
                     "datetime": "2019-08-08T22:29:53.917000Z",
-                    "timestamp": self.timestamp.timestamp(),
-                    "start_timestamp": self.start_timestamp.timestamp(),
+                    "timestamp": self.timestamp,
+                    "start_timestamp": self.start_timestamp,
                     "contexts": {
                         "trace": {
                             "sampled": True,
@@ -95,6 +95,8 @@ class SpanEvent:
         )
 
     def build_result(self, meta: KafkaMessageMetadata) -> Sequence[Mapping[str, Any]]:
+        start_timestamp = datetime.utcfromtimestamp(self.start_timestamp)
+        finish_timestamp = datetime.utcfromtimestamp(self.timestamp)
         ret = [
             {
                 "deleted": 0,
@@ -108,18 +110,20 @@ class SpanEvent:
                 "op": self.op,
                 "description": self.transaction_name,
                 "status": 0,
-                "start_ts": self.start_timestamp,
-                "start_ns": int(self.start_timestamp.microsecond * 1000),
-                "finish_ts": self.timestamp,
-                "finish_ns": int(self.timestamp.microsecond * 1000),
+                "start_ts": start_timestamp,
+                "start_ns": int(start_timestamp.microsecond * 1000),
+                "finish_ts": finish_timestamp,
+                "finish_ns": int(finish_timestamp.microsecond * 1000),
                 "duration_ms": int(
-                    (self.timestamp - self.start_timestamp).total_seconds() * 1000
+                    (finish_timestamp - start_timestamp).total_seconds() * 1000
                 ),
                 "retention_days": 90,
             }
         ]
 
         for s in self.spans:
+            span_start_ts = datetime.utcfromtimestamp(s.start_timestamp)
+            span_finish_ts = datetime.utcfromtimestamp(s.timestamp)
             ret.append(
                 {
                     "deleted": 0,
@@ -133,12 +137,12 @@ class SpanEvent:
                     "op": s.op,
                     "description": "GET /api/0/organizations/sentry/tags/?project=1",
                     "status": 2,
-                    "start_ts": s.start_timestamp,
-                    "start_ns": int(s.start_timestamp.microsecond * 1000),
-                    "finish_ts": s.timestamp,
-                    "finish_ns": int(s.timestamp.microsecond * 1000),
+                    "start_ts": span_start_ts,
+                    "start_ns": int(span_start_ts.microsecond * 1000),
+                    "finish_ts": span_finish_ts,
+                    "finish_ns": int(span_finish_ts.microsecond * 1000),
                     "duration_ms": int(
-                        (s.timestamp - s.start_timestamp).total_seconds() * 1000
+                        (span_finish_ts - span_start_ts).total_seconds() * 1000
                     ),
                     "tags.key": ["some_tag"],
                     "tags.value": ["some_val"],
@@ -149,7 +153,7 @@ class SpanEvent:
 
 
 def test_span_process() -> None:
-    timestamp = datetime.now() - timedelta(seconds=5)
+    timestamp = datetime.now(tz=timezone.utc) - timedelta(seconds=5)
     start_timestamp = timestamp - timedelta(seconds=4)
     message = SpanEvent(
         event_id="e5e062bf2e1d4afd96fd2f90b6770431",
@@ -158,24 +162,24 @@ def test_span_process() -> None:
         parent_span_id="b76a8ca0b0908a15",
         transaction_name="/organizations/:orgId/issues/",
         op="navigation",
-        timestamp=timestamp,
-        start_timestamp=start_timestamp,
+        timestamp=timestamp.timestamp(),
+        start_timestamp=start_timestamp.timestamp(),
         spans=[
             SpanData(
                 trace_id="7400045b25c443b885914600aa83ad04",
                 span_id="b95eff64930fef25",
                 parent_span_id="8841662216cc598b",
                 op="db",
-                start_timestamp=(start_timestamp + timedelta(seconds=1)),
-                timestamp=(start_timestamp + timedelta(seconds=2)),
+                start_timestamp=(start_timestamp + timedelta(seconds=1)).timestamp(),
+                timestamp=(start_timestamp + timedelta(seconds=2)).timestamp(),
             ),
             SpanData(
                 trace_id="7400045b25c443b885914600aa83ad04",
                 span_id="9f8e7bbe7bf22e09",
                 parent_span_id="b95eff64930fef25",
                 op="web",
-                start_timestamp=(start_timestamp + timedelta(seconds=2)),
-                timestamp=(start_timestamp + timedelta(seconds=3)),
+                start_timestamp=(start_timestamp + timedelta(seconds=2)).timestamp(),
+                timestamp=(start_timestamp + timedelta(seconds=3)).timestamp(),
             ),
         ],
     )
