@@ -175,3 +175,39 @@ class TestSessionsApi(BaseApiTest):
         assert data["data"][0]["sessions_errored"] == 4
         assert data["data"][0]["users"] == 1
         assert data["data"][0]["users_errored"] == 1
+
+    def test_session_small_granularity(self):
+        self.generate_session_events()
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "sessions",
+                    "organization": 1,
+                    "project": 2,
+                    "selected_columns": [
+                        "bucketed_started",
+                        "sessions",
+                        "sessions_errored",
+                        "users",
+                        "users_errored",
+                    ],
+                    "groupby": ["bucketed_started"],
+                    "granularity": 60,
+                    "from_date": (self.started - self.skew).isoformat(),
+                    "to_date": (self.started + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+
+        # We use the same data as the testcase above, and that data is rounded to the hour.
+        # So even if we query the data with a small granularity and group by `bucketed_started`,
+        # we will receive the same data as above.
+
+        assert len(data["data"]) == 1, data
+        assert data["data"][0]["sessions"] == 10
+        assert data["data"][0]["sessions_errored"] == 4
+        assert data["data"][0]["users"] == 1
+        assert data["data"][0]["users_errored"] == 1
