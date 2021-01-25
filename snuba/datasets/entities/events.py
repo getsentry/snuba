@@ -99,6 +99,12 @@ def callback_func(
     for result in results:
         result_data = result.result.result["data"]
 
+        metrics.timing(
+            "diff_ms",
+            round((result.execution_time - primary_result.execution_time) * 1000),
+            tags={"referrer": referrer},
+        )
+
         if result_data == primary_result_data:
             metrics.increment(
                 "query_result",

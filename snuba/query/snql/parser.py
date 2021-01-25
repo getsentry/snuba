@@ -214,6 +214,12 @@ class SnQLVisitor(NodeVisitor):
             if isinstance(args[k], Node):
                 del args[k]
 
+        if "groupby" in args:
+            if "selected_columns" not in args:
+                args["selected_columns"] = []
+            args["selected_columns"] += args["groupby"]
+            args["groupby"] = map(lambda gb: gb.expression, args["groupby"])
+
         if isinstance(data_source, (CompositeQuery, LogicalQuery, JoinClause)):
             args["from_clause"] = data_source
             return CompositeQuery(**args)
@@ -222,12 +228,6 @@ class SnQLVisitor(NodeVisitor):
         if isinstance(data_source, QueryEntity):
             # TODO: How sample rate gets stored needs to be addressed in a future PR
             args["sample"] = data_source.sample
-
-        if "groupby" in args:
-            if "selected_columns" not in args:
-                args["selected_columns"] = []
-            args["selected_columns"] += args["groupby"]
-            args["groupby"] = map(lambda gb: gb.expression, args["groupby"])
 
         return LogicalQuery(**args)
 
