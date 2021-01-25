@@ -104,6 +104,8 @@ class SessionsEntity(Entity):
                 "org_id": [ConditionFunctions.EQ],
                 "project_id": [ConditionFunctions.EQ, ConditionFunctions.IN],
                 "started": [
+                    ConditionFunctions.EQ,
+                    ConditionFunctions.IN,
                     ConditionFunctions.LT,
                     ConditionFunctions.LTE,
                     ConditionFunctions.GT,

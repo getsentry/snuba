@@ -240,6 +240,8 @@ class BaseEventsEntity(Entity, ABC):
             required_conditions={
                 "project_id": [ConditionFunctions.EQ, ConditionFunctions.IN],
                 "timestamp": [
+                    ConditionFunctions.EQ,
+                    ConditionFunctions.IN,
                     ConditionFunctions.LT,
                     ConditionFunctions.LTE,
                     ConditionFunctions.GT,

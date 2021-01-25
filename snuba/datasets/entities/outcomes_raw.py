@@ -30,6 +30,8 @@ class OutcomesRawEntity(Entity):
             required_conditions={
                 "org_id": [ConditionFunctions.EQ],
                 "timestamp": [
+                    ConditionFunctions.EQ,
+                    ConditionFunctions.IN,
                     ConditionFunctions.LT,
                     ConditionFunctions.LTE,
                     ConditionFunctions.GT,

@@ -108,6 +108,8 @@ class BaseTransactionsEntity(Entity, ABC):
             required_conditions={
                 "project_id": [ConditionFunctions.EQ, ConditionFunctions.IN],
                 "finish_ts": [
+                    ConditionFunctions.EQ,
+                    ConditionFunctions.IN,
                     ConditionFunctions.LT,
                     ConditionFunctions.LTE,
                     ConditionFunctions.GT,
