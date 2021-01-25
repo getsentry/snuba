@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence, Iterator
+from typing import Mapping, Sequence
 
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToCurriedFunction,
@@ -12,6 +12,12 @@ from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.query.conditions import (
+    in_condition,
+    ConditionFunctions,
+    binary_condition,
+    BooleanFunctions,
+)
 from snuba.query.expressions import Column, FunctionCall, Literal, Expression
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
@@ -32,13 +38,13 @@ def function_column(col_name: str, function_name: str) -> ColumnToFunction:
 
 
 def function_call(col_name: str, function_name: str) -> FunctionCall:
-    return FunctionCall(None, function_name, (Column(None, None, col_name),),)
+    return FunctionCall(None, function_name, (Column(None, None, col_name),))
 
 
 def plus_columns(
     col_name: str, col_a: FunctionCall, col_b: FunctionCall
 ) -> ColumnToFunction:
-    return ColumnToFunction(None, col_name, "plus", (col_a, col_b),)
+    return ColumnToFunction(None, col_name, "plus", (col_a, col_b))
 
 
 # We have the following columns that we want to query:
@@ -101,28 +107,29 @@ lit_nil = Literal(None, NIL_UUID)
 
 
 def eq(col: Column, lit: Literal) -> FunctionCall:
-    return FunctionCall(None, "equals", (col, lit))
+    return binary_condition(ConditionFunctions.EQ, col, lit)
 
 
 def neq(col: Column, lit: Literal) -> FunctionCall:
-    return FunctionCall(None, "notEquals", (col, lit))
+    return binary_condition(ConditionFunctions.NEQ, col, lit)
 
 
 def _and(ex1: Expression, ex2: Expression) -> FunctionCall:
-    return FunctionCall(None, "and", (ex1, ex2))
+    return binary_condition(BooleanFunctions.AND, ex1, ex2)
 
 
-def _in(col: Column, args: Iterator[Literal]) -> FunctionCall:
-    return FunctionCall(None, "in", (status, FunctionCall(None, "tuple", tuple(args))))
-
-
-has_errors = FunctionCall(
-    None, "greater", (Column(None, None, "errors"), Literal(None, 0))
+# `errors > 0`
+has_errors = binary_condition(
+    ConditionFunctions.GT, Column(None, None, "errors"), Literal(None, 0)
 )
+# `distinct_id != NIL`
 did_not_nil = neq(distinct_id, lit_nil)
+# `duration != MAX AND status == 1`
 duration_condition = _and(
     neq(duration, Literal(None, MAX_UINT32)), eq(status, Literal(None, 1))
 )
+# `status IN (2,3,4)`
+terminal_status = in_condition(status, [Literal(None, status) for status in [2, 3, 4]])
 
 # These here are basically the same statements as the matview query
 sessions_raw_translators = TranslationMappers(
@@ -156,15 +163,7 @@ sessions_raw_translators = TranslationMappers(
                 FunctionCall(
                     None,
                     "sumIf",
-                    (
-                        quantity,
-                        _and(
-                            _in(
-                                status, (Literal(None, status) for status in [2, 3, 4]),
-                            ),
-                            eq(session_id, lit_nil),
-                        ),
-                    ),
+                    (quantity, _and(terminal_status, eq(session_id, lit_nil))),
                 ),
             ),
         ),
