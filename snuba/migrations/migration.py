@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod, abstractproperty
 from typing import Sequence
 
+from snuba.clusters.cluster import get_cluster
 from snuba.migrations.context import Context
-from snuba.migrations.operations import Operation
+from snuba.migrations.operations import Operation, SqlOperation
 from snuba.migrations.status import Status
 
 
@@ -36,11 +37,11 @@ class Migration(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def forwards(self, context: Context) -> None:
+    def forwards(self, context: Context, dry_run: bool) -> None:
         raise NotImplementedError
 
     @abstractmethod
-    def backwards(self, context: Context) -> None:
+    def backwards(self, context: Context, dry_run: bool) -> None:
         raise NotImplementedError
 
 
@@ -80,7 +81,11 @@ class MultiStepMigration(Migration, ABC):
     def backwards_dist(self) -> Sequence[Operation]:
         raise NotImplementedError
 
-    def forwards(self, context: Context) -> None:
+    def forwards(self, context: Context, dry_run: bool = False) -> None:
+        if dry_run:
+            self.__dry_run(self.forwards_local(), self.forwards_dist())
+            return
+
         migration_id, logger, update_status = context
         logger.info(f"Running migration: {migration_id}")
         update_status(Status.IN_PROGRESS)
@@ -91,7 +96,11 @@ class MultiStepMigration(Migration, ABC):
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
 
-    def backwards(self, context: Context) -> None:
+    def backwards(self, context: Context, dry_run: bool) -> None:
+        if dry_run:
+            self.__dry_run(self.backwards_local(), self.backwards_dist())
+            return
+
         migration_id, logger, update_status = context
         logger.info(f"Reversing migration: {migration_id}")
         update_status(Status.IN_PROGRESS)
@@ -101,3 +110,25 @@ class MultiStepMigration(Migration, ABC):
             op.execute(local=True)
         logger.info(f"Finished reversing: {migration_id}")
         update_status(Status.NOT_STARTED)
+
+    def __dry_run(
+        self,
+        local_operations: Sequence[Operation],
+        dist_operations: Sequence[Operation],
+    ) -> None:
+
+        for op in local_operations:
+            if isinstance(op, SqlOperation):
+                print(op.format_sql())
+            else:
+                print("Non SQL operation")
+
+        for op in dist_operations:
+            if isinstance(op, SqlOperation):
+                cluster = get_cluster(op._storage_set)
+
+                if not cluster.is_single_node():
+                    print(op.format_sql())
+                    break
+            else:
+                print("Non SQL operation")
