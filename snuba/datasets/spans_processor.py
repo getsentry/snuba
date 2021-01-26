@@ -23,7 +23,7 @@ metrics = MetricsWrapper(environment.metrics, "spans.processor")
 
 class SpansMessageProcessor(MessageProcessor):
     def __extract_timestamp(self, field: float) -> Tuple[datetime, int]:
-        timestamp = _ensure_valid_date(datetime.fromtimestamp(field))
+        timestamp = _ensure_valid_date(datetime.utcfromtimestamp(field))
         if timestamp is None:
             timestamp = datetime.utcnow()
         nanoseconds = int(timestamp.microsecond * 1000)
@@ -41,7 +41,7 @@ class SpansMessageProcessor(MessageProcessor):
             "project_id": event["project_id"],
             "transaction_id": str(uuid.UUID(event["event_id"])),
             "retention_days": enforce_retention(
-                event, datetime.fromtimestamp(data["timestamp"])
+                event, datetime.utcfromtimestamp(data["timestamp"])
             ),
             "transaction_span_id": int(transaction_ctx["span_id"], 16),
             "trace_id": str(uuid.UUID(transaction_ctx["trace_id"])),
