@@ -84,7 +84,11 @@ metrics = MetricsWrapper(environment.metrics, "snuplicator")
 
 
 def callback_func(
-    storage: str, query: Query, referrer: str, results: List[Result[QueryResult]]
+    storage: str,
+    query: Query,
+    request_settings: RequestSettings,
+    referrer: str,
+    results: List[Result[QueryResult]],
 ) -> None:
     if not results:
         metrics.increment(
@@ -104,6 +108,10 @@ def callback_func(
             round((result.execution_time - primary_result.execution_time) * 1000),
             tags={"referrer": referrer},
         )
+
+        # Do not bother diffing the actual results of sampled queries
+        if request_settings.get_turbo() or query.get_sample() not in [None, 1.0]:
+            return
 
         if result_data == primary_result_data:
             metrics.increment(

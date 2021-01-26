@@ -52,9 +52,9 @@ def test() -> None:
     )
 
     with cv:
+        request_settings = HTTPRequestSettings()
         delegator.build_execution_pipeline(
-            Request("", query_body, query, HTTPRequestSettings(), "ref",),
-            mock_query_runner,
+            Request("", query_body, query, request_settings, "ref",), mock_query_runner,
         ).execute()
         cv.wait(timeout=5)
 
@@ -62,6 +62,7 @@ def test() -> None:
 
     assert mock_callback.call_args == call(
         query,
+        request_settings,
         "ref",
         [Result("events", query_result, ANY), Result("errors", query_result, ANY)],
     )
