@@ -11,7 +11,6 @@ from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-from snuba.query.conditions import ConditionFunctions
 from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, JoinType
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
@@ -69,9 +68,8 @@ class SpansEntity(Entity):
                 )
             },
             writable_storage=storage,
-            required_conditions={
-                "project_id": [ConditionFunctions.EQ, ConditionFunctions.IN],
-            },
+            required_filter_columns=["project_id"],
+            required_time_column=None,
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

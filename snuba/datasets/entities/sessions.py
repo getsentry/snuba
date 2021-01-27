@@ -11,7 +11,6 @@ from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
-from snuba.query.conditions import ConditionFunctions
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
@@ -100,18 +99,8 @@ class SessionsEntity(Entity):
             abstract_column_set=read_schema.get_columns(),
             join_relationships={},
             writable_storage=writable_storage,
-            required_conditions={
-                "org_id": [ConditionFunctions.EQ],
-                "project_id": [ConditionFunctions.EQ, ConditionFunctions.IN],
-                "started": [
-                    ConditionFunctions.EQ,
-                    ConditionFunctions.IN,
-                    ConditionFunctions.LT,
-                    ConditionFunctions.LTE,
-                    ConditionFunctions.GT,
-                    ConditionFunctions.GTE,
-                ],
-            },
+            required_filter_columns=["org_id", "project_id"],
+            required_time_column="started",
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

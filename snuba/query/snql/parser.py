@@ -29,7 +29,6 @@ from snuba.query.conditions import (
     binary_condition,
     combine_and_conditions,
     combine_or_conditions,
-    get_first_level_and_conditions,
 )
 from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
@@ -872,41 +871,15 @@ def _mangle_query_aliases(
         query.transform_expressions(mangle_column_value)
 
 
-def _check_conditions_for_columns(
-    key: EntityKey, condition: Optional[Expression], table_name: str = "",
-) -> None:
-    entity = get_entity(key)
-    required = entity.get_required_conditions()
-    if not required:
-        return
-    elif condition is None:
-        raise ParsingException(
-            f"{key} requires conditions on {', '.join([r for r in required])}"
-        )
-    else:
-        conditions = get_first_level_and_conditions(condition)
-        seen = {r: False for r in required}
-        for condition in conditions:
-            if isinstance(condition, FunctionCall) and condition.parameters:
-                param = condition.parameters[0]
-                if isinstance(param, Column) and seen.get(param.column_name) == False:
-                    if not table_name or param.table_name == table_name:
-                        allowed_ops = required[param.column_name]
-                        if condition.function_name in allowed_ops:
-                            seen[param.column_name] = True
-
-        if not all(seen.values()):
-            raise ParsingException(
-                f"{key} requires conditions on {', '.join([r for r in required])}"
-            )
-
-
 def _validate_required_conditions(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
 ) -> None:
     if isinstance(query, LogicalQuery):
-        condition = query.get_condition_from_ast()
-        _check_conditions_for_columns(query.get_from_clause().key, condition)
+        entity = get_entity(query.get_from_clause().key)
+        if not entity.validate_required_conditions(query):
+            raise ParsingException(
+                f"{query.get_from_clause().key} is missing required conditions"
+            )
     else:
         from_clause = query.get_from_clause()
         if isinstance(from_clause, (LogicalQuery, CompositeQuery)):
@@ -914,10 +887,13 @@ def _validate_required_conditions(
 
         assert isinstance(from_clause, JoinClause)  # mypy
         alias_map = from_clause.get_alias_node_map()
-        condition = query.get_condition_from_ast()
         for alias, node in alias_map.items():
             assert isinstance(node.data_source, QueryEntity)  # mypy
-            _check_conditions_for_columns(node.data_source.key, condition, alias)
+            entity = get_entity(node.data_source.key)
+            if not entity.validate_required_conditions(query, alias):
+                raise ParsingException(
+                    f"{node.data_source.key} is missing required conditions"
+                )
 
 
 def _post_process(
@@ -931,6 +907,7 @@ def _post_process(
         from_clause = query.get_from_clause()
         if isinstance(from_clause, (LogicalQuery, CompositeQuery)):
             _post_process(from_clause, funcs)
+            query.set_from_clause(from_clause)
 
 
 def parse_snql_query(
@@ -950,8 +927,9 @@ def parse_snql_query(
             _mangle_query_aliases,
             _array_join_transformation,
             _qualify_columns,
-            _validate_required_conditions,
         ],
     )
 
+    # Validating
+    _post_process(query, [_validate_required_conditions])
     return query

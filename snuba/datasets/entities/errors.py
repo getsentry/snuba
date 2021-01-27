@@ -7,7 +7,6 @@ from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors_common import promoted_tag_columns
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.query.conditions import ConditionFunctions
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
@@ -41,17 +40,8 @@ class ErrorsEntity(Entity):
             abstract_column_set=columns,
             join_relationships={},
             writable_storage=storage,
-            required_conditions={
-                "project_id": [ConditionFunctions.EQ, ConditionFunctions.IN],
-                "timestamp": [
-                    ConditionFunctions.EQ,
-                    ConditionFunctions.IN,
-                    ConditionFunctions.LT,
-                    ConditionFunctions.LTE,
-                    ConditionFunctions.GT,
-                    ConditionFunctions.GTE,
-                ],
-            },
+            required_filter_columns=["project_id"],
+            required_time_column="timestamp",
         )
 
     def _get_promoted_columns(self) -> Mapping[str, FrozenSet[str]]:
