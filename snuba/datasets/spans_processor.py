@@ -125,7 +125,6 @@ class SpansMessageProcessor(MessageProcessor):
             "transaction:parent_span_id", transaction_ctx.get("parent_span_id"), True
         )
 
-        processed["description"] = _unicodify(data.get("transaction") or "")
         processed["op"] = _unicodify(transaction_ctx.get("op") or "")
         status = transaction_ctx.get("status", None)
         self.__fill_status(processed, status)
@@ -144,7 +143,6 @@ class SpansMessageProcessor(MessageProcessor):
                 "span:parent_span_id", span.get("parent_span_id"), True
             )
 
-            processed["description"] = span.get("description", "") or ""
             processed["op"] = span["op"]
             tags = _as_dict_safe(span.get("tags", None))
             processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
