@@ -2,7 +2,10 @@ from abc import ABC, abstractmethod
 from typing import Callable, Optional, Sequence
 
 from snuba.clickhouse.columns import Column
-from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
+from snuba.clusters.cluster import (
+    ClickhouseClientSettings,
+    get_cluster,
+)
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.columns import MigrationModifiers
 from snuba.migrations.table_engines import TableEngine
@@ -21,6 +24,10 @@ class Operation(ABC):
 class SqlOperation(Operation, ABC):
     def __init__(self, storage_set: StorageSetKey):
         self._storage_set = storage_set
+
+    @property
+    def storage_set(self) -> StorageSetKey:
+        return self._storage_set
 
     def execute(self, local: bool) -> None:
         cluster = get_cluster(self._storage_set)
