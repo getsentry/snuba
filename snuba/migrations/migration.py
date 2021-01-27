@@ -117,11 +117,21 @@ class MultiStepMigration(Migration, ABC):
         dist_operations: Sequence[Operation],
     ) -> None:
 
+        print("Local operations:")
+        if len(local_operations) == 0:
+            print("n/a")
+
         for op in local_operations:
             if isinstance(op, SqlOperation):
                 print(op.format_sql())
             else:
                 print("Non SQL operation")
+
+        print("\n")
+        print("Dist operations:")
+
+        if len(dist_operations) == 0:
+            print("n/a")
 
         for op in dist_operations:
             if isinstance(op, SqlOperation):
@@ -129,6 +139,7 @@ class MultiStepMigration(Migration, ABC):
 
                 if not cluster.is_single_node():
                     print(op.format_sql())
-                    break
+                else:
+                    print("Skipped dist operation - single node cluster")
             else:
                 print("Non SQL operation")
