@@ -24,14 +24,14 @@ GROUPS_ASSIGNEE = ColumnSet([("id", UInt(32)), ("user", String())])
 
 
 def test_entity_node() -> None:
-    e = Entity(key=EntityKey.ERRORS, schema=ERRORS_SCHEMA)
+    e = Entity(key=EntityKey.EVENTS, schema=ERRORS_SCHEMA)
     node = IndividualNode(alias="err", data_source=e)
 
     assert node.get_column_sets() == {"err": e.schema}
 
 
 def test_simple_join() -> None:
-    e = Entity(key=EntityKey.ERRORS, schema=ERRORS_SCHEMA)
+    e = Entity(key=EntityKey.EVENTS, schema=ERRORS_SCHEMA)
     node_err = IndividualNode(alias="err", data_source=e)
 
     g = Entity(key=EntityKey.GROUPEDMESSAGES, schema=GROUPS_SCHEMA)
@@ -73,7 +73,7 @@ def test_simple_join() -> None:
 
 
 def test_complex_joins() -> None:
-    e = Entity(key=EntityKey.ERRORS, schema=ERRORS_SCHEMA)
+    e = Entity(key=EntityKey.EVENTS, schema=ERRORS_SCHEMA)
     node_err = IndividualNode(alias="err", data_source=e)
 
     g = Entity(key=EntityKey.GROUPEDMESSAGES, schema=GROUPS_SCHEMA)

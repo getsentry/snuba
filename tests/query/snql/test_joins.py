@@ -51,25 +51,25 @@ test_cases = [
         id="simple",
     ),
     pytest.param(
-        [("ev:events", "t:transactions"), ("t:transactions", "er:errors")],
-        join_clause("t", join_clause("ev", "events", "t:transactions"), "er:errors"),
+        [("ev:events", "t:transactions"), ("t:transactions", "d:discover")],
+        join_clause("t", join_clause("ev", "events", "t:transactions"), "d:discover"),
         id="depth=2",
     ),
     pytest.param(
-        [("t:transactions", "er:errors"), ("ev:events", "t:transactions")],
-        join_clause("t", join_clause("ev", "events", "t:transactions"), "er:errors"),
+        [("t:transactions", "d:discover"), ("ev:events", "t:transactions")],
+        join_clause("t", join_clause("ev", "events", "t:transactions"), "d:discover"),
         id="depth=2 bottom-up",
     ),
     pytest.param(
         [
             ("ev:events", "t:transactions"),
-            ("t:transactions", "er:errors"),
-            ("er:errors", "or:outcomes_raw"),
+            ("t:transactions", "d:discover"),
+            ("d:discover", "or:outcomes_raw"),
         ],
         join_clause(
-            "er",
+            "d",
             join_clause(
-                "t", join_clause("ev", "events", "t:transactions"), "er:errors"
+                "t", join_clause("ev", "events", "t:transactions"), "d:discover"
             ),
             "or:outcomes_raw",
         ),
@@ -77,14 +77,14 @@ test_cases = [
     ),
     pytest.param(
         [
-            ("er:errors", "or:outcomes_raw"),
-            ("t:transactions", "er:errors"),
+            ("d:discover", "or:outcomes_raw"),
+            ("t:transactions", "d:discover"),
             ("ev:events", "t:transactions"),
         ],
         join_clause(
-            "er",
+            "d",
             join_clause(
-                "t", join_clause("ev", "events", "t:transactions"), "er:errors"
+                "t", join_clause("ev", "events", "t:transactions"), "d:discover"
             ),
             "or:outcomes_raw",
         ),
@@ -92,34 +92,34 @@ test_cases = [
     ),
     pytest.param(
         [
-            ("er:errors", "or:outcomes_raw"),
+            ("d:discover", "or:outcomes_raw"),
             ("ev:events", "t:transactions"),
-            ("t:transactions", "er:errors"),
+            ("t:transactions", "d:discover"),
         ],
         join_clause(
-            "er",
+            "d",
             join_clause(
-                "t", join_clause("ev", "events", "t:transactions"), "er:errors"
+                "t", join_clause("ev", "events", "t:transactions"), "d:discover"
             ),
             "or:outcomes_raw",
         ),
         id="depth=3 orphan",
     ),
     pytest.param(
-        [("ev:events", "t:transactions"), ("ev:events", "er:errors")],
-        join_clause("ev", join_clause("ev", "events", "er:errors"), "t:transactions"),
+        [("ev:events", "t:transactions"), ("ev:events", "d:discover")],
+        join_clause("ev", join_clause("ev", "events", "d:discover"), "t:transactions"),
         id="breadth=2",
     ),
     pytest.param(
         [
             ("ev:events", "t:transactions"),
-            ("ev:events", "er:errors"),
+            ("ev:events", "d:discover"),
             ("ev:events", "or:outcomes_raw"),
         ],
         join_clause(
             "ev",
             join_clause(
-                "ev", join_clause("ev", "events", "or:outcomes_raw"), "er:errors"
+                "ev", join_clause("ev", "events", "or:outcomes_raw"), "d:discover"
             ),
             "t:transactions",
         ),
@@ -128,7 +128,7 @@ test_cases = [
     pytest.param(
         [
             ("ev:events", "t:transactions"),
-            ("t:transactions", "er:errors"),
+            ("t:transactions", "d:discover"),
             ("ev:events", "or:outcomes_raw"),
             ("or:outcomes_raw", "de:discover_events"),
         ],
@@ -143,13 +143,13 @@ test_cases = [
                 ),
                 "t:transactions",
             ),
-            "er:errors",
+            "d:discover",
         ),
         id="depth=2 breadth=2",
     ),
     pytest.param(
         [
-            ("t:transactions", "er:errors"),
+            ("t:transactions", "d:discover"),
             ("or:outcomes_raw", "de:discover_events"),
             ("ev:events", "t:transactions"),
             ("ev:events", "or:outcomes_raw"),
@@ -165,20 +165,20 @@ test_cases = [
                 ),
                 "t:transactions",
             ),
-            "er:errors",
+            "d:discover",
         ),
         id="depth=2 breadth=2",
     ),
     pytest.param(
         [
             ("ev:events", "t:transactions"),
-            ("t:transactions", "er:errors"),
-            ("er:errors", "ev:events"),
+            ("t:transactions", "d:discover"),
+            ("d:discover", "ev:events"),
         ],
         join_clause(
-            "er",
+            "d",
             join_clause(
-                "t", join_clause("ev", "events", "t:transactions"), "er:errors"
+                "t", join_clause("ev", "events", "t:transactions"), "d:discover"
             ),
             "ev:events",
         ),
@@ -186,14 +186,14 @@ test_cases = [
     ),
     pytest.param(
         [
-            ("er:errors", "ev:events"),
-            ("t:transactions", "er:errors"),
+            ("d:discover", "ev:events"),
+            ("t:transactions", "d:discover"),
             ("ev:events", "t:transactions"),
         ],
         join_clause(
             "ev",
             join_clause(
-                "er", join_clause("t", "transactions", "er:errors"), "ev:events"
+                "d", join_clause("t", "transactions", "d:discover"), "ev:events"
             ),
             "t:transactions",
         ),
