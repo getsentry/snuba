@@ -99,6 +99,8 @@ class SessionsEntity(Entity):
             abstract_column_set=read_schema.get_columns(),
             join_relationships={},
             writable_storage=writable_storage,
+            required_filter_columns=["org_id", "project_id"],
+            required_time_column="started",
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

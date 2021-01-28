@@ -33,9 +33,9 @@ class TestSnQLApi(BaseApiTest):
             "/discover/snql",
             data=json.dumps(
                 {
-                    "query": """MATCH (discover_events )
+                    "query": f"""MATCH (discover_events )
                     SELECT count() AS count BY project_id, tags[custom_tag]
-                    WHERE type != 'transaction' AND project_id = 70156
+                    WHERE type != 'transaction' AND project_id = {self.project_id} AND timestamp >= toDateTime('2021-01-01')
                     ORDER BY count ASC
                     LIMIT 1000""",
                     "turbo": False,
@@ -60,8 +60,10 @@ class TestSnQLApi(BaseApiTest):
             "/discover/snql",
             data=json.dumps(
                 {
-                    "query": """MATCH (s: spans) -[contained]-> (t: transactions)
-                    SELECT s.op, avg(s.duration_ms) AS avg BY s.op""",
+                    "query": f"""MATCH (s: spans) -[contained]-> (t: transactions)
+                    SELECT s.op, avg(s.duration_ms) AS avg BY s.op
+                    WHERE s.project_id = {self.project_id}
+                    AND t.project_id = {self.project_id} AND t.finish_ts >= toDateTime('2021-01-01')""",
                     "turbo": False,
                     "consistent": False,
                     "debug": True,

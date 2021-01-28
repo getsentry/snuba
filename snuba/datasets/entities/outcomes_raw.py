@@ -26,6 +26,8 @@ class OutcomesRawEntity(Entity):
             abstract_column_set=storage.get_schema().get_columns(),
             join_relationships={},
             writable_storage=None,
+            required_filter_columns=["org_id"],
+            required_time_column="timestamp",
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

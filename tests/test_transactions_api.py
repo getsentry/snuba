@@ -354,6 +354,8 @@ class TestTransactionsApi(BaseApiTest):
                     "aggregations": [["apdex(duration, 300)", "", "apdex_score"]],
                     "orderby": "transaction_name",
                     "groupby": ["transaction_name", "duration"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -380,6 +382,8 @@ class TestTransactionsApi(BaseApiTest):
                     "aggregations": [["failure_rate()", "", "error_percentage"]],
                     "orderby": "transaction_name",
                     "groupby": ["transaction_name", "duration"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -407,6 +411,8 @@ class TestTransactionsApi(BaseApiTest):
                         "measurements[asd]",
                     ],
                     "limit": 1,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -431,6 +437,8 @@ class TestTransactionsApi(BaseApiTest):
                     ],
                     "limit": 4,
                     "orderby": ["event_id", "key"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -457,6 +465,8 @@ class TestTransactionsApi(BaseApiTest):
                     "conditions": [["transaction", "LIKE", "stuff \\\" ' \\' stuff"]],
                     "limit": 4,
                     "orderby": ["event_id"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )

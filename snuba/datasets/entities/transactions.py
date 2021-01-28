@@ -104,6 +104,8 @@ class BaseTransactionsEntity(Entity, ABC):
                 )
             },
             writable_storage=storage,
+            required_filter_columns=["project_id"],
+            required_time_column="finish_ts",
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
