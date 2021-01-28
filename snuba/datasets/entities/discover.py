@@ -451,6 +451,8 @@ class DiscoverEntity(Entity):
             ),
             join_relationships={},
             writable_storage=None,
+            required_filter_columns=["project_id"],
+            required_time_column="timestamp",
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:

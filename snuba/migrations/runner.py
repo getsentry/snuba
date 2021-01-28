@@ -28,6 +28,12 @@ LOCAL_TABLE_NAME = "migrations_local"
 DIST_TABLE_NAME = "migrations_dist"
 
 
+def assert_single_node() -> None:
+    assert all(
+        cluster.is_single_node() for cluster in CLUSTERS
+    ), "Cannot run migrations for multi node clusters"
+
+
 class MigrationKey(NamedTuple):
     group: MigrationGroup
     migration_id: str
@@ -44,10 +50,6 @@ class MigrationDetails(NamedTuple):
 
 class Runner:
     def __init__(self) -> None:
-        assert all(
-            cluster.is_single_node() for cluster in CLUSTERS
-        ), "Cannot run migrations for multi node clusters"
-
         migrations_cluster = get_cluster(StorageSetKey.MIGRATIONS)
         self.__table_name = (
             LOCAL_TABLE_NAME if migrations_cluster.is_single_node() else DIST_TABLE_NAME
@@ -129,6 +131,8 @@ class Runner:
 
         Requires force to run blocking migrations.
         """
+        assert_single_node()
+
         pending_migrations = self._get_pending_migrations()
 
         # Do not run migrations if any are blocking
@@ -144,19 +148,31 @@ class Runner:
             self._run_migration_impl(migration_key, force=force)
 
     def run_migration(
-        self, migration_key: MigrationKey, *, force: bool = False, fake: bool = False,
+        self,
+        migration_key: MigrationKey,
+        *,
+        force: bool = False,
+        fake: bool = False,
+        dry_run: bool = False,
     ) -> None:
         """
         Run a single migration given its migration key and marks the migration as complete.
 
         Blocking migrations must be run with force.
         """
+        if not dry_run:
+            assert_single_node()
+
         migration_group, migration_id = migration_key
 
         group_migrations = get_group_loader(migration_group).get_migrations()
 
         if migration_id not in group_migrations:
             raise MigrationError("Could not find migration in group")
+
+        if dry_run:
+            self._run_migration_impl(migration_key, dry_run=True)
+            return
 
         migration_status = self._get_migration_status()
 
@@ -177,7 +193,7 @@ class Runner:
             self._run_migration_impl(migration_key, force=force)
 
     def _run_migration_impl(
-        self, migration_key: MigrationKey, *, force: bool = False
+        self, migration_key: MigrationKey, *, force: bool = False, dry_run: bool = False
     ) -> None:
         migration_id = migration_key.migration_id
 
@@ -189,20 +205,32 @@ class Runner:
         if migration.blocking and not force:
             raise MigrationError("Blocking migrations must be run with force")
 
-        migration.forwards(context)
+        migration.forwards(context, dry_run)
 
     def reverse_migration(
-        self, migration_key: MigrationKey, *, force: bool = False, fake: bool = False,
+        self,
+        migration_key: MigrationKey,
+        *,
+        force: bool = False,
+        fake: bool = False,
+        dry_run: bool = False,
     ) -> None:
         """
         Reverses a migration.
         """
+        if not dry_run:
+            assert_single_node()
+
         migration_group, migration_id = migration_key
 
         group_migrations = get_group_loader(migration_group).get_migrations()
 
         if migration_id not in group_migrations:
             raise MigrationError("Invalid migration")
+
+        if dry_run:
+            self._reverse_migration_impl(migration_key, dry_run=True)
+            return
 
         migration_status = self._get_migration_status()
 
@@ -224,16 +252,19 @@ class Runner:
         if fake:
             self._update_migration_status(migration_key, Status.NOT_STARTED)
         else:
-            context = Context(
-                migration_id,
-                logger,
-                partial(self._update_migration_status, migration_key),
-            )
-            migration = get_group_loader(migration_key.group).load_migration(
-                migration_id
-            )
+            self._reverse_migration_impl(migration_key)
 
-            migration.backwards(context)
+    def _reverse_migration_impl(
+        self, migration_key: MigrationKey, *, dry_run: bool = False
+    ) -> None:
+        migration_id = migration_key.migration_id
+
+        context = Context(
+            migration_id, logger, partial(self._update_migration_status, migration_key),
+        )
+        migration = get_group_loader(migration_key.group).load_migration(migration_id)
+
+        migration.backwards(context, dry_run)
 
     def _get_pending_migrations(self) -> List[MigrationKey]:
         """
