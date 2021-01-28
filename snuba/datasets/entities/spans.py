@@ -68,6 +68,8 @@ class SpansEntity(Entity):
                 )
             },
             writable_storage=storage,
+            required_filter_columns=["project_id"],
+            required_time_column=None,
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

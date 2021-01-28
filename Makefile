@@ -10,5 +10,7 @@ setup-git:
 test:
 	SNUBA_SETTINGS=test pytest -vv
 
+tests: test
+
 install-python-dependencies:
 	pip install -e .

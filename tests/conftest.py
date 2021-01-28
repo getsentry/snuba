@@ -6,6 +6,8 @@ import pytest
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
@@ -156,14 +158,25 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
             conditions.append(f"project_id={project}")
         elif isinstance(project, list):
             project = ",".join(map(str, project))
-            conditions.append(f"project_id IN {project}")
+            conditions.append(f"project_id IN tuple({project})")
 
         organization = legacy.get("organization")
         if isinstance(organization, int):
             conditions.append(f"org_id={organization}")
         elif isinstance(organization, list):
             organization = ",".join(organization)
-            conditions.append(f"org_id IN {organization}")
+            conditions.append(f"org_id IN tuple({organization})")
+
+        # Hack to help keep legacy in step with the validation SnQL requires
+        main_entity = get_entity(EntityKey(entity))
+        if main_entity._required_time_column:
+            time_cols = (("from_date", ">="), ("to_date", "<"))
+            for col, op in time_cols:
+                date_val = legacy.get(col)
+                if date_val:
+                    conditions.append(
+                        f"{main_entity._required_time_column} {op} toDateTime('{date_val}')"
+                    )
 
         conditions_str = " AND ".join(conditions)
         where_clause = f"WHERE {conditions_str}" if conditions_str else ""
