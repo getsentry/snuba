@@ -19,6 +19,7 @@ class TestSnQLApi(BaseApiTest):
         self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
         self.event = get_raw_event()
         self.project_id = self.event["project_id"]
+        self.org_id = self.event["organization_id"]
         self.skew = timedelta(minutes=180)
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
@@ -54,6 +55,29 @@ class TestSnQLApi(BaseApiTest):
                 "project_id": self.project_id,
             }
         ]
+
+    def test_sessions_query(self) -> None:
+        response = self.app.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "dataset": "sessions",
+                    "query": f"""MATCH (sessions)
+                    SELECT project_id, release BY release, project_id
+                    WHERE project_id IN array({self.project_id})
+                    AND project_id IN array({self.project_id})
+                    AND org_id = {self.org_id}
+                    AND started > toDateTime('2021-01-01T17:05:59.554860')
+                    AND started <= toDateTime('2022-01-01T17:06:00.554981')
+                    ORDER BY sessions DESC
+                    LIMIT 100 OFFSET 0""",
+                }
+            ),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data["data"] == []
 
     def test_join_query(self) -> None:
         response = self.app.post(

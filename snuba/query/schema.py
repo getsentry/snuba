@@ -18,7 +18,7 @@ BINARY_OPERATORS = [o for o in CONDITION_OPERATORS if o not in UNARY_OPERATORS]
 
 SNQL_QUERY_SCHEMA = {
     "type": "object",
-    "properties": {"query": {"type": "string"}},
+    "properties": {"query": {"type": "string"}, "dataset": {"type": "string"}},
     "additionalProperties": False,
 }
 
