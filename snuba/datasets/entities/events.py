@@ -244,6 +244,8 @@ class BaseEventsEntity(Entity, ABC):
             abstract_column_set=columns,
             join_relationships={},
             writable_storage=storage,
+            required_filter_columns=["project_id"],
+            required_time_column="timestamp",
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

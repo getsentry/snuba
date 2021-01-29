@@ -68,7 +68,7 @@ class Migration(migration.Migration):
             )
         ]
 
-    def forwards(self, context: Context) -> None:
+    def forwards(self, context: Context, dry_run: bool) -> None:
         migration_id, logger, update_status = context
         logger.info(f"Running migration: {migration_id}")
         for op in self.__forwards_local():
@@ -78,7 +78,7 @@ class Migration(migration.Migration):
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
 
-    def backwards(self, context: Context) -> None:
+    def backwards(self, context: Context, dry_run: bool) -> None:
         migration_id, logger, update_status = context
         logger.info(f"Reversing migration: {migration_id}")
         update_status(Status.IN_PROGRESS)

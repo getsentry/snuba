@@ -307,6 +307,11 @@ class FunctionCall(Pattern[FunctionCallExpr]):
     # must match one by one the ones of the Pattern thus the two tuples
     # must have the same length.
     with_optionals: bool = False
+    # Specifies a type that all the parameters in a function must be.
+    # If it is set, then it will iterate through the parameters and
+    # check them against the type. If this is set, it's not necessary
+    # to also specify the parameters field.
+    all_parameters: Optional[Pattern[TMatchedType]] = None
 
     def match(self, node: AnyType) -> Optional[MatchResult]:
         if not isinstance(node, FunctionCallExpr):
@@ -334,6 +339,11 @@ class FunctionCall(Pattern[FunctionCallExpr]):
                     return None
                 else:
                     result = result.merge(p_result)
+
+        if self.all_parameters:
+            for p in node.parameters:
+                if not self.all_parameters.match(p):
+                    return None
 
         return result
 
