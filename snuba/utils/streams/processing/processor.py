@@ -15,6 +15,8 @@ from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 logger = logging.getLogger(__name__)
 
+LOG_THRESHOLD_TIME = 10  # In seconds
+
 
 class InvalidStateError(RuntimeError):
     pass
@@ -50,6 +52,7 @@ class StreamProcessor(Generic[TPayload]):
         # If the consumer is in the paused state, this is when the last call to
         # ``pause`` occurred.
         self.__paused_timestamp: Optional[float] = None
+        self.__last_log_timestamp: Optional[float] = None
 
         self.__shutdown_requested = False
 
@@ -157,6 +160,26 @@ class StreamProcessor(Generic[TPayload]):
                         )
                         self.__consumer.pause([*self.__consumer.tell().keys()])
                         self.__paused_timestamp = time.time()
+                    else:
+                        # Log paused condition every 5 seconds at most
+                        current_time = time.time()
+                        if self.__last_log_timestamp:
+                            paused_duration: Optional[
+                                float
+                            ] = current_time - self.__last_log_timestamp
+                        elif self.__paused_timestamp:
+                            paused_duration = current_time - self.__paused_timestamp
+                        else:
+                            paused_duration = None
+
+                        if (
+                            paused_duration is not None
+                            and paused_duration > LOG_THRESHOLD_TIME
+                        ):
+                            self.__last_log_timestamp = current_time
+                            logger.info(
+                                "Paused for longer than %d seconds", LOG_THRESHOLD_TIME
+                            )
                 else:
                     # If we were trying to submit a message that failed to be
                     # submitted on a previous run, we can resume accepting new
@@ -165,6 +188,7 @@ class StreamProcessor(Generic[TPayload]):
                         assert self.__paused_timestamp is not None
                         paused_duration = time.time() - self.__paused_timestamp
                         self.__paused_timestamp = None
+                        self.__last_log_timestamp = None
                         logger.debug(
                             "Successfully submitted %r, resuming consumer after %0.4f seconds...",
                             self.__message,
