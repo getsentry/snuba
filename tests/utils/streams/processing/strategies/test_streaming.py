@@ -20,6 +20,7 @@ from snuba.utils.streams.processing.strategies.streaming.transform import (
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.assertions import assert_changes, assert_does_not_change
 from tests.backends.metrics import Gauge as GaugeCall
+from tests.backends.metrics import Timing as TimingCall
 from tests.backends.metrics import TestingMetricsBackend
 
 
@@ -239,8 +240,13 @@ def test_parallel_transform_step() -> None:
         lambda: metrics.calls,
         [],
         [
-            GaugeCall("batches_in_progress", value, tags=None)
-            for value in [0.0, 1.0, 2.0]
+            GaugeCall("batches_in_progress", 0.0, tags=None),
+            GaugeCall("batches_in_progress", 1.0, tags=None),
+            TimingCall("batch.size.msg", 3, None),
+            TimingCall("batch.size.bytes", 4000, None),
+            GaugeCall("batches_in_progress", 2.0, tags=None),
+            TimingCall("batch.size.msg", 1, None),
+            TimingCall("batch.size.bytes", 2000, None),
         ],
     ):
         transform_step = ParallelTransformStep(

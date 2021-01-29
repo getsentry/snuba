@@ -390,10 +390,10 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
                     current_time = time.time()
                     if current_time - self.__pool_waiting_time > LOG_THRESHOLD_TIME:
                         logger.warning(
-                            "Waited on the process pool longer than %d seconds. Waiting for %d results. Pool %r",
+                            "Waited on the process pool longer than %d seconds. Waiting for %d results. Active processes %d.",
                             LOG_THRESHOLD_TIME,
                             len(self.__results),
-                            self.__pool,
+                            multiprocessing.active_children(),
                         )
                         self.__pool_waiting_time = current_time
                 break
