@@ -75,6 +75,9 @@ logger = logging.getLogger(__name__)
     "--output-block-size", type=int, default=int(32 * 1e6),
 )
 @click.option("--log-level")
+@click.option(
+    "--no-writer", is_flag=True,
+)
 def multistorage_consumer(
     storage_names: Sequence[str],
     consumer_group: str,
@@ -87,6 +90,7 @@ def multistorage_consumer(
     input_block_size: int,
     output_block_size: int,
     log_level: Optional[str] = None,
+    no_writer: bool = False,
 ) -> None:
 
     setup_logging(log_level)
@@ -187,6 +191,7 @@ def multistorage_consumer(
             input_block_size=input_block_size,
             output_block_size=output_block_size,
             metrics=metrics,
+            no_writer=no_writer,
         ),
         metrics=metrics,
     )

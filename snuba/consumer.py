@@ -1,6 +1,7 @@
 import functools
 import itertools
 import logging
+import random
 import time
 from datetime import datetime
 from pickle import PickleBuffer
@@ -23,11 +24,7 @@ from snuba.clickhouse.http import JSONRow, JSONRowEncoder
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.processor import (
-    InsertBatch,
-    MessageProcessor,
-    ReplacementBatch,
-)
+from snuba.processor import InsertBatch, MessageProcessor, ReplacementBatch
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams import Message, Partition, Topic
@@ -35,13 +32,11 @@ from snuba.utils.streams.backends.kafka import (
     KafkaPayload,
     build_kafka_producer_configuration,
 )
-from snuba.utils.streams.processing.strategies import (
-    ProcessingStrategy,
-    ProcessingStrategyFactory,
-)
+from snuba.utils.streams.processing.strategies import ProcessingStrategy
 from snuba.utils.streams.processing.strategies import (
     ProcessingStrategy as ProcessingStep,
 )
+from snuba.utils.streams.processing.strategies import ProcessingStrategyFactory
 from snuba.utils.streams.processing.strategies.streaming import (
     CollectStep,
     FilterStep,
@@ -49,7 +44,6 @@ from snuba.utils.streams.processing.strategies.streaming import (
     TransformStep,
 )
 from snuba.writer import BatchWriter
-
 
 logger = logging.getLogger("snuba.consumer")
 
@@ -181,7 +175,7 @@ class ProcessedMessageBatchWriter(
 ):
     def __init__(
         self,
-        insert_batch_writer: InsertBatchWriter,
+        insert_batch_writer: ProcessingStep[JSONRowInsertBatch],
         replacement_batch_writer: Optional[ReplacementBatchWriter] = None,
     ) -> None:
         self.__insert_batch_writer = insert_batch_writer
@@ -475,6 +469,44 @@ def process_message_multistorage(
     return results
 
 
+class DevNullBatchWriter(ProcessingStep[JSONRowInsertBatch]):
+    def __init__(self, metrics: MetricsBackend) -> None:
+        self.__metrics = metrics
+
+        self.__messages: MutableSequence[Message[JSONRowInsertBatch]] = []
+        self.__closed = False
+
+    def poll(self) -> None:
+        pass
+
+    def submit(self, message: Message[JSONRowInsertBatch]) -> None:
+        assert not self.__closed
+
+        self.__messages.append(message)
+
+    def close(self) -> None:
+        self.__closed = True
+
+        if not self.__messages:
+            return
+
+        write_start = time.time()
+        time.sleep(2 + random.random() - 0.5)
+        write_finish = time.time()
+
+        logger.debug(
+            "Waited %0.4f seconds for %r rows to be ignored.",
+            write_finish - write_start,
+            sum(len(message.payload.rows) for message in self.__messages),
+        )
+
+    def terminate(self) -> None:
+        self.__closed = True
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        pass
+
+
 class MultistorageConsumerProcessingStrategyFactory(
     ProcessingStrategyFactory[KafkaPayload]
 ):
@@ -487,6 +519,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         input_block_size: int,
         output_block_size: int,
         metrics: MetricsBackend,
+        no_writer: bool = False,
     ):
         self.__storages = storages
         self.__max_batch_size = max_batch_size
@@ -495,6 +528,10 @@ class MultistorageConsumerProcessingStrategyFactory(
         self.__input_block_size = input_block_size
         self.__output_block_size = output_block_size
         self.__metrics = metrics
+        # If True, this won't write anything to Clickhouse
+        # this is meant to be used to try to reproduct issues
+        # on production traffic.
+        self.__no_writer = no_writer
 
     def __find_destination_storages(
         self, message: Message[KafkaPayload]
@@ -545,8 +582,10 @@ class MultistorageConsumerProcessingStrategyFactory(
                     {"load_balancing": "in_order", "insert_distributed_sync": 1},
                 ),
                 self.__metrics,
-            ),
-            replacement_batch_writer,
+            )
+            if not self.__no_writer
+            else DevNullBatchWriter(self.__metrics),
+            replacement_batch_writer if not self.__no_writer else None,
         )
 
     def __build_collector(
