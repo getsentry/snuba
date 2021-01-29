@@ -529,7 +529,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         self.__output_block_size = output_block_size
         self.__metrics = metrics
         # If True, this won't write anything to Clickhouse
-        # this is meant to be used to try to reproduct issues
+        # this is meant to be used to try to reproduce issues
         # on production traffic.
         self.__no_writer = no_writer
 
