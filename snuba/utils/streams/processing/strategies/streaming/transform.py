@@ -393,7 +393,7 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
                             "Waited on the process pool longer than %d seconds. Waiting for %d results. Active processes %d.",
                             LOG_THRESHOLD_TIME,
                             len(self.__results),
-                            multiprocessing.active_children(),
+                            len(multiprocessing.active_children()),
                         )
                         self.__pool_waiting_time = current_time
                 break
