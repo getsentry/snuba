@@ -1,0 +1,34 @@
+name: migrations
+on:
+  pull_request:
+    paths:
+      - 'snuba/migrations/snuba_migrations/*'
+jobs:
+  migrations:
+    name: Migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v2
+        name: Checkout code
+      - name: Docker set up
+        run: |
+          docker pull getsentry/snuba:latest || true
+          docker build --build-arg PYTHON_VERSION=3.8 -t getsentry/snuba . --cache-from getsentry/snuba:latest
+          docker network create --attachable cloudbuild
+      - name: Run migration
+        id: migrations
+        run: |
+          echo "::set-output name=migrations-text::$(SNUBA_IMAGE=getsentry/snuba docker-compose -f docker-compose.gcb.yml run --rm setup)"
+
+      - name: Dispatch migration output
+        uses: actions/github-script@v3
+        with:
+          script: |
+            // Check for getsentry PR dependency
+            github.issues.createComment({
+              owner: 'getsentry',
+              repo: 'snuba',
+              issue_number: context.payload.pull_request.number,
+              body: '${{ steps.migrations.outputs.migrations-text }}',
+            });
