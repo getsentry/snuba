@@ -1,8 +1,8 @@
 name: migrations
 on:
-  pull_request:
-    paths:
-      - 'snuba/migrations/snuba_migrations/*'
+  pull_request
+    # paths:
+    #   - 'snuba/migrations/snuba_migrations/*'
 jobs:
   migrations:
     name: Migrations
