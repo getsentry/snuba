@@ -18,7 +18,9 @@ from snuba.query.expressions import (
 
 test_data = [
     pytest.param(
-        Column(None, None, "group_id"), Literal(None, 0), id="basic column translation",
+        Column(None, None, "group_id"),
+        Literal(None, None),
+        id="basic column translation",
     ),
     pytest.param(
         Column(None, None, "primary_hash"),
