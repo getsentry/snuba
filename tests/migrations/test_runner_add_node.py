@@ -10,7 +10,7 @@ from snuba.migrations import runner
 def setup_function() -> None:
     settings.CLUSTERS = [
         {
-            "host": "localhost",
+            "host": "clickhouse",
             "port": 9000,
             "user": "default",
             "password": "",
