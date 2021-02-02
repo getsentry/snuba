@@ -271,7 +271,7 @@ events_translation_mappers = TranslationMappers(
 
 transaction_translation_mappers = TranslationMappers(
     columns=[
-        ColumnToLiteral(None, "group_id", 0),
+        ColumnToLiteral(None, "group_id", None),
         DefaultNoneColumnMapper(EVENTS_COLUMNS),
     ],
     functions=[DefaultNoneFunctionMapper({"isHandled", "notHandled"})],
@@ -399,12 +399,23 @@ class DiscoverEntity(Entity):
                                 None,
                                 "contexts",
                                 "geo.country_code",
+                                nullable=True,
                             ),
                             ColumnToMapping(
-                                None, "geo_region", None, "contexts", "geo.region"
+                                None,
+                                "geo_region",
+                                None,
+                                "contexts",
+                                "geo.region",
+                                nullable=True,
                             ),
                             ColumnToMapping(
-                                None, "geo_city", None, "contexts", "geo.city"
+                                None,
+                                "geo_city",
+                                None,
+                                "contexts",
+                                "geo.city",
+                                nullable=True,
                             ),
                             ColumnToFunction(
                                 None,
