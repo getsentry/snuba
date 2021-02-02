@@ -6,6 +6,7 @@ services:
       - redis_cluster
       - kafka
       - clickhouse
+      - zookeeper
     image: '$SNUBA_IMAGE'
     volumes:
       - '.artifacts:/.artifacts'
@@ -49,6 +50,7 @@ services:
     image: 'yandex/clickhouse-server:20.3.9.70'
     volumes:
       - ./config/clickhouse/macros.xml:/etc/clickhouse-server/config.d/macros.xml
+      - ./config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
     ulimits:
       nofile:
         soft: 262144
