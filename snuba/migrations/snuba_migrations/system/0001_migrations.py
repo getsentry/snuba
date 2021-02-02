@@ -4,8 +4,6 @@ from snuba.clickhouse.columns import Column, DateTime, Enum, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from snuba.migrations.context import Context
-from snuba.migrations.status import Status
 from snuba.migrations.table_engines import Distributed, ReplacingMergeTree
 
 columns: Sequence[Column[Modifiers]] = [
@@ -17,7 +15,7 @@ columns: Sequence[Column[Modifiers]] = [
 ]
 
 
-class Migration(migration.Migration):
+class Migration(migration.MultiStepMigration):
     """
     This migration extends Migration instead of MultiStepMigration since it is
     responsible for bootstrapping the migration system itself. It skips setting
@@ -27,6 +25,9 @@ class Migration(migration.Migration):
     """
 
     blocking = False
+
+    def is_first_migration(self) -> bool:
+        return True
 
     def forwards_local(self) -> Sequence[operations.Operation]:
         return [
@@ -67,31 +68,3 @@ class Migration(migration.Migration):
                 storage_set=StorageSetKey.MIGRATIONS, table_name="migrations_dist"
             )
         ]
-
-    def forwards(self, context: Context, dry_run: bool) -> None:
-        if dry_run:
-            self.dry_run(self.forwards_local(), self.forwards_dist())
-            return
-
-        migration_id, logger, update_status = context
-        logger.info(f"Running migration: {migration_id}")
-        for op in self.forwards_local():
-            op.execute(local=True)
-        for op in self.forwards_dist():
-            op.execute(local=False)
-        logger.info(f"Finished: {migration_id}")
-        update_status(Status.COMPLETED)
-
-    def backwards(self, context: Context, dry_run: bool) -> None:
-        if dry_run:
-            self.dry_run(self.backwards_local(), self.backwards_dist())
-            return
-
-        migration_id, logger, update_status = context
-        logger.info(f"Reversing migration: {migration_id}")
-        update_status(Status.IN_PROGRESS)
-        for op in self.backwards_dist():
-            op.execute(local=False)
-        for op in self.backwards_local():
-            op.execute(local=True)
-        logger.info(f"Finished reversing: {migration_id}")

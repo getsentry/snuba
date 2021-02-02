@@ -44,6 +44,30 @@ class Migration(ABC):
     def backwards(self, context: Context, dry_run: bool) -> None:
         raise NotImplementedError
 
+
+class MultiStepMigration(Migration, ABC):
+    """
+    A MultiStepMigration consists of one or more forward operations which will be executed
+    on all of the local and distributed nodes of the cluster. Upon error, the backwards
+    methods will be executed. The backwards operations are responsible for returning
+    the system to its pre-migration state, so that the forwards methods can be safely
+    retried.
+
+    Once the migration has been completed, we shouldn't use the backwards methods
+    to try and go back to the prior state. Since migrations can delete data, attempting
+    to revert cannot always bring back the previous state completely.
+
+    The operations in a migration should bring the system from one consistent state to
+    the next. There isn't a hard and fast rule about when operations should be grouped
+    into a single migration vs having multiple migrations with a single operation
+    each. Generally if the intermediate state between operations is not considered to
+    be valid, they should be put into the same migration. If the operations are
+    completely unrelated, they are probably better as separate migrations.
+    """
+
+    def is_first_migration(self) -> bool:
+        return False
+
     @abstractmethod
     def forwards_local(self) -> Sequence[Operation]:
         raise NotImplementedError
@@ -60,7 +84,45 @@ class Migration(ABC):
     def backwards_dist(self) -> Sequence[Operation]:
         raise NotImplementedError
 
-    def dry_run(
+    def forwards(self, context: Context, dry_run: bool = False) -> None:
+        if dry_run:
+            self.__dry_run(self.forwards_local(), self.forwards_dist())
+            return
+
+        migration_id, logger, update_status = context
+        logger.info(f"Running migration: {migration_id}")
+
+        # The table does not exist before the first migration is run
+        # so do not update status yet
+        if not self.is_first_migration():
+            update_status(Status.IN_PROGRESS)
+        for op in self.forwards_local():
+            op.execute(local=True)
+        for op in self.forwards_dist():
+            op.execute(local=False)
+        logger.info(f"Finished: {migration_id}")
+        update_status(Status.COMPLETED)
+
+    def backwards(self, context: Context, dry_run: bool) -> None:
+        if dry_run:
+            self.__dry_run(self.backwards_local(), self.backwards_dist())
+            return
+
+        migration_id, logger, update_status = context
+        logger.info(f"Reversing migration: {migration_id}")
+        update_status(Status.IN_PROGRESS)
+        for op in self.backwards_dist():
+            op.execute(local=False)
+        for op in self.backwards_local():
+            op.execute(local=True)
+        logger.info(f"Finished reversing: {migration_id}")
+
+        # The migrations table will be destroyed if the first
+        # migration is reversed; do not attempt to update status
+        if not self.is_first_migration():
+            update_status(Status.NOT_STARTED)
+
+    def __dry_run(
         self,
         local_operations: Sequence[Operation],
         dist_operations: Sequence[Operation],
@@ -92,54 +154,3 @@ class Migration(ABC):
                     print("Skipped dist operation - single node cluster")
             else:
                 print("Non SQL operation")
-
-
-class MultiStepMigration(Migration, ABC):
-    """
-    A MultiStepMigration consists of one or more forward operations which will be executed
-    on all of the local and distributed nodes of the cluster. Upon error, the backwards
-    methods will be executed. The backwards operations are responsible for returning
-    the system to its pre-migration state, so that the forwards methods can be safely
-    retried.
-
-    Once the migration has been completed, we shouldn't use the backwards methods
-    to try and go back to the prior state. Since migrations can delete data, attempting
-    to revert cannot always bring back the previous state completely.
-
-    The operations in a migration should bring the system from one consistent state to
-    the next. There isn't a hard and fast rule about when operations should be grouped
-    into a single migration vs having multiple migrations with a single operation
-    each. Generally if the intermediate state between operations is not considered to
-    be valid, they should be put into the same migration. If the operations are
-    completely unrelated, they are probably better as separate migrations.
-    """
-
-    def forwards(self, context: Context, dry_run: bool = False) -> None:
-        if dry_run:
-            self.dry_run(self.forwards_local(), self.forwards_dist())
-            return
-
-        migration_id, logger, update_status = context
-        logger.info(f"Running migration: {migration_id}")
-        update_status(Status.IN_PROGRESS)
-        for op in self.forwards_local():
-            op.execute(local=True)
-        for op in self.forwards_dist():
-            op.execute(local=False)
-        logger.info(f"Finished: {migration_id}")
-        update_status(Status.COMPLETED)
-
-    def backwards(self, context: Context, dry_run: bool) -> None:
-        if dry_run:
-            self.dry_run(self.backwards_local(), self.backwards_dist())
-            return
-
-        migration_id, logger, update_status = context
-        logger.info(f"Reversing migration: {migration_id}")
-        update_status(Status.IN_PROGRESS)
-        for op in self.backwards_dist():
-            op.execute(local=False)
-        for op in self.backwards_local():
-            op.execute(local=True)
-        logger.info(f"Finished reversing: {migration_id}")
-        update_status(Status.NOT_STARTED)
