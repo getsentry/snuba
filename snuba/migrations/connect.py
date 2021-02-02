@@ -1,8 +1,12 @@
 import logging
 import time
 
-from snuba.clusters.cluster import ClickhouseClientSettings, CLUSTERS
+from packaging import version
 
+from snuba.clickhouse.native import ClickhousePool
+from snuba.clusters.cluster import ClickhouseClientSettings, CLUSTERS
+from snuba.migrations.clickhouse import CLICKHOUSE_SERVER_MIN_VERSION
+from snuba.migrations.errors import InvalidClickhouseVersion
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +27,11 @@ def check_clickhouse_connections() -> None:
                     cluster,
                     attempts,
                 )
-                clickhouse.execute("SELECT 1")
+                check_clickhouse(clickhouse)
                 break
+            except InvalidClickhouseVersion as e:
+                logger.error(e)
+                raise
             except Exception as e:
                 logger.error(
                     "Connection to Clickhouse cluster %s failed (attempt %d)",
@@ -36,3 +43,11 @@ def check_clickhouse_connections() -> None:
                 if attempts == 60:
                     raise
                 time.sleep(1)
+
+
+def check_clickhouse(clickhouse: ClickhousePool) -> None:
+    ver = clickhouse.execute("SELECT version()")[0][0]
+    if version.parse(ver) < version.parse(CLICKHOUSE_SERVER_MIN_VERSION):
+        raise InvalidClickhouseVersion(
+            f"Snuba requires Clickhouse version {CLICKHOUSE_SERVER_MIN_VERSION}"
+        )
