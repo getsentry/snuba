@@ -1,4 +1,6 @@
 import importlib
+import os
+from copy import deepcopy
 
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
@@ -10,26 +12,13 @@ from snuba.migrations import runner
 def setup_function() -> None:
     settings.CLUSTERS = [
         {
-            "host": "clickhouse",
-            "port": 9000,
-            "user": "default",
-            "password": "",
-            "database": "default",
-            "http_port": 8123,
-            "storage_sets": {
-                "discover",
-                "events",
-                "events_ro",
-                "migrations",
-                "outcomes",
-                "querylog",
-                "sessions",
-                "transactions",
+            **deepcopy(settings.CLUSTERS[0]),
+            **{
+                "single_node": False,
+                "cluster_name": "local_hosts",
+                "distributed_cluster_name": "dist_hosts",
             },
-            "single_node": False,
-            "cluster_name": "local_hosts",
-            "distributed_cluster_name": "dist_hosts",
-        },
+        }
     ]
     importlib.reload(cluster)
     importlib.reload(runner)
@@ -54,11 +43,11 @@ def teardown_function() -> None:
 
 # TODO: Skip if no zookeeper
 def test_add_node() -> None:
-    host_name = "localhost"
-    port = 9000
+    host_name = os.environ.get("CLICKHOUSE_HOST", "localhost")
+    port = int(os.environ.get("CLICKHOUSE_PORT", 9000))
     user = "default"
     password = ""
-    database = "default"
+    database = os.environ.get("CLICKHOUSE_DATABASE", "default")
 
     client = ClickhousePool(host_name, port, user, password, database,)
 
