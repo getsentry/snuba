@@ -41,7 +41,6 @@ def teardown_function() -> None:
     importlib.reload(runner)
 
 
-# TODO: Skip if no zookeeper
 def test_add_node() -> None:
     host_name = os.environ.get("CLICKHOUSE_HOST", "localhost")
     port = int(os.environ.get("CLICKHOUSE_PORT", 9000))
