@@ -47,6 +47,8 @@ services:
       KAFKA_TOOLS_LOG4J_LOGLEVEL: 'WARN'
   clickhouse:
     image: 'yandex/clickhouse-server:20.3.9.70'
+    volumes:
+      - ./config/clickhouse/macros.xml:/etc/clickhouse-server/config.d/macros.xml
     ulimits:
       nofile:
         soft: 262144

@@ -3,11 +3,17 @@ import logging
 from clickhouse_driver import errors
 from datetime import datetime
 from functools import partial
-from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Tuple
+from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Sequence, Tuple
 
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster, CLUSTERS
+from snuba.clickhouse.native import ClickhousePool
+from snuba.clusters.cluster import (
+    ClickhouseClientSettings,
+    ClickhouseNodeType,
+    get_cluster,
+    CLUSTERS,
+)
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.context import Context
 from snuba.migrations.errors import (
@@ -20,6 +26,8 @@ from snuba.migrations.groups import (
     get_group_loader,
     MigrationGroup,
 )
+from snuba.migrations.migration import MultiStepMigration
+from snuba.migrations.operations import SqlOperation
 from snuba.migrations.status import Status
 
 logger = logging.getLogger("snuba.migrations")
@@ -359,3 +367,48 @@ class Runner:
                 raise e
 
         return data
+
+    @classmethod
+    def add_node(
+        self,
+        node_type: ClickhouseNodeType,
+        storage_sets: Sequence[StorageSetKey],
+        host_name: str,
+        port: int,
+        user: str,
+        password: str,
+        database: str,
+    ) -> None:
+        client_settings = ClickhouseClientSettings.MIGRATE.value
+        clickhouse = ClickhousePool(
+            host_name,
+            port,
+            user,
+            password,
+            database,
+            client_settings=client_settings.settings,
+            send_receive_timeout=client_settings.timeout,
+        )
+
+        migrations: List[MultiStepMigration] = []
+
+        for group in ACTIVE_MIGRATION_GROUPS:
+            group_loader = get_group_loader(group)
+
+            for migration_id in group_loader.get_migrations():
+                migration = group_loader.load_migration(migration_id)
+                migrations.append(migration)
+
+        for migration in migrations:
+            operations = (
+                migration.forwards_local()
+                if node_type == ClickhouseNodeType.LOCAL
+                else migration.forwards_dist()
+            )
+
+            for op in operations:
+                if isinstance(op, SqlOperation):
+                    if op._storage_set in storage_sets:
+                        sql = op.format_sql()
+                        print(f"Executing {sql}")
+                        clickhouse.execute(sql)

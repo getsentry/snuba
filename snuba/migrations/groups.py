@@ -5,7 +5,7 @@ from typing import Sequence
 
 from snuba import settings
 from snuba.migrations.errors import MigrationDoesNotExist
-from snuba.migrations.migration import Migration
+from snuba.migrations.migration import MultiStepMigration
 
 
 class MigrationGroup(Enum):
@@ -49,7 +49,7 @@ class GroupLoader(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def load_migration(self, migration_id: str) -> Migration:
+    def load_migration(self, migration_id: str) -> MultiStepMigration:
         raise NotImplementedError
 
 
@@ -66,7 +66,7 @@ class DirectoryLoader(GroupLoader, ABC):
     def get_migrations(self) -> Sequence[str]:
         raise NotImplementedError
 
-    def load_migration(self, migration_id: str) -> Migration:
+    def load_migration(self, migration_id: str) -> MultiStepMigration:
         try:
             module = import_module(f"{self.__module}.{migration_id}")
             return module.Migration()  # type: ignore
