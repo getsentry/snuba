@@ -65,6 +65,9 @@ class MultiStepMigration(Migration, ABC):
     completely unrelated, they are probably better as separate migrations.
     """
 
+    def is_first_migration(self) -> bool:
+        return False
+
     @abstractmethod
     def forwards_local(self) -> Sequence[Operation]:
         raise NotImplementedError
@@ -88,7 +91,11 @@ class MultiStepMigration(Migration, ABC):
 
         migration_id, logger, update_status = context
         logger.info(f"Running migration: {migration_id}")
-        update_status(Status.IN_PROGRESS)
+
+        # The table does not exist before the first migration is run
+        # so do not update status yet
+        if not self.is_first_migration():
+            update_status(Status.IN_PROGRESS)
         for op in self.forwards_local():
             op.execute(local=True)
         for op in self.forwards_dist():
@@ -109,7 +116,11 @@ class MultiStepMigration(Migration, ABC):
         for op in self.backwards_local():
             op.execute(local=True)
         logger.info(f"Finished reversing: {migration_id}")
-        update_status(Status.NOT_STARTED)
+
+        # The migrations table will be destroyed if the first
+        # migration is reversed; do not attempt to update status
+        if not self.is_first_migration():
+            update_status(Status.NOT_STARTED)
 
     def __dry_run(
         self,
