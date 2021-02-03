@@ -7,9 +7,9 @@ services:
       - kafka
       - clickhouse
     image: '$SNUBA_IMAGE'
-    command:
-      - 'migrations'
-      - 'list'
+    # command:
+    #   - 'migrations'
+    #   - 'list'
     environment:
       SNUBA_SETTINGS: 'ci'
       CLICKHOUSE_HOST: clickhouse
