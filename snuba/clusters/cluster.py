@@ -249,16 +249,19 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
     def get_local_nodes(self) -> Sequence[ClickhouseNode]:
         if self.__single_node:
             return [self.__query_node]
+
+        assert self.__cluster_name is not None, "cluster_name must be set"
         return self.__get_cluster_nodes(self.__cluster_name)
 
     def get_distributed_nodes(self) -> Sequence[ClickhouseNode]:
         if self.__single_node:
             return []
+        assert (
+            self.__distributed_cluster_name is not None
+        ), "distributed_cluster_name must be set"
         return self.__get_cluster_nodes(self.__distributed_cluster_name)
 
-    def __get_cluster_nodes(
-        self, cluster_name: Optional[str]
-    ) -> Sequence[ClickhouseNode]:
+    def __get_cluster_nodes(self, cluster_name: str) -> Sequence[ClickhouseNode]:
         return [
             ClickhouseNode(*host)
             for host in self.get_query_connection(
