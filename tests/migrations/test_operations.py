@@ -13,6 +13,7 @@ from snuba.migrations.operations import (
     InsertIntoSelect,
     ModifyColumn,
     RenameTable,
+    TruncateTable,
 )
 from snuba.migrations.table_engines import ReplacingMergeTree
 
@@ -64,6 +65,13 @@ def test_drop_table() -> None:
     assert (
         DropTable(StorageSetKey.EVENTS, "test_table").format_sql()
         == "DROP TABLE IF EXISTS test_table;"
+    )
+
+
+def test_truncate_table() -> None:
+    assert (
+        TruncateTable(StorageSetKey.EVENTS, "test_table").format_sql()
+        == "TRUNCATE TABLE IF EXISTS test_table;"
     )
 
 
