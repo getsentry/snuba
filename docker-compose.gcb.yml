@@ -1,7 +1,7 @@
 ---
 version: '3.4'
 services:
-  setup:
+  migrations-setup:
     depends_on:
       - redis_cluster
       - kafka
@@ -10,6 +10,18 @@ services:
     # command:
     #   - 'migrations'
     #   - 'list'
+    environment:
+      SNUBA_SETTINGS: 'ci'
+      CLICKHOUSE_HOST: clickhouse
+      REDIS_HOST: 'redis1'
+      REDIS_PORT: 6379
+      DEFAULT_BROKERS: 'kafka:9092'
+    entrypoint: snuba
+  migrations:
+    image: '$SNUBA_IMAGE'
+    command:
+      - 'migrations'
+      - 'list'
     environment:
       SNUBA_SETTINGS: 'ci'
       CLICKHOUSE_HOST: clickhouse

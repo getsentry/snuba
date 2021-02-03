@@ -18,11 +18,11 @@ jobs:
           docker network create --attachable cloudbuild
       - name: Snuba set up
         run: |
-          SNUBA_IMAGE=getsentry/snuba docker-compose -f docker-compose.gcb.yml run --rm setup
+          SNUBA_IMAGE=getsentry/snuba docker-compose -f docker-compose.gcb.yml run --rm migrations-setup
       - name: Run migration command
         id: migrations
         run: |
-          echo "::set-output name=migrations-text::$(snuba migrations list)"
+          echo "::set-output name=migrations-text::$(SNUBA_IMAGE=getsentry/snuba docker-compose -f docker-compose.gcb.yml run --rm migrations)"
       - name: Dispatch migration output
         uses: actions/github-script@v3
         with:
