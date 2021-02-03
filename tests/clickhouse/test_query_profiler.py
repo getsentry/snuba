@@ -3,6 +3,7 @@ from datetime import datetime
 import pytest
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.query.composite import CompositeQuery
 from snuba.clickhouse.query_profiler import generate_profile
 from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
 from snuba.query import SelectedExpression
@@ -15,6 +16,12 @@ from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.querylog.query_metadata import ClickhouseQueryProfile, FilterProfile
 from snuba.state import safe_dumps
+from tests.query.joins.join_structures import (
+    clickhouse_events_node,
+    clickhouse_groups_node,
+    events_groups_join,
+)
+
 
 test_cases = [
     pytest.param(
@@ -108,6 +115,34 @@ test_cases = [
             array_join_cols=set(),
         ),
         id="Almost empty query with OR",
+    ),
+    pytest.param(
+        CompositeQuery(
+            from_clause=events_groups_join(
+                clickhouse_events_node(
+                    [
+                        SelectedExpression(
+                            "_snuba_group_id",
+                            Column("_snuba_group_id", None, "group_id"),
+                        ),
+                    ]
+                ),
+                clickhouse_groups_node(
+                    [SelectedExpression("_snuba_id", Column("_snuba_id", None, "id"))],
+                ),
+            ),
+            selected_columns=[],
+        ),
+        ClickhouseQueryProfile(
+            time_range=None,
+            table="groupedmessage_local,sentry_errors",
+            all_columns=set(),
+            multi_level_condition=False,
+            where_profile=FilterProfile(columns=set(), mapping_cols=set(),),
+            groupby_cols=set(),
+            array_join_cols=set(),
+        ),
+        id="Simple join with two tables",
     ),
 ]
 
