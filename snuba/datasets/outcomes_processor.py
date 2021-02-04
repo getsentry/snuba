@@ -28,7 +28,7 @@ class OutcomesProcessor(MessageProcessor):
             ),
             "category": value.get(
                 "category", DataCategory.ERROR
-            ),  # if category is None, default to error for now
+            ),  # if category is None, default to error for now TODO: change security to error?
             "size": value.get("size", 0),
             "outcome": value.get("outcome", None),
             "reason": _unicodify(value.get("reason")),
