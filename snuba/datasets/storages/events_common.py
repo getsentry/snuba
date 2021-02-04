@@ -233,7 +233,7 @@ def get_column_tag_map() -> Mapping[str, Mapping[str, str]]:
 def get_tag_column_map() -> Mapping[str, Mapping[str, str]]:
     # And a reverse map from the tags the client expects to the database columns
     return {
-        col: dict(map(reversed, trans.items()))
+        col: dict(map(reversed, trans.items()))  # type: ignore
         for col, trans in get_column_tag_map().items()
     }
 
