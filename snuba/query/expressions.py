@@ -16,8 +16,14 @@ from typing import (
 TVisited = TypeVar("TVisited")
 
 
+# This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
 @dataclass(frozen=True)
-class Expression(ABC):
+class _Expression:
+    # TODO: Make it impossible to assign empty string as an alias.
+    alias: Optional[str]
+
+
+class Expression(_Expression, ABC):
     """
     A node in the Query AST. This can be a leaf or an intermediate node.
     It represents an expression that can be resolved to a value. This
@@ -26,9 +32,6 @@ class Expression(ABC):
 
     All expressions can have an optional alias.
     """
-
-    # TODO: Make it impossible to assign empty string as an alias.
-    alias: Optional[str]
 
     @abstractmethod
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:

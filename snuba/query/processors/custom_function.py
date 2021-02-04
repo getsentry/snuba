@@ -77,8 +77,8 @@ class CustomFunction(QueryProcessor):
     ) -> None:
         self.__dataset_schema = dataset_schema
         self.__function_name = name
-        self.__param_names = []
-        param_types = []
+        self.__param_names: Sequence[str] = []
+        param_types: Sequence[ParamType] = []
         if len(signature) > 0:
             self.__param_names, param_types = zip(*signature)
         self.__body = body
