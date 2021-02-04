@@ -60,9 +60,18 @@ transaction_translator = TranslationMappers(
         ColumnToColumn(None, "transaction", None, "transaction_name"),
         ColumnToColumn(None, "message", None, "transaction_name"),
         ColumnToColumn(None, "title", None, "transaction_name"),
-        ColumnToMapping(None, "geo_country_code", None, "contexts", "geo.country_code"),
-        ColumnToMapping(None, "geo_region", None, "contexts", "geo.region"),
-        ColumnToMapping(None, "geo_city", None, "contexts", "geo.city"),
+        ColumnToMapping(
+            None,
+            "geo_country_code",
+            None,
+            "contexts",
+            "geo.country_code",
+            nullable=True,
+        ),
+        ColumnToMapping(
+            None, "geo_region", None, "contexts", "geo.region", nullable=True
+        ),
+        ColumnToMapping(None, "geo_city", None, "contexts", "geo.city", nullable=True),
     ],
     subscriptables=[
         SubscriptableMapper(None, "tags", None, "tags"),
