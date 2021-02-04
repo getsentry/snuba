@@ -8,7 +8,6 @@ from typing import (
     Sequence,
     Tuple,
     TypeVar,
-    cast,
 )
 
 from snuba import settings
@@ -66,7 +65,9 @@ def extract_nested(
     for key, value in sorted(nested_col.items()):
         value = val_processor(value)
         if value is not None:
-            keys.append(cast(str, _unicodify(key)))
+            unicode_key = _unicodify(key)
+            assert isinstance(unicode_key, str)
+            keys.append(unicode_key)
             values.append(value)
 
     return (keys, values)
@@ -86,8 +87,14 @@ def extract_extra_contexts(
                     value = _unicodify(ctx_value)
                     if value:
                         ctx_key = f"{ctx_name}.{inner_ctx_name}"
-                        context_keys.append(cast(str, _unicodify(ctx_key)))
-                        context_values.append(cast(str, _unicodify(ctx_value)))
+                        unicode_key = _unicodify(ctx_key)
+                        unicode_value = _unicodify(ctx_value)
+
+                        assert isinstance(unicode_key, str)
+                        assert isinstance(unicode_value, str)
+
+                        context_keys.append(unicode_key)
+                        context_values.append(unicode_value)
 
     return (context_keys, context_values)
 
