@@ -77,7 +77,7 @@ comma                 = ","
 )
 
 
-class ClickhouseVisitor(NodeVisitor):
+class ClickhouseVisitor(NodeVisitor):  # type: ignore
     """
     Builds Snuba AST expressions from the Parsimonious parse tree.
     """
@@ -186,7 +186,7 @@ def parse_clickhouse_function(function: str) -> Expression:
     except Exception as cause:
         raise ParsingException(f"Cannot parse aggregation {function}", cause) from cause
 
-    return ClickhouseVisitor().visit(expression_tree)
+    return ClickhouseVisitor().visit(expression_tree)  # type: ignore
 
 
 def parse_aggregation(
