@@ -48,7 +48,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_local",
-                column=Column("category", UInt(8, Modifiers(low_cardinality=True))),
+                column=Column("category", UInt(8)),
                 after=None,
             ),
             operations.AddColumn(
@@ -60,7 +60,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_hourly_local",
-                column=Column("category", UInt(8, Modifiers(low_cardinality=True))),
+                column=Column("category", UInt(8)),
                 after=None,
             ),
             operations.DropTable(
@@ -137,7 +137,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_dist",
-                column=Column("category", UInt(8, Modifiers(low_cardinality=True))),
+                column=Column("category", UInt(8)),
                 after=None,
             ),
             operations.AddColumn(
@@ -149,7 +149,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_hourly_dist",
-                column=Column("category", UInt(8, Modifiers(low_cardinality=True))),
+                column=Column("category", UInt(8)),
                 after=None,
             ),
         ]
