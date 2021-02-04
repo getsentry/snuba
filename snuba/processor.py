@@ -3,7 +3,7 @@ import re
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from hashlib import md5
-from typing import Any, NamedTuple, Optional, Sequence, Union
+from typing import Any, Iterable, Mapping, NamedTuple, Optional, Sequence, Union
 
 import simplejson as json
 
@@ -48,7 +48,9 @@ class InvalidMessageVersion(Exception):
     pass
 
 
-def _as_dict_safe(value):
+def _as_dict_safe(
+    value: Union[None, Iterable[Any], Mapping[str, Any]]
+) -> Mapping[Any, Any]:
     if value is None:
         return {}
     if isinstance(value, dict):
@@ -112,7 +114,7 @@ def _floatify(s) -> Optional[float]:
         return None
 
 
-def _unicodify(s) -> Optional[str]:
+def _unicodify(s: Any) -> Optional[str]:
     if s is None:
         return None
 
