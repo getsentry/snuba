@@ -6,7 +6,7 @@ from typing import Any, Mapping, MutableMapping, Optional, Sequence
 from typing_extensions import TypedDict
 
 from snuba import settings
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import (
     EventTooOld,
     enforce_retention,

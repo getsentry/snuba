@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Mapping, Optional
 
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from sentry_relay import DataCategory
 
 from snuba import settings

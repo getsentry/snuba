@@ -6,7 +6,7 @@ from typing import Optional
 import pytest
 
 from snuba import settings
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import (
     enforce_retention,
     extract_base,

@@ -7,7 +7,7 @@ from typing import Any, Iterable, Mapping, NamedTuple, Optional, Sequence, Union
 
 import simplejson as json
 
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.util import force_bytes
 from snuba.writer import WriterTableRow
 
