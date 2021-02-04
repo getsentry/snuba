@@ -60,7 +60,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_hourly_local",
-                column=Column("category", UInt(8), Modifiers(low_cardinality=True)),
+                column=Column("category", UInt(8, Modifiers(low_cardinality=True))),
                 after=None,
             ),
             operations.DropTable(
