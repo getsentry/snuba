@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, List, Mapping, Optional, Sequence, Type
 
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
 from snuba.writer import WriterTableRow
 
