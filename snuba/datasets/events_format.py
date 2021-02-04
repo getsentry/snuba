@@ -1,5 +1,15 @@
 from datetime import datetime, timedelta
-from typing import Any, Callable, Mapping, MutableMapping, Sequence, Tuple, TypeVar
+from typing import (
+    Any,
+    Callable,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Tuple,
+    TypeVar,
+    cast,
+)
 
 from snuba import settings
 from snuba.processor import (
@@ -16,7 +26,9 @@ def extract_project_id(
     output["project_id"] = event["project_id"]
 
 
-def extract_base(output, message):
+def extract_base(
+    output: MutableMapping[str, Any], message: MutableMapping[str, Any]
+) -> MutableMapping[str, Any]:
     output["event_id"] = message["event_id"]
     extract_project_id(output, message)
     return output
@@ -47,20 +59,22 @@ def extract_extra_tags(
 
 
 def extract_nested(
-    nested_col: Mapping[str, Any], val_processor: Callable[[Any], TVal]
+    nested_col: Mapping[str, Any], val_processor: Callable[[Any], Optional[TVal]]
 ) -> Tuple[Sequence[str], Sequence[TVal]]:
     keys = []
     values = []
     for key, value in sorted(nested_col.items()):
         value = val_processor(value)
         if value is not None:
-            keys.append(_unicodify(key))
+            keys.append(cast(str, _unicodify(key)))
             values.append(value)
 
     return (keys, values)
 
 
-def extract_extra_contexts(contexts) -> Tuple[Sequence[str], Sequence[str]]:
+def extract_extra_contexts(
+    contexts: Mapping[str, Any]
+) -> Tuple[Sequence[str], Sequence[str]]:
     context_keys = []
     context_values = []
     valid_types = (int, float, str)
@@ -72,13 +86,13 @@ def extract_extra_contexts(contexts) -> Tuple[Sequence[str], Sequence[str]]:
                     value = _unicodify(ctx_value)
                     if value:
                         ctx_key = f"{ctx_name}.{inner_ctx_name}"
-                        context_keys.append(_unicodify(ctx_key))
-                        context_values.append(_unicodify(ctx_value))
+                        context_keys.append(cast(str, _unicodify(ctx_key)))
+                        context_values.append(cast(str, _unicodify(ctx_value)))
 
     return (context_keys, context_values)
 
 
-def enforce_retention(message, timestamp):
+def enforce_retention(message: Mapping[str, Any], timestamp: Optional[datetime]) -> int:
     project_id = message["project_id"]
     retention_days = settings.RETENTION_OVERRIDES.get(project_id)
     if retention_days is None:
