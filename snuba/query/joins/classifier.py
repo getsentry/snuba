@@ -30,16 +30,19 @@ from snuba.query.functions import is_aggregation_function
 AliasGenerator = Generator[str, None, None]
 
 
+# This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
 @dataclass(frozen=True)
-class SubExpression(ABC):
+class _SubExpression:
+    main_expression: Expression
+
+
+class SubExpression(_SubExpression, ABC):
     """
     Data structure maintained when visiting an Expression in the query.
     This keeps track of the main branch (the node we are visiting) as
     well as all the branches we cut that were under the main expression.
     Those cut branches should be pushed down into subqueries.
     """
-
-    main_expression: Expression
 
     @abstractmethod
     def cut_branch(self, alias_generator: AliasGenerator) -> MainQueryExpression:
