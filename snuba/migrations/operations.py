@@ -54,15 +54,6 @@ class RunSql(SqlOperation):
         return self.__statement
 
 
-class DropTable(SqlOperation):
-    def __init__(self, storage_set: StorageSetKey, table_name: str) -> None:
-        super().__init__(storage_set)
-        self.table_name = table_name
-
-    def format_sql(self) -> str:
-        return f"DROP TABLE IF EXISTS {self.table_name};"
-
-
 class CreateTable(SqlOperation):
     """
     The create table operation takes a table name, column list and table engine.
@@ -121,6 +112,25 @@ class RenameTable(SqlOperation):
 
     def format_sql(self) -> str:
         return f"RENAME TABLE {self.__old_table_name} TO {self.__new_table_name};"
+
+
+class DropTable(SqlOperation):
+    def __init__(self, storage_set: StorageSetKey, table_name: str) -> None:
+        super().__init__(storage_set)
+        self.table_name = table_name
+
+    def format_sql(self) -> str:
+        return f"DROP TABLE IF EXISTS {self.table_name};"
+
+
+class TruncateTable(SqlOperation):
+    def __init__(self, storage_set: StorageSetKey, table_name: str):
+        super().__init__(storage_set)
+        self.__storage_set = storage_set
+        self.__table_name = table_name
+
+    def format_sql(self) -> str:
+        return f"TRUNCATE TABLE IF EXISTS {self.__table_name};"
 
 
 class AddColumn(SqlOperation):

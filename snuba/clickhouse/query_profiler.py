@@ -4,6 +4,7 @@ from typing import Optional, Sequence
 
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range
+from snuba.clickhouse.query_inspector import TablesCollector
 from snuba.clickhouse.translators.snuba.mappers import (
     KEY_COL_MAPPING_PARAM,
     VALUE_COL_MAPPING_PARAM,
@@ -48,12 +49,10 @@ def _get_date_range(query: Query) -> Optional[int]:
     return None
 
 
-def _get_table(query: Query) -> str:
-    source = query.get_from_clause()
-    if source is None:
-        # Should never happen at this point.
-        return ""
-    return source.table_name
+def _get_tables(query: Query) -> str:
+    collector = TablesCollector()
+    collector.visit(query)
+    return ",".join(sorted([t for t in collector.get_tables()]))
 
 
 def _has_complex_conditions(query: Query) -> bool:
@@ -121,7 +120,7 @@ def generate_profile(query: Query) -> ClickhouseQueryProfile:
     try:
         return ClickhouseQueryProfile(
             time_range=_get_date_range(query),
-            table=_get_table(query),
+            table=_get_tables(query),
             all_columns=_get_all_columns(query),
             multi_level_condition=_has_complex_conditions(query),
             where_profile=FilterProfile(
