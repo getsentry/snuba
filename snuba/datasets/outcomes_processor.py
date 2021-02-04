@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-# from sentry_relay import DataCategory
+from sentry_relay import DataCategory
 
 from snuba import settings
 from snuba.processor import (
@@ -17,10 +17,7 @@ from snuba.processor import (
 class OutcomesProcessor(MessageProcessor):
     def process_message(self, value, metadata) -> Optional[ProcessedMessage]:
         assert isinstance(value, dict)
-
-        category = value.get("category")
-        print(category)
-
+        # TODO: validation around size and category?
         v_uuid = value.get("event_id")
         message = {
             "org_id": value.get("org_id", 0),
@@ -29,7 +26,10 @@ class OutcomesProcessor(MessageProcessor):
             "timestamp": _ensure_valid_date(
                 datetime.strptime(value["timestamp"], settings.PAYLOAD_DATETIME_FORMAT),
             ),
-            "category": category,
+            "category": value.get(
+                "category", DataCategory.ERROR
+            ),  # if category is None, default to error for now
+            "size": value.get("size", 0),
             "outcome": value.get("outcome", None),
             "reason": _unicodify(value.get("reason")),
             "event_id": str(uuid.UUID(v_uuid)) if v_uuid is not None else None,
