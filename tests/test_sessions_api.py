@@ -5,7 +5,7 @@ import pytz
 import simplejson as json
 
 from snuba import settings
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
