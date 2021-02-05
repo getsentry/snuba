@@ -125,7 +125,20 @@ test_cases = [
                             "_snuba_group_id",
                             Column("_snuba_group_id", None, "group_id"),
                         ),
-                    ]
+                    ],
+                    binary_condition(
+                        BooleanFunctions.AND,
+                        binary_condition(
+                            ConditionFunctions.GTE,
+                            Column(None, None, "timestamp"),
+                            Literal(None, datetime(2020, 8, 1)),
+                        ),
+                        binary_condition(
+                            ConditionFunctions.LT,
+                            Column(None, None, "timestamp"),
+                            Literal(None, datetime(2020, 9, 1)),
+                        ),
+                    ),
                 ),
                 clickhouse_groups_node(
                     [SelectedExpression("_snuba_id", Column("_snuba_id", None, "id"))],
@@ -134,7 +147,7 @@ test_cases = [
             selected_columns=[],
         ),
         ClickhouseQueryProfile(
-            time_range=None,
+            time_range=31,
             table="groupedmessage_local,sentry_errors",
             all_columns=set(),
             multi_level_condition=False,
