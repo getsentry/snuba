@@ -3,7 +3,7 @@ from __future__ import annotations
 import itertools
 import uuid
 from collections import ChainMap
-from typing import Any, Mapping, MutableMapping, Type
+from typing import Any, Mapping, MutableMapping, Type, Union
 
 import jsonschema
 import sentry_sdk
@@ -42,7 +42,7 @@ class RequestSchema:
         self.__extension_schemas = extensions_schemas
         self.__language = language
 
-        self.__composite_schema = {
+        self.__composite_schema: MutableMapping[str, Any] = {
             "type": "object",
             "properties": {},
             "required": [],
@@ -109,7 +109,7 @@ class RequestSchema:
         self, value: MutableMapping[str, Any], dataset: Dataset, referrer: str
     ) -> Request:
         try:
-            value = validate_jsonschema(value, self.__composite_schema)
+            value = validate_jsonschema(value, self.__composite_schema)  # type: ignore
         except jsonschema.ValidationError as error:
             raise JsonSchemaValidationException(str(error)) from error
 
@@ -124,7 +124,14 @@ class RequestSchema:
             if key in value
         }
 
-        settings_obj = self.__setting_class(**settings)
+        class_name = self.__setting_class
+        if isinstance(class_name, type(HTTPRequestSettings)):
+            settings_obj: Union[
+                HTTPRequestSettings, SubscriptionRequestSettings
+            ] = class_name(**settings)
+        elif isinstance(class_name, type(SubscriptionRequestSettings)):
+            settings_obj = class_name()
+
         extensions = {}
         for extension_name, extension_schema in self.__extension_schemas.items():
             extensions[extension_name] = {
