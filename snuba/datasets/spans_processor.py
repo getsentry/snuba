@@ -147,7 +147,7 @@ class SpansMessageProcessor(MessageProcessor):
             )
 
             processed["op"] = span["op"]
-            tags = _as_dict_safe(span.get("tags", None))
+            tags: Mapping[str, Any] = _as_dict_safe(span.get("tags", None))
             processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
 
             status = span.get("status", None)

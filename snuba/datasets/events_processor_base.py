@@ -195,7 +195,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         sdk = data.get("sdk", None) or {}
         self.extract_sdk(processed, sdk)
 
-        tags = _as_dict_safe(data.get("tags", None))
+        tags: Mapping[str, Any] = _as_dict_safe(data.get("tags", None))
         self.extract_promoted_tags(processed, tags)
         self.extract_tags_custom(processed, event, tags, metadata)
 
