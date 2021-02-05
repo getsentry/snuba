@@ -4,7 +4,7 @@ import logging
 import _strptime  # NOQA fixes _strptime deferred import issue
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import extract_http, extract_user
 from snuba.datasets.events_processor_base import EventsProcessorBase, InsertEvent
 from snuba.processor import (

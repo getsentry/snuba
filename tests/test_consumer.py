@@ -8,7 +8,7 @@ from unittest.mock import Mock, call
 
 import pytest
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.consumer import (
+from snuba.consumers.consumer import (
     JSONRowInsertBatch,
     MultistorageConsumerProcessingStrategyFactory,
     StreamingConsumerStrategyFactory,
