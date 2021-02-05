@@ -1,6 +1,6 @@
 from confluent_kafka import Consumer, KafkaError, Message, TopicPartition
 from enum import Enum
-from typing import Callable, Mapping, Optional, Sequence, Tuple
+from typing import Callable, MutableMapping, Optional, Sequence, Tuple
 
 import logging
 
@@ -63,21 +63,21 @@ class StrictConsumer:
         self.__topic = topic
         self.__consuming = False
 
-        consumer_config = broker_config.copy()
-        consumer_config.update(
-            {
+        consumer_config: KafkaBrokerConfig = {
+            **broker_config,
+            **{
                 "enable.auto.commit": False,
                 "group.id": group_id,
                 "enable.partition.eof": "true",
                 "auto.offset.reset": initial_auto_offset_reset,
-            }
-        )
+            },
+        }
 
         self.__consumer = self._create_consumer(consumer_config)
 
         def _on_partitions_assigned(
             consumer: Consumer, partitions: Sequence[TopicPartition],
-        ):
+        ) -> None:
             logger.info("New partitions assigned: %r", partitions)
             if self.__consuming:
                 # In order to ensure the topic is consumed front to back
@@ -91,7 +91,7 @@ class StrictConsumer:
 
         def _on_partitions_revoked(
             consumer: Consumer, partitions: Sequence[TopicPartition],
-        ):
+        ) -> None:
             logger.info("Partitions revoked: %r", partitions)
             if self.__on_partitions_revoked:
                 self.__on_partitions_revoked(consumer, partitions)
@@ -107,7 +107,7 @@ class StrictConsumer:
             on_revoke=_on_partitions_revoked,
         )
 
-    def _create_consumer(self, config) -> Consumer:
+    def _create_consumer(self, config: KafkaBrokerConfig) -> Consumer:
         return Consumer(config)
 
     def run(self) -> None:
@@ -121,7 +121,7 @@ class StrictConsumer:
             len(partitions_metadata) == 1
         ), f"Strict consumer only supports one partition topics. Found {len(partitions_metadata)} partitions"
 
-        watermarks: Mapping[Tuple[int, str], int] = {}
+        watermarks: MutableMapping[Tuple[int, str], int] = {}
 
         logger.debug("Starting Strict Consumer event loop")
         while not self.__shutdown:
