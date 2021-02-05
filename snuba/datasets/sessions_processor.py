@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional, Mapping
 
 from snuba import environment
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import (
     MAX_UINT32,
     NIL_UUID,
@@ -27,7 +28,9 @@ metrics = MetricsWrapper(environment.metrics, "sessions.processor")
 
 
 class SessionsProcessor(MessageProcessor):
-    def process_message(self, message, metadata) -> Optional[ProcessedMessage]:
+    def process_message(
+        self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
+    ) -> Optional[ProcessedMessage]:
         # some old relays accidentally emit rows without release
         if message["release"] is None:
             return None
