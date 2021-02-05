@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 from typing_extensions import TypedDict
 
@@ -138,7 +138,9 @@ class EventsProcessorBase(MessageProcessor, ABC):
         output["sdk_integrations"] = sdk_integrations
 
     def process_message(
-        self, message, metadata: KafkaMessageMetadata
+        self,
+        message: Tuple[int, str, InsertEvent, Any],
+        metadata: KafkaMessageMetadata,
     ) -> Optional[ProcessedMessage]:
         """\
         Process a raw message into an insertion or replacement batch. Returns
@@ -193,7 +195,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         sdk = data.get("sdk", None) or {}
         self.extract_sdk(processed, sdk)
 
-        tags = _as_dict_safe(data.get("tags", None))
+        tags: Mapping[str, Any] = _as_dict_safe(data.get("tags", None))
         self.extract_promoted_tags(processed, tags)
         self.extract_tags_custom(processed, event, tags, metadata)
 
