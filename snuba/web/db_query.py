@@ -46,9 +46,8 @@ class ResultCacheCodec(Codec[bytes, Result]):
 
     def decode(self, value: bytes) -> Result:
         ret = rapidjson.loads(value)
-        assert (
-            isinstance(ret, Mapping) and "meta" in ret and "data" in ret
-        ), "Invalid value type in result cache"
+        if not isinstance(ret, Mapping) or "meta" not in ret or "data" not in ret:
+            raise ValueError("Invalid value type in result cache")
         return cast(Result, ret)
 
 
