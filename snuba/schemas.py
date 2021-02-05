@@ -1,5 +1,5 @@
 import copy
-from typing import Any, Mapping, MutableMapping
+from typing import Any, Generator, Mapping, MutableMapping
 
 import jsonschema
 
@@ -7,7 +7,11 @@ import jsonschema
 Schema = Mapping[str, Any]  # placeholder for JSON schema
 
 
-def validate_jsonschema(value, schema, set_defaults=True):
+def validate_jsonschema(
+    value: MutableMapping[str, Any],
+    schema: MutableMapping[str, Any],
+    set_defaults: bool = True,
+) -> MutableMapping[str, Any]:
     """
     Validates a value against the provided schema, returning the validated
     value if the value conforms to the schema, otherwise raising a
@@ -16,11 +20,11 @@ def validate_jsonschema(value, schema, set_defaults=True):
     orig = jsonschema.Draft6Validator.VALIDATORS["properties"]
 
     def validate_and_default(
-        validator,
+        validator: jsonschema.IValidator,
         properties: Mapping[str, Any],
         instance: MutableMapping[str, Any],
-        schema,
-    ):
+        schema: Mapping[str, Any],
+    ) -> Generator[Exception, None, None]:
         for property, subschema in properties.items():
             if property not in instance and "default" in subschema:
                 if callable(subschema["default"]):

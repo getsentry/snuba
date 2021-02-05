@@ -109,7 +109,7 @@ class RequestSchema:
         self, value: MutableMapping[str, Any], dataset: Dataset, referrer: str
     ) -> Request:
         try:
-            value = validate_jsonschema(value, self.__composite_schema)  # type: ignore
+            value = validate_jsonschema(value, self.__composite_schema)
         except jsonschema.ValidationError as error:
             raise JsonSchemaValidationException(str(error)) from error
 
