@@ -2,11 +2,12 @@ import logging
 import numbers
 import uuid
 from datetime import datetime
-from typing import Any, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping, Tuple, Optional
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
 from snuba import environment
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import (
     EventTooOld,
     enforce_retention,
@@ -44,7 +45,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         "sentry:dist",
     }
 
-    def __extract_timestamp(self, field):
+    def __extract_timestamp(self, field: int) -> Tuple[datetime, int]:
         # We are purposely using a naive datetime here to work with the rest of the codebase.
         # We can be confident that clients are only sending UTC dates.
         timestamp = _ensure_valid_date(datetime.utcfromtimestamp(field))
@@ -53,7 +54,9 @@ class TransactionsMessageProcessor(MessageProcessor):
         milliseconds = int(timestamp.microsecond / 1000)
         return (timestamp, milliseconds)
 
-    def process_message(self, message, metadata) -> Optional[ProcessedMessage]:
+    def process_message(
+        self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
+    ) -> Optional[ProcessedMessage]:
         processed = {"deleted": 0}
         if not (isinstance(message, (list, tuple)) and len(message) >= 2):
             return None
