@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import MutableSequence, Sequence
 
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.storage import WritableStorage

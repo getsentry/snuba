@@ -2,7 +2,6 @@ import functools
 import itertools
 import logging
 import time
-from datetime import datetime
 from pickle import PickleBuffer
 from typing import (
     Callable,
@@ -20,6 +19,7 @@ import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -52,12 +52,6 @@ from snuba.writer import BatchWriter
 
 
 logger = logging.getLogger("snuba.consumer")
-
-
-class KafkaMessageMetadata(NamedTuple):
-    offset: int
-    partition: int
-    timestamp: datetime
 
 
 class JSONRowInsertBatch(NamedTuple):

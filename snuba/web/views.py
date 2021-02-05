@@ -16,7 +16,7 @@ from snuba import environment, settings, state, util
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
     InvalidDatasetError,
@@ -497,7 +497,7 @@ if application.debug or application.testing:
         assert storage is not None
 
         if type_ == "insert":
-            from snuba.consumer import StreamingConsumerStrategyFactory
+            from snuba.consumers.consumer import StreamingConsumerStrategyFactory
 
             table_writer = storage.get_table_writer()
             stream_loader = table_writer.get_stream_loader()
