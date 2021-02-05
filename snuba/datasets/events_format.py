@@ -45,7 +45,7 @@ TVal = TypeVar("TVal")
 
 
 def extract_http(output: MutableMapping[str, Any], request: Mapping[str, Any]) -> None:
-    http_headers = _as_dict_safe(request.get("headers", None))
+    http_headers: Mapping[str, Any] = _as_dict_safe(request.get("headers", None))
     output["http_method"] = _unicodify(request.get("method", None))
     output["http_referer"] = _unicodify(http_headers.get("Referer", None))
     output["http_url"] = _unicodify(request.get("url", None))

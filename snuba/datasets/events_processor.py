@@ -128,7 +128,9 @@ class EventsProcessor(EventsProcessorBase):
         output["device_online"] = _boolify(device_ctx.pop("online", None))
         output["device_charging"] = _boolify(device_ctx.pop("charging", None))
 
-    def extract_geo(self, output, geo):
+    def extract_geo(
+        self, output: MutableMapping[str, Any], geo: Mapping[str, Any]
+    ) -> None:
         output["geo_country_code"] = _unicodify(geo.get("country_code", None))
         output["geo_region"] = _unicodify(geo.get("region", None))
         output["geo_city"] = _unicodify(geo.get("city", None))

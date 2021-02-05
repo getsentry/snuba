@@ -1,10 +1,11 @@
 import uuid
 from datetime import datetime
-from typing import Any, List, Mapping, MutableMapping, Optional, Tuple
+from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
 from snuba import environment
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import enforce_retention, extract_extra_tags
 from snuba.processor import (
     InsertBatch,
@@ -90,7 +91,9 @@ class SpansMessageProcessor(MessageProcessor):
             metrics.increment("missing_field", tags={"field": field})
         return None
 
-    def process_message(self, message, metadata) -> Optional[ProcessedMessage]:
+    def process_message(
+        self, message: Sequence[Any], metadata: KafkaMessageMetadata
+    ) -> Optional[ProcessedMessage]:
         if not (isinstance(message, (list, tuple)) and len(message) >= 2):
             return None
         version = message[0]
@@ -144,7 +147,7 @@ class SpansMessageProcessor(MessageProcessor):
             )
 
             processed["op"] = span["op"]
-            tags = _as_dict_safe(span.get("tags", None))
+            tags: Mapping[str, Any] = _as_dict_safe(span.get("tags", None))
             processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
 
             status = span.get("status", None)

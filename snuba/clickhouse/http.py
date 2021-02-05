@@ -5,7 +5,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from queue import SimpleQueue
-from typing import Any, Iterable, Iterator, Mapping, Optional, Union
+from typing import Any, cast, Iterable, Iterator, Mapping, Optional, Union
 from urllib.parse import urlencode
 
 import rapidjson
@@ -41,7 +41,9 @@ class JSONRowEncoder(Encoder[JSONRow, WriterTableRow]):
             raise TypeError
 
     def encode(self, value: WriterTableRow) -> JSONRow:
-        return rapidjson.dumps(value, default=self.__default).encode("utf-8")
+        return cast(
+            bytes, rapidjson.dumps(value, default=self.__default).encode("utf-8")
+        )
 
 
 class HTTPWriteBatch:
