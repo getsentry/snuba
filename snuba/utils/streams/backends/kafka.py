@@ -11,6 +11,7 @@ from threading import Event
 from typing import (
     Any,
     Callable,
+    Dict,
     Mapping,
     MutableMapping,
     MutableSequence,
@@ -59,7 +60,7 @@ KafkaConsumerState = Enum(
     "KafkaConsumerState", ["CONSUMING", "ERROR", "CLOSED", "ASSIGNING", "REVOKING"]
 )
 
-KafkaBrokerConfig = Mapping[str, Any]
+KafkaBrokerConfig = Dict[str, Any]
 
 
 class InvalidState(RuntimeError):
