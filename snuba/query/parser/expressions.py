@@ -77,6 +77,8 @@ comma                 = ","
 )
 
 
+# parsimonious isn't properly type hinted yet, NodeVisitor has a type of Any
+# Add an ignore until parsimonious is properly typed.
 class ClickhouseVisitor(NodeVisitor):  # type: ignore
     """
     Builds Snuba AST expressions from the Parsimonious parse tree.
