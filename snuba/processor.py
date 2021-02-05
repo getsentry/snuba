@@ -5,12 +5,14 @@ from datetime import datetime, timedelta
 from hashlib import md5
 from typing import (
     Any,
+    Dict,
     Iterable,
-    Mapping,
     MutableMapping,
     NamedTuple,
     Optional,
     Sequence,
+    Tuple,
+    TypeVar,
     Union,
 )
 
@@ -60,9 +62,13 @@ class InvalidMessageVersion(Exception):
     pass
 
 
+TKey = TypeVar("TKey")
+TValue = TypeVar("TValue")
+
+
 def _as_dict_safe(
-    value: Union[None, Iterable[Any], Mapping[str, Any]]
-) -> MutableMapping[Any, Any]:
+    value: Union[None, Iterable[Tuple[TKey, TValue]], Dict[TKey, TValue]],
+) -> MutableMapping[TKey, TValue]:
     if value is None:
         return {}
     if isinstance(value, dict):
