@@ -3,7 +3,7 @@ from typing import Callable
 
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
-from snuba.query.matchers import Pattern, MatchResult
+from snuba.query.matchers import Pattern, MatchResult, TMatchedType
 from snuba.query.processors import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
@@ -15,7 +15,7 @@ class PatternReplacer(QueryProcessor):
 
     def __init__(
         self,
-        matcher: Pattern,
+        matcher: Pattern[TMatchedType],
         transformation_fn: Callable[[MatchResult, Expression], Expression],
     ) -> None:
         self.__matcher = matcher

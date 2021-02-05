@@ -24,18 +24,20 @@ from snuba.query.matchers import (
     String,
 )
 
-
+# This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
 @dataclass(frozen=True)
-class ColumnToExpression(ColumnMapper, ABC):
+class _ColumnToExpression:
+    from_table_name: Optional[str]
+    from_col_name: str
+
+
+class ColumnToExpression(_ColumnToExpression, ColumnMapper, ABC):
     """
     Provides some common logic for all the mappers that transform a specific
     column identified by table and name into one of the allowed expressions
     a column can be translated into.
     This exists for convenience just to avoid some code duplication.
     """
-
-    from_table_name: Optional[str]
-    from_col_name: str
 
     def attempt_map(
         self,
