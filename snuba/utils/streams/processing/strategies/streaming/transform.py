@@ -323,7 +323,7 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
             # multiprocessor pool workers.
             if not self.__closed:
                 self.__metrics.increment("sigchld.detected")
-                logger.warn("SIGCHLD detected in parallel consumer.",)
+                logger.warn("SIGCHLD detected in parallel consumer.")
 
         signal.signal(signal.SIGCHLD, handle_sigchld)
 
