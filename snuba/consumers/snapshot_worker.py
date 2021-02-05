@@ -56,7 +56,7 @@ class SnapshotProcessor(MessageProcessor):
         logger.debug("Starting snapshot aware worker for id %s", self.__snapshot_id)
 
     def __accept_message(
-        self, xid: int, value: CDCEvent, metadata: KafkaMessageMetadata
+        self, xid: Optional[int], value: CDCEvent, metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         if self.__catching_up and xid and xid >= self.__transaction_data.xmax:
             logger.info(
@@ -85,7 +85,10 @@ class SnapshotProcessor(MessageProcessor):
             )
         return None
 
-    def process_message(
+    # Typing does not allow a subclass to have a more specific argument
+    # since it violates the Liskov substitution principle.
+    # https://mypy.readthedocs.io/en/stable/common_issues.html#incompatible-overrides
+    def process_message(  # type: ignore
         self, message: CDCEvent, metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         """
@@ -115,7 +118,9 @@ class SnapshotProcessor(MessageProcessor):
         - After seeing xmax, all transactions have to be applied since they are either
           higher of xmax or part of xip_list.
         """
-        xid = message.get("xid")
+        xid = None
+        if message["event"] != "commit":
+            xid = message.get("xid")
 
         if xid is not None:
             if self.__catching_up:
