@@ -4,8 +4,9 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial, reduce
 from hashlib import md5
-from typing import Any, Mapping, MutableMapping, Optional, Set, Union
+from typing import Any, Mapping, MutableMapping, Optional, Set, Union, cast
 
+import rapidjson
 import sentry_sdk
 from sentry_sdk.api import configure_scope
 from snuba import settings, state
@@ -34,12 +35,25 @@ from snuba.state.rate_limit import (
     RateLimitExceeded,
 )
 from snuba.util import force_bytes, with_span
-from snuba.utils.codecs import JSONCodec, JSONData
+from snuba.utils.codecs import Codec
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
 
-cache: Cache[JSONData] = RedisCache(
-    redis_client, "snuba-query-cache:", JSONCodec(), ThreadPoolExecutor()
+
+class ResultCacheCodec(Codec[bytes, Result]):
+    def encode(self, value: Result) -> bytes:
+        return cast(str, rapidjson.dumps(value)).encode("utf-8")
+
+    def decode(self, value: bytes) -> Result:
+        ret = rapidjson.loads(value)
+        assert (
+            isinstance(ret, Mapping) and "meta" in ret and "data" in ret
+        ), "Invalid value type in result cache"
+        return cast(Result, ret)
+
+
+cache: Cache[Result] = RedisCache(
+    redis_client, "snuba-query-cache:", ResultCacheCodec(), ThreadPoolExecutor()
 )
 
 logger = logging.getLogger("snuba.query")
@@ -179,6 +193,7 @@ def execute_query(
     # Experiment, if we are going to grab more than X columns worth of data,
     # don't use uncompressed_cache in ClickHouse.
     uc_max = state.get_config("uncompressed_cache_max_cols", 5)
+    assert isinstance(uc_max, int)
     column_counter = ReferencedColumnsCounter()
     column_counter.visit(clickhouse_query.get_from_clause())
     if column_counter.count_columns() > uc_max:
@@ -270,6 +285,7 @@ def execute_query_with_caching(
 
     column_counter = ReferencedColumnsCounter()
     column_counter.visit(clickhouse_query.get_from_clause())
+    assert isinstance(uc_max, int)
     if column_counter.count_columns() > uc_max:
         use_cache = False
 
