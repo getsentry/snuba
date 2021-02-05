@@ -25,7 +25,7 @@ Markdown==2.6.11
 MarkupSafe==1.1.1
 mywsgi==1.0.3
 more-itertools==4.2.0
-mypy>=0.761
+mypy>=0.800
 packaging==17.1
 parsimonious==0.8.1
 py==1.5.3
