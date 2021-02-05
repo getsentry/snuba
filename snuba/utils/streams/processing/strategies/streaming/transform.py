@@ -318,7 +318,7 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         self.__closed = False
 
         def handle_sigchld(signum: int, frame: Any) -> None:
-            # Keeps track if any child process of the consumer is terminated.
+            # Logs if any child process of the consumer is terminated.
             # This is meant to detect the unexpected termination of
             # multiprocessor pool workers.
             if not self.__closed:
