@@ -1,7 +1,7 @@
 import logging
 from typing import Optional, Set
 
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.cdc.types import Event as CDCEvent
 from snuba.processor import MessageProcessor, ProcessedMessage
 from snuba.snapshots import SnapshotId

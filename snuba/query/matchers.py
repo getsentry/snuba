@@ -311,7 +311,7 @@ class FunctionCall(Pattern[FunctionCallExpr]):
     # If it is set, then it will iterate through the parameters and
     # check them against the type. If this is set, it's not necessary
     # to also specify the parameters field.
-    all_parameters: Optional[Pattern[TMatchedType]] = None
+    all_parameters: Optional[Pattern[Expression]] = None
 
     def match(self, node: AnyType) -> Optional[MatchResult]:
         if not isinstance(node, FunctionCallExpr):

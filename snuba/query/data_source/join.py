@@ -51,7 +51,6 @@ class JoinRelationship(NamedTuple):
     equivalences: Sequence[ColumnEquivalence]
 
 
-@dataclass(frozen=True)
 class JoinNode(ABC, Generic[TSimpleDataSource]):
     """
     Represent a Node in the join tree data structure.

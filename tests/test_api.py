@@ -12,7 +12,7 @@ from dateutil.parser import parse as parse_datetime
 from sentry_sdk import Client, Hub
 
 from snuba import settings, state
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import get_dataset
