@@ -147,7 +147,7 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                 plan_query_processors=[],
                 db_query_processors=db_query_processors,
                 storage_set_key=self.__storage.get_storage_set_key(),
-                execution_strategy=SimpleQueryPlanExecutionStrategy(
+                execution_strategy=SimpleQueryPlanExecutionStrategy(  # type: ignore
                     cluster=cluster,
                     db_query_processors=db_query_processors,
                     splitters=self.__storage.get_query_splitters(),
