@@ -58,7 +58,7 @@ from snuba.web import QueryException
 from snuba.web.converters import DatasetConverter
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
-from werkzeug import Response as WerkResponse
+from werkzeug import Response as WerkzeugResponse
 
 metrics = MetricsWrapper(environment.metrics, "api")
 
@@ -201,19 +201,19 @@ def root() -> str:
 
 
 @application.route("/css/<path:path>")
-def send_css(path: str) -> Any:
+def send_css(path: str) -> Response:
     return application.send_static_file(os.path.join("css", path))
 
 
 @application.route("/img/<path:path>")
 @application.route("/snuba/web/static/img/<path:path>")
-def send_img(path: str) -> Any:
+def send_img(path: str) -> Response:
     return application.send_static_file(os.path.join("img", path))
 
 
 @application.route("/dashboard")
 @application.route("/dashboard.<fmt>")
-def dashboard(fmt: str = "html") -> Any:
+def dashboard(fmt: str = "html") -> Union[Response, RespTuple]:
     if fmt == "json":
         result = {
             "queries": state.get_queries(),
@@ -227,7 +227,7 @@ def dashboard(fmt: str = "html") -> Any:
 
 @application.route("/config")
 @application.route("/config.<fmt>", methods=["GET", "POST"])
-def config(fmt: str = "html") -> Any:
+def config(fmt: str = "html") -> Union[Response, RespTuple]:
     if fmt == "json":
         if http_request.method == "GET":
             return (
@@ -304,7 +304,7 @@ def _trace_transaction(dataset: Dataset) -> None:
 
 @application.route("/query", methods=["GET", "POST"])
 @util.time_request("query")
-def unqualified_query_view(*, timer: Timer) -> WerkResponse:
+def unqualified_query_view(*, timer: Timer) -> WerkzeugResponse:
     if http_request.method == "GET":
         return redirect(f"/{settings.DEFAULT_DATASET_NAME}/query", code=302)
     elif http_request.method == "POST":
