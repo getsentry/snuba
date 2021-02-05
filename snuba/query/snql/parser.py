@@ -184,7 +184,7 @@ class OrTuple(NamedTuple):
     exp: Expression
 
 
-class SnQLVisitor(NodeVisitor):
+class SnQLVisitor(NodeVisitor):  # type: ignore
     """
     Builds Snuba AST expressions from the Parsimonious parse tree.
     """
