@@ -6,7 +6,7 @@ from unittest.mock import patch
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
