@@ -177,6 +177,7 @@ def _ensure_valid_ip(
             assert isinstance(
                 ip_address, (ipaddress.IPv4Address, ipaddress.IPv6Address)
             )
+            return ip_address
         except ValueError:
             pass
 
