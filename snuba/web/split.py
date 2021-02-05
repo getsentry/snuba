@@ -122,6 +122,7 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
 
         overall_result = None
         split_end = to_date_ast
+        assert isinstance(split_step, int)
         split_start = max(split_end - timedelta(seconds=split_step), from_date_ast)
         total_results = 0
         while split_start < split_end and total_results < limit:
