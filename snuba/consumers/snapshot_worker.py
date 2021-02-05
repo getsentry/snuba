@@ -85,10 +85,7 @@ class SnapshotProcessor(MessageProcessor):
             )
         return None
 
-    # Typing does not allow a subclass to have a more specific argument
-    # since it violates the Liskov substitution principle.
-    # https://mypy.readthedocs.io/en/stable/common_issues.html#incompatible-overrides
-    def process_message(  # type: ignore
+    def process_message(
         self, message: CDCEvent, metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         """
