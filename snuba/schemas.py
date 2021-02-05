@@ -20,7 +20,7 @@ def validate_jsonschema(
     orig = jsonschema.Draft6Validator.VALIDATORS["properties"]
 
     def validate_and_default(
-        validator: jsonschema.IValidator,
+        validator: object,
         properties: Mapping[str, Any],
         instance: MutableMapping[str, Any],
         schema: Mapping[str, Any],
