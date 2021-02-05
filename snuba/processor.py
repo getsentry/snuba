@@ -3,7 +3,18 @@ import re
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from hashlib import md5
-from typing import Any, Iterable, Mapping, NamedTuple, Optional, Sequence, Union
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    MutableMapping,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 import simplejson as json
 
@@ -38,7 +49,7 @@ class MessageProcessor(ABC):
 
     @abstractmethod
     def process_message(
-        self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
+        self, message: Any, metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         raise NotImplementedError
 
@@ -51,9 +62,13 @@ class InvalidMessageVersion(Exception):
     pass
 
 
+TKey = TypeVar("TKey")
+TValue = TypeVar("TValue")
+
+
 def _as_dict_safe(
-    value: Union[None, Iterable[Any], Mapping[str, Any]]
-) -> Mapping[Any, Any]:
+    value: Union[None, Iterable[Tuple[TKey, TValue]], Dict[TKey, TValue]],
+) -> MutableMapping[TKey, TValue]:
     if value is None:
         return {}
     if isinstance(value, dict):

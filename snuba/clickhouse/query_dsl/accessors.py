@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Optional, Set, Tuple, cast
 
 from snuba.clickhouse.query import Query
+from snuba.query import ProcessableQuery
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     BooleanFunctions,
@@ -9,6 +10,7 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
     is_in_condition_pattern,
 )
+from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
@@ -91,7 +93,7 @@ def get_project_ids_in_query_ast(
 
 
 def get_time_range(
-    query: Query, timestamp_field: str
+    query: ProcessableQuery[Table], timestamp_field: str
 ) -> Tuple[Optional[datetime], Optional[datetime]]:
     """
     Finds the minimal time range for this query. Which means, it finds
