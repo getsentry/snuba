@@ -69,7 +69,8 @@ class ClickhouseQueryPlan(QueryPlan[Query]):
     are executed by the execution strategy at every DB Query.
     """
 
-    query: Query
+    # Per https://github.com/python/mypy/issues/10039, this has to be redeclared
+    # to avoid a mypy error.
     execution_strategy: QueryPlanExecutionStrategy[Query]
     plan_query_processors: Sequence[QueryProcessor]
     db_query_processors: Sequence[QueryProcessor]
@@ -97,7 +98,8 @@ class CompositeQueryPlan(QueryPlan[CompositeQuery[Table]]):
     processors that still have to be executed on the subquery.
     """
 
-    query: CompositeQuery[Table]
+    # Per https://github.com/python/mypy/issues/10039, this has to be redeclared
+    # to avoid a mypy error.
     execution_strategy: QueryPlanExecutionStrategy[CompositeQuery[Table]]
     # If there is no join there would be no table alias and one
     # single simple subquery.
