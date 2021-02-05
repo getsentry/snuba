@@ -286,7 +286,7 @@ def parse_request_body(http_request: Request) -> MutableMapping[str, Any]:
         metrics.timing("http_request_body_length", len(http_request.data))
         try:
             body = json.loads(http_request.data)
-            assert isinstance(body, dict)
+            assert isinstance(body, MutableMapping)
             return body
         except json.JSONDecodeError as error:
             raise JsonDecodeException(str(error)) from error
