@@ -7,6 +7,7 @@ from typing import Any, Iterable, Mapping, NamedTuple, Optional, Sequence, Union
 
 import simplejson as json
 
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.util import force_bytes
 from snuba.writer import WriterTableRow
 
@@ -36,7 +37,9 @@ class MessageProcessor(ABC):
     """
 
     @abstractmethod
-    def process_message(self, message, metadata) -> Optional[ProcessedMessage]:
+    def process_message(
+        self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
+    ) -> Optional[ProcessedMessage]:
         raise NotImplementedError
 
 
