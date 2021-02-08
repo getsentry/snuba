@@ -24,7 +24,7 @@ new_materialized_view_columns: Sequence[Column[Modifiers]] = [
     Column("outcome", UInt(8)),
     Column("reason", String()),
     Column("category", UInt(8)),
-    Column("size_sum", UInt(64)),
+    Column("size", UInt(64)),
     Column("times_seen", UInt(64)),
 ]
 
@@ -54,14 +54,21 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_hourly_local",
-                column=Column("size_sum", UInt(64)),
+                column=Column("size", UInt(64)),
                 after=None,
             ),
-            operations.AddColumn(
+            # operations.AddColumn(
+            #     storage_set=StorageSetKey.OUTCOMES,
+            #     table_name="outcomes_hourly_local",
+            #     column=Column("category", UInt(8)),
+            #     after=""", MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category)""",
+            # ),
+            operations.RunSql(
                 storage_set=StorageSetKey.OUTCOMES,
-                table_name="outcomes_hourly_local",
-                column=Column("category", UInt(8)),
-                after=None,
+                statement="""
+            ALTER TABLE outcomes_hourly_local ADD COLUMN IF NOT EXISTS category UInt8,
+            MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category);
+            """,
             ),
             operations.DropTable(
                 storage_set=StorageSetKey.OUTCOMES,
@@ -71,7 +78,7 @@ class Migration(migration.MultiStepMigration):
                 storage_set=StorageSetKey.OUTCOMES,
                 view_name="outcomes_mv_hourly_local",
                 destination_table_name="outcomes_hourly_local",
-                columns=old_materialized_view_columns,
+                columns=new_materialized_view_columns,
                 query="""
                     SELECT
                         org_id,
@@ -80,9 +87,9 @@ class Migration(migration.MultiStepMigration):
                         toStartOfHour(timestamp) AS timestamp,
                         outcome,
                         ifNull(reason, 'none') AS reason,
-                        ifNull(category, 1) AS category,
+                        category,
                         count() AS times_seen,
-                        sum(size) AS size_sum
+                        ifNull(sum(size),0) AS size
                     FROM outcomes_raw_local
                     GROUP BY org_id, project_id, key_id, timestamp, outcome, reason, category
                 """,
@@ -96,15 +103,24 @@ class Migration(migration.MultiStepMigration):
                 StorageSetKey.OUTCOMES, "outcomes_raw_local", "category"
             ),
             operations.DropColumn(
-                StorageSetKey.OUTCOMES, "outcomes_hourly_local", "size_sum"
+                StorageSetKey.OUTCOMES, "outcomes_hourly_local", "size"
             ),
-            operations.DropColumn(
-                StorageSetKey.OUTCOMES, "outcomes_hourly_local", "category"
-            ),
+            # operations.DropColumn(
+            #     StorageSetKey.OUTCOMES, "outcomes_hourly_local", "category"
+            # ), #can't drop this column after being added to primary key
             operations.DropTable(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_mv_hourly_local",
             ),
+            # operations.RunSql(  # TODO: is this needed?
+            #     storage_set=StorageSetKey.OUTCOMES,
+            #     statement="""
+            #         ALTER TABLE
+            #             outcomes_hourly_local
+            #             MODIFY ORDER BY
+            #             (org_id, project_id, key_id, outcome, reason, timestamp)
+            #     """,
+            # ),
             # TODO: put old mat view query in own file, use reference to that?
             operations.CreateMaterializedView(
                 storage_set=StorageSetKey.OUTCOMES,
@@ -143,7 +159,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_hourly_dist",
-                column=Column("size_sum", UInt(64)),
+                column=Column("size", UInt(64)),
                 after=None,
             ),
             operations.AddColumn(
@@ -161,9 +177,9 @@ class Migration(migration.MultiStepMigration):
                 StorageSetKey.OUTCOMES, "outcomes_raw_dist", "category"
             ),
             operations.DropColumn(
-                StorageSetKey.OUTCOMES, "outcomes_hourly_dist", "size_sum"
+                StorageSetKey.OUTCOMES, "outcomes_hourly_dist", "size"
             ),
-            operations.DropColumn(
-                StorageSetKey.OUTCOMES, "outcomes_hourly_dist", "category"
-            ),
+            # operations.DropColumn(
+            #     StorageSetKey.OUTCOMES, "outcomes_hourly_dist", "category"
+            # ),# can't drop this one
         ]
