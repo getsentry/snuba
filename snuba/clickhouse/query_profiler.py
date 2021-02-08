@@ -1,5 +1,5 @@
 import logging
-from typing import Iterable, List, Mapping, Sequence, Set, Union
+from typing import Iterable, List, Mapping, Set, Union
 
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_inspector import TablesCollector
@@ -35,6 +35,15 @@ def _get_columns_from_expression(expression: Expression, table_name: str) -> Col
     }
 
 
+def _list_columns(expressions: Mapping[str, Set[Expression]]) -> Columnset:
+    ret = set()
+    for table_name, expression_set in expressions.items():
+        for e in expression_set:
+            ret |= _get_columns_from_expression(e, table_name)
+
+    return ret
+
+
 def _flatten_col_set(nested_sets: Iterable[Set[str]]) -> Columnset:
     ret = set()
     for s in nested_sets:
@@ -42,18 +51,20 @@ def _flatten_col_set(nested_sets: Iterable[Set[str]]) -> Columnset:
     return ret
 
 
-def _list_columns(filter_expressions: Mapping[str, Expression]) -> Columnset:
+def _list_columns_in_condition(
+    condition_expression: Mapping[str, Expression]
+) -> Columnset:
     return _flatten_col_set(
         [
             {c for c in _get_columns_from_expression(expression, table_name)}
-            for table_name, expression in filter_expressions.items()
+            for table_name, expression in condition_expression.items()
         ]
     )
 
 
-def _list_mapping(filter_expression: Mapping[str, Expression]) -> Columnset:
+def _list_mappings(condition_expression: Mapping[str, Expression]) -> Columnset:
     nested_sets: List[Set[str]] = []
-    for table_name, expression in filter_expression.items():
+    for table_name, expression in condition_expression.items():
         ret = set()
         for e in expression:
             result = mapping_pattern.match(e)
@@ -66,23 +77,6 @@ def _list_mapping(filter_expression: Mapping[str, Expression]) -> Columnset:
     return _flatten_col_set(nested_sets)
 
 
-def _list_array_join(filter_expression: Mapping[str, Set[Expression]]) -> Columnset:
-    ret = set()
-    for table_name, expressions in filter_expression.items():
-        for e in expressions:
-            ret |= _get_columns_from_expression(e, table_name)
-
-    return ret
-
-
-def _list_groupby_columns(groupby: Mapping[str, Sequence[Expression]]) -> Columnset:
-    nested_set = set()
-    for table_name, expressions in groupby.items():
-        for e in expressions:
-            nested_set |= _get_columns_from_expression(e, table_name)
-    return nested_set
-
-
 def generate_profile(
     query: Union[Query, CompositeQuery[Table]]
 ) -> ClickhouseQueryProfile:
@@ -93,7 +87,7 @@ def generate_profile(
     collector = TablesCollector()
     collector.visit(query)
 
-    condition = collector.get_all_conditions()
+    all_condition = collector.get_all_conditions()
 
     try:
         return ClickhouseQueryProfile(
@@ -102,10 +96,11 @@ def generate_profile(
             all_columns=_get_all_columns(collector.get_all_raw_columns()),
             multi_level_condition=collector.has_complex_condition(),
             where_profile=FilterProfile(
-                columns=_list_columns(condition), mapping_cols=_list_mapping(condition),
+                columns=_list_columns_in_condition(all_condition),
+                mapping_cols=_list_mappings(all_condition),
             ),
-            groupby_cols=_list_groupby_columns(collector.get_all_groupby()),
-            array_join_cols=_list_array_join(collector.get_all_arrayjoin()),
+            groupby_cols=_list_columns(collector.get_all_groupby()),
+            array_join_cols=_list_columns(collector.get_all_arrayjoin()),
         )
     except Exception:
         # Should never happen, but it is not worth failing queries while
