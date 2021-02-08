@@ -3,10 +3,10 @@ from datetime import datetime
 import pytest
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.query.composite import CompositeQuery
 from snuba.clickhouse.query_profiler import generate_profile
 from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
 from snuba.query import SelectedExpression
+from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
@@ -21,7 +21,6 @@ from tests.query.joins.join_structures import (
     clickhouse_groups_node,
     events_groups_join,
 )
-
 
 test_cases = [
     pytest.param(
@@ -131,16 +130,27 @@ test_cases = [
                     binary_condition(
                         BooleanFunctions.AND,
                         binary_condition(
-                            ConditionFunctions.GTE,
-                            Column(None, None, "timestamp"),
-                            Literal(None, datetime(2020, 8, 1)),
+                            BooleanFunctions.AND,
+                            binary_condition(
+                                ConditionFunctions.GTE,
+                                Column(None, None, "timestamp"),
+                                Literal(None, datetime(2020, 8, 1)),
+                            ),
+                            binary_condition(
+                                ConditionFunctions.LT,
+                                Column(None, None, "timestamp"),
+                                Literal(None, datetime(2020, 9, 1)),
+                            ),
                         ),
                         binary_condition(
-                            ConditionFunctions.LT,
-                            Column(None, None, "timestamp"),
-                            Literal(None, datetime(2020, 9, 1)),
+                            ConditionFunctions.EQ,
+                            build_mapping_expr(
+                                "tags[asd]", None, "tags", Literal(None, "asd"),
+                            ),
+                            Literal(None, "sdf"),
                         ),
                     ),
+                    [Column("_snuba_group_id", None, "group_id")],
                 ),
                 clickhouse_groups_node(
                     [SelectedExpression("_snuba_id", Column("_snuba_id", None, "id"))],
@@ -155,15 +165,68 @@ test_cases = [
                 "sentry_errors.group_id",
                 "sentry_errors.timestamp",
                 "groupedmessage_local.id",
+                "sentry_errors.tags.key",
+                "sentry_errors.tags.value",
             },
             multi_level_condition=False,
+            where_profile=FilterProfile(
+                columns={
+                    "sentry_errors.timestamp",
+                    "sentry_errors.tags.key",
+                    "sentry_errors.tags.value",
+                },
+                mapping_cols={"sentry_errors.tags.key", "sentry_errors.tags.value"},
+            ),
+            groupby_cols={"sentry_errors.group_id"},
+            array_join_cols=set(),
+        ),
+        id="Simple join with two tables",
+    ),
+    pytest.param(
+        CompositeQuery(
+            from_clause=events_groups_join(
+                clickhouse_events_node(
+                    [
+                        SelectedExpression(
+                            "_snuba_group_id",
+                            Column("_snuba_group_id", None, "group_id"),
+                        ),
+                    ],
+                    binary_condition(
+                        BooleanFunctions.OR,
+                        binary_condition(
+                            ConditionFunctions.GTE,
+                            Column(None, None, "timestamp"),
+                            Literal(None, datetime(2020, 8, 1)),
+                        ),
+                        binary_condition(
+                            ConditionFunctions.LT,
+                            Column(None, None, "timestamp"),
+                            Literal(None, datetime(2020, 9, 1)),
+                        ),
+                    ),
+                ),
+                clickhouse_groups_node(
+                    [SelectedExpression("_snuba_id", Column("_snuba_id", None, "id"))]
+                ),
+            )
+        ),
+        ClickhouseQueryProfile(
+            time_range=None,
+            table="groupedmessage_local,sentry_errors",
+            all_columns={
+                "sentry_errors.timestamp",
+                "sentry_errors.group_id",
+                "groupedmessage_local.id",
+            },
+            multi_level_condition=True,
             where_profile=FilterProfile(
                 columns={"sentry_errors.timestamp"}, mapping_cols=set(),
             ),
             groupby_cols=set(),
             array_join_cols=set(),
         ),
-        id="Simple join with two tables",
+        id="Almost empty join query with OR",
     ),
 ]
 

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Mapping, MutableMapping, Optional, Sequence, Set
+from typing import Mapping, MutableMapping, Optional, Set
 
 from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.query import ProcessableQuery
@@ -54,7 +54,7 @@ class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
         self.__sample_rate: Optional[float] = None
         self.__all_raw_columns: MutableMapping[str, Set[ColumnExpr]] = {}
         self.__all_conditions: MutableMapping[str, Expression] = {}
-        self.__all_groupby: MutableMapping[str, Sequence[Expression]] = {}
+        self.__all_groupby: MutableMapping[str, Set[Expression]] = {}
         self.__all_array_joins: MutableMapping[str, Set[Expression]] = {}
 
     def get_tables(self) -> Set[str]:
@@ -78,7 +78,7 @@ class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
     def get_all_conditions(self) -> Mapping[str, Expression]:
         return self.__all_conditions
 
-    def get_all_groupby(self) -> Mapping[str, Sequence[Expression]]:
+    def get_all_groupby(self) -> Mapping[str, Set[Expression]]:
         return self.__all_groupby
 
     def get_all_arrayjoin(self) -> Mapping[str, Set[Expression]]:
@@ -137,7 +137,7 @@ class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
         if condition is not None:
             self.__all_conditions[table_name] = condition
 
-        self.__all_groupby[table_name] = data_source.get_groupby_from_ast()
+        self.__all_groupby[table_name] = set(data_source.get_groupby_from_ast())
 
         self.__all_array_joins[table_name] = self._list_array_join(data_source)
 
