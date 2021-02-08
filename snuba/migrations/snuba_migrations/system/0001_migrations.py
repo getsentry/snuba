@@ -4,8 +4,6 @@ from snuba.clickhouse.columns import Column, DateTime, Enum, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from snuba.migrations.context import Context
-from snuba.migrations.status import Status
 from snuba.migrations.table_engines import Distributed, ReplacingMergeTree
 
 columns: Sequence[Column[Modifiers]] = [
@@ -17,7 +15,7 @@ columns: Sequence[Column[Modifiers]] = [
 ]
 
 
-class Migration(migration.Migration):
+class Migration(migration.MultiStepMigration):
     """
     This migration extends Migration instead of MultiStepMigration since it is
     responsible for bootstrapping the migration system itself. It skips setting
@@ -28,7 +26,10 @@ class Migration(migration.Migration):
 
     blocking = False
 
-    def __forwards_local(self) -> Sequence[operations.Operation]:
+    def is_first_migration(self) -> bool:
+        return True
+
+    def forwards_local(self) -> Sequence[operations.Operation]:
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.MIGRATIONS,
@@ -42,14 +43,14 @@ class Migration(migration.Migration):
             ),
         ]
 
-    def __backwards_local(self) -> Sequence[operations.Operation]:
+    def backwards_local(self) -> Sequence[operations.Operation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.MIGRATIONS, table_name="migrations_local",
             )
         ]
 
-    def __forwards_dist(self) -> Sequence[operations.Operation]:
+    def forwards_dist(self) -> Sequence[operations.Operation]:
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.MIGRATIONS,
@@ -61,29 +62,9 @@ class Migration(migration.Migration):
             )
         ]
 
-    def __backwards_dist(self) -> Sequence[operations.Operation]:
+    def backwards_dist(self) -> Sequence[operations.Operation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.MIGRATIONS, table_name="migrations_dist"
             )
         ]
-
-    def forwards(self, context: Context) -> None:
-        migration_id, logger, update_status = context
-        logger.info(f"Running migration: {migration_id}")
-        for op in self.__forwards_local():
-            op.execute(local=True)
-        for op in self.__forwards_dist():
-            op.execute(local=False)
-        logger.info(f"Finished: {migration_id}")
-        update_status(Status.COMPLETED)
-
-    def backwards(self, context: Context) -> None:
-        migration_id, logger, update_status = context
-        logger.info(f"Reversing migration: {migration_id}")
-        update_status(Status.IN_PROGRESS)
-        for op in self.__backwards_dist():
-            op.execute(local=False)
-        for op in self.__backwards_local():
-            op.execute(local=True)
-        logger.info(f"Finished reversing: {migration_id}")

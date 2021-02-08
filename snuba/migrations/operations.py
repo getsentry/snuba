@@ -2,7 +2,10 @@ from abc import ABC, abstractmethod
 from typing import Callable, Optional, Sequence
 
 from snuba.clickhouse.columns import Column
-from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
+from snuba.clusters.cluster import (
+    ClickhouseClientSettings,
+    get_cluster,
+)
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.columns import MigrationModifiers
 from snuba.migrations.table_engines import TableEngine
@@ -21,6 +24,10 @@ class Operation(ABC):
 class SqlOperation(Operation, ABC):
     def __init__(self, storage_set: StorageSetKey):
         self._storage_set = storage_set
+
+    @property
+    def storage_set(self) -> StorageSetKey:
+        return self._storage_set
 
     def execute(self, local: bool) -> None:
         cluster = get_cluster(self._storage_set)
@@ -45,15 +52,6 @@ class RunSql(SqlOperation):
 
     def format_sql(self) -> str:
         return self.__statement
-
-
-class DropTable(SqlOperation):
-    def __init__(self, storage_set: StorageSetKey, table_name: str) -> None:
-        super().__init__(storage_set)
-        self.table_name = table_name
-
-    def format_sql(self) -> str:
-        return f"DROP TABLE IF EXISTS {self.table_name};"
 
 
 class CreateTable(SqlOperation):
@@ -114,6 +112,25 @@ class RenameTable(SqlOperation):
 
     def format_sql(self) -> str:
         return f"RENAME TABLE {self.__old_table_name} TO {self.__new_table_name};"
+
+
+class DropTable(SqlOperation):
+    def __init__(self, storage_set: StorageSetKey, table_name: str) -> None:
+        super().__init__(storage_set)
+        self.table_name = table_name
+
+    def format_sql(self) -> str:
+        return f"DROP TABLE IF EXISTS {self.table_name};"
+
+
+class TruncateTable(SqlOperation):
+    def __init__(self, storage_set: StorageSetKey, table_name: str):
+        super().__init__(storage_set)
+        self.__storage_set = storage_set
+        self.__table_name = table_name
+
+    def format_sql(self) -> str:
+        return f"TRUNCATE TABLE IF EXISTS {self.__table_name};"
 
 
 class AddColumn(SqlOperation):

@@ -9,6 +9,7 @@ from multiprocessing.pool import AsyncResult, Pool
 from multiprocessing.shared_memory import SharedMemory
 from pickle import PickleBuffer
 from typing import (
+    Any,
     Callable,
     Deque,
     Generic,
@@ -31,6 +32,7 @@ from snuba.utils.streams.types import Message, TPayload
 
 logger = logging.getLogger(__name__)
 
+LOG_THRESHOLD_TIME = 20  # In seconds
 
 TTransformed = TypeVar("TTransformed")
 
@@ -108,6 +110,9 @@ class MessageBatch(Generic[TPayload]):
 
     def __len__(self) -> int:
         return len(self.__items)
+
+    def get_content_size(self) -> int:
+        return self.__offset
 
     def __getitem__(self, index: int) -> Message[TPayload]:
         """
@@ -306,9 +311,21 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
             ]
         ] = deque()
 
+        self.__metrics = metrics
         self.__batches_in_progress = Gauge(metrics, "batches_in_progress")
+        self.__pool_waiting_time: Optional[float] = None
 
         self.__closed = False
+
+        def handle_sigchld(signum: int, frame: Any) -> None:
+            # Logs if any child process of the consumer is terminated.
+            # This is meant to detect the unexpected termination of
+            # multiprocessor pool workers.
+            if not self.__closed:
+                self.__metrics.increment("sigchld.detected")
+                logger.warn("SIGCHLD detected in parallel consumer.")
+
+        signal.signal(signal.SIGCHLD, handle_sigchld)
 
     def __submit_batch(self) -> None:
         assert self.__batch_builder is not None
@@ -324,6 +341,8 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
             )
         )
         self.__batches_in_progress.increment()
+        self.__metrics.timing("batch.size.msg", len(batch))
+        self.__metrics.timing("batch.size.bytes", batch.get_content_size())
         self.__batch_builder = None
 
     def __check_for_results(self, timeout: Optional[float] = None) -> None:
@@ -376,7 +395,21 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
             try:
                 self.__check_for_results(timeout=0)
             except multiprocessing.TimeoutError:
+                if self.__pool_waiting_time is None:
+                    self.__pool_waiting_time = time.time()
+                else:
+                    current_time = time.time()
+                    if current_time - self.__pool_waiting_time > LOG_THRESHOLD_TIME:
+                        logger.warning(
+                            "Waited on the process pool longer than %d seconds. Waiting for %d results. Pool: %r",
+                            LOG_THRESHOLD_TIME,
+                            len(self.__results),
+                            self.__pool,
+                        )
+                        self.__pool_waiting_time = current_time
                 break
+            else:
+                self.__pool_waiting_time = None
 
         if self.__batch_builder is not None and self.__batch_builder.ready():
             self.__submit_batch()

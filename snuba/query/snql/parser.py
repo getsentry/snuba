@@ -184,7 +184,7 @@ class OrTuple(NamedTuple):
     exp: Expression
 
 
-class SnQLVisitor(NodeVisitor):
+class SnQLVisitor(NodeVisitor):  # type: ignore
     """
     Builds Snuba AST expressions from the Parsimonious parse tree.
     """
@@ -871,6 +871,31 @@ def _mangle_query_aliases(
         query.transform_expressions(mangle_column_value)
 
 
+def _validate_required_conditions(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
+) -> None:
+    if isinstance(query, LogicalQuery):
+        entity = get_entity(query.get_from_clause().key)
+        if not entity.validate_required_conditions(query):
+            raise ParsingException(
+                f"{query.get_from_clause().key} is missing required conditions"
+            )
+    else:
+        from_clause = query.get_from_clause()
+        if isinstance(from_clause, (LogicalQuery, CompositeQuery)):
+            return _validate_required_conditions(from_clause)
+
+        assert isinstance(from_clause, JoinClause)  # mypy
+        alias_map = from_clause.get_alias_node_map()
+        for alias, node in alias_map.items():
+            assert isinstance(node.data_source, QueryEntity)  # mypy
+            entity = get_entity(node.data_source.key)
+            if not entity.validate_required_conditions(query, alias):
+                raise ParsingException(
+                    f"{node.data_source.key} is missing required conditions"
+                )
+
+
 def _post_process(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
     funcs: Sequence[Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]],
@@ -882,6 +907,7 @@ def _post_process(
         from_clause = query.get_from_clause()
         if isinstance(from_clause, (LogicalQuery, CompositeQuery)):
             _post_process(from_clause, funcs)
+            query.set_from_clause(from_clause)
 
 
 def parse_snql_query(
@@ -904,4 +930,6 @@ def parse_snql_query(
         ],
     )
 
+    # Validating
+    _post_process(query, [_validate_required_conditions])
     return query

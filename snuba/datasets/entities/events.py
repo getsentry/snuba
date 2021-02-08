@@ -69,9 +69,18 @@ errors_translators = TranslationMappers(
         ColumnToColumn(None, "transaction", None, "transaction_name"),
         ColumnToColumn(None, "username", None, "user_name"),
         ColumnToColumn(None, "email", None, "user_email"),
-        ColumnToMapping(None, "geo_country_code", None, "contexts", "geo.country_code"),
-        ColumnToMapping(None, "geo_region", None, "contexts", "geo.region"),
-        ColumnToMapping(None, "geo_city", None, "contexts", "geo.city"),
+        ColumnToMapping(
+            None,
+            "geo_country_code",
+            None,
+            "contexts",
+            "geo.country_code",
+            nullable=True,
+        ),
+        ColumnToMapping(
+            None, "geo_region", None, "contexts", "geo.region", nullable=True
+        ),
+        ColumnToMapping(None, "geo_city", None, "contexts", "geo.city", nullable=True),
     ],
     subscriptables=[
         SubscriptableMapper(None, "tags", None, "tags"),
@@ -83,7 +92,11 @@ metrics = MetricsWrapper(environment.metrics, "snuplicator")
 
 
 def callback_func(
-    storage: str, query: Query, referrer: str, results: List[Result[QueryResult]]
+    storage: str,
+    query: Query,
+    request_settings: RequestSettings,
+    referrer: str,
+    results: List[Result[QueryResult]],
 ) -> None:
     if not results:
         metrics.increment(
@@ -103,6 +116,10 @@ def callback_func(
             round((result.execution_time - primary_result.execution_time) * 1000),
             tags={"referrer": referrer},
         )
+
+        # Do not bother diffing the actual results of sampled queries
+        if request_settings.get_turbo() or query.get_sample() not in [None, 1.0]:
+            return
 
         if result_data == primary_result_data:
             metrics.increment(
@@ -218,7 +235,9 @@ class BaseEventsEntity(Entity, ABC):
         )
 
         def selector_func(_query: Query) -> Tuple[str, List[str]]:
-            if random.random() < float(state.get_config("errors_query_percentage", 0)):
+            config = state.get_config("errors_query_percentage", 0)
+            assert isinstance(config, (float, int, str))
+            if random.random() < float(config):
                 return "events", ["errors"]
 
             return "events", []
@@ -236,6 +255,8 @@ class BaseEventsEntity(Entity, ABC):
             abstract_column_set=columns,
             join_relationships={},
             writable_storage=storage,
+            required_filter_columns=["project_id"],
+            required_time_column="timestamp",
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

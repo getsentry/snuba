@@ -1,19 +1,16 @@
 import logging
-from datetime import datetime
-from typing import Optional, Sequence
+from typing import Sequence
 
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.query_dsl.accessors import get_time_range
+from snuba.clickhouse.query_inspector import TablesCollector
 from snuba.clickhouse.translators.snuba.mappers import (
     KEY_COL_MAPPING_PARAM,
     VALUE_COL_MAPPING_PARAM,
     mapping_pattern,
 )
-from snuba.query.conditions import BooleanFunctions, ConditionFunctions
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
-from snuba.query.matchers import Any, Column, FunctionCall, Literal, Or, Param, String
 from snuba.querylog.query_metadata import (
     ClickhouseQueryProfile,
     Columnset,
@@ -21,49 +18,6 @@ from snuba.querylog.query_metadata import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _get_date_range(query: Query) -> Optional[int]:
-    """
-    Best guess to find the time range for the query.
-    We pick the first column that is compared with a datetime Literal.
-    """
-    pattern = FunctionCall(
-        Or([String(ConditionFunctions.GT), String(ConditionFunctions.GTE)]),
-        (Column(None, Param("col_name", Any(str))), Literal(Any(datetime))),
-    )
-
-    condition = query.get_condition_from_ast()
-    if condition is None:
-        return None
-    for exp in condition:
-        result = pattern.match(exp)
-        if result is not None:
-            from_date, to_date = get_time_range(query, result.string("col_name"))
-            if from_date is None or to_date is None:
-                return None
-            else:
-                return (to_date - from_date).days
-
-    return None
-
-
-def _get_table(query: Query) -> str:
-    source = query.get_from_clause()
-    if source is None:
-        # Should never happen at this point.
-        return ""
-    return source.table_name
-
-
-def _has_complex_conditions(query: Query) -> bool:
-    condition = query.get_condition_from_ast()
-    if condition is None:
-        return False
-    for c in condition:
-        if isinstance(c, FunctionCallExpr) and c.function_name == BooleanFunctions.OR:
-            return True
-    return False
 
 
 def _get_all_columns(query: Query) -> Columnset:
@@ -118,12 +72,15 @@ def generate_profile(query: Query) -> ClickhouseQueryProfile:
     where = query.get_condition_from_ast()
     groupby = query.get_groupby_from_ast()
 
+    collector = TablesCollector()
+    collector.visit(query)
+
     try:
         return ClickhouseQueryProfile(
-            time_range=_get_date_range(query),
-            table=_get_table(query),
+            time_range=collector.get_max_time_range(),
+            table=",".join(sorted([t for t in collector.get_tables()])),
             all_columns=_get_all_columns(query),
-            multi_level_condition=_has_complex_conditions(query),
+            multi_level_condition=collector.has_complex_condition(),
             where_profile=FilterProfile(
                 columns=_list_columns(where) if where is not None else set(),
                 mapping_cols=_list_mapping(where) if where is not None else set(),

@@ -12,3 +12,7 @@ class MigrationError(Exception):
 
 class MigrationInProgress(Exception):
     pass
+
+
+class InvalidClickhouseVersion(Exception):
+    pass

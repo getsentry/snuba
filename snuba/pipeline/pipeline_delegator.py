@@ -58,7 +58,12 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
         self.__query_pipeline_builders = query_pipeline_builders
         self.__selector_func = selector_func
         self.__callback_func = (
-            partial(callback_func, self.__request.query, self.__request.referrer)
+            partial(
+                callback_func,
+                self.__request.query,
+                self.__request.settings,
+                self.__request.referrer,
+            )
             if callback_func
             else None
         )

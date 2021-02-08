@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytz
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.cdc.groupassignee_processor import (
     GroupAssigneeProcessor,
     GroupAssigneeRow,

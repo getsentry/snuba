@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, NamedTuple, Sequence, Tuple
 
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.spans_processor import SpansMessageProcessor
 from snuba.processor import InsertBatch
 
@@ -108,7 +108,6 @@ class SpanEvent:
                 "parent_span_id": int(self.parent_span_id, 16),
                 "transaction_name": self.transaction_name,
                 "op": self.op,
-                "description": self.transaction_name,
                 "status": 0,
                 "start_ts": start_timestamp,
                 "start_ns": int(start_timestamp.microsecond * 1000),
@@ -135,7 +134,6 @@ class SpanEvent:
                     "parent_span_id": int(s.parent_span_id, 16),
                     "transaction_name": self.transaction_name,
                     "op": s.op,
-                    "description": "GET /api/0/organizations/sentry/tags/?project=1",
                     "status": 2,
                     "start_ts": span_start_ts,
                     "start_ns": int(span_start_ts.microsecond * 1000),

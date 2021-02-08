@@ -41,8 +41,8 @@ class TestDiscoverApi(BaseApiTest):
         self.project_id = self.event["project_id"]
         self.skew = timedelta(minutes=180)
         self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0, tzinfo=pytz.utc
-        ) - timedelta(minutes=180)
+            second=0, microsecond=0, tzinfo=pytz.utc
+        ) - timedelta(minutes=90)
         write_unprocessed_events(get_writable_storage(StorageKey.EVENTS), [self.event])
         write_unprocessed_events(
             get_writable_storage(StorageKey.TRANSACTIONS), [get_raw_transaction()],
@@ -60,6 +60,8 @@ class TestDiscoverApi(BaseApiTest):
                     "conditions": [["type", "!=", "transaction"]],
                     "orderby": "timestamp",
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -92,6 +94,8 @@ class TestDiscoverApi(BaseApiTest):
                     "conditions": [["type", "=", "transaction"]],
                     "orderby": "timestamp",
                     "limit": 1,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -121,6 +125,8 @@ class TestDiscoverApi(BaseApiTest):
                     "conditions": [["type", "!=", "transaction"]],
                     "orderby": "count",
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -147,6 +153,8 @@ class TestDiscoverApi(BaseApiTest):
                     "conditions": [["type", "=", "transaction"]],
                     "orderby": "count",
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -182,6 +190,8 @@ class TestDiscoverApi(BaseApiTest):
                     ],
                     "groupby": ["type"],
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -208,6 +218,8 @@ class TestDiscoverApi(BaseApiTest):
                     "conditions": [["type", "=", "error"]],
                     "groupby": ["type", "group_id"],
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -216,6 +228,65 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"] == [
             {"type": "error", "group_id": self.event["group_id"], "uniq_trace_id": None}
         ]
+
+    def test_geo_column_empty(self) -> None:
+        event = get_raw_event()
+        del event["data"]["user"]["geo"]
+        write_unprocessed_events(get_writable_storage(StorageKey.EVENTS), [event])
+
+        response = self.app.post(
+            self.endpoint,
+            "discover_events",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["geo_city"],
+                    "aggregations": [["count()", "", "count"]],
+                    "conditions": [[["isNull", ["geo_country_code"]], "!=", 1]],
+                    "groupby": ["geo_city"],
+                    "orderby": "count",
+                    "limit": 2,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [{"geo_city": "San Francisco", "count": 1}]
+
+        transaction = get_raw_transaction()
+        del transaction["data"]["user"]["geo"]
+        write_unprocessed_events(
+            get_writable_storage(StorageKey.TRANSACTIONS), [transaction]
+        )
+
+        response = self.app.post(
+            self.endpoint,
+            "discover_transactions",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["geo_city"],
+                    "aggregations": [["count()", "", "count"]],
+                    "conditions": [
+                        ["type", "=", "transaction"],
+                        [["isNull", ["geo_country_code"]], "!=", 1],
+                    ],
+                    "groupby": ["geo_city"],
+                    "orderby": "count",
+                    "limit": 2,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [{"geo_city": "San Francisco", "count": 1}]
 
     def test_geo_column_condition(self) -> None:
         response = self.app.post(
@@ -231,6 +302,8 @@ class TestDiscoverApi(BaseApiTest):
                         ["geo_country_code", "=", "MX"],
                     ],
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -254,6 +327,8 @@ class TestDiscoverApi(BaseApiTest):
                         ["geo_city", "=", "San Francisco"],
                     ],
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -281,6 +356,8 @@ class TestDiscoverApi(BaseApiTest):
                         ["exception_frames.filename", "LIKE", "%.java"],
                     ],
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -326,6 +403,8 @@ class TestDiscoverApi(BaseApiTest):
                         ],
                     ],
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -368,6 +447,8 @@ class TestDiscoverApi(BaseApiTest):
                         ],
                     ],
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -418,6 +499,8 @@ class TestDiscoverApi(BaseApiTest):
                         ],
                     ],
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -468,6 +551,8 @@ class TestDiscoverApi(BaseApiTest):
                     ],
                     "project": [self.project_id],
                     "limit": 10,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -488,6 +573,8 @@ class TestDiscoverApi(BaseApiTest):
                         ["contexts[os.kernel_version]", "LIKE", "10.1%"],
                     ],
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -507,6 +594,8 @@ class TestDiscoverApi(BaseApiTest):
                     "conditions": [["duration", ">=", 0]],
                     "groupby": ["http_method", "http_referer", "tags[url]"],
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -532,6 +621,8 @@ class TestDiscoverApi(BaseApiTest):
                     "conditions": [["group_id", ">=", 0]],
                     "groupby": ["http_method", "http_referer", "tags[url]"],
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -561,6 +652,8 @@ class TestDiscoverApi(BaseApiTest):
                         ["contexts[device.model_id]", "=", "Galaxy"],
                     ],
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -583,6 +676,8 @@ class TestDiscoverApi(BaseApiTest):
                         ["contexts[device.model_id]", "=", "Galaxy"],
                     ],
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -604,6 +699,8 @@ class TestDiscoverApi(BaseApiTest):
                     "conditions": [["duration", ">=", 0]],
                     "groupby": ["contexts[device.charging]"],
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -624,6 +721,8 @@ class TestDiscoverApi(BaseApiTest):
                     "conditions": [["type", "=", "error"]],
                     "groupby": ["contexts[device.charging]"],
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -646,6 +745,8 @@ class TestDiscoverApi(BaseApiTest):
                         [["notHandled", []], "=", 1],
                     ],
                     "limit": 5,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -667,6 +768,8 @@ class TestDiscoverApi(BaseApiTest):
                         "conditions": [["type", "!=", "transaction"]],
                         "having": [["times_seen", "=", 1]],
                         "aggregations": [["count()", "", "times_seen"]],
+                        "from_date": (self.base_time - self.skew).isoformat(),
+                        "to_date": (self.base_time + self.skew).isoformat(),
                     }
                 ),
             ).data
@@ -685,6 +788,8 @@ class TestDiscoverApi(BaseApiTest):
                         "selected_columns": ["project_id"],
                         "groupby": ["time", "project_id"],
                         "conditions": [["type", "!=", "transaction"]],
+                        "from_date": (self.base_time - self.skew).isoformat(),
+                        "to_date": (self.base_time + self.skew).isoformat(),
                     }
                 ),
             ).data
@@ -702,6 +807,8 @@ class TestDiscoverApi(BaseApiTest):
                         "selected_columns": ["project_id"],
                         "groupby": ["time", "project_id"],
                         "conditions": [["duration", ">=", 0]],
+                        "from_date": (self.base_time - self.skew).isoformat(),
+                        "to_date": (self.base_time + self.skew).isoformat(),
                     }
                 ),
             ).data
@@ -722,6 +829,8 @@ class TestDiscoverApi(BaseApiTest):
                             ["type", "=", "transaction"],
                             ["duration", ">=", 0],
                         ],
+                        "from_date": (self.base_time - self.skew).isoformat(),
+                        "to_date": (self.base_time + self.skew).isoformat(),
                     }
                 ),
             ).data
@@ -742,6 +851,8 @@ class TestDiscoverApi(BaseApiTest):
                             ["duration", ">=", 0],
                             ["group_id", "IN", (1, 2, 3, 4)],
                         ],
+                        "from_date": (self.base_time - self.skew).isoformat(),
+                        "to_date": (self.base_time + self.skew).isoformat(),
                     }
                 ),
             ).data
@@ -760,6 +871,8 @@ class TestDiscoverApi(BaseApiTest):
                         "project": self.project_id,
                         "conditions": [["type", "=", "error"]],
                         "selected_columns": ["contexts[device.online]"],
+                        "from_date": (self.base_time - self.skew).isoformat(),
+                        "to_date": (self.base_time + self.skew).isoformat(),
                     }
                 ),
             ).data
@@ -776,6 +889,8 @@ class TestDiscoverApi(BaseApiTest):
                         "project": self.project_id,
                         "conditions": [["duration", ">=", 0]],
                         "selected_columns": ["contexts[device.online]"],
+                        "from_date": (self.base_time - self.skew).isoformat(),
+                        "to_date": (self.base_time + self.skew).isoformat(),
                     }
                 ),
             ).data
@@ -797,6 +912,8 @@ class TestDiscoverApi(BaseApiTest):
                     "conditions": [],
                     "orderby": "apdex_duration_300",
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -827,6 +944,8 @@ class TestDiscoverApi(BaseApiTest):
                     "conditions": [],
                     "orderby": "uniq_user",
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -850,6 +969,8 @@ class TestDiscoverApi(BaseApiTest):
                     "conditions": [],
                     "orderby": "uniq_user",
                     "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -874,6 +995,8 @@ class TestDiscoverApi(BaseApiTest):
                         "measurements[asd]",
                     ],
                     "limit": 1,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -893,6 +1016,8 @@ class TestDiscoverApi(BaseApiTest):
                     "project": self.project_id,
                     "selected_columns": ["group_id", "measurements[lcp]"],
                     "limit": 1,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -915,6 +1040,8 @@ class TestDiscoverApi(BaseApiTest):
                     "conditions": [["type", "=", "error"]],
                     "groupby": ["group_id"],
                     "limit": 1,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -941,6 +1068,8 @@ class TestDiscoverApi(BaseApiTest):
                     "conditions": [["type", "=", "error"]],
                     "groupby": ["group_id"],
                     "limit": 1,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -1025,6 +1154,8 @@ class TestDiscoverApi(BaseApiTest):
                         "measurements_histogram_1_0_100",
                     ],
                     "limit": 1,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -1045,6 +1176,8 @@ class TestDiscoverApi(BaseApiTest):
                     "selected_columns": ["title", "type", "timestamp"],
                     "groupby": ["title", "type", "timestamp"],
                     "limit": 1,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -1073,6 +1206,8 @@ class TestDiscoverApi(BaseApiTest):
                         ["type", "=", "transaction"],
                     ],
                     "groupby": ["transaction"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -1135,6 +1270,8 @@ class TestDiscoverApi(BaseApiTest):
                         ["project_id", "IN", [self.project_id]],
                     ],
                     "groupby": ["transaction", "project_id"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -1174,6 +1311,8 @@ class TestDiscoverApi(BaseApiTest):
                         ["uniq", "user", "count_unique_user"],
                     ],
                     "consistent": False,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )

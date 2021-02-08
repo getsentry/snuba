@@ -6,7 +6,7 @@ from confluent_kafka import Producer as ConfluentKafkaProducer
 
 import click
 from snuba import environment, settings
-from snuba.consumer import MultistorageConsumerProcessingStrategyFactory
+from snuba.consumers.consumer import MultistorageConsumerProcessingStrategyFactory
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import WRITABLE_STORAGES, get_writable_storage
 from snuba.environment import setup_logging, setup_sentry

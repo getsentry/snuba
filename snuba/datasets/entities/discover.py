@@ -399,12 +399,23 @@ class DiscoverEntity(Entity):
                                 None,
                                 "contexts",
                                 "geo.country_code",
+                                nullable=True,
                             ),
                             ColumnToMapping(
-                                None, "geo_region", None, "contexts", "geo.region"
+                                None,
+                                "geo_region",
+                                None,
+                                "contexts",
+                                "geo.region",
+                                nullable=True,
                             ),
                             ColumnToMapping(
-                                None, "geo_city", None, "contexts", "geo.city"
+                                None,
+                                "geo_city",
+                                None,
+                                "contexts",
+                                "geo.city",
+                                nullable=True,
                             ),
                             ColumnToFunction(
                                 None,
@@ -427,9 +438,9 @@ class DiscoverEntity(Entity):
         )
 
         def selector_func(_query: Query) -> Tuple[str, List[str]]:
-            if random.random() < float(
-                state.get_config("discover_query_percentage", 0)
-            ):
+            config = state.get_config("discover_query_percentage", 0)
+            assert isinstance(config, (float, int, str))
+            if random.random() < float(config):
                 return "events", ["discover"]
 
             return "events", []
@@ -451,6 +462,8 @@ class DiscoverEntity(Entity):
             ),
             join_relationships={},
             writable_storage=None,
+            required_filter_columns=["project_id"],
+            required_time_column="timestamp",
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:

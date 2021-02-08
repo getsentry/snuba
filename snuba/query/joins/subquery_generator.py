@@ -46,7 +46,10 @@ class SubqueryDraft:
         return LogicalQuery(
             from_clause=self.__data_source,
             selected_columns=list(
-                sorted(self.__selected_expressions, key=lambda selected: selected.name)
+                sorted(
+                    self.__selected_expressions,
+                    key=lambda selected: selected.name or "",
+                )
             ),
             condition=combine_and_conditions(self.__conditions)
             if self.__conditions

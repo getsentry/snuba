@@ -59,7 +59,8 @@ def migrate(force: bool) -> None:
 @click.option("--migration-id", required=True, help="Migration ID")
 @click.option("--force", is_flag=True)
 @click.option("--fake", is_flag=True)
-def run(group: str, migration_id: str, force: bool, fake: bool) -> None:
+@click.option("--dry-run", is_flag=True)
+def run(group: str, migration_id: str, force: bool, fake: bool, dry_run: bool) -> None:
     """
     Runs a single migration.
     --force must be passed in order to run blocking migrations.
@@ -70,6 +71,10 @@ def run(group: str, migration_id: str, force: bool, fake: bool) -> None:
     runner = Runner()
     migration_group = MigrationGroup(group)
     migration_key = MigrationKey(migration_group, migration_id)
+
+    if dry_run:
+        runner.run_migration(migration_key, dry_run=True)
+        return
 
     try:
         if fake:
@@ -89,7 +94,10 @@ def run(group: str, migration_id: str, force: bool, fake: bool) -> None:
 @click.option("--migration-id", required=True, help="Migration ID")
 @click.option("--force", is_flag=True)
 @click.option("--fake", is_flag=True)
-def reverse(group: str, migration_id: str, force: bool, fake: bool) -> None:
+@click.option("--dry-run", is_flag=True)
+def reverse(
+    group: str, migration_id: str, force: bool, fake: bool, dry_run: bool
+) -> None:
     """
     Reverses a single migration.
 
@@ -99,6 +107,10 @@ def reverse(group: str, migration_id: str, force: bool, fake: bool) -> None:
     runner = Runner()
     migration_group = MigrationGroup(group)
     migration_key = MigrationKey(migration_group, migration_id)
+
+    if dry_run:
+        runner.reverse_migration(migration_key, dry_run=True)
+        return
 
     try:
         if fake:
