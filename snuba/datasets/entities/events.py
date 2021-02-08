@@ -5,7 +5,7 @@ from functools import partial
 from typing import List, Mapping, Optional, Sequence, Tuple
 
 import sentry_sdk
-from snuba import environment, state
+from snuba import environment, settings, state
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
     ColumnToFunction,
@@ -235,6 +235,18 @@ class BaseEventsEntity(Entity, ABC):
         )
 
         def selector_func(_query: Query, referrer: str) -> Tuple[str, List[str]]:
+            # In case something goes wrong, set this to 1 to revert to the events storage.
+            kill_rollout = state.get_config("errors_rollout_killswitch", 0)
+            assert isinstance(kill_rollout, (int, str))
+            if int(kill_rollout):
+                return "events", []
+
+            if referrer in settings.ERRORS_ROLLOUT_BY_REFERRER:
+                return "errors", []
+
+            if settings.ERRORS_ROLLOUT_ALL:
+                return "errors", []
+
             config = state.get_config("errors_query_percentage", 0)
             assert isinstance(config, (float, int, str))
             if random.random() < float(config):
