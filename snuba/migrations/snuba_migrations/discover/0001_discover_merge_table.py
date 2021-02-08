@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import List, Sequence
 
 from snuba.clickhouse.columns import (
     Column,
@@ -14,7 +14,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-columns = [
+columns: List[Column[Modifiers]] = [
     Column("event_id", UUID()),
     Column("project_id", UInt(64)),
     Column("type", String(Modifiers(low_cardinality=True))),

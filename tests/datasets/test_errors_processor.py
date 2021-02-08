@@ -3,7 +3,7 @@ from uuid import UUID
 
 import pytz
 
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.processor import InsertBatch
 from snuba.settings import PAYLOAD_DATETIME_FORMAT

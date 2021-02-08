@@ -2,9 +2,9 @@ import functools
 import itertools
 import logging
 import time
-from datetime import datetime
 from pickle import PickleBuffer
 from typing import (
+    Any,
     Callable,
     Mapping,
     MutableSequence,
@@ -20,6 +20,7 @@ import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -54,16 +55,10 @@ from snuba.writer import BatchWriter
 logger = logging.getLogger("snuba.consumer")
 
 
-class KafkaMessageMetadata(NamedTuple):
-    offset: int
-    partition: int
-    timestamp: datetime
-
-
 class JSONRowInsertBatch(NamedTuple):
     rows: Sequence[JSONRow]
 
-    def __reduce_ex__(self, protocol: int):
+    def __reduce_ex__(self, protocol: int) -> Tuple[Any, Tuple[Sequence[Any]]]:
         if protocol >= 5:
             return (type(self), ([PickleBuffer(row) for row in self.rows],))
         else:
@@ -135,7 +130,9 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
 
         self.__messages.append(message)
 
-    def __delivery_callback(self, error, message) -> None:
+    def __delivery_callback(
+        self, error: Optional[Exception], message: Message[ReplacementBatch]
+    ) -> None:
         if error is not None:
             # errors are KafkaError objects and inherit from BaseException
             raise error

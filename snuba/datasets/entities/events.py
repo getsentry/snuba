@@ -235,7 +235,9 @@ class BaseEventsEntity(Entity, ABC):
         )
 
         def selector_func(_query: Query) -> Tuple[str, List[str]]:
-            if random.random() < float(state.get_config("errors_query_percentage", 0)):
+            config = state.get_config("errors_query_percentage", 0)
+            assert isinstance(config, (float, int, str))
+            if random.random() < float(config):
                 return "events", ["errors"]
 
             return "events", []

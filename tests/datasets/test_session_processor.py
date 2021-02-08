@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from snuba.datasets.sessions_processor import SessionsProcessor
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import InsertBatch
 
 

@@ -3,10 +3,22 @@ import re
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from hashlib import md5
-from typing import Any, NamedTuple, Optional, Sequence, Union
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    MutableMapping,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 import simplejson as json
 
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.util import force_bytes
 from snuba.writer import WriterTableRow
 
@@ -36,7 +48,9 @@ class MessageProcessor(ABC):
     """
 
     @abstractmethod
-    def process_message(self, message, metadata) -> Optional[ProcessedMessage]:
+    def process_message(
+        self, message: Any, metadata: KafkaMessageMetadata
+    ) -> Optional[ProcessedMessage]:
         raise NotImplementedError
 
 
@@ -48,7 +62,13 @@ class InvalidMessageVersion(Exception):
     pass
 
 
-def _as_dict_safe(value):
+TKey = TypeVar("TKey")
+TValue = TypeVar("TValue")
+
+
+def _as_dict_safe(
+    value: Union[None, Iterable[Tuple[TKey, TValue]], Dict[TKey, TValue]],
+) -> MutableMapping[TKey, TValue]:
     if value is None:
         return {}
     if isinstance(value, dict):
@@ -112,7 +132,7 @@ def _floatify(s) -> Optional[float]:
         return None
 
 
-def _unicodify(s) -> Optional[str]:
+def _unicodify(s: Any) -> Optional[str]:
     if s is None:
         return None
 
