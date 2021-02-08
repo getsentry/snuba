@@ -437,7 +437,7 @@ class DiscoverEntity(Entity):
             )
         )
 
-        def selector_func(_query: Query) -> Tuple[str, List[str]]:
+        def selector_func(_query: Query, referrer: str) -> Tuple[str, List[str]]:
             config = state.get_config("discover_query_percentage", 0)
             assert isinstance(config, (float, int, str))
             if random.random() < float(config):
