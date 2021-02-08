@@ -229,6 +229,65 @@ class TestDiscoverApi(BaseApiTest):
             {"type": "error", "group_id": self.event["group_id"], "uniq_trace_id": None}
         ]
 
+    def test_geo_column_empty(self) -> None:
+        event = get_raw_event()
+        del event["data"]["user"]["geo"]
+        write_unprocessed_events(get_writable_storage(StorageKey.EVENTS), [event])
+
+        response = self.app.post(
+            self.endpoint,
+            "discover_events",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["geo_city"],
+                    "aggregations": [["count()", "", "count"]],
+                    "conditions": [[["isNull", ["geo_country_code"]], "!=", 1]],
+                    "groupby": ["geo_city"],
+                    "orderby": "count",
+                    "limit": 2,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [{"geo_city": "San Francisco", "count": 1}]
+
+        transaction = get_raw_transaction()
+        del transaction["data"]["user"]["geo"]
+        write_unprocessed_events(
+            get_writable_storage(StorageKey.TRANSACTIONS), [transaction]
+        )
+
+        response = self.app.post(
+            self.endpoint,
+            "discover_transactions",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["geo_city"],
+                    "aggregations": [["count()", "", "count"]],
+                    "conditions": [
+                        ["type", "=", "transaction"],
+                        [["isNull", ["geo_country_code"]], "!=", 1],
+                    ],
+                    "groupby": ["geo_city"],
+                    "orderby": "count",
+                    "limit": 2,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [{"geo_city": "San Francisco", "count": 1}]
+
     def test_geo_column_condition(self) -> None:
         response = self.app.post(
             self.endpoint,
