@@ -172,7 +172,7 @@ class TestOutcomesApi(BaseApiTest):
             num_outcomes=1,
             outcome=0,
             category=DataCategory.ERROR,
-            time_since_base=timedelta(minutes=30),
+            time_since_base=timedelta(minutes=500),
         )
         self.generate_outcomes(
             org_id=1,
@@ -180,7 +180,7 @@ class TestOutcomesApi(BaseApiTest):
             num_outcomes=1,
             outcome=0,
             category=DataCategory.ERROR,
-            time_since_base=timedelta(minutes=30),
+            time_since_base=timedelta(minutes=500),
         )
         self.generate_outcomes(
             org_id=1,
@@ -188,7 +188,7 @@ class TestOutcomesApi(BaseApiTest):
             num_outcomes=1,
             outcome=0,
             category=DataCategory.SECURITY,
-            time_since_base=timedelta(minutes=30),
+            time_since_base=timedelta(minutes=500),
         )
         self.generate_outcomes(
             org_id=1,
@@ -196,7 +196,7 @@ class TestOutcomesApi(BaseApiTest):
             num_outcomes=1,
             outcome=0,
             category=DataCategory.TRANSACTION,
-            time_since_base=timedelta(minutes=30),
+            time_since_base=timedelta(minutes=500),
         )
         self.generate_outcomes(
             org_id=1,
@@ -205,7 +205,7 @@ class TestOutcomesApi(BaseApiTest):
             outcome=0,
             size=6,
             category=DataCategory.SESSION,
-            time_since_base=timedelta(minutes=30),
+            time_since_base=timedelta(minutes=500),
         )
         self.generate_outcomes(
             org_id=1,
@@ -214,7 +214,7 @@ class TestOutcomesApi(BaseApiTest):
             outcome=0,
             size=4,
             category=DataCategory.SESSION,
-            time_since_base=timedelta(minutes=30),
+            time_since_base=timedelta(minutes=500),
         )
         self.generate_outcomes(
             org_id=1,
@@ -223,7 +223,7 @@ class TestOutcomesApi(BaseApiTest):
             outcome=0,
             category=DataCategory.ATTACHMENT,
             size=65536,
-            time_since_base=timedelta(minutes=30),
+            time_since_base=timedelta(minutes=500),
         )
         self.generate_outcomes(
             org_id=1,
@@ -232,11 +232,11 @@ class TestOutcomesApi(BaseApiTest):
             outcome=0,
             category=DataCategory.ATTACHMENT,
             size=16384,
-            time_since_base=timedelta(minutes=30),
+            time_since_base=timedelta(minutes=500),
         )
 
-        from_date = self.format_time(self.base_time - self.skew)
-        to_date = self.format_time(self.base_time + self.skew)
+        from_date = self.format_time(self.base_time + timedelta(minutes=400))
+        to_date = self.format_time(self.base_time + timedelta(minutes=600))
         response = self.app.post(
             self.endpoint,
             data=json.dumps(
@@ -261,7 +261,6 @@ class TestOutcomesApi(BaseApiTest):
 
         data = json.loads(response.data)
         print(json.dumps(data["data"]))
-        # print([[row["aggregate"], row["category"]] for row in data["data"]])
         assert response.status_code == 200
         assert len(data["data"]) == 5
         correct_data = [
