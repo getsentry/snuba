@@ -29,9 +29,9 @@ class OutcomesProcessor(MessageProcessor):
             "category": value.get(
                 "category", DataCategory.ERROR
             ).value,  # if category is None, default to error for now TODO: change security to error?
-            "size": value.get(
-                "size", 1
-            ),  # should probably be a default value of 1 for size and none
+            "quantity": value.get(
+                "quantity", 1
+            ),  # should probably be a default value of 1 for quantity and none
             "outcome": value.get("outcome", None),
             "reason": _unicodify(value.get("reason")),
             "event_id": str(uuid.UUID(v_uuid)) if v_uuid is not None else None,

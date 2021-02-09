@@ -47,7 +47,7 @@ class TestOutcomesApi(BaseApiTest):
         category: int,
         time_since_base: timedelta,
         outcome: int,
-        size: Optional[int] = None,
+        quantity: Optional[int] = None,
     ) -> None:
         outcomes = []
         for _ in range(num_outcomes):
@@ -65,7 +65,7 @@ class TestOutcomesApi(BaseApiTest):
                         "org_id": org_id,
                         "reason": None,
                         "key_id": 1,
-                        "size": size,
+                        "quantity": quantity,
                         "category": category,
                         "outcome": outcome,
                     },
@@ -165,7 +165,7 @@ class TestOutcomesApi(BaseApiTest):
         assert all([row["aggregate"] == 10 * self.multiplier for row in data["data"]])
         assert sorted([row["project_id"] for row in data["data"]]) == [1, 1, 2]
 
-    def test_category_size_sum_querying(self):
+    def test_category_quantity_sum_querying(self):
         self.generate_outcomes(
             org_id=1,
             project_id=1,
@@ -203,7 +203,7 @@ class TestOutcomesApi(BaseApiTest):
             project_id=1,
             num_outcomes=1,
             outcome=0,
-            size=6,
+            quantity=6,
             category=DataCategory.SESSION,
             time_since_base=timedelta(minutes=500),
         )
@@ -212,7 +212,7 @@ class TestOutcomesApi(BaseApiTest):
             project_id=1,
             num_outcomes=1,
             outcome=0,
-            size=4,
+            quantity=4,
             category=DataCategory.SESSION,
             time_since_base=timedelta(minutes=500),
         )
@@ -222,7 +222,7 @@ class TestOutcomesApi(BaseApiTest):
             num_outcomes=1,
             outcome=0,
             category=DataCategory.ATTACHMENT,
-            size=65536,
+            quantity=65536,
             time_since_base=timedelta(minutes=500),
         )
         self.generate_outcomes(
@@ -231,7 +231,7 @@ class TestOutcomesApi(BaseApiTest):
             num_outcomes=1,
             outcome=0,
             category=DataCategory.ATTACHMENT,
-            size=16384,
+            quantity=16384,
             time_since_base=timedelta(minutes=500),
         )
 
@@ -244,7 +244,7 @@ class TestOutcomesApi(BaseApiTest):
                     "dataset": "outcomes",
                     "aggregations": [
                         ["sum", "times_seen", "times_seen"],
-                        ["sum", "size", "size_sum"],
+                        ["sum", "quantity", "quantity_sum"],
                     ],
                     "from_date": from_date,
                     "selected_columns": [],
@@ -260,34 +260,33 @@ class TestOutcomesApi(BaseApiTest):
         )
 
         data = json.loads(response.data)
-        print(json.dumps(data["data"]))
         assert response.status_code == 200
         assert len(data["data"]) == 5
         correct_data = [
             {
                 "category": DataCategory.ERROR,
                 "times_seen": 2 * self.multiplier,
-                "size_sum": 0,
+                "quantity_sum": 0,
             },
             {
                 "category": DataCategory.TRANSACTION,
                 "times_seen": 1 * self.multiplier,
-                "size_sum": 0,
+                "quantity_sum": 0,
             },
             {
                 "category": DataCategory.SECURITY,
                 "times_seen": 1 * self.multiplier,
-                "size_sum": 0,
+                "quantity_sum": 0,
             },
             {
                 "category": DataCategory.ATTACHMENT,
                 "times_seen": 2 * self.multiplier,
-                "size_sum": (65536 + 16384) * self.multiplier,
+                "quantity_sum": (65536 + 16384) * self.multiplier,
             },
             {
                 "category": DataCategory.SESSION,
                 "times_seen": 2 * self.multiplier,
-                "size_sum": (6 + 4) * self.multiplier,
+                "quantity_sum": (6 + 4) * self.multiplier,
             },
         ]
         assert data["data"] == correct_data

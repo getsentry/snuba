@@ -24,7 +24,7 @@ new_materialized_view_columns: Sequence[Column[Modifiers]] = [
     Column("outcome", UInt(8)),
     Column("reason", String()),
     Column("category", UInt(8)),
-    Column("size", UInt(64)),
+    Column("quantity", UInt(64)),
     Column("times_seen", UInt(64)),
 ]
 
@@ -42,7 +42,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_local",
-                column=Column("size", UInt(32, Modifiers(nullable=True))),
+                column=Column("quantity", UInt(32, Modifiers(nullable=True))),
                 after=None,
             ),
             operations.AddColumn(
@@ -54,7 +54,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_hourly_local",
-                column=Column("size", UInt(64)),
+                column=Column("quantity", UInt(64)),
                 after=None,
             ),
             # operations.AddColumn(
@@ -89,7 +89,7 @@ class Migration(migration.MultiStepMigration):
                         ifNull(reason, 'none') AS reason,
                         category,
                         count() AS times_seen,
-                        ifNull(sum(size),0) AS size
+                        ifNull(sum(quantity),0) AS quantity
                     FROM outcomes_raw_local
                     GROUP BY org_id, project_id, key_id, timestamp, outcome, reason, category
                 """,
@@ -98,12 +98,14 @@ class Migration(migration.MultiStepMigration):
 
     def backwards_local(self) -> Sequence[operations.Operation]:
         return [
-            operations.DropColumn(StorageSetKey.OUTCOMES, "outcomes_raw_local", "size"),
+            operations.DropColumn(
+                StorageSetKey.OUTCOMES, "outcomes_raw_local", "quantity"
+            ),
             operations.DropColumn(
                 StorageSetKey.OUTCOMES, "outcomes_raw_local", "category"
             ),
             operations.DropColumn(
-                StorageSetKey.OUTCOMES, "outcomes_hourly_local", "size"
+                StorageSetKey.OUTCOMES, "outcomes_hourly_local", "quantity"
             ),
             # operations.DropColumn(
             #     StorageSetKey.OUTCOMES, "outcomes_hourly_local", "category"
@@ -147,7 +149,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_dist",
-                column=Column("size", UInt(32, Modifiers(nullable=True))),
+                column=Column("quantity", UInt(32, Modifiers(nullable=True))),
                 after=None,
             ),
             operations.AddColumn(
@@ -159,7 +161,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_hourly_dist",
-                column=Column("size", UInt(64)),
+                column=Column("quantity", UInt(64)),
                 after=None,
             ),
             operations.AddColumn(
@@ -172,12 +174,14 @@ class Migration(migration.MultiStepMigration):
 
     def backwards_dist(self) -> Sequence[operations.Operation]:
         return [
-            operations.DropColumn(StorageSetKey.OUTCOMES, "outcomes_raw_dist", "size"),
+            operations.DropColumn(
+                StorageSetKey.OUTCOMES, "outcomes_raw_dist", "quantity"
+            ),
             operations.DropColumn(
                 StorageSetKey.OUTCOMES, "outcomes_raw_dist", "category"
             ),
             operations.DropColumn(
-                StorageSetKey.OUTCOMES, "outcomes_hourly_dist", "size"
+                StorageSetKey.OUTCOMES, "outcomes_hourly_dist", "quantity"
             ),
             # operations.DropColumn(
             #     StorageSetKey.OUTCOMES, "outcomes_hourly_dist", "category"
