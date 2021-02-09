@@ -1,6 +1,6 @@
 from copy import deepcopy
 from dataclasses import replace
-from typing import Sequence
+from typing import List, Sequence
 
 from snuba.clickhouse.columns import (
     UUID,
@@ -19,7 +19,7 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 UNKNOWN_SPAN_STATUS = 2
 
-columns = [
+columns: List[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("event_id", UUID()),
     Column("trace_id", UUID()),
