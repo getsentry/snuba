@@ -172,11 +172,12 @@ def _ensure_valid_ip(
         try:
             ip_address = ipaddress.ip_address(ip)
             # Looking into ip_address code, it can either return one of the
-            # two or raise. Anyway, if received anything else the places where
+            # two or raise. Anyway, if we received anything else the places where
             # we use this method would fail.
-            assert isinstance(
+            if not isinstance(
                 ip_address, (ipaddress.IPv4Address, ipaddress.IPv6Address)
-            )
+            ):
+                return None
             return ip_address
         except ValueError:
             pass
