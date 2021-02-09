@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, Set
+from typing import Mapping, MutableMapping, Optional, Set
 
 from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.query import ProcessableQuery
@@ -8,6 +8,8 @@ from snuba.query.conditions import BooleanFunctions, ConditionFunctions
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Table
 from snuba.query.data_source.visitor import DataSourceVisitor
+from snuba.query.expressions import Column as ColumnExpr
+from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.matchers import Any, Column, FunctionCall, Literal, Or, Param, String
 
@@ -50,6 +52,10 @@ class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
         self.__has_complex_conditions: bool = False
         self.__final: bool = False
         self.__sample_rate: Optional[float] = None
+        self.__all_raw_columns: MutableMapping[str, Set[ColumnExpr]] = {}
+        self.__all_conditions: MutableMapping[str, Expression] = {}
+        self.__all_groupby: MutableMapping[str, Set[Expression]] = {}
+        self.__all_array_joins: MutableMapping[str, Set[Expression]] = {}
 
     def get_tables(self) -> Set[str]:
         return self.__tables
@@ -65,6 +71,18 @@ class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
 
     def get_sample_rate(self) -> Optional[float]:
         return self.__sample_rate
+
+    def get_all_raw_columns(self) -> Mapping[str, Set[ColumnExpr]]:
+        return self.__all_raw_columns
+
+    def get_all_conditions(self) -> Mapping[str, Expression]:
+        return self.__all_conditions
+
+    def get_all_groupby(self) -> Mapping[str, Set[Expression]]:
+        return self.__all_groupby
+
+    def get_all_arrayjoin(self) -> Mapping[str, Set[Expression]]:
+        return self.__all_array_joins
 
     def __find_complex_conditions(self, query: ProcessableQuery[Table]) -> bool:
         condition = query.get_condition_from_ast()
@@ -87,6 +105,18 @@ class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
     def _visit_join(self, data_source: JoinClause[Table]) -> None:
         self.visit_join_clause(data_source)
 
+    def _list_array_join(self, query: ProcessableQuery[Table]) -> Set[Expression]:
+        ret = set()
+        query_arrayjoin = query.get_arrayjoin_from_ast()
+        if query_arrayjoin is not None:
+            ret.add(query_arrayjoin)
+
+        for e in query.get_all_expressions():
+            if isinstance(e, FunctionCallExpr) and e.function_name == "arrayJoin":
+                ret.add(e)
+
+        return ret
+
     def _visit_simple_query(self, data_source: ProcessableQuery[Table]) -> None:
         time_range = _get_date_range(data_source)
         if time_range and (
@@ -97,6 +127,19 @@ class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
         self.__has_complex_conditions = (
             self.__has_complex_conditions | self.__find_complex_conditions(data_source)
         )
+
+        table_name = data_source.get_from_clause().table_name
+        self.__all_raw_columns[table_name] = {
+            c for c in data_source.get_all_ast_referenced_columns()
+        }
+
+        condition = data_source.get_condition_from_ast()
+        if condition is not None:
+            self.__all_conditions[table_name] = condition
+
+        self.__all_groupby[table_name] = set(data_source.get_groupby_from_ast())
+
+        self.__all_array_joins[table_name] = self._list_array_join(data_source)
 
         self.visit(data_source.get_from_clause())
 
