@@ -11,7 +11,7 @@ from snuba.migrations.errors import InvalidClickhouseVersion
 logger = logging.getLogger(__name__)
 
 
-def check_clickhouse_connections() -> None:
+def check_clickhouse_connections(warn: bool = False) -> None:
     """
     Ensure that we can establish a connection with every cluster.
     """
@@ -33,6 +33,12 @@ def check_clickhouse_connections() -> None:
                 logger.error(e)
                 raise
             except Exception as e:
+                if warn:
+                    logger.warn(
+                        "Connection to Clickhouse cluster %s failed", cluster,
+                    )
+                    break
+
                 logger.error(
                     "Connection to Clickhouse cluster %s failed (attempt %d)",
                     cluster,
