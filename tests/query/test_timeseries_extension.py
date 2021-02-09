@@ -25,12 +25,12 @@ def build_time_condition(
         BooleanFunctions.AND,
         binary_condition(
             ConditionFunctions.GTE,
-            Column(None, None, time_columns),
+            Column(f"_snuba_{time_columns}", None, time_columns),
             Literal(None, from_date),
         ),
         binary_condition(
             ConditionFunctions.LT,
-            Column(None, None, time_columns),
+            Column(f"_snuba_{time_columns}", None, time_columns),
             Literal(None, to_date),
         ),
     )

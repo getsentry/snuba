@@ -1,9 +1,11 @@
+import itertools
 import pytest
+import pytz
 import uuid
 from datetime import datetime, timedelta
-
-import pytz
 import simplejson as json
+from typing import Any, Callable, Tuple, Union
+
 
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
@@ -12,20 +14,23 @@ from tests.helpers import write_processed_messages
 
 
 class TestOutcomesApi(BaseApiTest):
-    @pytest.fixture(
-        autouse=True, params=["/query", "/outcomes/snql"], ids=["legacy", "snql"]
-    )
-    def _set_endpoint(self, request, convert_legacy_to_snql):
-        self.endpoint = request.param
-        self.multiplier = 1
-        if request.param == "/outcomes/snql":
-            self.multiplier = 2
-            old_post = self.app.post
+    @pytest.fixture
+    def test_entity(self) -> Union[str, Tuple[str, str]]:
+        return "outcomes"
 
-            def new_post(endpoint, data=None):
-                return old_post(endpoint, data=convert_legacy_to_snql(data, "outcomes"))
+    @pytest.fixture
+    def test_app(self) -> Any:
+        return self.app
 
-            self.app.post = new_post
+    @pytest.fixture(autouse=True)
+    def setup_post(self, _build_snql_post_methods: Callable[[Any], Any]) -> None:
+        self.post = _build_snql_post_methods
+
+    @pytest.fixture(scope="class")
+    def get_project_id(self, request: object) -> Callable[[], int]:
+        id_iter = itertools.count()
+        next(id_iter)  # skip 0
+        return lambda: next(id_iter)
 
     def setup_method(self, test_method):
         super().setup_method(test_method)
@@ -74,32 +79,34 @@ class TestOutcomesApi(BaseApiTest):
     def format_time(self, time: datetime) -> str:
         return time.replace(tzinfo=pytz.utc).isoformat()
 
-    def test_happy_path_querying(self):
+    def test_happy_path_querying(self, get_project_id):
+        project_id = get_project_id()
+        other_project_id = get_project_id()
         # the outcomes we are going to query; multiple project over multiple times
         self.generate_outcomes(
             org_id=1,
-            project_id=1,
+            project_id=project_id,
             num_outcomes=5,
             outcome=0,
             time_since_base=timedelta(minutes=1),
         )
         self.generate_outcomes(
             org_id=1,
-            project_id=1,
+            project_id=project_id,
             num_outcomes=5,
             outcome=0,
             time_since_base=timedelta(minutes=30),
         )
         self.generate_outcomes(
             org_id=1,
-            project_id=2,
+            project_id=other_project_id,
             num_outcomes=10,
             outcome=0,
             time_since_base=timedelta(minutes=30),
         )
         self.generate_outcomes(
             org_id=1,
-            project_id=1,
+            project_id=project_id,
             num_outcomes=10,
             outcome=0,
             time_since_base=timedelta(minutes=61),
@@ -108,7 +115,7 @@ class TestOutcomesApi(BaseApiTest):
         # outcomes for a different outcome
         self.generate_outcomes(
             org_id=1,
-            project_id=1,
+            project_id=project_id,
             num_outcomes=1,
             outcome=1,
             time_since_base=timedelta(minutes=1),
@@ -117,7 +124,7 @@ class TestOutcomesApi(BaseApiTest):
         # outcomes outside the time range we are going to request
         self.generate_outcomes(
             org_id=1,
-            project_id=1,
+            project_id=project_id,
             num_outcomes=1,
             outcome=0,
             time_since_base=timedelta(minutes=(self.skew_minutes + 60)),
@@ -126,8 +133,7 @@ class TestOutcomesApi(BaseApiTest):
         from_date = self.format_time(self.base_time - self.skew)
         to_date = self.format_time(self.base_time + self.skew)
 
-        response = self.app.post(
-            self.endpoint,
+        response = self.post(
             data=json.dumps(
                 {
                     "dataset": "outcomes",
@@ -138,7 +144,7 @@ class TestOutcomesApi(BaseApiTest):
                     "organization": 1,
                     "conditions": [
                         ["outcome", "=", 0],
-                        ["project_id", "IN", [1, 2]],
+                        ["project_id", "IN", [project_id, other_project_id]],
                         ["timestamp", ">", from_date],
                         ["timestamp", "<=", to_date],
                     ],
@@ -150,5 +156,9 @@ class TestOutcomesApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200
         assert len(data["data"]) == 3
-        assert all([row["aggregate"] == 10 * self.multiplier for row in data["data"]])
-        assert sorted([row["project_id"] for row in data["data"]]) == [1, 1, 2]
+        assert all([row["aggregate"] == 10 for row in data["data"]])
+        assert sorted([row["project_id"] for row in data["data"]]) == [
+            project_id,
+            project_id,
+            other_project_id,
+        ]
