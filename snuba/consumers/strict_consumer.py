@@ -63,15 +63,15 @@ class StrictConsumer:
         self.__topic = topic
         self.__consuming = False
 
-        consumer_config = broker_config.copy()
-        consumer_config.update(
-            {
+        consumer_config: KafkaBrokerConfig = {
+            **broker_config,
+            **{
                 "enable.auto.commit": False,
                 "group.id": group_id,
                 "enable.partition.eof": "true",
                 "auto.offset.reset": initial_auto_offset_reset,
-            }
-        )
+            },
+        }
 
         self.__consumer = self._create_consumer(consumer_config)
 
