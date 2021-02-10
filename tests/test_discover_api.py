@@ -6,6 +6,8 @@ from functools import partial
 
 import simplejson as json
 
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
@@ -43,7 +45,11 @@ class TestDiscoverApi(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             second=0, microsecond=0, tzinfo=pytz.utc
         ) - timedelta(minutes=90)
-        write_unprocessed_events(get_writable_storage(StorageKey.EVENTS), [self.event])
+
+        self.events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
+
+        write_unprocessed_events(self.events_storage, [self.event])
+
         write_unprocessed_events(
             get_writable_storage(StorageKey.TRANSACTIONS), [get_raw_transaction()],
         )
@@ -232,18 +238,21 @@ class TestDiscoverApi(BaseApiTest):
     def test_geo_column_empty(self) -> None:
         event = get_raw_event()
         del event["data"]["user"]["geo"]
-        write_unprocessed_events(get_writable_storage(StorageKey.EVENTS), [event])
+        write_unprocessed_events(self.events_storage, [event])
 
         response = self.app.post(
             self.endpoint,
-            "discover_events",
+            "discover",
             data=json.dumps(
                 {
-                    "dataset": "discover",
+                    "dataset": "discover_events",
                     "project": self.project_id,
                     "selected_columns": ["geo_city"],
                     "aggregations": [["count()", "", "count"]],
-                    "conditions": [[["isNull", ["geo_country_code"]], "!=", 1]],
+                    "conditions": [
+                        [["isNull", ["geo_country_code"]], "!=", 1],
+                        ["type", "!=", "transaction"],
+                    ],
                     "groupby": ["geo_city"],
                     "orderby": "count",
                     "limit": 2,
