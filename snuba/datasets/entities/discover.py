@@ -445,10 +445,10 @@ class DiscoverEntity(Entity):
                 return "events", []
 
             if referrer in settings.ERRORS_ROLLOUT_BY_REFERRER:
-                return "errors", []
+                return "discover", []
 
             if settings.ERRORS_ROLLOUT_ALL:
-                return "errors", []
+                return "discover", []
 
             config = state.get_config("discover_query_percentage", 0)
             assert isinstance(config, (float, int, str))
