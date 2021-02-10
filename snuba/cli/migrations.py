@@ -70,7 +70,8 @@ def run(group: str, migration_id: str, force: bool, fake: bool, dry_run: bool) -
 
     Migrations that are already in an in-progress or completed status will not be run.
     """
-    check_clickhouse_connections(warn=True if dry_run else False)
+    if not dry_run:
+        check_clickhouse_connections()
 
     runner = Runner()
     migration_group = MigrationGroup(group)
@@ -108,7 +109,8 @@ def reverse(
     --force is required to reverse an already completed migration.
     --fake marks a migration as reversed without doing anything.
     """
-    check_clickhouse_connections(warn=True if dry_run else False)
+    if not dry_run:
+        check_clickhouse_connections()
     runner = Runner()
     migration_group = MigrationGroup(group)
     migration_key = MigrationKey(migration_group, migration_id)
