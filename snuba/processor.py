@@ -80,7 +80,7 @@ def _as_dict_safe(
     return rv
 
 
-def _collapse_uint16(n) -> Optional[int]:
+def _collapse_uint16(n: Any) -> Optional[int]:
     if n is None:
         return None
 
@@ -91,7 +91,7 @@ def _collapse_uint16(n) -> Optional[int]:
     return i
 
 
-def _collapse_uint32(n) -> Optional[int]:
+def _collapse_uint32(n: Any) -> Optional[int]:
     if n is None:
         return None
 
@@ -102,7 +102,7 @@ def _collapse_uint32(n) -> Optional[int]:
     return i
 
 
-def _boolify(s) -> Optional[bool]:
+def _boolify(s: Any) -> Optional[bool]:
     if s is None:
         return None
 
@@ -119,7 +119,7 @@ def _boolify(s) -> Optional[bool]:
     return None
 
 
-def _floatify(s) -> Optional[float]:
+def _floatify(s: Any) -> Optional[float]:
     if s is None:
         return None
 
@@ -170,7 +170,15 @@ def _ensure_valid_ip(
     ip = _unicodify(ip)
     if ip:
         try:
-            return ipaddress.ip_address(ip)
+            ip_address = ipaddress.ip_address(ip)
+            # Looking into ip_address code, it can either return one of the
+            # two or raise. Anyway, if we received anything else the places where
+            # we use this method would fail.
+            if not isinstance(
+                ip_address, (ipaddress.IPv4Address, ipaddress.IPv6Address)
+            ):
+                return None
+            return ip_address
         except ValueError:
             pass
 
