@@ -115,6 +115,7 @@ TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 
 ERRORS_ROLLOUT_ALL: bool = False
 ERRORS_ROLLOUT_BY_REFERRER: Set[str] = set()
+ERRORS_ROLLOUT_WRITABLE_STORAGE: bool = False
 
 COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
