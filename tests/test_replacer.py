@@ -1,10 +1,11 @@
+import importlib
 import pytz
 import re
 from datetime import datetime
 from functools import partial
 import simplejson as json
 
-from snuba import replacer
+from snuba import replacer, settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets import errors_replacer
@@ -34,6 +35,11 @@ class TestReplacer:
 
         self.project_id = 1
         self.event = get_raw_event()
+        settings.ERRORS_ROLLOUT_ALL = False
+        settings.ERRORS_ROLLOUT_WRITABLE_STORAGE = False
+
+    def teardown_method(self):
+        importlib.reload(settings)
 
     def _wrap(self, msg: str) -> Message[KafkaPayload]:
         return Message(
