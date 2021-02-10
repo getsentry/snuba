@@ -4,7 +4,7 @@ from datetime import timedelta
 from functools import partial
 from typing import List, Mapping, Optional, Sequence, Set, Tuple
 
-from snuba import state
+from snuba import state, settings
 from snuba.clickhouse.columns import (
     UUID,
     Array,
@@ -438,6 +438,18 @@ class DiscoverEntity(Entity):
         )
 
         def selector_func(_query: Query, referrer: str) -> Tuple[str, List[str]]:
+            # In case something goes wrong, set this to 1 to revert to the events storage.
+            kill_rollout = state.get_config("errors_rollout_killswitch", 0)
+            assert isinstance(kill_rollout, (int, str))
+            if int(kill_rollout):
+                return "events", []
+
+            if referrer in settings.ERRORS_ROLLOUT_BY_REFERRER:
+                return "errors", []
+
+            if settings.ERRORS_ROLLOUT_ALL:
+                return "errors", []
+
             config = state.get_config("discover_query_percentage", 0)
             assert isinstance(config, (float, int, str))
             if random.random() < float(config):
