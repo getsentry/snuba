@@ -5,7 +5,7 @@ from functools import partial
 from typing import List, Mapping, Optional, Sequence, Tuple
 
 import sentry_sdk
-from snuba import environment, state
+from snuba import environment, settings, state
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
     ColumnToFunction,
@@ -15,7 +15,11 @@ from snuba.clickhouse.translators.snuba.mappers import (
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
-from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
+from snuba.datasets.storage import (
+    QueryStorageSelector,
+    StorageAndMappers,
+    WritableTableStorage,
+)
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
@@ -210,8 +214,9 @@ class BaseEventsEntity(Entity, ABC):
     """
 
     def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
-        storage = get_writable_storage(StorageKey.EVENTS)
-        schema = storage.get_table_writer().get_schema()
+        events_storage = get_writable_storage(StorageKey.EVENTS)
+        errors_storage = get_writable_storage(StorageKey.ERRORS)
+        schema = events_storage.get_table_writer().get_schema()
         columns = schema.get_columns()
 
         events_pipeline_builder = SimplePipelineBuilder(
@@ -235,6 +240,18 @@ class BaseEventsEntity(Entity, ABC):
         )
 
         def selector_func(_query: Query, referrer: str) -> Tuple[str, List[str]]:
+            # In case something goes wrong, set this to 1 to revert to the events storage.
+            kill_rollout = state.get_config("errors_rollout_killswitch", 0)
+            assert isinstance(kill_rollout, (int, str))
+            if int(kill_rollout):
+                return "events", []
+
+            if referrer in settings.ERRORS_ROLLOUT_BY_REFERRER:
+                return "errors", []
+
+            if settings.ERRORS_ROLLOUT_ALL:
+                return "errors", []
+
             config = state.get_config("errors_query_percentage", 0)
             assert isinstance(config, (float, int, str))
             if random.random() < float(config):
@@ -242,8 +259,14 @@ class BaseEventsEntity(Entity, ABC):
 
             return "events", []
 
+        def writable_storage() -> WritableTableStorage:
+            if settings.ERRORS_ROLLOUT_WRITABLE_STORAGE:
+                return get_writable_storage(StorageKey.ERRORS)
+            else:
+                return get_writable_storage(StorageKey.EVENTS)
+
         super().__init__(
-            storages=[storage],
+            storages=[events_storage, errors_storage],
             query_pipeline_builder=PipelineDelegator(
                 query_pipeline_builders={
                     "events": events_pipeline_builder,
@@ -254,7 +277,7 @@ class BaseEventsEntity(Entity, ABC):
             ),
             abstract_column_set=columns,
             join_relationships={},
-            writable_storage=storage,
+            writable_storage=writable_storage(),
             required_filter_columns=["project_id"],
             required_time_column="timestamp",
         )
