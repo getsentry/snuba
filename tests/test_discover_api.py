@@ -242,10 +242,10 @@ class TestDiscoverApi(BaseApiTest):
 
         response = self.app.post(
             self.endpoint,
-            "discover",
+            "discover_events",
             data=json.dumps(
                 {
-                    "dataset": "discover_events",
+                    "dataset": "discover",
                     "project": self.project_id,
                     "selected_columns": ["geo_city"],
                     "aggregations": [["count()", "", "count"]],
