@@ -6,7 +6,6 @@ from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from sentry_relay import DataCategory
 
-# TODO: materialized view migration
 old_materialized_view_columns: Sequence[Column[Modifiers]] = [
     Column("org_id", UInt(64)),
     Column("project_id", UInt(64)),
@@ -49,9 +48,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_local",
-                column=Column(
-                    "category", UInt(8, Modifiers(nullable=True))
-                ),  # TODO: default issue
+                column=Column("category", UInt(8, Modifiers(nullable=True))),
                 after=None,
             ),
             operations.AddColumn(
@@ -60,19 +57,13 @@ class Migration(migration.MultiStepMigration):
                 column=Column("quantity", UInt(64, Modifiers(nullable=True))),
                 after=None,
             ),
-            # operations.AddColumn(
-            #     storage_set=StorageSetKey.OUTCOMES,
-            #     table_name="outcomes_hourly_local",
-            #     column=Column("category", UInt(8)),
-            #     after=""", MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category)""",
-            # ),
             operations.RunSql(
                 storage_set=StorageSetKey.OUTCOMES,
                 statement="""
             ALTER TABLE outcomes_hourly_local ADD COLUMN IF NOT EXISTS category UInt8,
             MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category);
             """,
-            ),
+            ),  # note: this migration is not reversable! TODO: change AddColumn to be able to call that instead
             operations.DropTable(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_mv_hourly_local",
@@ -95,7 +86,7 @@ class Migration(migration.MultiStepMigration):
                         sum(quantity) AS quantity
                     FROM outcomes_raw_local
                     GROUP BY org_id, project_id, key_id, timestamp, outcome, reason, category
-                """,  # TODO: remove logic
+                """,
             ),
         ]
 
@@ -110,22 +101,10 @@ class Migration(migration.MultiStepMigration):
             operations.DropColumn(
                 StorageSetKey.OUTCOMES, "outcomes_hourly_local", "quantity"
             ),
-            # operations.DropColumn(
-            #     StorageSetKey.OUTCOMES, "outcomes_hourly_local", "category"
-            # ), #can't drop this column after being added to primary key
             operations.DropTable(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_mv_hourly_local",
             ),
-            # operations.RunSql(  # TODO: is this needed?
-            #     storage_set=StorageSetKey.OUTCOMES,
-            #     statement="""
-            #         ALTER TABLE
-            #             outcomes_hourly_local
-            #             MODIFY ORDER BY
-            #             (org_id, project_id, key_id, outcome, reason, timestamp)
-            #     """,
-            # ),
             # TODO: put old mat view query in own file, use reference to that?
             operations.CreateMaterializedView(
                 storage_set=StorageSetKey.OUTCOMES,
@@ -187,7 +166,4 @@ class Migration(migration.MultiStepMigration):
             operations.DropColumn(
                 StorageSetKey.OUTCOMES, "outcomes_hourly_dist", "quantity"
             ),
-            # operations.DropColumn(
-            #     StorageSetKey.OUTCOMES, "outcomes_hourly_dist", "category"
-            # ),# can't drop this one
         ]
