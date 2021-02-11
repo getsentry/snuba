@@ -60,9 +60,9 @@ class Migration(migration.MultiStepMigration):
             operations.RunSql(
                 storage_set=StorageSetKey.OUTCOMES,
                 statement="""
-            ALTER TABLE outcomes_hourly_local ADD COLUMN IF NOT EXISTS category UInt8,
-            MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category);
-            """,
+                    ALTER TABLE outcomes_hourly_local ADD COLUMN IF NOT EXISTS category UInt8,
+                    MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category);
+                """,
             ),  # note: this migration is not reversable!
             operations.DropTable(
                 storage_set=StorageSetKey.OUTCOMES,
@@ -150,7 +150,7 @@ class Migration(migration.MultiStepMigration):
                 statement="""
                     ALTER TABLE outcomes_hourly_local ADD COLUMN IF NOT EXISTS category UInt8,
                     MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category);
-                """,
+                """,  # note: this migration is not reversable!
             ),
         ]
 
