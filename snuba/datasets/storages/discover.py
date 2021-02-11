@@ -20,7 +20,7 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 )
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.web.split import TimeSplitQueryStrategy
+from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 columns = ColumnSet(
     [
@@ -79,5 +79,12 @@ storage = ReadableTableStorage(
         ArrayJoinKeyValueOptimizer("tags"),
         PrewhereProcessor(),
     ],
-    query_splitters=[TimeSplitQueryStrategy(timestamp_col="timestamp")],
+    query_splitters=[
+        ColumnSplitQueryStrategy(
+            id_column="event_id",
+            project_column="project_id",
+            timestamp_column="timestamp",
+        ),
+        TimeSplitQueryStrategy(timestamp_col="timestamp"),
+    ],
 )

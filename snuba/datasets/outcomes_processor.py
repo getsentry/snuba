@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Any, Mapping, Optional
 
+from snuba.consumers.types import KafkaMessageMetadata
 from sentry_relay import DataCategory
 
 from snuba import settings
@@ -15,7 +16,9 @@ from snuba.processor import (
 
 
 class OutcomesProcessor(MessageProcessor):
-    def process_message(self, value, metadata) -> Optional[ProcessedMessage]:
+    def process_message(
+        self, value: Mapping[str, Any], metadata: KafkaMessageMetadata
+    ) -> Optional[ProcessedMessage]:
         assert isinstance(value, dict)
         # TODO: validation around quantity and category?
         v_uuid = value.get("event_id")

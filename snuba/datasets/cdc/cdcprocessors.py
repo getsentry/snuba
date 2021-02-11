@@ -3,8 +3,9 @@ from __future__ import annotations
 import re
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Mapping, Optional, Sequence, Type
+from typing import Any, List, Mapping, Optional, Sequence, Type
 
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
 from snuba.writer import WriterTableRow
 
@@ -94,7 +95,7 @@ class CdcProcessor(MessageProcessor):
         old_key = dict(zip(key["keynames"], key["keyvalues"]))
         new_key = {key: columnvalues[columnnames.index(key)] for key in key["keynames"]}
 
-        ret = []
+        ret: List[WriterTableRow] = []
         if old_key != new_key:
             ret.extend(self._process_delete(offset, key))
 
@@ -110,7 +111,9 @@ class CdcProcessor(MessageProcessor):
     ) -> Sequence[WriterTableRow]:
         return []
 
-    def process_message(self, value, metadata) -> Optional[ProcessedMessage]:
+    def process_message(
+        self, value: Mapping[str, Any], metadata: KafkaMessageMetadata
+    ) -> Optional[ProcessedMessage]:
         assert isinstance(value, dict)
 
         offset = metadata.offset

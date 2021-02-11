@@ -56,6 +56,17 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             ],
         ),
         (
+            "outcomes-consumer",
+            [
+                "snuba",
+                "consumer",
+                "--auto-offset-reset=latest",
+                "--log-level=debug",
+                "--storage=outcomes_raw",
+                "--consumer-group=outcomes_group",
+            ],
+        ),
+        (
             "consumer",
             [
                 "snuba",

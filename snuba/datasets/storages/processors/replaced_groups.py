@@ -54,6 +54,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                 max_group_ids_exclude = get_config(
                     "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE
                 )
+                assert isinstance(max_group_ids_exclude, int)
                 if len(exclude_group_ids) > max_group_ids_exclude:
                     metrics.increment("final", tags={"cause": "max_groups"})
                     set_final = True

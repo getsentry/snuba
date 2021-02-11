@@ -3,6 +3,7 @@ from typing import Any, Mapping, Optional, Sequence, Union
 
 import simplejson as json
 
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
 
 
@@ -103,7 +104,9 @@ class QuerylogProcessor(MessageProcessor):
             "clickhouse_queries.array_join_columns": array_join_columns,
         }
 
-    def process_message(self, message, metadata) -> Optional[ProcessedMessage]:
+    def process_message(
+        self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
+    ) -> Optional[ProcessedMessage]:
         projects = message["request"]["body"].get("project", [])
         if not isinstance(projects, (list, tuple)):
             projects = [projects]

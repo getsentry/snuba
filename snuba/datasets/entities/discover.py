@@ -4,7 +4,7 @@ from datetime import timedelta
 from functools import partial
 from typing import List, Mapping, Optional, Sequence, Set, Tuple
 
-from snuba import state
+from snuba import state, settings
 from snuba.clickhouse.columns import (
     UUID,
     Array,
@@ -399,12 +399,23 @@ class DiscoverEntity(Entity):
                                 None,
                                 "contexts",
                                 "geo.country_code",
+                                nullable=True,
                             ),
                             ColumnToMapping(
-                                None, "geo_region", None, "contexts", "geo.region"
+                                None,
+                                "geo_region",
+                                None,
+                                "contexts",
+                                "geo.region",
+                                nullable=True,
                             ),
                             ColumnToMapping(
-                                None, "geo_city", None, "contexts", "geo.city"
+                                None,
+                                "geo_city",
+                                None,
+                                "contexts",
+                                "geo.city",
+                                nullable=True,
                             ),
                             ColumnToFunction(
                                 None,
@@ -426,7 +437,19 @@ class DiscoverEntity(Entity):
             )
         )
 
-        def selector_func(_query: Query) -> Tuple[str, List[str]]:
+        def selector_func(_query: Query, referrer: str) -> Tuple[str, List[str]]:
+            # In case something goes wrong, set this to 1 to revert to the events storage.
+            kill_rollout = state.get_config("errors_rollout_killswitch", 0)
+            assert isinstance(kill_rollout, (int, str))
+            if int(kill_rollout):
+                return "events", []
+
+            if referrer in settings.ERRORS_ROLLOUT_BY_REFERRER:
+                return "discover", []
+
+            if settings.ERRORS_ROLLOUT_ALL:
+                return "discover", []
+
             config = state.get_config("discover_query_percentage", 0)
             assert isinstance(config, (float, int, str))
             if random.random() < float(config):

@@ -9,6 +9,7 @@ from multiprocessing.pool import AsyncResult, Pool
 from multiprocessing.shared_memory import SharedMemory
 from pickle import PickleBuffer
 from typing import (
+    Any,
     Callable,
     Deque,
     Generic,
@@ -34,6 +35,10 @@ logger = logging.getLogger(__name__)
 LOG_THRESHOLD_TIME = 20  # In seconds
 
 TTransformed = TypeVar("TTransformed")
+
+
+class ChildProcessTerminated(RuntimeError):
+    pass
 
 
 class TransformStep(ProcessingStep[TPayload]):
@@ -315,6 +320,17 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         self.__pool_waiting_time: Optional[float] = None
 
         self.__closed = False
+
+        def handle_sigchld(signum: int, frame: Any) -> None:
+            # Terminates the consumer if any child process of the
+            # consumer is terminated.
+            # This is meant to detect the unexpected termination of
+            # multiprocessor pool workers.
+            if not self.__closed:
+                self.__metrics.increment("sigchld.detected")
+                raise ChildProcessTerminated()
+
+        signal.signal(signal.SIGCHLD, handle_sigchld)
 
     def __submit_batch(self) -> None:
         assert self.__batch_builder is not None

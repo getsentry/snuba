@@ -4,7 +4,7 @@ import logging
 import _strptime  # NOQA fixes _strptime deferred import issue
 import uuid
 
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import extract_http, extract_user
 from snuba.datasets.events_processor_base import EventsProcessorBase, InsertEvent
 from snuba.processor import (
@@ -61,7 +61,7 @@ class ErrorsProcessor(EventsProcessorBase):
             elif ip_address.version == 6:
                 output["ip_address_v6"] = str(ip_address)
 
-        contexts = _as_dict_safe(data.get("contexts", None))
+        contexts: MutableMapping[str, Any] = _as_dict_safe(data.get("contexts", None))
         geo = user_dict.get("geo", {})
         if "geo" not in contexts and isinstance(geo, dict):
             contexts["geo"] = geo

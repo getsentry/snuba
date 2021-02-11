@@ -3,7 +3,7 @@ from typing import Callable, Optional, Sequence
 from confluent_kafka import KafkaError, KafkaException, Producer
 
 from snuba import environment
-from snuba.consumer import StreamingConsumerStrategyFactory
+from snuba.consumers.consumer import StreamingConsumerStrategyFactory
 from snuba.consumers.snapshot_worker import SnapshotProcessor
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
