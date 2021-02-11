@@ -63,7 +63,7 @@ class Migration(migration.MultiStepMigration):
             ALTER TABLE outcomes_hourly_local ADD COLUMN IF NOT EXISTS category UInt8,
             MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category);
             """,
-            ),  # note: this migration is not reversable! TODO: change AddColumn to be able to call that instead
+            ),  # note: this migration is not reversable!
             operations.DropTable(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_mv_hourly_local",
@@ -105,7 +105,6 @@ class Migration(migration.MultiStepMigration):
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_mv_hourly_local",
             ),
-            # TODO: put old mat view query in own file, use reference to that?
             operations.CreateMaterializedView(
                 storage_set=StorageSetKey.OUTCOMES,
                 view_name="outcomes_mv_hourly_local",
