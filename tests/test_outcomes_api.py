@@ -266,17 +266,17 @@ class TestOutcomesApi(BaseApiTest):
             {
                 "category": DataCategory.ERROR,
                 "times_seen": 2 * self.multiplier,
-                "quantity_sum": 0,
+                "quantity_sum": None,
             },
             {
                 "category": DataCategory.TRANSACTION,
                 "times_seen": 1 * self.multiplier,
-                "quantity_sum": 0,
+                "quantity_sum": None,
             },
             {
                 "category": DataCategory.SECURITY,
                 "times_seen": 1 * self.multiplier,
-                "quantity_sum": 0,
+                "quantity_sum": None,
             },
             {
                 "category": DataCategory.ATTACHMENT,

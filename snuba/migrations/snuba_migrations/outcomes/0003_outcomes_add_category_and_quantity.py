@@ -56,7 +56,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_hourly_local",
-                column=Column("quantity", UInt(64)),
+                column=Column("quantity", UInt(64, Modifiers(nullable=True))),
                 after=None,
             ),
             # operations.AddColumn(
@@ -91,7 +91,7 @@ class Migration(migration.MultiStepMigration):
                         ifNull(reason, 'none') AS reason,
                         category,
                         count() AS times_seen,
-                        ifNull(sum(quantity),0) AS quantity
+                        sum(quantity) AS quantity
                     FROM outcomes_raw_local
                     GROUP BY org_id, project_id, key_id, timestamp, outcome, reason, category
                 """,  # TODO: remove logic
@@ -163,7 +163,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_hourly_dist",
-                column=Column("quantity", UInt(64)),
+                column=Column("quantity", UInt(64, Modifiers(nullable=True))),
                 after=None,
             ),
             operations.AddColumn(
