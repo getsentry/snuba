@@ -31,8 +31,8 @@ new_materialized_view_columns: Sequence[Column[Modifiers]] = [
 
 class Migration(migration.MultiStepMigration):
     """
-    Adds the http columns defined, with the method and referer coming from the request interface
-    and url materialized from the tags.
+    Adds quantity and category columns to outcomes. updates materialized view and hourly table to support
+    category as a new dimension and quantity as a new measure.
     """
 
     blocking = False
