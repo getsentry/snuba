@@ -7,6 +7,7 @@ import simplejson as json
 from typing import Any, Callable, Tuple, Union
 
 
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
@@ -23,7 +24,7 @@ class TestOutcomesApi(BaseApiTest):
         return self.app
 
     @pytest.fixture(autouse=True)
-    def setup_post(self, _build_snql_post_methods: Callable[[Any], Any]) -> None:
+    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
         self.post = _build_snql_post_methods
 
     @pytest.fixture(scope="class")
@@ -32,7 +33,7 @@ class TestOutcomesApi(BaseApiTest):
         next(id_iter)  # skip 0
         return lambda: next(id_iter)
 
-    def setup_method(self, test_method):
+    def setup_method(self, test_method: Any) -> None:
         super().setup_method(test_method)
 
         self.skew_minutes = 180
@@ -68,18 +69,18 @@ class TestOutcomesApi(BaseApiTest):
                         "key_id": 1,
                         "outcome": outcome,
                     },
-                    None,
+                    KafkaMessageMetadata(0, 0, self.base_time),
                 )
             )
-
-            outcomes.append(processed)
+            if processed:
+                outcomes.append(processed)
 
         write_processed_messages(self.storage, outcomes)
 
     def format_time(self, time: datetime) -> str:
         return time.replace(tzinfo=pytz.utc).isoformat()
 
-    def test_happy_path_querying(self, get_project_id):
+    def test_happy_path_querying(self, get_project_id: Callable[[], int]) -> None:
         project_id = get_project_id()
         other_project_id = get_project_id()
         # the outcomes we are going to query; multiple project over multiple times
@@ -134,7 +135,7 @@ class TestOutcomesApi(BaseApiTest):
         to_date = self.format_time(self.base_time + self.skew)
 
         response = self.post(
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "outcomes",
                     "aggregations": [["sum", "times_seen", "aggregate"]],

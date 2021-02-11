@@ -245,7 +245,7 @@ def _build_snql_post_methods(
     test_entity: Union[str, Tuple[str, str]],
     test_app: Any,
     convert_legacy_to_snql: Callable[[str, str], str],
-) -> Callable[[str, str], Any]:
+) -> Callable[..., Any]:
     dataset = entity = ""
     if isinstance(test_entity, tuple):
         entity, dataset = test_entity

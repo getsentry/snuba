@@ -26,7 +26,7 @@ class TestSessionsApi(BaseApiTest):
         return self.app
 
     @pytest.fixture(autouse=True)
-    def setup_post(self, _build_snql_post_methods: Callable[[Any], Any]) -> None:
+    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
         self.post = _build_snql_post_methods
 
     @pytest.fixture(scope="class")
@@ -35,7 +35,7 @@ class TestSessionsApi(BaseApiTest):
         next(id_iter)  # skip 0
         return lambda: next(id_iter)
 
-    def setup_method(self, test_method):
+    def setup_method(self, test_method: Any) -> None:
         super().setup_method(test_method)
 
         # values for test data
@@ -47,7 +47,7 @@ class TestSessionsApi(BaseApiTest):
 
         self.storage = get_writable_storage(StorageKey.SESSIONS_RAW)
 
-    def generate_manual_session_events(self, project_id):
+    def generate_manual_session_events(self, project_id: int) -> None:
         session_1 = "b3ef3211-58a4-4b36-a9a1-5a55df0d9aae"
         session_2 = "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf"
         user_1 = "b3ef3211-58a4-4b36-a9a1-5a55df0d9aae"
@@ -91,13 +91,13 @@ class TestSessionsApi(BaseApiTest):
             metrics=DummyMetricsBackend(strict=True)
         ).write([json.dumps(session).encode("utf-8") for session in sessions])
 
-        return project_id
-
-    def test_manual_session_aggregation(self, get_project_id):
+    def test_manual_session_aggregation(
+        self, get_project_id: Callable[[], int]
+    ) -> None:
         project_id = get_project_id()
         self.generate_manual_session_events(project_id)
         response = self.post(
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "sessions",
                     "organization": 1,
@@ -121,7 +121,7 @@ class TestSessionsApi(BaseApiTest):
         assert data["data"][0]["users"] == 2
         assert data["data"][0]["users_errored"] == 1
 
-    def generate_session_events(self, project_id):
+    def generate_session_events(self, project_id: int) -> None:
         processor = self.storage.get_table_writer().get_stream_loader().get_processor()
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)
@@ -167,13 +167,14 @@ class TestSessionsApi(BaseApiTest):
                 meta,
             ),
         ]
-        write_processed_messages(self.storage, events)
+        filtered = [e for e in events if e]
+        write_processed_messages(self.storage, filtered)
 
-    def test_session_aggregation(self, get_project_id):
+    def test_session_aggregation(self, get_project_id: Callable[[], int]) -> None:
         project_id = get_project_id()
         self.generate_session_events(project_id)
         response = self.post(
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "sessions",
                     "organization": 1,

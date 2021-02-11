@@ -26,10 +26,10 @@ class TestDiscoverApi(BaseApiTest):
         return self.app
 
     @pytest.fixture(autouse=True)
-    def setup_post(self, _build_snql_post_methods: Callable[[Any], Any]) -> None:
+    def setup_post(self, _build_snql_post_methods: Callable[..., Any]) -> None:
         self.post = _build_snql_post_methods
 
-    def setup_method(self, test_method):
+    def setup_method(self, test_method: Any) -> None:
         super().setup_method(test_method)
         self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
         self.event = get_raw_event()
@@ -45,7 +45,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_raw_data(self) -> None:
         response = self.post(
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -69,8 +69,7 @@ class TestDiscoverApi(BaseApiTest):
         }
 
         response = self.post(
-            entity="discover_transactions",
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -90,6 +89,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover_transactions",
         )
         data = json.loads(response.data)
         assert response.status_code == 200
@@ -106,7 +106,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_aggregations(self) -> None:
         response = self.post(
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -132,8 +132,7 @@ class TestDiscoverApi(BaseApiTest):
         ]
 
         response = self.post(
-            entity="discover_transactions",
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -146,6 +145,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover_transactions",
         )
         data = json.loads(response.data)
 
@@ -161,8 +161,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_handles_columns_from_other_dataset(self) -> None:
         response = self.post(
-            entity="discover_transactions",
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -182,6 +181,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover_transactions",
         )
         data = json.loads(response.data)
 
@@ -196,7 +196,7 @@ class TestDiscoverApi(BaseApiTest):
         ]
 
         response = self.post(
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -221,7 +221,7 @@ class TestDiscoverApi(BaseApiTest):
         write_unprocessed_events(get_writable_storage(StorageKey.EVENTS), [event])
 
         response = self.post(
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -247,8 +247,7 @@ class TestDiscoverApi(BaseApiTest):
         )
 
         response = self.post(
-            entity="discover_transactions",
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -265,6 +264,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover_transactions",
         )
 
         assert response.status_code == 200
@@ -273,8 +273,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_geo_column_condition(self) -> None:
         response = self.post(
-            entity="discover_transactions",
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -288,6 +287,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover_transactions",
         )
         data = json.loads(response.data)
 
@@ -295,8 +295,7 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"] == [{"count": 0}]
 
         response = self.post(
-            entity="discover_transactions",
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -312,6 +311,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover_transactions",
         )
         data = json.loads(response.data)
 
@@ -320,7 +320,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_exception_stack_column_boolean_condition_arrayjoin_function(self) -> None:
         response = self.post(
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -370,7 +370,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_tags_key_boolean_condition(self) -> None:
         response = self.post(
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "turbo": False,
@@ -416,8 +416,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_os_fields_condition(self) -> None:
         response = self.post(
-            entity="discover_transactions",
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -432,6 +431,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover_transactions",
         )
         assert response.status_code == 200
         data = json.loads(response.data)
@@ -439,8 +439,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_http_fields(self) -> None:
         response = self.post(
-            entity="discover_transactions",
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -452,6 +451,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover_transactions",
         )
         assert response.status_code == 200
         data = json.loads(response.data)
@@ -465,7 +465,7 @@ class TestDiscoverApi(BaseApiTest):
         ]
 
         response = self.post(
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -491,8 +491,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_device_fields_condition(self) -> None:
         response = self.post(
-            entity="discover_transactions",
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -507,6 +506,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover_transactions",
         )
 
         assert response.status_code == 200
@@ -514,7 +514,7 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"][0]["count"] == 1
 
         response = self.post(
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -537,8 +537,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_device_boolean_fields_context_vs_promoted_column(self) -> None:
         response = self.post(
-            entity="discover_transactions",
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -551,6 +550,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover_transactions",
         )
         assert response.status_code == 200
         data = json.loads(response.data)
@@ -558,7 +558,7 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"][0]["count"] == 1
 
         response = self.post(
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -579,7 +579,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_is_handled(self) -> None:
         response = self.post(
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -602,7 +602,7 @@ class TestDiscoverApi(BaseApiTest):
     def test_having(self) -> None:
         result = json.loads(
             self.post(
-                data=json.dumps(
+                json.dumps(
                     {
                         "dataset": "discover",
                         "project": self.project_id,
@@ -621,7 +621,7 @@ class TestDiscoverApi(BaseApiTest):
     def test_time(self) -> None:
         result = json.loads(
             self.post(
-                data=json.dumps(
+                json.dumps(
                     {
                         "dataset": "discover",
                         "project": self.project_id,
@@ -638,8 +638,7 @@ class TestDiscoverApi(BaseApiTest):
 
         result = json.loads(
             self.post(
-                entity="discover_transactions",
-                data=json.dumps(
+                json.dumps(
                     {
                         "dataset": "discover",
                         "project": self.project_id,
@@ -650,6 +649,7 @@ class TestDiscoverApi(BaseApiTest):
                         "to_date": (self.base_time + self.skew).isoformat(),
                     }
                 ),
+                entity="discover_transactions",
             ).data
         )
         assert len(result["data"]) == 1
@@ -657,8 +657,7 @@ class TestDiscoverApi(BaseApiTest):
     def test_transaction_group_ids(self) -> None:
         result = json.loads(
             self.post(
-                entity="discover_transactions",
-                data=json.dumps(
+                json.dumps(
                     {
                         "dataset": "discover",
                         "project": self.project_id,
@@ -671,14 +670,14 @@ class TestDiscoverApi(BaseApiTest):
                         "to_date": (self.base_time + self.skew).isoformat(),
                     }
                 ),
+                entity="discover_transactions",
             ).data
         )
         assert result["data"][0]["group_id"] == 0
 
         result = json.loads(
             self.post(
-                entity="discover_transactions",
-                data=json.dumps(
+                json.dumps(
                     {
                         "dataset": "discover",
                         "project": self.project_id,
@@ -692,6 +691,7 @@ class TestDiscoverApi(BaseApiTest):
                         "to_date": (self.base_time + self.skew).isoformat(),
                     }
                 ),
+                entity="discover_transactions",
             ).data
         )
 
@@ -700,7 +700,7 @@ class TestDiscoverApi(BaseApiTest):
     def test_contexts(self) -> None:
         result = json.loads(
             self.post(
-                data=json.dumps(
+                json.dumps(
                     {
                         "dataset": "discover",
                         "project": self.project_id,
@@ -716,8 +716,7 @@ class TestDiscoverApi(BaseApiTest):
 
         result = json.loads(
             self.post(
-                entity="discover_transactions",
-                data=json.dumps(
+                json.dumps(
                     {
                         "dataset": "discover",
                         "project": self.project_id,
@@ -727,14 +726,14 @@ class TestDiscoverApi(BaseApiTest):
                         "to_date": (self.base_time + self.skew).isoformat(),
                     }
                 ),
+                entity="discover_transactions",
             ).data
         )
         assert result["data"] == [{"contexts[device.online]": "True"}]
 
     def test_ast_impossible_queries(self) -> None:
         response = self.post(
-            entity="discover_transactions",
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -749,6 +748,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover_transactions",
         )
         data = json.loads(response.data)
 
@@ -763,7 +763,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_count_null_user_consistency(self) -> None:
         response = self.post(
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -786,8 +786,7 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"][0]["uniq_user"] == 0
 
         response = self.post(
-            entity="discover_transactions",
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -803,6 +802,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover_transactions",
         )
         data = json.loads(response.data)
         assert response.status_code == 200
@@ -812,8 +812,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_individual_measurement(self) -> None:
         response = self.post(
-            entity="discover_transactions",
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -828,6 +827,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover_transactions",
         )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
@@ -838,8 +838,7 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"][0]["measurements[asd]"] is None
 
         response = self.post(
-            entity="discover",
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -849,6 +848,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover",
         )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
@@ -858,7 +858,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_functions_called_on_null(self) -> None:
         response = self.post(
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -878,7 +878,7 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"][0]["sum_transaction_duration"] is None
 
         response = self.post(
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -905,8 +905,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_web_vitals_histogram_function(self) -> None:
         response = self.post(
-            entity="discover_transactions",
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -982,6 +981,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover_transactions",
         )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
@@ -989,7 +989,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_max_timestamp_by_timestamp(self) -> None:
         response = self.post(
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -1010,8 +1010,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_invalid_event_id_condition(self) -> None:
         response = self.post(
-            entity="discover_transactions",
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "aggregations": [
@@ -1031,6 +1030,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover_transactions",
         )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
@@ -1038,8 +1038,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_null_processor_with_if_function(self) -> None:
         response = self.post(
-            entity="discover_transactions",
-            data=json.dumps(
+            json.dumps(
                 {
                     "consistent": False,
                     "having": [],
@@ -1094,6 +1093,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover_transactions",
         )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
@@ -1107,8 +1107,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def test_zero_literal_caching(self) -> None:
         response = self.post(
-            entity="discover_transactions",
-            data=json.dumps(
+            json.dumps(
                 {
                     "selected_columns": [],
                     "having": [["count_unique_user", ">", 0.0]],
@@ -1134,6 +1133,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover_transactions",
         )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
@@ -1178,7 +1178,7 @@ class TestArrayJoinDiscoverAPI(BaseApiTest):
         data = json.loads(response.data)
         assert data["data"] == [{"count": 1}]
 
-    def test_exception_stack_column_boolean_condition(self, request) -> None:
+    def test_exception_stack_column_boolean_condition(self) -> None:
         response = self.app.post(
             "/query",
             headers={"referer": "test"},
