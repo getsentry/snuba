@@ -4,6 +4,7 @@ from snuba.clickhouse.columns import Column, UInt, String, DateTime
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
+from sentry_relay import DataCategory
 
 # TODO: materialized view migration
 old_materialized_view_columns: Sequence[Column[Modifiers]] = [
@@ -23,8 +24,8 @@ new_materialized_view_columns: Sequence[Column[Modifiers]] = [
     Column("timestamp", DateTime()),
     Column("outcome", UInt(8)),
     Column("reason", String()),
-    Column("category", UInt(8)),
-    Column("quantity", UInt(64)),
+    Column("category", UInt(8, Modifiers(nullable=True))),
+    Column("quantity", UInt(64, Modifiers(nullable=True))),
     Column("times_seen", UInt(64)),
 ]
 
@@ -71,7 +72,7 @@ class Migration(migration.MultiStepMigration):
             ALTER TABLE outcomes_hourly_local ADD COLUMN IF NOT EXISTS category UInt8,
             MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category);
             """,
-            ),  # TODO: decide on this category isssue
+            ),
             operations.DropTable(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_mv_hourly_local",
@@ -81,7 +82,7 @@ class Migration(migration.MultiStepMigration):
                 view_name="outcomes_mv_hourly_local",
                 destination_table_name="outcomes_hourly_local",
                 columns=new_materialized_view_columns,
-                query="""
+                query=f"""
                     SELECT
                         org_id,
                         project_id,
@@ -89,7 +90,7 @@ class Migration(migration.MultiStepMigration):
                         toStartOfHour(timestamp) AS timestamp,
                         outcome,
                         ifNull(reason, 'none') AS reason,
-                        category,
+                        ifNull(category,{DataCategory.ERROR}) as category,
                         count() AS times_seen,
                         sum(quantity) AS quantity
                     FROM outcomes_raw_local
@@ -166,11 +167,12 @@ class Migration(migration.MultiStepMigration):
                 column=Column("quantity", UInt(64, Modifiers(nullable=True))),
                 after=None,
             ),
-            operations.AddColumn(
+            operations.RunSql(
                 storage_set=StorageSetKey.OUTCOMES,
-                table_name="outcomes_hourly_dist",
-                column=Column("category", UInt(8)),
-                after=None,
+                statement="""
+                    ALTER TABLE outcomes_hourly_local ADD COLUMN IF NOT EXISTS category UInt8,
+                    MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category);
+                """,
             ),
         ]
 
