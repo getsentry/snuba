@@ -48,7 +48,9 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_local",
-                column=Column("category", UInt(8)),
+                column=Column(
+                    "category", UInt(8, Modifiers(nullable=True))
+                ),  # TODO: default issue
                 after=None,
             ),
             operations.AddColumn(
@@ -69,7 +71,7 @@ class Migration(migration.MultiStepMigration):
             ALTER TABLE outcomes_hourly_local ADD COLUMN IF NOT EXISTS category UInt8,
             MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category);
             """,
-            ),
+            ),  # TODO: decide on this category isssue
             operations.DropTable(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_mv_hourly_local",
@@ -92,7 +94,7 @@ class Migration(migration.MultiStepMigration):
                         ifNull(sum(quantity),0) AS quantity
                     FROM outcomes_raw_local
                     GROUP BY org_id, project_id, key_id, timestamp, outcome, reason, category
-                """,
+                """,  # TODO: remove logic
             ),
         ]
 
@@ -155,7 +157,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_dist",
-                column=Column("category", UInt(8)),
+                column=Column("category", UInt(8, Modifiers(nullable=True))),
                 after=None,
             ),
             operations.AddColumn(

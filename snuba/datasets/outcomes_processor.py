@@ -17,7 +17,7 @@ from snuba.processor import (
 class OutcomesProcessor(MessageProcessor):
     def process_message(self, value, metadata) -> Optional[ProcessedMessage]:
         assert isinstance(value, dict)
-        # TODO: validation around size and category?
+        # TODO: validation around quantity and category?
         v_uuid = value.get("event_id")
         message = {
             "org_id": value.get("org_id", 0),
@@ -29,9 +29,7 @@ class OutcomesProcessor(MessageProcessor):
             "category": value.get(
                 "category", DataCategory.ERROR
             ).value,  # if category is None, default to error for now TODO: change security to error?
-            "quantity": value.get(
-                "quantity", 1
-            ),  # should probably be a default value of 1 for quantity and none
+            "quantity": value.get("quantity", None),
             "outcome": value.get("outcome", None),
             "reason": _unicodify(value.get("reason")),
             "event_id": str(uuid.UUID(v_uuid)) if v_uuid is not None else None,

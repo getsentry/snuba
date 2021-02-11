@@ -24,7 +24,7 @@ write_columns = ColumnSet(
         ("reason", String(Modifiers(nullable=True))),
         ("event_id", UUID(Modifiers(nullable=True))),
         ("quantity", UInt(32, Modifiers(nullable=True))),
-        ("category", UInt(8)),
+        ("category", UInt(8, Modifiers(nullable=True))),
     ]
 )
 
