@@ -126,6 +126,7 @@ class TestSessionsApi(BaseApiTest):
                     "status": "exited",
                     "duration": 1947.49,
                     "session_id": "8333339f-5675-4f89-a9a0-1c935255ab58",
+                    "started": (self.started + timedelta(minutes=3)).timestamp(),
                 },
                 meta,
             ),
@@ -142,6 +143,7 @@ class TestSessionsApi(BaseApiTest):
                     "status": "errored",
                     "errors": 1,
                     "quantity": 2,
+                    "started": (self.started + timedelta(minutes=14)).timestamp(),
                 },
                 meta,
             ),
@@ -193,6 +195,7 @@ class TestSessionsApi(BaseApiTest):
                         "users_errored",
                     ],
                     "groupby": ["bucketed_started"],
+                    "orderby": ["bucketed_started"],
                     "granularity": 60,
                     "from_date": (self.started - self.skew).isoformat(),
                     "to_date": (self.started + self.skew).isoformat(),
@@ -202,12 +205,16 @@ class TestSessionsApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
 
-        # We use the same data as the testcase above, and that data is rounded to the hour.
-        # So even if we query the data with a small granularity and group by `bucketed_started`,
-        # we will receive the same data as above.
-
-        assert len(data["data"]) == 1, data
-        assert data["data"][0]["sessions"] == 10
-        assert data["data"][0]["sessions_errored"] == 4
+        assert len(data["data"]) == 3, data
+        assert data["data"][0]["sessions"] == 7
+        assert data["data"][0]["sessions_errored"] == 2
         assert data["data"][0]["users"] == 1
         assert data["data"][0]["users_errored"] == 1
+        assert data["data"][1]["sessions"] == 1
+        assert data["data"][1]["sessions_errored"] == 0
+        assert data["data"][1]["users"] == 1
+        assert data["data"][1]["users_errored"] == 0
+        assert data["data"][2]["sessions"] == 2
+        assert data["data"][2]["sessions_errored"] == 2
+        assert data["data"][2]["users"] == 1
+        assert data["data"][2]["users_errored"] == 1
