@@ -44,7 +44,7 @@ read_columns = ColumnSet(
         ("timestamp", DateTime()),
         ("outcome", UInt(8)),
         ("reason", String()),
-        ("quantity", UInt(64)),
+        ("quantity", UInt(64, Modifiers(nullable=True))),
         ("category", UInt(8)),
         ("times_seen", UInt(64)),
     ]
