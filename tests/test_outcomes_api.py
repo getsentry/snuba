@@ -23,7 +23,7 @@ class TestOutcomesApi(BaseApiTest):
         return self.app
 
     @pytest.fixture(autouse=True)
-    def setup_post(self, _build_snql_post_methods: Callable[[Any], Any]) -> None:
+    def setup_post(self, _build_snql_post_methods: Callable[[str], str]) -> None:
         self.post = _build_snql_post_methods
 
     @pytest.fixture(scope="class")
@@ -134,7 +134,7 @@ class TestOutcomesApi(BaseApiTest):
         to_date = self.format_time(self.base_time + self.skew)
 
         response = self.post(
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "outcomes",
                     "aggregations": [["sum", "times_seen", "aggregate"]],

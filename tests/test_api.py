@@ -1,14 +1,14 @@
 import calendar
-import time
-import uuid
-from datetime import datetime, timedelta
-from functools import partial
-from unittest.mock import patch
-
 import pytest
 import pytz
 import simplejson as json
+import time
+import uuid
+from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
+from typing import Any, Callable, Tuple, Union
+from unittest.mock import patch
+
 from sentry_sdk import Client, Hub
 
 from snuba import settings, state
@@ -23,14 +23,26 @@ from snuba.datasets.storages.factory import get_storage
 from snuba.processor import InsertBatch
 from snuba.redis import redis_client
 from snuba.subscriptions.store import RedisSubscriptionDataStore
+
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 
 
 class TestApi(BaseApiTest):
+    @pytest.fixture
+    def test_entity(self) -> Union[str, Tuple[str, str]]:
+        return "events"
+
+    @pytest.fixture
+    def test_app(self) -> Any:
+        return self.app
+
+    @pytest.fixture(autouse=True)
+    def setup_post(self, _build_snql_post_methods: Callable[[str, str], Any]) -> None:
+        self.post = _build_snql_post_methods
+
     def setup_method(self, test_method):
         super().setup_method(test_method)
-        self.app.post = partial(self.app.post, headers={"referer": "test"})
 
         # values for test data
         self.project_ids = [1, 2, 3]  # 3 projects
@@ -154,30 +166,6 @@ class TestApi(BaseApiTest):
         else:
             return dbsize
 
-    def test_invalid_queries(self):
-        result = self.app.post(
-            "/query",
-            data=json.dumps(
-                {"project": [], "aggregations": [["count()", "", "times_seen"]]}
-            ),
-        )
-        assert result.status_code == 400
-        payload = json.loads(result.data)
-        assert payload["error"]["type"] == "schema"
-
-        result = self.app.post(
-            "/query",
-            data=json.dumps(
-                {
-                    "project": [2],
-                    "aggregations": [["parenth((eses(arehard)", "", "times_seen"]],
-                }
-            ),
-        )
-        assert result.status_code == 400
-        payload = json.loads(result.data)
-        assert payload["error"]["type"] == "invalid_query"
-
     def test_count(self):
         """
         Test total counts are correct in the hourly time buckets for each project
@@ -193,8 +181,7 @@ class TestApi(BaseApiTest):
         rollup_mins = 60
         for p in self.project_ids:
             result = json.loads(
-                self.app.post(
-                    "/query",
+                self.post(
                     data=json.dumps(
                         {
                             "project": p,
@@ -225,8 +212,7 @@ class TestApi(BaseApiTest):
             # Note for buckets bigger than 1 hour, the results may not line up
             # with self.base_time as base_time is not necessarily on a bucket boundary
             result = json.loads(
-                self.app.post(
-                    "/query",
+                self.post(
                     data=json.dumps(
                         {
                             "project": 1,
@@ -1456,8 +1442,7 @@ class TestApi(BaseApiTest):
 
             # Test getting the last 150 events, should happen in 2 batches
             result = json.loads(
-                self.app.post(
-                    "/query",
+                self.post(
                     data=json.dumps(
                         {
                             "project": 1,
@@ -1478,8 +1463,7 @@ class TestApi(BaseApiTest):
 
             # Test getting the last 150 events, offset by 10
             result = json.loads(
-                self.app.post(
-                    "/query",
+                self.post(
                     data=json.dumps(
                         {
                             "project": 1,
@@ -1501,8 +1485,7 @@ class TestApi(BaseApiTest):
 
             # Test asking for more events than there are
             result = json.loads(
-                self.app.post(
-                    "/query",
+                self.post(
                     data=json.dumps(
                         {
                             "project": 1,
@@ -1523,8 +1506,7 @@ class TestApi(BaseApiTest):
 
             # Test offset by more events than there are
             result = json.loads(
-                self.app.post(
-                    "/query",
+                self.post(
                     data=json.dumps(
                         {
                             "project": 1,
@@ -1544,8 +1526,7 @@ class TestApi(BaseApiTest):
 
             # Test offset that spans batches
             result = json.loads(
-                self.app.post(
-                    "/query",
+                self.post(
                     data=json.dumps(
                         {
                             "project": 1,
@@ -1567,8 +1548,7 @@ class TestApi(BaseApiTest):
 
             # Test offset by the size of the first batch retrieved. (the first batch will be discarded/trimmed)
             result = json.loads(
-                self.app.post(
-                    "/query",
+                self.post(
                     data=json.dumps(
                         {
                             "project": 1,
@@ -1590,8 +1570,7 @@ class TestApi(BaseApiTest):
 
             # Test condition that means 0 events will be returned
             result = json.loads(
-                self.app.post(
-                    "/query",
+                self.post(
                     data=json.dumps(
                         {
                             "project": 1,
@@ -1612,8 +1591,7 @@ class TestApi(BaseApiTest):
 
             # Test splitting query by columns - non timestamp sort
             result = json.loads(
-                self.app.post(
-                    "/query",
+                self.post(
                     data=json.dumps(
                         {
                             "project": 1,
@@ -1648,8 +1626,7 @@ class TestApi(BaseApiTest):
 
             # Test splitting query by columns - timestamp sort
             result = json.loads(
-                self.app.post(
-                    "/query",
+                self.post(
                     data=json.dumps(
                         {
                             "project": 1,
@@ -1678,8 +1655,7 @@ class TestApi(BaseApiTest):
             )
 
             result = json.loads(
-                self.app.post(
-                    "/query",
+                self.post(
                     data=json.dumps(
                         {
                             "project": 1,
@@ -1709,8 +1685,7 @@ class TestApi(BaseApiTest):
 
             # Test offset
             result = json.loads(
-                self.app.post(
-                    "/query",
+                self.post(
                     data=json.dumps(
                         {
                             "project": 1,
@@ -1796,8 +1771,7 @@ class TestApi(BaseApiTest):
             state.set_config("use_split", use_split)
             record_query_mock.reset_mock()
             result = json.loads(
-                self.app.post(
-                    "/query",
+                self.post(
                     data=json.dumps(
                         {
                             "project": 1,
@@ -1910,3 +1884,29 @@ class TestDeleteSubscriptionApi(BaseApiTest):
             RedisSubscriptionDataStore(redis_client, self.dataset, partition,).all()
             == []
         )
+
+
+class TestInvalidAPI(BaseApiTest):
+    def test_invalid_queries(self):
+        result = self.app.post(
+            "/query",
+            data=json.dumps(
+                {"project": [], "aggregations": [["count()", "", "times_seen"]]}
+            ),
+        )
+        assert result.status_code == 400
+        payload = json.loads(result.data)
+        assert payload["error"]["type"] == "schema"
+
+        result = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "project": [2],
+                    "aggregations": [["parenth((eses(arehard)", "", "times_seen"]],
+                }
+            ),
+        )
+        assert result.status_code == 400
+        payload = json.loads(result.data)
+        assert payload["error"]["type"] == "invalid_query"
