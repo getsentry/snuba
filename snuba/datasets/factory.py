@@ -11,7 +11,6 @@ DATASETS_NAME_LOOKUP: MutableMapping[Dataset, str] = {}
 DATASET_NAMES: Set[str] = {
     "discover",
     "events",
-    "events_migration",
     "groupassignee",
     "groupedmessage",
     "outcomes",
