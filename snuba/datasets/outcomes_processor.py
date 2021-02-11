@@ -20,14 +20,7 @@ class OutcomesProcessor(MessageProcessor):
         self, value: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         assert isinstance(value, dict)
-
-        # Only record outcomes from traditional error tracking events, which
-        # excludes transactions, attachments and sessions. Once TSDB defines
-        # models for these, we can start recording again.
-        category = value.get("category")
-        if category is not None and category not in DataCategory.error_categories():
-            return None
-
+        # TODO: validation around quantity and category?
         v_uuid = value.get("event_id")
         message = {
             "org_id": value.get("org_id", 0),
@@ -36,7 +29,11 @@ class OutcomesProcessor(MessageProcessor):
             "timestamp": _ensure_valid_date(
                 datetime.strptime(value["timestamp"], settings.PAYLOAD_DATETIME_FORMAT),
             ),
-            "outcome": value["outcome"],
+            "category": value.get(
+                "category", DataCategory.ERROR
+            ).value,  # if category is None, default to error for now TODO: change security to error?
+            "quantity": value.get("quantity", None),
+            "outcome": value.get("outcome", None),
             "reason": _unicodify(value.get("reason")),
             "event_id": str(uuid.UUID(v_uuid)) if v_uuid is not None else None,
         }

@@ -5,10 +5,12 @@ from datetime import datetime, timedelta
 import pytz
 import simplejson as json
 
+from typing import Optional
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
+from sentry_relay import DataCategory
 
 
 class TestOutcomesApi(BaseApiTest):
@@ -42,8 +44,10 @@ class TestOutcomesApi(BaseApiTest):
         org_id: int,
         project_id: int,
         num_outcomes: int,
-        outcome: int,
+        category: int,
         time_since_base: timedelta,
+        outcome: int,
+        quantity: Optional[int] = None,
     ) -> None:
         outcomes = []
         for _ in range(num_outcomes):
@@ -61,6 +65,8 @@ class TestOutcomesApi(BaseApiTest):
                         "org_id": org_id,
                         "reason": None,
                         "key_id": 1,
+                        "quantity": quantity,
+                        "category": category,
                         "outcome": outcome,
                     },
                     None,
@@ -81,6 +87,7 @@ class TestOutcomesApi(BaseApiTest):
             project_id=1,
             num_outcomes=5,
             outcome=0,
+            category=DataCategory.ERROR,
             time_since_base=timedelta(minutes=1),
         )
         self.generate_outcomes(
@@ -88,6 +95,7 @@ class TestOutcomesApi(BaseApiTest):
             project_id=1,
             num_outcomes=5,
             outcome=0,
+            category=DataCategory.ATTACHMENT,
             time_since_base=timedelta(minutes=30),
         )
         self.generate_outcomes(
@@ -95,6 +103,7 @@ class TestOutcomesApi(BaseApiTest):
             project_id=2,
             num_outcomes=10,
             outcome=0,
+            category=DataCategory.TRANSACTION,
             time_since_base=timedelta(minutes=30),
         )
         self.generate_outcomes(
@@ -102,6 +111,7 @@ class TestOutcomesApi(BaseApiTest):
             project_id=1,
             num_outcomes=10,
             outcome=0,
+            category=DataCategory.ERROR,
             time_since_base=timedelta(minutes=61),
         )
 
@@ -111,6 +121,7 @@ class TestOutcomesApi(BaseApiTest):
             project_id=1,
             num_outcomes=1,
             outcome=1,
+            category=DataCategory.ERROR,
             time_since_base=timedelta(minutes=1),
         )
 
@@ -120,6 +131,7 @@ class TestOutcomesApi(BaseApiTest):
             project_id=1,
             num_outcomes=1,
             outcome=0,
+            category=DataCategory.SECURITY,
             time_since_base=timedelta(minutes=(self.skew_minutes + 60)),
         )
 
@@ -152,3 +164,129 @@ class TestOutcomesApi(BaseApiTest):
         assert len(data["data"]) == 3
         assert all([row["aggregate"] == 10 * self.multiplier for row in data["data"]])
         assert sorted([row["project_id"] for row in data["data"]]) == [1, 1, 2]
+
+    def test_category_quantity_sum_querying(self):
+        self.generate_outcomes(
+            org_id=1,
+            project_id=1,
+            num_outcomes=1,
+            outcome=0,
+            category=DataCategory.ERROR,
+            time_since_base=timedelta(minutes=500),
+        )
+        self.generate_outcomes(
+            org_id=1,
+            project_id=1,
+            num_outcomes=1,
+            outcome=0,
+            category=DataCategory.ERROR,
+            time_since_base=timedelta(minutes=500),
+        )
+        self.generate_outcomes(
+            org_id=1,
+            project_id=1,
+            num_outcomes=1,
+            outcome=0,
+            category=DataCategory.SECURITY,
+            time_since_base=timedelta(minutes=500),
+        )
+        self.generate_outcomes(
+            org_id=1,
+            project_id=1,
+            num_outcomes=1,
+            outcome=0,
+            category=DataCategory.TRANSACTION,
+            time_since_base=timedelta(minutes=500),
+        )
+        self.generate_outcomes(
+            org_id=1,
+            project_id=1,
+            num_outcomes=1,
+            outcome=0,
+            quantity=6,
+            category=DataCategory.SESSION,
+            time_since_base=timedelta(minutes=500),
+        )
+        self.generate_outcomes(
+            org_id=1,
+            project_id=1,
+            num_outcomes=1,
+            outcome=0,
+            quantity=4,
+            category=DataCategory.SESSION,
+            time_since_base=timedelta(minutes=500),
+        )
+        self.generate_outcomes(
+            org_id=1,
+            project_id=1,
+            num_outcomes=1,
+            outcome=0,
+            category=DataCategory.ATTACHMENT,
+            quantity=65536,
+            time_since_base=timedelta(minutes=500),
+        )
+        self.generate_outcomes(
+            org_id=1,
+            project_id=1,
+            num_outcomes=1,
+            outcome=0,
+            category=DataCategory.ATTACHMENT,
+            quantity=16384,
+            time_since_base=timedelta(minutes=500),
+        )
+
+        from_date = self.format_time(self.base_time + timedelta(minutes=400))
+        to_date = self.format_time(self.base_time + timedelta(minutes=600))
+        response = self.app.post(
+            self.endpoint,
+            data=json.dumps(
+                {
+                    "dataset": "outcomes",
+                    "aggregations": [
+                        ["sum", "times_seen", "times_seen"],
+                        ["sum", "quantity", "quantity_sum"],
+                    ],
+                    "from_date": from_date,
+                    "selected_columns": [],
+                    "to_date": to_date,
+                    "organization": 1,
+                    "conditions": [
+                        ["timestamp", ">", from_date],
+                        ["timestamp", "<=", to_date],
+                    ],
+                    "groupby": ["category"],
+                }
+            ),
+        )
+
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert len(data["data"]) == 5
+        correct_data = [
+            {
+                "category": DataCategory.ERROR,
+                "times_seen": 2 * self.multiplier,
+                "quantity_sum": None,
+            },
+            {
+                "category": DataCategory.TRANSACTION,
+                "times_seen": 1 * self.multiplier,
+                "quantity_sum": None,
+            },
+            {
+                "category": DataCategory.SECURITY,
+                "times_seen": 1 * self.multiplier,
+                "quantity_sum": None,
+            },
+            {
+                "category": DataCategory.ATTACHMENT,
+                "times_seen": 2 * self.multiplier,
+                "quantity_sum": (65536 + 16384) * self.multiplier,
+            },
+            {
+                "category": DataCategory.SESSION,
+                "times_seen": 2 * self.multiplier,
+                "quantity_sum": (6 + 4) * self.multiplier,
+            },
+        ]
+        assert data["data"] == correct_data
