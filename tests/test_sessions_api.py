@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from functools import partial
 
+import pytest
 import pytz
 import simplejson as json
 
@@ -72,6 +73,56 @@ class TestSessionsApi(BaseApiTest):
             metrics=DummyMetricsBackend(strict=True)
         ).write([json.dumps(session).encode("utf-8") for session in sessions])
 
+    def generate_session_events(self):
+        processor = self.storage.get_table_writer().get_stream_loader().get_processor()
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+        template = {
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf",
+            "duration": None,
+            "environment": "production",
+            "org_id": 1,
+            "project_id": 2,
+            "release": "sentry-test@1.0.0",
+            "retention_days": settings.DEFAULT_RETENTION_DAYS,
+            "seq": 0,
+            "errors": 0,
+            "received": datetime.utcnow().timestamp(),
+            "started": self.started.timestamp(),
+        }
+        events = [
+            processor.process_message(
+                {
+                    **template,
+                    "status": "exited",
+                    "duration": 1947.49,
+                    "session_id": "8333339f-5675-4f89-a9a0-1c935255ab58",
+                    "started": (self.started + timedelta(minutes=13)).timestamp(),
+                },
+                meta,
+            ),
+            processor.process_message(
+                {**template, "status": "exited", "quantity": 5}, meta,
+            ),
+            processor.process_message(
+                {**template, "status": "errored", "errors": 1, "quantity": 2}, meta,
+            ),
+            processor.process_message(
+                {
+                    **template,
+                    "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf",
+                    "status": "errored",
+                    "errors": 1,
+                    "quantity": 2,
+                    "started": (self.started + timedelta(minutes=24)).timestamp(),
+                },
+                meta,
+            ),
+        ]
+        write_processed_messages(self.storage, events)
+
     def test_manual_session_aggregation(self):
         self.generate_manual_session_events()
         response = self.app.post(
@@ -100,57 +151,16 @@ class TestSessionsApi(BaseApiTest):
         assert data["data"][0]["users"] == 2
         assert data["data"][0]["users_errored"] == 1
 
-    def generate_session_events(self):
-        processor = self.storage.get_table_writer().get_stream_loader().get_processor()
-        meta = KafkaMessageMetadata(
-            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
-        )
-        template = {
-            "session_id": "00000000-0000-0000-0000-000000000000",
-            "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf",
-            "duration": None,
-            "environment": "production",
-            "org_id": 1,
-            "project_id": 2,
-            "release": "sentry-test@1.0.0",
-            "retention_days": settings.DEFAULT_RETENTION_DAYS,
-            "seq": 0,
-            "errors": 0,
-            "received": datetime.utcnow().timestamp(),
-            "started": self.started.timestamp(),
-        }
-        events = [
-            processor.process_message(
-                {
-                    **template,
-                    "status": "exited",
-                    "duration": 1947.49,
-                    "session_id": "8333339f-5675-4f89-a9a0-1c935255ab58",
-                    "started": (self.started + timedelta(minutes=3)).timestamp(),
-                },
-                meta,
-            ),
-            processor.process_message(
-                {**template, "status": "exited", "quantity": 5}, meta,
-            ),
-            processor.process_message(
-                {**template, "status": "errored", "errors": 1, "quantity": 2}, meta,
-            ),
-            processor.process_message(
-                {
-                    **template,
-                    "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf",
-                    "status": "errored",
-                    "errors": 1,
-                    "quantity": 2,
-                    "started": (self.started + timedelta(minutes=14)).timestamp(),
-                },
-                meta,
-            ),
-        ]
-        write_processed_messages(self.storage, events)
-
-    def test_session_aggregation(self):
+    # Since we never select or group by the `bucketed_started`, the granularity
+    # will be ignored basically and we will get the same data.
+    # XXX: When we don’t group by `bucketed_start`, we do get the same data, no
+    # matter if we hit the raw or hourly storage. Right now we can’t really
+    # assert which storage we actually hit.
+    # XXX: Actually applying the parametrize makes snuba return X times the
+    # sessions than are expected. No idea why, as the parametrize down below
+    # works without any problems.
+    # @pytest.mark.parametrize("granularity", [60, 120, 3600])
+    def test_session_aggregation(self, granularity=3600):
         self.generate_session_events()
         response = self.app.post(
             "/query",
@@ -165,6 +175,7 @@ class TestSessionsApi(BaseApiTest):
                         "users",
                         "users_errored",
                     ],
+                    "granularity": granularity,
                     "from_date": (self.started - self.skew).isoformat(),
                     "to_date": (self.started + self.skew).isoformat(),
                 }
@@ -172,13 +183,17 @@ class TestSessionsApi(BaseApiTest):
         )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
+
         assert len(data["data"]) == 1, data
         assert data["data"][0]["sessions"] == 10
         assert data["data"][0]["sessions_errored"] == 4
         assert data["data"][0]["users"] == 1
         assert data["data"][0]["users_errored"] == 1
 
-    def test_session_small_granularity(self):
+    # the test sessions have timestamps of `:00`, `:13` and `:24`, so they will
+    # end up in 3 buckets no matter if we group by minute, 2 minutes or 10 minutes
+    @pytest.mark.parametrize("granularity", [60, 120, 600])
+    def test_session_small_granularity(self, granularity):
         self.generate_session_events()
         response = self.app.post(
             "/query",
@@ -196,7 +211,7 @@ class TestSessionsApi(BaseApiTest):
                     ],
                     "groupby": ["bucketed_started"],
                     "orderby": ["bucketed_started"],
-                    "granularity": 60,
+                    "granularity": granularity,
                     "from_date": (self.started - self.skew).isoformat(),
                     "to_date": (self.started + self.skew).isoformat(),
                 }
