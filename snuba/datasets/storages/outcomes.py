@@ -23,6 +23,8 @@ write_columns = ColumnSet(
         ("outcome", UInt(8)),
         ("reason", String(Modifiers(nullable=True))),
         ("event_id", UUID(Modifiers(nullable=True))),
+        ("quantity", UInt(32, Modifiers(nullable=True))),
+        ("category", UInt(8, Modifiers(nullable=True))),
     ]
 )
 
@@ -42,6 +44,8 @@ read_columns = ColumnSet(
         ("timestamp", DateTime()),
         ("outcome", UInt(8)),
         ("reason", String()),
+        ("quantity", UInt(64)),
+        ("category", UInt(8)),
         ("times_seen", UInt(64)),
     ]
 )
@@ -62,6 +66,8 @@ materialized_view_columns = ColumnSet(
         ("outcome", UInt(8)),
         ("reason", String()),
         ("times_seen", UInt(64)),
+        ("quantity", UInt(64)),
+        ("category", UInt(8)),
     ]
 )
 
