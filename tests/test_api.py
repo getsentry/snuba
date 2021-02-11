@@ -38,7 +38,7 @@ class TestApi(BaseApiTest):
         return self.app
 
     @pytest.fixture(autouse=True)
-    def setup_post(self, _build_snql_post_methods: Callable[[str, str], Any]) -> None:
+    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
         self.post = _build_snql_post_methods
 
     def setup_method(self, test_method):
@@ -182,7 +182,7 @@ class TestApi(BaseApiTest):
         for p in self.project_ids:
             result = json.loads(
                 self.post(
-                    data=json.dumps(
+                    json.dumps(
                         {
                             "project": p,
                             "granularity": rollup_mins * 60,
@@ -213,7 +213,7 @@ class TestApi(BaseApiTest):
             # with self.base_time as base_time is not necessarily on a bucket boundary
             result = json.loads(
                 self.post(
-                    data=json.dumps(
+                    json.dumps(
                         {
                             "project": 1,
                             "granularity": rollup_mins * 60,
@@ -244,9 +244,8 @@ class TestApi(BaseApiTest):
         # Adding a half hour skew to the time.
         skew = timedelta(minutes=30)
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 1,
                         "granularity": 60,
@@ -269,9 +268,8 @@ class TestApi(BaseApiTest):
         # the 1hr boundary.
         state.set_config("date_align_seconds", 3600)
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 1,
                         "granularity": 60,
@@ -290,24 +288,34 @@ class TestApi(BaseApiTest):
 
     def test_no_issues(self):
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
-                    {"project": 1, "granularity": 3600, "groupby": "group_id"}
+            self.post(
+                json.dumps(
+                    {
+                        "project": 1,
+                        "granularity": 3600,
+                        "groupby": "group_id",
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
+                    }
                 ),
             ).data
         )
         assert "error" not in result
 
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 1,
                         "granularity": 3600,
                         "groupby": "group_id",
                         "conditions": [["group_id", "=", 100]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -316,14 +324,17 @@ class TestApi(BaseApiTest):
         assert result["data"] == []
 
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 1,
                         "granularity": 3600,
                         "groupby": "group_id",
                         "conditions": [["group_id", "IN", [100, 200]]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -333,9 +344,8 @@ class TestApi(BaseApiTest):
 
     def test_offset_limit(self):
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": self.project_ids,
                         "groupby": ["project_id"],
@@ -343,6 +353,10 @@ class TestApi(BaseApiTest):
                         "orderby": "-count",
                         "offset": 1,
                         "limit": 1,
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -351,15 +365,18 @@ class TestApi(BaseApiTest):
         assert result["data"][0]["project_id"] == 2
 
         # limit over max-limit is invalid
-        result = self.app.post(
-            "/query",
-            data=json.dumps(
+        result = self.post(
+            json.dumps(
                 {
                     "project": self.project_ids,
                     "groupby": ["project_id"],
                     "aggregations": [["count()", "", "count"]],
                     "orderby": "-count",
                     "limit": 1000000,
+                    "from_date": self.base_time.isoformat(),
+                    "to_date": (
+                        self.base_time + timedelta(minutes=self.minutes)
+                    ).isoformat(),
                 }
             ),
         )
@@ -367,9 +384,8 @@ class TestApi(BaseApiTest):
 
     def test_totals(self):
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": self.project_ids,
                         "groupby": ["project_id"],
@@ -377,6 +393,10 @@ class TestApi(BaseApiTest):
                         "aggregations": [["count()", "", "count"]],
                         "orderby": "-count",
                         "limit": 1,
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -395,9 +415,8 @@ class TestApi(BaseApiTest):
 
         # LIMIT BY
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": self.project_ids,
                         "aggregations": [["count()", "", "count"]],
@@ -405,6 +424,10 @@ class TestApi(BaseApiTest):
                         "groupby": "environment",
                         "limitby": [100, "environment"],
                         "debug": True,
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -413,9 +436,8 @@ class TestApi(BaseApiTest):
 
         # Stress nullable totals column, making sure we get results as expected
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": self.project_ids,
                         "groupby": [
@@ -426,6 +448,10 @@ class TestApi(BaseApiTest):
                         "aggregations": [["count()", "", "count"]],
                         "orderby": "-count",
                         "limit": 1,
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -443,24 +469,8 @@ class TestApi(BaseApiTest):
 
     def test_conditions(self):
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
-                    {
-                        "project": 2,
-                        "granularity": 3600,
-                        "groupby": "group_id",
-                        "conditions": [[], ["group_id", "IN", self.group_ids[:5]]],
-                    }
-                ),
-            ).data
-        )
-        assert set([d["group_id"] for d in result["data"]]) == set([self.group_ids[4]])
-
-        result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 1,
                         "granularity": 3600,
@@ -469,6 +479,10 @@ class TestApi(BaseApiTest):
                         "conditions": [
                             ["platform", "NOT IN", ["b", "c", "d", "e", "f"]]
                         ],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -477,15 +491,18 @@ class TestApi(BaseApiTest):
         assert result["data"][0]["platform"] == "a"
 
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 1,
                         "selected_columns": ["event_id"],
                         "conditions": [["message", "LIKE", "a mess%"]],
                         "orderby": "event_id",
                         "limit": 1,
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -493,15 +510,18 @@ class TestApi(BaseApiTest):
         assert len(result["data"]) == 1
 
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 1,
                         "selected_columns": ["event_id"],
                         "conditions": [["message", "NOT LIKE", "a mess%"]],
                         "orderby": "event_id",
                         "limit": 1,
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -509,15 +529,18 @@ class TestApi(BaseApiTest):
         assert len(result["data"]) == 0
 
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 1,
                         "selected_columns": ["event_id"],
                         "conditions": [["tags[environment]", "LIKE", "%es%"]],
                         "orderby": "event_id",
                         "limit": 1,
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -525,72 +548,28 @@ class TestApi(BaseApiTest):
         assert len(result["data"]) == 1
 
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 1,
                         "selected_columns": ["event_id", "received"],
                         "conditions": [["received", "=", str(self.base_time)]],
                         "orderby": "event_id",
                         "limit": 1,
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
         )
         assert len(result["data"]) == 1
-
-        # Test that a scalar condition on an array column expands to an all() type
-        # iterator
-        result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
-                    {
-                        "project": [1, 2, 3],
-                        "selected_columns": ["project_id"],
-                        "groupby": "project_id",
-                        "conditions": [
-                            # only project 1 should have an event with lineno 5
-                            ["exception_frames.lineno", "=", 5],
-                            ["exception_frames.filename", "LIKE", "%bar%"],
-                            # TODO these conditions are both separately true for the event,
-                            # but they are not both true for a single exception_frame (i.e.
-                            # there is no frame with filename:bar and lineno:5). We need to
-                            # fix this so that we have one iterator that tests both
-                            # conditions, instead of 2 iterators testing 1 condition each.
-                        ],
-                    }
-                ),
-            ).data
-        )
-        assert len(result["data"]) == 1
-        assert result["data"][0]["project_id"] == 1
-
-        # Test that a negative scalar condition on an array column expands to an
-        # all() type iterator. Looking for stack traces that do not contain foo.py
-        # at all ie. all(filename != 'foo.py')
-        result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
-                    {
-                        "project": [1, 2, 3],
-                        "selected_columns": ["project_id"],
-                        "groupby": "project_id",
-                        "debug": True,
-                        "conditions": [["exception_frames.filename", "!=", "foo.py"]],
-                    }
-                ),
-            ).data
-        )
-        assert len(result["data"]) == 0
 
         # Test null group_id
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": [1, 2, 3],
                         "selected_columns": ["group_id"],
@@ -598,6 +577,10 @@ class TestApi(BaseApiTest):
                         "aggregations": [["count()", "", "count"]],
                         "debug": True,
                         "conditions": [["group_id", "IS NULL", None]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -608,9 +591,8 @@ class TestApi(BaseApiTest):
         assert res["count"] > 0
 
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "dataset": "events",
                         "project": [1, 2, 3],
@@ -618,6 +600,10 @@ class TestApi(BaseApiTest):
                         "groupby": ["group_id"],
                         "debug": True,
                         "conditions": [["group_id", "IS NULL", None]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -666,14 +652,17 @@ class TestApi(BaseApiTest):
         self.write_events(events)
 
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 4,
                         "selected_columns": ["message"],
                         "conditions": [[["isHandled", []], "=", 1]],
                         "orderby": ["message"],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -683,14 +672,17 @@ class TestApi(BaseApiTest):
         assert result["data"][1]["message"] == "handled True"
 
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 4,
                         "selected_columns": ["message"],
                         "conditions": [[["notHandled", []], "=", 1]],
                         "orderby": ["message"],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -701,9 +693,8 @@ class TestApi(BaseApiTest):
     def test_escaping(self):
         # Escape single quotes so we don't get Bobby Tables'd
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 1,
                         "granularity": 3600,
@@ -712,6 +703,10 @@ class TestApi(BaseApiTest):
                         "conditions": [
                             ["platform", "=", r"production'; DROP TABLE test; --"]
                         ],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -719,11 +714,8 @@ class TestApi(BaseApiTest):
 
         # Make sure we still got our table
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
-                    {"project": 1, "aggregations": [["count()", "", "count"]]}
-                ),
+            self.post(
+                json.dumps({"project": 1, "aggregations": [["count()", "", "count"]]}),
             ).data
         )
         assert result["data"][0]["count"] == 180
@@ -731,15 +723,18 @@ class TestApi(BaseApiTest):
         # Need to escape backslash as well otherwise the unescped
         # backslash would nullify the escaping on the quote.
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 1,
                         "granularity": 3600,
                         "aggregations": [["count()", "", "count"]],
                         "groupby": "platform",
                         "conditions": [["platform", "=", r"\'"]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -760,9 +755,8 @@ class TestApi(BaseApiTest):
         # Before we run our test, make sure the column exists in our prewhere keys
         assert "message" in prewhere_keys
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 1,
                         "selected_columns": ["event_id"],
@@ -771,6 +765,10 @@ class TestApi(BaseApiTest):
                         ],
                         "limit": 1,
                         "debug": True,
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -786,9 +784,8 @@ class TestApi(BaseApiTest):
         # Before we run our test, make sure that we have our priorities in the test right.
         assert prewhere_keys.index("message") < prewhere_keys.index("project_id")
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 1,
                         "selected_columns": ["event_id"],
@@ -797,6 +794,10 @@ class TestApi(BaseApiTest):
                         ],
                         "limit": 1,
                         "debug": True,
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -809,9 +810,8 @@ class TestApi(BaseApiTest):
         # Allow 2 conditions in prewhere clause
         settings.MAX_PREWHERE_CONDITIONS = 2
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 1,
                         "selected_columns": ["event_id"],
@@ -820,6 +820,10 @@ class TestApi(BaseApiTest):
                         ],
                         "limit": 1,
                         "debug": True,
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -832,15 +836,18 @@ class TestApi(BaseApiTest):
     def test_prewhere_conditions_dont_show_up_in_where_conditions(self):
         settings.MAX_PREWHERE_CONDITIONS = 1
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 1,
                         "selected_columns": ["event_id"],
                         "conditions": [["http_method", "=", "GET"]],
                         "limit": 1,
                         "debug": True,
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -856,13 +863,16 @@ class TestApi(BaseApiTest):
 
     def test_aggregate(self):
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 3,
                         "groupby": "project_id",
                         "aggregations": [["topK(4)", "group_id", "aggregate"]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -874,13 +884,16 @@ class TestApi(BaseApiTest):
         ]
 
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 3,
                         "groupby": "project_id",
                         "aggregations": [["uniq", "group_id", "aggregate"]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -888,13 +901,16 @@ class TestApi(BaseApiTest):
         assert result["data"][0]["aggregate"] == 3
 
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 3,
                         "groupby": ["project_id", "time"],
                         "aggregations": [["uniq", "group_id", "aggregate"]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -903,9 +919,8 @@ class TestApi(BaseApiTest):
         assert all(d["aggregate"] == 3 for d in result["data"])
 
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": self.project_ids,
                         "groupby": ["project_id"],
@@ -914,6 +929,10 @@ class TestApi(BaseApiTest):
                             ["uniq", "platform", "uniq_platforms"],
                             ["topK(1)", "platform", "top_platforms"],
                         ],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -929,15 +948,18 @@ class TestApi(BaseApiTest):
 
     def test_aggregate_with_multiple_arguments(self):
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 3,
                         "groupby": "project_id",
                         "aggregations": [
                             ["argMax", ["event_id", "timestamp"], "latest_event"]
                         ],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -948,14 +970,17 @@ class TestApi(BaseApiTest):
 
     def test_having_conditions(self):
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 2,
                         "groupby": "primary_hash",
                         "having": [["times_seen", ">", 1]],
                         "aggregations": [["count()", "", "times_seen"]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -963,14 +988,17 @@ class TestApi(BaseApiTest):
         assert len(result["data"]) == 3
 
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 2,
                         "groupby": "primary_hash",
                         "having": [["times_seen", ">", 100]],
                         "aggregations": [["count()", "", "times_seen"]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -979,13 +1007,16 @@ class TestApi(BaseApiTest):
 
         # unknown field times_seen
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 2,
                         "having": [["times_seen", ">", 1]],
                         "groupby": "time",
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -995,15 +1026,18 @@ class TestApi(BaseApiTest):
     def test_tag_expansion(self):
         # A promoted tag
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 2,
                         "granularity": 3600,
                         "groupby": "project_id",
                         "conditions": [["tags[sentry:dist]", "IN", ["dist1", "dist2"]]],
                         "aggregations": [["count()", "", "aggregate"]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -1013,9 +1047,8 @@ class TestApi(BaseApiTest):
 
         # A non promoted tag
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 2,
                         "granularity": 3600,
@@ -1025,6 +1058,10 @@ class TestApi(BaseApiTest):
                             ["tags[foo.bar]", "=", "qux"],
                         ],
                         "aggregations": [["count()", "", "aggregate"]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -1034,9 +1071,8 @@ class TestApi(BaseApiTest):
 
         # A combination of promoted and nested
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 2,
                         "granularity": 3600,
@@ -1046,6 +1082,10 @@ class TestApi(BaseApiTest):
                             ["tags[foo.bar]", "=", "qux"],
                         ],
                         "aggregations": [["count()", "", "aggregate"]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -1054,15 +1094,18 @@ class TestApi(BaseApiTest):
         assert result["data"][0]["aggregate"] == 90
 
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 2,
                         "granularity": 3600,
                         "groupby": "project_id",
                         "conditions": [["tags[os.rooted]", "=", "1"]],
                         "aggregations": [["count()", "", "aggregate"]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -1074,14 +1117,17 @@ class TestApi(BaseApiTest):
         # If there is a condition on an already SELECTed column, then use the
         # column alias instead of the full column expression again.
         response = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 2,
                         "granularity": 3600,
                         "groupby": "group_id",
                         "conditions": [["group_id", "=", 0], ["group_id", "=", 1]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -1092,22 +1138,41 @@ class TestApi(BaseApiTest):
 
     def test_sampling_expansion(self):
         response = json.loads(
-            self.app.post(
-                "/query", data=json.dumps({"project": 2, "sample": 1000})
+            self.post(
+                json.dumps(
+                    {
+                        "project": 2,
+                        "sample": 1000,
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
+                    }
+                )
             ).data
         )
         assert "SAMPLE 1000" in response["sql"]
 
         response = json.loads(
-            self.app.post("/query", data=json.dumps({"project": 2, "sample": 0.1})).data
+            self.post(
+                json.dumps(
+                    {
+                        "project": 2,
+                        "sample": 0.1,
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
+                    }
+                )
+            ).data
         )
         assert "SAMPLE 0.1" in response["sql"]
 
     def test_promoted_expansion(self):
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 1,
                         "granularity": 3600,
@@ -1118,6 +1183,10 @@ class TestApi(BaseApiTest):
                             ["topK(3)", "tags_value", "top"],
                         ],
                         "conditions": [["tags_value", "IS NOT NULL", None]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -1159,13 +1228,16 @@ class TestApi(BaseApiTest):
 
     def test_tag_translation(self):
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 1,
                         "granularity": 3600,
                         "aggregations": [["topK(100)", "tags_key", "top"]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -1175,15 +1247,18 @@ class TestApi(BaseApiTest):
 
     def test_unicode_condition(self):
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 1,
                         "granularity": 3600,
                         "groupby": ["environment"],
                         "aggregations": [["count()", "", "count"]],
                         "conditions": [["environment", "IN", ["prød"]]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -1192,11 +1267,8 @@ class TestApi(BaseApiTest):
 
     def test_query_timing(self):
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
-                    {"project": 1, "granularity": 3600, "groupby": "group_id"}
-                ),
+            self.post(
+                json.dumps({"project": 1, "granularity": 3600, "groupby": "group_id"}),
             ).data
         )
 
@@ -1205,7 +1277,7 @@ class TestApi(BaseApiTest):
 
     def test_global_rate_limiting(self):
         state.set_config("global_concurrent_limit", 0)
-        response = self.app.post("/query", data=json.dumps({"project": 1}))
+        response = self.post(json.dumps({"project": 1}))
         assert response.status_code == 429
 
     def test_project_rate_limiting(self):
@@ -1213,13 +1285,13 @@ class TestApi(BaseApiTest):
         state.set_config("project_concurrent_limit", 1)
         state.set_config("project_concurrent_limit_1", 0)
 
-        response = self.app.post(
-            "/query", data=json.dumps({"project": 2, "selected_columns": ["platform"]})
+        response = self.post(
+            json.dumps({"project": 2, "selected_columns": ["platform"]})
         )
         assert response.status_code == 200
 
-        response = self.app.post(
-            "/query", data=json.dumps({"project": 1, "selected_columns": ["platform"]})
+        response = self.post(
+            json.dumps({"project": 1, "selected_columns": ["platform"]})
         )
         assert response.status_code == 429
 
@@ -1228,8 +1300,10 @@ class TestApi(BaseApiTest):
             "project": 1,
             "groupby": "project_id",
             "aggregations": [["count()", "", "count"]],
+            "from_date": self.base_time.isoformat(),
+            "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
         }
-        result1 = json.loads(self.app.post("/query", data=json.dumps(query)).data)
+        result1 = json.loads(self.post(json.dumps(query)).data)
 
         event_id = "9" * 32
         if self.storage.get_storage_key() == StorageKey.ERRORS:
@@ -1253,7 +1327,7 @@ class TestApi(BaseApiTest):
             ],
         )
 
-        result2 = json.loads(self.app.post("/query", data=json.dumps(query)).data)
+        result2 = json.loads(self.post(json.dumps(query)).data)
         assert result1["data"] == result2["data"]
 
     def test_selected_columns(self):
@@ -1262,7 +1336,7 @@ class TestApi(BaseApiTest):
             "selected_columns": ["platform", "message"],
             "orderby": "platform",
         }
-        result = json.loads(self.app.post("/query", data=json.dumps(query)).data)
+        result = json.loads(self.post(json.dumps(query)).data)
 
         assert len(result["data"]) == 180
         assert result["data"][0] == {"message": "a message", "platform": "a"}
@@ -1271,8 +1345,10 @@ class TestApi(BaseApiTest):
         query = {
             "project": 1,
             "selected_columns": ["platform", ["notEmpty", ["exception_stacks.type"]]],
+            "from_date": self.base_time.isoformat(),
+            "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
         }
-        result = json.loads(self.app.post("/query", data=json.dumps(query)).data)
+        result = json.loads(self.post(json.dumps(query)).data)
         assert len(result["data"]) == 180
         assert "platform" in result["data"][0]
         assert "notEmpty(exception_stacks.type)" in result["data"][0]
@@ -1285,8 +1361,10 @@ class TestApi(BaseApiTest):
                 "platform",
                 ["notEmpty", ["exception_stacks.type"], "type_not_empty"],
             ],
+            "from_date": self.base_time.isoformat(),
+            "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
         }
-        result = json.loads(self.app.post("/query", data=json.dumps(query)).data)
+        result = json.loads(self.post(json.dumps(query)).data)
         assert len(result["data"]) == 180
         assert "platform" in result["data"][0]
         assert "type_not_empty" in result["data"][0]
@@ -1296,14 +1374,17 @@ class TestApi(BaseApiTest):
         # sort by a complex sort key with an expression, and a regular column,
         # and both ASC and DESC sorts.
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 1,
                         "selected_columns": ["environment", "time"],
                         "orderby": [["-substringUTF8", ["environment", 1, 3]], "time"],
                         "debug": True,
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -1324,7 +1405,7 @@ class TestApi(BaseApiTest):
             "project": 1,
             "selected_columns": ["received"],
         }
-        json.loads(self.app.post("/query", data=json.dumps(query)).data)
+        json.loads(self.post(json.dumps(query)).data)
 
     def test_duplicate_column(self):
         query = {
@@ -1335,78 +1416,8 @@ class TestApi(BaseApiTest):
             "to_date": "2019-11-26T01:00:36",
             "granularity": 3600,
         }
-        result = json.loads(self.app.post("/query", data=json.dumps(query)).data)
+        result = json.loads(self.post(json.dumps(query)).data)
         assert result["meta"] == [{"name": "timestamp", "type": "DateTime"}]
-
-    def test_test_endpoints(self):
-        project_id = 73
-        group_id = 74
-        event = (
-            2,
-            "insert",
-            {
-                "event_id": "9" * 32,
-                "primary_hash": "1" * 32,
-                "project_id": project_id,
-                "group_id": group_id,
-                "datetime": self.base_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-                "deleted": 1,
-                "retention_days": settings.DEFAULT_RETENTION_DAYS,
-                "platform": "python",
-                "message": "message",
-                "data": {"received": time.mktime(self.base_time.timetuple())},
-            },
-        )
-        response = self.app.post("/tests/events/eventstream", data=json.dumps(event))
-        assert response.status_code == 200
-
-        query = {
-            "project": project_id,
-            "groupby": "project_id",
-            "aggregations": [["count()", "", "count"]],
-            "conditions": [["group_id", "=", group_id]],
-        }
-        result = json.loads(self.app.post("/query", data=json.dumps(query)).data)
-        assert result["data"] == [{"count": 1, "project_id": project_id}]
-
-        event = (
-            2,
-            "end_delete_groups",
-            {
-                "transaction_id": "foo",
-                "project_id": project_id,
-                "group_ids": [group_id],
-                "datetime": (self.base_time + timedelta(days=7)).strftime(
-                    "%Y-%m-%dT%H:%M:%S.%fZ"
-                ),
-            },
-        )
-        response = self.app.post("/tests/events/eventstream", data=json.dumps(event))
-        assert response.status_code == 200
-
-        result = json.loads(self.app.post("/query", data=json.dumps(query)).data)
-        assert result["data"] == []
-
-        # make sure redis has _something_ before we go about dropping all the keys in it
-        assert self.redis_db_size() > 0
-
-        storage = get_storage(StorageKey.EVENTS)
-        clickhouse = storage.get_cluster().get_query_connection(
-            ClickhouseClientSettings.QUERY
-        )
-
-        # There is data in the events table
-        assert len(clickhouse.execute(f"SELECT * FROM {self.table}")) > 0
-
-        assert self.app.post("/tests/events/drop").status_code == 200
-        writer = storage.get_table_writer()
-        table = writer.get_schema().get_table_name()
-
-        assert table not in clickhouse.execute("SHOW TABLES")
-        assert self.redis_db_size() == 0
-
-        # No data in events table
-        assert len(clickhouse.execute(f"SELECT * FROM {self.table}")) == 0
 
     @pytest.mark.xfail
     def test_row_stats(self):
@@ -1414,7 +1425,7 @@ class TestApi(BaseApiTest):
             "project": 1,
             "selected_columns": ["platform"],
         }
-        result = json.loads(self.app.post("/query", data=json.dumps(query)).data)
+        result = json.loads(self.post(json.dumps(query)).data)
 
         assert "rows_read" in result["stats"]
         assert "bytes_read" in result["stats"]
@@ -1443,7 +1454,7 @@ class TestApi(BaseApiTest):
             # Test getting the last 150 events, should happen in 2 batches
             result = json.loads(
                 self.post(
-                    data=json.dumps(
+                    json.dumps(
                         {
                             "project": 1,
                             "from_date": self.base_time.isoformat(),
@@ -1464,7 +1475,7 @@ class TestApi(BaseApiTest):
             # Test getting the last 150 events, offset by 10
             result = json.loads(
                 self.post(
-                    data=json.dumps(
+                    json.dumps(
                         {
                             "project": 1,
                             "from_date": self.base_time.isoformat(),
@@ -1486,7 +1497,7 @@ class TestApi(BaseApiTest):
             # Test asking for more events than there are
             result = json.loads(
                 self.post(
-                    data=json.dumps(
+                    json.dumps(
                         {
                             "project": 1,
                             "from_date": self.base_time.isoformat(),
@@ -1507,7 +1518,7 @@ class TestApi(BaseApiTest):
             # Test offset by more events than there are
             result = json.loads(
                 self.post(
-                    data=json.dumps(
+                    json.dumps(
                         {
                             "project": 1,
                             "from_date": self.base_time.isoformat(),
@@ -1527,7 +1538,7 @@ class TestApi(BaseApiTest):
             # Test offset that spans batches
             result = json.loads(
                 self.post(
-                    data=json.dumps(
+                    json.dumps(
                         {
                             "project": 1,
                             "from_date": self.base_time.isoformat(),
@@ -1549,7 +1560,7 @@ class TestApi(BaseApiTest):
             # Test offset by the size of the first batch retrieved. (the first batch will be discarded/trimmed)
             result = json.loads(
                 self.post(
-                    data=json.dumps(
+                    json.dumps(
                         {
                             "project": 1,
                             "from_date": self.base_time.isoformat(),
@@ -1571,7 +1582,7 @@ class TestApi(BaseApiTest):
             # Test condition that means 0 events will be returned
             result = json.loads(
                 self.post(
-                    data=json.dumps(
+                    json.dumps(
                         {
                             "project": 1,
                             "from_date": self.base_time.isoformat(),
@@ -1592,7 +1603,7 @@ class TestApi(BaseApiTest):
             # Test splitting query by columns - non timestamp sort
             result = json.loads(
                 self.post(
-                    data=json.dumps(
+                    json.dumps(
                         {
                             "project": 1,
                             "from_date": self.base_time.isoformat(),
@@ -1627,7 +1638,7 @@ class TestApi(BaseApiTest):
             # Test splitting query by columns - timestamp sort
             result = json.loads(
                 self.post(
-                    data=json.dumps(
+                    json.dumps(
                         {
                             "project": 1,
                             "from_date": self.base_time.isoformat(),
@@ -1656,7 +1667,7 @@ class TestApi(BaseApiTest):
 
             result = json.loads(
                 self.post(
-                    data=json.dumps(
+                    json.dumps(
                         {
                             "project": 1,
                             "from_date": (
@@ -1686,7 +1697,7 @@ class TestApi(BaseApiTest):
             # Test offset
             result = json.loads(
                 self.post(
-                    data=json.dumps(
+                    json.dumps(
                         {
                             "project": 1,
                             "from_date": self.base_time.isoformat(),
@@ -1721,14 +1732,17 @@ class TestApi(BaseApiTest):
 
     def test_consistent(self):
         response = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
+            self.post(
+                json.dumps(
                     {
                         "project": 2,
                         "aggregations": [["count()", "", "aggregate"]],
                         "consistent": True,
                         "debug": True,
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
                     }
                 ),
             ).data
@@ -1736,9 +1750,8 @@ class TestApi(BaseApiTest):
         assert response["stats"]["consistent"]
 
     def test_gracefully_handle_multiple_conditions_on_same_column(self):
-        response = self.app.post(
-            "/query",
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "project": [2],
                     "selected_columns": ["timestamp"],
@@ -1747,6 +1760,10 @@ class TestApi(BaseApiTest):
                         [["isNull", ["group_id"]], "=", 1],
                     ],
                     "debug": True,
+                    "from_date": self.base_time.isoformat(),
+                    "to_date": (
+                        self.base_time + timedelta(minutes=self.minutes)
+                    ).isoformat(),
                 }
             ),
         )
@@ -1755,10 +1772,17 @@ class TestApi(BaseApiTest):
 
     def test_mandatory_conditions(self):
         result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
-                    {"project": 1, "granularity": 3600, "groupby": "group_id"}
+            self.post(
+                json.dumps(
+                    {
+                        "project": 1,
+                        "granularity": 3600,
+                        "groupby": "group_id",
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
+                    }
                 ),
             ).data
         )
@@ -1772,7 +1796,7 @@ class TestApi(BaseApiTest):
             record_query_mock.reset_mock()
             result = json.loads(
                 self.post(
-                    data=json.dumps(
+                    json.dumps(
                         {
                             "project": 1,
                             "selected_columns": [
@@ -1783,6 +1807,10 @@ class TestApi(BaseApiTest):
                                 "tags[b]",
                             ],
                             "limit": 5,
+                            "from_date": self.base_time.isoformat(),
+                            "to_date": (
+                                self.base_time + timedelta(minutes=self.minutes)
+                            ).isoformat(),
                         }
                     ),
                 ).data
@@ -1886,7 +1914,9 @@ class TestDeleteSubscriptionApi(BaseApiTest):
         )
 
 
-class TestInvalidAPI(BaseApiTest):
+class TestExtraAPI(TestApi):
+    """ These are tests for features that are not supported in SnQL. """
+
     def test_invalid_queries(self):
         result = self.app.post(
             "/query",
@@ -1910,3 +1940,147 @@ class TestInvalidAPI(BaseApiTest):
         assert result.status_code == 400
         payload = json.loads(result.data)
         assert payload["error"]["type"] == "invalid_query"
+
+    def test_test_endpoints(self):
+        project_id = 73
+        group_id = 74
+        event = (
+            2,
+            "insert",
+            {
+                "event_id": "9" * 32,
+                "primary_hash": "1" * 32,
+                "project_id": project_id,
+                "group_id": group_id,
+                "datetime": self.base_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                "deleted": 1,
+                "retention_days": settings.DEFAULT_RETENTION_DAYS,
+                "platform": "python",
+                "message": "message",
+                "data": {"received": time.mktime(self.base_time.timetuple())},
+            },
+        )
+        response = self.app.post("/tests/events/eventstream", data=json.dumps(event))
+        assert response.status_code == 200
+
+        query = {
+            "project": project_id,
+            "groupby": "project_id",
+            "aggregations": [["count()", "", "count"]],
+            "conditions": [["group_id", "=", group_id]],
+        }
+        result = json.loads(self.app.post("/query", data=json.dumps(query)).data)
+        assert result["data"] == [{"count": 1, "project_id": project_id}]
+
+        event = (
+            2,
+            "end_delete_groups",
+            {
+                "transaction_id": "foo",
+                "project_id": project_id,
+                "group_ids": [group_id],
+                "datetime": (self.base_time + timedelta(days=7)).strftime(
+                    "%Y-%m-%dT%H:%M:%S.%fZ"
+                ),
+            },
+        )
+        response = self.app.post("/tests/events/eventstream", data=json.dumps(event))
+        assert response.status_code == 200
+
+        result = json.loads(self.app.post("/query", data=json.dumps(query)).data)
+        assert result["data"] == []
+
+        # make sure redis has _something_ before we go about dropping all the keys in it
+        assert self.redis_db_size() > 0
+
+        storage = get_storage(StorageKey.EVENTS)
+        clickhouse = storage.get_cluster().get_query_connection(
+            ClickhouseClientSettings.QUERY
+        )
+
+        # There is data in the events table
+        assert len(clickhouse.execute(f"SELECT * FROM {self.table}")) > 0
+
+        assert self.app.post("/tests/events/drop").status_code == 200
+        writer = storage.get_table_writer()
+        table = writer.get_schema().get_table_name()
+
+        assert table not in clickhouse.execute("SHOW TABLES")
+        assert self.redis_db_size() == 0
+
+        # No data in events table
+        assert len(clickhouse.execute(f"SELECT * FROM {self.table}")) == 0
+
+    def test_conditions(self):
+        result = json.loads(
+            self.app.post(
+                "/query",
+                data=json.dumps(
+                    {
+                        "project": 2,
+                        "granularity": 3600,
+                        "groupby": "group_id",
+                        "conditions": [[], ["group_id", "IN", self.group_ids[:5]]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
+                    }
+                ),
+            ).data
+        )
+        assert set([d["group_id"] for d in result["data"]]) == set([self.group_ids[4]])
+
+        # Test that a scalar condition on an array column expands to an all() type
+        # iterator
+        result = json.loads(
+            self.app.post(
+                "/query",
+                data=json.dumps(
+                    {
+                        "project": [1, 2, 3],
+                        "selected_columns": ["project_id"],
+                        "groupby": "project_id",
+                        "conditions": [
+                            # only project 1 should have an event with lineno 5
+                            ["exception_frames.lineno", "=", 5],
+                            ["exception_frames.filename", "LIKE", "%bar%"],
+                            # TODO these conditions are both separately true for the event,
+                            # but they are not both true for a single exception_frame (i.e.
+                            # there is no frame with filename:bar and lineno:5). We need to
+                            # fix this so that we have one iterator that tests both
+                            # conditions, instead of 2 iterators testing 1 condition each.
+                        ],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
+                    }
+                ),
+            ).data
+        )
+        assert len(result["data"]) == 1
+        assert result["data"][0]["project_id"] == 1
+
+        # Test that a negative scalar condition on an array column expands to an
+        # all() type iterator. Looking for stack traces that do not contain foo.py
+        # at all ie. all(filename != 'foo.py')
+        result = json.loads(
+            self.app.post(
+                "/query",
+                data=json.dumps(
+                    {
+                        "project": [1, 2, 3],
+                        "selected_columns": ["project_id"],
+                        "groupby": "project_id",
+                        "debug": True,
+                        "conditions": [["exception_frames.filename", "!=", "foo.py"]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
+                    }
+                ),
+            ).data
+        )
+        assert len(result["data"]) == 0

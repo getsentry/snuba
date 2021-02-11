@@ -1,20 +1,23 @@
 import datetime
+
 import pytest
 
 from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.query.conditions import binary_condition
-from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.composite import CompositeQuery
+from snuba.query.conditions import binary_condition, unary_condition
 from snuba.query.data_source.join import (
     IndividualNode,
     JoinClause,
-    JoinType,
     JoinCondition,
     JoinConditionExpression,
     JoinRelationship,
+    JoinType,
 )
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -23,11 +26,8 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.composite import CompositeQuery
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.snql.parser import parse_snql_query
-
 
 required_condition = binary_condition(
     "and",
@@ -596,6 +596,56 @@ test_cases = [
             offset=0,
         ),
         id="Basic query with new lines and no ambiguous clause content",
+    ),
+    pytest.param(
+        """MATCH (events)
+        SELECT 4-5,3*foo(c) AS foo,c
+        WHERE platform NOT IN tuple('x', 'y') AND message IS NULL AND project_id = 1 AND timestamp > toDateTime('2021-01-01') """,
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "4-5",
+                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                ),
+                SelectedExpression(
+                    "3*foo(c) AS foo",
+                    FunctionCall(
+                        None,
+                        "multiply",
+                        (
+                            Literal(None, 3),
+                            FunctionCall(
+                                "_snuba_foo", "foo", (Column("_snuba_c", None, "c"),)
+                            ),
+                        ),
+                    ),
+                ),
+                SelectedExpression("c", Column("_snuba_c", None, "c")),
+            ],
+            condition=binary_condition(
+                "notIn",
+                binary_condition(
+                    "equals",
+                    Column("_snuba_platform", None, "platform"),
+                    FunctionCall(
+                        None, "tuple", (Literal(None, "x"), Literal(None, "y"))
+                    ),
+                ),
+                binary_condition(
+                    "and",
+                    unary_condition(
+                        "isNull", Column("_snuba_message", None, "message")
+                    ),
+                    required_condition,
+                ),
+            ),
+            limit=1000,
+            offset=0,
+        ),
+        id="Basic query with word condition ops",
     ),
     pytest.param(
         """MATCH (events)

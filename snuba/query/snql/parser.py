@@ -32,6 +32,7 @@ from snuba.query.conditions import (
     binary_condition,
     combine_and_conditions,
     combine_or_conditions,
+    unary_condition,
 )
 from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
@@ -122,8 +123,10 @@ snql_grammar = Grammar(
     and_tuple             = space+ "AND" condition
     or_tuple              = space+ "OR" and_expression
 
-    condition             = main_condition / parenthesized_cdn
+    condition             = unary_condition / main_condition / parenthesized_cdn
+    unary_condition       = low_pri_arithmetic space+ unary_op
     main_condition        = low_pri_arithmetic space* condition_op space* (function_call / simple_term)
+    unary_op              = "IS NULL" / "IS NOT NULL"
     condition_op          = "!=" / ">=" / ">" / "<=" / "<" / "=" / "NOT IN" / "NOT LIKE" / "IN" / "LIKE"
     parenthesized_cdn     = space* open_paren or_expression close_paren
 
@@ -227,6 +230,18 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             if "selected_columns" not in args:
                 args["selected_columns"] = args["groupby"]
             else:
+                # Don't add the same column twice
+                groupby_to_add = []
+                for g in args["groupby"]:
+                    dupe = False
+                    for s in args["selected_columns"]:
+                        if g == s:
+                            dupe = True
+                            break
+
+                    if not dupe:
+                        groupby_to_add.append(g)
+
                 args["selected_columns"] = args["groupby"] + args["selected_columns"]
 
             args["groupby"] = map(lambda gb: gb.expression, args["groupby"])
@@ -519,6 +534,12 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
                     args.append(elem.exp)
         return combine_or_conditions(args)
 
+    def visit_unary_condition(
+        self, node: Node, visited_children: Tuple[Expression, Any, str]
+    ) -> Expression:
+        exp, _, op = visited_children
+        return unary_condition(op, exp)
+
     def visit_main_condition(
         self,
         node: Node,
@@ -527,8 +548,11 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         exp, _, op, _, literal = visited_children
         return binary_condition(op, exp, literal)
 
+    def visit_unary_op(self, node: Node, visited_children: Iterable[Any]) -> str:
+        return OPERATOR_TO_FUNCTION[node.text.strip()]
+
     def visit_condition_op(self, node: Node, visited_children: Iterable[Any]) -> str:
-        return OPERATOR_TO_FUNCTION[node.text]
+        return OPERATOR_TO_FUNCTION[node.text.strip()]
 
     def visit_order_by_clause(
         self, node: Node, visited_children: Tuple[Any, Any, Any, Sequence[OrderBy]]

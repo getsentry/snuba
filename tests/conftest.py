@@ -129,11 +129,13 @@ def convert_legacy_to_snql() -> Callable[[str, str], str]:
         if groupby and not isinstance(groupby, list):
             groupby = [groupby]
 
-        phrase = "BY" if select_clause else "SELECT"
+        print("HELLO", groupby)
         groupby = ", ".join(map(func, groupby))
-        groupby_clause = f"{phrase} {groupby}" if groupby else ""
+        groupby_clause = f"BY {groupby}" if groupby else ""
+        if not select_clause:
+            groupby_clause = f"SELECT {groupby} {groupby_clause}"
+        print("HELLO2", groupby_clause)
 
-        word_ops = ("NOT IN", "IN", "LIKE", "NOT LIKE")
         conditions = []
 
         # These conditions are ordered to match how the legacy parser would
@@ -163,8 +165,11 @@ def convert_legacy_to_snql() -> Callable[[str, str], str]:
             project = ",".join(map(str, project))
             conditions.append(f"project_id IN tuple({project})")
 
+        word_ops = ("NOT IN", "IN", "LIKE", "NOT LIKE", "IS NULL", "IS NOT NULL")
         for cond in legacy.get("conditions", []):
-            if len(cond) != 3 or not isinstance(cond[1], str):
+            if len(cond) == 0:
+                continue
+            elif len(cond) != 3 or not isinstance(cond[1], str):
                 or_condition = []
                 for or_cond in cond:
                     op = f" {or_cond[1]} " if or_cond[1] in word_ops else or_cond[1]
@@ -174,8 +179,12 @@ def convert_legacy_to_snql() -> Callable[[str, str], str]:
                 or_condition_str = " OR ".join(or_condition)
                 conditions.append(f"{or_condition_str}")
             else:
+                rhs = ""
+                if cond[1] not in ["IS NULL", "IS NOT NULL"]:
+                    rhs = literal(cond[2])
+
                 op = f" {cond[1]} " if cond[1] in word_ops else cond[1]
-                conditions.append(f"{func(cond[0])}{op}{literal(cond[2])}")
+                conditions.append(f"{func(cond[0])}{op}{rhs}")
 
         conditions_str = " AND ".join(conditions)
         where_clause = f"WHERE {conditions_str}" if conditions_str else ""
@@ -234,6 +243,7 @@ def convert_legacy_to_snql() -> Callable[[str, str], str]:
         query = f"{match_clause} {select_clause} {groupby_clause} {where_clause} {having_clause} {order_by_clause} {limit_by_clause} {extras_clause}"
         body = {"query": query}
 
+        print("QUERY", query)
         return json.dumps(body)
 
     return convert
@@ -272,6 +282,7 @@ def _build_snql_post_methods(
         )
 
         legacy_data = json.loads(legacy_resp.data)
+        print("LEGACY", legacy_data["sql"])
         snql_data = json.loads(snql_resp.data)
         assert (
             legacy_data["sql"] == snql_data["sql"]
