@@ -4,8 +4,8 @@ from snuba.clickhouse.columns import Column, UInt, String, DateTime
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
+from sentry_relay import DataCategory
 
-# TODO: materialized view migration
 old_materialized_view_columns: Sequence[Column[Modifiers]] = [
     Column("org_id", UInt(64)),
     Column("project_id", UInt(64)),
@@ -23,16 +23,16 @@ new_materialized_view_columns: Sequence[Column[Modifiers]] = [
     Column("timestamp", DateTime()),
     Column("outcome", UInt(8)),
     Column("reason", String()),
-    Column("category", UInt(8)),
-    Column("quantity", UInt(64)),
+    Column("category", UInt(8, Modifiers(nullable=True))),
+    Column("quantity", UInt(64, Modifiers(nullable=True))),
     Column("times_seen", UInt(64)),
 ]
 
 
 class Migration(migration.MultiStepMigration):
     """
-    Adds the http columns defined, with the method and referer coming from the request interface
-    and url materialized from the tags.
+    Adds quantity and category columns to outcomes. updates materialized view and hourly table to support
+    category as a new dimension and quantity as a new measure.
     """
 
     blocking = False
@@ -48,9 +48,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_local",
-                column=Column(
-                    "category", UInt(8, Modifiers(nullable=True))
-                ),  # TODO: default issue
+                column=Column("category", UInt(8, Modifiers(nullable=True))),
                 after=None,
             ),
             operations.AddColumn(
@@ -59,19 +57,13 @@ class Migration(migration.MultiStepMigration):
                 column=Column("quantity", UInt(64, Modifiers(nullable=True))),
                 after=None,
             ),
-            # operations.AddColumn(
-            #     storage_set=StorageSetKey.OUTCOMES,
-            #     table_name="outcomes_hourly_local",
-            #     column=Column("category", UInt(8)),
-            #     after=""", MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category)""",
-            # ),
             operations.RunSql(
                 storage_set=StorageSetKey.OUTCOMES,
                 statement="""
-            ALTER TABLE outcomes_hourly_local ADD COLUMN IF NOT EXISTS category UInt8,
-            MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category);
-            """,
-            ),  # TODO: decide on this category isssue
+                    ALTER TABLE outcomes_hourly_local ADD COLUMN IF NOT EXISTS category UInt8,
+                    MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category);
+                """,
+            ),  # note: this migration is not reversable!
             operations.DropTable(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_mv_hourly_local",
@@ -81,7 +73,7 @@ class Migration(migration.MultiStepMigration):
                 view_name="outcomes_mv_hourly_local",
                 destination_table_name="outcomes_hourly_local",
                 columns=new_materialized_view_columns,
-                query="""
+                query=f"""
                     SELECT
                         org_id,
                         project_id,
@@ -89,12 +81,12 @@ class Migration(migration.MultiStepMigration):
                         toStartOfHour(timestamp) AS timestamp,
                         outcome,
                         ifNull(reason, 'none') AS reason,
-                        category,
+                        ifNull(category,{DataCategory.ERROR}) as category,
                         count() AS times_seen,
                         sum(quantity) AS quantity
                     FROM outcomes_raw_local
                     GROUP BY org_id, project_id, key_id, timestamp, outcome, reason, category
-                """,  # TODO: remove logic
+                """,
             ),
         ]
 
@@ -109,23 +101,20 @@ class Migration(migration.MultiStepMigration):
             operations.DropColumn(
                 StorageSetKey.OUTCOMES, "outcomes_hourly_local", "quantity"
             ),
-            # operations.DropColumn(
-            #     StorageSetKey.OUTCOMES, "outcomes_hourly_local", "category"
-            # ), #can't drop this column after being added to primary key
+            operations.RunSql(
+                storage_set=StorageSetKey.OUTCOMES,
+                statement="""
+                    ALTER TABLE outcomes_hourly_local
+                    MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp);
+                """,
+            ),
+            operations.DropColumn(
+                StorageSetKey.OUTCOMES, "outcomes_hourly_local", "category"
+            ),
             operations.DropTable(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_mv_hourly_local",
             ),
-            # operations.RunSql(  # TODO: is this needed?
-            #     storage_set=StorageSetKey.OUTCOMES,
-            #     statement="""
-            #         ALTER TABLE
-            #             outcomes_hourly_local
-            #             MODIFY ORDER BY
-            #             (org_id, project_id, key_id, outcome, reason, timestamp)
-            #     """,
-            # ),
-            # TODO: put old mat view query in own file, use reference to that?
             operations.CreateMaterializedView(
                 storage_set=StorageSetKey.OUTCOMES,
                 view_name="outcomes_mv_hourly_local",
@@ -166,11 +155,12 @@ class Migration(migration.MultiStepMigration):
                 column=Column("quantity", UInt(64, Modifiers(nullable=True))),
                 after=None,
             ),
-            operations.AddColumn(
+            operations.RunSql(
                 storage_set=StorageSetKey.OUTCOMES,
-                table_name="outcomes_hourly_dist",
-                column=Column("category", UInt(8)),
-                after=None,
+                statement="""
+                    ALTER TABLE outcomes_hourly_local ADD COLUMN IF NOT EXISTS category UInt8,
+                    MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category);
+                """,  # note: this migration is not reversable!
             ),
         ]
 
@@ -185,7 +175,14 @@ class Migration(migration.MultiStepMigration):
             operations.DropColumn(
                 StorageSetKey.OUTCOMES, "outcomes_hourly_dist", "quantity"
             ),
-            # operations.DropColumn(
-            #     StorageSetKey.OUTCOMES, "outcomes_hourly_dist", "category"
-            # ),# can't drop this one
+            operations.RunSql(
+                storage_set=StorageSetKey.OUTCOMES,
+                statement="""
+                    ALTER TABLE outcomes_hourly_local
+                    MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp);
+                """,
+            ),
+            operations.DropColumn(
+                StorageSetKey.OUTCOMES, "outcomes_hourly_local", "category"
+            ),
         ]
