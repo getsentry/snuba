@@ -1,4 +1,3 @@
-import pytz
 import uuid
 from datetime import datetime, timedelta
 from functools import partial
@@ -24,10 +23,13 @@ class TestSnQLApi(BaseApiTest):
         self.org_id = self.event["organization_id"]
         self.skew = timedelta(minutes=180)
         self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0, tzinfo=pytz.utc
+            minute=0, second=0, microsecond=0
         ) - timedelta(minutes=180)
         events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
         write_unprocessed_events(events_storage, [self.event])
+        self.next_time = datetime.utcnow().replace(
+            minute=0, second=0, microsecond=0
+        ) + timedelta(minutes=180)
         write_unprocessed_events(
             get_writable_storage(StorageKey.TRANSACTIONS), [get_raw_transaction()],
         )
@@ -39,7 +41,9 @@ class TestSnQLApi(BaseApiTest):
                 {
                     "query": f"""MATCH (discover_events )
                     SELECT count() AS count BY project_id, tags[custom_tag]
-                    WHERE type != 'transaction' AND project_id = {self.project_id} AND timestamp >= toDateTime('2021-01-01')
+                    WHERE type != 'transaction' AND project_id = {self.project_id}
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
                     ORDER BY count ASC
                     LIMIT 1000""",
                     "turbo": False,
@@ -70,8 +74,8 @@ class TestSnQLApi(BaseApiTest):
                     WHERE project_id IN array({self.project_id})
                     AND project_id IN array({self.project_id})
                     AND org_id = {self.org_id}
-                    AND started > toDateTime('2021-01-01T17:05:59.554860')
-                    AND started <= toDateTime('2022-01-01T17:06:00.554981')
+                    AND started >= toDateTime('2021-01-01T17:05:59.554860')
+                    AND started < toDateTime('2022-01-01T17:06:00.554981')
                     ORDER BY sessions DESC
                     LIMIT 100 OFFSET 0""",
                 }
@@ -90,7 +94,10 @@ class TestSnQLApi(BaseApiTest):
                     "query": f"""MATCH (s: spans) -[contained]-> (t: transactions)
                     SELECT s.op, avg(s.duration_ms) AS avg BY s.op
                     WHERE s.project_id = {self.project_id}
-                    AND t.project_id = {self.project_id} AND t.finish_ts >= toDateTime('2021-01-01')""",
+                    AND t.project_id = {self.project_id}
+                    AND t.finish_ts >= toDateTime('2021-01-01')
+                    AND t.finish_ts < toDateTime('2021-01-02')
+                    """,
                     "turbo": False,
                     "consistent": False,
                     "debug": True,

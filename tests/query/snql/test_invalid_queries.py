@@ -54,7 +54,7 @@ test_cases = [
         id="simple query missing required conditions",
     ),
     pytest.param(
-        "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c WHERE e.project_id = '1' AND e.timestamp > toDateTime('2021-01-01')",
+        "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c WHERE e.project_id = '1' AND e.timestamp >= toDateTime('2021-01-01')",
         ParsingException,
         "EntityKey.EVENTS is missing required conditions",
         id="simple query required conditions have wrong type",
@@ -72,7 +72,7 @@ test_cases = [
         id="join missing required conditions on both sides",
     ),
     pytest.param(
-        "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c WHERE e.project_id = 1 AND e.timestamp > toDateTime('2021-01-01')",
+        "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c WHERE e.project_id = 1 AND e.timestamp >= toDateTime('2021-01-01') AND e.timestamp < toDateTime('2021-01-02')",
         ParsingException,
         "EntityKey.TRANSACTIONS is missing required conditions",
         id="join missing required conditions on one side",
