@@ -101,6 +101,16 @@ class Migration(migration.MultiStepMigration):
             operations.DropColumn(
                 StorageSetKey.OUTCOMES, "outcomes_hourly_local", "quantity"
             ),
+            operations.RunSql(
+                storage_set=StorageSetKey.OUTCOMES,
+                statement="""
+                    ALTER TABLE outcomes_hourly_local
+                    MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp);
+                """,
+            ),
+            operations.DropColumn(
+                StorageSetKey.OUTCOMES, "outcomes_hourly_local", "category"
+            ),
             operations.DropTable(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_mv_hourly_local",
@@ -164,5 +174,15 @@ class Migration(migration.MultiStepMigration):
             ),
             operations.DropColumn(
                 StorageSetKey.OUTCOMES, "outcomes_hourly_dist", "quantity"
+            ),
+            operations.RunSql(
+                storage_set=StorageSetKey.OUTCOMES,
+                statement="""
+                    ALTER TABLE outcomes_hourly_local
+                    MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp);
+                """,
+            ),
+            operations.DropColumn(
+                StorageSetKey.OUTCOMES, "outcomes_hourly_local", "category"
             ),
         ]
