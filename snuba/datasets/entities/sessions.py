@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence, Optional
+from typing import Mapping, Sequence
 
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToCurriedFunction,
@@ -21,20 +21,14 @@ from snuba.query.conditions import (
 from snuba.query.expressions import Column, FunctionCall, Literal, Expression
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
-from snuba.query.matchers import (
-    Column as ColumnMatch,
-    FunctionCall as FunctionCallMatch,
-    Param,
-    String,
-    Or,
-    Any,
-    Literal as LiteralMatch,
-)
 from snuba.query.logical import Query
 from snuba.processor import MAX_UINT32, NIL_UUID
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.processors.timeseries_processor import (
+    TimeSeriesProcessor,
+    extract_granularity_from_query,
+)
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
@@ -207,8 +201,10 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
     def select_storage(
         self, query: Query, request_settings: RequestSettings
     ) -> StorageAndMappers:
-        granularity = extract_granularity_from_query(query) or 3600
-        print(granularity)
+        # time_range = get_time_range(query, "started")
+        # print(time_range)
+
+        granularity = extract_granularity_from_query(query, "started") or 3600
         use_materialized_storage = granularity >= 3600
 
         if use_materialized_storage:
@@ -257,59 +253,3 @@ class SessionsEntity(Entity):
                 {"bucketed_started": "started"}, ("started", "received")
             ),
         ]
-
-
-GRANULARITY_MAPPING = {
-    "toStartOfMinute": 60,
-    "toStartOfHour": 3600,
-    "toDate": 86400,
-}
-
-
-def extract_granularity_from_query(query: Query) -> Optional[int]:
-    """
-    This extracts the `granularity` from the `groupby` statement of the query,
-    if the query is grouped by the `bucketed_started` virtual column
-    (which is a transformation of the `started` column).
-    The matches are essentially the reverse of `TimeSeriesProcessor.__group_time_function`.
-    """
-    groupby = query.get_groupby_from_ast()
-
-    column_match = ColumnMatch(None, String("started"))
-    started_fn_match = FunctionCallMatch(
-        Param(
-            "time_fn",
-            Or([String("toStartOfHour"), String("toStartOfMinute"), String("toDate")]),
-        ),
-        (column_match, LiteralMatch(Any(str))),
-    )
-    started_expr_match = FunctionCallMatch(
-        String("toDateTime"),
-        (
-            FunctionCallMatch(
-                String("multiply"),
-                (
-                    FunctionCallMatch(
-                        String("intDiv"),
-                        (
-                            FunctionCallMatch(String("toUInt32"), (column_match,)),
-                            LiteralMatch(Param("granularity", Any(int))),
-                        ),
-                    ),
-                    LiteralMatch(Param("granularity", Any(int))),
-                ),
-            ),
-            LiteralMatch(Any(str)),
-        ),
-    )
-
-    for expr in groupby:
-        result = started_fn_match.match(expr)
-        if result is not None:
-            return GRANULARITY_MAPPING[result.string("time_fn")]
-
-        result = started_expr_match.match(expr)
-        if result is not None:
-            return result.integer("granularity")
-
-    return None

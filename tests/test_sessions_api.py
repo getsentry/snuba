@@ -159,7 +159,7 @@ class TestSessionsApi(BaseApiTest):
     # XXX: Actually applying the parametrize makes snuba return X times the
     # sessions than are expected. No idea why, as the parametrize down below
     # works without any problems.
-    # @pytest.mark.parametrize("granularity", [60, 120, 3600])
+    @pytest.mark.parametrize("granularity", [60, 120, 3600])
     def test_session_aggregation(self, granularity=3600):
         self.generate_session_events()
         response = self.app.post(
