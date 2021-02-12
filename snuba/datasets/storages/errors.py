@@ -36,7 +36,8 @@ storage = WritableTableStorage(
         StorageKey.ERRORS,
         processor=ErrorsProcessor(promoted_tag_columns),
         default_topic_name="events",
-        replacement_topic_name="errors-replacements",
+        replacement_topic_name="event-replacements",
+        commit_log_topic_name="snuba-commit-log",
     ),
     replacer_processor=ErrorsReplacer(
         schema=schema,
