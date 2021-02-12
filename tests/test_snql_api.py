@@ -5,6 +5,8 @@ from functools import partial
 
 import simplejson as json
 
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
@@ -24,7 +26,8 @@ class TestSnQLApi(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         ) - timedelta(minutes=180)
-        write_unprocessed_events(get_writable_storage(StorageKey.EVENTS), [self.event])
+        events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
+        write_unprocessed_events(events_storage, [self.event])
         write_unprocessed_events(
             get_writable_storage(StorageKey.TRANSACTIONS), [get_raw_transaction()],
         )
