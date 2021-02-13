@@ -13,6 +13,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import (
@@ -24,6 +25,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
+from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall
 from snuba.query.extensions import QueryExtension
 from snuba.query.formatters.tracing import format_query
@@ -276,7 +278,20 @@ class BaseEventsEntity(Entity, ABC):
                 callback_func=partial(callback_func, "errors"),
             ),
             abstract_column_set=columns,
-            join_relationships={},
+            join_relationships={
+                "grouped": JoinRelationship(
+                    rhs_entity=EntityKey.GROUPEDMESSAGES,
+                    columns=[("project_id", "project_id"), ("group_id", "id")],
+                    join_type=JoinType.INNER,
+                    equivalences=[],
+                ),
+                "assigned": JoinRelationship(
+                    rhs_entity=EntityKey.GROUPASSIGNEE,
+                    columns=[("project_id", "project_id"), ("group_id", "group_id")],
+                    join_type=JoinType.INNER,
+                    equivalences=[],
+                ),
+            },
             writable_storage=writable_storage(),
             required_filter_columns=["project_id"],
             required_time_column="timestamp",
