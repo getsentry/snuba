@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 
-VERSION = "21.2.0.dev0"
+VERSION = "21.2.0"
 
 
 def get_requirements():
