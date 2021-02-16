@@ -29,9 +29,7 @@ class OutcomesProcessor(MessageProcessor):
             "timestamp": _ensure_valid_date(
                 datetime.strptime(value["timestamp"], settings.PAYLOAD_DATETIME_FORMAT),
             ),
-            "category": value.get(
-                "category", DataCategory.ERROR
-            ).value,  # if category is None, default to error for now TODO: change security to error?
+            "category": value.get("category", DataCategory.ERROR).value,
             "quantity": value.get("quantity", None),
             "outcome": value.get("outcome", None),
             "reason": _unicodify(value.get("reason")),
