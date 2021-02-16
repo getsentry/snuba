@@ -53,10 +53,10 @@ time_validation_tests = [
                     EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
                 ),
                 selected_columns=[
+                    SelectedExpression("title", Column("_snuba_title", None, "title")),
                     SelectedExpression(
                         "count", FunctionCall("_snuba_count", "count", tuple())
                     ),
-                    SelectedExpression("title", Column("_snuba_title", None, "title")),
                 ],
                 groupby=[Column("_snuba_title", None, "title")],
                 condition=binary_condition(
@@ -80,6 +80,8 @@ time_validation_tests = [
                         ),
                     ),
                 ),
+                limit=1000,
+                offset=0,
             ),
             selected_columns=[
                 SelectedExpression(
@@ -91,6 +93,8 @@ time_validation_tests = [
                     ),
                 ),
             ],
+            limit=1000,
+            offset=0,
         ),
         id="subquery has their dates adjusted",
     ),
@@ -177,6 +181,8 @@ time_validation_tests = [
                     ),
                 ),
             ),
+            limit=1000,
+            offset=0,
         ),
         id="times are adjusted in each entity",
     ),
@@ -262,6 +268,8 @@ time_validation_tests = [
                     ),
                 ),
             ),
+            limit=1000,
+            offset=0,
         ),
         id="times are adjusted in each entity",
     ),
