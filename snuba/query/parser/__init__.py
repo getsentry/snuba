@@ -250,6 +250,11 @@ def _parse_query_impl(body: MutableMapping[str, Any], entity: Entity) -> Query:
             parse_expression(limitby_expr, entity.get_data_model(), set()),
         )
 
+    sample = body.get("sample")
+    if sample is not None:
+        assert isinstance(sample, (int, float))
+        sample = float(sample)
+
     return Query(
         None,
         selected_columns=select_clause,
@@ -259,7 +264,7 @@ def _parse_query_impl(body: MutableMapping[str, Any], entity: Entity) -> Query:
         having=having_expr,
         order_by=orderby_exprs,
         limitby=limitby_clause,
-        sample=body.get("sample"),
+        sample=sample,
         limit=body.get("limit", None),
         offset=body.get("offset", 0),
         totals=body.get("totals", False),
