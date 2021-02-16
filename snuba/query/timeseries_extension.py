@@ -90,12 +90,20 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
                 BooleanFunctions.AND,
                 binary_condition(
                     ConditionFunctions.GTE,
-                    Column(None, None, self.__timestamp_column),
+                    Column(
+                        f"_snuba_{self.__timestamp_column}",
+                        None,
+                        self.__timestamp_column,
+                    ),
                     Literal(None, from_date),
                 ),
                 binary_condition(
                     ConditionFunctions.LT,
-                    Column(None, None, self.__timestamp_column),
+                    Column(
+                        f"_snuba_{self.__timestamp_column}",
+                        None,
+                        self.__timestamp_column,
+                    ),
                     Literal(None, to_date),
                 ),
             )
