@@ -5,7 +5,7 @@ from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.query.conditions import binary_condition
+from snuba.query.conditions import binary_condition, unary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.data_source.join import (
     IndividualNode,
@@ -199,6 +199,57 @@ test_cases = [
             offset=0,
         ),
         id="Basic query with no spaces and no ambiguous clause content",
+    ),
+    pytest.param(
+        """MATCH (events)
+        SELECT 4-5,3*foo(c) AS foo,c
+        WHERE platform NOT IN tuple('x', 'y') AND message IS NULL
+        AND project_id = 1 AND timestamp > toDateTime('2021-01-01')""",
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "4-5",
+                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                ),
+                SelectedExpression(
+                    "3*foo(c) AS foo",
+                    FunctionCall(
+                        None,
+                        "multiply",
+                        (
+                            Literal(None, 3),
+                            FunctionCall(
+                                "_snuba_foo", "foo", (Column("_snuba_c", None, "c"),)
+                            ),
+                        ),
+                    ),
+                ),
+                SelectedExpression("c", Column("_snuba_c", None, "c")),
+            ],
+            condition=binary_condition(
+                "and",
+                binary_condition(
+                    "notIn",
+                    Column("_snuba_platform", None, "platform"),
+                    FunctionCall(
+                        None, "tuple", (Literal(None, "x"), Literal(None, "y"))
+                    ),
+                ),
+                binary_condition(
+                    "and",
+                    unary_condition(
+                        "isNull", Column("_snuba_message", None, "message")
+                    ),
+                    required_condition,
+                ),
+            ),
+            limit=1000,
+            offset=0,
+        ),
+        id="Basic query with word condition ops",
     ),
     pytest.param(
         "MATCH (events) SELECT count() AS count BY tags[key], measurements[lcp.elementSize] WHERE measurements[lcp.elementSize] > 1 AND project_id = 1 AND timestamp > toDateTime('2021-01-01')",

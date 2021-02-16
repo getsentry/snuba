@@ -4,9 +4,9 @@ from typing import (
     Any,
     Callable,
     Iterable,
+    List,
     MutableMapping,
     NamedTuple,
-    List,
     Optional,
     Sequence,
     Tuple,
@@ -20,18 +20,14 @@ from parsimonious.nodes import Node, NodeVisitor
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.query import (
-    LimitBy,
-    OrderBy,
-    OrderByDirection,
-    SelectedExpression,
-)
+from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     binary_condition,
     combine_and_conditions,
     combine_or_conditions,
+    unary_condition,
 )
 from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
@@ -44,18 +40,14 @@ from snuba.query.expressions import (
     Lambda,
     Literal,
 )
-from snuba.query.matchers import (
-    Any as AnyMatch,
-    AnyExpression,
-    AnyOptionalString,
-    Column as ColumnMatch,
-    FunctionCall as FunctionCallMatch,
-    Literal as LiteralMatch,
-    Param,
-    Or,
-    String as StringMatch,
-)
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.matchers import Any as AnyMatch
+from snuba.query.matchers import AnyExpression, AnyOptionalString
+from snuba.query.matchers import Column as ColumnMatch
+from snuba.query.matchers import FunctionCall as FunctionCallMatch
+from snuba.query.matchers import Literal as LiteralMatch
+from snuba.query.matchers import Or, Param
+from snuba.query.matchers import String as StringMatch
 from snuba.query.parser import (
     _apply_column_aliases,
     _expand_aliases,
@@ -85,10 +77,7 @@ from snuba.query.snql.expression_visitor import (
     visit_parameters_list,
     visit_quoted_literal,
 )
-from snuba.query.snql.joins import (
-    RelationshipTuple,
-    build_join_clause,
-)
+from snuba.query.snql.joins import RelationshipTuple, build_join_clause
 from snuba.util import parse_datetime
 
 logger = logging.getLogger("snuba.snql.parser")
@@ -122,9 +111,11 @@ snql_grammar = Grammar(
     and_tuple             = space+ "AND" condition
     or_tuple              = space+ "OR" and_expression
 
-    condition             = main_condition / parenthesized_cdn
+    condition             = unary_condition / main_condition / parenthesized_cdn
+    unary_condition       = low_pri_arithmetic space+ unary_op
     main_condition        = low_pri_arithmetic space* condition_op space* (function_call / simple_term)
     condition_op          = "!=" / ">=" / ">" / "<=" / "<" / "=" / "NOT IN" / "NOT LIKE" / "IN" / "LIKE"
+    unary_op              = "IS NULL" / "IS NOT NULL"
     parenthesized_cdn     = space* open_paren or_expression close_paren
 
     select_list          = select_columns* (selected_expression)
@@ -518,6 +509,15 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
                 elif isinstance(elem, (AndTuple, OrTuple)):
                     args.append(elem.exp)
         return combine_or_conditions(args)
+
+    def visit_unary_condition(
+        self, node: Node, visited_children: Tuple[Expression, Any, str]
+    ) -> Expression:
+        exp, _, op = visited_children
+        return unary_condition(op, exp)
+
+    def visit_unary_op(self, node: Node, visited_children: Iterable[Any]) -> str:
+        return OPERATOR_TO_FUNCTION[node.text]
 
     def visit_main_condition(
         self,

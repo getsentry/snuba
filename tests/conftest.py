@@ -133,7 +133,7 @@ def convert_legacy_to_snql() -> Callable[[str, str], str]:
         groupby = ", ".join(map(func, groupby))
         groupby_clause = f"{phrase} {groupby}" if groupby else ""
 
-        word_ops = ("NOT IN", "IN", "LIKE", "NOT LIKE")
+        word_ops = ("NOT IN", "IN", "LIKE", "NOT LIKE", "IS NULL", "IS NOT NULL")
         conditions = []
 
         # These conditions are ordered to match how the legacy parser would
@@ -174,8 +174,12 @@ def convert_legacy_to_snql() -> Callable[[str, str], str]:
                 or_condition_str = " OR ".join(or_condition)
                 conditions.append(f"{or_condition_str}")
             else:
+                rhs = ""
+                if cond[1] not in ["IS NULL", "IS NOT NULL"]:
+                    rhs = literal(cond[2])
+
                 op = f" {cond[1]} " if cond[1] in word_ops else cond[1]
-                conditions.append(f"{func(cond[0])}{op}{literal(cond[2])}")
+                conditions.append(f"{func(cond[0])}{op}{rhs}")
 
         conditions_str = " AND ".join(conditions)
         where_clause = f"WHERE {conditions_str}" if conditions_str else ""
