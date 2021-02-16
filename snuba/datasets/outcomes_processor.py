@@ -29,7 +29,7 @@ class OutcomesProcessor(MessageProcessor):
                 datetime.strptime(value["timestamp"], settings.PAYLOAD_DATETIME_FORMAT),
             ),
             "outcome": value["outcome"],
-            "category": value.get("category", DataCategory.ERROR).value,
+            "category": value.get("category", DataCategory.ERROR),
             "quantity": value.get("quantity", None),
             "reason": _unicodify(value.get("reason")),
             "event_id": str(uuid.UUID(v_uuid)) if v_uuid is not None else None,
