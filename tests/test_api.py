@@ -839,7 +839,7 @@ class TestApi(BaseApiTest):
             ).data
         )
         assert (
-            "PREWHERE notEquals(positionCaseInsensitive((message AS _snuba_message), 'abc'), 0) AND in(project_id, tuple(1))"
+            "PREWHERE notEquals(positionCaseInsensitive((message AS _snuba_message), 'abc'), 0) AND in((project_id AS _snuba_project_id), tuple(1))"
             in result["sql"]
         )
 
@@ -861,8 +861,12 @@ class TestApi(BaseApiTest):
         )
 
         # make sure the conditions is in PREWHERE and nowhere else
-        assert "PREWHERE in(project_id, tuple(1))" in result["sql"]
-        assert result["sql"].count("in(project_id, tuple(1))") == 1
+        assert (
+            "PREWHERE in((project_id AS _snuba_project_id), tuple(1))" in result["sql"]
+        )
+        assert (
+            result["sql"].count("in((project_id AS _snuba_project_id), tuple(1))") == 1
+        )
 
     def test_aggregate(self):
         result = json.loads(
