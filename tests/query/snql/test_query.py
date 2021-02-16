@@ -246,6 +246,8 @@ test_cases = [
                     required_condition,
                 ),
             ),
+            limit=1000,
+            offset=0,
         ),
         id="Basic query with word condition ops",
     ),
