@@ -158,7 +158,7 @@ def convert_legacy_to_snql() -> Callable[[str, str], str]:
 
         project = legacy.get("project")
         if isinstance(project, int):
-            conditions.append(f"project_id={project}")
+            conditions.append(f"project_id IN tuple({project})")
         elif isinstance(project, list):
             project = ",".join(map(str, project))
             conditions.append(f"project_id IN tuple({project})")
