@@ -29,9 +29,9 @@ class OutcomesProcessor(MessageProcessor):
             "timestamp": _ensure_valid_date(
                 datetime.strptime(value["timestamp"], settings.PAYLOAD_DATETIME_FORMAT),
             ),
+            "outcome": value["outcome"],
             "category": value.get("category", DataCategory.ERROR).value,
             "quantity": value.get("quantity", None),
-            "outcome": value.get("outcome", None),
             "reason": _unicodify(value.get("reason")),
             "event_id": str(uuid.UUID(v_uuid)) if v_uuid is not None else None,
         }
