@@ -209,11 +209,6 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             if isinstance(args[k], Node):
                 del args[k]
 
-        if "limit" not in args:
-            args["limit"] = 1000
-        if "offset" not in args:
-            args["offset"] = 0
-
         if "groupby" in args:
             if "selected_columns" not in args:
                 args["selected_columns"] = args["groupby"]
@@ -763,6 +758,13 @@ def parse_snql_query_initial(
         raise ParsingException(message)
 
     assert isinstance(parsed, (CompositeQuery, LogicalQuery))  # mypy
+
+    # Add these defaults here to avoid them getting applied to subqueries
+    if parsed.get_limit() is None:
+        parsed.set_limit(1000)
+    if parsed.get_offset() is None:
+        parsed.set_offset(0)
+
     return parsed
 
 
