@@ -20,7 +20,6 @@ class OutcomesProcessor(MessageProcessor):
         self, value: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         assert isinstance(value, dict)
-        # TODO: validation around quantity and category?
         v_uuid = value.get("event_id")
         message = {
             "org_id": value.get("org_id", 0),
