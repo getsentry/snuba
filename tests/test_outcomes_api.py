@@ -51,26 +51,27 @@ class TestOutcomesApi(BaseApiTest):
     ) -> None:
         outcomes = []
         for _ in range(num_outcomes):
+            message = {
+                "project_id": project_id,
+                "event_id": uuid.uuid4().hex,
+                "timestamp": (self.base_time + time_since_base).strftime(
+                    "%Y-%m-%dT%H:%M:%S.%fZ"
+                ),
+                "org_id": org_id,
+                "reason": None,
+                "key_id": 1,
+                "quantity": quantity,
+                "category": category,
+                "outcome": outcome,
+            }
+            if message["category"] is None:
+                del message["category"]  # for testing None category case
+
             processed = (
                 self.storage.get_table_writer()
                 .get_stream_loader()
                 .get_processor()
-                .process_message(
-                    {
-                        "project_id": project_id,
-                        "event_id": uuid.uuid4().hex,
-                        "timestamp": (self.base_time + time_since_base).strftime(
-                            "%Y-%m-%dT%H:%M:%S.%fZ"
-                        ),
-                        "org_id": org_id,
-                        "reason": None,
-                        "key_id": 1,
-                        "quantity": quantity,
-                        "category": category,
-                        "outcome": outcome,
-                    },
-                    None,
-                )
+                .process_message(message, None,)
             )
 
             outcomes.append(processed)
@@ -179,7 +180,7 @@ class TestOutcomesApi(BaseApiTest):
             project_id=1,
             num_outcomes=1,
             outcome=0,
-            category=DataCategory.ERROR,
+            category=None,  # should be counted as an Error
             time_since_base=timedelta(minutes=500),
         )
         self.generate_outcomes(
