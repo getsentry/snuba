@@ -47,14 +47,15 @@ class TestSnQLApi(BaseApiTest):
                     ORDER BY count ASC
                     LIMIT 1000""",
                     "turbo": False,
-                    "consistent": False,
+                    "consistent": True,
                     "debug": True,
                 }
             ),
         )
         data = json.loads(response.data)
 
-        assert response.status_code == 200
+        assert response.status_code == 200, data
+        assert data["stats"]["consistent"]
         assert data["data"] == [
             {
                 "count": 1,

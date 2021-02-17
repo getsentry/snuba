@@ -1273,8 +1273,6 @@ test_cases = [
                 ],
                 groupby=[Column("_snuba_title", None, "title")],
                 condition=required_condition,
-                limit=1000,
-                offset=0,
             ),
             selected_columns=[
                 SelectedExpression(
@@ -1316,8 +1314,6 @@ test_cases = [
                     ],
                     groupby=[Column("_snuba_title", None, "title")],
                     condition=required_condition,
-                    limit=1000,
-                    offset=0,
                 ),
                 selected_columns=[
                     SelectedExpression(
@@ -1329,8 +1325,6 @@ test_cases = [
                         ),
                     ),
                 ],
-                limit=1000,
-                offset=0,
             ),
             selected_columns=[
                 SelectedExpression(

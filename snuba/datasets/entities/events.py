@@ -14,6 +14,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
+from snuba.datasets.entities.assign_reason import assign_reason_category
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import (
     QueryStorageSelector,
@@ -131,16 +132,23 @@ def callback_func(
                 tags={"storage": storage, "match": "true", "referrer": referrer},
             )
         else:
+            reason = assign_reason_category(result_data, primary_result_data, referrer)
+
             metrics.increment(
                 "query_result",
-                tags={"storage": storage, "match": "false", "referrer": referrer},
+                tags={
+                    "storage": storage,
+                    "match": "false",
+                    "referrer": referrer,
+                    "reason": reason,
+                },
             )
 
             if len(result_data) != len(primary_result_data):
                 sentry_sdk.capture_message(
                     f"Non matching {storage} result - different length",
                     level="warning",
-                    tags={"referrer": referrer, "storage": storage},
+                    tags={"referrer": referrer, "storage": storage, "reason": reason},
                     extras={
                         "query": format_query(query),
                         "primary_result": len(primary_result_data),
@@ -156,7 +164,11 @@ def callback_func(
                     sentry_sdk.capture_message(
                         "Non matching result - different result",
                         level="warning",
-                        tags={"referrer": referrer, "storage": storage},
+                        tags={
+                            "referrer": referrer,
+                            "storage": storage,
+                            "reason": reason,
+                        },
                         extras={
                             "query": format_query(query),
                             "primary_result": primary_result_data[idx],
@@ -252,9 +264,13 @@ class BaseEventsEntity(Entity, ABC):
             if settings.ERRORS_ROLLOUT_ALL:
                 return "errors", []
 
-            config = state.get_config("errors_query_percentage", 0)
-            assert isinstance(config, (float, int, str))
-            if random.random() < float(config):
+            default_threshold = state.get_config("errors_query_percentage", 0)
+            assert isinstance(default_threshold, (float, int, str))
+            threshold = settings.ERRORS_QUERY_PERCENTAGE_BY_REFERRER.get(
+                referrer, default_threshold
+            )
+
+            if random.random() < float(threshold):
                 return "events", ["errors"]
 
             return "events", []

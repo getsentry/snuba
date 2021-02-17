@@ -450,9 +450,14 @@ class DiscoverEntity(Entity):
             if settings.ERRORS_ROLLOUT_ALL:
                 return "discover", []
 
-            config = state.get_config("discover_query_percentage", 0)
-            assert isinstance(config, (float, int, str))
-            if random.random() < float(config):
+            default_threshold = state.get_config("discover_query_percentage", 0)
+            assert isinstance(default_threshold, (float, int, str))
+
+            threshold = settings.ERRORS_QUERY_PERCENTAGE_BY_REFERRER.get(
+                referrer, default_threshold
+            )
+
+            if random.random() < float(threshold):
                 return "events", ["discover"]
 
             return "events", []
