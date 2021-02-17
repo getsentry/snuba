@@ -30,8 +30,7 @@ new_materialized_view_columns: Sequence[Column[Modifiers]] = [
 
 class Migration(migration.MultiStepMigration):
     """
-    Adds quantity and category columns to outcomes. updates materialized view and hourly table to support
-    category as a new dimension and quantity as a new measure.
+    Updates materialized view query to support category and quantity
     """
 
     blocking = False

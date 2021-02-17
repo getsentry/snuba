@@ -8,7 +8,7 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 class Migration(migration.MultiStepMigration):
     """
-    Adds quantity and category columns to outcomes. updates materialized view and hourly table to support
+    Adds quantity and category columns to outcomes. updates hourly table to support
     category as a new dimension and quantity as a new measure.
     """
 
