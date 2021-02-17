@@ -150,12 +150,11 @@ def callback_func(
                 sentry_sdk.capture_message(
                     f"Non matching {storage} result - different length",
                     level="warning",
-                    tags={"referrer": referrer, "storage": storage},
+                    tags={"referrer": referrer, "storage": storage, "reason": reason},
                     extras={
                         "query": format_query(query),
                         "primary_result": len(primary_result_data),
                         "other_result": len(result_data),
-                        "reason": reason,
                     },
                 )
 
@@ -167,12 +166,15 @@ def callback_func(
                     sentry_sdk.capture_message(
                         "Non matching result - different result",
                         level="warning",
-                        tags={"referrer": referrer, "storage": storage},
+                        tags={
+                            "referrer": referrer,
+                            "storage": storage,
+                            "reason": reason,
+                        },
                         extras={
                             "query": format_query(query),
                             "primary_result": primary_result_data[idx],
                             "other_result": result_data[idx],
-                            "reason": reason,
                         },
                     )
 
