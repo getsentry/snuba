@@ -148,6 +148,7 @@ class OutcomesLoader(DirectoryLoader):
             "0001_outcomes",
             "0002_outcomes_remove_size_and_bytes",
             "0003_outcomes_add_category_and_quantity",
+            "0004_outcomes_matview_additions",
         ]
 
 
