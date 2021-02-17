@@ -15,6 +15,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
+from snuba.datasets.entities.assign_reason import assign_reason_category
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import (
     QueryStorageSelector,
@@ -133,9 +134,16 @@ def callback_func(
                 tags={"storage": storage, "match": "true", "referrer": referrer},
             )
         else:
+            reason = assign_reason_category(result_data, primary_result_data, referrer)
+
             metrics.increment(
                 "query_result",
-                tags={"storage": storage, "match": "false", "referrer": referrer},
+                tags={
+                    "storage": storage,
+                    "match": "false",
+                    "referrer": referrer,
+                    "reason": reason,
+                },
             )
 
             if len(result_data) != len(primary_result_data):
@@ -147,6 +155,7 @@ def callback_func(
                         "query": format_query(query),
                         "primary_result": len(primary_result_data),
                         "other_result": len(result_data),
+                        "reason": reason,
                     },
                 )
 
@@ -163,6 +172,7 @@ def callback_func(
                             "query": format_query(query),
                             "primary_result": primary_result_data[idx],
                             "other_result": result_data[idx],
+                            "reason": reason,
                         },
                     )
 
