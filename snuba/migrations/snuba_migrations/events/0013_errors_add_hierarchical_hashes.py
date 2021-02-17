@@ -24,13 +24,25 @@ class Migration(migration.MultiStepMigration):
                     Array(String(Modifiers(nullable=False, low_cardinality=False))),
                 ),
                 after="modules",
-            )
+            ),
+            operations.AddColumn(
+                storage_set=StorageSetKey.EVENTS,
+                table_name="sentry_local",
+                column=Column(
+                    "hierarchical_hashes",
+                    Array(String(Modifiers(nullable=False, low_cardinality=False))),
+                ),
+                after="modules",
+            ),
         ]
 
     def backwards_local(self) -> Sequence[operations.Operation]:
         return [
             operations.DropColumn(
                 StorageSetKey.EVENTS, "errors_local", "hierarchical_hashes"
+            ),
+            operations.DropColumn(
+                StorageSetKey.EVENTS, "sentry_local", "hierarchical_hashes"
             ),
         ]
 
@@ -44,12 +56,24 @@ class Migration(migration.MultiStepMigration):
                     Array(String(Modifiers(nullable=False, low_cardinality=False))),
                 ),
                 after="modules",
-            )
+            ),
+            operations.AddColumn(
+                storage_set=StorageSetKey.EVENTS,
+                table_name="sentry_dist",
+                column=Column(
+                    "hierarchical_hashes",
+                    Array(String(Modifiers(nullable=False, low_cardinality=False))),
+                ),
+                after="modules",
+            ),
         ]
 
     def backwards_dist(self) -> Sequence[operations.Operation]:
         return [
             operations.DropColumn(
                 StorageSetKey.EVENTS, "errors_dist", "hierarchical_hashes"
+            ),
+            operations.DropColumn(
+                StorageSetKey.EVENTS, "sentry_dist", "hierarchical_hashes"
             ),
         ]
