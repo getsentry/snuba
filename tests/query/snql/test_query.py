@@ -5,7 +5,7 @@ from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.query.conditions import binary_condition
+from snuba.query.conditions import binary_condition, unary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.data_source.join import (
     IndividualNode,
@@ -58,6 +58,8 @@ test_cases = [
             ],
             granularity=60,
             condition=required_condition,
+            limit=1000,
+            offset=0,
         ),
         id="granularity on whole query",
     ),
@@ -76,6 +78,8 @@ test_cases = [
             ],
             condition=required_condition,
             totals=True,
+            limit=1000,
+            offset=0,
         ),
         id="totals on whole query",
     ),
@@ -94,6 +98,8 @@ test_cases = [
             ],
             condition=required_condition,
             sample=0.5,
+            limit=1000,
+            offset=0,
         ),
         id="sample on entity",
     ),
@@ -112,6 +118,8 @@ test_cases = [
             ],
             condition=required_condition,
             limitby=LimitBy(5, Column("_snuba_c", None, "c")),
+            limit=1000,
+            offset=0,
         ),
         id="limit by column",
     ),
@@ -155,6 +163,8 @@ test_cases = [
             ],
             condition=required_condition,
             totals=True,
+            limit=1000,
+            offset=0,
         ),
         id="Array join",
     ),
@@ -185,8 +195,61 @@ test_cases = [
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
             ],
             condition=required_condition,
+            limit=1000,
+            offset=0,
         ),
         id="Basic query with no spaces and no ambiguous clause content",
+    ),
+    pytest.param(
+        """MATCH (events)
+        SELECT 4-5,3*foo(c) AS foo,c
+        WHERE platform NOT IN tuple('x', 'y') AND message IS NULL
+        AND project_id = 1 AND timestamp > toDateTime('2021-01-01')""",
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "4-5",
+                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
+                ),
+                SelectedExpression(
+                    "3*foo(c) AS foo",
+                    FunctionCall(
+                        None,
+                        "multiply",
+                        (
+                            Literal(None, 3),
+                            FunctionCall(
+                                "_snuba_foo", "foo", (Column("_snuba_c", None, "c"),)
+                            ),
+                        ),
+                    ),
+                ),
+                SelectedExpression("c", Column("_snuba_c", None, "c")),
+            ],
+            condition=binary_condition(
+                "and",
+                binary_condition(
+                    "notIn",
+                    Column("_snuba_platform", None, "platform"),
+                    FunctionCall(
+                        None, "tuple", (Literal(None, "x"), Literal(None, "y"))
+                    ),
+                ),
+                binary_condition(
+                    "and",
+                    unary_condition(
+                        "isNull", Column("_snuba_message", None, "message")
+                    ),
+                    required_condition,
+                ),
+            ),
+            limit=1000,
+            offset=0,
+        ),
+        id="Basic query with word condition ops",
     ),
     pytest.param(
         "MATCH (events) SELECT count() AS count BY tags[key], measurements[lcp.elementSize] WHERE measurements[lcp.elementSize] > 1 AND project_id = 1 AND timestamp > toDateTime('2021-01-01')",
@@ -195,9 +258,6 @@ test_cases = [
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
             selected_columns=[
-                SelectedExpression(
-                    "count", FunctionCall("_snuba_count", "count", tuple()),
-                ),
                 SelectedExpression(
                     "tags[key]",
                     SubscriptableReference(
@@ -213,6 +273,9 @@ test_cases = [
                         Column("_snuba_measurements", None, "measurements"),
                         Literal(None, "lcp.elementSize"),
                     ),
+                ),
+                SelectedExpression(
+                    "count", FunctionCall("_snuba_count", "count", tuple()),
                 ),
             ],
             groupby=[
@@ -240,6 +303,8 @@ test_cases = [
                 ),
                 required_condition,
             ),
+            limit=1000,
+            offset=0,
         ),
         id="Basic query with subscriptables",
     ),
@@ -250,6 +315,11 @@ test_cases = [
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
             selected_columns=[
+                SelectedExpression("d", Column("_snuba_d", None, "d")),
+                SelectedExpression(
+                    "2+7",
+                    FunctionCall(None, "plus", (Literal(None, 2), Literal(None, 7))),
+                ),
                 SelectedExpression(
                     "(2*(4-5)+3)",
                     FunctionCall(
@@ -277,11 +347,6 @@ test_cases = [
                     FunctionCall("_snuba_goo", "g", (Column("_snuba_c", None, "c"),)),
                 ),
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
-                SelectedExpression("d", Column("_snuba_d", None, "d")),
-                SelectedExpression(
-                    "2+7",
-                    FunctionCall(None, "plus", (Literal(None, 2), Literal(None, 7))),
-                ),
             ],
             condition=required_condition,
             groupby=[
@@ -289,6 +354,8 @@ test_cases = [
                 FunctionCall(None, "plus", (Literal(None, 2), Literal(None, 7))),
             ],
             order_by=[OrderBy(OrderByDirection.DESC, Column("_snuba_f", None, "f"))],
+            limit=1000,
+            offset=0,
         ),
         id="Simple complete query with example of parenthesized arithmetic expression in SELECT",
     ),
@@ -299,6 +366,11 @@ test_cases = [
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
             selected_columns=[
+                SelectedExpression("d", Column("_snuba_d", None, "d")),
+                SelectedExpression(
+                    "2+7",
+                    FunctionCall(None, "plus", (Literal(None, 2), Literal(None, 7))),
+                ),
                 SelectedExpression(
                     "(2*(4-5)+3)",
                     FunctionCall(
@@ -328,11 +400,6 @@ test_cases = [
                     ),
                 ),
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
-                SelectedExpression("d", Column("_snuba_d", None, "d")),
-                SelectedExpression(
-                    "2+7",
-                    FunctionCall(None, "plus", (Literal(None, 2), Literal(None, 7))),
-                ),
             ],
             condition=required_condition,
             groupby=[
@@ -340,6 +407,8 @@ test_cases = [
                 FunctionCall(None, "plus", (Literal(None, 2), Literal(None, 7))),
             ],
             order_by=[OrderBy(OrderByDirection.DESC, Column("_snuba_f", None, "f"))],
+            limit=1000,
+            offset=0,
         ),
         id="Simple complete query with aliased function in SELECT",
     ),
@@ -350,6 +419,9 @@ test_cases = [
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
             ),
             selected_columns=[
+                SelectedExpression(
+                    "now", Literal("_snuba_now", datetime.datetime(2020, 1, 1, 0, 0)),
+                ),
                 SelectedExpression(
                     "now", Literal("_snuba_now", datetime.datetime(2020, 1, 1, 0, 0)),
                 ),
@@ -366,12 +438,11 @@ test_cases = [
                         ),
                     ),
                 ),
-                SelectedExpression(
-                    "now", Literal("_snuba_now", datetime.datetime(2020, 1, 1, 0, 0)),
-                ),
             ],
             groupby=[Literal("_snuba_now", datetime.datetime(2020, 1, 1, 0, 0))],
             condition=required_condition,
+            limit=1000,
+            offset=0,
         ),
         id="Basic query with date literals",
     ),
@@ -413,6 +484,8 @@ test_cases = [
                     ),
                 ),
             ),
+            limit=1000,
+            offset=0,
         ),
         id="Query with multiple conditions joined by AND",
     ),
@@ -448,6 +521,8 @@ test_cases = [
                 ),
                 required_condition,
             ),
+            limit=1000,
+            offset=0,
         ),
         id="Query with multiple conditions joined by OR / parenthesized OR",
     ),
@@ -499,6 +574,8 @@ test_cases = [
                 ),
                 required_condition,
             ),
+            limit=1000,
+            offset=0,
         ),
         id="Query with multiple / complex conditions joined by parenthesized / regular AND / OR",
     ),
@@ -532,6 +609,8 @@ test_cases = [
                     Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
                 ),
             ),
+            limit=1000,
+            offset=0,
         ),
         id="Query with IN condition",
     ),
@@ -564,6 +643,8 @@ test_cases = [
                 SelectedExpression("c", Column("_snuba_c", None, "c")),
             ],
             condition=required_condition,
+            limit=1000,
+            offset=0,
         ),
         id="Basic query with new lines and no ambiguous clause content",
     ),
@@ -675,6 +756,8 @@ test_cases = [
                 ),
                 required_condition,
             ),
+            limit=1000,
+            offset=0,
         ),
         id="Special array join functions",
     ),
@@ -740,6 +823,8 @@ test_cases = [
                     ),
                 ),
             ),
+            limit=1000,
+            offset=0,
         ),
         id="Basic join match",
     ),
@@ -806,6 +891,8 @@ test_cases = [
                     ),
                 ),
             ),
+            limit=1000,
+            offset=0,
         ),
         id="Basic join match with sample",
     ),
@@ -891,6 +978,8 @@ test_cases = [
                     ),
                 ),
             ),
+            limit=1000,
+            offset=0,
         ),
         id="Multi join match",
     ),
@@ -1044,6 +1133,8 @@ test_cases = [
                     ),
                 ),
             ),
+            limit=1000,
+            offset=0,
         ),
         id="Multi multi join match",
     ),
@@ -1055,10 +1146,10 @@ test_cases = [
                     EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
                 ),
                 selected_columns=[
+                    SelectedExpression("title", Column("_snuba_title", None, "title")),
                     SelectedExpression(
                         "count", FunctionCall("_snuba_count", "count", tuple())
                     ),
-                    SelectedExpression("title", Column("_snuba_title", None, "title")),
                 ],
                 groupby=[Column("_snuba_title", None, "title")],
                 condition=required_condition,
@@ -1073,6 +1164,8 @@ test_cases = [
                     ),
                 ),
             ],
+            limit=1000,
+            offset=0,
         ),
         id="sub query match",
     ),
@@ -1086,10 +1179,10 @@ test_cases = [
                     ),
                     selected_columns=[
                         SelectedExpression(
-                            "count", FunctionCall("_snuba_count", "count", tuple())
+                            "title", Column("_snuba_title", None, "title")
                         ),
                         SelectedExpression(
-                            "title", Column("_snuba_title", None, "title")
+                            "count", FunctionCall("_snuba_count", "count", tuple())
                         ),
                     ],
                     groupby=[Column("_snuba_title", None, "title")],
@@ -1116,6 +1209,8 @@ test_cases = [
                     ),
                 ),
             ],
+            limit=1000,
+            offset=0,
         ),
         id="sub query of sub query match",
     ),
@@ -1162,6 +1257,8 @@ test_cases = [
                     required_condition,
                 ),
             ),
+            limit=1000,
+            offset=0,
         ),
         id="Basic query with crazy characters and escaping",
     ),
@@ -1177,10 +1274,10 @@ test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "count", FunctionCall("_snuba_count", "count", tuple()),
+                    "tags_key", Column("_snuba_tags_key", None, "tags_key"),
                 ),
                 SelectedExpression(
-                    "tags_key", Column("_snuba_tags_key", None, "tags_key"),
+                    "count", FunctionCall("_snuba_count", "count", tuple()),
                 ),
             ],
             groupby=[Column("_snuba_tags_key", None, "tags_key")],
@@ -1237,6 +1334,7 @@ test_cases = [
                 ),
                 required_condition,
             ),
+            offset=0,
         ),
         id="Query with nested boolean conditions with multiple empty quoted literals",
     ),
