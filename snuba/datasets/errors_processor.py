@@ -80,7 +80,7 @@ class ErrorsProcessor(EventsProcessorBase):
 
         output["primary_hash"] = str(uuid.UUID(_hashify(event["primary_hash"])))
         output["hierarchical_hashes"] = list(
-            str(uuid.UUID(_hashify(x))) for x in event["primary_hash"] or ()
+            str(uuid.UUID(_hashify(x))) for x in event.get("hierarchical_hashes") or ()
         )
 
         output["culprit"] = _unicodify(data.get("culprit", ""))
