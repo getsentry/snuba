@@ -1,8 +1,8 @@
 import json
-from typing import Any, Callable, Iterator, List, Tuple, Union
+from typing import Any, Callable, Iterator, Generator, List, Tuple, Union
 
 import pytest
-from snuba import settings
+from snuba import settings, state
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.entities import EntityKey
@@ -238,6 +238,11 @@ def convert_legacy_to_snql() -> Callable[[str, str], str]:
         query = f"{match_clause} {select_clause} {groupby_clause} {where_clause} {having_clause} {order_by_clause} {limit_by_clause} {extras_clause}"
         body = {"query": query}
 
+        settings_extras = ("consistent", "debug", "turbo")
+        for setting in settings_extras:
+            if legacy.get(setting) is not None:
+                body[setting] = legacy[setting]
+
         return json.dumps(body)
 
     return convert
@@ -284,3 +289,13 @@ def _build_snql_post_methods(
         return snql_resp
 
     return compare_post
+
+
+@pytest.fixture
+def disable_query_cache() -> Generator[None, None, None]:
+    cache, readthrough = state.get_configs(
+        [("use_cache", settings.USE_RESULT_CACHE), ("use_readthrough_query_cache", 1)]
+    )
+    state.set_configs({"use_cache": 0, "use_readthrough_query_cache": 0})
+    yield
+    state.set_configs({"use_cache": cache, "use_readthrough_query_cache": readthrough})
