@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from functools import partial
 
+import pytest
 import pytz
 import simplejson as json
 from snuba.datasets.entities import EntityKey
@@ -9,6 +10,48 @@ from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.base import BaseApiTest
 from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
+
+TEST_GROUP_JOIN_PARAMS = [
+    pytest.param(
+        "(e: events) -[grouped]-> (g: groupedmessage)",
+        "=",
+        1,
+        id="events groups join on existing group",
+    ),
+    pytest.param(
+        "(e: events) -[grouped]-> (g: groupedmessage)",
+        "!=",
+        0,
+        id="events groups join on non existing group",
+    ),
+    pytest.param(
+        "(g: groupedmessage) -[groups]-> (e: events)",
+        "=",
+        1,
+        id="groups events join on existing group",
+    ),
+    pytest.param(
+        "(g: groupedmessage) -[groups]-> (e: events)",
+        "!=",
+        0,
+        id="groups events join on non existing group",
+    ),
+]
+
+TEST_ASSIGNEE_JOIN_PARAMS = [
+    pytest.param(
+        "(e: events) -[assigned]-> (a: groupassignee)",
+        "=",
+        1,
+        id="events assignees join on existing user",
+    ),
+    pytest.param(
+        "(a: groupassignee) -[owns]-> (e: events)",
+        "=",
+        1,
+        id="assignees events join on existing user",
+    ),
+]
 
 
 class TestCdcEvents(BaseApiTest):
@@ -39,9 +82,29 @@ class TestCdcEvents(BaseApiTest):
             metrics=DummyMetricsBackend(strict=True)
         ).write([json.dumps(group).encode("utf-8") for group in groups])
 
-    def test_basic_join(self) -> None:
+        assignees = [
+            {
+                "offset": 0,
+                "project_id": self.project_id,
+                "group_id": self.event["group_id"],
+                "record_deleted": 0,
+                "user_id": 100,
+            }
+        ]
+
+        assignees_storage = get_entity(EntityKey.GROUPASSIGNEE).get_writable_storage()
+        assignees_storage.get_table_writer().get_batch_writer(
+            metrics=DummyMetricsBackend(strict=True)
+        ).write([json.dumps(assignee).encode("utf-8") for assignee in assignees])
+
+    @pytest.mark.parametrize(
+        "relationship, operator, expected_rows", TEST_GROUP_JOIN_PARAMS
+    )
+    def test_groups_join(
+        self, relationship: str, operator: str, expected_rows: int
+    ) -> None:
         query_template = (
-            "MATCH (e: events) -[grouped]-> (g: groupedmessage) "
+            "MATCH %(relationship)s "
             "SELECT e.event_id WHERE "
             "e.project_id = %(project_id)s AND "
             "g.project_id = %(project_id)s AND "
@@ -56,8 +119,9 @@ class TestCdcEvents(BaseApiTest):
                     "dataset": "events",
                     "query": query_template
                     % {
+                        "relationship": relationship,
                         "project_id": self.project_id,
-                        "operator": "=",
+                        "operator": operator,
                         "group_id": self.event["group_id"],
                         "time": self.base_time,
                     },
@@ -66,7 +130,22 @@ class TestCdcEvents(BaseApiTest):
         )
         data = json.loads(response.data)
         assert response.status_code == 200
-        assert len(data["data"]) == 1, data
+        assert len(data["data"]) == expected_rows, data
+
+    @pytest.mark.parametrize(
+        "relationship, operator, expected_rows", TEST_ASSIGNEE_JOIN_PARAMS
+    )
+    def test_assignee_join(
+        self, relationship: str, operator: str, expected_rows: int
+    ) -> None:
+        query_template = (
+            "MATCH %(relationship)s "
+            "SELECT e.event_id WHERE "
+            "e.project_id = %(project_id)s AND "
+            "a.project_id = %(project_id)s AND "
+            "a.user_id %(operator)s 100 AND "
+            "e.timestamp > toDateTime('%(time)s')"
+        )
 
         response = self.app.post(
             "/events/snql",
@@ -75,8 +154,9 @@ class TestCdcEvents(BaseApiTest):
                     "dataset": "events",
                     "query": query_template
                     % {
+                        "relationship": relationship,
                         "project_id": self.project_id,
-                        "operator": "!=",
+                        "operator": operator,
                         "group_id": self.event["group_id"],
                         "time": self.base_time,
                     },
@@ -85,4 +165,4 @@ class TestCdcEvents(BaseApiTest):
         )
         data = json.loads(response.data)
         assert response.status_code == 200
-        assert len(data["data"]) == 0, data
+        assert len(data["data"]) == expected_rows, data
