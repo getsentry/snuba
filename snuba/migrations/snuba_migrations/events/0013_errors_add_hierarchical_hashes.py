@@ -1,9 +1,8 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import Column, String, Array
+from snuba.clickhouse.columns import Column, FixedString, Array, UUID
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
-from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
 class Migration(migration.MultiStepMigration):
@@ -19,19 +18,13 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_local",
-                column=Column(
-                    "hierarchical_hashes",
-                    Array(String(Modifiers(nullable=False, low_cardinality=False))),
-                ),
+                column=Column("hierarchical_hashes", Array(UUID()),),
                 after="modules",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="sentry_local",
-                column=Column(
-                    "hierarchical_hashes",
-                    Array(String(Modifiers(nullable=False, low_cardinality=False))),
-                ),
+                column=Column("hierarchical_hashes", Array(FixedString(32)),),
                 after="modules",
             ),
         ]
@@ -51,19 +44,13 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_dist",
-                column=Column(
-                    "hierarchical_hashes",
-                    Array(String(Modifiers(nullable=False, low_cardinality=False))),
-                ),
+                column=Column("hierarchical_hashes", Array(UUID()),),
                 after="modules",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="sentry_dist",
-                column=Column(
-                    "hierarchical_hashes",
-                    Array(String(Modifiers(nullable=False, low_cardinality=False))),
-                ),
+                column=Column("hierarchical_hashes", Array(FixedString(32)),),
                 after="modules",
             ),
         ]

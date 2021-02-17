@@ -107,6 +107,7 @@ all_columns = ColumnSet(
         ),
         ("sdk_integrations", Array(String())),
         ("modules", Nested([("name", String()), ("version", String())])),
+        ("hierarchical_hashes", Array(UUID())),
     ]
 )
 
