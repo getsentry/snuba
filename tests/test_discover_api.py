@@ -1114,7 +1114,7 @@ class TestDiscoverApi(BaseApiTest):
             == 1.0
         )
 
-    def test_zero_literal_caching(self) -> None:
+    def test_zero_literal_caching(self, disable_query_cache) -> None:
         response = self.post(
             json.dumps(
                 {
@@ -1137,7 +1137,7 @@ class TestDiscoverApi(BaseApiTest):
                         ],
                         ["uniq", "user", "count_unique_user"],
                     ],
-                    "consistent": False,
+                    "consistent": True,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
@@ -1146,6 +1146,7 @@ class TestDiscoverApi(BaseApiTest):
         )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
+        assert data["stats"]["consistent"]
         assert len(data["data"]) == 0, data
 
 
