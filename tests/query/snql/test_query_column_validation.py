@@ -80,8 +80,6 @@ time_validation_tests = [
                         ),
                     ),
                 ),
-                limit=1000,
-                offset=0,
             ),
             selected_columns=[
                 SelectedExpression(
