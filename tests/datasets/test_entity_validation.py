@@ -257,6 +257,84 @@ tests = [
         ),
         id="only minimum time range is adjusted",
     ),
+    pytest.param(
+        EntityKey.EVENTS,
+        binary_condition(
+            "and",
+            binary_condition(
+                "equals",
+                Column("_snuba_project_id", None, "project_id"),
+                Literal(None, 1),
+            ),
+            binary_condition(
+                "and",
+                binary_condition(
+                    "greaterOrEquals",
+                    Column("_snuba_timestamp", None, "timestamp"),
+                    Literal(None, datetime.datetime(2021, 1, 1, 0, 30)),
+                ),
+                binary_condition(
+                    "and",
+                    binary_condition(
+                        "less",
+                        Column("_snuba_timestamp", None, "timestamp"),
+                        Literal(None, datetime.datetime(2021, 1, 2, 0, 30)),
+                    ),
+                    binary_condition(
+                        "or",
+                        binary_condition(
+                            "less",
+                            Column("_snuba_timestamp", None, "timestamp"),
+                            Literal(None, datetime.datetime(2021, 1, 2, 0, 30)),
+                        ),
+                        binary_condition(
+                            "less",
+                            Column("_snuba_timestamp", None, "timestamp"),
+                            Literal(None, datetime.datetime(2021, 1, 2, 0, 30)),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        binary_condition(
+            "and",
+            binary_condition(
+                "equals",
+                Column("_snuba_project_id", None, "project_id"),
+                Literal(None, 1),
+            ),
+            binary_condition(
+                "and",
+                binary_condition(
+                    "greaterOrEquals",
+                    Column("_snuba_timestamp", None, "timestamp"),
+                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+                ),
+                binary_condition(
+                    "and",
+                    binary_condition(
+                        "less",
+                        Column("_snuba_timestamp", None, "timestamp"),
+                        Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+                    ),
+                    binary_condition(
+                        "or",
+                        binary_condition(
+                            "less",
+                            Column("_snuba_timestamp", None, "timestamp"),
+                            Literal(None, datetime.datetime(2021, 1, 2, 0, 30)),
+                        ),
+                        binary_condition(
+                            "less",
+                            Column("_snuba_timestamp", None, "timestamp"),
+                            Literal(None, datetime.datetime(2021, 1, 2, 0, 30)),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        id="nested conditions are not adjusted",
+    ),
 ]
 
 

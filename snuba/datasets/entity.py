@@ -10,7 +10,11 @@ from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query import Query
-from snuba.query.conditions import ConditionFunctions, get_first_level_and_conditions
+from snuba.query.conditions import (
+    combine_and_conditions,
+    ConditionFunctions,
+    get_first_level_and_conditions,
+)
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.expressions import Expression, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
@@ -192,8 +196,9 @@ class Entity(ABC):
             return exp
 
         condition = query.get_condition_from_ast()
-        if condition:
-            query.set_ast_condition(condition.transform(replace_cond))
+        top_level = get_first_level_and_conditions(condition) if condition else []
+        new_top_level = list(map(replace_cond, top_level))
+        query.set_ast_condition(combine_and_conditions(new_top_level))
 
     def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
         """
