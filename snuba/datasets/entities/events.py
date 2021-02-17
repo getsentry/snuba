@@ -264,9 +264,13 @@ class BaseEventsEntity(Entity, ABC):
             if settings.ERRORS_ROLLOUT_ALL:
                 return "errors", []
 
-            config = state.get_config("errors_query_percentage", 0)
-            assert isinstance(config, (float, int, str))
-            if random.random() < float(config):
+            default_threshold = state.get_config("errors_query_percentage", 0)
+            assert isinstance(default_threshold, (float, int, str))
+            threshold = settings.ERRORS_QUERY_PERCENTAGE_BY_REFERRER.get(
+                referrer, default_threshold
+            )
+
+            if random.random() < float(threshold):
                 return "events", ["errors"]
 
             return "events", []
