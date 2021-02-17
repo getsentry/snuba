@@ -40,7 +40,7 @@ class Migration(migration.MultiStepMigration):
                     ALTER TABLE outcomes_hourly_local ADD COLUMN IF NOT EXISTS category UInt8,
                     MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category);
                 """,
-            ),  # note: this migration is not reversable!
+            ),
         ]
 
     def backwards_local(self) -> Sequence[operations.Operation]:
