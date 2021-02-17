@@ -19,13 +19,13 @@ class Migration(migration.MultiStepMigration):
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_local",
                 column=Column("hierarchical_hashes", Array(UUID()),),
-                after="modules",
+                after="primary_hash",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="sentry_local",
                 column=Column("hierarchical_hashes", Array(FixedString(32)),),
-                after="modules",
+                after="primary_hash",
             ),
         ]
 
@@ -45,13 +45,13 @@ class Migration(migration.MultiStepMigration):
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_dist",
                 column=Column("hierarchical_hashes", Array(UUID()),),
-                after="modules",
+                after="primary_hash",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="sentry_dist",
                 column=Column("hierarchical_hashes", Array(FixedString(32)),),
-                after="modules",
+                after="primary_hash",
             ),
         ]
 
