@@ -65,7 +65,7 @@ class EventsProcessor(EventsProcessorBase):
 
         output["primary_hash"] = _hashify(event["primary_hash"])
         output["hierarchical_hashes"] = list(
-            _hashify(x) for x in event.get("hierarchical_hashes") or ()
+            _hashify(x) for x in data.get("hierarchical_hashes") or ()
         )
 
         output["culprit"] = _unicodify(data.get("culprit", None))
