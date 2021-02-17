@@ -1,11 +1,13 @@
+import itertools
 import pytest
+import pytz
 import uuid
 from datetime import datetime, timedelta
-
-import pytz
 import simplejson as json
+from typing import Any, Callable, Tuple, Union, Optional
 
-from typing import Optional
+
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
@@ -14,22 +16,25 @@ from sentry_relay import DataCategory
 
 
 class TestOutcomesApi(BaseApiTest):
-    @pytest.fixture(
-        autouse=True, params=["/query", "/outcomes/snql"], ids=["legacy", "snql"]
-    )
-    def _set_endpoint(self, request, convert_legacy_to_snql):
-        self.endpoint = request.param
-        self.multiplier = 1
-        if request.param == "/outcomes/snql":
-            self.multiplier = 2
-            old_post = self.app.post
+    @pytest.fixture
+    def test_entity(self) -> Union[str, Tuple[str, str]]:
+        return "outcomes"
 
-            def new_post(endpoint, data=None):
-                return old_post(endpoint, data=convert_legacy_to_snql(data, "outcomes"))
+    @pytest.fixture
+    def test_app(self) -> Any:
+        return self.app
 
-            self.app.post = new_post
+    @pytest.fixture(autouse=True)
+    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+        self.post = _build_snql_post_methods
 
-    def setup_method(self, test_method):
+    @pytest.fixture(scope="class")
+    def get_project_id(self, request: object) -> Callable[[], int]:
+        id_iter = itertools.count()
+        next(id_iter)  # skip 0
+        return lambda: next(id_iter)
+
+    def setup_method(self, test_method: Any) -> None:
         super().setup_method(test_method)
 
         self.skew_minutes = 180
@@ -44,9 +49,9 @@ class TestOutcomesApi(BaseApiTest):
         org_id: int,
         project_id: int,
         num_outcomes: int,
-        category: int,
-        time_since_base: timedelta,
         outcome: int,
+        time_since_base: timedelta,
+        category: int,
         quantity: Optional[int] = None,
     ) -> None:
         outcomes = []
@@ -60,88 +65,88 @@ class TestOutcomesApi(BaseApiTest):
                 "org_id": org_id,
                 "reason": None,
                 "key_id": 1,
-                "quantity": quantity,
-                "category": category,
                 "outcome": outcome,
+                "category": category,
+                "quantity": quantity,
             }
             if message["category"] is None:
                 del message["category"]  # for testing None category case
-
             processed = (
                 self.storage.get_table_writer()
                 .get_stream_loader()
                 .get_processor()
-                .process_message(message, None,)
+                .process_message(message, KafkaMessageMetadata(0, 0, self.base_time),)
             )
-
-            outcomes.append(processed)
+            if processed:
+                outcomes.append(processed)
 
         write_processed_messages(self.storage, outcomes)
 
     def format_time(self, time: datetime) -> str:
         return time.replace(tzinfo=pytz.utc).isoformat()
 
-    def test_happy_path_querying(self):
+    def test_happy_path_querying(self, get_project_id: Callable[[], int]) -> None:
+        project_id = get_project_id()
+        other_project_id = get_project_id()
         # the outcomes we are going to query; multiple project over multiple times
         self.generate_outcomes(
             org_id=1,
-            project_id=1,
+            project_id=project_id,
             num_outcomes=5,
             outcome=0,
-            category=DataCategory.ERROR,
             time_since_base=timedelta(minutes=1),
+            category=DataCategory.ERROR,
         )
         self.generate_outcomes(
             org_id=1,
-            project_id=1,
+            project_id=project_id,
             num_outcomes=5,
             outcome=0,
-            category=DataCategory.ATTACHMENT,
             time_since_base=timedelta(minutes=30),
-        )
-        self.generate_outcomes(
-            org_id=1,
-            project_id=2,
-            num_outcomes=10,
-            outcome=0,
             category=DataCategory.TRANSACTION,
-            time_since_base=timedelta(minutes=30),
         )
         self.generate_outcomes(
             org_id=1,
-            project_id=1,
+            project_id=other_project_id,
             num_outcomes=10,
             outcome=0,
-            category=DataCategory.ERROR,
+            time_since_base=timedelta(minutes=30),
+            category=DataCategory.SECURITY,
+        )
+        self.generate_outcomes(
+            org_id=1,
+            project_id=project_id,
+            num_outcomes=10,
+            outcome=0,
             time_since_base=timedelta(minutes=61),
+            category=None,
         )
 
         # outcomes for a different outcome
         self.generate_outcomes(
             org_id=1,
-            project_id=1,
+            project_id=project_id,
             num_outcomes=1,
             outcome=1,
-            category=DataCategory.ERROR,
             time_since_base=timedelta(minutes=1),
+            category=DataCategory.ERROR,
         )
 
         # outcomes outside the time range we are going to request
         self.generate_outcomes(
             org_id=1,
-            project_id=1,
+            project_id=project_id,
             num_outcomes=1,
             outcome=0,
-            category=DataCategory.SECURITY,
             time_since_base=timedelta(minutes=(self.skew_minutes + 60)),
+            category=DataCategory.ERROR,
         )
 
         from_date = self.format_time(self.base_time - self.skew)
         to_date = self.format_time(self.base_time + self.skew)
 
-        response = self.app.post(
-            self.endpoint,
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "outcomes",
                     "aggregations": [["sum", "times_seen", "aggregate"]],
@@ -151,7 +156,7 @@ class TestOutcomesApi(BaseApiTest):
                     "organization": 1,
                     "conditions": [
                         ["outcome", "=", 0],
-                        ["project_id", "IN", [1, 2]],
+                        ["project_id", "IN", [project_id, other_project_id]],
                         ["timestamp", ">", from_date],
                         ["timestamp", "<=", to_date],
                     ],
@@ -163,13 +168,18 @@ class TestOutcomesApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200
         assert len(data["data"]) == 3
-        assert all([row["aggregate"] == 10 * self.multiplier for row in data["data"]])
-        assert sorted([row["project_id"] for row in data["data"]]) == [1, 1, 2]
+        assert all([row["aggregate"] == 10 for row in data["data"]])
+        assert sorted([row["project_id"] for row in data["data"]]) == [
+            project_id,
+            project_id,
+            other_project_id,
+        ]
 
-    def test_category_quantity_sum_querying(self):
+    def test_category_quantity_sum_querying(self, get_project_id: Callable[[], int]):
+        project_id = get_project_id()
         self.generate_outcomes(
             org_id=1,
-            project_id=1,
+            project_id=project_id,
             num_outcomes=1,
             outcome=0,
             category=DataCategory.ERROR,
@@ -177,7 +187,7 @@ class TestOutcomesApi(BaseApiTest):
         )
         self.generate_outcomes(
             org_id=1,
-            project_id=1,
+            project_id=project_id,
             num_outcomes=1,
             outcome=0,
             category=None,  # should be counted as an Error
@@ -185,7 +195,7 @@ class TestOutcomesApi(BaseApiTest):
         )
         self.generate_outcomes(
             org_id=1,
-            project_id=1,
+            project_id=project_id,
             num_outcomes=1,
             outcome=0,
             category=DataCategory.SECURITY,
@@ -193,7 +203,7 @@ class TestOutcomesApi(BaseApiTest):
         )
         self.generate_outcomes(
             org_id=1,
-            project_id=1,
+            project_id=project_id,
             num_outcomes=1,
             outcome=0,
             category=DataCategory.TRANSACTION,
@@ -201,7 +211,7 @@ class TestOutcomesApi(BaseApiTest):
         )
         self.generate_outcomes(
             org_id=1,
-            project_id=1,
+            project_id=project_id,
             num_outcomes=1,
             outcome=0,
             quantity=6,
@@ -210,7 +220,7 @@ class TestOutcomesApi(BaseApiTest):
         )
         self.generate_outcomes(
             org_id=1,
-            project_id=1,
+            project_id=project_id,
             num_outcomes=1,
             outcome=0,
             quantity=4,
@@ -219,7 +229,7 @@ class TestOutcomesApi(BaseApiTest):
         )
         self.generate_outcomes(
             org_id=1,
-            project_id=1,
+            project_id=project_id,
             num_outcomes=1,
             outcome=0,
             category=DataCategory.ATTACHMENT,
@@ -228,7 +238,7 @@ class TestOutcomesApi(BaseApiTest):
         )
         self.generate_outcomes(
             org_id=1,
-            project_id=1,
+            project_id=project_id,
             num_outcomes=1,
             outcome=0,
             category=DataCategory.ATTACHMENT,
@@ -238,8 +248,7 @@ class TestOutcomesApi(BaseApiTest):
 
         from_date = self.format_time(self.base_time + timedelta(minutes=400))
         to_date = self.format_time(self.base_time + timedelta(minutes=600))
-        response = self.app.post(
-            self.endpoint,
+        response = self.post(
             data=json.dumps(
                 {
                     "dataset": "outcomes",
@@ -254,6 +263,7 @@ class TestOutcomesApi(BaseApiTest):
                     "conditions": [
                         ["timestamp", ">", from_date],
                         ["timestamp", "<=", to_date],
+                        ["project_id", "=", project_id],
                     ],
                     "groupby": ["category"],
                 }
@@ -264,30 +274,22 @@ class TestOutcomesApi(BaseApiTest):
         assert response.status_code == 200
         assert len(data["data"]) == 5
         correct_data = [
-            {
-                "category": DataCategory.ERROR,
-                "times_seen": 2 * self.multiplier,
-                "quantity_sum": None,
-            },
+            {"category": DataCategory.ERROR, "times_seen": 2, "quantity_sum": None},
             {
                 "category": DataCategory.TRANSACTION,
-                "times_seen": 1 * self.multiplier,
+                "times_seen": 1,
                 "quantity_sum": None,
             },
-            {
-                "category": DataCategory.SECURITY,
-                "times_seen": 1 * self.multiplier,
-                "quantity_sum": None,
-            },
+            {"category": DataCategory.SECURITY, "times_seen": 1, "quantity_sum": None},
             {
                 "category": DataCategory.ATTACHMENT,
-                "times_seen": 2 * self.multiplier,
-                "quantity_sum": (65536 + 16384) * self.multiplier,
+                "times_seen": 2,
+                "quantity_sum": (65536 + 16384),
             },
             {
                 "category": DataCategory.SESSION,
-                "times_seen": 2 * self.multiplier,
-                "quantity_sum": (6 + 4) * self.multiplier,
+                "times_seen": 2,
+                "quantity_sum": (6 + 4),
             },
         ]
         assert data["data"] == correct_data
