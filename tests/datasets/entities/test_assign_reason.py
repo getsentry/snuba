@@ -25,7 +25,35 @@ test_data = [
         "AGGREGATE_TOO_HIGH",
         id="tagstore.get_groups_user_counts",
     ),
-    pytest.param([{"count": 1}], [{"count": 1}], "unknown", "UNKNOWN", id="default"),
+    pytest.param(
+        [{"count": 1}], [{"count": 2}], "tsdb:modelid:4", "UNKNOWN", id="default"
+    ),
+    pytest.param(
+        [
+            {"group_id": 1, "count": 1},
+            {"group_id": 2, "count": 1},
+            {"group_id": 3, "count": 1},
+        ],
+        [{"group_id": 1, "count": 1}, {"group_id": 2, "count": 1}],
+        "tsdb-modelid:4",
+        "FOUND_EXTRA_DATA",
+        id="extra_data",
+    ),
+    pytest.param(
+        [
+            {"group_id": 1, "count": 1},
+            {"group_id": 2, "count": 1},
+            {"group_id": 3, "count": 1},
+        ],
+        [
+            {"group_id": 1, "count": 1},
+            {"group_id": 3, "count": 1},
+            {"group_id": 2, "count": 1},
+        ],
+        "tsdb-modelid:4",
+        "RESULT_OUT_OF_ORDER",
+        id="out_of_order",
+    ),
 ]
 
 
