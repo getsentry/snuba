@@ -119,6 +119,7 @@ def subscriptions(
     dataset = get_dataset(dataset_name)
 
     storage = dataset.get_default_entity().get_writable_storage()
+    assert storage is not None
     storage_key = storage.get_storage_key()
 
     loader = enforce_table_writer(dataset).get_stream_loader()
