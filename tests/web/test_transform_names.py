@@ -9,7 +9,6 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_writable_storage
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -30,11 +29,13 @@ def test_transform_column_names() -> None:
     to the SelectedExpression names and not to the expression aliases
     (which are supposed to be internal).
     """
+    events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
 
     event_id = uuid.uuid4().hex
+
     event_date = datetime.utcnow()
     write_unprocessed_events(
-        get_writable_storage(StorageKey.EVENTS),
+        events_storage,
         [
             InsertEvent(
                 {
@@ -102,7 +103,13 @@ def test_transform_column_names() -> None:
     data = result.result["data"]
     assert data == [{"event_id": event_id, "message": "a message"}]
     meta = result.result["meta"]
+
+    if events_storage.get_storage_key() == StorageKey.EVENTS:
+        events_meta_type = "FixedString(32)"
+    else:
+        events_meta_type = "String"
+
     assert meta == [
-        MetaColumn(name="event_id", type="FixedString(32)"),
+        MetaColumn(name="event_id", type=events_meta_type),
         MetaColumn(name="message", type="String"),
     ]

@@ -1,5 +1,5 @@
 from collections import ChainMap
-from typing import FrozenSet, Mapping, Sequence
+from typing import FrozenSet, Mapping, Sequence, cast
 
 from snuba.clickhouse.columns import (
     Array,
@@ -133,7 +133,10 @@ all_columns = (
         # other tags
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
-        ("_tags_hash_map", Array(UInt(64), Modifiers(readonly=True))),
+        (
+            "_tags_hash_map",
+            cast(Array[Modifiers], Array(UInt(64), Modifiers(readonly=True))),
+        ),
         # other context
         ("contexts", Nested([("key", String()), ("value", String())])),
         # http interface
@@ -163,7 +166,7 @@ all_columns = (
                     ("in_app", UInt(8, Modifiers(nullable=True))),
                     ("colno", UInt(32, Modifiers(nullable=True))),
                     ("lineno", UInt(32, Modifiers(nullable=True))),
-                    ("stack_level", UInt(16)),
+                    ("stack_level", UInt(16, Modifiers())),
                 ]
             ),
         ),

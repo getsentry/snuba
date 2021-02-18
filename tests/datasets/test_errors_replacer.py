@@ -1,3 +1,4 @@
+import importlib
 import pytz
 import uuid
 import re
@@ -6,7 +7,7 @@ from functools import partial
 import simplejson as json
 from typing import Any, Tuple
 
-from snuba import replacer
+from snuba import replacer, settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.datasets import errors_replacer
 from snuba.datasets.storages import StorageKey
@@ -36,6 +37,11 @@ class TestReplacer:
 
         self.project_id = 1
         self.event = get_raw_event()
+        settings.ERRORS_ROLLOUT_ALL = True
+        settings.ERRORS_ROLLOUT_WRITABLE_STORAGE = True
+
+    def teardown_method(self):
+        importlib.reload(settings)
 
     def _wrap(self, msg: Tuple[Any, ...]) -> Message[KafkaPayload]:
         return Message(
@@ -55,9 +61,9 @@ class TestReplacer:
         if group_id:
             args.setdefault("conditions", []).append(("group_id", "=", group_id))
 
-        return json.loads(
-            self.app.post("/events_migration/query", data=json.dumps(args)).data
-        )["data"]
+        return json.loads(self.app.post("/events/query", data=json.dumps(args)).data)[
+            "data"
+        ]
 
     def _get_group_id(self, project_id: int, event_id: str):
         args = {
@@ -68,9 +74,9 @@ class TestReplacer:
             ],
         }
 
-        data = json.loads(
-            self.app.post("/events_migration/query", data=json.dumps(args)).data
-        )["data"]
+        data = json.loads(self.app.post("/events/query", data=json.dumps(args)).data)[
+            "data"
+        ]
         if not data:
             return None
 

@@ -1,5 +1,5 @@
 import os
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
+from typing import Any, Mapping, MutableMapping, Sequence, Set
 
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
@@ -113,10 +113,11 @@ PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 
-AST_DATASET_ROLLOUT: Mapping[str, int] = {}  # (dataset name: percentage)
-AST_REFERRER_ROLLOUT: Mapping[
-    str, Mapping[Optional[str], int]
-] = {}  # (dataset name: (referrer: percentage))
+ERRORS_ROLLOUT_ALL: bool = False
+ERRORS_ROLLOUT_BY_REFERRER: Set[str] = set()
+ERRORS_ROLLOUT_WRITABLE_STORAGE: bool = False
+
+ERRORS_QUERY_PERCENTAGE_BY_REFERRER: Mapping[str, float] = {}
 
 COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
