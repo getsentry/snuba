@@ -63,6 +63,7 @@ class TestCdcEvents(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             second=0, microsecond=0, tzinfo=pytz.utc
         ) - timedelta(minutes=90)
+        self.next_time = self.base_time + timedelta(minutes=95)
 
         self.events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
         write_unprocessed_events(self.events_storage, [self.event])
@@ -109,7 +110,8 @@ class TestCdcEvents(BaseApiTest):
             "e.project_id = %(project_id)s AND "
             "g.project_id = %(project_id)s AND "
             "g.id %(operator)s %(group_id)s AND "
-            "e.timestamp > toDateTime('%(time)s')"
+            "e.timestamp >= toDateTime('%(btime)s') AND "
+            "e.timestamp < toDateTime('%(ntime)s')"
         )
 
         response = self.app.post(
@@ -123,7 +125,8 @@ class TestCdcEvents(BaseApiTest):
                         "project_id": self.project_id,
                         "operator": operator,
                         "group_id": self.event["group_id"],
-                        "time": self.base_time,
+                        "btime": self.base_time,
+                        "ntime": self.next_time,
                     },
                 }
             ),
@@ -144,7 +147,8 @@ class TestCdcEvents(BaseApiTest):
             "e.project_id = %(project_id)s AND "
             "a.project_id = %(project_id)s AND "
             "a.user_id %(operator)s 100 AND "
-            "e.timestamp > toDateTime('%(time)s')"
+            "e.timestamp >= toDateTime('%(btime)s') AND "
+            "e.timestamp < toDateTime('%(ntime)s')"
         )
 
         response = self.app.post(
@@ -158,7 +162,8 @@ class TestCdcEvents(BaseApiTest):
                         "project_id": self.project_id,
                         "operator": operator,
                         "group_id": self.event["group_id"],
-                        "time": self.base_time,
+                        "btime": self.base_time,
+                        "ntime": self.next_time,
                     },
                 }
             ),
