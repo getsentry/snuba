@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Generic, Iterable, List, Mapping, TypeVar
+from typing import Any, Generic, Iterable, List, TypeVar
 
+from snuba.clickhouse.http import JSONRow
 from snuba.utils.codecs import Encoder, TDecoded, TEncoded
 
 logger = logging.getLogger("snuba.writer")
