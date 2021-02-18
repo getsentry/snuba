@@ -37,6 +37,10 @@ LOG_THRESHOLD_TIME = 20  # In seconds
 TTransformed = TypeVar("TTransformed")
 
 
+class ChildProcessTerminated(RuntimeError):
+    pass
+
+
 class TransformStep(ProcessingStep[TPayload]):
     """
     Transforms a message and submits the transformed value to the next
@@ -114,7 +118,7 @@ class MessageBatch(Generic[TPayload]):
     def get_content_size(self) -> int:
         return self.__offset
 
-    def __getitem__(self, index: int) -> Message[TPayload]:
+    def __getitem__(self, index: int) -> Any:
         """
         Get a message in this batch by its index.
 
@@ -318,12 +322,13 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         self.__closed = False
 
         def handle_sigchld(signum: int, frame: Any) -> None:
-            # Logs if any child process of the consumer is terminated.
+            # Terminates the consumer if any child process of the
+            # consumer is terminated.
             # This is meant to detect the unexpected termination of
             # multiprocessor pool workers.
             if not self.__closed:
                 self.__metrics.increment("sigchld.detected")
-                logger.warn("SIGCHLD detected in parallel consumer.")
+                raise ChildProcessTerminated()
 
         signal.signal(signal.SIGCHLD, handle_sigchld)
 

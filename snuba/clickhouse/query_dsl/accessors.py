@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, Set, Tuple, cast
+from typing import Optional, Sequence, Set, Tuple, cast
 
 from snuba.clickhouse.query import Query
 from snuba.query import ProcessableQuery
@@ -92,6 +92,47 @@ def get_project_ids_in_query_ast(
     return get_project_ids_in_condition(condition) if condition is not None else None
 
 
+def get_time_range_expressions(
+    conditions: Sequence[Expression],
+    timestamp_field: str,
+    table_name: Optional[str] = None,
+) -> Tuple[
+    Optional[Tuple[datetime, FunctionCallExpr]],
+    Optional[Tuple[datetime, FunctionCallExpr]],
+]:
+    max_lower_bound = None
+    min_upper_bound = None
+    table_match = String(table_name) if table_name else None
+    for c in conditions:
+        match = FunctionCall(
+            Param(
+                "operator",
+                Or(
+                    [
+                        String(OPERATOR_TO_FUNCTION[">="]),
+                        String(OPERATOR_TO_FUNCTION["<"]),
+                    ]
+                ),
+            ),
+            (
+                Column(table_match, String(timestamp_field)),
+                Literal(Param("timestamp", Any(datetime))),
+            ),
+        ).match(c)
+
+        if match is not None:
+            timestamp = cast(datetime, match.scalar("timestamp"))
+            assert isinstance(c, FunctionCallExpr)
+            if match.string("operator") == OPERATOR_TO_FUNCTION[">="]:
+                if not max_lower_bound or timestamp > max_lower_bound[0]:
+                    max_lower_bound = (timestamp, c)
+            else:
+                if not min_upper_bound or timestamp < min_upper_bound[0]:
+                    min_upper_bound = (timestamp, c)
+
+    return (max_lower_bound, min_upper_bound)
+
+
 def get_time_range(
     query: ProcessableQuery[Table], timestamp_field: str
 ) -> Tuple[Optional[datetime], Optional[datetime]]:
@@ -108,32 +149,9 @@ def get_time_range(
     if not condition_clause:
         return (None, None)
 
-    max_lower_bound = None
-    min_upper_bound = None
-    for c in get_first_level_and_conditions(condition_clause):
-        match = FunctionCall(
-            Param(
-                "operator",
-                Or(
-                    [
-                        String(OPERATOR_TO_FUNCTION[">="]),
-                        String(OPERATOR_TO_FUNCTION["<"]),
-                    ]
-                ),
-            ),
-            (
-                Column(None, String(timestamp_field)),
-                Literal(Param("timestamp", Any(datetime))),
-            ),
-        ).match(c)
-
-        if match is not None:
-            timestamp = cast(datetime, match.scalar("timestamp"))
-            if match.string("operator") == OPERATOR_TO_FUNCTION[">="]:
-                if not max_lower_bound or timestamp > max_lower_bound:
-                    max_lower_bound = timestamp
-            else:
-                if not min_upper_bound or timestamp < min_upper_bound:
-                    min_upper_bound = timestamp
-
-    return (max_lower_bound, min_upper_bound)
+    lower, upper = get_time_range_expressions(
+        get_first_level_and_conditions(condition_clause), timestamp_field
+    )
+    lower_bound = lower[0] if lower else None
+    upper_bound = upper[0] if upper else None
+    return lower_bound, upper_bound

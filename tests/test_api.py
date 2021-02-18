@@ -12,12 +12,14 @@ from dateutil.parser import parse as parse_datetime
 from sentry_sdk import Client, Hub
 
 from snuba import settings, state
-from snuba.consumers.types import KafkaMessageMetadata
 from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.consumers.types import KafkaMessageMetadata
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storages.factory import get_storage
 from snuba.processor import InsertBatch
 from snuba.redis import redis_client
 from snuba.subscriptions.store import RedisSubscriptionDataStore
@@ -41,7 +43,7 @@ class TestApi(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0
         ) - timedelta(minutes=self.minutes)
-        self.storage = get_writable_storage(StorageKey.EVENTS)
+        self.storage = get_entity(EntityKey.EVENTS).get_writable_storage()
         self.table = self.storage.get_table_writer().get_schema().get_table_name()
         self.generate_fizzbuzz_events()
 
@@ -837,7 +839,7 @@ class TestApi(BaseApiTest):
             ).data
         )
         assert (
-            "PREWHERE notEquals(positionCaseInsensitive((message AS _snuba_message), 'abc'), 0) AND in(project_id, tuple(1))"
+            "PREWHERE notEquals(positionCaseInsensitive((message AS _snuba_message), 'abc'), 0) AND in((project_id AS _snuba_project_id), tuple(1))"
             in result["sql"]
         )
 
@@ -859,8 +861,12 @@ class TestApi(BaseApiTest):
         )
 
         # make sure the conditions is in PREWHERE and nowhere else
-        assert "PREWHERE in(project_id, tuple(1))" in result["sql"]
-        assert result["sql"].count("in(project_id, tuple(1))") == 1
+        assert (
+            "PREWHERE in((project_id AS _snuba_project_id), tuple(1))" in result["sql"]
+        )
+        assert (
+            result["sql"].count("in((project_id AS _snuba_project_id), tuple(1))") == 1
+        )
 
     def test_aggregate(self):
         result = json.loads(
@@ -1239,13 +1245,17 @@ class TestApi(BaseApiTest):
         }
         result1 = json.loads(self.app.post("/query", data=json.dumps(query)).data)
 
+        event_id = "9" * 32
+        if self.storage.get_storage_key() == StorageKey.ERRORS:
+            event_id = str(uuid.UUID(event_id))
+
         write_processed_messages(
             self.storage,
             [
                 InsertBatch(
                     [
                         {
-                            "event_id": "9" * 32,
+                            "event_id": event_id,
                             "project_id": 1,
                             "group_id": 1,
                             "timestamp": self.base_time,
@@ -1400,7 +1410,7 @@ class TestApi(BaseApiTest):
         )
 
         # There is data in the events table
-        assert len(clickhouse.execute("SELECT * FROM sentry_local")) > 0
+        assert len(clickhouse.execute(f"SELECT * FROM {self.table}")) > 0
 
         assert self.app.post("/tests/events/drop").status_code == 200
         writer = storage.get_table_writer()
@@ -1410,7 +1420,7 @@ class TestApi(BaseApiTest):
         assert self.redis_db_size() == 0
 
         # No data in events table
-        assert len(clickhouse.execute("SELECT * FROM sentry_local")) == 0
+        assert len(clickhouse.execute(f"SELECT * FROM {self.table}")) == 0
 
     @pytest.mark.xfail
     def test_row_stats(self):

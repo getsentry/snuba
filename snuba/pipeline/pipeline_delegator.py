@@ -17,7 +17,7 @@ BuilderId = str
 Timing = float
 QueryPipelineBuilders = Mapping[BuilderId, QueryPipelineBuilder[ClickhouseQueryPlan]]
 QueryResults = List[Result[QueryResult]]
-SelectorFunc = Callable[[LogicalQuery], Tuple[BuilderId, List[BuilderId]]]
+SelectorFunc = Callable[[LogicalQuery, str], Tuple[BuilderId, List[BuilderId]]]
 CallbackFunc = Callable[[LogicalQuery, str, QueryResults], None]
 
 
@@ -56,7 +56,11 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
         self.__request = request
         self.__runner = runner
         self.__query_pipeline_builders = query_pipeline_builders
-        self.__selector_func = selector_func
+
+        self.__selector_func = lambda query: selector_func(
+            query, self.__request.referrer
+        )
+
         self.__callback_func = (
             partial(
                 callback_func,
@@ -114,6 +118,6 @@ class PipelineDelegator(QueryPipelineBuilder[ClickhouseQueryPlan]):
     ) -> QueryPlanner[ClickhouseQueryPlan]:
         # For composite queries, we just build the primary pipeline / query plan;
         # running multiple concurrent composite queries is not currently supported.
-        primary_builder_id, _others = self.__selector_func(query)
+        primary_builder_id, _others = self.__selector_func(query, "")
         query_pipeline_builder = self.__query_pipeline_builders[primary_builder_id]
         return query_pipeline_builder.build_planner(query, settings)
