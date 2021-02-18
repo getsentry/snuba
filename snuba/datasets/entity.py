@@ -1,28 +1,30 @@
 from abc import ABC, abstractmethod
-from datetime import datetime
+from dataclasses import replace
+from datetime import datetime, timedelta
 from typing import Any, Mapping, Optional, Sequence
 
+from snuba import state
 from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.query_dsl.accessors import get_time_range_expressions
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query import Query
 from snuba.query.conditions import (
+    combine_and_conditions,
     ConditionFunctions,
     get_first_level_and_conditions,
 )
 from snuba.query.data_source.join import JoinRelationship
-from snuba.query.expressions import Expression
+from snuba.query.expressions import Expression, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
-from snuba.query.matchers import (
-    Any as AnyMatch,
-    AnyOptionalString,
-    Column as ColumnMatch,
-    FunctionCall as FunctionCallMatch,
-    Literal as LiteralMatch,
-    Or,
-    String as StringMatch,
-)
+from snuba.query.matchers import Any as AnyMatch
+from snuba.query.matchers import AnyOptionalString
+from snuba.query.matchers import Column as ColumnMatch
+from snuba.query.matchers import FunctionCall as FunctionCallMatch
+from snuba.query.matchers import Literal as LiteralMatch
+from snuba.query.matchers import Or
+from snuba.query.matchers import String as StringMatch
 from snuba.query.processors import QueryProcessor
 from snuba.query.validation import FunctionCallValidator
 
@@ -139,21 +141,64 @@ class Entity(ABC):
 
         if self._required_time_column:
             match = build_match(
-                self._required_time_column,
-                [
-                    ConditionFunctions.EQ,
-                    ConditionFunctions.GT,
-                    ConditionFunctions.GTE,
-                    ConditionFunctions.LT,
-                    ConditionFunctions.LTE,
-                ],
-                datetime,
+                self._required_time_column, [ConditionFunctions.EQ], datetime,
             )
             found = any(match.match(cond) for cond in top_level)
-            if not found:
+            if found:
+                return True
+
+            lower, upper = get_time_range_expressions(
+                top_level, self._required_time_column, alias
+            )
+            if not lower or not upper:
                 return False
 
+            # At this point we have valid conditions. However we need to align them and
+            # make sure they don't exceed the max_days. Replace the conditions.
+            self._replace_time_condition(query, *lower, *upper)
+
         return True
+
+    def _replace_time_condition(
+        self,
+        query: Query,
+        from_date: datetime,
+        from_exp: FunctionCall,
+        to_date: datetime,
+        to_exp: FunctionCall,
+    ) -> None:
+        max_days, date_align = state.get_configs(
+            [("max_days", None), ("date_align_seconds", 1)]
+        )
+
+        def align_fn(dt: datetime) -> datetime:
+            assert isinstance(date_align, int)
+            return dt - timedelta(seconds=(dt - dt.min).seconds % date_align)
+
+        from_date, to_date = align_fn(from_date), align_fn(to_date)
+        assert from_date <= to_date
+
+        if max_days is not None and (to_date - from_date).days > max_days:
+            from_date = to_date - timedelta(days=max_days)
+
+        def replace_cond(exp: Expression) -> Expression:
+            if not isinstance(exp, FunctionCall):
+                return exp
+            elif exp == from_exp:
+                return replace(
+                    exp, parameters=(from_exp.parameters[0], Literal(None, from_date)),
+                )
+            elif exp == to_exp:
+                return replace(
+                    exp, parameters=(to_exp.parameters[0], Literal(None, to_date))
+                )
+
+            return exp
+
+        condition = query.get_condition_from_ast()
+        top_level = get_first_level_and_conditions(condition) if condition else []
+        new_top_level = list(map(replace_cond, top_level))
+        query.set_ast_condition(combine_and_conditions(new_top_level))
 
     def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
         """
