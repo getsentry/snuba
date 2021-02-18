@@ -117,7 +117,7 @@ def rate_limit(
     bypass_rate_limit, rate_history_s = state.get_configs(
         [("bypass_rate_limit", 0), ("rate_history_sec", 3600)]
     )
-
+    assert rate_history_s is not None
     if bypass_rate_limit == 1:
         yield None
         return
@@ -126,7 +126,7 @@ def rate_limit(
     pipe.zremrangebyscore(
         bucket, "-inf", "({:f}".format(now - rate_history_s)
     )  # cleanup
-    pipe.zadd(bucket, now + state.max_query_duration_s, query_id)  # add query
+    pipe.zadd(bucket, now + state.max_query_duration_s, query_id)  # type: ignore
     if rate_limit_params.per_second_limit is None:
         pipe.exists("nosuchkey")  # no-op if we don't need per-second
     else:
@@ -151,7 +151,7 @@ def rate_limit(
 
     rate_limit_name = rate_limit_params.rate_limit_name
 
-    Reason = namedtuple("reason", "scope name val limit")
+    Reason = namedtuple("Reason", "scope name val limit")
     reasons = [
         Reason(
             rate_limit_name,
@@ -208,7 +208,7 @@ def get_global_rate_limit_params() -> RateLimitParameters:
     )
 
 
-class RateLimitAggregator(AbstractContextManager):
+class RateLimitAggregator(AbstractContextManager):  # type: ignore
     """
     Runs the rate limits provided by the `rate_limit_params` configuration object.
 

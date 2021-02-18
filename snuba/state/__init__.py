@@ -4,8 +4,19 @@ import logging
 import random
 import re
 import time
+from builtins import AssertionError
 from functools import partial
-from typing import Any, Iterable, Mapping, Optional, Sequence, Tuple
+from typing import (
+    Any,
+    Callable,
+    Iterable,
+    Mapping,
+    Optional,
+    Sequence,
+    SupportsFloat,
+    SupportsInt,
+    Tuple,
+)
 
 import simplejson as json
 from confluent_kafka import KafkaError
@@ -13,7 +24,7 @@ from confluent_kafka import Message as KafkaMessage
 from confluent_kafka import Producer
 
 from snuba import environment, settings
-from snuba.redis import redis_client as rds
+from snuba.redis import redis_client
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.backends.kafka import (
     build_default_kafka_producer_configuration,
@@ -23,6 +34,7 @@ metrics = MetricsWrapper(environment.metrics, "snuba.state")
 logger = logging.getLogger("snuba.state")
 
 kfk = None
+rds = redis_client
 
 ratelimit_prefix = "snuba-ratelimit:"
 query_lock_prefix = "snuba-query-lock:"
@@ -51,6 +63,7 @@ def get_rates(bucket: str, rollup: int = 60) -> Sequence[Any]:
     bucket = "{}{}".format(ratelimit_prefix, bucket)
     pipe = rds.pipeline(transaction=False)
     rate_history_s = get_config("rate_history_sec", 3600)
+    assert rate_history_s is not None
     for i in reversed(range(now - rollup, now - rate_history_s, -rollup)):
         pipe.zcount(bucket, i, "({:f}".format(i + rollup))
     return [c / float(rollup) for c in pipe.execute()]
@@ -67,10 +80,10 @@ class memoize:
     def __init__(self, timeout: int = 1) -> None:
         self.timeout = timeout
         self.saved = None
-        self.at = 0
+        self.at = 0.0
 
-    def __call__(self, func):
-        def wrapper():
+    def __call__(self, func: Callable[[], Any]) -> Callable[[], Any]:
+        def wrapper() -> Any:
             now = time.time()
             if now > self.at + self.timeout or self.saved is None:
                 self.saved, self.at = func(), now
@@ -79,13 +92,15 @@ class memoize:
         return wrapper
 
 
-def numeric(value: Optional[Any]) -> Optional[Any]:
+def numeric(value: Any) -> Any:
     try:
+        assert isinstance(value, (str, SupportsInt))
         return int(value)
-    except ValueError:
+    except (ValueError, AssertionError):
         try:
+            assert isinstance(value, (str, SupportsFloat))
             return float(value)
-        except ValueError:
+        except (ValueError, AssertionError):
             return value
 
 
@@ -111,8 +126,8 @@ def abtest(value: Optional[Any]) -> Optional[Any]:
             i += int(weight or 1)
             if i >= r:
                 return numeric(v)
-    else:
-        return value
+
+    return value
 
 
 def set_config(key: str, value: Optional[Any], user: Optional[str] = None) -> None:
@@ -212,7 +227,7 @@ def record_query(query_metadata: Mapping[str, Any]) -> None:
     max_redis_queries = 200
     try:
         data = safe_dumps(query_metadata)
-        rds.pipeline(transaction=False).lpush(queries_list, data).ltrim(
+        rds.pipeline(transaction=False).lpush(queries_list, data).ltrim(  # type: ignore
             queries_list, 0, max_redis_queries - 1
         ).execute()
 
