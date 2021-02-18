@@ -1,3 +1,6 @@
+import pytest
+from typing import MutableMapping, Any
+
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
 from snuba.query import SelectedExpression
@@ -55,6 +58,62 @@ def test_sessions_processing() -> None:
                 ),
             ),
         ]
+        return QueryResult({}, {})
+
+    sessions.get_default_entity().get_query_pipeline_builder().build_execution_pipeline(
+        request, query_runner
+    ).execute()
+
+
+granularity_tests = [
+    ({}, None),
+    ({"selected_columns": ["bucketed_started"], "groupby": ["bucketed_started"]}, 3600),
+    (
+        {
+            "selected_columns": ["bucketed_started"],
+            "groupby": ["bucketed_started"],
+            "organization": 1,
+            "project": [1],
+            "granularity": 60,
+        },
+        3600,
+    ),
+]
+
+selector_tests = [
+    (
+        {
+            "selected_columns": ["sessions", "bucketed_started"],
+            "groupby": ["bucketed_started"],
+        },
+        "sessions_hourly_local",
+    ),
+    ({"selected_columns": ["sessions"], "granularity": 60}, "sessions_hourly_local",),
+    (
+        {
+            "selected_columns": ["sessions", "bucketed_started"],
+            "groupby": ["bucketed_started"],
+            "granularity": 60,
+        },
+        "sessions_raw_local",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "query_body, expected_table", selector_tests,
+)
+def test_select_storage(
+    query_body: MutableMapping[str, Any], expected_table: str
+) -> None:
+    sessions = get_dataset("sessions")
+    query = parse_query(query_body, sessions)
+    request = Request("", query_body, query, HTTPRequestSettings(), "")
+
+    def query_runner(
+        query: Query, settings: RequestSettings, reader: Reader
+    ) -> QueryResult:
+        assert query.get_from_clause().table_name == expected_table
         return QueryResult({}, {})
 
     sessions.get_default_entity().get_query_pipeline_builder().build_execution_pipeline(

@@ -151,16 +151,7 @@ class TestSessionsApi(BaseApiTest):
         assert data["data"][0]["users"] == 2
         assert data["data"][0]["users_errored"] == 1
 
-    # Since we never select or group by the `bucketed_started`, the granularity
-    # will be ignored basically and we will get the same data.
-    # XXX: When we don’t group by `bucketed_start`, we do get the same data, no
-    # matter if we hit the raw or hourly storage. Right now we can’t really
-    # assert which storage we actually hit.
-    # XXX: Actually applying the parametrize makes snuba return X times the
-    # sessions than are expected. No idea why, as the parametrize down below
-    # works without any problems.
-    @pytest.mark.parametrize("granularity", [60, 120, 3600])
-    def test_session_aggregation(self, granularity):
+    def test_session_aggregation(self):
         self.generate_session_events()
         response = self.app.post(
             "/query",
@@ -175,7 +166,6 @@ class TestSessionsApi(BaseApiTest):
                         "users",
                         "users_errored",
                     ],
-                    "granularity": granularity,
                     "from_date": (self.started - self.skew).isoformat(),
                     "to_date": (self.started + self.skew).isoformat(),
                 }
