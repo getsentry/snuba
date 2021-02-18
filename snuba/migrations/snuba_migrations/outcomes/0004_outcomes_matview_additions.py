@@ -30,10 +30,11 @@ new_materialized_view_columns: Sequence[Column[Modifiers]] = [
 
 class Migration(migration.MultiStepMigration):
     """
-    Updates materialized view query to support category and quantity
+    Updates materialized view query to support category and quantity.
+    Note that the consumer needs to be stopped for this migration.
     """
 
-    blocking = False
+    blocking = True
 
     def forwards_local(self) -> Sequence[operations.Operation]:
         return [
