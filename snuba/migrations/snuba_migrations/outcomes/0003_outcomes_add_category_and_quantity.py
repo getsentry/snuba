@@ -20,24 +20,24 @@ class Migration(migration.MultiStepMigration):
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_local",
                 column=Column("quantity", UInt(32, Modifiers(nullable=True))),
-                after=None,
+                after="reason",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_local",
                 column=Column("category", UInt(8)),
-                after=None,
+                after="timestamp",
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_hourly_local",
                 column=Column("quantity", UInt(64, Modifiers(nullable=True))),
-                after=None,
+                after="reason",
             ),
             operations.RunSql(
                 storage_set=StorageSetKey.OUTCOMES,
                 statement="""
-                    ALTER TABLE outcomes_hourly_local ADD COLUMN IF NOT EXISTS category UInt8,
+                    ALTER TABLE outcomes_hourly_local ADD COLUMN IF NOT EXISTS category UInt8 AFTER timestamp,
                     MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category);
                 """,
             ),
