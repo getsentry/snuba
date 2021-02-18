@@ -41,9 +41,9 @@ class PassthroughCodec(Generic[T], Codec[T, T]):
 JSONData = Any
 
 
-class JSONCodec(Codec[str, JSONData]):
-    def encode(self, value: JSONData) -> str:
-        return rapidjson.dumps(value)
+class JSONCodec(Codec[bytes, JSONData]):
+    def encode(self, value: JSONData) -> bytes:
+        return rapidjson.dumps(value)  # type: ignore
 
-    def decode(self, value: str) -> JSONData:
+    def decode(self, value: bytes) -> JSONData:
         return rapidjson.loads(value)

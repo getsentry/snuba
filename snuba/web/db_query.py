@@ -34,11 +34,11 @@ from snuba.state.rate_limit import (
     RateLimitExceeded,
 )
 from snuba.util import force_bytes, with_span
-from snuba.utils.codecs import JSONCodec, JSONData
+from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
 
-cache: Cache[JSONData] = RedisCache(
+cache: Cache[Result] = RedisCache(
     redis_client, "snuba-query-cache:", JSONCodec(), ThreadPoolExecutor()
 )
 
@@ -179,6 +179,7 @@ def execute_query(
     # Experiment, if we are going to grab more than X columns worth of data,
     # don't use uncompressed_cache in ClickHouse.
     uc_max = state.get_config("uncompressed_cache_max_cols", 5)
+    assert isinstance(uc_max, int)
     column_counter = ReferencedColumnsCounter()
     column_counter.visit(clickhouse_query.get_from_clause())
     if column_counter.count_columns() > uc_max:
@@ -267,7 +268,7 @@ def execute_query_with_caching(
     use_cache, uc_max = state.get_configs(
         [("use_cache", settings.USE_RESULT_CACHE), ("uncompressed_cache_max_cols", 5)]
     )
-
+    assert isinstance(uc_max, int)
     column_counter = ReferencedColumnsCounter()
     column_counter.visit(clickhouse_query.get_from_clause())
     if column_counter.count_columns() > uc_max:
