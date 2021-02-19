@@ -11,7 +11,7 @@ from snuba import settings
 RedisClientType = Union[StrictRedis, StrictRedisCluster]
 
 
-class RetryingStrictRedisCluster(StrictRedisCluster):  # type: ignore
+class RetryingStrictRedisCluster(StrictRedisCluster):  # type: ignore #  Missing type stubs in client lib
     """
     Execute a command with cluster reinitialization retry logic.
     Should a cluster respond with a ConnectionError or BusyLoadingError the
