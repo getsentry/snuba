@@ -119,7 +119,9 @@ def subscriptions(
     dataset = get_dataset(dataset_name)
 
     storage = dataset.get_default_entity().get_writable_storage()
-    assert storage is not None
+    assert (
+        storage is not None
+    ), f"Dataset {dataset_name} does not have a writable storage by default."
     storage_key = storage.get_storage_key()
 
     loader = enforce_table_writer(dataset).get_stream_loader()
