@@ -18,8 +18,9 @@ from snuba.state.rate_limit import PROJECT_RATE_LIMIT_NAME, RateLimitParameters
 
 class ProjectRateLimiterProcessor(QueryProcessor):
     """
-    If there isn't already a rate limiter on a project, search the top level conditions
-    for project IDs using the given project column name and add a rate limiter for them.
+    If there isn't already a rate limiter on a project, search the top level
+    conditions for project IDs using the given project column name and add a
+    rate limiter for them.
     """
 
     def __init__(self, project_column: str) -> None:
