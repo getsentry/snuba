@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 
-from typing import Union
+from typing import Any, Union
 
 from redis.client import StrictRedis
 from redis.exceptions import BusyLoadingError, ConnectionError
@@ -11,7 +11,7 @@ from snuba import settings
 RedisClientType = Union[StrictRedis, StrictRedisCluster]
 
 
-class RetryingStrictRedisCluster(StrictRedisCluster):
+class RetryingStrictRedisCluster(StrictRedisCluster):  # type: ignore
     """
     Execute a command with cluster reinitialization retry logic.
     Should a cluster respond with a ConnectionError or BusyLoadingError the
@@ -19,7 +19,7 @@ class RetryingStrictRedisCluster(StrictRedisCluster):
     again with the most up to date view of the world.
     """
 
-    def execute_command(self, *args, **kwargs):
+    def execute_command(self, *args: Any, **kwargs: Any) -> Any:
         try:
             return super(self.__class__, self).execute_command(*args, **kwargs)
         except (
