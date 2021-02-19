@@ -61,7 +61,9 @@ class GlobalMigration(Migration, ABC):
 
     def forwards(self, context: Context, dry_run: bool) -> None:
         if dry_run:
-            print("Non SQL operation")
+            for op in self.forwards_global():
+                desc = op.description() or "No description provided"
+                print(f"Non SQL operation - {desc}")
             return
 
         migration_id, logger, update_status = context
@@ -77,7 +79,9 @@ class GlobalMigration(Migration, ABC):
 
     def backwards(self, context: Context, dry_run: bool) -> None:
         if dry_run:
-            print("Non SQL operation")
+            for op in self.backwards_global():
+                desc = op.description() or "No description provided"
+                print(f"Non SQL operation - {desc}")
             return
 
         migration_id, logger, update_status = context
