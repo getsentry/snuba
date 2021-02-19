@@ -70,7 +70,26 @@ def fix_order_by() -> None:
     clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
 
 
-class Migration(migration.MultiStepMigration):
+def ensure_drop_temporary_tables() -> None:
+    cluster = get_cluster(StorageSetKey.EVENTS)
+
+    if not cluster.is_single_node():
+        return
+
+    clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+    clickhouse.execute(
+        operations.DropTable(
+            storage_set=StorageSetKey.EVENTS, table_name=TABLE_NAME_NEW,
+        ).format_sql()
+    )
+    clickhouse.execute(
+        operations.DropTable(
+            storage_set=StorageSetKey.EVENTS, table_name=TABLE_NAME_OLD,
+        ).format_sql()
+    )
+
+
+class Migration(migration.GlobalMigration):
     """
     An earlier version of the groupedmessage table (pre September 2019) did not
     include the project ID. This migration adds the column and rebuilds that table
@@ -79,24 +98,17 @@ class Migration(migration.MultiStepMigration):
 
     blocking = True
 
-    def forwards_local(self) -> Sequence[operations.Operation]:
+    def forwards_global(self) -> Sequence[operations.RunPython]:
         return [
-            operations.RunPython(func=fix_order_by),
-        ]
-
-    def backwards_local(self) -> Sequence[operations.Operation]:
-        # Drop the temporary tables used by forwards_local if they exist
-        return [
-            operations.DropTable(
-                storage_set=StorageSetKey.EVENTS, table_name=TABLE_NAME_NEW,
-            ),
-            operations.DropTable(
-                storage_set=StorageSetKey.EVENTS, table_name=TABLE_NAME_OLD,
+            operations.RunPython(
+                func=fix_order_by, description="Sync project ID colum for onpremise"
             ),
         ]
 
-    def forwards_dist(self) -> Sequence[operations.Operation]:
-        return []
-
-    def backwards_dist(self) -> Sequence[operations.Operation]:
-        return []
+    def backwards_global(self) -> Sequence[operations.RunPython]:
+        return [
+            operations.RunPython(
+                func=ensure_drop_temporary_tables,
+                description="Ensure temporary tables created by the migration are dropped",
+            )
+        ]

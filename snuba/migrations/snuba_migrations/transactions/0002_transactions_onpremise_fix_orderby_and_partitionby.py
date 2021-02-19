@@ -152,7 +152,7 @@ def backwards() -> None:
         clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
 
 
-class Migration(migration.MultiStepMigration):
+class Migration(migration.GlobalMigration):
     """
     The first of two migrations that syncs the transactions_local table for onpremise
     users migrating from versions of Snuba prior to the migration system.
@@ -166,16 +166,13 @@ class Migration(migration.MultiStepMigration):
 
     blocking = True  # This migration may take some time if there is data to migrate
 
-    def forwards_local(self) -> Sequence[operations.Operation]:
+    def forwards_global(self) -> Sequence[operations.RunPython]:
         return [
-            operations.RunPython(func=forwards),
+            operations.RunPython(
+                func=forwards,
+                description="Sync sample, partition and primary key for onpremise",
+            ),
         ]
 
-    def backwards_local(self) -> Sequence[operations.Operation]:
+    def backwards_global(self) -> Sequence[operations.RunPython]:
         return [operations.RunPython(func=backwards)]
-
-    def forwards_dist(self) -> Sequence[operations.Operation]:
-        return []
-
-    def backwards_dist(self) -> Sequence[operations.Operation]:
-        return []

@@ -3,17 +3,15 @@ from typing import Sequence
 
 from snuba.clusters.cluster import get_cluster
 from snuba.migrations.context import Context
-from snuba.migrations.operations import Operation, SqlOperation
+from snuba.migrations.operations import RunPython, SqlOperation
 from snuba.migrations.status import Status
 
 
 class Migration(ABC):
     """
-    A Migration should implement the forwards and backwards methods. Most of the
-    time, migrations should extend MultiStepMigration rather than Migration directly
-    and just provide the list of operations to be run. Only migrations with custom
-    behavior (such as those that bootstrap the migration system itself) should ever
-    use Migration directly.
+    A Migration should implement the forwards and backwards methods. Migrations should
+    not use this class directly, rather they should extend either the ClickHouseNodeMigration
+    (for SQL migrations to be run on ClickHouse) or GlobalMigration (for Python migrations).
 
     Migrations that cannot be completed immediately, such as those that contain
     a data migration, must be marked with blocking = True.
@@ -32,6 +30,9 @@ class Migration(ABC):
     before the new version is downloaded and any subsequent migrations run.
     """
 
+    def is_first_migration(self) -> bool:
+        return False
+
     @abstractproperty
     def blocking(self) -> bool:
         raise NotImplementedError
@@ -45,13 +46,60 @@ class Migration(ABC):
         raise NotImplementedError
 
 
-class MultiStepMigration(Migration, ABC):
+class GlobalMigration(Migration, ABC):
+    """
+    Consists of one or more Python functions executed once globally.
+    """
+
+    @abstractmethod
+    def forwards_global(self) -> Sequence[RunPython]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def backwards_global(self) -> Sequence[RunPython]:
+        raise NotImplementedError
+
+    def forwards(self, context: Context, dry_run: bool) -> None:
+        if dry_run:
+            print("Non SQL operation")
+            return
+
+        migration_id, logger, update_status = context
+        logger.info(f"Running migration: {migration_id}")
+        if not self.is_first_migration():
+            update_status(Status.IN_PROGRESS)
+
+        for op in self.forwards_global():
+            op.execute()
+
+        logger.info(f"Finished: {migration_id}")
+        update_status(Status.COMPLETED)
+
+    def backwards(self, context: Context, dry_run: bool) -> None:
+        if dry_run:
+            print("Non SQL operation")
+            return
+
+        migration_id, logger, update_status = context
+        logger.info(f"Reversing migration: {migration_id}")
+        update_status(Status.IN_PROGRESS)
+        for op in self.backwards_global():
+            op.execute()
+        logger.info(f"Finished reversing: {migration_id}")
+
+        # The migrations table will be destroyed if the first
+        # migration is reversed; do not attempt to update status
+        if not self.is_first_migration():
+            update_status(Status.NOT_STARTED)
+
+
+class ClickhouseNodeMigration(Migration, ABC):
     """
     A MultiStepMigration consists of one or more forward operations which will be executed
     on all of the local and distributed nodes of the cluster. Upon error, the backwards
-    methods will be executed. The backwards operations are responsible for returning
-    the system to its pre-migration state, so that the forwards methods can be safely
-    retried.
+    methods can be executed to restore the state. The backwards operations are responsible
+    for returning the system to its pre-migration state, so that the forwards methods can be
+    safely retried.
 
     Once the migration has been completed, we shouldn't use the backwards methods
     to try and go back to the prior state. Since migrations can delete data, attempting
@@ -65,23 +113,20 @@ class MultiStepMigration(Migration, ABC):
     completely unrelated, they are probably better as separate migrations.
     """
 
-    def is_first_migration(self) -> bool:
-        return False
-
     @abstractmethod
-    def forwards_local(self) -> Sequence[Operation]:
+    def forwards_local(self) -> Sequence[SqlOperation]:
         raise NotImplementedError
 
     @abstractmethod
-    def backwards_local(self) -> Sequence[Operation]:
+    def backwards_local(self) -> Sequence[SqlOperation]:
         raise NotImplementedError
 
     @abstractmethod
-    def forwards_dist(self) -> Sequence[Operation]:
+    def forwards_dist(self) -> Sequence[SqlOperation]:
         raise NotImplementedError
 
     @abstractmethod
-    def backwards_dist(self) -> Sequence[Operation]:
+    def backwards_dist(self) -> Sequence[SqlOperation]:
         raise NotImplementedError
 
     def forwards(self, context: Context, dry_run: bool = False) -> None:
@@ -124,8 +169,8 @@ class MultiStepMigration(Migration, ABC):
 
     def __dry_run(
         self,
-        local_operations: Sequence[Operation],
-        dist_operations: Sequence[Operation],
+        local_operations: Sequence[SqlOperation],
+        dist_operations: Sequence[SqlOperation],
     ) -> None:
 
         print("Local operations:")
@@ -133,10 +178,7 @@ class MultiStepMigration(Migration, ABC):
             print("n/a")
 
         for op in local_operations:
-            if isinstance(op, SqlOperation):
-                print(op.format_sql())
-            else:
-                print("Non SQL operation")
+            print(op.format_sql())
 
         print("\n")
         print("Dist operations:")
@@ -145,12 +187,9 @@ class MultiStepMigration(Migration, ABC):
             print("n/a")
 
         for op in dist_operations:
-            if isinstance(op, SqlOperation):
-                cluster = get_cluster(op._storage_set)
+            cluster = get_cluster(op._storage_set)
 
-                if not cluster.is_single_node():
-                    print(op.format_sql())
-                else:
-                    print("Skipped dist operation - single node cluster")
+            if not cluster.is_single_node():
+                print(op.format_sql())
             else:
-                print("Non SQL operation")
+                print("Skipped dist operation - single node cluster")
