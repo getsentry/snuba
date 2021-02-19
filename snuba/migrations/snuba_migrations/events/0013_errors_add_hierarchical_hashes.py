@@ -44,7 +44,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_dist",
-                column=Column("hierarchical_hashes", Array(UUID()),),
+                column=Column("hierarchical_hashes", Array(UUID())),
                 after="primary_hash",
             ),
             operations.AddColumn(
