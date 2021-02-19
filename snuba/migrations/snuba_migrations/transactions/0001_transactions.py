@@ -91,7 +91,7 @@ class Migration(migration.MultiStepMigration):
 
     def forwards_dist(self) -> Sequence[operations.Operation]:
         # We removed the materialized for the dist table DDL.
-        def strip_materialized(columns: Sequence[Column]) -> None:
+        def strip_materialized(columns: Sequence[Column[Modifiers]]) -> None:
             for col in columns:
                 if col.type.has_modifier(Materialized):
                     modifiers = col.type.get_modifiers()

@@ -1,21 +1,15 @@
-from collections import namedtuple, ChainMap
-from contextlib import contextmanager, AbstractContextManager, ExitStack
-from dataclasses import dataclass
 import logging
 import time
-from types import TracebackType
-from typing import (
-    ChainMap as TypingChainMap,
-    Iterator,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Type,
-)
 import uuid
+from collections import ChainMap, namedtuple
+from contextlib import AbstractContextManager, ExitStack, contextmanager
+from dataclasses import dataclass
+from types import TracebackType
+from typing import ChainMap as TypingChainMap
+from typing import Iterator, Mapping, MutableMapping, Optional, Sequence, Type
 
 from snuba import state
+from snuba.redis import redis_client as rds
 
 logger = logging.getLogger("snuba.state.rate_limit")
 
@@ -117,12 +111,13 @@ def rate_limit(
     bypass_rate_limit, rate_history_s = state.get_configs(
         [("bypass_rate_limit", 0), ("rate_history_sec", 3600)]
     )
-    assert rate_history_s is not None
+    assert isinstance(rate_history_s, (int, float))
+
     if bypass_rate_limit == 1:
         yield None
         return
 
-    pipe = state.rds.pipeline(transaction=False)
+    pipe = rds.pipeline(transaction=False)
     pipe.zremrangebyscore(
         bucket, "-inf", "({:f}".format(now - rate_history_s)
     )  # cleanup
@@ -171,7 +166,7 @@ def rate_limit(
 
     if reason:
         try:
-            state.rds.zrem(bucket, query_id)  # not allowed / not counted
+            rds.zrem(bucket, query_id)  # not allowed / not counted
         except Exception as ex:
             logger.exception(ex)
 
@@ -186,7 +181,7 @@ def rate_limit(
     finally:
         try:
             # return the query to its start time
-            state.rds.zincrby(bucket, query_id, -float(state.max_query_duration_s))
+            rds.zincrby(bucket, query_id, -float(state.max_query_duration_s))
         except Exception as ex:
             logger.exception(ex)
 
