@@ -121,7 +121,7 @@ def rate_limit(
     pipe.zremrangebyscore(
         bucket, "-inf", "({:f}".format(now - rate_history_s)
     )  # cleanup
-    pipe.zadd(bucket, now + state.max_query_duration_s, query_id)  # add query
+    pipe.zadd(bucket, now + state.max_query_duration_s, query_id)  # type: ignore
     if rate_limit_params.per_second_limit is None:
         pipe.exists("nosuchkey")  # no-op if we don't need per-second
     else:
@@ -203,7 +203,7 @@ def get_global_rate_limit_params() -> RateLimitParameters:
     )
 
 
-class RateLimitAggregator(AbstractContextManager):
+class RateLimitAggregator(AbstractContextManager):  # type: ignore
     """
     Runs the rate limits provided by the `rate_limit_params` configuration object.
 
