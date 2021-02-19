@@ -1,6 +1,7 @@
 import pytest
 from typing import MutableMapping, Any
 
+from snuba import state
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
 from snuba.query import SelectedExpression
@@ -65,37 +66,28 @@ def test_sessions_processing() -> None:
     ).execute()
 
 
-granularity_tests = [
-    ({}, None),
-    ({"selected_columns": ["bucketed_started"], "groupby": ["bucketed_started"]}, 3600),
-    (
-        {
-            "selected_columns": ["bucketed_started"],
-            "groupby": ["bucketed_started"],
-            "organization": 1,
-            "project": [1],
-            "granularity": 60,
-        },
-        3600,
-    ),
-]
-
 selector_tests = [
-    (
+    pytest.param(
         {
             "selected_columns": ["sessions", "bucketed_started"],
             "groupby": ["bucketed_started"],
         },
         "sessions_hourly_local",
+        id="Select hourly by default",
     ),
-    ({"selected_columns": ["sessions"], "granularity": 60}, "sessions_hourly_local",),
-    (
+    pytest.param(
+        {"selected_columns": ["sessions"], "granularity": 60},
+        "sessions_hourly_local",
+        id="Select hourly if not grouped by started time",
+    ),
+    pytest.param(
         {
             "selected_columns": ["sessions", "bucketed_started"],
             "groupby": ["bucketed_started"],
             "granularity": 60,
         },
         "sessions_raw_local",
+        id="Select raw depending on granularity",
     ),
 ]
 
@@ -106,6 +98,7 @@ selector_tests = [
 def test_select_storage(
     query_body: MutableMapping[str, Any], expected_table: str
 ) -> None:
+    state.set_config("allow_subhour_sessions", 1)
     sessions = get_dataset("sessions")
     query = parse_query(query_body, sessions)
     request = Request("", query_body, query, HTTPRequestSettings(), "")

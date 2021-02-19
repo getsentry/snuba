@@ -6,7 +6,7 @@ import simplejson as json
 from typing import Any, Callable, Tuple, Union
 
 
-from snuba import settings
+from snuba import settings, state
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
@@ -207,6 +207,7 @@ class TestSessionsApi(BaseApiTest):
     def test_session_small_granularity(
         self, get_project_id: Callable[[], int], granularity: int
     ):
+        state.set_config("allow_subhour_sessions", 1)
         project_id = get_project_id()
         self.generate_session_events(project_id)
         response = self.app.post(

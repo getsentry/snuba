@@ -1,6 +1,7 @@
 from datetime import timedelta
 from typing import Mapping, Sequence
 
+from snuba import environment, state
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToCurriedFunction,
     ColumnToFunction,
@@ -32,6 +33,9 @@ from snuba.query.processors.timeseries_processor import (
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
+from snuba.utils.metrics.wrapper import MetricsWrapper
+
+metrics = MetricsWrapper(environment.metrics, "api.sessions")
 
 
 def function_column(col_name: str, function_name: str) -> ColumnToFunction:
@@ -201,11 +205,22 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
     def select_storage(
         self, query: Query, request_settings: RequestSettings
     ) -> StorageAndMappers:
-        # time_range = get_time_range(query, "started")
-        # print(time_range)
-
         granularity = extract_granularity_from_query(query, "started") or 3600
-        use_materialized_storage = granularity >= 3600
+        use_materialized_storage = granularity >= 3600 and (granularity % 3600) == 0
+
+        allow_subhour_sessions = state.get_config("allow_subhour_sessions", 0)
+        if not allow_subhour_sessions:
+            use_materialized_storage = True
+
+        metrics.increment(
+            "query.selector",
+            tags={
+                "granularity": granularity,
+                "selected_storage": "materialized"
+                if use_materialized_storage
+                else "raw",
+            },
+        )
 
         if use_materialized_storage:
             return StorageAndMappers(
