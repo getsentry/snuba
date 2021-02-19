@@ -8,7 +8,7 @@ from snuba.utils.codecs import Encoder, TDecoded, TEncoded
 
 logger = logging.getLogger("snuba.writer")
 
-WriterTableRow = bytes  # Mapping[str, Any]
+WriterTableRow = Mapping[str, Any]
 
 
 T = TypeVar("T")
@@ -41,10 +41,10 @@ class BufferedWriterWrapper:
     This is not thread safe. Don't try to do parallel flush hoping in the GIL.
     """
 
-    def __init__(self, writer: BatchWriter[JSONRow], buffer_size: int):
+    def __init__(self, writer: BatchWriter[bytes], buffer_size: int):
         self.__writer = writer
         self.__buffer_size = buffer_size
-        self.__buffer: List[JSONRow] = []
+        self.__buffer: List[bytes] = []
 
     def __flush(self) -> None:
         logger.debug("Flushing buffer with %d elements", len(self.__buffer))
@@ -58,7 +58,7 @@ class BufferedWriterWrapper:
         if self.__buffer:
             self.__flush()
 
-    def write(self, row: JSONRow) -> None:
+    def write(self, row: bytes) -> None:
         self.__buffer.append(row)
         if len(self.__buffer) >= self.__buffer_size:
             self.__flush()

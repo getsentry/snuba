@@ -69,7 +69,7 @@ def merge_modifiers(
         return col_type.set_modifiers(existing_modifiers.merge(modifiers))
 
 
-class Visitor(NodeVisitor):
+class Visitor(NodeVisitor):  # type: ignore
     def visit_basic_type(
         self, node: Node, visited_children: Iterable[Any]
     ) -> ColumnType[MigrationModifiers]:
