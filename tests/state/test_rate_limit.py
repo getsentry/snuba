@@ -14,7 +14,7 @@ from snuba.state.rate_limit import (
 
 
 class TestRateLimit:
-    def test_concurrent_limit(self):
+    def test_concurrent_limit(self) -> None:
         # No concurrent limit should not raise
         rate_limit_params = RateLimitParameters("foo", "bar", None, None)
         with rate_limit(rate_limit_params) as stats:
@@ -52,7 +52,7 @@ class TestRateLimit:
             with RateLimitAggregator([rate_limit_params2]):
                 pass
 
-    def test_per_second_limit(self):
+    def test_per_second_limit(self) -> None:
         bucket = uuid.uuid4()
         rate_limit_params = RateLimitParameters("foo", bucket, 1, None)
         # Create 30 queries at time 0, should all be allowed
@@ -84,7 +84,7 @@ class TestRateLimit:
             with rate_limit(rate_limit_params) as stats:
                 assert stats is not None
 
-    def test_aggregator(self):
+    def test_aggregator(self) -> None:
         # do not raise with multiple valid rate limits
         rate_limit_params_outer = RateLimitParameters("foo", "bar", None, 5)
         rate_limit_params_inner = RateLimitParameters("foo", "bar", None, 5)
@@ -112,7 +112,7 @@ class TestRateLimit:
             ):
                 pass
 
-    def test_rate_limit_container(self):
+    def test_rate_limit_container(self) -> None:
         rate_limit_container = RateLimitStatsContainer()
         rate_limit_stats = RateLimitStats(rate=0.5, concurrent=2)
 
@@ -123,7 +123,7 @@ class TestRateLimit:
 
         assert rate_limit_container.to_dict() == {"foo_rate": 0.5, "foo_concurrent": 2}
 
-    def test_bypass_rate_limit(self):
+    def test_bypass_rate_limit(self) -> None:
         rate_limit_params = RateLimitParameters("foo", "bar", None, None)
         state.set_config("bypass_rate_limit", 1)
 
