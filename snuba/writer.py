@@ -31,7 +31,7 @@ class BatchWriterEncoderWrapper(BatchWriter[TDecoded]):
         return self.__writer.write(map(self.__encoder.encode, values))
 
 
-class BufferedWriterWrapper(Generic[TDecoded]):
+class BufferedWriterWrapper(Generic[TEncoded, TDecoded]):
     """
     This is a wrapper that adds a buffer around a BatchWriter.
     When consuming data from Kafka, the buffering logic is generally
@@ -41,17 +41,23 @@ class BufferedWriterWrapper(Generic[TDecoded]):
     This is not thread safe. Don't try to do parallel flush hoping in the GIL.
     """
 
-    def __init__(self, writer: BatchWriter[TDecoded], buffer_size: int):
+    def __init__(
+        self,
+        writer: BatchWriter[TEncoded],
+        buffer_size: int,
+        encoder: Encoder[TEncoded, TDecoded],
+    ):
         self.__writer = writer
         self.__buffer_size = buffer_size
-        self.__buffer: List[TDecoded] = []
+        self.__buffer: List[TEncoded] = []
+        self.__encoder = encoder
 
     def __flush(self) -> None:
         logger.debug("Flushing buffer with %d elements", len(self.__buffer))
         self.__writer.write(self.__buffer)
         self.__buffer = []
 
-    def __enter__(self) -> BufferedWriterWrapper[TDecoded]:
+    def __enter__(self) -> BufferedWriterWrapper[TEncoded, TDecoded]:
         return self
 
     def __exit__(self, type: Any, value: Any, traceback: Any) -> None:
@@ -59,6 +65,6 @@ class BufferedWriterWrapper(Generic[TDecoded]):
             self.__flush()
 
     def write(self, row: TDecoded) -> None:
-        self.__buffer.append(row)
+        self.__buffer.append(self.__encoder.encode(row))
         if len(self.__buffer) >= self.__buffer_size:
             self.__flush()

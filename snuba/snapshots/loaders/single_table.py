@@ -1,11 +1,11 @@
 import logging
 from typing import Callable
 
+from snuba.clickhouse.http import JSONRow
 from snuba.clickhouse.native import ClickhousePool
 from snuba.snapshots import BulkLoadSource, SnapshotTableRow
 from snuba.snapshots.loaders import BulkLoader
 from snuba.writer import BufferedWriterWrapper, WriterTableRow
-
 
 RowProcessor = Callable[[SnapshotTableRow], WriterTableRow]
 
@@ -29,7 +29,7 @@ class SingleTableBulkLoader(BulkLoader):
         self.__row_processor = row_processor
         self.__clickhouse = clickhouse
 
-    def load(self, writer: BufferedWriterWrapper) -> None:
+    def load(self, writer: BufferedWriterWrapper[JSONRow, WriterTableRow]) -> None:
         logger = logging.getLogger("snuba.bulk-loader")
 
         clickhouse_tables = self.__clickhouse.execute("show tables")
