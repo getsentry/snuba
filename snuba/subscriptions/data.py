@@ -8,9 +8,9 @@ from uuid import UUID
 from snuba.datasets.dataset import Dataset
 from snuba.query.logical import Aggregation
 from snuba.query.types import Condition
-from snuba.request import Request
+from snuba.request import Language, Request
 from snuba.request.request_settings import SubscriptionRequestSettings
-from snuba.request.schema import Language, RequestSchema
+from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request
 from snuba.utils.metrics.timer import Timer
 

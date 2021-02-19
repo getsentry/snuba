@@ -40,9 +40,11 @@ from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.web import QueryResult
 
 events_ent = Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model())
-events_storage = get_storage(StorageKey.EVENTS)
+events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
+events_table_name = events_storage.get_table_writer().get_schema().get_table_name()
+
 events_table = Table(
-    "sentry_local",
+    events_table_name,
     events_storage.get_schema().get_columns(),
     final=False,
     sampling_rate=None,
@@ -79,15 +81,15 @@ TEST_CASES = [
                 selected_columns=[
                     SelectedExpression("project_id", Column(None, None, "project_id")),
                     SelectedExpression(
-                        "count_release",
+                        "count_environment",
                         FunctionCall(
-                            "count_release",
+                            "count_environment",
                             "uniq",
                             (
                                 SubscriptableReference(
                                     None,
                                     Column(None, None, "tags"),
-                                    Literal(None, "sentry:release"),
+                                    Literal(None, "environment"),
                                 ),
                             ),
                         ),
@@ -104,7 +106,7 @@ TEST_CASES = [
                 SelectedExpression(
                     "average",
                     FunctionCall(
-                        "average", "avg", (Column(None, None, "count_release"),)
+                        "average", "avg", (Column(None, None, "count_environment"),)
                     ),
                 ),
             ],
@@ -118,9 +120,9 @@ TEST_CASES = [
                             "project_id", Column(None, None, "project_id")
                         ),
                         SelectedExpression(
-                            "count_release",
+                            "count_environment",
                             FunctionCall(
-                                "count_release",
+                                "count_environment",
                                 function_name="ifNull",
                                 parameters=(
                                     FunctionCall(
@@ -131,7 +133,7 @@ TEST_CASES = [
                                                 None,
                                                 None,
                                                 "tags",
-                                                Literal(None, "sentry:release"),
+                                                Literal(None, "environment"),
                                             ),
                                         ),
                                     ),
@@ -151,7 +153,7 @@ TEST_CASES = [
                     SelectedExpression(
                         "average",
                         FunctionCall(
-                            "average", "avg", (Column(None, None, "count_release"),)
+                            "average", "avg", (Column(None, None, "count_environment"),)
                         ),
                     ),
                 ],
@@ -160,10 +162,7 @@ TEST_CASES = [
             StorageSetKey.EVENTS,
             SubqueryProcessors(
                 [],
-                [
-                    *get_storage(StorageKey.EVENTS).get_query_processors(),
-                    MandatoryConditionApplier(),
-                ],
+                [*events_storage.get_query_processors(), MandatoryConditionApplier()],
             ),
             None,
         ),
@@ -173,9 +172,9 @@ TEST_CASES = [
                 selected_columns=[
                     SelectedExpression("project_id", Column(None, None, "project_id")),
                     SelectedExpression(
-                        "count_release",
+                        "count_environment",
                         FunctionCall(
-                            "count_release",
+                            "count_environment",
                             function_name="ifNull",
                             parameters=(
                                 FunctionCall(
@@ -185,7 +184,7 @@ TEST_CASES = [
                                         Column(
                                             alias=None,
                                             table_name=None,
-                                            column_name="sentry:release",
+                                            column_name="environment",
                                         ),
                                     ),
                                 ),
@@ -210,7 +209,7 @@ TEST_CASES = [
                 SelectedExpression(
                     "average",
                     FunctionCall(
-                        "average", "avg", (Column(None, None, "count_release"),)
+                        "average", "avg", (Column(None, None, "count_environment"),)
                     ),
                 ),
             ],
@@ -320,7 +319,7 @@ TEST_CASES = [
                 "err": SubqueryProcessors(
                     [],
                     [
-                        *get_storage(StorageKey.EVENTS).get_query_processors(),
+                        *events_storage.get_query_processors(),
                         MandatoryConditionApplier(),
                     ],
                 ),
@@ -356,7 +355,16 @@ TEST_CASES = [
                                 FunctionCall(
                                     "f_release",
                                     function_name="f",
-                                    parameters=(Column(None, None, "sentry:release"),),
+                                    parameters=(
+                                        Column(
+                                            None,
+                                            None,
+                                            "sentry:release"
+                                            if events_storage.get_storage_key()
+                                            == StorageKey.EVENTS
+                                            else "release",
+                                        ),
+                                    ),
                                 ),
                             ),
                         ],
