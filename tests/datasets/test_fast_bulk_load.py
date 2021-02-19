@@ -5,7 +5,7 @@ from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageRow
 
 
 class TestFastGroupedMessageLoad:
-    def test_supported_date_format(self):
+    def test_supported_date_format(self) -> None:
         """
         This test is to ensure the compatibility between
         the clickhouse datetime format and the hardcoded
@@ -15,7 +15,7 @@ class TestFastGroupedMessageLoad:
         """
         assert DATETIME_FORMAT == "%Y-%m-%d %H:%M:%S"
 
-    def test_basic_date(self):
+    def test_basic_date(self) -> None:
         message = GroupedMessageRow.from_bulk(
             {
                 "project_id": "2",
@@ -43,7 +43,7 @@ class TestFastGroupedMessageLoad:
             "first_release_id": 0,
         }
 
-    def test_failure(self):
+    def test_failure(self) -> None:
         with pytest.raises(AssertionError):
             GroupedMessageRow.from_bulk(
                 {
