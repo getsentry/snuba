@@ -42,7 +42,7 @@ class Entity(ABC):
         query_pipeline_builder: QueryPipelineBuilder[ClickhouseQueryPlan],
         abstract_column_set: ColumnSet,
         join_relationships: Mapping[str, JoinRelationship],
-        writable_storage: WritableTableStorage,
+        writable_storage: Optional[WritableTableStorage],
         required_filter_columns: Optional[Sequence[str]],
         required_time_column: Optional[str],
     ) -> None:
@@ -222,7 +222,7 @@ class Entity(ABC):
         """
         return {}
 
-    def get_writable_storage(self) -> WritableTableStorage:
+    def get_writable_storage(self) -> Optional[WritableTableStorage]:
         """
         Temporarily support getting the writable storage from an entity.
         Once consumers/replacers no longer reference entity, this can be removed
