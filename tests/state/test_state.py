@@ -15,7 +15,7 @@ class TestState:
         self.app = application.test_client()
         self.app.post = partial(self.app.post, headers={"referer": "test"})
 
-    def test_config(self):
+    def test_config(self) -> None:
         state.set_config("foo", 1)
         state.set_configs({"bar": 2, "baz": 3})
         assert state.get_config("foo") == 1
@@ -33,7 +33,7 @@ class TestState:
             all_configs[k] == v for k, v in [("foo", 1), ("bar", "quux"), ("baz", 3)]
         )
 
-    def test_memoize(self):
+    def test_memoize(self) -> None:
         @state.memoize(0.1)
         def rand() -> float:
             return random.random()
@@ -44,7 +44,7 @@ class TestState:
         time.sleep(0.1)
         assert rand1 != rand()
 
-    def test_abtest(self):
+    def test_abtest(self) -> None:
         assert state.abtest("1000:1/2000:1") in (1000, 2000)
         assert state.abtest("1000/2000") in (1000, 2000)
         assert state.abtest("1000/2000:5") in (1000, 2000)

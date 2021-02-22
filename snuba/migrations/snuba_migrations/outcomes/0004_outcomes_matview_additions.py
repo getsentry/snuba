@@ -23,17 +23,18 @@ new_materialized_view_columns: Sequence[Column[Modifiers]] = [
     Column("outcome", UInt(8)),
     Column("reason", String()),
     Column("category", UInt(8)),
-    Column("quantity", UInt(64, Modifiers(nullable=True))),
+    Column("quantity", UInt(64)),
     Column("times_seen", UInt(64)),
 ]
 
 
 class Migration(migration.MultiStepMigration):
     """
-    Updates materialized view query to support category and quantity
+    Updates materialized view query to support category and quantity.
+    Note that the consumer needs to be stopped for this migration.
     """
 
-    blocking = False
+    blocking = True
 
     def forwards_local(self) -> Sequence[operations.Operation]:
         return [

@@ -82,7 +82,7 @@ class TestReplacer:
 
         return data[0]["group_id"]
 
-    def test_delete_groups_process(self):
+    def test_delete_groups_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
@@ -117,7 +117,7 @@ class TestReplacer:
             [1, 2, 3],
         )
 
-    def test_tombstone_events_process(self):
+    def test_tombstone_events_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
@@ -147,7 +147,7 @@ class TestReplacer:
         }
         assert replacement.query_time_flags == (None, self.project_id,)
 
-    def test_replace_group_process(self):
+    def test_replace_group_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
@@ -179,7 +179,7 @@ class TestReplacer:
         }
         assert replacement.query_time_flags == (None, self.project_id,)
 
-    def test_merge_process(self):
+    def test_merge_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
@@ -215,7 +215,7 @@ class TestReplacer:
             [1, 2],
         )
 
-    def test_unmerge_process(self):
+    def test_unmerge_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
@@ -253,7 +253,7 @@ class TestReplacer:
             self.project_id,
         )
 
-    def test_delete_promoted_tag_process(self):
+    def test_delete_promoted_tag_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
@@ -288,7 +288,7 @@ class TestReplacer:
             self.project_id,
         )
 
-    def test_delete_unpromoted_tag_process(self):
+    def test_delete_unpromoted_tag_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
@@ -324,7 +324,7 @@ class TestReplacer:
             self.project_id,
         )
 
-    def test_delete_groups_insert(self):
+    def test_delete_groups_insert(self) -> None:
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         write_unprocessed_events(self.storage, [self.event])
@@ -361,7 +361,7 @@ class TestReplacer:
 
         assert self._issue_count(self.project_id) == []
 
-    def test_reprocessing_flow_insert(self):
+    def test_reprocessing_flow_insert(self) -> None:
         # We have a group that contains two events, 1 and 2.
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
@@ -432,7 +432,7 @@ class TestReplacer:
         assert self._get_group_id(project_id, event_id2) == 2
         assert not self._get_group_id(project_id, event_id)
 
-    def test_merge_insert(self):
+    def test_merge_insert(self) -> None:
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         write_unprocessed_events(self.storage, [self.event])
@@ -470,7 +470,7 @@ class TestReplacer:
 
         assert self._issue_count(1) == [{"count": 1, "group_id": 2}]
 
-    def test_unmerge_insert(self):
+    def test_unmerge_insert(self) -> None:
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "a" * 32

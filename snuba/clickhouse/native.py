@@ -3,7 +3,7 @@ import queue
 import re
 import time
 from datetime import date, datetime
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence, Union
 from uuid import UUID
 
 from clickhouse_driver import Client, errors
@@ -14,6 +14,8 @@ from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.reader import Reader, Result, build_result_transformer
 
 logger = logging.getLogger("snuba.clickhouse")
+
+Params = Optional[Union[Sequence[Any], Mapping[str, Any]]]
 
 
 class ClickhousePool(object):
@@ -49,7 +51,7 @@ class ClickhousePool(object):
     def execute(
         self,
         query: str,
-        params: Optional[Mapping[str, Any]] = None,
+        params: Params = None,
         with_column_types: bool = False,
         query_id: Optional[str] = None,
         settings: Optional[Mapping[str, Any]] = None,
@@ -107,7 +109,7 @@ class ClickhousePool(object):
     def execute_robust(
         self,
         query: str,
-        params: Optional[Mapping[str, Any]] = None,
+        params: Params = None,
         with_column_types: bool = False,
         query_id: Optional[str] = None,
         settings: Optional[Mapping[str, Any]] = None,
