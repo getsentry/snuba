@@ -30,7 +30,7 @@ class OutcomesProcessor(MessageProcessor):
             ),
             "outcome": value["outcome"],
             "category": value.get("category", DataCategory.ERROR),
-            "quantity": value.get("quantity", None),
+            "quantity": value.get("quantity", 1),
             "reason": _unicodify(value.get("reason")),
             "event_id": str(uuid.UUID(v_uuid)) if v_uuid is not None else None,
         }

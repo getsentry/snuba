@@ -71,6 +71,8 @@ class TestOutcomesApi(BaseApiTest):
             }
             if message["category"] is None:
                 del message["category"]  # for testing None category case
+            if message["quantity"] is None:
+                del message["quantity"]  # for testing None quantity case
             processed = (
                 self.storage.get_table_writer()
                 .get_stream_loader()
@@ -275,13 +277,9 @@ class TestOutcomesApi(BaseApiTest):
         assert response.status_code == 200
         assert len(data["data"]) == 5
         correct_data = [
-            {"category": DataCategory.ERROR, "times_seen": 2, "quantity_sum": None},
-            {
-                "category": DataCategory.TRANSACTION,
-                "times_seen": 1,
-                "quantity_sum": None,
-            },
-            {"category": DataCategory.SECURITY, "times_seen": 1, "quantity_sum": None},
+            {"category": DataCategory.ERROR, "times_seen": 2, "quantity_sum": 2},
+            {"category": DataCategory.TRANSACTION, "times_seen": 1, "quantity_sum": 1},
+            {"category": DataCategory.SECURITY, "times_seen": 1, "quantity_sum": 1},
             {
                 "category": DataCategory.ATTACHMENT,
                 "times_seen": 2,
