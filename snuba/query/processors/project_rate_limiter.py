@@ -27,6 +27,7 @@ class ProjectRateLimiterProcessor(QueryProcessor):
         if not project_ids:
             return
 
+        # TODO: Use all the projects, not just one
         project_id = project_ids.pop()
 
         prl, pcl = get_configs(
