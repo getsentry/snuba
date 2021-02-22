@@ -337,7 +337,6 @@ def execute_query_with_readthrough_caching(
     query_settings["query_id"] = query_id
 
     def record_cache_hit_type(hit_type: int) -> None:
-        print("RECORDING HIT TYPE", hit_type)
         if hit_type == RESULT_VALUE:
             stats["cache_hit"] = 1
         elif hit_type == RESULT_WAIT:
