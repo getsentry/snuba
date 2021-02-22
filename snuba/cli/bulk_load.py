@@ -2,10 +2,10 @@ import logging
 from typing import Optional
 
 import click
-
 from snuba import environment, settings
+from snuba.clickhouse.http import JSONRowEncoder
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_cdc_storage, CDC_STORAGES
+from snuba.datasets.storages.factory import CDC_STORAGES, get_cdc_storage
 from snuba.environment import setup_logging, setup_sentry
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
 from snuba.writer import BufferedWriterWrapper
@@ -57,6 +57,7 @@ def bulk_load(
             chunk_size=settings.BULK_CLICKHOUSE_BUFFER,
         ),
         settings.BULK_CLICKHOUSE_BUFFER,
+        JSONRowEncoder(),
     )
 
     loader.load(writer)

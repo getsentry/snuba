@@ -7,7 +7,7 @@ from tests.subscriptions import BaseSubscriptionTest
 
 
 class TestBuildRequest(BaseSubscriptionTest):
-    def test_conditions(self):
+    def test_conditions(self) -> None:
         subscription = SubscriptionData(
             project_id=self.project_id,
             conditions=[["platform", "IN", ["a"]]],

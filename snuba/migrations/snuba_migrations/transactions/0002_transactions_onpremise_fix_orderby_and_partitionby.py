@@ -135,7 +135,7 @@ def backwards() -> None:
 
     clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
-    def table_exists(table_name: str):
+    def table_exists(table_name: str) -> bool:
         return clickhouse.execute(f"EXISTS TABLE {table_name};") == [(1,)]
 
     if not table_exists(TABLE_NAME):

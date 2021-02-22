@@ -55,7 +55,8 @@ def set_project_exclude_groups(
     key = get_project_exclude_groups_key(project_id, state_name)
     p = redis_client.pipeline()
 
-    p.zadd(key, **{str(group_id): now for group_id in group_ids})
+    group_id_data: Mapping[str, float] = {str(group_id): now for group_id in group_ids}
+    p.zadd(key, **group_id_data)
     p.zremrangebyscore(key, -1, now - settings.REPLACER_KEY_TTL)
     p.expire(key, int(settings.REPLACER_KEY_TTL))
 

@@ -71,7 +71,7 @@ class TestEventsProcessor:
         assert isinstance(processed, InsertBatch)
         assert processed.rows[0]["primary_hash"] == "a52ccc1a61c2258e918b43b5aff50db1"
 
-    def test_extract_required(self):
+    def test_extract_required(self) -> None:
         now = datetime.utcnow()
         event = {
             "event_id": "1" * 32,
@@ -94,7 +94,7 @@ class TestEventsProcessor:
             "retention_days": settings.DEFAULT_RETENTION_DAYS,
         }
 
-    def test_extract_common(self):
+    def test_extract_common(self) -> None:
         now = datetime.utcnow().replace(microsecond=0)
         event = {
             "primary_hash": "a" * 32,
@@ -122,70 +122,70 @@ class TestEventsProcessor:
             "location": "bar.py",
         }
 
-    def test_v2_invalid_type(self):
+    def test_v2_invalid_type(self) -> None:
         with pytest.raises(InvalidMessageType):
             assert (
                 self.processor.process_message((2, "__invalid__", {}), self.metadata)
                 == 1
             )
 
-    def test_v2_start_delete_groups(self):
+    def test_v2_start_delete_groups(self) -> None:
         project_id = 1
         message = (2, "start_delete_groups", {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
-    def test_v2_end_delete_groups(self):
+    def test_v2_end_delete_groups(self) -> None:
         project_id = 1
         message = (2, "end_delete_groups", {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
-    def test_v2_start_merge(self):
+    def test_v2_start_merge(self) -> None:
         project_id = 1
         message = (2, "start_merge", {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
-    def test_v2_end_merge(self):
+    def test_v2_end_merge(self) -> None:
         project_id = 1
         message = (2, "end_merge", {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
-    def test_v2_start_unmerge(self):
+    def test_v2_start_unmerge(self) -> None:
         project_id = 1
         message = (2, "start_unmerge", {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
-    def test_v2_end_unmerge(self):
+    def test_v2_end_unmerge(self) -> None:
         project_id = 1
         message = (2, "end_unmerge", {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
-    def test_v2_start_delete_tag(self):
+    def test_v2_start_delete_tag(self) -> None:
         project_id = 1
         message = (2, "start_delete_tag", {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
-    def test_v2_end_delete_tag(self):
+    def test_v2_end_delete_tag(self) -> None:
         project_id = 1
         message = (2, "end_delete_tag", {"project_id": project_id})
         assert self.processor.process_message(
             message, self.metadata
         ) == ReplacementBatch(str(project_id), [message])
 
-    def test_extract_sdk(self):
+    def test_extract_sdk(self) -> None:
         sdk = {
             "integrations": ["logback"],
             "name": "sentry-java",
@@ -201,7 +201,7 @@ class TestEventsProcessor:
             "sdk_integrations": [u"logback"],
         }
 
-    def test_extract_tags(self):
+    def test_extract_tags(self) -> None:
         orig_tags = {
             "sentry:user": "the_user",
             "level": "the_level",
@@ -244,7 +244,7 @@ class TestEventsProcessor:
             "tags.value": [v for k, v in valid_items],
         }
 
-    def test_extract_tags_empty_string(self):
+    def test_extract_tags_empty_string(self) -> None:
         # verify our text field extraction doesn't coerce '' to None
         tags = {
             "environment": "",
@@ -255,7 +255,7 @@ class TestEventsProcessor:
 
         assert output["environment"] == u""
 
-    def test_extract_contexts(self):
+    def test_extract_contexts(self) -> None:
         contexts = {
             "app": {"device_app_hash": "the_app_device_uuid"},
             "os": {
@@ -366,7 +366,7 @@ class TestEventsProcessor:
             "contexts.value": [u"0", u"1.3", u"string", u"invalid utf-8 surrogate"],
         }
 
-    def test_extract_user(self):
+    def test_extract_user(self) -> None:
         user = {
             "id": "user_id",
             "email": "user_email",
@@ -384,7 +384,7 @@ class TestEventsProcessor:
             "username": u"user_username",
         }
 
-    def test_extract_geo(self):
+    def test_extract_geo(self) -> None:
         geo = {
             "country_code": "US",
             "city": "San Francisco",
@@ -400,7 +400,7 @@ class TestEventsProcessor:
             "geo_region": "CA",
         }
 
-    def test_extract_http(self):
+    def test_extract_http(self) -> None:
         request = {
             "method": "GET",
             "headers": [
@@ -419,7 +419,7 @@ class TestEventsProcessor:
             "http_url": "the_url",
         }
 
-    def test_extract_stacktraces(self):
+    def test_extract_stacktraces(self) -> None:
         stacks = [
             {
                 "module": "java.lang",

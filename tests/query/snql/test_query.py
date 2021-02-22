@@ -5,16 +5,18 @@ from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
+from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import binary_condition, unary_condition
-from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.data_source.join import (
     IndividualNode,
     JoinClause,
-    JoinType,
     JoinCondition,
     JoinConditionExpression,
     JoinRelationship,
+    JoinType,
 )
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -23,28 +25,41 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.composite import CompositeQuery
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.snql.parser import parse_snql_query
 
 
+def build_cond(tn: str) -> str:
+    time_column = "finish_ts" if tn == "t" else "timestamp"
+    tn = tn + "." if tn else ""
+    return f"{tn}project_id=1 AND {tn}{time_column}>=toDateTime('2021-01-01') AND {tn}{time_column}<toDateTime('2021-01-02')"
+
+
+added_condition = build_cond("")
 required_condition = binary_condition(
     "and",
     binary_condition(
         "equals", Column("_snuba_project_id", None, "project_id"), Literal(None, 1),
     ),
     binary_condition(
-        "greater",
-        Column("_snuba_timestamp", None, "timestamp"),
-        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+        "and",
+        binary_condition(
+            "greaterOrEquals",
+            Column("_snuba_timestamp", None, "timestamp"),
+            Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+        ),
+        binary_condition(
+            "less",
+            Column("_snuba_timestamp", None, "timestamp"),
+            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+        ),
     ),
 )
 
 
 test_cases = [
     pytest.param(
-        "MATCH (events) SELECT 4-5, c WHERE project_id = 1 AND timestamp > toDateTime('2021-01-01') GRANULARITY 60",
+        f"MATCH (events) SELECT 4-5, c WHERE {added_condition} GRANULARITY 60",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -64,7 +79,7 @@ test_cases = [
         id="granularity on whole query",
     ),
     pytest.param(
-        "MATCH (events) SELECT 4-5, c WHERE project_id = 1 AND timestamp > toDateTime('2021-01-01') TOTALS true",
+        f"MATCH (events) SELECT 4-5, c WHERE {added_condition} TOTALS true",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -84,7 +99,7 @@ test_cases = [
         id="totals on whole query",
     ),
     pytest.param(
-        "MATCH (events SAMPLE 0.5) SELECT 4-5, c WHERE project_id = 1 AND timestamp > toDateTime('2021-01-01') ",
+        f"MATCH (events SAMPLE 0.5) SELECT 4-5, c WHERE {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(), 0.5,
@@ -104,7 +119,7 @@ test_cases = [
         id="sample on entity",
     ),
     pytest.param(
-        "MATCH (events) SELECT 4-5, c WHERE project_id = 1 AND timestamp > toDateTime('2021-01-01') LIMIT 5 BY c",
+        f"MATCH (events) SELECT 4-5, c WHERE {added_condition} LIMIT 5 BY c",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -124,7 +139,7 @@ test_cases = [
         id="limit by column",
     ),
     pytest.param(
-        "MATCH (events) SELECT 4-5, c WHERE project_id = 1 AND timestamp > toDateTime('2021-01-01') LIMIT 5 OFFSET 3",
+        f"MATCH (events) SELECT 4-5, c WHERE {added_condition} LIMIT 5 OFFSET 3",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -143,7 +158,7 @@ test_cases = [
         id="limit and offset",
     ),
     pytest.param(
-        "MATCH (events) SELECT 4-5, c, arrayJoin(c) AS x WHERE project_id = 1 AND timestamp > toDateTime('2021-01-01') TOTALS true",
+        f"MATCH (events) SELECT 4-5, c, arrayJoin(c) AS x WHERE {added_condition} TOTALS true",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -169,7 +184,7 @@ test_cases = [
         id="Array join",
     ),
     pytest.param(
-        "MATCH (events) SELECT 4-5, 3* foo(c) AS foo, c WHERE project_id = 1 AND timestamp > toDateTime('2021-01-01') ",
+        f"MATCH (events) SELECT 4-5, 3* foo(c) AS foo, c WHERE {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -201,10 +216,10 @@ test_cases = [
         id="Basic query with no spaces and no ambiguous clause content",
     ),
     pytest.param(
-        """MATCH (events)
+        f"""MATCH (events)
         SELECT 4-5,3*foo(c) AS foo,c
         WHERE platform NOT IN tuple('x', 'y') AND message IS NULL
-        AND project_id = 1 AND timestamp > toDateTime('2021-01-01')""",
+        AND {added_condition}""",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -252,7 +267,7 @@ test_cases = [
         id="Basic query with word condition ops",
     ),
     pytest.param(
-        "MATCH (events) SELECT count() AS count BY tags[key], measurements[lcp.elementSize] WHERE measurements[lcp.elementSize] > 1 AND project_id = 1 AND timestamp > toDateTime('2021-01-01')",
+        f"MATCH (events) SELECT count() AS count BY tags[key], measurements[lcp.elementSize] WHERE measurements[lcp.elementSize] > 1 AND {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -309,7 +324,7 @@ test_cases = [
         id="Basic query with subscriptables",
     ),
     pytest.param(
-        "MATCH (events) SELECT (2*(4-5)+3), g(c) AS goo, c BY d, 2+7 WHERE project_id = 1 AND timestamp > toDateTime('2021-01-01') ORDER BY f DESC",
+        f"MATCH (events) SELECT (2*(4-5)+3), g(c) AS goo, c BY d, 2+7 WHERE {added_condition} ORDER BY f DESC",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -360,7 +375,7 @@ test_cases = [
         id="Simple complete query with example of parenthesized arithmetic expression in SELECT",
     ),
     pytest.param(
-        "MATCH (events) SELECT (2*(4-5)+3), foo(c) AS thing2, c BY d, 2+7 WHERE project_id = 1 AND timestamp > toDateTime('2021-01-01') ORDER BY f DESC",
+        f"MATCH (events) SELECT (2*(4-5)+3), foo(c) AS thing2, c BY d, 2+7 WHERE {added_condition} ORDER BY f DESC",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -413,7 +428,7 @@ test_cases = [
         id="Simple complete query with aliased function in SELECT",
     ),
     pytest.param(
-        "MATCH (events) SELECT toDateTime('2020-01-01') AS now, 3*foo(c) AS foo BY toDateTime('2020-01-01') AS now WHERE project_id = 1 AND timestamp>toDateTime('2021-01-01')",
+        f"MATCH (events) SELECT toDateTime('2020-01-01') AS now, 3*foo(c) AS foo BY toDateTime('2020-01-01') AS now WHERE {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -447,7 +462,7 @@ test_cases = [
         id="Basic query with date literals",
     ),
     pytest.param(
-        "MATCH (events) SELECT a WHERE time_seen<3 AND last_seen=2 AND c=2 AND d=3 AND project_id = 1 AND timestamp > toDateTime('2021-01-01')",
+        f"MATCH (events) SELECT a WHERE time_seen<3 AND last_seen=2 AND c=2 AND d=3 AND {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -490,7 +505,7 @@ test_cases = [
         id="Query with multiple conditions joined by AND",
     ),
     pytest.param(
-        "MATCH (events) SELECT a WHERE ((time_seen<3 OR last_seen=afternoon) OR name=bob) AND project_id = 1 AND timestamp > toDateTime('2021-01-01') ",
+        f"MATCH (events) SELECT a WHERE ((time_seen<3 OR last_seen=afternoon) OR name=bob) AND {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -527,7 +542,7 @@ test_cases = [
         id="Query with multiple conditions joined by OR / parenthesized OR",
     ),
     pytest.param(
-        "MATCH (events) SELECT a WHERE (name!=bob OR last_seen<afternoon AND (location=gps(x,y,z) OR times_seen>0)) AND project_id = 1 AND timestamp > toDateTime('2021-01-01') ",
+        f"MATCH (events) SELECT a WHERE (name!=bob OR last_seen<afternoon AND (location=gps(x,y,z) OR times_seen>0)) AND {added_condition}",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -580,7 +595,11 @@ test_cases = [
         id="Query with multiple / complex conditions joined by parenthesized / regular AND / OR",
     ),
     pytest.param(
-        "MATCH (events) SELECT a, b[c] WHERE project_id IN tuple( 2 , 3) AND timestamp > toDateTime('2021-01-01') ",
+        """MATCH (events)
+        SELECT a, b[c]
+        WHERE project_id IN tuple( 2 , 3)
+        AND timestamp>=toDateTime('2021-01-01')
+        AND timestamp<toDateTime('2021-01-02')""",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -604,9 +623,17 @@ test_cases = [
                     FunctionCall(None, "tuple", (Literal(None, 2), Literal(None, 3))),
                 ),
                 binary_condition(
-                    "greater",
-                    Column("_snuba_timestamp", None, "timestamp"),
-                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+                    "and",
+                    binary_condition(
+                        "greaterOrEquals",
+                        Column("_snuba_timestamp", None, "timestamp"),
+                        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+                    ),
+                    binary_condition(
+                        "less",
+                        Column("_snuba_timestamp", None, "timestamp"),
+                        Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+                    ),
                 ),
             ),
             limit=1000,
@@ -615,9 +642,9 @@ test_cases = [
         id="Query with IN condition",
     ),
     pytest.param(
-        """MATCH (events)
+        f"""MATCH (events)
         SELECT 4-5,3*foo(c) AS foo,c
-        WHERE project_id = 1 AND timestamp > toDateTime('2021-01-01') """,
+        WHERE {added_condition}""",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -649,9 +676,9 @@ test_cases = [
         id="Basic query with new lines and no ambiguous clause content",
     ),
     pytest.param(
-        """MATCH (events)
+        f"""MATCH (events)
         SELECT 4-5,3*foo(c) AS foo,c
-        WHERE or(equals(arrayExists(a, '=', 'RuntimeException'), 1), equals(arrayAll(b, 'NOT IN', tuple('Stack', 'Arithmetic')), 1)) = 1 AND project_id = 1 AND timestamp > toDateTime('2021-01-01') """,
+        WHERE or(equals(arrayExists(a, '=', 'RuntimeException'), 1), equals(arrayAll(b, 'NOT IN', tuple('Stack', 'Arithmetic')), 1)) = 1 AND {added_condition}""",
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -762,8 +789,8 @@ test_cases = [
         id="Special array join functions",
     ),
     pytest.param(
-        """MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c
-        WHERE e.project_id = 1 AND e.timestamp > toDateTime('2021-01-01') AND t.project_id = 1 AND t.finish_ts > toDateTime('2021-01-01') """,
+        f"""MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c
+        WHERE {build_cond('e')} AND {build_cond('t')}""",
         CompositeQuery(
             from_clause=JoinClause(
                 left_node=IndividualNode(
@@ -804,21 +831,37 @@ test_cases = [
                 binary_condition(
                     "and",
                     binary_condition(
-                        "greater",
+                        "greaterOrEquals",
                         Column("_snuba_e.timestamp", "e", "timestamp"),
                         Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
                     ),
                     binary_condition(
                         "and",
                         binary_condition(
-                            "equals",
-                            Column("_snuba_t.project_id", "t", "project_id"),
-                            Literal(None, 1),
+                            "less",
+                            Column("_snuba_e.timestamp", "e", "timestamp"),
+                            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
                         binary_condition(
-                            "greater",
-                            Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                            Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+                            "and",
+                            binary_condition(
+                                "equals",
+                                Column("_snuba_t.project_id", "t", "project_id"),
+                                Literal(None, 1),
+                            ),
+                            binary_condition(
+                                "and",
+                                binary_condition(
+                                    "greaterOrEquals",
+                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
+                                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+                                ),
+                                binary_condition(
+                                    "less",
+                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
+                                    Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+                                ),
+                            ),
                         ),
                     ),
                 ),
@@ -829,8 +872,8 @@ test_cases = [
         id="Basic join match",
     ),
     pytest.param(
-        """MATCH (e: events) -[contains]-> (t: transactions SAMPLE 0.5) SELECT 4-5, t.c
-        WHERE e.project_id = 1 AND e.timestamp > toDateTime('2021-01-01') AND t.project_id = 1 AND t.finish_ts > toDateTime('2021-01-01') """,
+        f"""MATCH (e: events) -[contains]-> (t: transactions SAMPLE 0.5) SELECT 4-5, t.c
+        WHERE {build_cond('e')} AND {build_cond('t')}""",
         CompositeQuery(
             from_clause=JoinClause(
                 left_node=IndividualNode(
@@ -872,21 +915,37 @@ test_cases = [
                 binary_condition(
                     "and",
                     binary_condition(
-                        "greater",
+                        "greaterOrEquals",
                         Column("_snuba_e.timestamp", "e", "timestamp"),
                         Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
                     ),
                     binary_condition(
                         "and",
                         binary_condition(
-                            "equals",
-                            Column("_snuba_t.project_id", "t", "project_id"),
-                            Literal(None, 1),
+                            "less",
+                            Column("_snuba_e.timestamp", "e", "timestamp"),
+                            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
                         binary_condition(
-                            "greater",
-                            Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                            Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+                            "and",
+                            binary_condition(
+                                "equals",
+                                Column("_snuba_t.project_id", "t", "project_id"),
+                                Literal(None, 1),
+                            ),
+                            binary_condition(
+                                "and",
+                                binary_condition(
+                                    "greaterOrEquals",
+                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
+                                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+                                ),
+                                binary_condition(
+                                    "less",
+                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
+                                    Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+                                ),
+                            ),
                         ),
                     ),
                 ),
@@ -897,11 +956,11 @@ test_cases = [
         id="Basic join match with sample",
     ),
     pytest.param(
-        """MATCH
+        f"""MATCH
             (e: events) -[contains]-> (t: transactions),
             (e: events) -[assigned]-> (ga: groupassignee)
         SELECT 4-5, ga.c
-        WHERE e.project_id = 1 AND e.timestamp > toDateTime('2021-01-01') AND t.project_id = 1 AND t.finish_ts > toDateTime('2021-01-01') """,
+        WHERE {build_cond('e')} AND {build_cond('t')}""",
         CompositeQuery(
             from_clause=JoinClause(
                 left_node=JoinClause(
@@ -959,21 +1018,37 @@ test_cases = [
                 binary_condition(
                     "and",
                     binary_condition(
-                        "greater",
+                        "greaterOrEquals",
                         Column("_snuba_e.timestamp", "e", "timestamp"),
                         Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
                     ),
                     binary_condition(
                         "and",
                         binary_condition(
-                            "equals",
-                            Column("_snuba_t.project_id", "t", "project_id"),
-                            Literal(None, 1),
+                            "less",
+                            Column("_snuba_e.timestamp", "e", "timestamp"),
+                            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
                         binary_condition(
-                            "greater",
-                            Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                            Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+                            "and",
+                            binary_condition(
+                                "equals",
+                                Column("_snuba_t.project_id", "t", "project_id"),
+                                Literal(None, 1),
+                            ),
+                            binary_condition(
+                                "and",
+                                binary_condition(
+                                    "greaterOrEquals",
+                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
+                                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+                                ),
+                                binary_condition(
+                                    "less",
+                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
+                                    Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+                                ),
+                            ),
                         ),
                     ),
                 ),
@@ -984,15 +1059,15 @@ test_cases = [
         id="Multi join match",
     ),
     pytest.param(
-        """MATCH
+        f"""MATCH
             (e: events) -[contains]-> (t: transactions),
             (e: events) -[assigned]-> (ga: groupassignee),
             (e: events) -[bookmark]-> (gm: groupedmessage),
             (e: events) -[activity]-> (se: sessions)
         SELECT 4-5, e.a, t.b, ga.c, gm.d, se.e
-        WHERE e.project_id = 1 AND e.timestamp > toDateTime('2021-01-01')
-        AND t.project_id = 1 AND t.finish_ts > toDateTime('2021-01-01')
-        AND se.org_id = 1 AND se.project_id = 1 AND se.started > toDateTime('2021-01-01')""",
+        WHERE {build_cond('e')} AND {build_cond('t')}
+        AND se.org_id = 1 AND se.project_id = 1
+        AND se.started >= toDateTime('2021-01-01') AND se.started < toDateTime('2021-01-02')""",
         CompositeQuery(
             from_clause=JoinClause(
                 left_node=JoinClause(
@@ -1086,45 +1161,89 @@ test_cases = [
                 binary_condition(
                     "and",
                     binary_condition(
-                        "greater",
+                        "greaterOrEquals",
                         Column("_snuba_e.timestamp", "e", "timestamp"),
                         Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
                     ),
                     binary_condition(
                         "and",
                         binary_condition(
-                            "equals",
-                            Column("_snuba_t.project_id", "t", "project_id"),
-                            Literal(None, 1),
+                            "less",
+                            Column("_snuba_e.timestamp", "e", "timestamp"),
+                            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
                         binary_condition(
                             "and",
                             binary_condition(
-                                "greater",
-                                Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+                                "equals",
+                                Column("_snuba_t.project_id", "t", "project_id"),
+                                Literal(None, 1),
                             ),
                             binary_condition(
                                 "and",
                                 binary_condition(
-                                    "equals",
-                                    Column("_snuba_se.org_id", "se", "org_id"),
-                                    Literal(None, 1),
+                                    "greaterOrEquals",
+                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
+                                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
                                 ),
                                 binary_condition(
                                     "and",
                                     binary_condition(
-                                        "equals",
-                                        Column(
-                                            "_snuba_se.project_id", "se", "project_id",
+                                        "less",
+                                        Column("_snuba_t.finish_ts", "t", "finish_ts"),
+                                        Literal(
+                                            None, datetime.datetime(2021, 1, 2, 0, 0)
                                         ),
-                                        Literal(None, 1),
                                     ),
                                     binary_condition(
-                                        "greater",
-                                        Column("_snuba_se.started", "se", "started"),
-                                        Literal(
-                                            None, datetime.datetime(2021, 1, 1, 0, 0),
+                                        "and",
+                                        binary_condition(
+                                            "equals",
+                                            Column("_snuba_se.org_id", "se", "org_id"),
+                                            Literal(None, 1),
+                                        ),
+                                        binary_condition(
+                                            "and",
+                                            binary_condition(
+                                                "equals",
+                                                Column(
+                                                    "_snuba_se.project_id",
+                                                    "se",
+                                                    "project_id",
+                                                ),
+                                                Literal(None, 1),
+                                            ),
+                                            binary_condition(
+                                                "and",
+                                                binary_condition(
+                                                    "greaterOrEquals",
+                                                    Column(
+                                                        "_snuba_se.started",
+                                                        "se",
+                                                        "started",
+                                                    ),
+                                                    Literal(
+                                                        None,
+                                                        datetime.datetime(
+                                                            2021, 1, 1, 0, 0
+                                                        ),
+                                                    ),
+                                                ),
+                                                binary_condition(
+                                                    "less",
+                                                    Column(
+                                                        "_snuba_se.started",
+                                                        "se",
+                                                        "started",
+                                                    ),
+                                                    Literal(
+                                                        None,
+                                                        datetime.datetime(
+                                                            2021, 1, 2, 0, 0
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
                                         ),
                                     ),
                                 ),
@@ -1139,7 +1258,8 @@ test_cases = [
         id="Multi multi join match",
     ),
     pytest.param(
-        "MATCH { MATCH (events) SELECT count() AS count BY title WHERE project_id = 1 AND timestamp > toDateTime('2021-01-01') } SELECT max(count) AS max_count",
+        "MATCH { MATCH (events) SELECT count() AS count BY title WHERE %s } SELECT max(count) AS max_count"
+        % added_condition,
         CompositeQuery(
             from_clause=LogicalQuery(
                 QueryEntity(
@@ -1170,7 +1290,14 @@ test_cases = [
         id="sub query match",
     ),
     pytest.param(
-        "MATCH { MATCH { MATCH (events) SELECT count() AS count BY title WHERE project_id = 1 AND timestamp > toDateTime('2021-01-01') } SELECT max(count) AS max_count } SELECT min(max_count) AS min_count",
+        """MATCH {
+            MATCH {
+                MATCH (events) SELECT count() AS count BY title WHERE %s
+            }
+            SELECT max(count) AS max_count
+        }
+        SELECT min(max_count) AS min_count"""
+        % added_condition,
         CompositeQuery(
             from_clause=CompositeQuery(
                 from_clause=LogicalQuery(
@@ -1215,7 +1342,7 @@ test_cases = [
         id="sub query of sub query match",
     ),
     pytest.param(
-        """MATCH (events) SELECT 4-5,3*foo(c) AS foo,c WHERE a<'stuff\\' "\\" stuff' AND b='"💩\\" \t \\'\\'' AND project_id = 1 AND timestamp > toDateTime('2021-01-01') """,
+        f"""MATCH (events) SELECT 4-5,3*foo(c) AS foo,c WHERE a<'stuff\\' "\\" stuff' AND b='"💩\\" \t \\'\\'' AND {added_condition} """,
         LogicalQuery(
             QueryEntity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -1263,9 +1390,9 @@ test_cases = [
         id="Basic query with crazy characters and escaping",
     ),
     pytest.param(
-        """MATCH (discover_events )
+        f"""MATCH (discover_events )
         SELECT count() AS count BY tags_key
-        WHERE or(equals(ifNull(tags[foo],''),'baz'),equals(ifNull(tags[foo.bar],''),'qux'))=1 AND project_id = 1 AND timestamp > toDateTime('2021-01-01')
+        WHERE or(equals(ifNull(tags[foo],''),'baz'),equals(ifNull(tags[foo.bar],''),'qux'))=1 AND {added_condition}
         ORDER BY count DESC,tags_key ASC  LIMIT 10""",
         LogicalQuery(
             QueryEntity(
