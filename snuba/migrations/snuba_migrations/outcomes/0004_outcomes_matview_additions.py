@@ -23,7 +23,7 @@ new_materialized_view_columns: Sequence[Column[Modifiers]] = [
     Column("outcome", UInt(8)),
     Column("reason", String()),
     Column("category", UInt(8)),
-    Column("quantity", UInt(64, Modifiers(nullable=True))),
+    Column("quantity", UInt(64)),
     Column("times_seen", UInt(64)),
 ]
 

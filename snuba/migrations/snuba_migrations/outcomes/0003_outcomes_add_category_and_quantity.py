@@ -3,7 +3,6 @@ from typing import Sequence
 from snuba.clickhouse.columns import Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
-from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
 class Migration(migration.MultiStepMigration):
@@ -19,7 +18,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_local",
-                column=Column("quantity", UInt(32, Modifiers(nullable=True))),
+                column=Column("quantity", UInt(32)),
                 after="reason",
             ),
             operations.AddColumn(
@@ -31,7 +30,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_hourly_local",
-                column=Column("quantity", UInt(64, Modifiers(nullable=True))),
+                column=Column("quantity", UInt(64)),
                 after="reason",
             ),
             operations.RunSql(
@@ -71,7 +70,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_raw_dist",
-                column=Column("quantity", UInt(32, Modifiers(nullable=True))),
+                column=Column("quantity", UInt(32)),
                 after=None,
             ),
             operations.AddColumn(
@@ -83,7 +82,7 @@ class Migration(migration.MultiStepMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
                 table_name="outcomes_hourly_dist",
-                column=Column("quantity", UInt(64, Modifiers(nullable=True))),
+                column=Column("quantity", UInt(64)),
                 after=None,
             ),
             operations.RunSql(
