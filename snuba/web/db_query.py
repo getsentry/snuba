@@ -9,6 +9,7 @@ from typing import Any, Mapping, MutableMapping, Optional, Set, Union, cast
 import rapidjson
 import sentry_sdk
 from sentry_sdk.api import configure_scope
+
 from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
@@ -28,7 +29,11 @@ from snuba.reader import Reader, Result
 from snuba.redis import redis_client
 from snuba.request.request_settings import RequestSettings
 from snuba.state.cache.abstract import Cache
-from snuba.state.cache.redis.backend import RedisCache
+from snuba.state.cache.redis.backend import (
+    RESULT_VALUE,
+    RESULT_WAIT,
+    RedisCache,
+)
 from snuba.state.rate_limit import (
     PROJECT_RATE_LIMIT_NAME,
     RateLimitAggregator,
@@ -330,6 +335,14 @@ def execute_query_with_readthrough_caching(
 ) -> Result:
     query_id = get_query_cache_key(formatted_query)
     query_settings["query_id"] = query_id
+
+    def record_cache_hit_type(hit_type: int) -> None:
+        print("RECORDING HIT TYPE", hit_type)
+        if hit_type == RESULT_VALUE:
+            stats["cache_hit"] = 1
+        elif hit_type == RESULT_WAIT:
+            stats["is_duplicate"] = 1
+
     return cache.get_readthrough(
         query_id,
         partial(
@@ -342,6 +355,7 @@ def execute_query_with_readthrough_caching(
             stats,
             query_settings,
         ),
+        record_cache_hit_type=record_cache_hit_type,
         timeout=query_settings.get("max_execution_time", 30),
         timer=timer,
     )
