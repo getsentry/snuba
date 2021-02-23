@@ -68,8 +68,7 @@ class CodeMigration(Migration, ABC):
 
         migration_id, logger, update_status = context
         logger.info(f"Running migration: {migration_id}")
-        if not self.is_first_migration():
-            update_status(Status.IN_PROGRESS)
+        update_status(Status.IN_PROGRESS)
 
         for op in self.forwards_global():
             op.execute()
@@ -91,10 +90,7 @@ class CodeMigration(Migration, ABC):
             op.execute()
         logger.info(f"Finished reversing: {migration_id}")
 
-        # The migrations table will be destroyed if the first
-        # migration is reversed; do not attempt to update status
-        if not self.is_first_migration():
-            update_status(Status.NOT_STARTED)
+        update_status(Status.NOT_STARTED)
 
 
 class ClickhouseNodeMigration(Migration, ABC):
