@@ -55,7 +55,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         return (timestamp, milliseconds)
 
     def process_message(
-        self, message: Tuple[int, str, Any, Any], metadata: KafkaMessageMetadata
+        self, message: Tuple[int, str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
         processed: MutableMapping[str, Any] = {"deleted": 0}
         if not (isinstance(message, (list, tuple)) and len(message) >= 2):
