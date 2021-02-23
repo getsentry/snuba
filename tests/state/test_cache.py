@@ -27,6 +27,10 @@ def backend() -> Iterator[Cache[bytes]]:
         redis_client.flushdb()
 
 
+def noop(value: int) -> None:
+    return None
+
+
 def test_get_readthrough(backend: Cache[bytes]) -> None:
     key = "key"
     value = b"value"
@@ -35,12 +39,12 @@ def test_get_readthrough(backend: Cache[bytes]) -> None:
     assert backend.get(key) is None
 
     with assert_changes(lambda: function.call_count, 0, 1):
-        backend.get_readthrough(key, function, 5) == value
+        backend.get_readthrough(key, function, noop, 5) == value
 
     assert backend.get(key) == value
 
     with assert_does_not_change(lambda: function.call_count, 1):
-        backend.get_readthrough(key, function, 5) == value
+        backend.get_readthrough(key, function, noop, 5) == value
 
 
 def test_get_readthrough_missed_deadline(backend: Cache[bytes]) -> None:
@@ -52,7 +56,7 @@ def test_get_readthrough_missed_deadline(backend: Cache[bytes]) -> None:
         return value
 
     with pytest.raises(TimeoutError):
-        backend.get_readthrough(key, function, 1)
+        backend.get_readthrough(key, function, noop, 1)
 
     assert backend.get(key) is None
 
@@ -67,7 +71,7 @@ def test_get_readthrough_exception(backend: Cache[bytes]) -> None:
         raise CustomException("error")
 
     with pytest.raises(CustomException):
-        backend.get_readthrough(key, function, 1)
+        backend.get_readthrough(key, function, noop, 1)
 
     assert backend.get(key) is None
 
@@ -80,7 +84,7 @@ def test_get_readthrough_set_wait(backend: Cache[bytes]) -> None:
         return f"{random.random()}".encode("utf-8")
 
     def worker() -> bytes:
-        return backend.get_readthrough(key, function, 10)
+        return backend.get_readthrough(key, function, noop, 10)
 
     setter = execute(worker)
     waiter = execute(worker)
@@ -99,7 +103,7 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
         raise CustomException("error")
 
     def worker() -> bytes:
-        return backend.get_readthrough(key, function, 10)
+        return backend.get_readthrough(key, function, noop, 10)
 
     setter = execute(worker)
     waiter = execute(worker)
@@ -120,7 +124,7 @@ def test_get_readthrough_set_wait_timeout(backend: Cache[bytes]) -> None:
         return value
 
     def worker(timeout: int) -> bytes:
-        return backend.get_readthrough(key, function, timeout)
+        return backend.get_readthrough(key, function, noop, timeout)
 
     setter = execute(partial(worker, 2))
     waiter_fast = execute(partial(worker, 1))

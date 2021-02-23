@@ -25,6 +25,7 @@ from snuba.query.processors.performance_expressions import (
     apdex_processor,
     failure_rate_processor,
 )
+from snuba.query.processors.project_rate_limiter import ProjectRateLimiterProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
@@ -136,6 +137,7 @@ class BaseTransactionsEntity(Entity, ABC):
             BasicFunctionsProcessor(),
             apdex_processor(self.get_data_model()),
             failure_rate_processor(self.get_data_model()),
+            ProjectRateLimiterProcessor(project_column="project_id"),
         ]
 
 
