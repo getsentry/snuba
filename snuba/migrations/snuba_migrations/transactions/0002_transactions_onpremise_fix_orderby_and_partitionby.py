@@ -152,7 +152,7 @@ def backwards() -> None:
         clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
 
 
-class Migration(migration.GlobalMigration):
+class Migration(migration.CodeMigration):
     """
     The first of two migrations that syncs the transactions_local table for onpremise
     users migrating from versions of Snuba prior to the migration system.

@@ -11,7 +11,7 @@ class Migration(ABC):
     """
     A Migration should implement the forwards and backwards methods. Migrations should
     not use this class directly, rather they should extend either the ClickHouseNodeMigration
-    (for SQL migrations to be run on ClickHouse) or GlobalMigration (for Python migrations).
+    (for SQL migrations to be run on ClickHouse) or CodeMigration (for Python migrations).
 
     Migrations that cannot be completed immediately, such as those that contain
     a data migration, must be marked with blocking = True.
@@ -46,9 +46,9 @@ class Migration(ABC):
         raise NotImplementedError
 
 
-class GlobalMigration(Migration, ABC):
+class CodeMigration(Migration, ABC):
     """
-    Consists of one or more Python functions executed once globally.
+    Consists of one or more Python functions executed in sequence.
     """
 
     @abstractmethod

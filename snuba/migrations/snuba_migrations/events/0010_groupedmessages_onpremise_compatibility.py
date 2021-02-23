@@ -89,7 +89,7 @@ def ensure_drop_temporary_tables() -> None:
     )
 
 
-class Migration(migration.GlobalMigration):
+class Migration(migration.CodeMigration):
     """
     An earlier version of the groupedmessage table (pre September 2019) did not
     include the project ID. This migration adds the column and rebuilds that table
