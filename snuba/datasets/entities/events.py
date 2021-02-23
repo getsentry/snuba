@@ -38,7 +38,6 @@ from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
-from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.request.request_settings import RequestSettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.threaded_function_delegator import Result
@@ -104,7 +103,6 @@ def callback_func(
     query: Query,
     request_settings: RequestSettings,
     referrer: str,
-    query_metadata: SnubaQueryMetadata,
     results: List[Result[QueryResult]],
 ) -> None:
     cache_hit = False
@@ -114,10 +112,10 @@ def callback_func(
     # hits may a cause of inconsistency between results.
     # Doesn't attempt to distinguish between all of the specific scenarios (one or both
     # queries, or splits of those queries could have hit the cache).
-    if any([query.stats.get("cache_hit", 0) for query in query_metadata.query_list]):
+    if any([result.result.extra["stats"].get("cache_hit", 0) for result in results]):
         cache_hit = True
     elif any(
-        [query.stats.get("is_duplicate", 0) for query in query_metadata.query_list]
+        [result.result.extra["stats"].get("is_duplicate", 0) for result in results]
     ):
         is_duplicate = True
 
