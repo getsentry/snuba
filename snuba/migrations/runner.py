@@ -202,7 +202,7 @@ class Runner:
         )
         migration = get_group_loader(migration_key.group).load_migration(migration_id)
 
-        if migration.blocking and not force:
+        if migration.blocking and not dry_run and not force:
             raise MigrationError("Blocking migrations must be run with force")
 
         migration.forwards(context, dry_run)
