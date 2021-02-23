@@ -24,6 +24,10 @@ jobs:
         #      `getconf ARG_MAX` - max # bytes of args + environ for exec()
         run: |
           pre-commit run --files $(git diff --diff-filter=d --name-only master)
+      - name: Run mypy
+        run: |
+          mypy --config-file, mypy.ini, --ignore-missing-imports, --strict, --warn-unreachable snuba
+
   tests:
     needs: linting
     name: Tests and code coverage
