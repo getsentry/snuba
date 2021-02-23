@@ -1,5 +1,4 @@
 import threading
-import uuid
 from typing import List, Tuple
 from unittest.mock import ANY, Mock, call
 
@@ -10,10 +9,8 @@ from snuba.datasets.storages.factory import get_storage
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.parser import parse_query
-from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
-from snuba.utils.metrics.timer import Timer
 from snuba.utils.threaded_function_delegator import Result
 from snuba.web import QueryResult
 
@@ -54,21 +51,10 @@ def test() -> None:
         callback_func=mock_callback,
     )
 
-    metadata = SnubaQueryMetadata(
-        request=Request(
-            uuid.UUID("a" * 32).hex, {}, query, HTTPRequestSettings(), "test",
-        ),
-        dataset="events",
-        timer=Timer("test"),
-        query_list=[],
-    )
-
     with cv:
         request_settings = HTTPRequestSettings()
         delegator.build_execution_pipeline(
-            Request("", query_body, query, request_settings, "ref",),
-            mock_query_runner,
-            metadata,
+            Request("", query_body, query, request_settings, "ref",), mock_query_runner,
         ).execute()
         cv.wait(timeout=5)
 
@@ -78,6 +64,5 @@ def test() -> None:
         query,
         request_settings,
         "ref",
-        metadata,
         [Result("events", query_result, ANY), Result("errors", query_result, ANY)],
     )

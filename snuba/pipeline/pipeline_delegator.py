@@ -8,7 +8,6 @@ from snuba.pipeline.query_pipeline import (
     QueryPlanner,
 )
 from snuba.query.logical import Query as LogicalQuery
-from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 from snuba.utils.threaded_function_delegator import Result, ThreadedFunctionDelegator
@@ -19,9 +18,7 @@ Timing = float
 QueryPipelineBuilders = Mapping[BuilderId, QueryPipelineBuilder[ClickhouseQueryPlan]]
 QueryResults = List[Result[QueryResult]]
 SelectorFunc = Callable[[LogicalQuery, str], Tuple[BuilderId, List[BuilderId]]]
-CallbackFunc = Callable[
-    [LogicalQuery, RequestSettings, str, SnubaQueryMetadata, QueryResults], None
-]
+CallbackFunc = Callable[[LogicalQuery, str, QueryResults], None]
 
 
 class MultipleConcurrentPipeline(QueryExecutionPipeline):
@@ -52,14 +49,12 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
         self,
         request: Request,
         runner: QueryRunner,
-        query_metadata: SnubaQueryMetadata,
         query_pipeline_builders: QueryPipelineBuilders,
         selector_func: SelectorFunc,
         callback_func: Optional[CallbackFunc],
     ):
         self.__request = request
         self.__runner = runner
-        self.__query_metadata = query_metadata
         self.__query_pipeline_builders = query_pipeline_builders
 
         self.__selector_func = lambda query: selector_func(
@@ -72,7 +67,6 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
                 self.__request.query,
                 self.__request.settings,
                 self.__request.referrer,
-                self.__query_metadata,
             )
             if callback_func
             else None
@@ -82,7 +76,7 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
         executor = ThreadedFunctionDelegator[LogicalQuery, QueryResult](
             callables={
                 builder_id: builder.build_execution_pipeline(
-                    self.__request, self.__runner, self.__query_metadata
+                    self.__request, self.__runner
                 ).execute
                 for builder_id, builder in self.__query_pipeline_builders.items()
             },
@@ -109,12 +103,11 @@ class PipelineDelegator(QueryPipelineBuilder[ClickhouseQueryPlan]):
         self.__callback_func = callback_func
 
     def build_execution_pipeline(
-        self, request: Request, runner: QueryRunner, query_metadata: SnubaQueryMetadata
+        self, request: Request, runner: QueryRunner
     ) -> QueryExecutionPipeline:
         return MultipleConcurrentPipeline(
             request=request,
             runner=runner,
-            query_metadata=query_metadata,
             query_pipeline_builders=self.__query_pipeline_builders,
             selector_func=self.__selector_func,
             callback_func=self.__callback_func,

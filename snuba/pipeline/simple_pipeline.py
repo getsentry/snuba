@@ -15,7 +15,6 @@ from snuba.pipeline.query_pipeline import (
     QueryPipelineBuilder,
 )
 from snuba.query.logical import Query as LogicalQuery
-from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
@@ -82,7 +81,7 @@ class SimplePipelineBuilder(QueryPipelineBuilder[ClickhouseQueryPlan]):
         self.__query_plan_builder = query_plan_builder
 
     def build_execution_pipeline(
-        self, request: Request, runner: QueryRunner, query_metadata: SnubaQueryMetadata
+        self, request: Request, runner: QueryRunner
     ) -> QueryExecutionPipeline:
         assert isinstance(request.query, LogicalQuery)
         return SimpleExecutionPipeline(

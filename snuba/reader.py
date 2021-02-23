@@ -116,7 +116,6 @@ class Reader(ABC):
         self,
         query: FormattedQuery,
         settings: Optional[Mapping[str, str]] = None,
-        stats: Optional[Mapping[str, Any]] = None,
         with_totals: bool = False,
     ) -> Result:
         """Execute a query."""

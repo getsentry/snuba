@@ -269,7 +269,6 @@ class NativeDriverReader(Reader):
         query: FormattedQuery,
         # TODO: move Clickhouse specific arguments into clickhouse.query.Query
         settings: Optional[Mapping[str, str]] = None,
-        stats: Optional[Mapping[str, Any]] = None,
         with_totals: bool = False,
     ) -> Result:
         settings = {**settings} if settings is not None else {}
