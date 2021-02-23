@@ -208,19 +208,18 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
         granularity = extract_granularity_from_query(query, "started") or 3600
         use_materialized_storage = granularity >= 3600 and (granularity % 3600) == 0
 
-        allow_subhour_sessions = state.get_config("allow_subhour_sessions", 0)
-        if not allow_subhour_sessions:
-            use_materialized_storage = True
-
         metrics.increment(
             "query.selector",
             tags={
-                "granularity": granularity,
                 "selected_storage": "materialized"
                 if use_materialized_storage
                 else "raw",
             },
         )
+
+        allow_subhour_sessions = state.get_config("allow_subhour_sessions", 0)
+        if not allow_subhour_sessions:
+            use_materialized_storage = True
 
         if use_materialized_storage:
             return StorageAndMappers(
