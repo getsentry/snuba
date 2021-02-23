@@ -56,6 +56,8 @@ class FunctionCallsValidator(ExpressionValidator):
                 )
             data_model = entity.get_data_model()
         elif isinstance(data_source, (Query, JoinClause)):
+            # TODO: This is currently ignoring entity validators. We should be validating
+            # each entity.
             data_model = data_source.get_columns()
         else:
             return
