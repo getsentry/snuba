@@ -38,6 +38,7 @@ from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
+from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.request.request_settings import RequestSettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.threaded_function_delegator import Result
@@ -103,8 +104,23 @@ def callback_func(
     query: Query,
     request_settings: RequestSettings,
     referrer: str,
+    query_metadata: SnubaQueryMetadata,
     results: List[Result[QueryResult]],
 ) -> None:
+    cache_hit = False
+    is_duplicate = False
+
+    # Captures if any of the queries involved was a cache hit or duplicate, as cache
+    # hits may a cause of inconsistency between results.
+    # Doesn't attempt to distinguish between all of the specific scenarios (one or both
+    # queries, or splits of those queries could have hit the cache).
+    if any([query.stats.get("cache_hit", 0) for query in query_metadata.query_list]):
+        cache_hit = True
+    elif any(
+        [query.stats.get("is_duplicate", 0) for query in query_metadata.query_list]
+    ):
+        is_duplicate = True
+
     if not results:
         metrics.increment(
             "query_result",
@@ -121,7 +137,11 @@ def callback_func(
         metrics.timing(
             "diff_ms",
             round((result.execution_time - primary_result.execution_time) * 1000),
-            tags={"referrer": referrer},
+            tags={
+                "referrer": referrer,
+                "cache_hit": str(cache_hit),
+                "is_duplicate": str(is_duplicate),
+            },
         )
 
         # Do not bother diffing the actual results of sampled queries
@@ -131,7 +151,13 @@ def callback_func(
         if result_data == primary_result_data:
             metrics.increment(
                 "query_result",
-                tags={"storage": storage, "match": "true", "referrer": referrer},
+                tags={
+                    "storage": storage,
+                    "match": "true",
+                    "referrer": referrer,
+                    "cache_hit": str(cache_hit),
+                    "is_duplicate": str(is_duplicate),
+                },
             )
         else:
             reason = assign_reason_category(result_data, primary_result_data, referrer)
@@ -143,6 +169,8 @@ def callback_func(
                     "match": "false",
                     "referrer": referrer,
                     "reason": reason,
+                    "cache_hit": str(cache_hit),
+                    "is_duplicate": str(is_duplicate),
                 },
             )
 
@@ -150,7 +178,13 @@ def callback_func(
                 sentry_sdk.capture_message(
                     f"Non matching {storage} result - different length",
                     level="warning",
-                    tags={"referrer": referrer, "storage": storage, "reason": reason},
+                    tags={
+                        "referrer": referrer,
+                        "storage": storage,
+                        "reason": reason,
+                        "cache_hit": str(cache_hit),
+                        "is_duplicate": str(is_duplicate),
+                    },
                     extras={
                         "query": format_query(query),
                         "primary_result": len(primary_result_data),
@@ -170,6 +204,8 @@ def callback_func(
                             "referrer": referrer,
                             "storage": storage,
                             "reason": reason,
+                            "cache_hit": str(cache_hit),
+                            "is_duplicate": str(is_duplicate),
                         },
                         extras={
                             "query": format_query(query),

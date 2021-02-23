@@ -7,6 +7,7 @@ from snuba.datasets.plans.query_plan import (
     QueryRunner,
 )
 from snuba.query.logical import Query
+from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
@@ -64,7 +65,7 @@ class QueryPipelineBuilder(ABC, Generic[TPlan]):
 
     @abstractmethod
     def build_execution_pipeline(
-        self, request: Request, runner: QueryRunner
+        self, request: Request, runner: QueryRunner, query_metadata: SnubaQueryMetadata
     ) -> QueryExecutionPipeline:
         """
         Returns a pipeline to execute a query

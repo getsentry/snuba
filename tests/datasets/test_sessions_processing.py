@@ -1,11 +1,15 @@
+import uuid
+
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
 from snuba.query.parser import parse_query
+from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
+from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
 
 
@@ -57,6 +61,15 @@ def test_sessions_processing() -> None:
         ]
         return QueryResult({}, {})
 
+    metadata = SnubaQueryMetadata(
+        request=Request(
+            uuid.UUID("a" * 32).hex, {}, query, HTTPRequestSettings(), "test",
+        ),
+        dataset="events",
+        timer=Timer("test"),
+        query_list=[],
+    )
+
     sessions.get_default_entity().get_query_pipeline_builder().build_execution_pipeline(
-        request, query_runner
+        request, query_runner, metadata
     ).execute()

@@ -9,6 +9,7 @@ from snuba.datasets.plans.query_plan import QueryRunner
 from snuba.pipeline.composite import CompositeExecutionPipeline
 from snuba.pipeline.query_pipeline import QueryExecutionPipeline
 from snuba.query.logical import Query
+from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.request import Request
 
 
@@ -68,12 +69,12 @@ class DatasetQueryPipelineBuilder:
     """
 
     def build_execution_pipeline(
-        self, request: Request, runner: QueryRunner
+        self, request: Request, runner: QueryRunner, query_metadata: SnubaQueryMetadata
     ) -> QueryExecutionPipeline:
         if isinstance(request.query, Query):
             entity = get_entity(request.query.get_from_clause().key)
             return entity.get_query_pipeline_builder().build_execution_pipeline(
-                request, runner
+                request, runner, query_metadata
             )
         else:
             return CompositeExecutionPipeline(request.query, request.settings, runner)

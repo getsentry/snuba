@@ -114,7 +114,7 @@ def _run_query_pipeline(
 
     return (
         dataset.get_query_pipeline_builder()
-        .build_execution_pipeline(request, query_runner)
+        .build_execution_pipeline(request, query_runner, query_metadata)
         .execute()
     )
 
