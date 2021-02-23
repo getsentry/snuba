@@ -28,7 +28,7 @@ new_materialized_view_columns: Sequence[Column[Modifiers]] = [
 ]
 
 
-class Migration(migration.MultiStepMigration):
+class Migration(migration.ClickhouseNodeMigration):
     """
     Updates materialized view query to support category and quantity.
     Note that the consumer needs to be stopped for this migration.
@@ -36,7 +36,7 @@ class Migration(migration.MultiStepMigration):
 
     blocking = True
 
-    def forwards_local(self) -> Sequence[operations.Operation]:
+    def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.OUTCOMES,
@@ -64,7 +64,7 @@ class Migration(migration.MultiStepMigration):
             ),
         ]
 
-    def backwards_local(self) -> Sequence[operations.Operation]:
+    def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.OUTCOMES,
@@ -90,8 +90,8 @@ class Migration(migration.MultiStepMigration):
             ),
         ]
 
-    def forwards_dist(self) -> Sequence[operations.Operation]:
+    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return []
 
-    def backwards_dist(self) -> Sequence[operations.Operation]:
+    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return []
