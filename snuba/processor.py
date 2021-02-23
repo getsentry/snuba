@@ -18,6 +18,7 @@ from typing import (
 
 import simplejson as json
 
+from snuba.utils.metrics.timer import Timer
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.util import force_bytes
 from snuba.writer import WriterTableRow
@@ -31,6 +32,7 @@ NIL_UUID = "00000000-0000-0000-0000-000000000000"
 
 class InsertBatch(NamedTuple):
     rows: Sequence[WriterTableRow]
+    timers: Sequence[Timer]
 
 
 class ReplacementBatch(NamedTuple):

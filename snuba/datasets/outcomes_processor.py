@@ -41,4 +41,4 @@ class OutcomesProcessor(MessageProcessor):
             "event_id": str(uuid.UUID(v_uuid)) if v_uuid is not None else None,
         }
 
-        return InsertBatch([message])
+        return InsertBatch([message], [])

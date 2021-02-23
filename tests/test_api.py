@@ -1262,7 +1262,8 @@ class TestApi(BaseApiTest):
                             "deleted": 1,
                             "retention_days": settings.DEFAULT_RETENTION_DAYS,
                         }
-                    ]
+                    ],
+                    [],
                 )
             ],
         )

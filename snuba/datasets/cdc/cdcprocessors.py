@@ -153,4 +153,4 @@ class CdcProcessor(MessageProcessor):
         if not messages:
             return None
 
-        return InsertBatch(messages)
+        return InsertBatch(messages, [])

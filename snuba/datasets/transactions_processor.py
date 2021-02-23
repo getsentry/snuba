@@ -201,4 +201,4 @@ class TransactionsMessageProcessor(MessageProcessor):
         if processed["sdk_version"] == "":
             metrics.increment("missing_sdk_version")
 
-        return InsertBatch([processed])
+        return InsertBatch([processed], [])

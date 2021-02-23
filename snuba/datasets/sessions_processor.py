@@ -76,4 +76,4 @@ class SessionsProcessor(MessageProcessor):
             "release": message["release"],
             "environment": message.get("environment") or "",
         }
-        return InsertBatch([processed])
+        return InsertBatch([processed], [])

@@ -164,7 +164,7 @@ class TestGroupassignee:
         )
 
         ret = processor.process_message(self.INSERT_MSG, metadata)
-        assert ret == InsertBatch([self.PROCESSED])
+        assert ret == InsertBatch([self.PROCESSED], [])
         write_processed_messages(self.storage, [ret])
         ret = (
             self.storage.get_cluster()
@@ -182,15 +182,15 @@ class TestGroupassignee:
         )
 
         ret = processor.process_message(self.UPDATE_MSG_NO_KEY_CHANGE, metadata)
-        assert ret == InsertBatch([self.PROCESSED])
+        assert ret == InsertBatch([self.PROCESSED], [])
 
         # Tests an update with key change which becomes a two inserts:
         # one deletion and the insertion of the new row.
         ret = processor.process_message(self.UPDATE_MSG_WITH_KEY_CHANGE, metadata)
-        assert ret == InsertBatch([self.DELETED, self.PROCESSED_UPDATE])
+        assert ret == InsertBatch([self.DELETED, self.PROCESSED_UPDATE], [])
 
         ret = processor.process_message(self.DELETE_MSG, metadata)
-        assert ret == InsertBatch([self.DELETED])
+        assert ret == InsertBatch([self.DELETED], [])
 
     def test_bulk_load(self) -> None:
         row = GroupAssigneeRow.from_bulk(
@@ -202,7 +202,7 @@ class TestGroupassignee:
                 "team_id": "",
             }
         )
-        write_processed_messages(self.storage, [InsertBatch([row.to_clickhouse()])])
+        write_processed_messages(self.storage, [InsertBatch([row.to_clickhouse()], [])])
         ret = (
             self.storage.get_cluster()
             .get_query_connection(ClickhouseClientSettings.QUERY)

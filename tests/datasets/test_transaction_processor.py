@@ -325,4 +325,4 @@ class TestTransactionsProcessor:
         )
         assert TransactionsMessageProcessor().process_message(
             message.serialize(), meta
-        ) == InsertBatch([message.build_result(meta)])
+        ) == InsertBatch([message.build_result(meta)], [])

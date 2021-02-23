@@ -156,6 +156,6 @@ class SpansMessageProcessor(MessageProcessor):
             ret.append(processed)
 
         if ret:
-            return InsertBatch(ret)
+            return InsertBatch(ret, [])
         else:
             return None

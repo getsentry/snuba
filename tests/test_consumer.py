@@ -39,7 +39,7 @@ def test_streaming_consumer_strategy() -> None:
     processor = Mock()
     processor.process_message.side_effect = [
         None,
-        InsertBatch([{}]),
+        InsertBatch([{}], []),
         ReplacementBatch("key", [{}]),
     ]
 

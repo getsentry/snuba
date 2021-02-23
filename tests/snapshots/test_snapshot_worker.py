@@ -111,8 +111,8 @@ test_data = [
     (90, None),
     (100, None),
     (110, None),
-    (120, InsertBatch([PROCESSED])),
-    (210, InsertBatch([PROCESSED])),
+    (120, InsertBatch([PROCESSED], [])),
+    (210, InsertBatch([PROCESSED], [])),
 ]
 
 

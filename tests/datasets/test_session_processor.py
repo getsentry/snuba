@@ -50,7 +50,8 @@ class TestSessionProcessor:
                     "status": 1,
                     "received": timestamp.replace(tzinfo=None),
                 }
-            ]
+            ],
+            [],
         )
 
     def test_ingest_session_event_abnormal(self) -> None:
@@ -98,7 +99,8 @@ class TestSessionProcessor:
                     "status": 3,
                     "received": timestamp.replace(tzinfo=None),
                 }
-            ]
+            ],
+            [],
         )
 
     def test_ingest_session_event_crashed(self) -> None:
@@ -146,5 +148,6 @@ class TestSessionProcessor:
                     "status": 2,
                     "received": timestamp.replace(tzinfo=None),
                 }
-            ]
+            ],
+            [],
         )

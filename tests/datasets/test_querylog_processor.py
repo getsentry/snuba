@@ -110,4 +110,5 @@ def test_simple() -> None:
                 "clickhouse_queries.array_join_columns": [[]],
             }
         ],
+        [],
     )
