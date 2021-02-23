@@ -5,7 +5,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 
 
-class Migration(migration.MultiStepMigration):
+class Migration(migration.ClickhouseNodeMigration):
     """
     Adds the _tags_hash_map and deleted columns to the merge table so we can use
     the tags optimization, and ensure deleted rows are omitted from queries.
@@ -13,7 +13,9 @@ class Migration(migration.MultiStepMigration):
 
     blocking = False
 
-    def __forward_migrations(self, table_name: str) -> Sequence[operations.Operation]:
+    def __forward_migrations(
+        self, table_name: str
+    ) -> Sequence[operations.SqlOperation]:
         return [
             operations.AddColumn(
                 storage_set=StorageSetKey.DISCOVER,
@@ -29,7 +31,9 @@ class Migration(migration.MultiStepMigration):
             ),
         ]
 
-    def __backward_migrations(self, table_name: str) -> Sequence[operations.Operation]:
+    def __backward_migrations(
+        self, table_name: str
+    ) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropColumn(
                 storage_set=StorageSetKey.DISCOVER,
@@ -43,14 +47,14 @@ class Migration(migration.MultiStepMigration):
             ),
         ]
 
-    def forwards_local(self) -> Sequence[operations.Operation]:
+    def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return self.__forward_migrations("discover_local")
 
-    def backwards_local(self) -> Sequence[operations.Operation]:
+    def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return self.__backward_migrations("discover_local")
 
-    def forwards_dist(self) -> Sequence[operations.Operation]:
+    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return self.__forward_migrations("discover_dist")
 
-    def backwards_dist(self) -> Sequence[operations.Operation]:
+    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return self.__backward_migrations("discover_dist")
