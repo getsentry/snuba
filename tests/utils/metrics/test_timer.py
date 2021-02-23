@@ -49,3 +49,22 @@ def test_timer_send_metrics() -> None:
         Timing("timer.thing1", 10.0 * 1000, {"mark-key": "mark-value"}),
         Timing("timer.thing2", 10.0 * 1000, {"mark-key": "mark-value"}),
     ]
+
+
+def test_timer_send_metrics_fake_times() -> None:
+    backend = TestingMetricsBackend()
+
+    time = TestingClock(100)
+
+    t = Timer("timer", clock=time, init_time=5.0)
+    time.sleep(10)
+    t.mark("thing1", 10.0)
+    time.sleep(10)
+    t.mark("thing2", 11.0)
+    t.send_metrics_to(backend)
+
+    assert backend.calls == [
+        Timing("timer", (11.0 - 5.0) * 1000, None),
+        Timing("timer.thing1", 5.0 * 1000, None),
+        Timing("timer.thing2", 1000, None),
+    ]

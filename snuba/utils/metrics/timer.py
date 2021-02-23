@@ -21,18 +21,22 @@ else:
 
 
 class Timer:
-    def __init__(self, name: str, clock: Clock = SystemClock()):
+    def __init__(
+        self, name: str, clock: Clock = SystemClock(), init_time: Optional[float] = None
+    ):
         self.__name = name
         self.__clock = clock
 
         self.__marks: MutableSequence[Tuple[str, float]] = [
-            (self.__name, self.__clock.time())
+            (self.__name, self.__clock.time() if init_time is None else init_time)
         ]
         self.__data: Optional[TimerData] = None
 
-    def mark(self, name: str) -> None:
+    def mark(self, name: str, timestamp: Optional[float] = None) -> None:
         self.__data = None
-        self.__marks.append((name, self.__clock.time()))
+        self.__marks.append(
+            (name, self.__clock.time() if timestamp is None else timestamp)
+        )
 
     def __diff_ms(self, start: float, end: float) -> int:
         return int((end - start) * 1000)
