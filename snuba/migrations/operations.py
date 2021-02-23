@@ -11,17 +11,7 @@ from snuba.migrations.columns import MigrationModifiers
 from snuba.migrations.table_engines import TableEngine
 
 
-class Operation(ABC):
-    """
-    Executed on all the nodes of the cluster.
-    """
-
-    @abstractmethod
-    def execute(self, local: bool) -> None:
-        raise NotImplementedError
-
-
-class SqlOperation(Operation, ABC):
+class SqlOperation(ABC):
     def __init__(self, storage_set: StorageSetKey):
         self._storage_set = storage_set
 
@@ -298,9 +288,15 @@ class InsertIntoSelect(SqlOperation):
         return f"INSERT INTO {self.__dest_table_name} ({dest_columns}) SELECT {src_columns} FROM {self.__src_table_name}{prewhere_clause}{where_clause};"
 
 
-class RunPython(Operation):
-    def __init__(self, func: Callable[[], None]) -> None:
+class RunPython:
+    def __init__(
+        self, func: Callable[[], None], description: Optional[str] = None
+    ) -> None:
         self.__func = func
+        self.__description = description
 
-    def execute(self, local: bool) -> None:
+    def execute(self) -> None:
         self.__func()
+
+    def description(self) -> Optional[str]:
+        return self.__description
