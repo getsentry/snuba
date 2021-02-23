@@ -74,6 +74,7 @@ class RedisCache(Cache[TValue]):
         self,
         key: str,
         function: Callable[[], TValue],
+        record_cache_hit_type: Callable[[int], None],
         timeout: int,
         timer: Optional[Timer] = None,
     ) -> TValue:
@@ -130,6 +131,9 @@ class RedisCache(Cache[TValue]):
 
         if timer is not None:
             timer.mark("cache_get")
+
+        # This updates the stats object and querylog
+        record_cache_hit_type(result[0])
 
         if result[0] == RESULT_VALUE:
             # If we got a cache hit, this is easy -- we just return it.
