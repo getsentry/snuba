@@ -15,9 +15,9 @@ columns: Sequence[Column[Modifiers]] = [
 ]
 
 
-class Migration(migration.MultiStepMigration):
+class Migration(migration.ClickhouseNodeMigration):
     """
-    This migration extends Migration instead of MultiStepMigration since it is
+    This migration is the only one that sets is_first_migration = True since it is
     responsible for bootstrapping the migration system itself. It skips setting
     the in progress status in the forwards method and the not started status in
     the backwards method. Since the migration table doesn't exist yet, we can't
@@ -29,7 +29,7 @@ class Migration(migration.MultiStepMigration):
     def is_first_migration(self) -> bool:
         return True
 
-    def forwards_local(self) -> Sequence[operations.Operation]:
+    def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.MIGRATIONS,
@@ -43,14 +43,14 @@ class Migration(migration.MultiStepMigration):
             ),
         ]
 
-    def backwards_local(self) -> Sequence[operations.Operation]:
+    def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.MIGRATIONS, table_name="migrations_local",
             )
         ]
 
-    def forwards_dist(self) -> Sequence[operations.Operation]:
+    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.MIGRATIONS,
@@ -62,7 +62,7 @@ class Migration(migration.MultiStepMigration):
             )
         ]
 
-    def backwards_dist(self) -> Sequence[operations.Operation]:
+    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.MIGRATIONS, table_name="migrations_dist"
