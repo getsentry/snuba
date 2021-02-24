@@ -185,3 +185,58 @@ class TimeSeriesProcessor(QueryProcessor):
         condition = query.get_condition_from_ast()
         if condition:
             query.set_ast_condition(condition.transform(self.__process_condition))
+
+
+GRANULARITY_MAPPING = {
+    "toStartOfMinute": 60,
+    "toStartOfHour": 3600,
+    "toDate": 86400,
+}
+
+
+def extract_granularity_from_query(query: Query, column: str) -> Optional[int]:
+    """
+    This extracts the `granularity` from the `groupby` statement of the query.
+    The matches are essentially the reverse of `TimeSeriesProcessor.__group_time_function`.
+    """
+    groupby = query.get_groupby_from_ast()
+
+    column_match = ColumnMatch(None, String(column))
+    fn_match = FunctionCallMatch(
+        Param(
+            "time_fn",
+            Or([String("toStartOfHour"), String("toStartOfMinute"), String("toDate")]),
+        ),
+        (column_match, LiteralMatch(Any(str))),
+    )
+    expr_match = FunctionCallMatch(
+        String("toDateTime"),
+        (
+            FunctionCallMatch(
+                String("multiply"),
+                (
+                    FunctionCallMatch(
+                        String("intDiv"),
+                        (
+                            FunctionCallMatch(String("toUInt32"), (column_match,)),
+                            LiteralMatch(Param("granularity", Any(int))),
+                        ),
+                    ),
+                    LiteralMatch(Param("granularity", Any(int))),
+                ),
+            ),
+            LiteralMatch(Any(str)),
+        ),
+    )
+
+    for top_expr in groupby:
+        for expr in top_expr:
+            result = fn_match.match(expr)
+            if result is not None:
+                return GRANULARITY_MAPPING[result.string("time_fn")]
+
+            result = expr_match.match(expr)
+            if result is not None:
+                return result.integer("granularity")
+
+    return None
