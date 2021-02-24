@@ -6,6 +6,7 @@ from functools import cached_property
 from pathlib import Path
 from struct import Struct
 from typing import (
+    Any,
     BinaryIO,
     Iterator,
     MutableMapping,
@@ -30,7 +31,7 @@ class PickleCodec(Codec[bytes, Tuple[TPayload, datetime]]):
     def encode(self, value: Tuple[TPayload, datetime]) -> bytes:
         return pickle.dumps(value)
 
-    def decode(self, value: bytes) -> Tuple[TPayload, datetime]:
+    def decode(self, value: bytes) -> Any:
         return pickle.loads(value)
 
 
@@ -93,7 +94,7 @@ class FileMessageStorage(MessageStorage[TPayload]):
             if path.is_dir():
                 yield Topic(path.name)
 
-    def delete_topic(self, topic: Topic):
+    def delete_topic(self, topic: Topic) -> None:
         topic_path = self.__directory / topic.name
         if not topic_path.exists():
             raise TopicDoesNotExist(topic)

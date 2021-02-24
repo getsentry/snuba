@@ -154,7 +154,7 @@ class TestApi(BaseApiTest):
         else:
             return dbsize
 
-    def test_invalid_queries(self):
+    def test_invalid_queries(self) -> None:
         result = self.app.post(
             "/query",
             data=json.dumps(
@@ -178,7 +178,7 @@ class TestApi(BaseApiTest):
         payload = json.loads(result.data)
         assert payload["error"]["type"] == "invalid_query"
 
-    def test_count(self):
+    def test_count(self) -> None:
         """
         Test total counts are correct in the hourly time buckets for each project
         """
@@ -220,7 +220,7 @@ class TestApi(BaseApiTest):
                 )
                 assert result["data"][b]["aggregate"] == float(rollup_mins) / p
 
-    def test_rollups(self):
+    def test_rollups(self) -> None:
         for rollup_mins in (1, 2, 15, 30, 60):
             # Note for buckets bigger than 1 hour, the results may not line up
             # with self.base_time as base_time is not necessarily on a bucket boundary
@@ -254,7 +254,7 @@ class TestApi(BaseApiTest):
                     result["data"][b]["aggregate"] == rollup_mins
                 )  # project 1 has 1 event per minute
 
-    def test_time_alignment(self):
+    def test_time_alignment(self) -> None:
         # Adding a half hour skew to the time.
         skew = timedelta(minutes=30)
         result = json.loads(
@@ -302,7 +302,7 @@ class TestApi(BaseApiTest):
         bucket_time = parse_datetime(result["data"][0]["time"]).replace(tzinfo=None)
         assert bucket_time == self.base_time
 
-    def test_no_issues(self):
+    def test_no_issues(self) -> None:
         result = json.loads(
             self.app.post(
                 "/query",
@@ -345,7 +345,7 @@ class TestApi(BaseApiTest):
         assert "error" not in result
         assert result["data"] == []
 
-    def test_offset_limit(self):
+    def test_offset_limit(self) -> None:
         result = json.loads(
             self.app.post(
                 "/query",
@@ -379,7 +379,7 @@ class TestApi(BaseApiTest):
         )
         assert result.status_code == 400
 
-    def test_totals(self):
+    def test_totals(self) -> None:
         result = json.loads(
             self.app.post(
                 "/query",
@@ -455,7 +455,7 @@ class TestApi(BaseApiTest):
         )  # totals row is zero or empty for non-aggregate cols
         assert result["totals"]["count"] == 180 + 90 + 60
 
-    def test_conditions(self):
+    def test_conditions(self) -> None:
         result = json.loads(
             self.app.post(
                 "/query",
@@ -638,7 +638,7 @@ class TestApi(BaseApiTest):
         )
         assert result["data"][0]["null_group_id"] == 1
 
-    def test_null_array_conditions(self):
+    def test_null_array_conditions(self) -> None:
         events = []
         for value in (None, False, True):
             events.append(
@@ -712,7 +712,7 @@ class TestApi(BaseApiTest):
         assert len(result["data"]) == 1
         assert result["data"][0]["message"] == "handled False"
 
-    def test_escaping(self):
+    def test_escaping(self) -> None:
         # Escape single quotes so we don't get Bobby Tables'd
         result = json.loads(
             self.app.post(
@@ -760,7 +760,7 @@ class TestApi(BaseApiTest):
         )
         assert "error" not in result
 
-    def test_prewhere_conditions(self):
+    def test_prewhere_conditions(self) -> None:
         settings.MAX_PREWHERE_CONDITIONS = 1
         prewhere_keys = [
             "event_id",
@@ -843,7 +843,7 @@ class TestApi(BaseApiTest):
             in result["sql"]
         )
 
-    def test_prewhere_conditions_dont_show_up_in_where_conditions(self):
+    def test_prewhere_conditions_dont_show_up_in_where_conditions(self) -> None:
         settings.MAX_PREWHERE_CONDITIONS = 1
         result = json.loads(
             self.app.post(
@@ -868,7 +868,7 @@ class TestApi(BaseApiTest):
             result["sql"].count("in((project_id AS _snuba_project_id), tuple(1))") == 1
         )
 
-    def test_aggregate(self):
+    def test_aggregate(self) -> None:
         result = json.loads(
             self.app.post(
                 "/query",
@@ -941,7 +941,7 @@ class TestApi(BaseApiTest):
             assert len(data[idx]["top_platforms"]) == 1
             assert data[idx]["top_platforms"][0] in self.platforms
 
-    def test_aggregate_with_multiple_arguments(self):
+    def test_aggregate_with_multiple_arguments(self) -> None:
         result = json.loads(
             self.app.post(
                 "/query",
@@ -960,7 +960,7 @@ class TestApi(BaseApiTest):
         assert "latest_event" in result["data"][0]
         assert "project_id" in result["data"][0]
 
-    def test_having_conditions(self):
+    def test_having_conditions(self) -> None:
         result = json.loads(
             self.app.post(
                 "/query",
@@ -1006,7 +1006,7 @@ class TestApi(BaseApiTest):
         )
         assert result["error"]
 
-    def test_tag_expansion(self):
+    def test_tag_expansion(self) -> None:
         # A promoted tag
         result = json.loads(
             self.app.post(
@@ -1084,7 +1084,7 @@ class TestApi(BaseApiTest):
         assert len(result["data"]) == 1
         assert result["data"][0]["aggregate"] == 90
 
-    def test_column_expansion(self):
+    def test_column_expansion(self) -> None:
         # If there is a condition on an already SELECTed column, then use the
         # column alias instead of the full column expression again.
         response = json.loads(
@@ -1104,7 +1104,7 @@ class TestApi(BaseApiTest):
         assert "equals(_snuba_group_id, 0)" in response["sql"]
         assert "equals(_snuba_group_id, 1)" in response["sql"]
 
-    def test_sampling_expansion(self):
+    def test_sampling_expansion(self) -> None:
         response = json.loads(
             self.app.post(
                 "/query", data=json.dumps({"project": 2, "sample": 1000})
@@ -1117,7 +1117,7 @@ class TestApi(BaseApiTest):
         )
         assert "SAMPLE 0.1" in response["sql"]
 
-    def test_promoted_expansion(self):
+    def test_promoted_expansion(self) -> None:
         result = json.loads(
             self.app.post(
                 "/query",
@@ -1171,7 +1171,7 @@ class TestApi(BaseApiTest):
         assert len(result_map["environment"]["top"]) == 2
         assert all(r in self.environments for r in result_map["environment"]["top"])
 
-    def test_tag_translation(self):
+    def test_tag_translation(self) -> None:
         result = json.loads(
             self.app.post(
                 "/query",
@@ -1187,7 +1187,7 @@ class TestApi(BaseApiTest):
 
         assert "os.rooted" in result["data"][0]["top"]
 
-    def test_unicode_condition(self):
+    def test_unicode_condition(self) -> None:
         result = json.loads(
             self.app.post(
                 "/query",
@@ -1204,7 +1204,7 @@ class TestApi(BaseApiTest):
         )
         assert result["data"][0] == {"environment": "prød", "count": 90}
 
-    def test_query_timing(self):
+    def test_query_timing(self) -> None:
         result = json.loads(
             self.app.post(
                 "/query",
@@ -1217,12 +1217,12 @@ class TestApi(BaseApiTest):
         assert "timing" in result
         assert "timestamp" in result["timing"]
 
-    def test_global_rate_limiting(self):
+    def test_global_rate_limiting(self) -> None:
         state.set_config("global_concurrent_limit", 0)
         response = self.app.post("/query", data=json.dumps({"project": 1}))
         assert response.status_code == 429
 
-    def test_project_rate_limiting(self):
+    def test_project_rate_limiting(self) -> None:
         # All projects except project 1 are allowed
         state.set_config("project_concurrent_limit", 1)
         state.set_config("project_concurrent_limit_1", 0)
@@ -1237,7 +1237,7 @@ class TestApi(BaseApiTest):
         )
         assert response.status_code == 429
 
-    def test_doesnt_select_deletions(self):
+    def test_doesnt_select_deletions(self) -> None:
         query = {
             "project": 1,
             "groupby": "project_id",
@@ -1270,7 +1270,7 @@ class TestApi(BaseApiTest):
         result2 = json.loads(self.app.post("/query", data=json.dumps(query)).data)
         assert result1["data"] == result2["data"]
 
-    def test_selected_columns(self):
+    def test_selected_columns(self) -> None:
         query = {
             "project": 1,
             "selected_columns": ["platform", "message"],
@@ -1281,7 +1281,7 @@ class TestApi(BaseApiTest):
         assert len(result["data"]) == 180
         assert result["data"][0] == {"message": "a message", "platform": "a"}
 
-    def test_complex_selected_columns(self):
+    def test_complex_selected_columns(self) -> None:
         query = {
             "project": 1,
             "selected_columns": ["platform", ["notEmpty", ["exception_stacks.type"]]],
@@ -1306,7 +1306,7 @@ class TestApi(BaseApiTest):
         assert "type_not_empty" in result["data"][0]
         assert result["data"][0]["type_not_empty"] == 1
 
-    def test_complex_order(self):
+    def test_complex_order(self) -> None:
         # sort by a complex sort key with an expression, and a regular column,
         # and both ASC and DESC sorts.
         result = json.loads(
@@ -1332,7 +1332,7 @@ class TestApi(BaseApiTest):
         test_timestamps = [d["time"] for d in result["data"][:90]]
         assert sorted(test_timestamps) == test_timestamps
 
-    def test_nullable_datetime_columns(self):
+    def test_nullable_datetime_columns(self) -> None:
         # Test that requesting a Nullable(DateTime) column does not throw
         query = {
             "project": 1,
@@ -1340,7 +1340,7 @@ class TestApi(BaseApiTest):
         }
         json.loads(self.app.post("/query", data=json.dumps(query)).data)
 
-    def test_duplicate_column(self):
+    def test_duplicate_column(self) -> None:
         query = {
             "selected_columns": ["timestamp", "timestamp"],
             "limit": 3,
@@ -1352,7 +1352,7 @@ class TestApi(BaseApiTest):
         result = json.loads(self.app.post("/query", data=json.dumps(query)).data)
         assert result["meta"] == [{"name": "timestamp", "type": "DateTime"}]
 
-    def test_test_endpoints(self):
+    def test_test_endpoints(self) -> None:
         project_id = 73
         group_id = 74
         event = (
@@ -1423,7 +1423,7 @@ class TestApi(BaseApiTest):
         assert len(clickhouse.execute(f"SELECT * FROM {self.table}")) == 0
 
     @pytest.mark.xfail
-    def test_row_stats(self):
+    def test_row_stats(self) -> None:
         query = {
             "project": 1,
             "selected_columns": ["platform"],
@@ -1434,12 +1434,12 @@ class TestApi(BaseApiTest):
         assert "bytes_read" in result["stats"]
         assert result["stats"]["bytes_read"] > 0
 
-    def test_static_page_renders(self):
+    def test_static_page_renders(self) -> None:
         response = self.app.get("/config")
         assert response.status_code == 200
         assert len(response.data) > 100
 
-    def test_exception_captured_by_sentry(self):
+    def test_exception_captured_by_sentry(self) -> None:
         events = []
         with Hub(Client(transport=events.append)):
             # This endpoint should return 500 as it internally raises an exception
@@ -1449,7 +1449,7 @@ class TestApi(BaseApiTest):
             assert len(events) == 1
             assert events[0]["exception"]["values"][0]["type"] == "ZeroDivisionError"
 
-    def test_split_query(self):
+    def test_split_query(self) -> None:
         state.set_config("use_split", 1)
         state.set_config("split_step", 3600)  # first batch will be 1 hour
         try:
@@ -1744,7 +1744,7 @@ class TestApi(BaseApiTest):
         finally:
             state.set_config("use_split", 0)
 
-    def test_consistent(self):
+    def test_consistent(self) -> None:
         response = json.loads(
             self.app.post(
                 "/query",
@@ -1760,7 +1760,7 @@ class TestApi(BaseApiTest):
         )
         assert response["stats"]["consistent"]
 
-    def test_gracefully_handle_multiple_conditions_on_same_column(self):
+    def test_gracefully_handle_multiple_conditions_on_same_column(self) -> None:
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -1778,7 +1778,7 @@ class TestApi(BaseApiTest):
 
         assert response.status_code == 200
 
-    def test_mandatory_conditions(self):
+    def test_mandatory_conditions(self) -> None:
         result = json.loads(
             self.app.post(
                 "/query",
@@ -1849,7 +1849,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
             "subscription_id": f"0/{expected_uuid.hex}",
         }
 
-    def test_time_error(self):
+    def test_time_error(self) -> None:
         resp = self.app.post(
             "{}/subscriptions".format(self.dataset_name),
             data=json.dumps(

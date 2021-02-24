@@ -4,10 +4,12 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial, reduce
 from hashlib import md5
-from typing import Any, Mapping, MutableMapping, Optional, Set, Union
+from typing import Any, Mapping, MutableMapping, Optional, Set, Union, cast
 
+import rapidjson
 import sentry_sdk
 from sentry_sdk.api import configure_scope
+
 from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
@@ -27,19 +29,35 @@ from snuba.reader import Reader, Result
 from snuba.redis import redis_client
 from snuba.request.request_settings import RequestSettings
 from snuba.state.cache.abstract import Cache
-from snuba.state.cache.redis.backend import RedisCache
+from snuba.state.cache.redis.backend import (
+    RESULT_VALUE,
+    RESULT_WAIT,
+    RedisCache,
+)
 from snuba.state.rate_limit import (
     PROJECT_RATE_LIMIT_NAME,
     RateLimitAggregator,
     RateLimitExceeded,
 )
 from snuba.util import force_bytes, with_span
-from snuba.utils.codecs import JSONCodec, JSONData
+from snuba.utils.codecs import Codec
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
 
-cache: Cache[JSONData] = RedisCache(
-    redis_client, "snuba-query-cache:", JSONCodec(), ThreadPoolExecutor()
+
+class ResultCacheCodec(Codec[bytes, Result]):
+    def encode(self, value: Result) -> bytes:
+        return cast(str, rapidjson.dumps(value)).encode("utf-8")
+
+    def decode(self, value: bytes) -> Result:
+        ret = rapidjson.loads(value)
+        if not isinstance(ret, Mapping) or "meta" not in ret or "data" not in ret:
+            raise ValueError("Invalid value type in result cache")
+        return cast(Result, ret)
+
+
+cache: Cache[Result] = RedisCache(
+    redis_client, "snuba-query-cache:", ResultCacheCodec(), ThreadPoolExecutor()
 )
 
 logger = logging.getLogger("snuba.query")
@@ -179,6 +197,7 @@ def execute_query(
     # Experiment, if we are going to grab more than X columns worth of data,
     # don't use uncompressed_cache in ClickHouse.
     uc_max = state.get_config("uncompressed_cache_max_cols", 5)
+    assert isinstance(uc_max, int)
     column_counter = ReferencedColumnsCounter()
     column_counter.visit(clickhouse_query.get_from_clause())
     if column_counter.count_columns() > uc_max:
@@ -270,6 +289,7 @@ def execute_query_with_caching(
 
     column_counter = ReferencedColumnsCounter()
     column_counter.visit(clickhouse_query.get_from_clause())
+    assert isinstance(uc_max, int)
     if column_counter.count_columns() > uc_max:
         use_cache = False
 
@@ -315,6 +335,13 @@ def execute_query_with_readthrough_caching(
 ) -> Result:
     query_id = get_query_cache_key(formatted_query)
     query_settings["query_id"] = query_id
+
+    def record_cache_hit_type(hit_type: int) -> None:
+        if hit_type == RESULT_VALUE:
+            stats["cache_hit"] = 1
+        elif hit_type == RESULT_WAIT:
+            stats["is_duplicate"] = 1
+
     return cache.get_readthrough(
         query_id,
         partial(
@@ -327,6 +354,7 @@ def execute_query_with_readthrough_caching(
             stats,
             query_settings,
         ),
+        record_cache_hit_type=record_cache_hit_type,
         timeout=query_settings.get("max_execution_time", 30),
         timer=timer,
     )

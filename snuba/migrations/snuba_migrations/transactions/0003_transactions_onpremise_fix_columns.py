@@ -8,7 +8,7 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 UNKNOWN_SPAN_STATUS = 2
 
 
-class Migration(migration.MultiStepMigration):
+class Migration(migration.ClickhouseNodeMigration):
     """
     The second of two migrations that syncs the transactions_local table for onpremise
     users migrating from versions of Snuba prior to the migration system.
@@ -18,7 +18,7 @@ class Migration(migration.MultiStepMigration):
 
     blocking = True  # Just to be safe since we are changing some column types
 
-    def forwards_local(self) -> Sequence[operations.Operation]:
+    def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.ModifyColumn(
                 storage_set=StorageSetKey.TRANSACTIONS,
@@ -132,11 +132,11 @@ class Migration(migration.MultiStepMigration):
             ),
         ]
 
-    def backwards_local(self) -> Sequence[operations.Operation]:
+    def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return []
 
-    def forwards_dist(self) -> Sequence[operations.Operation]:
+    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return []
 
-    def backwards_dist(self) -> Sequence[operations.Operation]:
+    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return []

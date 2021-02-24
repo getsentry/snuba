@@ -1,8 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar
-
-import rapidjson
-
+from typing import Generic, TypeVar
 
 TEncoded = TypeVar("TEncoded")
 
@@ -36,14 +33,3 @@ class PassthroughCodec(Generic[T], Codec[T, T]):
 
     def decode(self, value: T) -> T:
         return value
-
-
-JSONData = Any
-
-
-class JSONCodec(Codec[str, JSONData]):
-    def encode(self, value: JSONData) -> str:
-        return rapidjson.dumps(value)
-
-    def decode(self, value: str) -> JSONData:
-        return rapidjson.loads(value)

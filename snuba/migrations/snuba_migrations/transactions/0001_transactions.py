@@ -61,10 +61,10 @@ columns: List[Column[Modifiers]] = [
 ]
 
 
-class Migration(migration.MultiStepMigration):
+class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
-    def forwards_local(self) -> Sequence[operations.Operation]:
+    def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.TRANSACTIONS,
@@ -82,16 +82,16 @@ class Migration(migration.MultiStepMigration):
             )
         ]
 
-    def backwards_local(self) -> Sequence[operations.Operation]:
+    def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.TRANSACTIONS, table_name="transactions_local",
             )
         ]
 
-    def forwards_dist(self) -> Sequence[operations.Operation]:
+    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         # We removed the materialized for the dist table DDL.
-        def strip_materialized(columns: Sequence[Column]) -> None:
+        def strip_materialized(columns: Sequence[Column[Modifiers]]) -> None:
             for col in columns:
                 if col.type.has_modifier(Materialized):
                     modifiers = col.type.get_modifiers()
@@ -115,7 +115,7 @@ class Migration(migration.MultiStepMigration):
             )
         ]
 
-    def backwards_dist(self) -> Sequence[operations.Operation]:
+    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.TRANSACTIONS, table_name="transactions_dist",

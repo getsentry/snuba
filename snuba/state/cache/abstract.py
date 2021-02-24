@@ -35,6 +35,7 @@ class Cache(Generic[TValue], ABC):
         self,
         key: str,
         function: Callable[[], TValue],
+        record_cache_hit_type: Callable[[int], None],
         timeout: int,
         timer: Optional[Timer] = None,
     ) -> TValue:

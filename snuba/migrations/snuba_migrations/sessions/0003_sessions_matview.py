@@ -93,7 +93,7 @@ GROUP BY
 """
 
 
-class Migration(migration.MultiStepMigration):
+class Migration(migration.ClickhouseNodeMigration):
     """
     This migration re-creates the materialized view that aggregates sessions.
     It is now using the new `X_preaggr` columns based on the `quantity`.
@@ -101,7 +101,7 @@ class Migration(migration.MultiStepMigration):
 
     blocking = False
 
-    def forwards_local(self) -> Sequence[operations.Operation]:
+    def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.SESSIONS,
@@ -116,7 +116,7 @@ class Migration(migration.MultiStepMigration):
             ),
         ]
 
-    def backwards_local(self) -> Sequence[operations.Operation]:
+    def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.SESSIONS,
@@ -125,8 +125,8 @@ class Migration(migration.MultiStepMigration):
             create_matview_v1,
         ]
 
-    def forwards_dist(self) -> Sequence[operations.Operation]:
+    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return []
 
-    def backwards_dist(self) -> Sequence[operations.Operation]:
+    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return []

@@ -54,7 +54,7 @@ new_dest_columns: Sequence[Tuple[Column[Modifiers], str]] = [
 ]
 
 
-class Migration(migration.MultiStepMigration):
+class Migration(migration.ClickhouseNodeMigration):
     """
     This migration adds new columns to both the raw and aggregated sessions.
     The new `X_preaggr` columns in the aggregated dataset will be used later on
@@ -63,7 +63,7 @@ class Migration(migration.MultiStepMigration):
 
     blocking = False
 
-    def forwards_local(self) -> Sequence[operations.Operation]:
+    def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.AddColumn(
                 storage_set=StorageSetKey.SESSIONS,
@@ -82,7 +82,7 @@ class Migration(migration.MultiStepMigration):
             for [column, after] in new_dest_columns
         ]
 
-    def backwards_local(self) -> Sequence[operations.Operation]:
+    def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropColumn(
                 StorageSetKey.SESSIONS, "sessions_raw_local", column.name
@@ -95,7 +95,7 @@ class Migration(migration.MultiStepMigration):
             for [column, after] in new_dest_columns
         ]
 
-    def forwards_dist(self) -> Sequence[operations.Operation]:
+    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.AddColumn(
                 storage_set=StorageSetKey.SESSIONS,
@@ -114,7 +114,7 @@ class Migration(migration.MultiStepMigration):
             for [column, after] in new_dest_columns
         ]
 
-    def backwards_dist(self) -> Sequence[operations.Operation]:
+    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropColumn(
                 StorageSetKey.SESSIONS, "sessions_raw_dist", column.name
