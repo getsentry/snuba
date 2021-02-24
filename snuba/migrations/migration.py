@@ -95,7 +95,7 @@ class CodeMigration(Migration, ABC):
 
 class ClickhouseNodeMigration(Migration, ABC):
     """
-    A MultiStepMigration consists of one or more forward operations which will be executed
+    A ClickhouseNodeMigration consists of one or more forward operations which will be executed
     on all of the local and distributed nodes of the cluster. Upon error, the backwards
     methods can be executed to restore the state. The backwards operations are responsible
     for returning the system to its pre-migration state, so that the forwards methods can be
