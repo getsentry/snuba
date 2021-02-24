@@ -99,8 +99,8 @@ def get_time_range_expressions(
     Optional[Tuple[datetime, FunctionCallExpr]],
     Optional[Tuple[datetime, FunctionCallExpr]],
 ]:
-    max_lower_bound = None
-    min_upper_bound = None
+    max_lower_bound: Optional[Tuple[datetime, FunctionCallExpr]] = None
+    min_upper_bound: Optional[Tuple[datetime, FunctionCallExpr]] = None
     table_match = String(table_name) if table_name else None
     for c in conditions:
         match = FunctionCall(
