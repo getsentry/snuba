@@ -159,6 +159,10 @@ def callback_func(
                 },
             )
         else:
+            # Do not log cache hits to Sentry as it creates too much noise
+            if cache_hit:
+                continue
+
             reason = assign_reason_category(result_data, primary_result_data, referrer)
 
             metrics.increment(
@@ -310,7 +314,7 @@ class BaseEventsEntity(Entity, ABC):
             if random.random() < float(threshold):
                 return "events", ["errors"]
 
-            return "events", []
+            return "events", ["errors"]
 
         def writable_storage() -> WritableTableStorage:
             if settings.ERRORS_ROLLOUT_WRITABLE_STORAGE:
