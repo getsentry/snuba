@@ -27,19 +27,7 @@ from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 
 
-class TestApi(BaseApiTest):
-    @pytest.fixture  # type: ignore
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
-        return "events"
-
-    @pytest.fixture  # type: ignore
-    def test_app(self) -> Any:
-        return self.app
-
-    @pytest.fixture(autouse=True)  # type: ignore
-    def setup_post(self, _build_snql_post_methods: Callable[..., Any]) -> None:
-        self.post = _build_snql_post_methods
-
+class SimpleAPITest(BaseApiTest):
     def setup_method(self, test_method: Callable[..., Any]) -> None:
         super().setup_method(test_method)
 
@@ -166,6 +154,20 @@ class TestApi(BaseApiTest):
             return sum(dbsize.values())
         else:
             return dbsize
+
+
+class TestApi(SimpleAPITest):
+    @pytest.fixture  # type: ignore
+    def test_entity(self) -> Union[str, Tuple[str, str]]:
+        return "events"
+
+    @pytest.fixture  # type: ignore
+    def test_app(self) -> Any:
+        return self.app
+
+    @pytest.fixture(autouse=True)  # type: ignore
+    def setup_post(self, _build_snql_post_methods: Callable[..., Any]) -> None:
+        self.post = _build_snql_post_methods
 
     def test_count(self) -> None:
         """
@@ -1925,135 +1927,8 @@ class TestDeleteSubscriptionApi(BaseApiTest):
         )
 
 
-class TestExtraAPI(BaseApiTest):
-    """ These are tests for features that are not supported in SnQL. """
-
-    def setup_method(self, test_method: Callable[..., Any]) -> None:
-        super().setup_method(test_method)
-
-        # values for test data
-        self.project_ids = [1, 2, 3]  # 3 projects
-        self.environments = ["prød", "test"]  # 2 environments
-        self.platforms = ["a", "b", "c", "d", "e", "f"]  # 6 platforms
-        self.hashes = [x * 32 for x in "0123456789ab"]  # 12 hashes
-        self.group_ids = [int(hsh[:16], 16) for hsh in self.hashes]
-        self.minutes = 180
-
-        self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0
-        ) - timedelta(minutes=self.minutes)
-        storage = get_entity(EntityKey.EVENTS).get_writable_storage()
-        assert storage is not None
-        self.storage = storage
-        self.table = self.storage.get_table_writer().get_schema().get_table_name()
-        self.generate_fizzbuzz_events()
-
-    def teardown_method(self, test_method: Callable[..., Any]) -> None:
-        # Reset rate limits
-        state.delete_config("global_concurrent_limit")
-        state.delete_config("global_per_second_limit")
-        state.delete_config("project_concurrent_limit")
-        state.delete_config("project_concurrent_limit_1")
-        state.delete_config("project_per_second_limit")
-        state.delete_config("date_align_seconds")
-
-    def write_events(self, events: Sequence[InsertEvent]) -> None:
-        processor = self.storage.get_table_writer().get_stream_loader().get_processor()
-
-        processed_messages = []
-        for i, event in enumerate(events):
-            processed_message = processor.process_message(
-                (2, "insert", event, {}), KafkaMessageMetadata(i, 0, datetime.now())
-            )
-            assert processed_message is not None
-            processed_messages.append(processed_message)
-
-        write_processed_messages(self.storage, processed_messages)
-
-    def generate_fizzbuzz_events(self) -> None:
-        """
-        Generate a deterministic set of events across a time range.
-        """
-
-        events = []
-        for tick in range(self.minutes):
-            tock = tick + 1
-            for p in self.project_ids:
-                # project N sends an event every Nth minute
-                if tock % p == 0:
-                    events.append(
-                        InsertEvent(
-                            {
-                                "organization_id": 1,
-                                "project_id": p,
-                                "event_id": uuid.uuid4().hex,
-                                "datetime": (
-                                    self.base_time + timedelta(minutes=tick)
-                                ).strftime(settings.PAYLOAD_DATETIME_FORMAT),
-                                "message": "a message",
-                                "platform": self.platforms[
-                                    (tock * p) % len(self.platforms)
-                                ],
-                                "primary_hash": self.hashes[
-                                    (tock * p) % len(self.hashes)
-                                ],
-                                "group_id": self.group_ids[
-                                    (tock * p) % len(self.hashes)
-                                ],
-                                "retention_days": settings.DEFAULT_RETENTION_DAYS,
-                                "data": {
-                                    # Project N sends every Nth (mod len(hashes)) hash (and platform)
-                                    "received": calendar.timegm(
-                                        (
-                                            self.base_time + timedelta(minutes=tick)
-                                        ).timetuple()
-                                    ),
-                                    "tags": {
-                                        # Sentry
-                                        "environment": self.environments[
-                                            (tock * p) % len(self.environments)
-                                        ],
-                                        "sentry:release": str(tick),
-                                        "sentry:dist": "dist1",
-                                        "os.name": "windows",
-                                        "os.rooted": 1,
-                                        # User
-                                        "foo": "baz",
-                                        "foo.bar": "qux",
-                                        "os_name": "linux",
-                                    },
-                                    "exception": {
-                                        "values": [
-                                            {
-                                                "stacktrace": {
-                                                    "frames": [
-                                                        {
-                                                            "filename": "foo.py",
-                                                            "lineno": tock,
-                                                        },
-                                                        {
-                                                            "filename": "bar.py",
-                                                            "lineno": tock * 2,
-                                                        },
-                                                    ]
-                                                }
-                                            }
-                                        ]
-                                    },
-                                },
-                            }
-                        )
-                    )
-        self.write_events(events)
-
-    def redis_db_size(self) -> int:
-        # dbsize could be an integer for a single node cluster or a dictionary
-        # with one key value pair per node for a multi node cluster
-        dbsize = redis_client.dbsize()
-        if isinstance(dbsize, dict):
-            return sum(dbsize.values())
-        else:
-            return dbsize
+class TestLegacyAPI(SimpleAPITest):
+    """ Tests for features that are not SnQL compliant or that don't work with pytest.params """
 
     def test_invalid_queries(self) -> None:
         result = self.app.post(
