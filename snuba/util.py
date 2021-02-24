@@ -220,8 +220,8 @@ def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
     with the specified prefix and tags. Return a DummyMetricsBackend otherwise.
     Prefixes must start with `snuba.<category>`, for example: `snuba.processor`.
     """
-    host = settings.DOGSTATSD_HOST
-    port = settings.DOGSTATSD_PORT
+    host: Optional[str] = settings.DOGSTATSD_HOST
+    port: Optional[int] = settings.DOGSTATSD_PORT
 
     if host is None and port is None:
         from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
