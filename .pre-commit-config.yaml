@@ -25,6 +25,6 @@ repos:
     rev: 'v0.800'
     hooks:
     -   id: mypy
-        args: [--config-file, mypy.ini, --ignore-missing-imports, --strict]
+        args: [--config-file, mypy.ini, --ignore-missing-imports, --strict, --warn-unreachable]
 default_language_version:
   python: python3.8

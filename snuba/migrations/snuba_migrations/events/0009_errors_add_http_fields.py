@@ -6,7 +6,7 @@ from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
-class Migration(migration.MultiStepMigration):
+class Migration(migration.ClickhouseNodeMigration):
     """
     Adds the http columns defined, with the method and referer coming from the request interface
     and url materialized from the tags.
@@ -14,7 +14,7 @@ class Migration(migration.MultiStepMigration):
 
     blocking = False
 
-    def forwards_local(self) -> Sequence[operations.Operation]:
+    def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
@@ -33,13 +33,13 @@ class Migration(migration.MultiStepMigration):
             ),
         ]
 
-    def backwards_local(self) -> Sequence[operations.Operation]:
+    def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropColumn(StorageSetKey.EVENTS, "errors_local", "http_method"),
             operations.DropColumn(StorageSetKey.EVENTS, "errors_local", "http_referer"),
         ]
 
-    def forwards_dist(self) -> Sequence[operations.Operation]:
+    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
@@ -58,7 +58,7 @@ class Migration(migration.MultiStepMigration):
             ),
         ]
 
-    def backwards_dist(self) -> Sequence[operations.Operation]:
+    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropColumn(StorageSetKey.EVENTS, "errors_dist", "http_method"),
             operations.DropColumn(StorageSetKey.EVENTS, "errors_dist", "http_referer"),

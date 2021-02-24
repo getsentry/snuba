@@ -1,8 +1,7 @@
 from datetime import datetime
 from typing import Optional, Sequence, Set, Tuple, cast
 
-from snuba.clickhouse.query import Query
-from snuba.query import ProcessableQuery
+from snuba.query import ProcessableQuery, TSimpleDataSource
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     BooleanFunctions,
@@ -27,7 +26,7 @@ from snuba.query.matchers import (
 
 
 def get_project_ids_in_query_ast(
-    query: Query, project_column: str
+    query: ProcessableQuery[TSimpleDataSource], project_column: str
 ) -> Optional[Set[int]]:
     """
     Finds the project ids this query is filtering according to the AST
@@ -100,8 +99,8 @@ def get_time_range_expressions(
     Optional[Tuple[datetime, FunctionCallExpr]],
     Optional[Tuple[datetime, FunctionCallExpr]],
 ]:
-    max_lower_bound = None
-    min_upper_bound = None
+    max_lower_bound: Optional[Tuple[datetime, FunctionCallExpr]] = None
+    min_upper_bound: Optional[Tuple[datetime, FunctionCallExpr]] = None
     table_match = String(table_name) if table_name else None
     for c in conditions:
         match = FunctionCall(
