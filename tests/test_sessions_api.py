@@ -6,7 +6,7 @@ import simplejson as json
 from typing import Any, Callable, Tuple, Union
 
 
-from snuba import settings
+from snuba import settings, state
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
@@ -147,6 +147,7 @@ class TestSessionsApi(BaseApiTest):
                     "status": "exited",
                     "duration": 1947.49,
                     "session_id": "8333339f-5675-4f89-a9a0-1c935255ab58",
+                    "started": (self.started + timedelta(minutes=13)).timestamp(),
                 },
                 meta,
             ),
@@ -163,6 +164,7 @@ class TestSessionsApi(BaseApiTest):
                     "status": "errored",
                     "errors": 1,
                     "quantity": 2,
+                    "started": (self.started + timedelta(minutes=24)).timestamp(),
                 },
                 meta,
             ),
@@ -192,8 +194,57 @@ class TestSessionsApi(BaseApiTest):
         )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
+
         assert len(data["data"]) == 1, data
         assert data["data"][0]["sessions"] == 10
         assert data["data"][0]["sessions_errored"] == 4
         assert data["data"][0]["users"] == 1
         assert data["data"][0]["users_errored"] == 1
+
+    # the test sessions have timestamps of `:00`, `:13` and `:24`, so they will
+    # end up in 3 buckets no matter if we group by minute, 2 minutes or 10 minutes
+    @pytest.mark.parametrize("granularity", [60, 120, 600])
+    def test_session_small_granularity(
+        self, get_project_id: Callable[[], int], granularity: int
+    ):
+        state.set_config("allow_subhour_sessions", 1)
+        project_id = get_project_id()
+        self.generate_session_events(project_id)
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "sessions",
+                    "organization": 1,
+                    "project": project_id,
+                    "selected_columns": [
+                        "bucketed_started",
+                        "sessions",
+                        "sessions_errored",
+                        "users",
+                        "users_errored",
+                    ],
+                    "groupby": ["bucketed_started"],
+                    "orderby": ["bucketed_started"],
+                    "granularity": granularity,
+                    "from_date": (self.started - self.skew).isoformat(),
+                    "to_date": (self.started + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+
+        assert len(data["data"]) == 3, data
+        assert data["data"][0]["sessions"] == 7
+        assert data["data"][0]["sessions_errored"] == 2
+        assert data["data"][0]["users"] == 1
+        assert data["data"][0]["users_errored"] == 1
+        assert data["data"][1]["sessions"] == 1
+        assert data["data"][1]["sessions_errored"] == 0
+        assert data["data"][1]["users"] == 1
+        assert data["data"][1]["users_errored"] == 0
+        assert data["data"][2]["sessions"] == 2
+        assert data["data"][2]["sessions_errored"] == 2
+        assert data["data"][2]["users"] == 1
+        assert data["data"][2]["users_errored"] == 1
