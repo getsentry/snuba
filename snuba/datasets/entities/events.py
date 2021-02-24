@@ -314,7 +314,7 @@ class BaseEventsEntity(Entity, ABC):
             if random.random() < float(threshold):
                 return "events", ["errors"]
 
-            return "events", ["errors"]
+            return "events", []
 
         def writable_storage() -> WritableTableStorage:
             if settings.ERRORS_ROLLOUT_WRITABLE_STORAGE:
