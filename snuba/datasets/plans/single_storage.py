@@ -80,7 +80,6 @@ def get_query_data_source(
         final=final,
         sampling_rate=sampling_rate,
         mandatory_conditions=relational_source.get_mandatory_conditions(),
-        prewhere_candidates=relational_source.get_prewhere_candidates(),
     )
 
 
