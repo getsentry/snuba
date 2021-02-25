@@ -42,9 +42,6 @@ class GroupedMessageEntity(Entity):
             required_time_column=None,
         )
 
-    def get_prewhere_keys(self) -> Sequence[str]:
-        return ["project_id"]
-
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
