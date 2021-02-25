@@ -3,7 +3,7 @@ import queue
 import re
 import time
 from datetime import date, datetime
-from typing import Mapping, Optional
+from typing import Any, Mapping, Optional, Sequence, Union
 from uuid import UUID
 
 from clickhouse_driver import Client, errors
@@ -15,6 +15,8 @@ from snuba.reader import Reader, Result, build_result_transformer
 
 logger = logging.getLogger("snuba.clickhouse")
 
+Params = Optional[Union[Sequence[Any], Mapping[str, Any]]]
+
 
 class ClickhousePool(object):
     def __init__(
@@ -24,11 +26,11 @@ class ClickhousePool(object):
         user: str,
         password: str,
         database: str,
-        connect_timeout=1,
-        send_receive_timeout=300,
-        max_pool_size=settings.CLICKHOUSE_MAX_POOL_SIZE,
-        client_settings={},
-    ):
+        connect_timeout: int = 1,
+        send_receive_timeout: Optional[int] = 300,
+        max_pool_size: int = settings.CLICKHOUSE_MAX_POOL_SIZE,
+        client_settings: Mapping[str, Any] = {},
+    ) -> None:
         self.host = host
         self.port = port
         self.user = user
@@ -38,13 +40,24 @@ class ClickhousePool(object):
         self.send_receive_timeout = send_receive_timeout
         self.client_settings = client_settings
 
-        self.pool = queue.LifoQueue(max_pool_size)
+        self.pool: queue.LifoQueue[Optional[Client]] = queue.LifoQueue(max_pool_size)
 
         # Fill the queue up so that doing get() on it will block properly
         for _ in range(max_pool_size):
             self.pool.put(None)
 
-    def execute(self, *args, **kwargs):
+    # This will actually return an int if an INSERT query is run, but we never capture the
+    # output of INSERT queries so I left this as a Sequence.
+    def execute(
+        self,
+        query: str,
+        params: Params = None,
+        with_column_types: bool = False,
+        query_id: Optional[str] = None,
+        settings: Optional[Mapping[str, Any]] = None,
+        types_check: bool = False,
+        columnar: bool = False,
+    ) -> Sequence[Any]:
         """
         Execute a clickhouse query with a single quick retry in case of
         connection failure.
@@ -64,7 +77,15 @@ class ClickhousePool(object):
                     conn = self._create_conn()
 
                 try:
-                    result = conn.execute(*args, **kwargs)
+                    result: Sequence[Any] = conn.execute(
+                        query,
+                        params=params,
+                        with_column_types=with_column_types,
+                        query_id=query_id,
+                        settings=settings,
+                        types_check=types_check,
+                        columnar=columnar,
+                    )
                     return result
                 except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
                     # Force a reconnection next time
@@ -83,7 +104,18 @@ class ClickhousePool(object):
         finally:
             self.pool.put(conn, block=False)
 
-    def execute_robust(self, *args, **kwargs):
+        return []
+
+    def execute_robust(
+        self,
+        query: str,
+        params: Params = None,
+        with_column_types: bool = False,
+        query_id: Optional[str] = None,
+        settings: Optional[Mapping[str, Any]] = None,
+        types_check: bool = False,
+        columnar: bool = False,
+    ) -> Sequence[Any]:
         """
         Execute a clickhouse query with a bit more tenacity. Make more retry
         attempts, (infinite in the case of too many simultaneous queries
@@ -97,7 +129,15 @@ class ClickhousePool(object):
 
         while True:
             try:
-                return self.execute(*args, **kwargs)
+                return self.execute(
+                    query,
+                    params=params,
+                    with_column_types=with_column_types,
+                    query_id=query_id,
+                    settings=settings,
+                    types_check=types_check,
+                    columnar=columnar,
+                )
             except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
                 # Try 3 times on connection issues.
                 logger.warning(
@@ -125,7 +165,7 @@ class ClickhousePool(object):
             except errors.Error as e:
                 raise ClickhouseError(e.code, e.message) from e
 
-    def _create_conn(self):
+    def _create_conn(self) -> Client:
         return Client(
             host=self.host,
             port=self.port,
@@ -191,7 +231,7 @@ class NativeDriverReader(Reader):
     def __init__(self, client: ClickhousePool) -> None:
         self.__client = client
 
-    def __transform_result(self, result, with_totals: bool) -> Result:
+    def __transform_result(self, result: Sequence[Any], with_totals: bool) -> Result:
         """
         Transform a native driver response into a response that is
         structurally similar to a ClickHouse-flavored JSON response.
@@ -212,16 +252,17 @@ class NativeDriverReader(Reader):
             {"name": m[0], "type": m[1]} for m in [meta[i] for i in columns.values()]
         ]
 
+        new_result: Result = {}
         if with_totals:
             assert len(data) > 0
             totals = data.pop(-1)
-            result = {"data": data, "meta": meta, "totals": totals}
+            new_result = {"data": data, "meta": meta, "totals": totals}
         else:
-            result = {"data": data, "meta": meta}
+            new_result = {"data": data, "meta": meta}
 
-        transform_column_types(result)
+        transform_column_types(new_result)
 
-        return result
+        return new_result
 
     def execute(
         self,
@@ -232,13 +273,16 @@ class NativeDriverReader(Reader):
     ) -> Result:
         settings = {**settings} if settings is not None else {}
 
-        kwargs = {}
+        query_id = None
         if "query_id" in settings:
-            kwargs["query_id"] = settings.pop("query_id")
+            query_id = settings.pop("query_id")
 
         return self.__transform_result(
             self.__client.execute(
-                query.get_sql(), with_column_types=True, settings=settings, **kwargs
+                query.get_sql(),
+                with_column_types=True,
+                query_id=query_id,
+                settings=settings,
             ),
             with_totals=with_totals,
         )

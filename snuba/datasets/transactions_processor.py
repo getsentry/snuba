@@ -2,11 +2,12 @@ import logging
 import numbers
 import uuid
 from datetime import datetime
-from typing import Any, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping, Optional, Tuple
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
 from snuba import environment
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import (
     EventTooOld,
     enforce_retention,
@@ -44,7 +45,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         "sentry:dist",
     }
 
-    def __extract_timestamp(self, field):
+    def __extract_timestamp(self, field: int) -> Tuple[datetime, int]:
         # We are purposely using a naive datetime here to work with the rest of the codebase.
         # We can be confident that clients are only sending UTC dates.
         timestamp = _ensure_valid_date(datetime.utcfromtimestamp(field))
@@ -53,8 +54,10 @@ class TransactionsMessageProcessor(MessageProcessor):
         milliseconds = int(timestamp.microsecond / 1000)
         return (timestamp, milliseconds)
 
-    def process_message(self, message, metadata) -> Optional[ProcessedMessage]:
-        processed = {"deleted": 0}
+    def process_message(
+        self, message: Tuple[int, str, Any], metadata: KafkaMessageMetadata
+    ) -> Optional[ProcessedMessage]:
+        processed: MutableMapping[str, Any] = {"deleted": 0}
         if not (isinstance(message, (list, tuple)) and len(message) >= 2):
             return None
         version = message[0]
@@ -109,7 +112,8 @@ class TransactionsMessageProcessor(MessageProcessor):
         except Exception:
             # all these fields are required but we saw some events go through here
             # in the past.  For now bail.
-            return
+            return None
+
         processed["finish_ts"], processed["finish_ms"] = self.__extract_timestamp(
             data["timestamp"],
         )
@@ -119,7 +123,7 @@ class TransactionsMessageProcessor(MessageProcessor):
 
         processed["platform"] = _unicodify(event["platform"])
 
-        tags = _as_dict_safe(data.get("tags", None))
+        tags: Mapping[str, Any] = _as_dict_safe(data.get("tags", None))
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
 
         promoted_tags = {col: tags[col] for col in self.PROMOTED_TAGS if col in tags}
@@ -128,7 +132,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         )
         processed["environment"] = promoted_tags.get("environment")
 
-        contexts = _as_dict_safe(data.get("contexts", None))
+        contexts: MutableMapping[str, Any] = _as_dict_safe(data.get("contexts", None))
 
         user_dict = data.get("user", data.get("sentry.interfaces.User", None)) or {}
         geo = user_dict.get("geo", None) or {}
@@ -172,7 +176,7 @@ class TransactionsMessageProcessor(MessageProcessor):
             promoted_tags.get("sentry:dist", data.get("dist")),
         )
 
-        user_data = {}
+        user_data: MutableMapping[str, Any] = {}
         extract_user(user_data, user_dict)
         processed["user"] = promoted_tags.get("sentry:user", "")
         processed["user_name"] = user_data["username"]

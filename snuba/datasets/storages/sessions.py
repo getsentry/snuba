@@ -90,13 +90,11 @@ read_schema = TableSchema(
     local_table_name=READ_LOCAL_TABLE_NAME,
     dist_table_name=READ_DIST_TABLE_NAME,
     storage_set_key=StorageSetKey.SESSIONS,
-    prewhere_candidates=["project_id", "org_id"],
 )
 materialized_view_schema = TableSchema(
     local_table_name=READ_LOCAL_MV_NAME,
     dist_table_name=READ_DIST_MV_NAME,
     storage_set_key=StorageSetKey.SESSIONS,
-    prewhere_candidates=["project_id", "org_id"],
     columns=read_columns,
 )
 
@@ -118,5 +116,5 @@ materialized_storage = ReadableTableStorage(
     storage_key=StorageKey.SESSIONS_HOURLY,
     storage_set_key=StorageSetKey.SESSIONS,
     schema=read_schema,
-    query_processors=[PrewhereProcessor()],
+    query_processors=[PrewhereProcessor(["project_id", "org_id"])],
 )

@@ -1,5 +1,5 @@
 from collections import ChainMap
-from typing import FrozenSet, Mapping, Sequence
+from typing import FrozenSet, Mapping, Sequence, cast
 
 from snuba.clickhouse.columns import (
     Array,
@@ -133,7 +133,10 @@ all_columns = (
         # other tags
         ("tags", Nested([("key", String()), ("value", String())])),
         ("_tags_flattened", String()),
-        ("_tags_hash_map", Array(UInt(64), Modifiers(readonly=True))),
+        (
+            "_tags_hash_map",
+            cast(Array[Modifiers], Array(UInt(64), Modifiers(readonly=True))),
+        ),
         # other context
         ("contexts", Nested([("key", String()), ("value", String())])),
         # http interface
@@ -163,7 +166,7 @@ all_columns = (
                     ("in_app", UInt(8, Modifiers(nullable=True))),
                     ("colno", UInt(32, Modifiers(nullable=True))),
                     ("lineno", UInt(32, Modifiers(nullable=True))),
-                    ("stack_level", UInt(16)),
+                    ("stack_level", UInt(16, Modifiers())),
                 ]
             ),
         ),
@@ -174,9 +177,6 @@ all_columns = (
         ("culprit", String(Modifiers(nullable=True))),
         ("sdk_integrations", Array(String())),
         ("modules", Nested([("name", String()), ("version", String())])),
-        ("release", String(Modifiers(nullable=True, readonly=True))),
-        ("dist", String(Modifiers(nullable=True, readonly=True))),
-        ("user", String(Modifiers(nullable=True, readonly=True))),
     ]
 )
 
@@ -233,7 +233,7 @@ def get_column_tag_map() -> Mapping[str, Mapping[str, str]]:
 def get_tag_column_map() -> Mapping[str, Mapping[str, str]]:
     # And a reverse map from the tags the client expects to the database columns
     return {
-        col: dict(map(reversed, trans.items()))
+        col: dict(map(reversed, trans.items()))  # type: ignore
         for col, trans in get_column_tag_map().items()
     }
 
@@ -291,7 +291,7 @@ query_processors = [
     EventsBooleanContextsProcessor(),
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
-    PrewhereProcessor(),
+    PrewhereProcessor(prewhere_candidates),
 ]
 
 

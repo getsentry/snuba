@@ -29,7 +29,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             redis_client, self.dataset, identifier.partition,
         ).all()[0][1] == subscription
 
-    def test_invalid_condition_column(self):
+    def test_invalid_condition_column(self) -> None:
         creator = SubscriptionCreator(self.dataset)
         with raises(QueryException):
             creator.create(
@@ -43,7 +43,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 self.timer,
             )
 
-    def test_invalid_aggregation(self):
+    def test_invalid_aggregation(self) -> None:
         creator = SubscriptionCreator(self.dataset)
         with raises(QueryException):
             creator.create(
@@ -57,7 +57,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 self.timer,
             )
 
-    def test_invalid_time_window(self):
+    def test_invalid_time_window(self) -> None:
         creator = SubscriptionCreator(self.dataset)
         with raises(InvalidSubscriptionError):
             creator.create(
@@ -83,7 +83,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 self.timer,
             )
 
-    def test_invalid_resolution(self):
+    def test_invalid_resolution(self) -> None:
         creator = SubscriptionCreator(self.dataset)
         with raises(InvalidSubscriptionError):
             creator.create(

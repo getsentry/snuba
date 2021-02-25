@@ -170,8 +170,8 @@ class TableWriter:
     def get_batch_writer(
         self,
         metrics: MetricsBackend,
-        options=None,
-        table_name=None,
+        options: ClickhouseWriterOptions = None,
+        table_name: Optional[str] = None,
         chunk_size: int = settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
     ) -> BatchWriter[JSONRow]:
         table_name = table_name or self.__table_schema.get_table_name()

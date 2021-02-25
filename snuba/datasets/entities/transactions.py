@@ -25,6 +25,7 @@ from snuba.query.processors.performance_expressions import (
     apdex_processor,
     failure_rate_processor,
 )
+from snuba.query.processors.project_rate_limiter import ProjectRateLimiterProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
@@ -60,9 +61,18 @@ transaction_translator = TranslationMappers(
         ColumnToColumn(None, "transaction", None, "transaction_name"),
         ColumnToColumn(None, "message", None, "transaction_name"),
         ColumnToColumn(None, "title", None, "transaction_name"),
-        ColumnToMapping(None, "geo_country_code", None, "contexts", "geo.country_code"),
-        ColumnToMapping(None, "geo_region", None, "contexts", "geo.region"),
-        ColumnToMapping(None, "geo_city", None, "contexts", "geo.city"),
+        ColumnToMapping(
+            None,
+            "geo_country_code",
+            None,
+            "contexts",
+            "geo.country_code",
+            nullable=True,
+        ),
+        ColumnToMapping(
+            None, "geo_region", None, "contexts", "geo.region", nullable=True
+        ),
+        ColumnToMapping(None, "geo_city", None, "contexts", "geo.city", nullable=True),
     ],
     subscriptables=[
         SubscriptableMapper(None, "tags", None, "tags"),
@@ -127,6 +137,7 @@ class BaseTransactionsEntity(Entity, ABC):
             BasicFunctionsProcessor(),
             apdex_processor(self.get_data_model()),
             failure_rate_processor(self.get_data_model()),
+            ProjectRateLimiterProcessor(project_column="project_id"),
         ]
 
 

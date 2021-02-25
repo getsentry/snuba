@@ -13,7 +13,7 @@ from snuba.migrations.status import Status
 
 @click.group()
 def migrations() -> None:
-    check_clickhouse_connections()
+    pass
 
 
 @migrations.command()
@@ -21,6 +21,7 @@ def list() -> None:
     """
     Lists migrations and their statuses
     """
+    check_clickhouse_connections()
     runner = Runner()
     for group, group_migrations in runner.show_all():
         click.echo(group.value)
@@ -48,6 +49,7 @@ def migrate(force: bool) -> None:
     """
     Runs all migrations. Blocking migrations will not be run unless --force is passed.
     """
+    check_clickhouse_connections()
     runner = Runner()
 
     try:
@@ -72,6 +74,9 @@ def run(group: str, migration_id: str, force: bool, fake: bool, dry_run: bool) -
 
     Migrations that are already in an in-progress or completed status will not be run.
     """
+    if not dry_run:
+        check_clickhouse_connections()
+
     runner = Runner()
     migration_group = MigrationGroup(group)
     migration_key = MigrationKey(migration_group, migration_id)
@@ -108,6 +113,8 @@ def reverse(
     --force is required to reverse an already completed migration.
     --fake marks a migration as reversed without doing anything.
     """
+    if not dry_run:
+        check_clickhouse_connections()
     runner = Runner()
     migration_group = MigrationGroup(group)
     migration_key = MigrationKey(migration_group, migration_id)

@@ -1,10 +1,11 @@
+import importlib
 import pytz
 import re
 from datetime import datetime
 from functools import partial
 import simplejson as json
 
-from snuba import replacer
+from snuba import replacer, settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets import errors_replacer
@@ -34,6 +35,11 @@ class TestReplacer:
 
         self.project_id = 1
         self.event = get_raw_event()
+        settings.ERRORS_ROLLOUT_ALL = False
+        settings.ERRORS_ROLLOUT_WRITABLE_STORAGE = False
+
+    def teardown_method(self):
+        importlib.reload(settings)
 
     def _wrap(self, msg: str) -> Message[KafkaPayload]:
         return Message(
@@ -55,7 +61,7 @@ class TestReplacer:
 
         return json.loads(self.app.post("/query", data=json.dumps(args)).data)["data"]
 
-    def test_delete_groups_process(self):
+    def test_delete_groups_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
@@ -90,7 +96,7 @@ class TestReplacer:
             [1, 2, 3],
         )
 
-    def test_merge_process(self):
+    def test_merge_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
@@ -126,7 +132,7 @@ class TestReplacer:
             [1, 2],
         )
 
-    def test_unmerge_process(self):
+    def test_unmerge_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
@@ -163,7 +169,7 @@ class TestReplacer:
             self.project_id,
         )
 
-    def test_delete_promoted_tag_process(self):
+    def test_delete_promoted_tag_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
@@ -198,7 +204,7 @@ class TestReplacer:
             self.project_id,
         )
 
-    def test_delete_unpromoted_tag_process(self):
+    def test_delete_unpromoted_tag_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
@@ -234,7 +240,7 @@ class TestReplacer:
             self.project_id,
         )
 
-    def test_delete_groups_insert(self):
+    def test_delete_groups_insert(self) -> None:
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         write_unprocessed_events(self.storage, [self.event])
@@ -271,7 +277,7 @@ class TestReplacer:
 
         assert self._issue_count(self.project_id) == []
 
-    def test_merge_insert(self):
+    def test_merge_insert(self) -> None:
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         write_unprocessed_events(self.storage, [self.event])
@@ -309,7 +315,7 @@ class TestReplacer:
 
         assert self._issue_count(1) == [{"count": 1, "group_id": 2}]
 
-    def test_unmerge_insert(self):
+    def test_unmerge_insert(self) -> None:
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "a" * 32
@@ -349,7 +355,7 @@ class TestReplacer:
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 2}]
 
-    def test_delete_tag_promoted_insert(self):
+    def test_delete_tag_promoted_insert(self) -> None:
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["data"]["tags"].append(["browser.name", "foo"])
@@ -407,7 +413,7 @@ class TestReplacer:
         assert _issue_count() == []
         assert _issue_count(total=True) == [{"count": 1, "group_id": 1}]
 
-    def test_query_time_flags(self):
+    def test_query_time_flags(self) -> None:
         project_ids = [1, 2]
 
         assert errors_replacer.get_projects_query_flags(

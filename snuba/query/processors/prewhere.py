@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Sequence
 
 from snuba import settings
 from snuba.clickhouse.processors import QueryProcessor
@@ -37,14 +37,32 @@ class PrewhereProcessor(QueryProcessor):
       the query data source.
     """
 
-    def __init__(self, max_prewhere_conditions: Optional[int] = None) -> None:
+    def __init__(
+        self,
+        prewhere_candidates: Sequence[str],
+        omit_if_final: Optional[Sequence[str]] = None,
+        max_prewhere_conditions: Optional[int] = None,
+    ) -> None:
+        self.__prewhere_candidates = prewhere_candidates
+        self.__omit_if_final = omit_if_final
         self.__max_prewhere_conditions: Optional[int] = max_prewhere_conditions
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         max_prewhere_conditions: int = (
             self.__max_prewhere_conditions or settings.MAX_PREWHERE_CONDITIONS
         )
-        prewhere_keys = query.get_from_clause().prewhere_candidates
+        prewhere_keys = self.__prewhere_candidates
+
+        # HACK: If query has final, do not move any condition on a column in the
+        # omit_if_final list to prewhere.
+        # There is a bug in ClickHouse affecting queries with FINAL and PREWHERE
+        # with Low Cardinality and Nullable columns.
+        # https://github.com/ClickHouse/ClickHouse/issues/16171
+        if query.get_from_clause().final and self.__omit_if_final:
+            prewhere_keys = [
+                key for key in prewhere_keys if key not in self.__omit_if_final
+            ]
+
         if not prewhere_keys:
             return
 

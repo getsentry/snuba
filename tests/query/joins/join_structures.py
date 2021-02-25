@@ -64,6 +64,7 @@ def build_clickhouse_node(
     from_clause: Table,
     selected_columns: Sequence[SelectedExpression],
     condition: Optional[Expression],
+    groupby: Optional[Sequence[Expression]] = None,
 ) -> IndividualNode[Table]:
     return IndividualNode(
         alias=alias,
@@ -71,6 +72,7 @@ def build_clickhouse_node(
             from_clause=from_clause,
             selected_columns=selected_columns,
             condition=condition,
+            groupby=groupby,
         ),
     )
 
@@ -78,9 +80,14 @@ def build_clickhouse_node(
 def clickhouse_events_node(
     selected_columns: Sequence[SelectedExpression],
     condition: Optional[Expression] = None,
+    groupby: Optional[Sequence[Expression]] = None,
 ) -> IndividualNode[Table]:
     return build_clickhouse_node(
-        "ev", Table("sentry_errors", EVENTS_SCHEMA), selected_columns, condition
+        "ev",
+        Table("sentry_errors", EVENTS_SCHEMA),
+        selected_columns,
+        condition,
+        groupby,
     )
 
 

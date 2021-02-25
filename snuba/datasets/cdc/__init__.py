@@ -1,3 +1,4 @@
+from typing import Any
 from snuba.datasets.storage import WritableTableStorage
 from snuba.snapshots.loaders.single_table import RowProcessor
 
@@ -9,7 +10,7 @@ class CdcStorage(WritableTableStorage):
         default_control_topic: str,
         postgres_table: str,
         row_processor: RowProcessor,
-        **kwargs,
+        **kwargs: Any,
     ):
         super().__init__(**kwargs)
         self.__default_control_topic = default_control_topic

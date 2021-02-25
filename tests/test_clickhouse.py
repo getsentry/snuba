@@ -41,6 +41,22 @@ def test_reconnect(FakeClient) -> None:
     cp = ClickhousePool("0:0:0:0", 9000, "default", "", "default")
     cp.execute("SHOW TABLES")
     assert FakeClient.return_value.execute.mock_calls == [
-        call("SHOW TABLES"),
-        call("SHOW TABLES"),
+        call(
+            "SHOW TABLES",
+            params=None,
+            with_column_types=False,
+            query_id=None,
+            settings=None,
+            types_check=False,
+            columnar=False,
+        ),
+        call(
+            "SHOW TABLES",
+            params=None,
+            with_column_types=False,
+            query_id=None,
+            settings=None,
+            types_check=False,
+            columnar=False,
+        ),
     ]

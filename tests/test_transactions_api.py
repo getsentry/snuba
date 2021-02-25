@@ -1,14 +1,14 @@
 import calendar
-import pytest
 import uuid
 from datetime import datetime, timedelta
-from functools import partial
+from typing import Any, Callable, Tuple, Union
 
+import pytest
 import pytz
 import simplejson as json
 
 from snuba import settings, state
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
@@ -16,24 +16,20 @@ from tests.helpers import write_processed_messages
 
 
 class TestTransactionsApi(BaseApiTest):
-    @pytest.fixture(
-        autouse=True, params=["/query", "/transactions/snql"], ids=["legacy", "snql"]
-    )
-    def _set_endpoint(self, request, convert_legacy_to_snql) -> None:
-        self.endpoint = request.param
-        if request.param == "/transactions/snql":
-            old_post = self.app.post
+    @pytest.fixture
+    def test_entity(self) -> Union[str, Tuple[str, str]]:
+        return "transactions"
 
-            def new_post(endpoint, data=None):
-                return old_post(
-                    endpoint, data=convert_legacy_to_snql(data, "transactions")
-                )
+    @pytest.fixture
+    def test_app(self) -> Any:
+        return self.app
 
-            self.app.post = new_post
+    @pytest.fixture(autouse=True)
+    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
+        self.post = _build_snql_post_methods
 
-    def setup_method(self, test_method) -> None:
+    def setup_method(self, test_method: Any) -> None:
         super().setup_method(test_method)
-        self.app.post = partial(self.app.post, headers={"referer": "test"})
 
         # values for test data
         self.project_ids = [1, 2]  # 2 projects
@@ -50,7 +46,7 @@ class TestTransactionsApi(BaseApiTest):
         self.storage = get_writable_storage(StorageKey.TRANSACTIONS)
         self.generate_fizzbuzz_events()
 
-    def teardown_method(self, test_method) -> None:
+    def teardown_method(self, test_method: Any) -> None:
         # Reset rate limits
         state.delete_config("global_concurrent_limit")
         state.delete_config("global_per_second_limit")
@@ -159,13 +155,13 @@ class TestTransactionsApi(BaseApiTest):
                             KafkaMessageMetadata(0, 0, self.base_time),
                         )
                     )
-                    events.append(processed)
+                    if processed:
+                        events.append(processed)
         write_processed_messages(self.storage, events)
 
     def test_read_ip(self) -> None:
-        response = self.app.post(
-            self.endpoint,
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
@@ -182,9 +178,8 @@ class TestTransactionsApi(BaseApiTest):
         assert "ip_address" in data["data"][0]
 
     def test_read_lowcard(self) -> None:
-        response = self.app.post(
-            self.endpoint,
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
@@ -202,9 +197,8 @@ class TestTransactionsApi(BaseApiTest):
         assert data["data"][0]["transaction_op"] == "http"
 
     def test_start_ts_microsecond_truncation(self) -> None:
-        response = self.app.post(
-            self.endpoint,
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
@@ -239,9 +233,8 @@ class TestTransactionsApi(BaseApiTest):
         assert "transaction_name" in data["data"][0]
 
     def test_split_query(self) -> None:
-        response = self.app.post(
-            self.endpoint,
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
@@ -262,9 +255,8 @@ class TestTransactionsApi(BaseApiTest):
         assert len(data["data"]) > 1, data
 
     def test_column_formatting(self) -> None:
-        response = self.app.post(
-            self.endpoint,
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
@@ -283,9 +275,8 @@ class TestTransactionsApi(BaseApiTest):
         assert len(first_event_id) == 32
         assert data["data"][0]["ip_address"] == "8.8.8.8"
 
-        response = self.app.post(
-            self.endpoint,
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
@@ -303,9 +294,8 @@ class TestTransactionsApi(BaseApiTest):
         assert data["data"][0]["event_id"] == first_event_id
 
     def test_trace_column_formatting(self) -> None:
-        response = self.app.post(
-            self.endpoint,
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
@@ -324,9 +314,8 @@ class TestTransactionsApi(BaseApiTest):
         assert len(first_trace_id) == 36
         assert data["data"][0]["ip_address"] == "8.8.8.8"
 
-        response = self.app.post(
-            self.endpoint,
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
@@ -344,9 +333,8 @@ class TestTransactionsApi(BaseApiTest):
         assert data["data"][0]["trace_id"] == first_trace_id
 
     def test_apdex_function(self) -> None:
-        response = self.app.post(
-            self.endpoint,
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
@@ -372,9 +360,8 @@ class TestTransactionsApi(BaseApiTest):
         }
 
     def test_failure_rate_function(self) -> None:
-        response = self.app.post(
-            self.endpoint,
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
@@ -399,9 +386,8 @@ class TestTransactionsApi(BaseApiTest):
         }
 
     def test_individual_measurement(self) -> None:
-        response = self.app.post(
-            self.endpoint,
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
@@ -424,9 +410,8 @@ class TestTransactionsApi(BaseApiTest):
         assert data["data"][0]["measurements[asd]"] is None
 
     def test_arrayjoin_measurements(self) -> None:
-        response = self.app.post(
-            self.endpoint,
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
@@ -455,9 +440,8 @@ class TestTransactionsApi(BaseApiTest):
         assert data["data"][3]["value"] == 4242
 
     def test_escaping_strings(self) -> None:
-        response = self.app.post(
-            self.endpoint,
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,

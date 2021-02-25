@@ -1,12 +1,12 @@
 from datetime import datetime, timedelta, timezone
 
 from snuba.datasets.sessions_processor import SessionsProcessor
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import InsertBatch
 
 
 class TestSessionProcessor:
-    def test_ingest_session_event_max_sample_rate(self):
+    def test_ingest_session_event_max_sample_rate(self) -> None:
         timestamp = datetime.now(timezone.utc)
         started = timestamp - timedelta(hours=1)
 
@@ -53,7 +53,7 @@ class TestSessionProcessor:
             ]
         )
 
-    def test_ingest_session_event_abnormal(self):
+    def test_ingest_session_event_abnormal(self) -> None:
         timestamp = datetime.now(timezone.utc)
         started = timestamp - timedelta(hours=1)
 
@@ -101,7 +101,7 @@ class TestSessionProcessor:
             ]
         )
 
-    def test_ingest_session_event_crashed(self):
+    def test_ingest_session_event_crashed(self) -> None:
         timestamp = datetime.now(timezone.utc)
         started = timestamp - timedelta(hours=1)
 

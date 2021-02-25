@@ -22,7 +22,7 @@ timeseries_metrics = MetricsWrapper(environment.metrics, "extensions.timeseries"
 
 def get_time_series_extension_properties(
     default_granularity: int, default_window: timedelta
-):
+) -> Mapping[str, Any]:
     return {
         "type": "object",
         "properties": {
@@ -67,7 +67,7 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
         max_days, date_align = state.get_configs(
             [("max_days", None), ("date_align_seconds", 1)]
         )
-
+        assert isinstance(date_align, int)  # mypy
         to_date = parse_datetime(timeseries_extension["to_date"], date_align)
         from_date = parse_datetime(timeseries_extension["from_date"], date_align)
         assert from_date <= to_date
@@ -90,12 +90,20 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
                 BooleanFunctions.AND,
                 binary_condition(
                     ConditionFunctions.GTE,
-                    Column(None, None, self.__timestamp_column),
+                    Column(
+                        f"_snuba_{self.__timestamp_column}",
+                        None,
+                        self.__timestamp_column,
+                    ),
                     Literal(None, from_date),
                 ),
                 binary_condition(
                     ConditionFunctions.LT,
-                    Column(None, None, self.__timestamp_column),
+                    Column(
+                        f"_snuba_{self.__timestamp_column}",
+                        None,
+                        self.__timestamp_column,
+                    ),
                     Literal(None, to_date),
                 ),
             )

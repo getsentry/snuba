@@ -117,10 +117,10 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
         date_align, split_step = state.get_configs(
             [("date_align_seconds", 1), ("split_step", 3600)]  # default 1 hour
         )
-
+        assert isinstance(split_step, int)
         remaining_offset = query.get_offset()
 
-        overall_result = None
+        overall_result: Optional[QueryResult] = None
         split_end = to_date_ast
         split_start = max(split_end - timedelta(seconds=split_step), from_date_ast)
         total_results = 0

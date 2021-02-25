@@ -26,7 +26,6 @@ from dateutil.parser import parse as dateutil_parse
 
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
-from snuba.query.parsing import ParsingContext
 from snuba.query.schema import CONDITION_OPERATORS
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -98,27 +97,6 @@ def is_function(column_expr: Any, depth: int = 0) -> Optional[Tuple[Any, ...]]:
         return None
 
 
-def alias_expr(expr: str, alias: str, parsing_context: ParsingContext) -> str:
-    """
-    Return the correct expression to use in the final SQL. Keeps a cache of
-    the previously created expressions and aliases, so it knows when it can
-    subsequently replace a redundant expression with an alias.
-
-    1. If the expression and alias are equal, just return that.
-    2. Otherwise, if the expression is new, add it to the cache and its alias so
-       it can be reused later and return `expr AS alias`
-    3. If the expression has been aliased before, return the alias
-    """
-
-    if expr == alias:
-        return expr
-    elif parsing_context.is_alias_present(alias):
-        return alias
-    else:
-        parsing_context.add_alias(alias)
-        return "({} AS {})".format(expr, alias)
-
-
 def is_condition(cond_or_list: Sequence[Any]) -> bool:
     return (
         # A condition is:
@@ -131,27 +109,6 @@ def is_condition(cond_or_list: Sequence[Any]) -> bool:
         # and the first element looks like a column name or expression
         isinstance(cond_or_list[0], (str, tuple, list))
     )
-
-
-def columns_in_expr(expr: Any) -> Sequence[str]:
-    """
-    Get the set of columns that are referenced by a single column expression.
-    Either it is a simple string with the column name, or a nested function
-    that could reference multiple columns
-    """
-    cols = []
-    # TODO possibly exclude quoted args to functions as those are
-    # string literals, not column names.
-    if isinstance(expr, str):
-        cols.append(expr.lstrip("-"))
-    elif (
-        isinstance(expr, (list, tuple))
-        and len(expr) >= 2
-        and isinstance(expr[1], (list, tuple))
-    ):
-        for func_arg in expr[1]:
-            cols.extend(columns_in_expr(func_arg))
-    return cols
 
 
 def tuplify(nested: Any) -> Any:
@@ -183,14 +140,17 @@ def escape_literal(
         raise ValueError("Do not know how to escape {} for SQL".format(type(value)))
 
 
-def time_request(name):
-    def decorator(func):
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def time_request(name: str) -> Callable[[F], F]:
+    def decorator(func: F) -> F:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             kwargs["timer"] = Timer(name)
             return func(*args, **kwargs)
 
-        return wrapper
+        return cast(F, wrapper)
 
     return decorator
 
@@ -260,8 +220,8 @@ def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
     with the specified prefix and tags. Return a DummyMetricsBackend otherwise.
     Prefixes must start with `snuba.<category>`, for example: `snuba.processor`.
     """
-    host = settings.DOGSTATSD_HOST
-    port = settings.DOGSTATSD_PORT
+    host: Optional[str] = settings.DOGSTATSD_HOST
+    port: Optional[int] = settings.DOGSTATSD_PORT
 
     if host is None and port is None:
         from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
@@ -289,9 +249,6 @@ def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
     )
 
 
-F = TypeVar("F", bound=Callable[..., Any])
-
-
 def with_span(op: str = "function") -> Callable[[F], F]:
     """ Wraps a function call in a Sentry AM span
     """
@@ -301,7 +258,7 @@ def with_span(op: str = "function") -> Callable[[F], F]:
         filename = frame_info.filename
 
         @wraps(func)
-        def wrapper(*args, **kwargs) -> Any:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             with sentry_sdk.start_span(description=func.__name__, op=op) as span:
                 span.set_data("filename", filename)
                 return func(*args, **kwargs)

@@ -19,7 +19,7 @@ def build_in(project_column: str, projects: Sequence[int]) -> Expression:
         None,
         "in",
         (
-            Column(None, None, project_column),
+            Column(f"_snuba_{project_column}", None, project_column),
             FunctionCall(None, "tuple", tuple([Literal(None, p) for p in projects])),
         ),
     )

@@ -1,15 +1,13 @@
-import pytest
 import re
-from parsimonious.exceptions import IncompleteParseError, VisitationError
+from typing import Optional
+
+import pytest
 
 from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.query.data_source.join import (
-    JoinType,
-    JoinRelationship,
-)
+from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.snql.parser import parse_snql_query
 
@@ -18,33 +16,33 @@ test_cases = [
     # i.e. the entire string is not consumed
     pytest.param(
         "MATCH (events) SELECT 4-5,3*g(c),c BY d,2+7 WHEREa<3 ORDERBY f DESC",
-        IncompleteParseError,
-        "The non-matching portion of the text begins with 'WHERE",
+        ParsingException,
+        "Parsing error at 'WHEREa<3 OR'",
         id="ORDER BY is two words",
     ),
     pytest.param(
         "MATCH (events) SELECT 4-5, 3*g(c), c BY d,2+7 WHERE a<3  ORDER BY fDESC",
-        IncompleteParseError,
-        "The non-matching portion of the text begins with 'ORDER BY",
+        ParsingException,
+        "Parsing error at 'ORDER BY fD'",
         id="Expression before ASC / DESC needs to be separated from ASC / DESC keyword by space",
     ),
     pytest.param(
         "MATCH (events) SELECT 4-5, 3*g(c), c BY d, ,2+7 WHERE a<3  ORDER BY f DESC",
-        IncompleteParseError,
-        "The non-matching portion of the text begins with 'BY",
+        ParsingException,
+        "Parsing error at 'BY d, ,2+7 '",
         id="In a list, columns are separated by exactly one comma",
     ),
     pytest.param(
-        "MATCH (events) SELECT 4-5, 3*g(c), c BY d, ,2+7 WHERE a<3ORb>2  ORDER BY f DESC",
-        IncompleteParseError,
-        "The non-matching portion of the text begins with 'BY",
+        "MATCH (events) SELECT 4-5, 3*g(c), c BY d, 2+7 WHERE a<3ORb>2  ORDER BY f DESC",
+        ParsingException,
+        "Parsing error at 'ORb>2  ORDE'",
         id="mandatory spacing",
     ),
     pytest.param(
         """MATCH (e: events) -[nonsense]-> (t: transactions) SELECT 4-5, e.c
         WHERE e.project_id = 1 AND e.timestamp > toDateTime('2021-01-01') AND t.project_id = 1 AND t.finish_ts > toDateTime('2021-01-01')""",
-        VisitationError,
-        "KeyError: 'nonsense'",
+        ParsingException,
+        "ParsingException: events does not have a join relationship -[nonsense]->",
         id="invalid relationship name",
     ),
     pytest.param(
@@ -54,7 +52,7 @@ test_cases = [
         id="simple query missing required conditions",
     ),
     pytest.param(
-        "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c WHERE e.project_id = '1' AND e.timestamp > toDateTime('2021-01-01')",
+        "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c WHERE e.project_id = '1' AND e.timestamp >= toDateTime('2021-01-01')",
         ParsingException,
         "EntityKey.EVENTS is missing required conditions",
         id="simple query required conditions have wrong type",
@@ -72,7 +70,7 @@ test_cases = [
         id="join missing required conditions on both sides",
     ),
     pytest.param(
-        "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c WHERE e.project_id = 1 AND e.timestamp > toDateTime('2021-01-01')",
+        "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c WHERE e.project_id = 1 AND e.timestamp >= toDateTime('2021-01-01') AND e.timestamp < toDateTime('2021-01-02')",
         ParsingException,
         "EntityKey.TRANSACTIONS is missing required conditions",
         id="join missing required conditions on one side",
@@ -105,7 +103,9 @@ def test_failures(query_body: str, exception: Exception, message: str) -> None:
         "activity": (EntityKey.SESSIONS, "org_id"),
     }
 
-    def events_mock(relationship: str) -> JoinRelationship:
+    def events_mock(relationship: str) -> Optional[JoinRelationship]:
+        if relationship not in mapping:
+            return None
         entity_key, rhs_column = mapping[relationship]
         return JoinRelationship(
             rhs_entity=entity_key,

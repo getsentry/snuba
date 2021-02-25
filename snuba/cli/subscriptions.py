@@ -4,7 +4,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from datetime import timedelta
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
 import click
 
@@ -119,9 +119,14 @@ def subscriptions(
     dataset = get_dataset(dataset_name)
 
     storage = dataset.get_default_entity().get_writable_storage()
+    assert (
+        storage is not None
+    ), f"Dataset {dataset_name} does not have a writable storage by default."
     storage_key = storage.get_storage_key()
 
     loader = enforce_table_writer(dataset).get_stream_loader()
+    topic_spec = loader.get_commit_log_topic_spec()
+    assert topic_spec is not None
 
     metrics = MetricsWrapper(
         environment.metrics,
@@ -150,7 +155,7 @@ def subscriptions(
             (
                 Topic(commit_log_topic)
                 if commit_log_topic is not None
-                else Topic(loader.get_commit_log_topic_spec().topic_name)
+                else Topic(topic_spec.topic_name)
             ),
             set(commit_log_groups),
         ),
@@ -174,8 +179,10 @@ def subscriptions(
     )
 
     executor = ThreadPoolExecutor(max_workers=max_query_workers)
-    logger.debug("Starting %r with %s workers...", executor, executor._max_workers)
-    metrics.gauge("executor.workers", executor._max_workers)
+    logger.debug(
+        "Starting %r with %s workers...", executor, getattr(executor, "_max_workers", 0)
+    )
+    metrics.gauge("executor.workers", getattr(executor, "_max_workers", 0))
 
     with closing(consumer), executor, closing(producer):
         batching_consumer = StreamProcessor(
@@ -215,7 +222,7 @@ def subscriptions(
             metrics=metrics,
         )
 
-        def handler(signum, frame) -> None:
+        def handler(signum: int, frame: Optional[Any]) -> None:
             batching_consumer.signal_shutdown()
 
         signal.signal(signal.SIGINT, handler)

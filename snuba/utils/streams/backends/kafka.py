@@ -11,6 +11,7 @@ from threading import Event
 from typing import (
     Any,
     Callable,
+    Dict,
     Mapping,
     MutableMapping,
     MutableSequence,
@@ -19,6 +20,7 @@ from typing import (
     Sequence,
     Set,
     Tuple,
+    Type,
     Union,
 )
 
@@ -59,7 +61,7 @@ KafkaConsumerState = Enum(
     "KafkaConsumerState", ["CONSUMING", "ERROR", "CLOSED", "ASSIGNING", "REVOKING"]
 )
 
-KafkaBrokerConfig = Mapping[str, Any]
+KafkaBrokerConfig = Dict[str, Any]
 
 
 class InvalidState(RuntimeError):
@@ -75,7 +77,7 @@ class KafkaPayload(NamedTuple):
     value: bytes
     headers: Headers
 
-    def __reduce_ex__(self, protocol: int):
+    def __reduce_ex__(self, protocol: int) -> Tuple[Type[KafkaPayload], Any]:
         if protocol >= 5:
             return (
                 type(self),
@@ -652,6 +654,7 @@ def get_default_kafka_configuration(
     override_params: Optional[Mapping[str, Any]] = None,
 ) -> KafkaBrokerConfig:
     default_bootstrap_servers = None
+    default_config: Mapping[str, Any]
     if storage_key is not None:
         storage_name = storage_key.value
         if storage_name in settings.DEFAULT_STORAGE_BROKERS:
@@ -677,6 +680,7 @@ def get_default_kafka_configuration(
         else:
             default_config = settings.BROKER_CONFIG
     broker_config = copy.deepcopy(default_config)
+    assert isinstance(broker_config, dict)
     bootstrap_servers = (
         ",".join(bootstrap_servers) if bootstrap_servers else default_bootstrap_servers
     )

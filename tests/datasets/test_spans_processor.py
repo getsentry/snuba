@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, NamedTuple, Sequence, Tuple
 
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.spans_processor import SpansMessageProcessor
 from snuba.processor import InsertBatch
 

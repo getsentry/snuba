@@ -5,7 +5,7 @@ from functools import partial
 from typing import List, Mapping, Optional, Sequence, Tuple
 
 import sentry_sdk
-from snuba import environment, state
+from snuba import environment, settings, state
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
     ColumnToFunction,
@@ -13,13 +13,20 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
+from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
+from snuba.datasets.entities.assign_reason import assign_reason_category
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
-from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
+from snuba.datasets.storage import (
+    QueryStorageSelector,
+    StorageAndMappers,
+    WritableTableStorage,
+)
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
+from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall
 from snuba.query.extensions import QueryExtension
 from snuba.query.formatters.tracing import format_query
@@ -27,6 +34,7 @@ from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.handled_functions import HandledFunctionsProcessor
+from snuba.query.processors.project_rate_limiter import ProjectRateLimiterProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
@@ -69,9 +77,18 @@ errors_translators = TranslationMappers(
         ColumnToColumn(None, "transaction", None, "transaction_name"),
         ColumnToColumn(None, "username", None, "user_name"),
         ColumnToColumn(None, "email", None, "user_email"),
-        ColumnToMapping(None, "geo_country_code", None, "contexts", "geo.country_code"),
-        ColumnToMapping(None, "geo_region", None, "contexts", "geo.region"),
-        ColumnToMapping(None, "geo_city", None, "contexts", "geo.city"),
+        ColumnToMapping(
+            None,
+            "geo_country_code",
+            None,
+            "contexts",
+            "geo.country_code",
+            nullable=True,
+        ),
+        ColumnToMapping(
+            None, "geo_region", None, "contexts", "geo.region", nullable=True
+        ),
+        ColumnToMapping(None, "geo_city", None, "contexts", "geo.city", nullable=True),
     ],
     subscriptables=[
         SubscriptableMapper(None, "tags", None, "tags"),
@@ -89,6 +106,22 @@ def callback_func(
     referrer: str,
     results: List[Result[QueryResult]],
 ) -> None:
+    cache_hit = False
+    is_duplicate = False
+
+    # Captures if any of the queries involved was a cache hit or duplicate, as cache
+    # hits may a cause of inconsistency between results.
+    # Doesn't attempt to distinguish between all of the specific scenarios (one or both
+    # queries, or splits of those queries could have hit the cache).
+    if any([result.result.extra["stats"].get("cache_hit", 0) for result in results]):
+        cache_hit = True
+    elif any(
+        [result.result.extra["stats"].get("is_duplicate", 0) for result in results]
+    ):
+        is_duplicate = True
+
+    consistent = request_settings.get_consistent()
+
     if not results:
         metrics.increment(
             "query_result",
@@ -105,7 +138,12 @@ def callback_func(
         metrics.timing(
             "diff_ms",
             round((result.execution_time - primary_result.execution_time) * 1000),
-            tags={"referrer": referrer},
+            tags={
+                "referrer": referrer,
+                "cache_hit": str(cache_hit),
+                "is_duplicate": str(is_duplicate),
+                "consistent": str(consistent),
+            },
         )
 
         # Do not bother diffing the actual results of sampled queries
@@ -115,19 +153,47 @@ def callback_func(
         if result_data == primary_result_data:
             metrics.increment(
                 "query_result",
-                tags={"storage": storage, "match": "true", "referrer": referrer},
+                tags={
+                    "storage": storage,
+                    "match": "true",
+                    "referrer": referrer,
+                    "cache_hit": str(cache_hit),
+                    "is_duplicate": str(is_duplicate),
+                    "consistent": str(consistent),
+                },
             )
         else:
+            # Do not log cache hits to Sentry as it creates too much noise
+            if cache_hit:
+                continue
+
+            reason = assign_reason_category(result_data, primary_result_data, referrer)
+
             metrics.increment(
                 "query_result",
-                tags={"storage": storage, "match": "false", "referrer": referrer},
+                tags={
+                    "storage": storage,
+                    "match": "false",
+                    "referrer": referrer,
+                    "reason": reason,
+                    "cache_hit": str(cache_hit),
+                    "is_duplicate": str(is_duplicate),
+                    "consistent": str(consistent),
+                },
             )
 
             if len(result_data) != len(primary_result_data):
                 sentry_sdk.capture_message(
                     f"Non matching {storage} result - different length",
                     level="warning",
-                    tags={"referrer": referrer, "storage": storage},
+                    tags={
+                        "referrer": referrer,
+                        "storage": storage,
+                        "reason": reason,
+                        "cache_hit": str(cache_hit),
+                        "is_duplicate": str(is_duplicate),
+                        "consistent": str(consistent),
+                    },
                     extras={
                         "query": format_query(query),
                         "primary_result": len(primary_result_data),
@@ -143,7 +209,14 @@ def callback_func(
                     sentry_sdk.capture_message(
                         "Non matching result - different result",
                         level="warning",
-                        tags={"referrer": referrer, "storage": storage},
+                        tags={
+                            "referrer": referrer,
+                            "storage": storage,
+                            "reason": reason,
+                            "cache_hit": str(cache_hit),
+                            "is_duplicate": str(is_duplicate),
+                            "consistent": str(consistent),
+                        },
                         extras={
                             "query": format_query(query),
                             "primary_result": primary_result_data[idx],
@@ -201,8 +274,9 @@ class BaseEventsEntity(Entity, ABC):
     """
 
     def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
-        storage = get_writable_storage(StorageKey.EVENTS)
-        schema = storage.get_table_writer().get_schema()
+        events_storage = get_writable_storage(StorageKey.EVENTS)
+        errors_storage = get_writable_storage(StorageKey.ERRORS)
+        schema = events_storage.get_table_writer().get_schema()
         columns = schema.get_columns()
 
         events_pipeline_builder = SimplePipelineBuilder(
@@ -225,14 +299,38 @@ class BaseEventsEntity(Entity, ABC):
             ),
         )
 
-        def selector_func(_query: Query) -> Tuple[str, List[str]]:
-            if random.random() < float(state.get_config("errors_query_percentage", 0)):
+        def selector_func(_query: Query, referrer: str) -> Tuple[str, List[str]]:
+            # In case something goes wrong, set this to 1 to revert to the events storage.
+            kill_rollout = state.get_config("errors_rollout_killswitch", 0)
+            assert isinstance(kill_rollout, (int, str))
+            if int(kill_rollout):
+                return "events", []
+
+            if referrer in settings.ERRORS_ROLLOUT_BY_REFERRER:
+                return "errors", []
+
+            if settings.ERRORS_ROLLOUT_ALL:
+                return "errors", []
+
+            default_threshold = state.get_config("errors_query_percentage", 0)
+            assert isinstance(default_threshold, (float, int, str))
+            threshold = settings.ERRORS_QUERY_PERCENTAGE_BY_REFERRER.get(
+                referrer, default_threshold
+            )
+
+            if random.random() < float(threshold):
                 return "events", ["errors"]
 
             return "events", []
 
+        def writable_storage() -> WritableTableStorage:
+            if settings.ERRORS_ROLLOUT_WRITABLE_STORAGE:
+                return get_writable_storage(StorageKey.ERRORS)
+            else:
+                return get_writable_storage(StorageKey.EVENTS)
+
         super().__init__(
-            storages=[storage],
+            storages=[events_storage, errors_storage],
             query_pipeline_builder=PipelineDelegator(
                 query_pipeline_builders={
                     "events": events_pipeline_builder,
@@ -242,8 +340,21 @@ class BaseEventsEntity(Entity, ABC):
                 callback_func=partial(callback_func, "errors"),
             ),
             abstract_column_set=columns,
-            join_relationships={},
-            writable_storage=storage,
+            join_relationships={
+                "grouped": JoinRelationship(
+                    rhs_entity=EntityKey.GROUPEDMESSAGES,
+                    columns=[("project_id", "project_id"), ("group_id", "id")],
+                    join_type=JoinType.INNER,
+                    equivalences=[],
+                ),
+                "assigned": JoinRelationship(
+                    rhs_entity=EntityKey.GROUPASSIGNEE,
+                    columns=[("project_id", "project_id"), ("group_id", "group_id")],
+                    join_type=JoinType.INNER,
+                    equivalences=[],
+                ),
+            },
+            writable_storage=writable_storage(),
             required_filter_columns=["project_id"],
             required_time_column="timestamp",
         )
@@ -268,6 +379,7 @@ class BaseEventsEntity(Entity, ABC):
             HandledFunctionsProcessor(
                 "exception_stacks.mechanism_handled", self.get_data_model()
             ),
+            ProjectRateLimiterProcessor(project_column="project_id"),
         ]
 
 

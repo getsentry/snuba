@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from snuba.consumer import KafkaMessageMetadata
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.processor import InsertBatch

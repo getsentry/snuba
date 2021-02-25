@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import List, Sequence
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 from snuba.clickhouse.columns import UUID, Array, Column, DateTime, Nested, String, UInt
@@ -9,9 +9,7 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 UNKNOWN_SPAN_STATUS = SPAN_STATUS_NAME_TO_CODE["unknown"]
 
-tags_col = Column("tags", Nested([("key", String()), ("value", String())]))
-
-columns = [
+columns: List[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("transaction_id", UUID()),
     Column("trace_id", UUID()),
@@ -27,16 +25,16 @@ columns = [
     Column("finish_ts", DateTime()),
     Column("finish_ns", UInt(32)),
     Column("duration_ms", UInt(32)),
-    tags_col,
+    Column("tags", Nested([("key", String()), ("value", String())])),
     Column("retention_days", UInt(16)),
     Column("deleted", UInt(8)),
 ]
 
 
-class Migration(migration.MultiStepMigration):
+class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
-    def forwards_local(self) -> Sequence[operations.Operation]:
+    def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.TRANSACTIONS,
@@ -67,7 +65,7 @@ class Migration(migration.MultiStepMigration):
             ),
         ]
 
-    def backwards_local(self) -> Sequence[operations.Operation]:
+    def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.TRANSACTIONS,
@@ -75,7 +73,7 @@ class Migration(migration.MultiStepMigration):
             ),
         ]
 
-    def forwards_dist(self) -> Sequence[operations.Operation]:
+    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.TRANSACTIONS,
@@ -97,7 +95,7 @@ class Migration(migration.MultiStepMigration):
             ),
         ]
 
-    def backwards_dist(self) -> Sequence[operations.Operation]:
+    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.TRANSACTIONS,

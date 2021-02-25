@@ -8,7 +8,6 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors_common import (
     all_columns,
     mandatory_conditions,
-    prewhere_candidates,
     promoted_tag_columns,
     query_processors,
     query_splitters,
@@ -22,7 +21,6 @@ schema = WritableTableSchema(
     dist_table_name="errors_dist",
     storage_set_key=StorageSetKey.EVENTS,
     mandatory_conditions=mandatory_conditions,
-    prewhere_candidates=prewhere_candidates,
     part_format=[util.PartSegment.RETENTION_DAYS, util.PartSegment.DATE],
 )
 
@@ -36,7 +34,8 @@ storage = WritableTableStorage(
         StorageKey.ERRORS,
         processor=ErrorsProcessor(promoted_tag_columns),
         default_topic_name="events",
-        replacement_topic_name="errors-replacements",
+        replacement_topic_name="event-replacements",
+        commit_log_topic_name="snuba-commit-log",
     ),
     replacer_processor=ErrorsReplacer(
         schema=schema,

@@ -4,7 +4,7 @@ from datetime import timedelta
 from functools import partial
 from typing import List, Mapping, Optional, Sequence, Set, Tuple
 
-from snuba import state
+from snuba import state, settings
 from snuba.clickhouse.columns import (
     UUID,
     Array,
@@ -62,6 +62,7 @@ from snuba.query.matchers import Or
 from snuba.query.matchers import String as StringMatch
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.project_rate_limiter import ProjectRateLimiterProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
@@ -399,12 +400,23 @@ class DiscoverEntity(Entity):
                                 None,
                                 "contexts",
                                 "geo.country_code",
+                                nullable=True,
                             ),
                             ColumnToMapping(
-                                None, "geo_region", None, "contexts", "geo.region"
+                                None,
+                                "geo_region",
+                                None,
+                                "contexts",
+                                "geo.region",
+                                nullable=True,
                             ),
                             ColumnToMapping(
-                                None, "geo_city", None, "contexts", "geo.city"
+                                None,
+                                "geo_city",
+                                None,
+                                "contexts",
+                                "geo.city",
+                                nullable=True,
                             ),
                             ColumnToFunction(
                                 None,
@@ -426,10 +438,27 @@ class DiscoverEntity(Entity):
             )
         )
 
-        def selector_func(_query: Query) -> Tuple[str, List[str]]:
-            if random.random() < float(
-                state.get_config("discover_query_percentage", 0)
-            ):
+        def selector_func(_query: Query, referrer: str) -> Tuple[str, List[str]]:
+            # In case something goes wrong, set this to 1 to revert to the events storage.
+            kill_rollout = state.get_config("errors_rollout_killswitch", 0)
+            assert isinstance(kill_rollout, (int, str))
+            if int(kill_rollout):
+                return "events", []
+
+            if referrer in settings.ERRORS_ROLLOUT_BY_REFERRER:
+                return "discover", []
+
+            if settings.ERRORS_ROLLOUT_ALL:
+                return "discover", []
+
+            default_threshold = state.get_config("discover_query_percentage", 0)
+            assert isinstance(default_threshold, (float, int, str))
+
+            threshold = settings.ERRORS_QUERY_PERCENTAGE_BY_REFERRER.get(
+                referrer, default_threshold
+            )
+
+            if random.random() < float(threshold):
                 return "events", ["discover"]
 
             return "events", []
@@ -460,6 +489,7 @@ class DiscoverEntity(Entity):
             TimeSeriesProcessor({"time": "timestamp"}, ("timestamp",)),
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
+            ProjectRateLimiterProcessor(project_column="project_id"),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
