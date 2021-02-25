@@ -59,6 +59,7 @@ from snuba.web.converters import DatasetConverter
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 from werkzeug import Response as WerkzeugResponse
+from werkzeug.exceptions import InternalServerError
 
 metrics = MetricsWrapper(environment.metrics, "api")
 
@@ -190,6 +191,30 @@ def handle_invalid_query(exception: InvalidQueryException) -> Response:
             {"error": {"type": "invalid_query", "message": str(exception)}}, indent=4
         ),
         400,
+        {"Content-Type": "application/json"},
+    )
+
+
+@application.errorhandler(InternalServerError)
+def handle_internal_server_error(exception: InternalServerError) -> Response:
+    original = getattr(exception, "original_exception", None)
+
+    if original is None:
+        return Response(
+            json.dumps(
+                {"error": {"type": "internal_server_error", "message": str(exception)}},
+                indent=4,
+            ),
+            500,
+            {"Content-Type": "application/json"},
+        )
+
+    return Response(
+        json.dumps(
+            {"error": {"type": "internal_server_error", "message": str(original)}},
+            indent=4,
+        ),
+        500,
         {"Content-Type": "application/json"},
     )
 
