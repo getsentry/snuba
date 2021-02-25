@@ -3,7 +3,7 @@ import simplejson as json
 from datetime import datetime, timedelta
 from functools import partial
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from snuba import state
 from snuba.datasets.entities import EntityKey
@@ -304,3 +304,30 @@ class TestSnQLApi(BaseApiTest):
             assert metadata["dataset"] == "events"
             assert metadata["request"]["referrer"] == "test"
             assert len(metadata["query_list"]) == expected_query_count
+
+    @patch("snuba.web.query._run_query_pipeline")
+    def test_error_handler(self, pipeline_mock: MagicMock) -> None:
+        from rediscluster.utils import ClusterDownError
+
+        hsh = "0" * 32
+        group_id = int(hsh[:16], 16)
+        pipeline_mock.side_effect = ClusterDownError("stuff")
+        response = self.app.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT event_id, group_id, project_id, timestamp
+                    WHERE project_id IN tuple({self.project_id})
+                    AND group_id IN tuple({group_id})
+                    AND  timestamp >= toDateTime('2021-01-01')
+                    AND timestamp < toDateTime('2022-01-01')
+                    ORDER BY timestamp DESC, event_id DESC
+                    LIMIT 1""",
+                }
+            ),
+        )
+        assert response.status_code == 500
+        data = json.loads(response.data)
+        assert data["error"]["type"] == "internal_server_error"
+        assert data["error"]["message"] == "stuff"
