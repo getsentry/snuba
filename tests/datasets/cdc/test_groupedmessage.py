@@ -230,7 +230,9 @@ class TestGroupedMessage:
         )
 
         ret = processor.process_message(self.INSERT_MSG, metadata)
-        assert ret == InsertBatch([self.PROCESSED])
+        assert ret == InsertBatch(
+            [self.PROCESSED], datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=pytz.UTC)
+        )
         write_processed_messages(self.storage, [ret])
         ret = (
             get_cluster(StorageSetKey.EVENTS)
@@ -250,10 +252,14 @@ class TestGroupedMessage:
         )
 
         ret = processor.process_message(self.UPDATE_MSG, metadata)
-        assert ret == InsertBatch([self.PROCESSED])
+        assert ret == InsertBatch(
+            [self.PROCESSED], datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=pytz.UTC)
+        )
 
         ret = processor.process_message(self.DELETE_MSG, metadata)
-        assert ret == InsertBatch([self.DELETED])
+        assert ret == InsertBatch(
+            [self.DELETED], datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=pytz.UTC)
+        )
 
     def test_bulk_load(self) -> None:
         row = GroupedMessageRow.from_bulk(
@@ -267,7 +273,9 @@ class TestGroupedMessage:
                 "first_release_id": "26",
             }
         )
-        write_processed_messages(self.storage, [InsertBatch([row.to_clickhouse()])])
+        write_processed_messages(
+            self.storage, [InsertBatch([row.to_clickhouse()], None)]
+        )
         ret = (
             get_cluster(StorageSetKey.EVENTS)
             .get_query_connection(ClickhouseClientSettings.QUERY)

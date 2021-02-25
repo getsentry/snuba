@@ -118,11 +118,14 @@ class CdcProcessor(MessageProcessor):
 
         offset = metadata.offset
         event = value["event"]
+        timestamp: Optional[datetime] = None
         if event == "begin":
             messages = self._process_begin(offset)
         elif event == "commit":
             messages = self._process_commit(offset)
         elif event == "change":
+            if "timestamp" in value:
+                timestamp = parse_postgres_datetime(value["timestamp"])
             table_name = value["table"]
             if table_name != self.pg_table:
                 return None
@@ -153,4 +156,4 @@ class CdcProcessor(MessageProcessor):
         if not messages:
             return None
 
-        return InsertBatch(messages)
+        return InsertBatch(messages, timestamp)
