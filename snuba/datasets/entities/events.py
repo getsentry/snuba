@@ -163,6 +163,10 @@ def callback_func(
                 },
             )
         else:
+            # Do not log cache hits to Sentry as it creates too much noise
+            if cache_hit:
+                continue
+
             reason = assign_reason_category(result_data, primary_result_data, referrer)
 
             metrics.increment(
