@@ -40,9 +40,6 @@ class OutcomesRawEntity(Entity):
             "organization": OrganizationExtension(),
         }
 
-    def get_prewhere_keys(self) -> Sequence[str]:
-        return ["project_id", "org_id"]
-
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
