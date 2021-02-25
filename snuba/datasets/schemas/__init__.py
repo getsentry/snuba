@@ -32,18 +32,6 @@ class RelationalSource(ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
-    def get_prewhere_candidates(self) -> Sequence[str]:
-        """
-        Returns the list of keys that can be promoted to PREWHERE conditions
-        if found in the conditions field of the query.
-        pre where keys depend on the actual table used to run the query, so,
-        since the query processors can change the datasource of the query, the
-        list of candidates must be associated to the data source itself and not
-        to the dataset.
-        """
-        raise NotImplementedError
-
 
 class Schema(ABC):
     """

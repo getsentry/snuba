@@ -80,7 +80,6 @@ schema = WritableTableSchema(
     dist_table_name="transactions_dist",
     storage_set_key=StorageSetKey.TRANSACTIONS,
     mandatory_conditions=[],
-    prewhere_candidates=["event_id", "transaction_name", "transaction", "title"],
     part_format=[util.PartSegment.RETENTION_DAYS, util.PartSegment.DATE],
 )
 
@@ -95,7 +94,7 @@ storage = WritableTableStorage(
         ArrayJoinKeyValueOptimizer("tags"),
         ArrayJoinKeyValueOptimizer("measurements"),
         UUIDColumnProcessor(set(["event_id", "trace_id"])),
-        PrewhereProcessor(),
+        PrewhereProcessor(["event_id", "transaction_name", "transaction", "title"]),
     ],
     stream_loader=build_kafka_stream_loader_from_settings(
         StorageKey.TRANSACTIONS,
