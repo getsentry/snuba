@@ -26,7 +26,7 @@ from snuba.migrations.groups import (
     get_group_loader,
     MigrationGroup,
 )
-from snuba.migrations.migration import MultiStepMigration
+from snuba.migrations.migration import ClickhouseNodeMigration, Migration
 from snuba.migrations.operations import SqlOperation
 from snuba.migrations.status import Status
 
@@ -390,7 +390,7 @@ class Runner:
             send_receive_timeout=client_settings.timeout,
         )
 
-        migrations: List[MultiStepMigration] = []
+        migrations: List[Migration] = []
 
         for group in ACTIVE_MIGRATION_GROUPS:
             group_loader = get_group_loader(group)
@@ -400,15 +400,16 @@ class Runner:
                 migrations.append(migration)
 
         for migration in migrations:
-            operations = (
-                migration.forwards_local()
-                if node_type == ClickhouseNodeType.LOCAL
-                else migration.forwards_dist()
-            )
+            if isinstance(migration, ClickhouseNodeMigration):
+                operations = (
+                    migration.forwards_local()
+                    if node_type == ClickhouseNodeType.LOCAL
+                    else migration.forwards_dist()
+                )
 
-            for op in operations:
-                if isinstance(op, SqlOperation):
-                    if op._storage_set in storage_sets:
-                        sql = op.format_sql()
-                        print(f"Executing {sql}")
-                        clickhouse.execute(sql)
+                for op in operations:
+                    if isinstance(op, SqlOperation):
+                        if op._storage_set in storage_sets:
+                            sql = op.format_sql()
+                            print(f"Executing {sql}")
+                            clickhouse.execute(sql)
