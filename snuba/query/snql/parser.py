@@ -55,6 +55,7 @@ from snuba.query.parser import (
     _validate_aliases,
 )
 from snuba.query.parser.exceptions import ParsingException
+from snuba.query.parser.validation import validate_query
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
     HighPriOperator,
@@ -969,5 +970,5 @@ def parse_snql_query(
     )
 
     # Validating
-    _post_process(query, [_validate_required_conditions])
+    _post_process(query, [_validate_required_conditions, validate_query])
     return query

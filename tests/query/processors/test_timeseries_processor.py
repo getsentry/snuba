@@ -16,7 +16,10 @@ from snuba.query.dsl import multiply
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
-from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
+from snuba.query.processors.timeseries_processor import (
+    TimeSeriesProcessor,
+    extract_granularity_from_query,
+)
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.util import parse_datetime
 
@@ -152,6 +155,7 @@ def test_timeseries_format_expressions(
             SelectedExpression("my_time", Column("my_time", None, "time")),
         ],
         condition=condition,
+        groupby=[Column("my_time", None, "time")],
         granularity=granularity,
     )
     expected = Query(
@@ -186,6 +190,8 @@ def test_timeseries_format_expressions(
             ClickhouseExpressionFormatter()
         )
         assert formatted_condition == ret
+
+    assert extract_granularity_from_query(unprocessed, "finish_ts") == granularity
 
 
 def test_invalid_datetime() -> None:

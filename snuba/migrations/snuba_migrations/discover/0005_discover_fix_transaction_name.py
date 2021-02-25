@@ -6,14 +6,16 @@ from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
-class Migration(migration.MultiStepMigration):
+class Migration(migration.ClickhouseNodeMigration):
     """
     The transaction_name column should not be nullable; it is not in either errors or transacions
     """
 
     blocking = False
 
-    def __forward_migrations(self, table_name: str) -> Sequence[operations.Operation]:
+    def __forward_migrations(
+        self, table_name: str
+    ) -> Sequence[operations.SqlOperation]:
         return [
             operations.ModifyColumn(
                 storage_set=StorageSetKey.DISCOVER,
@@ -24,7 +26,9 @@ class Migration(migration.MultiStepMigration):
             ),
         ]
 
-    def __backwards_migrations(self, table_name: str) -> Sequence[operations.Operation]:
+    def __backwards_migrations(
+        self, table_name: str
+    ) -> Sequence[operations.SqlOperation]:
         return [
             operations.ModifyColumn(
                 storage_set=StorageSetKey.DISCOVER,
@@ -36,14 +40,14 @@ class Migration(migration.MultiStepMigration):
             ),
         ]
 
-    def forwards_local(self) -> Sequence[operations.Operation]:
+    def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return self.__forward_migrations("discover_local")
 
-    def backwards_local(self) -> Sequence[operations.Operation]:
+    def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return self.__backwards_migrations("discover_local")
 
-    def forwards_dist(self) -> Sequence[operations.Operation]:
+    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return self.__forward_migrations("discover_dist")
 
-    def backwards_dist(self) -> Sequence[operations.Operation]:
+    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return self.__backwards_migrations("discover_dist")
