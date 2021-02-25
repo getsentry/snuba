@@ -48,7 +48,6 @@ schema = WritableTableSchema(
             Literal(None, 0),
         ),
     ],
-    prewhere_candidates=["project_id", "id"],
 )
 
 POSTGRES_TABLE = "sentry_groupedmessage"
@@ -57,7 +56,7 @@ storage = CdcStorage(
     storage_key=StorageKey.GROUPEDMESSAGES,
     storage_set_key=StorageSetKey.EVENTS,
     schema=schema,
-    query_processors=[PrewhereProcessor()],
+    query_processors=[PrewhereProcessor(["project_id", "id"])],
     stream_loader=build_kafka_stream_loader_from_settings(
         StorageKey.GROUPEDMESSAGES,
         processor=GroupedMessageProcessor(POSTGRES_TABLE),

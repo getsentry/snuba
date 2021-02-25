@@ -47,11 +47,10 @@ class Table(SimpleDataSource):
     schema: ColumnSet
     final: bool = False
     sampling_rate: Optional[float] = None
-    # TODO: Move mandatory connditions ad prewhere candidates out of
+    # TODO: Move mandatory connditions out of
     # here as they are structural property of a storage. This requires
     # the processors that consume these fields to access the storage.
     mandatory_conditions: Sequence[FunctionCall] = field(default_factory=list)
-    prewhere_candidates: Sequence[str] = field(default_factory=list)
 
     def get_columns(self) -> ColumnSet:
         return self.schema

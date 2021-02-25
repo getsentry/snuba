@@ -41,7 +41,7 @@ storage = CdcStorage(
     storage_key=StorageKey.GROUPASSIGNEES,
     storage_set_key=StorageSetKey.EVENTS,
     schema=schema,
-    query_processors=[PrewhereProcessor()],
+    query_processors=[PrewhereProcessor(["project_id"])],
     stream_loader=build_kafka_stream_loader_from_settings(
         StorageKey.GROUPASSIGNEES,
         processor=GroupAssigneeProcessor(POSTGRES_TABLE),
