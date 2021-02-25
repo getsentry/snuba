@@ -550,7 +550,11 @@ class MultistorageConsumerProcessingStrategyFactory(
                     self.__metrics,
                     {"load_balancing": "in_order", "insert_distributed_sync": 1},
                 ),
-                self.__metrics,
+                MetricsWrapper(
+                    self.__metrics,
+                    "insertions",
+                    {"storage": storage.get_storage_key().value},
+                ),
             ),
             replacement_batch_writer,
         )
