@@ -26,7 +26,7 @@ from snuba.migrations.groups import (
     get_group_loader,
     MigrationGroup,
 )
-from snuba.migrations.migration import ClickhouseNodeMigration, Migration
+from snuba.migrations.migration import ClickhouseNodeMigration, CodeMigration, Migration
 from snuba.migrations.operations import SqlOperation
 from snuba.migrations.status import Status
 
@@ -407,9 +407,12 @@ class Runner:
                     else migration.forwards_dist()
                 )
 
-                for op in operations:
-                    if isinstance(op, SqlOperation):
-                        if op._storage_set in storage_sets:
-                            sql = op.format_sql()
+                for sql_op in operations:
+                    if isinstance(sql_op, SqlOperation):
+                        if sql_op._storage_set in storage_sets:
+                            sql = sql_op.format_sql()
                             print(f"Executing {sql}")
                             clickhouse.execute(sql)
+            elif isinstance(migration, CodeMigration):
+                for python_op in migration.forwards_global():
+                    python_op.execute_new_node(storage_sets)
