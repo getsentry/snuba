@@ -70,6 +70,7 @@ all_columns = ColumnSet(
         ("deleted", UInt(8)),
         ("group_id", UInt(64)),
         ("primary_hash", UUID()),
+        ("hierarchical_hashes", Array(UUID())),
         ("received", DateTime()),
         ("message", String()),
         ("title", String()),
