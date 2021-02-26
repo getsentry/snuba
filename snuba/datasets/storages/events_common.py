@@ -178,9 +178,6 @@ all_columns = (
         ("culprit", String(Modifiers(nullable=True))),
         ("sdk_integrations", Array(String())),
         ("modules", Nested([("name", String()), ("version", String())])),
-        ("release", String(Modifiers(nullable=True, readonly=True))),
-        ("dist", String(Modifiers(nullable=True, readonly=True))),
-        ("user", String(Modifiers(nullable=True, readonly=True))),
     ]
 )
 
@@ -295,7 +292,7 @@ query_processors = [
     EventsBooleanContextsProcessor(),
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
-    PrewhereProcessor(),
+    PrewhereProcessor(prewhere_candidates),
 ]
 
 

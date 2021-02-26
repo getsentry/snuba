@@ -120,6 +120,8 @@ def callback_func(
     ):
         is_duplicate = True
 
+    consistent = request_settings.get_consistent()
+
     if not results:
         metrics.increment(
             "query_result",
@@ -140,6 +142,7 @@ def callback_func(
                 "referrer": referrer,
                 "cache_hit": str(cache_hit),
                 "is_duplicate": str(is_duplicate),
+                "consistent": str(consistent),
             },
         )
 
@@ -156,9 +159,14 @@ def callback_func(
                     "referrer": referrer,
                     "cache_hit": str(cache_hit),
                     "is_duplicate": str(is_duplicate),
+                    "consistent": str(consistent),
                 },
             )
         else:
+            # Do not log cache hits to Sentry as it creates too much noise
+            if cache_hit:
+                continue
+
             reason = assign_reason_category(result_data, primary_result_data, referrer)
 
             metrics.increment(
@@ -170,6 +178,7 @@ def callback_func(
                     "reason": reason,
                     "cache_hit": str(cache_hit),
                     "is_duplicate": str(is_duplicate),
+                    "consistent": str(consistent),
                 },
             )
 
@@ -183,6 +192,7 @@ def callback_func(
                         "reason": reason,
                         "cache_hit": str(cache_hit),
                         "is_duplicate": str(is_duplicate),
+                        "consistent": str(consistent),
                     },
                     extras={
                         "query": format_query(query),
@@ -205,6 +215,7 @@ def callback_func(
                             "reason": reason,
                             "cache_hit": str(cache_hit),
                             "is_duplicate": str(is_duplicate),
+                            "consistent": str(consistent),
                         },
                         extras={
                             "query": format_query(query),

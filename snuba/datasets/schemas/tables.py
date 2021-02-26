@@ -21,12 +21,10 @@ class TableSource(RelationalSource):
         table_name: str,
         columns: ColumnSet,
         mandatory_conditions: Optional[Sequence[FunctionCall]] = None,
-        prewhere_candidates: Optional[Sequence[str]] = None,
     ) -> None:
         self.__table_name = table_name
         self.__columns = columns
         self.__mandatory_conditions = mandatory_conditions or []
-        self.__prewhere_candidates = prewhere_candidates or []
 
     def get_table_name(self) -> str:
         return self.__table_name
@@ -36,9 +34,6 @@ class TableSource(RelationalSource):
 
     def get_mandatory_conditions(self) -> Sequence[FunctionCall]:
         return self.__mandatory_conditions
-
-    def get_prewhere_candidates(self) -> Sequence[str]:
-        return self.__prewhere_candidates
 
 
 class TableSchema(Schema):
@@ -55,7 +50,6 @@ class TableSchema(Schema):
         dist_table_name: str,
         storage_set_key: StorageSetKey,
         mandatory_conditions: Optional[Sequence[FunctionCall]] = None,
-        prewhere_candidates: Optional[Sequence[str]] = None,
         part_format: Optional[Sequence[util.PartSegment]] = None,
     ):
         self.__local_table_name = local_table_name
@@ -65,7 +59,7 @@ class TableSchema(Schema):
             else dist_table_name
         )
         self.__table_source = TableSource(
-            self.get_table_name(), columns, mandatory_conditions, prewhere_candidates,
+            self.get_table_name(), columns, mandatory_conditions
         )
         self.__part_format = part_format
 

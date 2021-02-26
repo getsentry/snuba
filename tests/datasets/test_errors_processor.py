@@ -332,4 +332,6 @@ def test_error_processor() -> None:
         }
     )
 
-    assert processor.process_message(error, meta) == InsertBatch([expected_result])
+    assert processor.process_message(error, meta) == InsertBatch(
+        [expected_result], None
+    )

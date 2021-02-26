@@ -59,14 +59,6 @@ schema = TableSchema(
     dist_table_name="discover_dist",
     storage_set_key=StorageSetKey.DISCOVER,
     mandatory_conditions=mandatory_conditions,
-    prewhere_candidates=[
-        "event_id",
-        "release",
-        "message",
-        "transaction_name",
-        "environment",
-        "project_id",
-    ],
 )
 
 storage = ReadableTableStorage(
@@ -77,7 +69,16 @@ storage = ReadableTableStorage(
         MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
         EventIdColumnProcessor(),
         ArrayJoinKeyValueOptimizer("tags"),
-        PrewhereProcessor(),
+        PrewhereProcessor(
+            [
+                "event_id",
+                "release",
+                "message",
+                "transaction_name",
+                "environment",
+                "project_id",
+            ]
+        ),
     ],
     query_splitters=[
         ColumnSplitQueryStrategy(
