@@ -4,7 +4,7 @@ from snuba.query.conditions import (
     binary_condition,
     get_first_level_and_conditions,
     get_first_level_or_conditions,
-    is_binary_condition,
+    is_any_binary_condition,
     is_condition,
     is_in_condition,
     is_in_condition_pattern,
@@ -187,8 +187,8 @@ def test_is_x_condition_functions() -> None:
     eq_condition = binary_condition(
         ConditionFunctions.EQ, Column(None, None, "test"), Literal(None, "1")
     )
-    assert is_binary_condition(eq_condition, ConditionFunctions.EQ)
-    assert not is_binary_condition(eq_condition, ConditionFunctions.NEQ)
+    assert is_any_binary_condition(eq_condition, ConditionFunctions.EQ)
+    assert not is_any_binary_condition(eq_condition, ConditionFunctions.NEQ)
 
     un_condition = unary_condition(
         ConditionFunctions.IS_NOT_NULL, Column(None, None, "test")

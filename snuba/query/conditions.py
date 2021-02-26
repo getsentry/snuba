@@ -94,7 +94,7 @@ set_condition_pattern = {
 
 
 def __is_set_condition(exp: Expression, operator: str) -> bool:
-    if is_binary_condition(exp, operator):
+    if is_any_binary_condition(exp, operator):
         if operator in set_condition_pattern:
             if set_condition_pattern[operator].match(exp) is not None:
                 assert isinstance(exp, FunctionCall)  # mypy
@@ -141,7 +141,7 @@ binary_condition_patterns = {
 }
 
 
-def is_binary_condition(exp: Expression, operator: str) -> bool:
+def is_any_binary_condition(exp: Expression, operator: str) -> bool:
     if operator in binary_condition_patterns:
         return binary_condition_patterns[operator].match(exp) is not None
 
