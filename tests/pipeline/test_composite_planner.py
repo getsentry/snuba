@@ -51,9 +51,6 @@ events_table = Table(
     mandatory_conditions=events_storage.get_schema()
     .get_data_source()
     .get_mandatory_conditions(),
-    prewhere_candidates=events_storage.get_schema()
-    .get_data_source()
-    .get_prewhere_candidates(),
 )
 
 groups_ent = Entity(
@@ -68,9 +65,6 @@ groups_table = Table(
     mandatory_conditions=groups_storage.get_schema()
     .get_data_source()
     .get_mandatory_conditions(),
-    prewhere_candidates=groups_storage.get_schema()
-    .get_data_source()
-    .get_prewhere_candidates(),
 )
 
 TEST_CASES = [

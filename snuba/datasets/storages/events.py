@@ -10,7 +10,6 @@ from snuba.datasets.storages.events_common import (
     get_promoted_tags,
     get_tag_column_map,
     mandatory_conditions,
-    prewhere_candidates,
     promoted_tag_columns,
     query_processors,
     query_splitters,
@@ -25,7 +24,6 @@ schema = WritableTableSchema(
     dist_table_name="sentry_dist",
     storage_set_key=StorageSetKey.EVENTS,
     mandatory_conditions=mandatory_conditions,
-    prewhere_candidates=prewhere_candidates,
     part_format=[util.PartSegment.DATE, util.PartSegment.RETENTION_DAYS],
 )
 

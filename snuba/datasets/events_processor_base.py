@@ -161,7 +161,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
             if row is None:  # the processor cannot/does not handle this input
                 return None
 
-            return InsertBatch([row])
+            return InsertBatch([row], None)
         elif type_ in REPLACEMENT_EVENT_TYPES:
             # pass raw events along to republish
             return ReplacementBatch(str(event["project_id"]), [message])
