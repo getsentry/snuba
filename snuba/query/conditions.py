@@ -1,8 +1,8 @@
-from typing import Mapping, Sequence
+from typing import Mapping, Optional, Sequence, Set
 
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Expression, FunctionCall, Literal
-from snuba.query.matchers import AnyExpression
+from snuba.query.matchers import AnyExpression, MatchResult
 from snuba.query.matchers import FunctionCall as FunctionCallPattern
 from snuba.query.matchers import Integer
 from snuba.query.matchers import Literal as LiteralPattern
@@ -139,6 +139,36 @@ binary_condition_patterns = {
     op: FunctionCallPattern(String(op), (AnyExpression(), AnyExpression()))
     for op in BINARY_OPERATORS
 }
+
+
+def match_condition(
+    exp: Expression,
+    operators: Set[str],
+    lhs_pattern: Pattern[Expression],
+    rhs_pattern: Pattern[Expression],
+    commutative: bool,
+) -> Optional[MatchResult]:
+    """
+    Matches a binary condition given the two operands and the valid
+    operators. It also supports commutative conditions.
+    """
+    pattern: Pattern[Expression]
+    if commutative:
+        pattern = Or(
+            [
+                FunctionCallPattern(
+                    Or([String(op) for op in operators]), (lhs_pattern, rhs_pattern)
+                ),
+                FunctionCallPattern(
+                    Or([String(op) for op in operators]), (rhs_pattern, lhs_pattern)
+                ),
+            ]
+        )
+    else:
+        pattern = FunctionCallPattern(
+            Or([String(op) for op in operators]), (lhs_pattern, rhs_pattern)
+        )
+    return pattern.match(exp)
 
 
 def is_any_binary_condition(exp: Expression, operator: str) -> bool:

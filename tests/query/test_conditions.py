@@ -11,11 +11,13 @@ from snuba.query.conditions import (
     is_not_in_condition,
     is_not_in_condition_pattern,
     is_unary_condition,
+    match_condition,
     unary_condition,
 )
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.matchers import Column as ColumnPattern
+from snuba.query.matchers import Literal as LiteralPattern
 from snuba.query.matchers import String
 
 
@@ -247,3 +249,17 @@ def test_first_level_conditions() -> None:
         c1,
         binary_condition(BooleanFunctions.AND, c2, c3),
     ]
+
+
+def test_binary_match() -> None:
+    c1 = binary_condition(
+        ConditionFunctions.EQ, Column(None, "table1", "column1"), Literal(None, "test"),
+    )
+
+    lhs = ColumnPattern(String("table1"), String("column1"))
+    rhs = LiteralPattern(String("test"))
+
+    assert match_condition(c1, {ConditionFunctions.EQ}, lhs, rhs, True) is not None
+    assert match_condition(c1, {ConditionFunctions.EQ}, lhs, rhs, False) is not None
+    assert match_condition(c1, {ConditionFunctions.EQ}, rhs, lhs, True) is not None
+    assert match_condition(c1, {ConditionFunctions.EQ}, rhs, lhs, False) is None
