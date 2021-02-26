@@ -436,7 +436,7 @@ note the position of the group in this list determines the order the migrations
 will be executed in.
 
 The new migration should contain a class called `Migration` which inherits from
-`MultiStepMigration`. You should define all four methods - `forwards_local`,
+`ClickhouseNodeMigration`. You should define all four methods - `forwards_local`,
 `backwards_local`, `forwards_dist` and `backwards_dist` in order to provide the
 DDL for all ClickHouse layouts that a user may have. The operations provided in
 the `_local` methods will run on each local ClickHouse node and the `_dist` methods

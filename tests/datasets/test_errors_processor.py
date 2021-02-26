@@ -173,6 +173,10 @@ def test_error_processor() -> None:
                 },
                 "fingerprint": ["{{ default }}"],
                 "hashes": ["c8b21c571231e989060b9110a2ade7d3"],
+                "hierarchical_hashes": [
+                    "04233d08ac90cf6fc015b1be5932e7e3",
+                    "04233d08ac90cf6fc015b1be5932e7e4",
+                ],
                 "key_id": "537125",
                 "level": "error",
                 "location": "snuba/clickhouse/http.py",
@@ -274,6 +278,10 @@ def test_error_processor() -> None:
         "deleted": 0,
         "group_id": 100,
         "primary_hash": str(UUID("04233d08ac90cf6fc015b1be5932e7e2")),
+        "hierarchical_hashes": [
+            str(UUID("04233d08ac90cf6fc015b1be5932e7e3")),
+            str(UUID("04233d08ac90cf6fc015b1be5932e7e4")),
+        ],
         "received": received_timestamp.astimezone(pytz.utc).replace(
             tzinfo=None, microsecond=0
         ),
@@ -324,4 +332,6 @@ def test_error_processor() -> None:
         }
     )
 
-    assert processor.process_message(error, meta) == InsertBatch([expected_result])
+    assert processor.process_message(error, meta) == InsertBatch(
+        [expected_result], None
+    )
