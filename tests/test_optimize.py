@@ -25,7 +25,8 @@ test_data = [
                     "timestamp": dt,
                     "retention_days": settings.DEFAULT_RETENTION_DAYS,
                 }
-            ]
+            ],
+            None,
         ),
         id="events",
     ),
@@ -41,7 +42,8 @@ test_data = [
                     "timestamp": dt,
                     "retention_days": settings.DEFAULT_RETENTION_DAYS,
                 }
-            ]
+            ],
+            None,
         ),
         id="errors",
     ),
@@ -56,7 +58,8 @@ test_data = [
                     "finish_ts": dt,
                     "retention_days": settings.DEFAULT_RETENTION_DAYS,
                 }
-            ]
+            ],
+            None,
         ),
         id="transactions",
     ),
