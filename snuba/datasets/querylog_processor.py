@@ -126,4 +126,4 @@ class QuerylogProcessor(MessageProcessor):
             **self.__extract_query_list(message["query_list"]),
         }
 
-        return InsertBatch([processed])
+        return InsertBatch([processed], None)
