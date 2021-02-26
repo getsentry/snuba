@@ -130,6 +130,7 @@ prewhere_candidates = [
     "event_id",
     "group_id",
     "tags[sentry:release]",
+    "release",
     "message",
     "environment",
     "project_id",
@@ -145,7 +146,7 @@ query_processors = [
     GroupIdColumnProcessor(),
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
-    PrewhereProcessor(prewhere_candidates, omit_if_final=["environment"]),
+    PrewhereProcessor(prewhere_candidates, omit_if_final=["environment", "release"]),
 ]
 
 query_splitters = [
