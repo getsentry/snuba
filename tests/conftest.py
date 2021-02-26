@@ -1,5 +1,5 @@
 import json
-from typing import Any, Callable, Iterator, Generator, List, Tuple, Union
+from typing import Any, Callable, Iterator, Generator, List, Sequence, Tuple, Union
 
 import pytest
 from snuba import settings, state
@@ -75,7 +75,7 @@ def convert_legacy_to_snql() -> Callable[[str, str], str]:
     def convert(data: str, entity: str) -> str:
         legacy = json.loads(data)
 
-        def func(value: Union[str, List[Any]]) -> str:
+        def func(value: Union[str, Sequence[Any]]) -> str:
             if not isinstance(value, list):
                 return f"{value}" if value is not None else "NULL"
 
@@ -88,19 +88,20 @@ def convert_legacy_to_snql() -> Callable[[str, str], str]:
             alias = f" AS {value[2]}" if len(value) > 2 else ""
             return f"{value[0]}({children}){alias}"
 
-        def literal(value: Union[str, List[Any]]) -> str:
-            if isinstance(value, list):
+        def literal(value: Union[str, Sequence[Any]]) -> str:
+            if isinstance(value, (list, tuple)):
                 return f"tuple({','.join(list(map(literal, value)))})"
 
-            try:
-                float(value)
+            if isinstance(value, (int, float)):
                 return f"{value}"
-            except ValueError:
+            else:
                 escaped = value.replace("'", "\\'")
                 return f"'{escaped}'"
 
         sample = legacy.get("sample")
-        sample_clause = f"SAMPLE {sample}" if sample else ""
+        sample_clause = ""
+        if sample is not None:
+            sample_clause = f"SAMPLE {float(sample)}" if sample else ""
         match_clause = f"MATCH ({entity} {sample_clause})"
 
         aggregations = []
@@ -129,8 +130,8 @@ def convert_legacy_to_snql() -> Callable[[str, str], str]:
         if groupby and not isinstance(groupby, list):
             groupby = [groupby]
 
-        phrase = "BY" if select_clause else "SELECT"
         groupby = ", ".join(map(func, groupby))
+        phrase = "BY" if select_clause else f"SELECT {groupby} BY"
         groupby_clause = f"{phrase} {groupby}" if groupby else ""
 
         word_ops = ("NOT IN", "IN", "LIKE", "NOT LIKE", "IS NULL", "IS NOT NULL")
@@ -208,12 +209,18 @@ def convert_legacy_to_snql() -> Callable[[str, str], str]:
             if isinstance(order_by, list):
                 parts: List[str] = []
                 for part in order_by:
+                    order_part = ""
+                    if isinstance(part, (list, tuple)):
+                        order_part = func(part)
+                    else:
+                        order_part = part
+
                     sort = "ASC"
-                    if part.startswith("-"):
-                        part = part[1:]
+                    if order_part.startswith("-"):
+                        order_part = order_part[1:]
                         sort = "DESC"
 
-                    parts.append(f"{part} {sort}")
+                    parts.append(f"{order_part} {sort}")
                 order_by_str = ",".join(parts)
             else:
                 sort = "ASC"
