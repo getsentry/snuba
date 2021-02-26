@@ -70,6 +70,7 @@ all_columns = ColumnSet(
         ("deleted", UInt(8)),
         ("group_id", UInt(64)),
         ("primary_hash", UUID()),
+        ("hierarchical_hashes", Array(UUID())),
         ("received", DateTime()),
         ("message", String()),
         ("title", String()),
@@ -144,7 +145,7 @@ query_processors = [
     GroupIdColumnProcessor(),
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
-    PrewhereProcessor(),
+    PrewhereProcessor(prewhere_candidates, omit_if_final=["environment"]),
 ]
 
 query_splitters = [
