@@ -32,18 +32,6 @@ class RelationalSource(ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
-    def get_prewhere_candidates(self) -> Sequence[str]:
-        """
-        Returns the list of keys that can be promoted to PREWHERE conditions
-        if found in the conditions field of the query.
-        pre where keys depend on the actual table used to run the query, so,
-        since the query processors can change the datasource of the query, the
-        list of candidates must be associated to the data source itself and not
-        to the dataset.
-        """
-        raise NotImplementedError
-
 
 class Schema(ABC):
     """
@@ -78,22 +66,24 @@ class Schema(ABC):
         """
         errors: List[str] = []
 
-        for column_name, column in expected_columns.items():
-            if column_name not in self.get_columns():
+        for column in self.get_columns():
+            if column.flattened not in expected_columns:
                 errors.append(
-                    "Column '%s' exists in local ClickHouse but not in schema!"
-                    % column_name
+                    "Column '%s' exists in schema but not local ClickHouse!"
+                    % column.name
                 )
                 continue
 
-            expected_type = self.get_columns()[column_name].type
+            expected_type = expected_columns[column.flattened]
 
-            if column.get_raw() != expected_type.get_raw() or column.has_modifier(
+            if column.type.get_raw() != expected_type.get_raw() or column.type.has_modifier(
                 Nullable
-            ) != expected_type.has_modifier(Nullable):
+            ) != expected_type.has_modifier(
+                Nullable
+            ):
                 errors.append(
                     "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)"
-                    % (column_name, expected_type, column)
+                    % (column.name, expected_type, column)
                 )
 
         return errors

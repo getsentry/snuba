@@ -7,6 +7,9 @@ import pytest
 
 import snuba.query.parser.validation.functions as functions
 from snuba.clickhouse.columns import ColumnSet
+from snuba.datasets.entities import EntityKey
+from snuba.datasets.entities.factory import get_entity
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column, Expression, FunctionCall
 from snuba.query.parser.validation.functions import FunctionCallsValidator
@@ -47,22 +50,31 @@ test_cases = [
 ]
 
 
-@pytest.mark.parametrize("default_validators, entity_validators, exception", test_cases)
+@pytest.mark.parametrize("default_validators, entity_validators, exception", test_cases)  # type: ignore
 def test_functions(
     default_validators: Mapping[str, FunctionCallValidator],
     entity_validators: Mapping[str, FunctionCallValidator],
     exception: Optional[Type[InvalidExpressionException]],
 ) -> None:
+    fn_cached = functions.default_validators
     functions.default_validators = default_validators
-    entity = MagicMock()
-    entity.get_function_call_validators.return_value = entity_validators
-    entity.get_data_model.return_value = ColumnSet([])
+
+    entity_return = MagicMock()
+    entity_return.return_value = entity_validators
+    events_entity = get_entity(EntityKey.EVENTS)
+    cached = events_entity.get_function_call_validators
+    setattr(events_entity, "get_function_call_validators", entity_return)
+    data_source = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
 
     expression = FunctionCall(
         None, "f", (Column(alias=None, table_name=None, column_name="col"),)
     )
     if exception is None:
-        FunctionCallsValidator().validate(expression, entity)
+        FunctionCallsValidator().validate(expression, data_source)
     else:
         with pytest.raises(exception):
-            FunctionCallsValidator().validate(expression, entity)
+            FunctionCallsValidator().validate(expression, data_source)
+
+    # TODO: This should use fixture to do this
+    setattr(events_entity, "get_function_call_validators", cached)
+    functions.default_validators = fn_cached

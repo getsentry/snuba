@@ -30,10 +30,10 @@ raw_columns: Sequence[Column[Modifiers]] = [
 ]
 
 
-class Migration(migration.MultiStepMigration):
+class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
-    def forwards_local(self) -> Sequence[operations.Operation]:
+    def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.SESSIONS,
@@ -60,7 +60,7 @@ class Migration(migration.MultiStepMigration):
             create_matview_v1,
         ]
 
-    def backwards_local(self) -> Sequence[operations.Operation]:
+    def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.SESSIONS,
@@ -74,7 +74,7 @@ class Migration(migration.MultiStepMigration):
             ),
         ]
 
-    def forwards_dist(self) -> Sequence[operations.Operation]:
+    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.SESSIONS,
@@ -94,7 +94,7 @@ class Migration(migration.MultiStepMigration):
             ),
         ]
 
-    def backwards_dist(self) -> Sequence[operations.Operation]:
+    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.SESSIONS, table_name="sessions_hourly_dist",

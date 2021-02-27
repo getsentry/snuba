@@ -129,6 +129,7 @@ class PostgresSnapshot(BulkLoadSource):
                 expected_columns = self.__descriptor.get_table(table).columns
                 if expected_columns:
                     expected_set = set(expected_columns)
+                    assert isinstance(columns, Iterable)
                     existing_set = set(columns)
                     if not expected_set <= existing_set:
                         raise ValueError(

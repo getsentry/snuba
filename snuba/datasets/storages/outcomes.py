@@ -69,7 +69,6 @@ materialized_view_schema = TableSchema(
     local_table_name="outcomes_mv_hourly_local",
     dist_table_name="outcomes_mv_hourly_dist",
     storage_set_key=StorageSetKey.OUTCOMES,
-    prewhere_candidates=["project_id", "org_id"],
     columns=materialized_view_columns,
 )
 
@@ -89,5 +88,5 @@ materialized_storage = ReadableTableStorage(
     storage_key=StorageKey.OUTCOMES_HOURLY,
     storage_set_key=StorageSetKey.OUTCOMES,
     schema=read_schema,
-    query_processors=[PrewhereProcessor()],
+    query_processors=[PrewhereProcessor(["project_id", "org_id"])],
 )

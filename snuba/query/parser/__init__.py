@@ -88,7 +88,6 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     _deescape_aliases(query)
     _mangle_aliases(query)
     _validate_arrayjoin(query)
-    validate_query(query, entity)
 
     # XXX: Select the entity to be used for the query. This step is temporary. Eventually
     # entity selection will be moved to Sentry and specified for all SnQL queries.
@@ -98,6 +97,7 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     )
     query.set_from_clause(query_entity)
 
+    validate_query(query)
     return query
 
 
@@ -250,6 +250,11 @@ def _parse_query_impl(body: MutableMapping[str, Any], entity: Entity) -> Query:
             parse_expression(limitby_expr, entity.get_data_model(), set()),
         )
 
+    sample = body.get("sample")
+    if sample is not None:
+        assert isinstance(sample, (int, float))
+        sample = float(sample)
+
     return Query(
         None,
         selected_columns=select_clause,
@@ -259,7 +264,7 @@ def _parse_query_impl(body: MutableMapping[str, Any], entity: Entity) -> Query:
         having=having_expr,
         order_by=orderby_exprs,
         limitby=limitby_clause,
-        sample=body.get("sample"),
+        sample=sample,
         limit=body.get("limit", None),
         offset=body.get("offset", 0),
         totals=body.get("totals", False),

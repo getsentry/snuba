@@ -1,9 +1,8 @@
-from typing import Any, Callable, Iterator, List, Union
-
 import json
-import pytest
+from typing import Any, Callable, Iterator, Generator, List, Sequence, Tuple, Union
 
-from snuba import settings
+import pytest
+from snuba import settings, state
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.entities import EntityKey
@@ -72,11 +71,11 @@ def run_migrations() -> Iterator[None]:
 
 
 @pytest.fixture
-def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
+def convert_legacy_to_snql() -> Callable[[str, str], str]:
     def convert(data: str, entity: str) -> str:
         legacy = json.loads(data)
 
-        def func(value: Union[str, List[Any]]) -> str:
+        def func(value: Union[str, Sequence[Any]]) -> str:
             if not isinstance(value, list):
                 return f"{value}" if value is not None else "NULL"
 
@@ -89,23 +88,32 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
             alias = f" AS {value[2]}" if len(value) > 2 else ""
             return f"{value[0]}({children}){alias}"
 
-        def literal(value: Union[str, List[Any]]) -> str:
-            if isinstance(value, list):
+        def literal(value: Union[str, Sequence[Any]]) -> str:
+            if isinstance(value, (list, tuple)):
                 return f"tuple({','.join(list(map(literal, value)))})"
 
-            try:
-                float(value)
+            if isinstance(value, (int, float)):
                 return f"{value}"
-            except ValueError:
+            else:
                 escaped = value.replace("'", "\\'")
                 return f"'{escaped}'"
 
         sample = legacy.get("sample")
-        sample_clause = f"SAMPLE {sample}" if sample else ""
+        sample_clause = ""
+        if sample is not None:
+            sample_clause = f"SAMPLE {float(sample)}" if sample else ""
         match_clause = f"MATCH ({entity} {sample_clause})"
 
-        selected = ", ".join(map(func, legacy.get("selected_columns", [])))
-        select_clause = f"SELECT {selected}" if selected else ""
+        aggregations = []
+        for a in legacy.get("aggregations", []):
+            if a[0].endswith(")") and not a[1]:
+                aggregations.append(f"{a[0]} AS {a[2]}")
+            else:
+                agg = func(a)
+                aggregations.append(agg)
+
+        expressions = aggregations + list(map(func, legacy.get("selected_columns", [])))
+        select_clause = f"SELECT {', '.join(expressions)}" if expressions else ""
 
         arrayjoin = legacy.get("arrayjoin")
         if arrayjoin:
@@ -118,48 +126,19 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
                 else f"{select_clause}, {array_join_clause}"
             )
 
-        aggregations = []
-        for a in legacy.get("aggregations", []):
-            if a[0].endswith(")") and not a[1]:
-                aggregations.append(f"{a[0]} AS {a[2]}")
-            else:
-                agg = func(a)
-                aggregations.append(agg)
-
-        aggregations_str = ", ".join(aggregations)
-        joined = ", " if select_clause else "SELECT "
-        aggregation_clause = f"{joined}{aggregations_str}" if aggregations_str else ""
-
         groupby = legacy.get("groupby", [])
         if groupby and not isinstance(groupby, list):
             groupby = [groupby]
 
         groupby = ", ".join(map(func, groupby))
-        groupby_clause = f"BY {groupby}" if groupby else ""
+        phrase = "BY" if select_clause else f"SELECT {groupby} BY"
+        groupby_clause = f"{phrase} {groupby}" if groupby else ""
 
-        word_ops = ("NOT IN", "IN", "LIKE", "NOT LIKE")
+        word_ops = ("NOT IN", "IN", "LIKE", "NOT LIKE", "IS NULL", "IS NOT NULL")
         conditions = []
-        for cond in legacy.get("conditions", []):
-            if len(cond) != 3 or not isinstance(cond[1], str):
-                or_condition = []
-                for or_cond in cond:
-                    op = f" {or_cond[1]} " if or_cond[1] in word_ops else or_cond[1]
-                    or_condition.append(
-                        f"{func(or_cond[0])}{op}{literal(or_cond[2])}".join(or_cond)
-                    )
-                or_condition_str = " OR ".join(or_condition)
-                conditions.append(f"{or_condition_str}")
-            else:
-                op = f" {cond[1]} " if cond[1] in word_ops else cond[1]
-                conditions.append(f"{func(cond[0])}{op}{literal(cond[2])}")
 
-        project = legacy.get("project")
-        if isinstance(project, int):
-            conditions.append(f"project_id={project}")
-        elif isinstance(project, list):
-            project = ",".join(map(str, project))
-            conditions.append(f"project_id IN tuple({project})")
-
+        # These conditions are ordered to match how the legacy parser would
+        # add these conditions so we can compare SQL queries directly.
         organization = legacy.get("organization")
         if isinstance(organization, int):
             conditions.append(f"org_id={organization}")
@@ -177,6 +156,31 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
                     conditions.append(
                         f"{main_entity._required_time_column} {op} toDateTime('{date_val}')"
                     )
+
+        project = legacy.get("project")
+        if isinstance(project, int):
+            conditions.append(f"project_id IN tuple({project})")
+        elif isinstance(project, list):
+            project = ",".join(map(str, project))
+            conditions.append(f"project_id IN tuple({project})")
+
+        for cond in legacy.get("conditions", []):
+            if len(cond) != 3 or not isinstance(cond[1], str):
+                or_condition = []
+                for or_cond in cond:
+                    op = f" {or_cond[1]} " if or_cond[1] in word_ops else or_cond[1]
+                    or_condition.append(
+                        f"{func(or_cond[0])}{op}{literal(or_cond[2])}".join(or_cond)
+                    )
+                or_condition_str = " OR ".join(or_condition)
+                conditions.append(f"{or_condition_str}")
+            else:
+                rhs = ""
+                if cond[1] not in ["IS NULL", "IS NOT NULL"]:
+                    rhs = literal(cond[2])
+
+                op = f" {cond[1]} " if cond[1] in word_ops else cond[1]
+                conditions.append(f"{func(cond[0])}{op}{rhs}")
 
         conditions_str = " AND ".join(conditions)
         where_clause = f"WHERE {conditions_str}" if conditions_str else ""
@@ -205,12 +209,18 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
             if isinstance(order_by, list):
                 parts: List[str] = []
                 for part in order_by:
+                    order_part = ""
+                    if isinstance(part, (list, tuple)):
+                        order_part = func(part)
+                    else:
+                        order_part = part
+
                     sort = "ASC"
-                    if part.startswith("-"):
-                        part = part[1:]
+                    if order_part.startswith("-"):
+                        order_part = order_part[1:]
                         sort = "DESC"
 
-                    parts.append(f"{part} {sort}")
+                    parts.append(f"{order_part} {sort}")
                 order_by_str = ",".join(parts)
             else:
                 sort = "ASC"
@@ -232,9 +242,67 @@ def convert_legacy_to_snql() -> Iterator[Callable[[str, str], str]]:
                 extra_exps.append(f"{extra.upper()} {legacy.get(extra)}")
         extras_clause = " ".join(extra_exps)
 
-        query = f"{match_clause} {select_clause} {aggregation_clause} {groupby_clause} {where_clause} {having_clause} {order_by_clause} {limit_by_clause} {extras_clause}"
+        query = f"{match_clause} {select_clause} {groupby_clause} {where_clause} {having_clause} {order_by_clause} {limit_by_clause} {extras_clause}"
         body = {"query": query}
+
+        settings_extras = ("consistent", "debug", "turbo")
+        for setting in settings_extras:
+            if legacy.get(setting) is not None:
+                body[setting] = legacy[setting]
 
         return json.dumps(body)
 
-    yield convert
+    return convert
+
+
+@pytest.fixture(params=["legacy", "snql", "compare"])
+def _build_snql_post_methods(
+    request: Any,
+    test_entity: Union[str, Tuple[str, str]],
+    test_app: Any,
+    convert_legacy_to_snql: Callable[[str, str], str],
+) -> Callable[..., Any]:
+    dataset = entity = ""
+    if isinstance(test_entity, tuple):
+        entity, dataset = test_entity
+    else:
+        dataset = entity = test_entity
+
+    if request.param == "legacy" or request.param == "snql":
+        endpoint = "/query" if request.param == "legacy" else f"/{dataset}/snql"
+
+        def simple_post(data: str, entity: str = entity) -> Any:
+            if request.param == "snql":
+                data = convert_legacy_to_snql(data, entity)
+            return test_app.post(endpoint, data=data, headers={"referer": "test"})
+
+        return simple_post
+
+    def compare_post(data: str, entity: str = entity) -> Any:
+        # Run legacy and snql and compare the outputs
+        legacy_resp = test_app.post("/query", data=data, headers={"referer": "test"})
+        snql_resp = test_app.post(
+            f"/{dataset}/snql",
+            data=convert_legacy_to_snql(data, entity),
+            headers={"referer": "test"},
+        )
+
+        legacy_data = json.loads(legacy_resp.data)
+        snql_data = json.loads(snql_resp.data)
+        assert (
+            legacy_data["sql"] == snql_data["sql"]
+        ), f"LEGACY:\n{legacy_data['sql']}\n\nSNQL:\n{snql_data['sql']}\n"
+
+        return snql_resp
+
+    return compare_post
+
+
+@pytest.fixture
+def disable_query_cache() -> Generator[None, None, None]:
+    cache, readthrough = state.get_configs(
+        [("use_cache", settings.USE_RESULT_CACHE), ("use_readthrough_query_cache", 1)]
+    )
+    state.set_configs({"use_cache": 0, "use_readthrough_query_cache": 0})
+    yield
+    state.set_configs({"use_cache": cache, "use_readthrough_query_cache": readthrough})

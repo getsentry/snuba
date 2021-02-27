@@ -29,12 +29,12 @@ class TestSubscriptionCodec:
             resolution=timedelta(minutes=1),
         )
 
-    def test_basic(self):
+    def test_basic(self) -> None:
         data = self.build_subscription_data()
         codec = SubscriptionDataCodec()
         assert codec.decode(codec.encode(data)) == data
 
-    def test_encode(self):
+    def test_encode(self) -> None:
         codec = SubscriptionDataCodec()
         subscription = self.build_subscription_data()
 
@@ -46,7 +46,7 @@ class TestSubscriptionCodec:
         assert data["time_window"] == int(subscription.time_window.total_seconds())
         assert data["resolution"] == int(subscription.resolution.total_seconds())
 
-    def test_decode(self):
+    def test_decode(self) -> None:
         codec = SubscriptionDataCodec()
         subscription = self.build_subscription_data()
         data = {

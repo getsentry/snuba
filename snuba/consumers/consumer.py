@@ -2,6 +2,7 @@ import functools
 import itertools
 import logging
 import time
+from datetime import datetime
 from pickle import PickleBuffer
 from typing import (
     Any,
@@ -18,17 +19,12 @@ from typing import (
 
 import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
-
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.processor import (
-    InsertBatch,
-    MessageProcessor,
-    ReplacementBatch,
-)
+from snuba.processor import InsertBatch, MessageProcessor, ReplacementBatch
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams import Message, Partition, Topic
@@ -36,13 +32,11 @@ from snuba.utils.streams.backends.kafka import (
     KafkaPayload,
     build_kafka_producer_configuration,
 )
-from snuba.utils.streams.processing.strategies import (
-    ProcessingStrategy,
-    ProcessingStrategyFactory,
-)
+from snuba.utils.streams.processing.strategies import ProcessingStrategy
 from snuba.utils.streams.processing.strategies import (
     ProcessingStrategy as ProcessingStep,
 )
+from snuba.utils.streams.processing.strategies import ProcessingStrategyFactory
 from snuba.utils.streams.processing.strategies.streaming import (
     CollectStep,
     FilterStep,
@@ -51,18 +45,23 @@ from snuba.utils.streams.processing.strategies.streaming import (
 )
 from snuba.writer import BatchWriter
 
-
 logger = logging.getLogger("snuba.consumer")
 
 
 class JSONRowInsertBatch(NamedTuple):
     rows: Sequence[JSONRow]
+    origin_timestamp: Optional[datetime]
 
-    def __reduce_ex__(self, protocol: int) -> Tuple[Any, Tuple[Sequence[Any]]]:
+    def __reduce_ex__(
+        self, protocol: int
+    ) -> Tuple[Any, Tuple[Sequence[Any], Optional[datetime]]]:
         if protocol >= 5:
-            return (type(self), ([PickleBuffer(row) for row in self.rows],))
+            return (
+                type(self),
+                ([PickleBuffer(row) for row in self.rows], self.origin_timestamp),
+            )
         else:
-            return type(self), (self.rows,)
+            return type(self), (self.rows, self.origin_timestamp)
 
 
 class InsertBatchWriter(ProcessingStep[JSONRowInsertBatch]):
@@ -99,6 +98,12 @@ class InsertBatchWriter(ProcessingStep[JSONRowInsertBatch]):
             self.__metrics.timing(
                 "latency_ms", (write_finish - message.timestamp.timestamp()) * 1000
             )
+            if message.payload.origin_timestamp is not None:
+                self.__metrics.timing(
+                    "end_to_end_latency_ms",
+                    (write_finish - message.payload.origin_timestamp.timestamp())
+                    * 1000,
+                )
 
         logger.debug(
             "Waited %0.4f seconds for %r rows to be written to %r.",
@@ -255,7 +260,10 @@ def process_message(
     )
 
     if isinstance(result, InsertBatch):
-        return JSONRowInsertBatch([json_row_encoder.encode(row) for row in result.rows])
+        return JSONRowInsertBatch(
+            [json_row_encoder.encode(row) for row in result.rows],
+            result.origin_timestamp,
+        )
     else:
         return result
 
@@ -462,7 +470,8 @@ def process_message_multistorage(
                 (
                     storage_key,
                     JSONRowInsertBatch(
-                        [json_row_encoder.encode(row) for row in result.rows]
+                        [json_row_encoder.encode(row) for row in result.rows],
+                        result.origin_timestamp,
                     ),
                 )
             )
@@ -541,7 +550,11 @@ class MultistorageConsumerProcessingStrategyFactory(
                     self.__metrics,
                     {"load_balancing": "in_order", "insert_distributed_sync": 1},
                 ),
-                self.__metrics,
+                MetricsWrapper(
+                    self.__metrics,
+                    "insertions",
+                    {"storage": storage.get_storage_key().value},
+                ),
             ),
             replacement_batch_writer,
         )

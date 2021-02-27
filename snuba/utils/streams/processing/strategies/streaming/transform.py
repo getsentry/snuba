@@ -118,7 +118,7 @@ class MessageBatch(Generic[TPayload]):
     def get_content_size(self) -> int:
         return self.__offset
 
-    def __getitem__(self, index: int) -> Message[TPayload]:
+    def __getitem__(self, index: int) -> Any:
         """
         Get a message in this batch by its index.
 

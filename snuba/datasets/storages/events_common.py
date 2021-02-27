@@ -107,6 +107,7 @@ all_columns = (
         ("platform", String(Modifiers(nullable=True))),
         ("message", String(Modifiers(nullable=True))),
         ("primary_hash", FixedString(32, Modifiers(nullable=True))),
+        ("hierarchical_hashes", Array(FixedString(32))),
         ("received", DateTime(Modifiers(nullable=True))),
         ("search_message", String(Modifiers(nullable=True))),
         ("title", String(Modifiers(nullable=True))),
@@ -177,9 +178,6 @@ all_columns = (
         ("culprit", String(Modifiers(nullable=True))),
         ("sdk_integrations", Array(String())),
         ("modules", Nested([("name", String()), ("version", String())])),
-        ("release", String(Modifiers(nullable=True, readonly=True))),
-        ("dist", String(Modifiers(nullable=True, readonly=True))),
-        ("user", String(Modifiers(nullable=True, readonly=True))),
     ]
 )
 
@@ -294,7 +292,7 @@ query_processors = [
     EventsBooleanContextsProcessor(),
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
-    PrewhereProcessor(),
+    PrewhereProcessor(prewhere_candidates),
 ]
 
 

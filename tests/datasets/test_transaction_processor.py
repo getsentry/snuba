@@ -222,7 +222,7 @@ class TestTransactionsProcessor:
         start_timestamp = timestamp - timedelta(seconds=5)
         return (start_timestamp.timestamp(), timestamp.timestamp())
 
-    def test_skip_non_transactions(self):
+    def test_skip_non_transactions(self) -> None:
         start, finish = self.__get_timestamps()
         message = TransactionEvent(
             event_id="e5e062bf2e1d4afd96fd2f90b6770431",
@@ -258,7 +258,7 @@ class TestTransactionsProcessor:
         processor = TransactionsMessageProcessor()
         assert processor.process_message(payload, meta) is None
 
-    def test_missing_trace_context(self):
+    def test_missing_trace_context(self) -> None:
         start, finish = self.__get_timestamps()
         message = TransactionEvent(
             event_id="e5e062bf2e1d4afd96fd2f90b6770431",
@@ -294,7 +294,7 @@ class TestTransactionsProcessor:
         processor = TransactionsMessageProcessor()
         assert processor.process_message(payload, meta) is None
 
-    def test_base_process(self):
+    def test_base_process(self) -> None:
         start, finish = self.__get_timestamps()
         message = TransactionEvent(
             event_id="e5e062bf2e1d4afd96fd2f90b6770431",
@@ -325,4 +325,4 @@ class TestTransactionsProcessor:
         )
         assert TransactionsMessageProcessor().process_message(
             message.serialize(), meta
-        ) == InsertBatch([message.build_result(meta)])
+        ) == InsertBatch([message.build_result(meta)], None)

@@ -21,13 +21,13 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
     def build_store(self, key="1") -> RedisSubscriptionDataStore:
         return RedisSubscriptionDataStore(redis_client, self.dataset, key)
 
-    def test_create(self):
+    def test_create(self) -> None:
         store = self.build_store()
         subscription_id = uuid1()
         store.create(subscription_id, self.subscription)
         assert store.all() == [(subscription_id, self.subscription)]
 
-    def test_delete(self):
+    def test_delete(self) -> None:
         store = self.build_store()
         subscription_id = uuid1()
         store.create(subscription_id, self.subscription)
@@ -35,7 +35,7 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
         store.delete(subscription_id)
         assert store.all() == []
 
-    def test_all(self):
+    def test_all(self) -> None:
         store = self.build_store()
         assert store.all() == []
         subscription_id = uuid1()
@@ -55,7 +55,7 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
             (new_subscription_id, new_subscription),
         ]
 
-    def test_partitions(self):
+    def test_partitions(self) -> None:
         store_1 = self.build_store("1")
         store_2 = self.build_store("2")
         subscription_id = uuid1()

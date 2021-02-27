@@ -6,14 +6,16 @@ from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
-class Migration(migration.MultiStepMigration):
+class Migration(migration.ClickhouseNodeMigration):
     """
     Adds fields for query profile.
     """
 
     blocking = True
 
-    def __forward_migrations(self, table_name: str) -> Sequence[operations.Operation]:
+    def __forward_migrations(
+        self, table_name: str
+    ) -> Sequence[operations.SqlOperation]:
         return [
             operations.AddColumn(
                 storage_set=StorageSetKey.QUERYLOG,
@@ -101,7 +103,9 @@ class Migration(migration.MultiStepMigration):
             ),
         ]
 
-    def __backwards_migrations(self, table_name: str) -> Sequence[operations.Operation]:
+    def __backwards_migrations(
+        self, table_name: str
+    ) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropColumn(
                 StorageSetKey.QUERYLOG, table_name, "clickhouse_queries.all_columns"
@@ -127,14 +131,14 @@ class Migration(migration.MultiStepMigration):
             ),
         ]
 
-    def forwards_local(self) -> Sequence[operations.Operation]:
+    def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return self.__forward_migrations("querylog_local")
 
-    def backwards_local(self) -> Sequence[operations.Operation]:
+    def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return self.__backwards_migrations("querylog_local")
 
-    def forwards_dist(self) -> Sequence[operations.Operation]:
+    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return self.__forward_migrations("querylog_dist")
 
-    def backwards_dist(self) -> Sequence[operations.Operation]:
+    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return self.__backwards_migrations("querylog_dist")

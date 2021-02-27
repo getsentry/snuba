@@ -39,7 +39,7 @@ def test_streaming_consumer_strategy() -> None:
     processor = Mock()
     processor.process_message.side_effect = [
         None,
-        InsertBatch([{}]),
+        InsertBatch([{}], None),
         ReplacementBatch("key", [{}]),
     ]
 
@@ -97,12 +97,12 @@ def test_streaming_consumer_strategy() -> None:
 
 
 def test_json_row_batch_pickle_simple() -> None:
-    batch = JSONRowInsertBatch([b"foo", b"bar", b"baz"])
+    batch = JSONRowInsertBatch([b"foo", b"bar", b"baz"], datetime(2021, 1, 1, 11, 0, 1))
     assert pickle.loads(pickle.dumps(batch)) == batch
 
 
 def test_json_row_batch_pickle_out_of_band() -> None:
-    batch = JSONRowInsertBatch([b"foo", b"bar", b"baz"])
+    batch = JSONRowInsertBatch([b"foo", b"bar", b"baz"], datetime(2021, 1, 1, 11, 0, 1))
 
     buffers: MutableSequence[PickleBuffer] = []
     data = pickle.dumps(batch, protocol=5, buffer_callback=buffers.append)

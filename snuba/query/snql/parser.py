@@ -1,34 +1,33 @@
+import logging
 from dataclasses import replace
 from typing import (
     Any,
     Callable,
     Iterable,
+    List,
     MutableMapping,
     NamedTuple,
-    List,
     Optional,
     Sequence,
     Tuple,
     Union,
 )
 
+from parsimonious.exceptions import IncompleteParseError
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
+
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.query import (
-    LimitBy,
-    OrderBy,
-    OrderByDirection,
-    SelectedExpression,
-)
+from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     binary_condition,
     combine_and_conditions,
     combine_or_conditions,
+    unary_condition,
 )
 from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
@@ -41,18 +40,14 @@ from snuba.query.expressions import (
     Lambda,
     Literal,
 )
-from snuba.query.matchers import (
-    Any as AnyMatch,
-    AnyExpression,
-    AnyOptionalString,
-    Column as ColumnMatch,
-    FunctionCall as FunctionCallMatch,
-    Literal as LiteralMatch,
-    Param,
-    Or,
-    String as StringMatch,
-)
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.matchers import Any as AnyMatch
+from snuba.query.matchers import AnyExpression, AnyOptionalString
+from snuba.query.matchers import Column as ColumnMatch
+from snuba.query.matchers import FunctionCall as FunctionCallMatch
+from snuba.query.matchers import Literal as LiteralMatch
+from snuba.query.matchers import Or, Param
+from snuba.query.matchers import String as StringMatch
 from snuba.query.parser import (
     _apply_column_aliases,
     _expand_aliases,
@@ -60,6 +55,7 @@ from snuba.query.parser import (
     _validate_aliases,
 )
 from snuba.query.parser.exceptions import ParsingException
+from snuba.query.parser.validation import validate_query
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
     HighPriOperator,
@@ -82,11 +78,10 @@ from snuba.query.snql.expression_visitor import (
     visit_parameters_list,
     visit_quoted_literal,
 )
-from snuba.query.snql.joins import (
-    RelationshipTuple,
-    build_join_clause,
-)
+from snuba.query.snql.joins import RelationshipTuple, build_join_clause
 from snuba.util import parse_datetime
+
+logger = logging.getLogger("snuba.snql.parser")
 
 snql_grammar = Grammar(
     r"""
@@ -117,9 +112,11 @@ snql_grammar = Grammar(
     and_tuple             = space+ "AND" condition
     or_tuple              = space+ "OR" and_expression
 
-    condition             = main_condition / parenthesized_cdn
-    main_condition        = low_pri_arithmetic space* condition_op space* (function_call / column_name / quoted_literal / numeric_literal)
+    condition             = unary_condition / main_condition / parenthesized_cdn
+    unary_condition       = low_pri_arithmetic space+ unary_op
+    main_condition        = low_pri_arithmetic space* condition_op space* (function_call / simple_term)
     condition_op          = "!=" / ">=" / ">" / "<=" / "<" / "=" / "NOT IN" / "NOT LIKE" / "IN" / "LIKE"
+    unary_op              = "IS NULL" / "IS NOT NULL"
     parenthesized_cdn     = space* open_paren or_expression close_paren
 
     select_list          = select_columns* (selected_expression)
@@ -136,7 +133,7 @@ snql_grammar = Grammar(
     low_pri_tuple         = low_pri_op space* high_pri_arithmetic
     high_pri_tuple        = high_pri_op space* arithmetic_term
 
-    arithmetic_term       = space* (function_call / numeric_literal / subscriptable / column_name / parenthesized_arithm)
+    arithmetic_term       = space* (function_call / subscriptable / simple_term / parenthesized_arithm)
     parenthesized_arithm  = open_paren low_pri_arithmetic close_paren
 
     low_pri_op            = "+" / "-"
@@ -145,8 +142,7 @@ snql_grammar = Grammar(
     parameters_list       = parameter* (param_expression)
     parameter             = param_expression space* comma space*
     function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)? (space* "AS" space* string_literal)?
-    simple_term           = quoted_literal / numeric_literal / column_name
-    literal               = ~r"[a-zA-Z0-9_\.:-]+"
+    simple_term           = quoted_literal / numeric_literal / null_literal / boolean_literal / column_name
     quoted_literal        = ~r"((?<!\\)')((?!(?<!\\)').)*.?'"
     string_literal        = ~r"[a-zA-Z0-9_\.\+\*\/:\-]*"
     numeric_literal       = ~r"-?[0-9]+(\.[0-9]+)?(e[\+\-][0-9]+)?"
@@ -154,8 +150,9 @@ snql_grammar = Grammar(
     boolean_literal       = true_literal / false_literal
     true_literal          = ~r"TRUE"i
     false_literal         = ~r"FALSE"i
+    null_literal          = ~r"NULL"i
     subscriptable         = column_name open_square column_name close_square
-    column_name           = ~r"[a-zA-Z_][a-zA-Z0-9_\.]*"
+    column_name           = ~r"[a-zA-Z_][a-zA-Z0-9_\.:]*"
     function_name         = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     entity_alias          = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     entity_name           = ~r"[a-zA-Z_]+"
@@ -215,8 +212,10 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
         if "groupby" in args:
             if "selected_columns" not in args:
-                args["selected_columns"] = []
-            args["selected_columns"] += args["groupby"]
+                args["selected_columns"] = args["groupby"]
+            else:
+                args["selected_columns"] = args["groupby"] + args["selected_columns"]
+
             args["groupby"] = map(lambda gb: gb.expression, args["groupby"])
 
         if isinstance(data_source, (CompositeQuery, LogicalQuery, JoinClause)):
@@ -334,7 +333,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         data = lhs_entity.get_join_relationship(relationship)
         if data is None:
             raise ParsingException(
-                f"{lhs.data_source.key.value} does not have a join relationship {relationship}"
+                f"{lhs.data_source.key.value} does not have a join relationship -[{relationship}]->"
             )
         elif data.rhs_entity != rhs.data_source.key:
             raise ParsingException(
@@ -444,6 +443,11 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
         return Literal(None, False)
 
+    def visit_null_literal(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> Literal:
+        return Literal(None, None)
+
     def visit_quoted_literal(
         self, node: Node, visited_children: Tuple[Node]
     ) -> Literal:
@@ -501,6 +505,15 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
                 elif isinstance(elem, (AndTuple, OrTuple)):
                     args.append(elem.exp)
         return combine_or_conditions(args)
+
+    def visit_unary_condition(
+        self, node: Node, visited_children: Tuple[Expression, Any, str]
+    ) -> Expression:
+        exp, _, op = visited_children
+        return unary_condition(op, exp)
+
+    def visit_unary_op(self, node: Node, visited_children: Iterable[Any]) -> str:
+        return OPERATOR_TO_FUNCTION[node.text]
 
     def visit_main_condition(
         self,
@@ -728,9 +741,35 @@ def parse_snql_query_initial(
     account the initial query body. Extensions are parsed by extension
     processors and are supposed to update the AST.
     """
-    exp_tree = snql_grammar.parse(body)
-    parsed = SnQLVisitor().visit(exp_tree)
+    try:
+        exp_tree = snql_grammar.parse(body)
+        parsed = SnQLVisitor().visit(exp_tree)
+    except ParsingException as e:
+        logger.warning(f"Invalid SnQL query ({e}): {body}")
+        raise e
+    except IncompleteParseError as e:
+        idx = e.column()
+        prefix = body[max(0, idx - 1) : idx]
+        suffix = body[idx : (idx + 10)]
+        raise ParsingException(f"Parsing error at '{prefix}{suffix}'")
+    except Exception as e:
+        message = str(e)
+        if "\n" in message:
+            message, _ = message.split("\n", 1)
+        raise ParsingException(message)
+
     assert isinstance(parsed, (CompositeQuery, LogicalQuery))  # mypy
+
+    # Add these defaults here to avoid them getting applied to subqueries
+    limit = parsed.get_limit()
+    if limit is None:
+        parsed.set_limit(1000)
+    elif limit > 10000:
+        raise ParsingException("queries cannot have a limit higher than 10000")
+
+    if parsed.get_offset() is None:
+        parsed.set_offset(0)
+
     return parsed
 
 
@@ -931,5 +970,5 @@ def parse_snql_query(
     )
 
     # Validating
-    _post_process(query, [_validate_required_conditions])
+    _post_process(query, [_validate_required_conditions, validate_query])
     return query
