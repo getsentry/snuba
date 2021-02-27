@@ -1,17 +1,11 @@
-"""\
-Backfills the errors table from events.
-
-This script will eventually be moved to a migration - after we have a multistorage
-consumer running in all environments populating new events into both tables.
-
-Errors replacements should be turned off while this script is running.
-"""
 from datetime import date, datetime, timedelta
+from typing import Sequence
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.migrations import migration, operations
 from snuba.migrations.operations import InsertIntoSelect
 
 
@@ -206,3 +200,24 @@ def backfill_errors() -> None:
                 PARTITION {partition} FINAL DEDUPLICATE
                 """
             )
+
+
+class Migration(migration.CodeMigration):
+    """
+    Backfills the errors table from events.
+    Errors replacements should be turned off while this script is running.
+    Note this migration is not reversible.
+    """
+
+    blocking = True
+
+    def forwards_global(self) -> Sequence[operations.RunPython]:
+
+        return [
+            operations.RunPython(
+                func=backfill_errors, description="Backfill errors table from events"
+            ),
+        ]
+
+    def backwards_global(self) -> Sequence[operations.RunPython]:
+        return []
