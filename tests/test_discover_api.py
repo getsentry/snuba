@@ -420,6 +420,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover",
         )
         assert response.status_code == 200
 
@@ -1011,6 +1012,7 @@ class TestDiscoverApi(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover",
         )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
@@ -1160,7 +1162,8 @@ class TestArrayJoinDiscoverAPI(BaseApiTest):
         self.base_time = datetime.utcnow().replace(
             second=0, microsecond=0, tzinfo=pytz.utc
         ) - timedelta(minutes=90)
-        write_unprocessed_events(get_writable_storage(StorageKey.EVENTS), [self.event])
+        events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
+        write_unprocessed_events(events_storage, [self.event])
         write_unprocessed_events(
             get_writable_storage(StorageKey.TRANSACTIONS), [get_raw_transaction()],
         )
