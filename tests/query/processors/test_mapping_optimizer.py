@@ -33,16 +33,16 @@ TEST_CASES = [
         build_query(
             selected_columns=[column("event_id")],
             condition=nested_condition(
-                "contexts", ConditionFunctions.EQ, "my_ctx", "a"
+                "contexts", "my_ctx", ConditionFunctions.EQ, "a"
             ),
         ),
-        nested_condition("contexts", ConditionFunctions.EQ, "my_ctx", "a"),
+        nested_condition("contexts", "my_ctx", ConditionFunctions.EQ, "a"),
         id="Nested condition on the wrong column",
     ),
     pytest.param(
         build_query(
             selected_columns=[column("event_id")],
-            condition=nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
+            condition=nested_condition("tags", "my_tag", ConditionFunctions.EQ, "a"),
         ),
         FunctionCall(
             None,
@@ -57,7 +57,7 @@ TEST_CASES = [
     pytest.param(
         build_query(
             selected_columns=[column("event_id")],
-            condition=nested_condition("tags", ConditionFunctions.EQ, "my=t\\ag", "a"),
+            condition=nested_condition("tags", "my=t\\ag", ConditionFunctions.EQ, "a"),
         ),
         FunctionCall(
             None,
@@ -95,9 +95,9 @@ TEST_CASES = [
     pytest.param(
         build_query(
             selected_columns=[column("event_id")],
-            condition=nested_condition("tags", ConditionFunctions.LIKE, "my_tag", "a"),
+            condition=nested_condition("tags", "my_tag", ConditionFunctions.LIKE, "a"),
         ),
-        nested_condition("tags", ConditionFunctions.LIKE, "my_tag", "a"),
+        nested_condition("tags", "my_tag", ConditionFunctions.LIKE, "a"),
         id="Unsupported condition",
     ),
     pytest.param(
@@ -105,14 +105,14 @@ TEST_CASES = [
             selected_columns=[column("event_id")],
             condition=binary_condition(
                 BooleanFunctions.OR,
-                nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
-                nested_condition("tags", ConditionFunctions.LIKE, "my_tag2", "b"),
+                nested_condition("tags", "my_tag", ConditionFunctions.EQ, "a"),
+                nested_condition("tags", "my_tag2", ConditionFunctions.LIKE, "b"),
             ),
         ),
         binary_condition(
             BooleanFunctions.OR,
-            nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
-            nested_condition("tags", ConditionFunctions.LIKE, "my_tag2", "b"),
+            nested_condition("tags", "my_tag", ConditionFunctions.EQ, "a"),
+            nested_condition("tags", "my_tag2", ConditionFunctions.LIKE, "b"),
         ),
         id="Unsupported and supported conditions",
     ),
@@ -121,7 +121,7 @@ TEST_CASES = [
             selected_columns=[column("event_id")],
             condition=binary_condition(
                 BooleanFunctions.AND,
-                nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
+                nested_condition("tags", "my_tag", ConditionFunctions.EQ, "a"),
                 binary_condition(
                     ConditionFunctions.LIKE,
                     Column(None, None, "something_else"),
@@ -174,14 +174,14 @@ TEST_CASES = [
     pytest.param(
         build_query(
             selected_columns=[column("event_id")],
-            condition=nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
+            condition=nested_condition("tags", "my_tag", ConditionFunctions.EQ, "a"),
             having=binary_condition(
                 ConditionFunctions.EQ,
                 FunctionCall(None, "arrayjoin", (Column(None, None, "tags.key"),)),
                 Literal(None, "bla"),
             ),
         ),
-        nested_condition("tags", ConditionFunctions.EQ, "my_tag", "a"),
+        nested_condition("tags", "my_tag", ConditionFunctions.EQ, "a"),
         id="Non optimizable having",
     ),
 ]

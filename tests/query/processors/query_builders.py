@@ -40,7 +40,7 @@ def nested_expression(column: str, key: str) -> FunctionCall:
 
 
 def nested_condition(
-    column_name: str, operator: str, key: str, val: str,
+    column_name: str, key: str, operator: str, val: str,
 ) -> Expression:
     return binary_condition(
         operator, nested_expression(column_name, key), Literal(None, val),

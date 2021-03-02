@@ -69,7 +69,7 @@ class HexIntContextType(ContextType):
 
 class PromotionSpec(NamedTuple):
     context_name: str
-    promtoed_column_name: str
+    promoted_column_name: str
     data_type: ContextType
 
 
@@ -82,7 +82,7 @@ class TypedContextPromoter(QueryProcessor):
     to further reduce the amount of data fetched.
 
     The conditions it promtoes are of the form:
-    `arrayValue(contexts.values, indexOf(contexts.key, 'NAME')) = 'string_uuid'`
+    `arrayElement(contexts.values, indexOf(contexts.key, 'NAME')) = 'string_uuid'`
     into:
     `promoted_column = the_proper_representation_of_string_uuid`
     """
@@ -144,7 +144,7 @@ class TypedContextPromoter(QueryProcessor):
                     exp,
                     pattern,
                     self.__specs[context_name].data_type,
-                    self.__specs[context_name].promtoed_column_name,
+                    self.__specs[context_name].promoted_column_name,
                     context_name,
                 )
                 if ret is not None:

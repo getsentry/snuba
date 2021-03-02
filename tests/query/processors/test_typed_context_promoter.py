@@ -50,7 +50,7 @@ TEST_CASES = [
                 nested_expression("contexts", "trace.trace_id"),
             ],
             condition=nested_condition(
-                "contexts", ConditionFunctions.EQ, "my_ctx", "a"
+                "contexts", "my_ctx", ConditionFunctions.EQ, "a"
             ),
         ),
         build_query(
@@ -59,7 +59,7 @@ TEST_CASES = [
                 nested_expression("contexts", "trace.trace_id"),
             ],
             condition=nested_condition(
-                "contexts", ConditionFunctions.EQ, "my_ctx", "a"
+                "contexts", "my_ctx", ConditionFunctions.EQ, "a"
             ),
         ),
         id="Wrong context in query",
@@ -72,8 +72,8 @@ TEST_CASES = [
             ],
             condition=nested_condition(
                 "contexts",
-                ConditionFunctions.EQ,
                 "trace.trace_id",
+                ConditionFunctions.EQ,
                 "b0ee5765475f4377be3d8623dd2c034f",
             ),
         ),
@@ -97,11 +97,11 @@ TEST_CASES = [
                 BooleanFunctions.AND,
                 nested_condition(
                     "contexts",
-                    ConditionFunctions.EQ,
                     "trace.trace_id",
+                    ConditionFunctions.EQ,
                     "b0ee5765475f4377be3d8623dd2c034f",
                 ),
-                nested_condition("contexts", ConditionFunctions.EQ, "my_ctx", "a"),
+                nested_condition("contexts", "my_ctx", ConditionFunctions.EQ, "a"),
             ),
         ),
         build_query(
@@ -113,7 +113,7 @@ TEST_CASES = [
                     Column(None, None, "trace_id"),
                     Literal(None, "b0ee5765-475f-4377-be3d-8623dd2c034f"),
                 ),
-                nested_condition("contexts", ConditionFunctions.EQ, "my_ctx", "a"),
+                nested_condition("contexts", "my_ctx", ConditionFunctions.EQ, "a"),
             ),
         ),
         id="Context found in nested condition. Ignored in Select",
@@ -125,14 +125,14 @@ TEST_CASES = [
                 BooleanFunctions.AND,
                 nested_condition(
                     "contexts",
-                    ConditionFunctions.EQ,
                     "trace.trace_id",
+                    ConditionFunctions.EQ,
                     "b0ee5765475f4377be3d8623dd2c034f",
                 ),
                 nested_condition(
                     "contexts",
-                    ConditionFunctions.EQ,
                     "trace.span_id",
+                    ConditionFunctions.EQ,
                     "a046e6b8f2acdd20",
                 ),
             ),
