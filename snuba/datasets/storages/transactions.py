@@ -1,3 +1,9 @@
+from snuba.query.processors.typed_context_promoter import (
+    HexIntContextType,
+    PromotionSpec,
+    TypedContextPromoter,
+    UUIDContextType,
+)
 from snuba import util
 from snuba.clickhouse.columns import (
     UUID,
@@ -90,6 +96,13 @@ storage = WritableTableStorage(
     schema=schema,
     query_processors=[
         MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
+        TypedContextPromoter(
+            "contexts",
+            {
+                PromotionSpec("trace.trace_id", "trace_id", UUIDContextType()),
+                PromotionSpec("trace.span_id", "span_id", HexIntContextType()),
+            },
+        ),
         EventIdColumnProcessor(),
         ArrayJoinKeyValueOptimizer("tags"),
         ArrayJoinKeyValueOptimizer("measurements"),
