@@ -4,18 +4,20 @@ from snuba.query.conditions import (
     binary_condition,
     get_first_level_and_conditions,
     get_first_level_or_conditions,
-    is_binary_condition,
+    is_any_binary_condition,
     is_condition,
     is_in_condition,
     is_in_condition_pattern,
     is_not_in_condition,
     is_not_in_condition_pattern,
     is_unary_condition,
+    match_condition,
     unary_condition,
 )
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.matchers import Column as ColumnPattern
+from snuba.query.matchers import Literal as LiteralPattern
 from snuba.query.matchers import String
 
 
@@ -187,8 +189,8 @@ def test_is_x_condition_functions() -> None:
     eq_condition = binary_condition(
         ConditionFunctions.EQ, Column(None, None, "test"), Literal(None, "1")
     )
-    assert is_binary_condition(eq_condition, ConditionFunctions.EQ)
-    assert not is_binary_condition(eq_condition, ConditionFunctions.NEQ)
+    assert is_any_binary_condition(eq_condition, ConditionFunctions.EQ)
+    assert not is_any_binary_condition(eq_condition, ConditionFunctions.NEQ)
 
     un_condition = unary_condition(
         ConditionFunctions.IS_NOT_NULL, Column(None, None, "test")
@@ -247,3 +249,17 @@ def test_first_level_conditions() -> None:
         c1,
         binary_condition(BooleanFunctions.AND, c2, c3),
     ]
+
+
+def test_binary_match() -> None:
+    c1 = binary_condition(
+        ConditionFunctions.EQ, Column(None, "table1", "column1"), Literal(None, "test"),
+    )
+
+    lhs = ColumnPattern(String("table1"), String("column1"))
+    rhs = LiteralPattern(String("test"))
+
+    assert match_condition(c1, {ConditionFunctions.EQ}, lhs, rhs, True) is not None
+    assert match_condition(c1, {ConditionFunctions.EQ}, lhs, rhs, False) is not None
+    assert match_condition(c1, {ConditionFunctions.EQ}, rhs, lhs, True) is not None
+    assert match_condition(c1, {ConditionFunctions.EQ}, rhs, lhs, False) is None

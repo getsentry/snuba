@@ -51,10 +51,10 @@ columns: Sequence[Column[Modifiers]] = [
 ]
 
 
-class Migration(migration.MultiStepMigration):
+class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
-    def forwards_local(self) -> Sequence[operations.Operation]:
+    def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.QUERYLOG,
@@ -69,14 +69,14 @@ class Migration(migration.MultiStepMigration):
             )
         ]
 
-    def backwards_local(self) -> Sequence[operations.Operation]:
+    def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.QUERYLOG, table_name="querylog_local",
             )
         ]
 
-    def forwards_dist(self) -> Sequence[operations.Operation]:
+    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.QUERYLOG,
@@ -88,7 +88,7 @@ class Migration(migration.MultiStepMigration):
             )
         ]
 
-    def backwards_dist(self) -> Sequence[operations.Operation]:
+    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.QUERYLOG, table_name="querylog_dist",
