@@ -54,10 +54,25 @@ test_data = [
         "RESULT_OUT_OF_ORDER",
         id="out_of_order",
     ),
+    pytest.param(
+        [
+            {"group_id": 1, "count": 1},
+            {"group_id": 2, "count": 1},
+            {"group_id": 3, "count": 1},
+        ],
+        [
+            {"group_id": 3, "count": 1},
+            {"group_id": 2, "count": 1},
+            {"group_id": 1, "count": 1},
+        ],
+        "tagstore.get_groups_user_counts",
+        "NONDETERMINISTIC_QUERY",
+        id="nondeterministic_query",
+    ),
 ]
 
 
-@pytest.mark.parametrize("data, primary_data, referrer, expected_reason", test_data)
+@pytest.mark.parametrize("data, primary_data, referrer, expected_reason", test_data)  # type: ignore
 def test_assign_reason_category(
     data: Sequence[Mapping[str, Any]],
     primary_data: Sequence[Mapping[str, Any]],
