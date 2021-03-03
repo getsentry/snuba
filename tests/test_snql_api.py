@@ -2,6 +2,8 @@ import uuid
 import simplejson as json
 from datetime import datetime, timedelta
 from functools import partial
+from typing import Any
+from unittest.mock import patch, MagicMock
 
 from snuba import state
 from snuba.datasets.entities import EntityKey
@@ -134,9 +136,27 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
         data = json.loads(response.data)
-
         assert response.status_code == 200, data
         assert data["data"] == [{"avg_count": 1.0}]
+
+    def test_max_limit(self) -> None:
+        response = self.app.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (discover_events )
+                    SELECT count() AS count BY project_id, tags[custom_tag]
+                    WHERE type != 'transaction' AND project_id = {self.project_id} AND timestamp >= toDateTime('2021-01-01')
+                    ORDER BY count ASC
+                    LIMIT 100000""",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 400, data
 
     def test_project_rate_limiting(self) -> None:
         state.set_config("project_concurrent_limit", self.project_id)
@@ -255,3 +275,59 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
         assert response.status_code == 429
+
+    @patch("snuba.settings.RECORD_QUERIES", True)
+    @patch("snuba.state.record_query")
+    def test_record_queries(self, record_query_mock: Any) -> None:
+        for use_split, expected_query_count in [(0, 1), (1, 2)]:
+            state.set_config("use_split", use_split)
+            record_query_mock.reset_mock()
+            result = json.loads(
+                self.app.post(
+                    "/events/snql",
+                    data=json.dumps(
+                        {
+                            "query": f"""MATCH (events)
+                            SELECT event_id, title, transaction, tags[a], tags[b]
+                            WHERE timestamp >= toDateTime('2021-01-01')
+                            AND timestamp < toDateTime('2022-01-01')
+                            AND project_id IN tuple({self.project_id})
+                            LIMIT 5""",
+                        }
+                    ),
+                ).data
+            )
+
+            assert len(result["data"]) == 1
+            assert record_query_mock.call_count == 1
+            metadata = record_query_mock.call_args[0][0]
+            assert metadata["dataset"] == "events"
+            assert metadata["request"]["referrer"] == "test"
+            assert len(metadata["query_list"]) == expected_query_count
+
+    @patch("snuba.web.query._run_query_pipeline")
+    def test_error_handler(self, pipeline_mock: MagicMock) -> None:
+        from rediscluster.utils import ClusterDownError
+
+        hsh = "0" * 32
+        group_id = int(hsh[:16], 16)
+        pipeline_mock.side_effect = ClusterDownError("stuff")
+        response = self.app.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT event_id, group_id, project_id, timestamp
+                    WHERE project_id IN tuple({self.project_id})
+                    AND group_id IN tuple({group_id})
+                    AND  timestamp >= toDateTime('2021-01-01')
+                    AND timestamp < toDateTime('2022-01-01')
+                    ORDER BY timestamp DESC, event_id DESC
+                    LIMIT 1""",
+                }
+            ),
+        )
+        assert response.status_code == 500
+        data = json.loads(response.data)
+        assert data["error"]["type"] == "internal_server_error"
+        assert data["error"]["message"] == "stuff"

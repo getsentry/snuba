@@ -2,9 +2,9 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Sequence
 
-from snuba.datasets.entity import Entity
 from snuba.query.expressions import Expression
-from snuba.query.logical import Query
+from snuba.query.data_source import DataSource
+from snuba.query import Query
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,7 @@ class ExpressionValidator(ABC):
     """
 
     @abstractmethod
-    def validate(self, exp: Expression, entity: Entity) -> None:
+    def validate(self, exp: Expression, data_source: DataSource) -> None:
         """
         If the expression is valid according to this validator it
         returns, otherwise it raises a subclass of
@@ -29,11 +29,11 @@ from snuba.query.parser.validation.functions import FunctionCallsValidator
 validators: Sequence[ExpressionValidator] = [FunctionCallsValidator()]
 
 
-def validate_query(query: Query, entity: Entity) -> None:
+def validate_query(query: Query) -> None:
     """
     Applies all the expression validators in one pass over the AST.
     """
 
     for exp in query.get_all_expressions():
         for v in validators:
-            v.validate(exp, entity)
+            v.validate(exp, query.get_from_clause())

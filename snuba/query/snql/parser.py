@@ -55,6 +55,7 @@ from snuba.query.parser import (
     _validate_aliases,
 )
 from snuba.query.parser.exceptions import ParsingException
+from snuba.query.parser.validation import validate_query
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
     HighPriOperator,
@@ -151,7 +152,7 @@ snql_grammar = Grammar(
     false_literal         = ~r"FALSE"i
     null_literal          = ~r"NULL"i
     subscriptable         = column_name open_square column_name close_square
-    column_name           = ~r"[a-zA-Z_][a-zA-Z0-9_\.]*"
+    column_name           = ~r"[a-zA-Z_][a-zA-Z0-9_\.:]*"
     function_name         = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     entity_alias          = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     entity_name           = ~r"[a-zA-Z_]+"
@@ -760,8 +761,12 @@ def parse_snql_query_initial(
     assert isinstance(parsed, (CompositeQuery, LogicalQuery))  # mypy
 
     # Add these defaults here to avoid them getting applied to subqueries
-    if parsed.get_limit() is None:
+    limit = parsed.get_limit()
+    if limit is None:
         parsed.set_limit(1000)
+    elif limit > 10000:
+        raise ParsingException("queries cannot have a limit higher than 10000")
+
     if parsed.get_offset() is None:
         parsed.set_offset(0)
 
@@ -965,5 +970,5 @@ def parse_snql_query(
     )
 
     # Validating
-    _post_process(query, [_validate_required_conditions])
+    _post_process(query, [_validate_required_conditions, validate_query])
     return query

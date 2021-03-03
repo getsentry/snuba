@@ -100,6 +100,7 @@ class EventsLoader(DirectoryLoader):
             "0010_groupedmessages_onpremise_compatibility",
             "0011_rebuild_errors",
             "0012_errors_make_level_nullable",
+            "0013_errors_add_hierarchical_hashes",
         ]
 
 
