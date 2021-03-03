@@ -12,5 +12,8 @@ test:
 
 tests: test
 
+api-tests:
+	SNUBA_SETTINGS=test pytest -vv tests/*_api.py
+
 install-python-dependencies:
 	pip install -e .
