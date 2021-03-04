@@ -12,7 +12,7 @@ from snuba.environment import setup_logging
 @click.option("--processes", default=1)
 @click.option("--threads", default=1)
 def api(*, debug: bool, log_level: Optional[str], processes: int, threads: int) -> None:
-    from snuba import settings
+    from snuba import settings, state
 
     if debug:
         if processes > 1 or threads > 1:
@@ -23,6 +23,9 @@ def api(*, debug: bool, log_level: Optional[str], processes: int, threads: int) 
 
         setup_logging(log_level)
 
+        if settings.DEBUG or settings.TESTING:
+            state.set_config("use_readthrough_query_cache", 0)
+
         WSGIRequestHandler.protocol_version = "HTTP/1.1"
         application.run(port=settings.PORT, threaded=True, debug=debug)
     else:
@@ -30,6 +33,9 @@ def api(*, debug: bool, log_level: Optional[str], processes: int, threads: int) 
 
         if log_level:
             os.environ["LOG_LEVEL"] = log_level
+
+        if settings.DEBUG or settings.TESTING:
+            state.set_config("use_readthrough_query_cache", 0)
 
         mywsgi.run(
             "snuba.web.wsgi:application",
