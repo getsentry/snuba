@@ -13,7 +13,6 @@ from snuba.query.processors.typed_context_promoter import (
     UUIDContextType,
 )
 from snuba.request.request_settings import HTTPRequestSettings
-from snuba.state import set_config
 from tests.query.processors.query_builders import (
     build_query,
     column,
@@ -163,7 +162,6 @@ TEST_CASES = [
 
 @pytest.mark.parametrize("query, expected_query", TEST_CASES)
 def test_tags_hash_map(query: ClickhouseQuery, expected_query: ClickhouseQuery) -> None:
-    set_config("typed_context_promoter_enabled", 1)
     TypedContextPromoter(
         "contexts",
         {

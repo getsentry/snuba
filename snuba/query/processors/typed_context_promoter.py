@@ -21,7 +21,6 @@ from snuba.query.expressions import Column
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Any, Literal, MatchResult, Param, Pattern
 from snuba.request.request_settings import RequestSettings
-from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "typed_context")
@@ -103,9 +102,6 @@ class TypedContextPromoter(QueryProcessor):
         self.__specs = {spec.context_name: spec for spec in specs}
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
-        if not get_config("typed_context_promoter_enabled", 0):
-            return
-
         def apply_pattern(
             exp: Expression,
             pattern: Pattern[Expression],
