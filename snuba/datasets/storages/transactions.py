@@ -107,7 +107,16 @@ storage = WritableTableStorage(
         ArrayJoinKeyValueOptimizer("tags"),
         ArrayJoinKeyValueOptimizer("measurements"),
         UUIDColumnProcessor(set(["event_id", "trace_id"])),
-        PrewhereProcessor(["event_id", "transaction_name", "transaction", "title"]),
+        PrewhereProcessor(
+            [
+                "event_id",
+                "trace_id",
+                "span_id",
+                "transaction_name",
+                "transaction",
+                "title",
+            ]
+        ),
     ],
     stream_loader=build_kafka_stream_loader_from_settings(
         StorageKey.TRANSACTIONS,
