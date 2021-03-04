@@ -48,49 +48,49 @@ test_cases = [
     pytest.param(
         "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c",
         ParsingException,
-        "EntityKey.EVENTS is missing required conditions",
+        "EntityKey.EVENTS is missing conditions on timestamp, project_id",
         id="simple query missing required conditions",
     ),
     pytest.param(
         "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c WHERE e.project_id = '1' AND e.timestamp >= toDateTime('2021-01-01')",
         ParsingException,
-        "EntityKey.EVENTS is missing required conditions",
+        "EntityKey.EVENTS is missing conditions on project_id",
         id="simple query required conditions have wrong type",
     ),
     pytest.param(
         "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c WHERE e.project_id = 1",
         ParsingException,
-        "EntityKey.EVENTS is missing required conditions",
+        "EntityKey.EVENTS is missing conditions on timestamp",
         id="simple query missing some required conditions",
     ),
     pytest.param(
         "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c",
         ParsingException,
-        "EntityKey.EVENTS is missing required conditions",
+        "EntityKey.EVENTS is missing conditions on timestamp, project_id",
         id="join missing required conditions on both sides",
     ),
     pytest.param(
         "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c WHERE e.project_id = 1 AND e.timestamp >= toDateTime('2021-01-01') AND e.timestamp < toDateTime('2021-01-02')",
         ParsingException,
-        "EntityKey.TRANSACTIONS is missing required conditions",
+        "EntityKey.TRANSACTIONS is missing conditions on project_id",
         id="join missing required conditions on one side",
     ),
     pytest.param(
         "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c WHERE e.project_id = 1 AND t.finish_ts > toDateTime('2021-01-01') ",
         ParsingException,
-        "EntityKey.EVENTS is missing required conditions",
+        "EntityKey.EVENTS is missing conditions on timestamp",
         id="join missing some required conditions on both sides",
     ),
     pytest.param(
         "MATCH { MATCH (events) SELECT count() AS count BY title } SELECT max(count) AS max_count",
         ParsingException,
-        "EntityKey.EVENTS is missing required conditions",
+        "EntityKey.EVENTS is missing conditions on timestamp, project_id",
         id="subquery missing required conditions",
     ),
 ]
 
 
-@pytest.mark.parametrize("query_body, exception, message", test_cases)
+@pytest.mark.parametrize("query_body, exception, message", test_cases)  # type: ignore
 def test_failures(query_body: str, exception: Exception, message: str) -> None:
     state.set_config("query_parsing_expand_aliases", 1)
     events = get_dataset("events")
