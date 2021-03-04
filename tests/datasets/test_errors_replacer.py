@@ -1,4 +1,5 @@
 import importlib
+import pytest
 import pytz
 import uuid
 import re
@@ -117,17 +118,19 @@ class TestReplacer:
             [1, 2, 3],
         )
 
-    def test_tombstone_events_process(self) -> None:
+    @pytest.mark.parametrize("for_primary_hash_change", [True, False, None])
+    def test_tombstone_events_process(self, for_primary_hash_change) -> None:
         timestamp = datetime.now(tz=pytz.utc)
-        message = (
-            2,
-            "tombstone_events",
-            {
-                "project_id": self.project_id,
-                "event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"],
-                "datetime": timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            },
-        )
+        message_kwargs = {
+            "project_id": self.project_id,
+            "event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"],
+            "datetime": timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+        }
+
+        if for_primary_hash_change is not None:
+            message_kwargs["for_primary_hash_change"] = for_primary_hash_change
+
+        message = (2, "tombstone_events", message_kwargs)
 
         replacement = self.replacer.process_message(self._wrap(message))
 

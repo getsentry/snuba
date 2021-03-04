@@ -172,7 +172,9 @@ class ErrorsReplacer(ReplacerProcessor):
                 self.__schema,
             )
         elif type_ == "tombstone_events":
-            processed = process_tombstone_events(event, self.__required_columns)
+            processed = process_tombstone_events(
+                event, self.__required_columns, self.__state_name
+            )
         elif type_ == "replace_group":
             processed = process_replace_group(event, self.__all_columns)
         elif type_ == "exclude_groups":
@@ -373,10 +375,22 @@ def process_delete_groups(
 
 
 def process_tombstone_events(
-    message: Mapping[str, Any], required_columns: Sequence[str]
+    message: Mapping[str, Any],
+    required_columns: Sequence[str],
+    state_name: ReplacerState,
 ) -> Optional[Replacement]:
     event_ids = message["event_ids"]
     if not event_ids:
+        return None
+
+    for_primary_hash_change = bool(message.get("for_primary_hash_change"))
+
+    if for_primary_hash_change and state_name == ReplacerState.EVENTS:
+        # for_primary_hash_change flag means the event is only tombstoned
+        # because it will be reinserted with a changed primary_hash. Since
+        # primary_hash is part of the sortkey/primarykey in the ERRORS table,
+        # we need to tombstone the old event. In the old EVENTS table we do
+        # not.
         return None
 
     # XXX: We need to construct a query that works on both event_id columns,
