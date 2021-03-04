@@ -48,7 +48,7 @@ test_cases = [
     pytest.param(
         "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c",
         ParsingException,
-        "EntityKey.EVENTS is missing conditions on timestamp, project_id",
+        "EntityKey.EVENTS is missing conditions on project_id, timestamp",
         id="simple query missing required conditions",
     ),
     pytest.param(
@@ -66,7 +66,7 @@ test_cases = [
     pytest.param(
         "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c",
         ParsingException,
-        "EntityKey.EVENTS is missing conditions on timestamp, project_id",
+        "EntityKey.EVENTS is missing conditions on project_id, timestamp",
         id="join missing required conditions on both sides",
     ),
     pytest.param(
@@ -84,7 +84,7 @@ test_cases = [
     pytest.param(
         "MATCH { MATCH (events) SELECT count() AS count BY title } SELECT max(count) AS max_count",
         ParsingException,
-        "EntityKey.EVENTS is missing conditions on timestamp, project_id",
+        "EntityKey.EVENTS is missing conditions on project_id, timestamp",
         id="subquery missing required conditions",
     ),
 ]

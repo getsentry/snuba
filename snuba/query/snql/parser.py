@@ -918,7 +918,7 @@ def _validate_required_conditions(
         missing = entity.validate_required_conditions(query)
         if missing:
             raise ParsingException(
-                f"{query.get_from_clause().key} is missing conditions on {', '.join(missing)}"
+                f"{query.get_from_clause().key} is missing conditions on {', '.join(sorted(missing))}"
             )
     else:
         from_clause = query.get_from_clause()
@@ -933,7 +933,7 @@ def _validate_required_conditions(
             missing = entity.validate_required_conditions(query, alias)
             if missing:
                 raise ParsingException(
-                    f"{node.data_source.key} is missing conditions on {', '.join(missing)}"
+                    f"{node.data_source.key} is missing conditions on {', '.join(sorted(missing))}"
                 )
 
 
