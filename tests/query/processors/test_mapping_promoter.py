@@ -26,7 +26,7 @@ test_cases = [
                     "tags[foo]",
                     FunctionCall(
                         "tags[foo]",
-                        "arrayValue",
+                        "arrayElement",
                         (
                             Column(None, None, "tags.value"),
                             FunctionCall(
@@ -46,7 +46,7 @@ test_cases = [
                     "tags[foo]",
                     FunctionCall(
                         "tags[foo]",
-                        "arrayValue",
+                        "arrayElement",
                         (
                             Column(None, None, "tags.value"),
                             FunctionCall(

@@ -11,7 +11,7 @@ from snuba.query.conditions import (
     is_not_in_condition,
     is_not_in_condition_pattern,
     is_unary_condition,
-    match_condition,
+    condition_pattern,
     unary_condition,
 )
 from snuba.query.dsl import literals_tuple
@@ -259,7 +259,14 @@ def test_binary_match() -> None:
     lhs = ColumnPattern(String("table1"), String("column1"))
     rhs = LiteralPattern(String("test"))
 
-    assert match_condition(c1, {ConditionFunctions.EQ}, lhs, rhs, True) is not None
-    assert match_condition(c1, {ConditionFunctions.EQ}, lhs, rhs, False) is not None
-    assert match_condition(c1, {ConditionFunctions.EQ}, rhs, lhs, True) is not None
-    assert match_condition(c1, {ConditionFunctions.EQ}, rhs, lhs, False) is None
+    assert (
+        condition_pattern({ConditionFunctions.EQ}, lhs, rhs, True).match(c1) is not None
+    )
+    assert (
+        condition_pattern({ConditionFunctions.EQ}, lhs, rhs, False).match(c1)
+        is not None
+    )
+    assert (
+        condition_pattern({ConditionFunctions.EQ}, rhs, lhs, True).match(c1) is not None
+    )
+    assert condition_pattern({ConditionFunctions.EQ}, rhs, lhs, False).match(c1) is None
