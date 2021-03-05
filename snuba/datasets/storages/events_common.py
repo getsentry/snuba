@@ -107,6 +107,7 @@ all_columns = (
         ("platform", String(Modifiers(nullable=True))),
         ("message", String(Modifiers(nullable=True))),
         ("primary_hash", FixedString(32, Modifiers(nullable=True))),
+        ("hierarchical_hashes", Array(FixedString(32))),
         ("received", DateTime(Modifiers(nullable=True))),
         ("search_message", String(Modifiers(nullable=True))),
         ("title", String(Modifiers(nullable=True))),

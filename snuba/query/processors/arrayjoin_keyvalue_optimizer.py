@@ -7,7 +7,7 @@ from snuba.query.conditions import (
     ConditionFunctions,
     get_first_level_and_conditions,
     in_condition,
-    is_binary_condition,
+    is_any_binary_condition,
     is_in_condition_pattern,
 )
 from snuba.query.dsl import arrayJoin, tupleElement
@@ -57,7 +57,7 @@ def _get_mapping_keys_in_condition(
 
     conditions = get_first_level_and_conditions(condition)
     for c in conditions:
-        if is_binary_condition(c, BooleanFunctions.OR):
+        if is_any_binary_condition(c, BooleanFunctions.OR):
             return None
 
         match = FunctionCall(
