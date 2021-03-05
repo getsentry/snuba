@@ -3,8 +3,13 @@ from typing import Any, Mapping, Optional, Sequence, Union
 
 import simplejson as json
 
+from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
+from snuba.utils.metrics.wrapper import MetricsWrapper
+
+
+metrics = MetricsWrapper(environment.metrics, "snuba.querylog")
 
 
 class QuerylogProcessor(MessageProcessor):
@@ -130,8 +135,16 @@ class QuerylogProcessor(MessageProcessor):
             "duration_ms": message.get("timing", {}).get("duration_ms"),
             "status": message.get("status"),
         }
+        missing_keys = []
         for key, val in missing_fields.items():
             if val and key not in processed:
                 processed[key] = val
+            elif not val:
+                missing_keys.append(key)
 
+        if missing_keys:
+            metrics.increment(
+                "process.missing_fields",
+                tags={"fields": ",".join(sorted(missing_keys))},
+            )
         return InsertBatch([processed], None)
