@@ -139,14 +139,16 @@ class QuerylogProcessor(MessageProcessor):
         if message.get("status") is not None:
             missing_fields["status"] = message["status"]
 
-        missing_keys = []
+        missing_keys = set(["timestamp", "duration_ms", "status"])
         for key, val in missing_fields.items():
-            if val is not None and key not in processed:
+            if key in processed:
+                missing_keys.remove(key)
+            elif val is not None:
                 processed[key] = val
-            elif not val:
-                missing_keys.append(key)
+                missing_keys.remove(key)
 
         if missing_keys:
+            print("MISSING", missing_keys)
             metrics.increment(
                 "process.missing_fields",
                 tags={"fields": ",".join(sorted(missing_keys))},
