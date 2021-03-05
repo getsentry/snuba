@@ -2,7 +2,7 @@ import random
 from dataclasses import dataclass
 from datetime import timedelta
 from functools import partial
-from typing import List, Mapping, Optional, Sequence, Set, Tuple
+from typing import List, Mapping, Optional, Sequence, Set, Tuple, Union
 
 from snuba import state, settings
 from snuba.clickhouse.columns import (
@@ -159,7 +159,7 @@ class DefaultIfNullCurriedFunctionMapper(CurriedFunctionCallMapper):
         self,
         expression: CurriedFunctionCall,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[CurriedFunctionCall]:
+    ) -> Optional[Union[CurriedFunctionCall, FunctionCall]]:
         internal_function = expression.internal_function.accept(children_translator)
         assert isinstance(internal_function, FunctionCall)  # mypy
         parameters = tuple(p.accept(children_translator) for p in expression.parameters)
@@ -169,15 +169,7 @@ class DefaultIfNullCurriedFunctionMapper(CurriedFunctionCallMapper):
             # collapse the entire expression.
             fmatch = self.function_match.match(param)
             if fmatch is not None:
-                return CurriedFunctionCall(
-                    alias=expression.alias,
-                    internal_function=FunctionCall(
-                        None,
-                        f"{internal_function.function_name}OrNull",
-                        internal_function.parameters,
-                    ),
-                    parameters=tuple(Literal(None, None) for p in parameters),
-                )
+                return identity(Literal(None, None), expression.alias)
 
         return None
 
