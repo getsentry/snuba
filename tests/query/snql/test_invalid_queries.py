@@ -72,7 +72,7 @@ test_cases = [
     pytest.param(
         "MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c WHERE e.project_id = 1 AND e.timestamp >= toDateTime('2021-01-01') AND e.timestamp < toDateTime('2021-01-02')",
         ParsingException,
-        "EntityKey.TRANSACTIONS is missing conditions on project_id",
+        "EntityKey.TRANSACTIONS is missing conditions on finish_ts, project_id",
         id="join missing required conditions on one side",
     ),
     pytest.param(

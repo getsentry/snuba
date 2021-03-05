@@ -102,14 +102,6 @@ class Entity(ABC):
 
         condition = query.get_condition_from_ast()
         top_level = get_first_level_and_conditions(condition) if condition else []
-        if not top_level:
-            missing = set()
-            if self._required_time_column:
-                missing.add(self._required_time_column)
-            if self._required_filter_columns:
-                missing |= set(self._required_filter_columns)
-            return missing
-
         alias_match = AnyOptionalString() if alias is None else StringMatch(alias)
 
         def build_match(
@@ -137,16 +129,13 @@ class Entity(ABC):
                 ]
             )
 
+        missing = set()
         if self._required_filter_columns:
-            missing = set()
             for col in self._required_filter_columns:
                 match = build_match(col, [ConditionFunctions.EQ], int)
                 found = any(match.match(cond) for cond in top_level)
                 if not found:
                     missing.add(col)
-
-            if missing:
-                return missing
 
         if self._required_time_column:
             match = build_match(
@@ -160,13 +149,16 @@ class Entity(ABC):
                 top_level, self._required_time_column, alias
             )
             if not lower or not upper:
-                return set([self._required_time_column])
+                missing.add(self._required_time_column)
+                return missing
+            elif missing:
+                return missing
 
             # At this point we have valid conditions. However we need to align them and
             # make sure they don't exceed the max_days. Replace the conditions.
             self._replace_time_condition(query, *lower, *upper)
 
-        return None
+        return missing or None
 
     def _replace_time_condition(
         self,
