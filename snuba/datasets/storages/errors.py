@@ -8,12 +8,23 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors_common import (
     all_columns,
     mandatory_conditions,
+    prewhere_candidates,
     promoted_tag_columns,
-    query_processors,
     query_splitters,
     required_columns,
 )
+from snuba.datasets.storages.event_id_column_processor import EventIdColumnProcessor
+from snuba.datasets.storages.processors.replaced_groups import (
+    PostReplacementConsistencyEnforcer,
+)
+from snuba.datasets.storages.user_column_processor import UserColumnProcessor
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
+from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
+    ArrayJoinKeyValueOptimizer,
+)
+from snuba.query.processors.mapping_optimizer import MappingOptimizer
+from snuba.query.processors.mapping_promoter import MappingColumnPromoter
+from snuba.query.processors.prewhere import PrewhereProcessor
 
 schema = WritableTableSchema(
     columns=all_columns,
@@ -28,7 +39,19 @@ storage = WritableTableStorage(
     storage_key=StorageKey.ERRORS,
     storage_set_key=StorageSetKey.EVENTS,
     schema=schema,
-    query_processors=query_processors,
+    query_processors=[
+        PostReplacementConsistencyEnforcer(
+            project_column="project_id", replacer_state_name=ReplacerState.ERRORS,
+        ),
+        MappingColumnPromoter(mapping_specs={"tags": promoted_tag_columns}),
+        UserColumnProcessor(),
+        EventIdColumnProcessor(),
+        MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
+        ArrayJoinKeyValueOptimizer("tags"),
+        PrewhereProcessor(
+            prewhere_candidates, omit_if_final=["environment", "release"]
+        ),
+    ],
     query_splitters=query_splitters,
     stream_loader=build_kafka_stream_loader_from_settings(
         StorageKey.ERRORS,
