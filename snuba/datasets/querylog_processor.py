@@ -120,10 +120,18 @@ class QuerylogProcessor(MessageProcessor):
             # TODO: This column is empty for now, we plan to use it soon as we
             # will start to write org IDs into events and allow querying by org.
             "organization": None,
+            **self.__extract_query_list(message["query_list"]),
+        }
+
+        # These fields are sometimes missing from the payload. If they are missing, don't
+        # add them to processed so Clickhouse sets a default value for them.
+        missing_fields = {
             "timestamp": message.get("timing", {}).get("timestamp"),
             "duration_ms": message.get("timing", {}).get("duration_ms"),
             "status": message.get("status"),
-            **self.__extract_query_list(message["query_list"]),
         }
+        for key, val in missing_fields.items():
+            if val and key not in processed:
+                processed[key] = val
 
         return InsertBatch([processed], None)
