@@ -3,8 +3,13 @@ from typing import Any, Mapping, Optional, Sequence, Union
 
 import simplejson as json
 
+from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
+from snuba.utils.metrics.wrapper import MetricsWrapper
+
+
+metrics = MetricsWrapper(environment.metrics, "snuba.querylog")
 
 
 class QuerylogProcessor(MessageProcessor):
@@ -120,10 +125,26 @@ class QuerylogProcessor(MessageProcessor):
             # TODO: This column is empty for now, we plan to use it soon as we
             # will start to write org IDs into events and allow querying by org.
             "organization": None,
-            "timestamp": message["timing"]["timestamp"],
-            "duration_ms": message["timing"]["duration_ms"],
-            "status": message["status"],
             **self.__extract_query_list(message["query_list"]),
         }
 
+        # These fields are sometimes missing from the payload. If they are missing, don't
+        # add them to processed so Clickhouse sets a default value for them.
+        missing_fields = {
+            "timestamp": message.get("timing", {}).get("timestamp"),
+            "duration_ms": message.get("timing", {}).get("duration_ms"),
+            "status": message.get("status"),
+        }
+        missing_keys = []
+        for key, val in missing_fields.items():
+            if val is not None and key not in processed:
+                processed[key] = val
+            elif not val:
+                missing_keys.append(key)
+
+        if missing_keys:
+            metrics.increment(
+                "process.missing_fields",
+                tags={"fields": ",".join(sorted(missing_keys))},
+            )
         return InsertBatch([processed], None)
