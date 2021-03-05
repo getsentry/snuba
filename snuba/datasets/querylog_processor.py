@@ -3,8 +3,13 @@ from typing import Any, Mapping, Optional, Sequence, Union
 
 import simplejson as json
 
+from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
+from snuba.utils.metrics.wrapper import MetricsWrapper
+
+
+metrics = MetricsWrapper(environment.metrics, "snuba.querylog")
 
 
 class QuerylogProcessor(MessageProcessor):
@@ -120,10 +125,31 @@ class QuerylogProcessor(MessageProcessor):
             # TODO: This column is empty for now, we plan to use it soon as we
             # will start to write org IDs into events and allow querying by org.
             "organization": None,
-            "timestamp": message["timing"]["timestamp"],
-            "duration_ms": message["timing"]["duration_ms"],
-            "status": message["status"],
             **self.__extract_query_list(message["query_list"]),
         }
 
+        # These fields are sometimes missing from the payload. If they are missing, don't
+        # add them to processed so Clickhouse sets a default value for them.
+        missing_fields = {}
+        timing = message.get("timing") or {}
+        if timing.get("timestamp") is not None:
+            missing_fields["timestamp"] = timing["timestamp"]
+        if timing.get("duration_ms") is not None:
+            missing_fields["duration_ms"] = timing["duration_ms"]
+        if message.get("status") is not None:
+            missing_fields["status"] = message["status"]
+
+        missing_keys = set(["timestamp", "duration_ms", "status"])
+        for key, val in missing_fields.items():
+            if key in processed:
+                missing_keys.remove(key)
+            elif val is not None:
+                processed[key] = val
+                missing_keys.remove(key)
+
+        if missing_keys:
+            metrics.increment(
+                "process.missing_fields",
+                tags={"fields": ",".join(sorted(missing_keys))},
+            )
         return InsertBatch([processed], None)
