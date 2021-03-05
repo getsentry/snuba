@@ -1,4 +1,5 @@
 import click
+import os
 
 from typing import Sequence
 
@@ -147,11 +148,36 @@ def reverse(
     required=True,
     multiple=True,
 )
-@click.option("--host-name", type=str, required=True)
-@click.option("--port", type=int, required=True)
-@click.option("--user", type=str, required=True, default="default")
-@click.option("--password", type=str, required=True, default="")
-@click.option("--database", type=str, required=True, default="default")
+@click.option(
+    "--host-name",
+    type=str,
+    required=True,
+    default=os.environ.get("CLICKHOUSE_HOST", "localhost"),
+)
+@click.option(
+    "--port",
+    type=int,
+    required=True,
+    default=int(os.environ.get("CLICKHOUSE_PORT", 9000)),
+)
+@click.option(
+    "--user",
+    type=str,
+    required=True,
+    default=os.environ.get("CLICKHOUSE_USER", "default"),
+)
+@click.option(
+    "--password",
+    type=str,
+    required=True,
+    default=os.environ.get("CLICKHOUSE_PASSWORD", ""),
+)
+@click.option(
+    "--database",
+    type=str,
+    required=True,
+    default=os.environ.get("CLICKHOUSE_DATABASE", "default"),
+)
 def add_node(
     node_type: str,
     storage_set_names: Sequence[str],
