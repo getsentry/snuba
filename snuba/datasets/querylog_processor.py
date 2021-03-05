@@ -130,11 +130,15 @@ class QuerylogProcessor(MessageProcessor):
 
         # These fields are sometimes missing from the payload. If they are missing, don't
         # add them to processed so Clickhouse sets a default value for them.
-        missing_fields = {
-            "timestamp": message.get("timing", {}).get("timestamp"),
-            "duration_ms": message.get("timing", {}).get("duration_ms"),
-            "status": message.get("status"),
-        }
+        missing_fields = {}
+        timing = message.get("timing") or {}
+        if timing.get("timestamp") is not None:
+            missing_fields["timestamp"] = timing["timestamp"]
+        if timing.get("duration_ms") is not None:
+            missing_fields["duration_ms"] = timing["duration_ms"]
+        if message.get("status") is not None:
+            missing_fields["status"] = message["status"]
+
         missing_keys = []
         for key, val in missing_fields.items():
             if val is not None and key not in processed:
