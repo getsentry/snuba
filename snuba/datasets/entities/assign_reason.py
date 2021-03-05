@@ -25,6 +25,12 @@ def assign_reason_category(
                 return agg
 
         if referrer == "tagstore.get_groups_user_counts":
+            nondeterministic_query = check_nondeterministic_query(
+                data, expected_data, ["count"]
+            )
+            if nondeterministic_query is not None:
+                return nondeterministic_query
+
             agg = check_aggregate(data, expected_data, "count")
             if agg is not None:
                 return agg
@@ -38,6 +44,27 @@ def assign_reason_category(
             agg = check_aggregate(data, expected_data, "count")
             if agg is not None:
                 return agg
+
+        if referrer == "api.organization-events-facets.top-tags":
+            nondeterministic_query = check_nondeterministic_query(
+                data, expected_data, ["count", "tags_key"]
+            )
+            if nondeterministic_query is not None:
+                return nondeterministic_query
+
+        if referrer == "tagstore.get_tag_value_paginator_for_projects":
+            nondeterministic_query = check_nondeterministic_query(
+                data, expected_data, ["last_seen"]
+            )
+            if nondeterministic_query is not None:
+                return nondeterministic_query
+
+        if referrer == "tagstore.__get_tag_keys_and_top_values":
+            nondeterministic_query = check_nondeterministic_query(
+                data, expected_data, ["count"]
+            )
+            if nondeterministic_query is not None:
+                return nondeterministic_query
 
         if referrer == "api.organization-events-meta":
             agg = check_aggregate(data, expected_data, "count")
@@ -53,6 +80,13 @@ def assign_reason_category(
             agg = check_aggregate(data, expected_data, "times_seen")
             if agg is not None:
                 return agg
+
+        if referrer == "api.organization-sdk-updates":
+            nondeterministic_query = check_nondeterministic_query(
+                data, expected_data, ["project"]
+            )
+            if nondeterministic_query is not None:
+                return nondeterministic_query
 
         return "UNKNOWN"
 
@@ -115,5 +149,27 @@ def check_result_out_of_order(
     if len(data) == len(expected_data):
         if all(row in data for row in expected_data):
             return "RESULT_OUT_OF_ORDER"
+
+    return None
+
+
+def check_nondeterministic_query(
+    data: Sequence[Mapping[str, Any]],
+    expected_data: Sequence[Mapping[str, Any]],
+    sort_fields: Sequence[str],
+) -> Optional[str]:
+    """
+    Returns NONDETERMINISTIC_QUERY if different rows are returned due
+    to a missing or non unique order by clause.
+    """
+    if len(data) == len(expected_data):
+        for idx in range(len(data)):
+            if data[idx] != expected_data[idx]:
+                if all(
+                    data[idx][col] == expected_data[idx][col]
+                    for col in data[idx]
+                    if col in sort_fields
+                ):
+                    return "NONDETERMINISTIC_QUERY"
 
     return None

@@ -64,6 +64,10 @@ class EventsProcessor(EventsProcessorBase):
         output["http_referer"] = http_data["http_referer"]
 
         output["primary_hash"] = _hashify(event["primary_hash"])
+        output["hierarchical_hashes"] = list(
+            _hashify(x) for x in data.get("hierarchical_hashes") or ()
+        )
+
         output["culprit"] = _unicodify(data.get("culprit", None))
         output["type"] = _unicodify(data.get("type", None))
         output["title"] = _unicodify(data.get("title", None))
