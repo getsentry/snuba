@@ -5,7 +5,7 @@ from typing import Any, Mapping, Optional
 from snuba.consumers.types import KafkaMessageMetadata
 from sentry_relay import DataCategory
 
-from snuba import settings
+from snuba import settings, environment
 from snuba.processor import (
     InsertBatch,
     MessageProcessor,
@@ -14,6 +14,10 @@ from snuba.processor import (
     _unicodify,
 )
 
+from snuba.utils.metrics.wrapper import MetricsWrapper
+
+metrics = MetricsWrapper(environment.metrics, "outcomes.processor")
+
 
 class OutcomesProcessor(MessageProcessor):
     def process_message(
@@ -21,6 +25,10 @@ class OutcomesProcessor(MessageProcessor):
     ) -> Optional[ProcessedMessage]:
         assert isinstance(value, dict)
         v_uuid = value.get("event_id")
+
+        if "category" not in value:
+            metrics.increment("missing_category")
+
         message = {
             "org_id": value.get("org_id", 0),
             "project_id": value.get("project_id", 0),
