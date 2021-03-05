@@ -148,7 +148,6 @@ class QuerylogProcessor(MessageProcessor):
                 missing_keys.remove(key)
 
         if missing_keys:
-            print("MISSING", missing_keys)
             metrics.increment(
                 "process.missing_fields",
                 tags={"fields": ",".join(sorted(missing_keys))},
