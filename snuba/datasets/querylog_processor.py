@@ -120,9 +120,9 @@ class QuerylogProcessor(MessageProcessor):
             # TODO: This column is empty for now, we plan to use it soon as we
             # will start to write org IDs into events and allow querying by org.
             "organization": None,
-            "timestamp": message["timing"]["timestamp"],
-            "duration_ms": message["timing"]["duration_ms"],
-            "status": message["status"],
+            "timestamp": message.get("timing", {}).get("timestamp"),
+            "duration_ms": message.get("timing", {}).get("duration_ms"),
+            "status": message.get("status"),
             **self.__extract_query_list(message["query_list"]),
         }
 
