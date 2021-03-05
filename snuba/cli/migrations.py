@@ -161,18 +161,6 @@ def reverse(
     default=int(os.environ.get("CLICKHOUSE_PORT", 9000)),
 )
 @click.option(
-    "--user",
-    type=str,
-    required=True,
-    default=os.environ.get("CLICKHOUSE_USER", "default"),
-)
-@click.option(
-    "--password",
-    type=str,
-    required=True,
-    default=os.environ.get("CLICKHOUSE_PASSWORD", ""),
-)
-@click.option(
     "--database",
     type=str,
     required=True,
@@ -183,8 +171,6 @@ def add_node(
     storage_set_names: Sequence[str],
     host_name: str,
     port: int,
-    user: str,
-    password: str,
     database: str,
 ) -> None:
     """
@@ -198,6 +184,8 @@ def add_node(
     / migrations_dist tables, since it is designed to bring a new node up to
     the same state as existing ones already added to the cluster.
     """
+    user = os.environ.get("CLICKHOUSE_USER", "default")
+    password = os.environ.get("CLICKHOUSE_PASSWORD", "")
 
     storage_set_keys = [StorageSetKey(name) for name in storage_set_names]
 
