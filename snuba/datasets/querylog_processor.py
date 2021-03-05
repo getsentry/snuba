@@ -137,7 +137,7 @@ class QuerylogProcessor(MessageProcessor):
         }
         missing_keys = []
         for key, val in missing_fields.items():
-            if val and key not in processed:
+            if val is not None and key not in processed:
                 processed[key] = val
             elif not val:
                 missing_keys.append(key)
