@@ -6,16 +6,15 @@ from snuba.clickhouse.columns import (
     IPv4,
     IPv6,
     Nested,
-    String,
-    UInt,
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets.storages.event_id_column_processor import EventIdColumnProcessor
-from snuba.datasets.storages.user_column_processor import UserColumnProcessor
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
+from snuba.datasets.storages.user_column_processor import UserColumnProcessor
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
@@ -24,6 +23,7 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.uuid_column_processor import UUIDColumnProcessor
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 required_columns = [
@@ -127,6 +127,7 @@ mandatory_conditions = [
 
 prewhere_candidates = [
     "event_id",
+    "trace_id",
     "group_id",
     "tags[sentry:release]",
     "release",
@@ -144,6 +145,7 @@ query_processors = [
     EventIdColumnProcessor(),
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
+    UUIDColumnProcessor(set(["event_id"])),
     PrewhereProcessor(prewhere_candidates, omit_if_final=["environment", "release"]),
 ]
 
