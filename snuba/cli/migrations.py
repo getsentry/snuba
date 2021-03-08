@@ -1,5 +1,10 @@
 import click
+import os
 
+from typing import Sequence
+
+from snuba.clusters.cluster import ClickhouseNodeType, CLUSTERS
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.connect import check_clickhouse_connections
 from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import MigrationGroup
@@ -130,3 +135,81 @@ def reverse(
         raise click.ClickException(str(e))
 
     click.echo(f"Finished reversing migration {migration_key}")
+
+
+@migrations.command()
+@click.option(
+    "--type", "node_type", type=click.Choice(["local", "dist"]), required=True
+)
+@click.option(
+    "--storage-set",
+    "storage_set_names",
+    type=click.Choice([s.value for s in StorageSetKey]),
+    required=True,
+    multiple=True,
+)
+@click.option(
+    "--host-name",
+    type=str,
+    required=True,
+    default=os.environ.get("CLICKHOUSE_HOST", "localhost"),
+)
+@click.option(
+    "--port",
+    type=int,
+    required=True,
+    default=int(os.environ.get("CLICKHOUSE_PORT", 9000)),
+)
+@click.option(
+    "--database",
+    type=str,
+    required=True,
+    default=os.environ.get("CLICKHOUSE_DATABASE", "default"),
+)
+def add_node(
+    node_type: str,
+    storage_set_names: Sequence[str],
+    host_name: str,
+    port: int,
+    database: str,
+) -> None:
+    """
+    Runs all migrations on a brand new ClickHouse node. This should be performed
+    before a new node is added to an existing ClickHouse cluster.
+
+    All of the SQL operations for the provided storage sets will be run. Any non
+    SQL (Python) operations will be skipped.
+
+    This operation does not change the migration status in the migrations_local
+    / migrations_dist tables, since it is designed to bring a new node up to
+    the same state as existing ones already added to the cluster.
+    """
+    user = os.environ.get("CLICKHOUSE_USER", "default")
+    password = os.environ.get("CLICKHOUSE_PASSWORD", "")
+
+    storage_set_keys = [StorageSetKey(name) for name in storage_set_names]
+
+    cluster = next(
+        (
+            c
+            for c in CLUSTERS
+            if all(ss in c.get_storage_set_keys() for ss in storage_set_keys)
+        ),
+        None,
+    )
+
+    if not cluster:
+        raise click.ClickException("Storage sets should be in the same cluster")
+
+    if cluster.is_single_node():
+        raise click.ClickException("You cannot add a node to a single node cluster")
+
+    Runner.add_node(
+        node_type=ClickhouseNodeType(node_type),
+        storage_sets=storage_set_keys,
+        host_name=host_name,
+        port=port,
+        user=user,
+        password=password,
+        database=database,
+    )
