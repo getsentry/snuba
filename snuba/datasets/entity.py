@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import replace
 from datetime import datetime, timedelta
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence, Set
 
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
@@ -96,15 +96,12 @@ class Entity(ABC):
 
     def validate_required_conditions(
         self, query: Query, alias: Optional[str] = None
-    ) -> bool:
+    ) -> Optional[Set[str]]:
         if not self._required_filter_columns and not self._required_time_column:
-            return True
+            return None
 
         condition = query.get_condition_from_ast()
         top_level = get_first_level_and_conditions(condition) if condition else []
-        if not top_level:
-            return False
-
         alias_match = AnyOptionalString() if alias is None else StringMatch(alias)
 
         def build_match(
@@ -132,12 +129,13 @@ class Entity(ABC):
                 ]
             )
 
+        missing = set()
         if self._required_filter_columns:
             for col in self._required_filter_columns:
                 match = build_match(col, [ConditionFunctions.EQ], int)
                 found = any(match.match(cond) for cond in top_level)
                 if not found:
-                    return False
+                    missing.add(col)
 
         if self._required_time_column:
             match = build_match(
@@ -145,19 +143,22 @@ class Entity(ABC):
             )
             found = any(match.match(cond) for cond in top_level)
             if found:
-                return True
+                return None
 
             lower, upper = get_time_range_expressions(
                 top_level, self._required_time_column, alias
             )
             if not lower or not upper:
-                return False
+                missing.add(self._required_time_column)
+                return missing
+            elif missing:
+                return missing
 
             # At this point we have valid conditions. However we need to align them and
             # make sure they don't exceed the max_days. Replace the conditions.
             self._replace_time_condition(query, *lower, *upper)
 
-        return True
+        return missing or None
 
     def _replace_time_condition(
         self,
