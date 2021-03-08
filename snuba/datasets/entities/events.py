@@ -169,10 +169,6 @@ def callback_func(
 
             reason = assign_reason_category(result_data, primary_result_data, referrer)
 
-            # Avoid noise in Sentry
-            if reason == "NONDETERMINISTIC_QUERY":
-                continue
-
             metrics.increment(
                 "query_result",
                 tags={
@@ -185,6 +181,10 @@ def callback_func(
                     "consistent": str(consistent),
                 },
             )
+
+            # Avoid noise in Sentry
+            if reason == "NONDETERMINISTIC_QUERY":
+                continue
 
             if len(result_data) != len(primary_result_data):
                 sentry_sdk.capture_message(
