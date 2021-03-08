@@ -28,6 +28,7 @@ from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 required_columns = [
     "event_id",
+    "primary_hash",
     "project_id",
     "group_id",
     "timestamp",
