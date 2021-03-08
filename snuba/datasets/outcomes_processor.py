@@ -27,13 +27,9 @@ class OutcomesProcessor(MessageProcessor):
         v_uuid = value.get("event_id")
 
         if "category" not in value:
-            metrics.increment(
-                "missing_category", tags={"org_id": value.get("org_id", 0)}
-            )
+            metrics.increment("missing_category")
         if "quantity" not in value:
-            metrics.increment(
-                "missing_quantity", tags={"org_id": value.get("org_id", 0)}
-            )
+            metrics.increment("missing_quantity")
 
         message = {
             "org_id": value.get("org_id", 0),
