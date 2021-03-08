@@ -163,10 +163,6 @@ def callback_func(
                 },
             )
         else:
-            # Do not log cache hits to Sentry as it creates too much noise
-            if cache_hit:
-                continue
-
             reason = assign_reason_category(result_data, primary_result_data, referrer)
 
             metrics.increment(
@@ -183,7 +179,7 @@ def callback_func(
             )
 
             # Avoid noise in Sentry
-            if reason == "NONDETERMINISTIC_QUERY":
+            if cache_hit or reason == "NONDETERMINISTIC_QUERY":
                 continue
 
             if len(result_data) != len(primary_result_data):
