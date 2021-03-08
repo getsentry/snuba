@@ -66,7 +66,7 @@ class FunctionCallMapper(SnubaClickhouseMapper[FunctionCall, FunctionCall]):
 
 
 class CurriedFunctionCallMapper(
-    SnubaClickhouseMapper[CurriedFunctionCall, CurriedFunctionCall]
+    SnubaClickhouseMapper[CurriedFunctionCall, Union[CurriedFunctionCall, FunctionCall]]
 ):
     pass
 
