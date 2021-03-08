@@ -289,14 +289,28 @@ class InsertIntoSelect(SqlOperation):
 
 
 class RunPython:
+    """
+    `new_node_func` should only be provided in the (probably rare)
+    scenario where there is a Python script that must be rerun anytime
+    another ClickHouse node is added to the cluster.
+    """
+
     def __init__(
-        self, func: Callable[[], None], description: Optional[str] = None
+        self,
+        func: Callable[[], None],
+        new_node_func: Optional[Callable[[Sequence[StorageSetKey]], None]] = None,
+        description: Optional[str] = None,
     ) -> None:
         self.__func = func
+        self.__new_node_func = new_node_func
         self.__description = description
 
     def execute(self) -> None:
         self.__func()
+
+    def execute_new_node(self, storage_sets: Sequence[StorageSetKey]) -> None:
+        if self.__new_node_func is not None:
+            self.__new_node_func(storage_sets)
 
     def description(self) -> Optional[str]:
         return self.__description

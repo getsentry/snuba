@@ -915,9 +915,10 @@ def _validate_required_conditions(
 ) -> None:
     if isinstance(query, LogicalQuery):
         entity = get_entity(query.get_from_clause().key)
-        if not entity.validate_required_conditions(query):
+        missing = entity.validate_required_conditions(query)
+        if missing:
             raise ParsingException(
-                f"{query.get_from_clause().key} is missing required conditions"
+                f"{query.get_from_clause().key} is missing conditions on {', '.join(sorted(missing))}"
             )
     else:
         from_clause = query.get_from_clause()
@@ -929,9 +930,10 @@ def _validate_required_conditions(
         for alias, node in alias_map.items():
             assert isinstance(node.data_source, QueryEntity)  # mypy
             entity = get_entity(node.data_source.key)
-            if not entity.validate_required_conditions(query, alias):
+            missing = entity.validate_required_conditions(query, alias)
+            if missing:
                 raise ParsingException(
-                    f"{node.data_source.key} is missing required conditions"
+                    f"{node.data_source.key} is missing conditions on {', '.join(sorted(missing))}"
                 )
 
 

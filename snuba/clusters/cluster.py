@@ -62,6 +62,11 @@ class ClickhouseNode:
         return f"{self.host_name}:{self.port}"
 
 
+class ClickhouseNodeType(Enum):
+    LOCAL = "local"
+    DIST = "dist"
+
+
 TWriterOptions = TypeVar("TWriterOptions")
 
 
