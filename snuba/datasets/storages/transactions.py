@@ -36,7 +36,7 @@ columns = ColumnSet(
     [
         ("project_id", UInt(64)),
         ("event_id", UUID()),
-        ("trace_id", UUID()),
+        ("trace_id", UUID(Modifiers(nullable=True))),
         ("span_id", UInt(64)),
         ("transaction_name", String()),
         ("transaction_hash", UInt(64, Modifiers(readonly=True))),
