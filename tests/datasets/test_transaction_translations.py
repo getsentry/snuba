@@ -213,11 +213,7 @@ test_data = [
             FunctionCall(None, "quantile", (Literal(None, 0.95),)),
             (Column(None, None, "primary_hash"),),
         ),
-        CurriedFunctionCall(
-            None,
-            FunctionCall(None, "quantileOrNull", (Literal(None, 0.95),)),
-            (Literal(None, None),),
-        ),
+        FunctionCall(None, "identity", (Literal(None, None),)),
         id="curried function call",
     ),
     pytest.param(
