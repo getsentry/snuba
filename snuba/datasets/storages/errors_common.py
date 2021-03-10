@@ -129,7 +129,6 @@ mandatory_conditions = [
 
 prewhere_candidates = [
     "event_id",
-    "trace_id",
     "group_id",
     "tags[sentry:release]",
     "release",
