@@ -58,7 +58,7 @@ def _replace_ast_condition(
             )
         )
 
-    condition = query.get_condition_from_ast()
+    condition = query.get_condition()
     if condition is not None:
         query.set_ast_condition(
             combine_and_conditions(
@@ -94,13 +94,13 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
         avoid querying the entire range.
         """
         limit = query.get_limit()
-        if limit is None or query.get_groupby_from_ast():
+        if limit is None or query.get_groupby():
             return None
 
         if query.get_offset() >= 1000:
             return None
 
-        orderby = query.get_orderby_from_ast()
+        orderby = query.get_orderby()
         if (
             not orderby
             or orderby[0].direction != OrderByDirection.DESC
@@ -211,8 +211,8 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         if (
             limit is None
             or limit == 0
-            or query.get_groupby_from_ast()
-            or not query.get_selected_columns_from_ast()
+            or query.get_groupby()
+            or not query.get_selected_columns()
         ):
             return None
 
@@ -226,7 +226,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             (Column(None, String(self.__id_column)), AnyExpression(),),
         )
 
-        for expr in query.get_condition_from_ast() or []:
+        for expr in query.get_condition() or []:
             match = id_column_matcher.match(expr)
 
             if match:

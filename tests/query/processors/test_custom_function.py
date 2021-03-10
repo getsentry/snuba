@@ -146,15 +146,12 @@ def test_format_expressions(query: Query, expected_query: Query) -> None:
     # We cannot just run == on the query objects. The content of the two
     # objects is different, being one the AST and the ont the AST + raw body
     processor.process_query(query, HTTPRequestSettings())
-    assert (
-        query.get_selected_columns_from_ast()
-        == expected_query.get_selected_columns_from_ast()
-    )
-    assert query.get_groupby_from_ast() == expected_query.get_groupby_from_ast()
-    assert query.get_condition_from_ast() == expected_query.get_condition_from_ast()
-    assert query.get_arrayjoin_from_ast() == expected_query.get_arrayjoin_from_ast()
-    assert query.get_having_from_ast() == expected_query.get_having_from_ast()
-    assert query.get_orderby_from_ast() == expected_query.get_orderby_from_ast()
+    assert query.get_selected_columns() == expected_query.get_selected_columns()
+    assert query.get_groupby() == expected_query.get_groupby()
+    assert query.get_condition() == expected_query.get_condition()
+    assert query.get_arrayjoin() == expected_query.get_arrayjoin()
+    assert query.get_having() == expected_query.get_having()
+    assert query.get_orderby() == expected_query.get_orderby()
 
 
 INVALID_QUERIES = [

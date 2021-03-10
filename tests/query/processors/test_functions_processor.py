@@ -174,9 +174,6 @@ test_data = [
 def test_format_expressions(pre_format: Query, expected_query: Query) -> None:
     copy = deepcopy(pre_format)
     BasicFunctionsProcessor().process_query(copy, HTTPRequestSettings())
-    assert (
-        copy.get_selected_columns_from_ast()
-        == expected_query.get_selected_columns_from_ast()
-    )
-    assert copy.get_groupby_from_ast() == expected_query.get_groupby_from_ast()
-    assert copy.get_condition_from_ast() == expected_query.get_condition_from_ast()
+    assert copy.get_selected_columns() == expected_query.get_selected_columns()
+    assert copy.get_groupby() == expected_query.get_groupby()
+    assert copy.get_condition() == expected_query.get_condition()

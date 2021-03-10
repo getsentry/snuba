@@ -406,7 +406,7 @@ def _mangle_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
 
     # HACK: This reverts the mangle of arrayjoin since we cannot reference aliases
     # there
-    arrayjoin = query.get_arrayjoin_from_ast()
+    arrayjoin = query.get_arrayjoin()
 
     def transform_arrayjoin(expr: Expression) -> Expression:
         if isinstance(expr, Column):
@@ -420,7 +420,7 @@ def _mangle_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
 def _validate_arrayjoin(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
     # TODO: Actually validate arrayjoin. For now log how it is used.
     body_arrayjoin = ""
-    arrayjoin = query.get_arrayjoin_from_ast()
+    arrayjoin = query.get_arrayjoin()
     if arrayjoin is not None:
         if isinstance(arrayjoin, Column):
             body_arrayjoin = arrayjoin.column_name
@@ -467,10 +467,7 @@ def _deescape_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
     query.transform_expressions(lambda expr: replace(expr, alias=deescape(expr.alias)))
 
     query.set_ast_selected_columns(
-        [
-            replace(s, name=deescape(s.name))
-            for s in query.get_selected_columns_from_ast() or []
-        ]
+        [replace(s, name=deescape(s.name)) for s in query.get_selected_columns() or []]
     )
 
 

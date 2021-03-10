@@ -164,14 +164,14 @@ class MappingOptimizer(QueryProcessor):
             return
 
         cond_class = ConditionClass.IRRELEVANT
-        condition = query.get_condition_from_ast()
+        condition = query.get_condition()
         if condition is not None:
             cond_class = self.__classify_combined_conditions(condition)
             if cond_class == ConditionClass.NOT_OPTIMIZABLE:
                 return
 
         having_cond_class = ConditionClass.IRRELEVANT
-        having_cond = query.get_having_from_ast()
+        having_cond = query.get_having()
         if having_cond is not None:
             having_cond_class = self.__classify_combined_conditions(having_cond)
             if having_cond_class == ConditionClass.NOT_OPTIMIZABLE:

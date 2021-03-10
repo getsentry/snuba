@@ -100,19 +100,13 @@ def _format_query_content(query: FormattableQuery) -> Sequence[FormattedNode]:
         for v in [
             _format_select(query, formatter),
             PaddingNode("FROM", DataSourceFormatter().visit(query.get_from_clause())),
-            _build_optional_string_node(
-                "ARRAY JOIN", query.get_arrayjoin_from_ast(), formatter
-            ),
+            _build_optional_string_node("ARRAY JOIN", query.get_arrayjoin(), formatter),
             _build_optional_string_node("PREWHERE", query.get_prewhere_ast(), formatter)
             if isinstance(query, Query)
             else None,
-            _build_optional_string_node(
-                "WHERE", query.get_condition_from_ast(), formatter
-            ),
+            _build_optional_string_node("WHERE", query.get_condition(), formatter),
             _format_groupby(query, formatter),
-            _build_optional_string_node(
-                "HAVING", query.get_having_from_ast(), formatter
-            ),
+            _build_optional_string_node("HAVING", query.get_having(), formatter),
             _format_orderby(query, formatter),
             _format_limitby(query, formatter),
             _format_limit(query, formatter),
@@ -125,7 +119,7 @@ def _format_select(
     query: AbstractQuery, formatter: ClickhouseExpressionFormatter
 ) -> StringNode:
     selected_cols = [
-        e.expression.accept(formatter) for e in query.get_selected_columns_from_ast()
+        e.expression.accept(formatter) for e in query.get_selected_columns()
     ]
     return StringNode(f"SELECT {', '.join(selected_cols)}")
 
@@ -146,7 +140,7 @@ def _format_groupby(
     query: AbstractQuery, formatter: ClickhouseExpressionFormatter
 ) -> Optional[StringNode]:
     group_clause: Optional[StringNode] = None
-    ast_groupby = query.get_groupby_from_ast()
+    ast_groupby = query.get_groupby()
     if ast_groupby:
         groupby_expressions = [e.accept(formatter) for e in ast_groupby]
         group_clause_str = f"{', '.join(groupby_expressions)}"
@@ -159,7 +153,7 @@ def _format_groupby(
 def _format_orderby(
     query: AbstractQuery, formatter: ClickhouseExpressionFormatter
 ) -> Optional[StringNode]:
-    ast_orderby = query.get_orderby_from_ast()
+    ast_orderby = query.get_orderby()
     if ast_orderby:
         orderby = [
             f"{e.expression.accept(formatter)} {e.direction.value}" for e in ast_orderby

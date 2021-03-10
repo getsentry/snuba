@@ -141,7 +141,7 @@ def _run_and_apply_column_names(
     )
 
     alias_name_mapping: MutableMapping[str, str] = {}
-    for select_col in clickhouse_query.get_selected_columns_from_ast():
+    for select_col in clickhouse_query.get_selected_columns():
         alias = select_col.expression.alias
         name = select_col.name
         if alias is None or name is None:

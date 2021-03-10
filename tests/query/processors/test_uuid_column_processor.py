@@ -284,11 +284,8 @@ def test_uuid_column_processor(
     UUIDColumnProcessor(set(["column1", "column2"])).process_query(
         unprocessed_query, HTTPRequestSettings()
     )
-    assert (
-        expected_query.get_condition_from_ast()
-        == unprocessed_query.get_condition_from_ast()
-    )
-    condition = unprocessed_query.get_condition_from_ast()
+    assert expected_query.get_condition() == unprocessed_query.get_condition()
+    condition = unprocessed_query.get_condition()
     assert condition is not None
     ret = condition.accept(ClickhouseExpressionFormatter())
     assert ret == formatted_value

@@ -29,7 +29,7 @@ def test_events_processing() -> None:
         else:
             transaction_col_name = "transaction_name"
 
-        assert query.get_selected_columns_from_ast() == [
+        assert query.get_selected_columns() == [
             SelectedExpression(
                 "tags[transaction]",
                 Column("_snuba_tags[transaction]", None, transaction_col_name),

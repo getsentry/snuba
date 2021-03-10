@@ -90,14 +90,14 @@ def get_filtered_mapping_keys(query: Query, column_name: str) -> Set[str]:
     """
     array_join_found = any(
         array_join_pattern(column_name).match(f) is not None
-        for selected in query.get_selected_columns_from_ast() or []
+        for selected in query.get_selected_columns() or []
         for f in selected.expression
     )
 
     if not array_join_found:
         return set()
 
-    ast_condition = query.get_condition_from_ast()
+    ast_condition = query.get_condition()
     cond_keys = (
         _get_mapping_keys_in_condition(ast_condition, column_name)
         if ast_condition is not None
@@ -108,7 +108,7 @@ def get_filtered_mapping_keys(query: Query, column_name: str) -> Set[str]:
         # be cases where this condition is still optimizable.
         return set()
 
-    ast_having = query.get_having_from_ast()
+    ast_having = query.get_having()
     having_keys = (
         _get_mapping_keys_in_condition(ast_having, column_name)
         if ast_having is not None

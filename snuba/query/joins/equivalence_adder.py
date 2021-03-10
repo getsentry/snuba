@@ -56,7 +56,7 @@ def add_equivalent_conditions(query: CompositeQuery[Entity]) -> None:
         entity_to_alias.setdefault(entity, set()).add(alias)
 
     column_equivalence = get_equivalent_columns(from_clause)
-    condition = query.get_condition_from_ast()
+    condition = query.get_condition()
     if condition is None:
         return
 
