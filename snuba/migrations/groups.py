@@ -119,6 +119,7 @@ class TransactionsLoader(DirectoryLoader):
             "0007_transactions_add_discover_cols",
             "0008_transactions_add_timestamp_index",
             "0009_transactions_fix_title_and_message",
+            "0010_transactions_nullable_trace_id",
         ]
 
 
@@ -137,6 +138,7 @@ class DiscoverLoader(DirectoryLoader):
             "0003_discover_fix_user_column",
             "0004_discover_fix_title_and_message",
             "0005_discover_fix_transaction_name",
+            "0006_discover_add_trace_id",
         ]
 
 

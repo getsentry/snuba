@@ -14,6 +14,7 @@ from snuba.datasets.storages.event_id_column_processor import EventIdColumnProce
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
+from snuba.datasets.storages.type_condition_optimizer import TypeConditionOptimizer
 from snuba.datasets.storages.user_column_processor import UserColumnProcessor
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
@@ -28,6 +29,7 @@ from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 required_columns = [
     "event_id",
+    "primary_hash",
     "project_id",
     "group_id",
     "timestamp",
@@ -143,6 +145,7 @@ query_processors = [
     MappingColumnPromoter(mapping_specs={"tags": promoted_tag_columns}),
     UserColumnProcessor(),
     EventIdColumnProcessor(),
+    TypeConditionOptimizer(),
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
     UUIDColumnProcessor(set(["event_id"])),

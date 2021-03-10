@@ -353,12 +353,9 @@ def test_tags_processor(
     Tests the whole processing in some notable cases.
     """
     processed = parse_and_process(query_body)
-    assert (
-        processed.get_selected_columns_from_ast()
-        == expected_query.get_selected_columns_from_ast()
-    )
-    assert processed.get_condition_from_ast() == expected_query.get_condition_from_ast()
-    assert processed.get_having_from_ast() == expected_query.get_having_from_ast()
+    assert processed.get_selected_columns() == expected_query.get_selected_columns()
+    assert processed.get_condition() == expected_query.get_condition()
+    assert processed.get_having() == expected_query.get_having()
 
 
 def test_formatting() -> None:

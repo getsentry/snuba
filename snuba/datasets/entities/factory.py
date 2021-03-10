@@ -25,7 +25,6 @@ def get_entity(name: EntityKey) -> Entity:
         DiscoverEventsEntity,
         DiscoverTransactionsEntity,
     )
-    from snuba.datasets.entities.errors import ErrorsEntity
     from snuba.datasets.entities.events import EventsEntity
     from snuba.datasets.entities.outcomes import OutcomesEntity
     from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
@@ -35,7 +34,6 @@ def get_entity(name: EntityKey) -> Entity:
 
     entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {
         EntityKey.DISCOVER: DiscoverEntity,
-        EntityKey.ERRORS: ErrorsEntity,
         EntityKey.EVENTS: EventsEntity,
         EntityKey.GROUPASSIGNEE: GroupAssigneeEntity,
         EntityKey.GROUPEDMESSAGES: GroupedMessageEntity,

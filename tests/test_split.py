@@ -117,7 +117,7 @@ def test_col_split(
     ) -> QueryResult:
         selected_col_names = [
             c.expression.column_name
-            for c in query.get_selected_columns_from_ast() or []
+            for c in query.get_selected_columns() or []
             if isinstance(c.expression, Column)
         ]
         if selected_col_names == list(first_query_data[0].keys()):

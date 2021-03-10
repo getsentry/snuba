@@ -45,6 +45,13 @@ def assign_reason_category(
             if agg is not None:
                 return agg
 
+        if referrer == "tagstore.__get_tag_keys":
+            nondeterministic_query = check_nondeterministic_query(
+                data, expected_data, ["count"]
+            )
+            if nondeterministic_query is not None:
+                return nondeterministic_query
+
         if referrer == "api.organization-events-facets.top-tags":
             nondeterministic_query = check_nondeterministic_query(
                 data, expected_data, ["count", "tags_key"]
@@ -65,6 +72,11 @@ def assign_reason_category(
             )
             if nondeterministic_query is not None:
                 return nondeterministic_query
+
+        if referrer == "tagstore.get_release_tags":
+            agg = check_aggregate(data, expected_data, "times_seen")
+            if agg is not None:
+                return agg
 
         if referrer == "api.organization-events-meta":
             agg = check_aggregate(data, expected_data, "count")

@@ -137,23 +137,21 @@ def _format_query_body(query: Query) -> Mapping[str, Any]:
     formatted = {
         "SELECT": [
             [e.name, e.expression.accept(expression_formatter)]
-            for e in query.get_selected_columns_from_ast()
+            for e in query.get_selected_columns()
         ],
-        "GROUPBY": [
-            e.accept(expression_formatter) for e in query.get_groupby_from_ast()
-        ],
+        "GROUPBY": [e.accept(expression_formatter) for e in query.get_groupby()],
         "ORDERBY": [
             [e.expression.accept(expression_formatter), e.direction]
-            for e in query.get_orderby_from_ast()
+            for e in query.get_orderby()
         ],
     }
-    array_join = query.get_arrayjoin_from_ast()
+    array_join = query.get_arrayjoin()
     if array_join:
         formatted["ARRAYJOIN"] = array_join.accept(expression_formatter)
-    condition = query.get_condition_from_ast()
+    condition = query.get_condition()
     if condition:
         formatted["WHERE"] = condition.accept(expression_formatter)
-    having = query.get_having_from_ast()
+    having = query.get_having()
     if having:
         formatted["HAVING"] = having.accept(expression_formatter)
     limitby = query.get_limitby()

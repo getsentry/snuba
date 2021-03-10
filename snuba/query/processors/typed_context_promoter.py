@@ -148,7 +148,7 @@ class TypedContextPromoter(QueryProcessor):
 
             return exp
 
-        condition = query.get_condition_from_ast()
+        condition = query.get_condition()
         if condition is None:
             return
 

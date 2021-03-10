@@ -110,7 +110,4 @@ def test_format_expressions(
         query, HTTPRequestSettings()
     )
 
-    assert (
-        query.get_selected_columns_from_ast()
-        == expected_query.get_selected_columns_from_ast()
-    )
+    assert query.get_selected_columns() == expected_query.get_selected_columns()

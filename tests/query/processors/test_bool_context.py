@@ -87,7 +87,4 @@ def test_events_boolean_context() -> None:
     ).process_query(query, settings)
     EventsBooleanContextsProcessor().process_query(query, settings)
 
-    assert (
-        query.get_selected_columns_from_ast()
-        == expected.get_selected_columns_from_ast()
-    )
+    assert query.get_selected_columns() == expected.get_selected_columns()

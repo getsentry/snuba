@@ -26,7 +26,7 @@ def test_sessions_processing() -> None:
         quantiles = tuple(
             Literal(None, quant) for quant in [0.5, 0.75, 0.9, 0.95, 0.99, 1]
         )
-        assert query.get_selected_columns_from_ast() == [
+        assert query.get_selected_columns() == [
             SelectedExpression(
                 "duration_quantiles",
                 CurriedFunctionCall(

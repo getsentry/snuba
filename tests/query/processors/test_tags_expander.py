@@ -28,7 +28,7 @@ def test_tags_expander() -> None:
     request_settings = HTTPRequestSettings()
     processor.process_query(query, request_settings)
 
-    assert query.get_selected_columns_from_ast() == [
+    assert query.get_selected_columns() == [
         SelectedExpression(
             "platforms",
             FunctionCall(
@@ -70,13 +70,13 @@ def test_tags_expander() -> None:
         SelectedExpression("f2_alias", FunctionCall("_snuba_f2_alias", "f2", tuple())),
     ]
 
-    assert query.get_condition_from_ast() == binary_condition(
+    assert query.get_condition() == binary_condition(
         OPERATOR_TO_FUNCTION["="],
         FunctionCall("_snuba_tags_key", "arrayJoin", (Column(None, None, "tags.key"),)),
         Literal(None, "tags_key"),
     )
 
-    assert query.get_having_from_ast() == in_condition(
+    assert query.get_having() == in_condition(
         FunctionCall(
             "_snuba_tags_value", "arrayJoin", (Column(None, None, "tags.value"),)
         ),
