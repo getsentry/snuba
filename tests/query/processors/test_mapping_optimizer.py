@@ -196,4 +196,4 @@ def test_tags_hash_map(query: ClickhouseQuery, expected_condition: Expression,) 
         killswitch="tags_hash_map_enabled",
     ).process_query(query, HTTPRequestSettings())
 
-    assert query.get_condition_from_ast() == expected_condition
+    assert query.get_condition() == expected_condition

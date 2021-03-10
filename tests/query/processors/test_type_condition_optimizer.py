@@ -35,11 +35,8 @@ def test_type_condition_optimizer() -> None:
     )
     TypeConditionOptimizer().process_query(unprocessed_query, HTTPRequestSettings())
 
-    assert (
-        expected_query.get_condition_from_ast()
-        == unprocessed_query.get_condition_from_ast()
-    )
-    condition = unprocessed_query.get_condition_from_ast()
+    assert expected_query.get_condition() == unprocessed_query.get_condition()
+    condition = unprocessed_query.get_condition()
     assert condition is not None
     ret = condition.accept(ClickhouseExpressionFormatter())
     assert ret == "1 AND equals(col1, 'val1')"

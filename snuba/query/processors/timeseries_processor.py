@@ -182,7 +182,7 @@ class TimeSeriesProcessor(QueryProcessor):
 
         # Now that all the column names are correct, search the conditions for time based
         # conditions and make sure the comparison is with a datetime
-        condition = query.get_condition_from_ast()
+        condition = query.get_condition()
         if condition:
             query.set_ast_condition(condition.transform(self.__process_condition))
 
@@ -199,7 +199,7 @@ def extract_granularity_from_query(query: Query, column: str) -> Optional[int]:
     This extracts the `granularity` from the `groupby` statement of the query.
     The matches are essentially the reverse of `TimeSeriesProcessor.__group_time_function`.
     """
-    groupby = query.get_groupby_from_ast()
+    groupby = query.get_groupby()
 
     column_match = ColumnMatch(None, String(column))
     fn_match = FunctionCallMatch(

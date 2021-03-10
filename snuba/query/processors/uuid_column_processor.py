@@ -150,7 +150,7 @@ class UUIDColumnProcessor(QueryProcessor):
         return exp
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
-        condition = query.get_condition_from_ast()
+        condition = query.get_condition()
         if condition:
             query.set_ast_condition(condition.transform(self.process_condition))
 

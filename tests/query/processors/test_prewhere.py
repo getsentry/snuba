@@ -193,5 +193,5 @@ def test_prewhere(
     processor = PrewhereProcessor(keys, omit_if_final=omit_if_final_keys)
     processor.process_query(query, request_settings)
 
-    assert query.get_condition_from_ast() == new_ast_condition
+    assert query.get_condition() == new_ast_condition
     assert query.get_prewhere_ast() == new_prewhere_ast_condition

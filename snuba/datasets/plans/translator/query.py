@@ -15,12 +15,12 @@ def identity_translate(query: LogicalQuery) -> ClickhouseQuery:
     """
     return ClickhouseQuery(
         from_clause=None,
-        selected_columns=query.get_selected_columns_from_ast(),
-        array_join=query.get_arrayjoin_from_ast(),
-        condition=query.get_condition_from_ast(),
-        groupby=query.get_groupby_from_ast(),
-        having=query.get_having_from_ast(),
-        order_by=query.get_orderby_from_ast(),
+        selected_columns=query.get_selected_columns(),
+        array_join=query.get_arrayjoin(),
+        condition=query.get_condition(),
+        groupby=query.get_groupby(),
+        having=query.get_having(),
+        order_by=query.get_orderby(),
         limitby=query.get_limitby(),
         limit=query.get_limit(),
         offset=query.get_offset(),

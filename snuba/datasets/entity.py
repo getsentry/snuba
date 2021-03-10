@@ -100,7 +100,7 @@ class Entity(ABC):
         if not self._required_filter_columns and not self._required_time_column:
             return None
 
-        condition = query.get_condition_from_ast()
+        condition = query.get_condition()
         top_level = get_first_level_and_conditions(condition) if condition else []
         alias_match = AnyOptionalString() if alias is None else StringMatch(alias)
 
@@ -196,7 +196,7 @@ class Entity(ABC):
 
             return exp
 
-        condition = query.get_condition_from_ast()
+        condition = query.get_condition()
         top_level = get_first_level_and_conditions(condition) if condition else []
         new_top_level = list(map(replace_cond, top_level))
         query.set_ast_condition(combine_and_conditions(new_top_level))

@@ -198,12 +198,9 @@ def test_translation(
 
     # TODO: consider providing an __eq__ method to the Query class. Or turn it into
     # a dataclass.
-    assert (
-        expected.get_selected_columns_from_ast()
-        == translated.get_selected_columns_from_ast()
-    )
-    assert expected.get_groupby_from_ast() == translated.get_groupby_from_ast()
-    assert expected.get_condition_from_ast() == translated.get_condition_from_ast()
-    assert expected.get_arrayjoin_from_ast() == translated.get_arrayjoin_from_ast()
-    assert expected.get_having_from_ast() == translated.get_having_from_ast()
-    assert expected.get_orderby_from_ast() == translated.get_orderby_from_ast()
+    assert expected.get_selected_columns() == translated.get_selected_columns()
+    assert expected.get_groupby() == translated.get_groupby()
+    assert expected.get_condition() == translated.get_condition()
+    assert expected.get_arrayjoin() == translated.get_arrayjoin()
+    assert expected.get_having() == translated.get_having()
+    assert expected.get_orderby() == translated.get_orderby()

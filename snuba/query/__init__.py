@@ -140,7 +140,7 @@ class Query(DataSource, ABC):
 
     # TODO: Run a codemod to remove the "from_ast" from all these
     # methods.
-    def get_selected_columns_from_ast(self) -> Sequence[SelectedExpression]:
+    def get_selected_columns(self) -> Sequence[SelectedExpression]:
         return self.__selected_columns
 
     def set_ast_selected_columns(
@@ -148,13 +148,13 @@ class Query(DataSource, ABC):
     ) -> None:
         self.__selected_columns = selected_columns
 
-    def get_groupby_from_ast(self) -> Sequence[Expression]:
+    def get_groupby(self) -> Sequence[Expression]:
         return self.__groupby
 
     def set_ast_groupby(self, groupby: Sequence[Expression]) -> None:
         self.__groupby = groupby
 
-    def get_condition_from_ast(self) -> Optional[Expression]:
+    def get_condition(self) -> Optional[Expression]:
         return self.__condition
 
     def set_ast_condition(self, condition: Optional[Expression]) -> None:
@@ -168,19 +168,19 @@ class Query(DataSource, ABC):
                 BooleanFunctions.AND, condition, self.__condition
             )
 
-    def get_arrayjoin_from_ast(self) -> Optional[Expression]:
+    def get_arrayjoin(self) -> Optional[Expression]:
         return self.__array_join
 
     def set_arrayjoin(self, arrayjoin: Optional[Expression]) -> None:
         self.__array_join = arrayjoin
 
-    def get_having_from_ast(self) -> Optional[Expression]:
+    def get_having(self) -> Optional[Expression]:
         return self.__having
 
     def set_ast_having(self, condition: Optional[Expression]) -> None:
         self.__having = condition
 
-    def get_orderby_from_ast(self) -> Sequence[OrderBy]:
+    def get_orderby(self) -> Sequence[OrderBy]:
         return self.__order_by
 
     def set_ast_orderby(self, orderby: Sequence[OrderBy]) -> None:
@@ -408,12 +408,12 @@ class Query(DataSource, ABC):
 
     def _eq_functions(self) -> Sequence[str]:
         return (
-            "get_selected_columns_from_ast",
-            "get_groupby_from_ast",
-            "get_condition_from_ast",
-            "get_arrayjoin_from_ast",
-            "get_having_from_ast",
-            "get_orderby_from_ast",
+            "get_selected_columns",
+            "get_groupby",
+            "get_condition",
+            "get_arrayjoin",
+            "get_having",
+            "get_orderby",
             "get_limitby",
             "get_limit",
             "get_offset",

@@ -77,4 +77,4 @@ def test_mand_conditions(table: str, mand_conditions: List[FunctionCall]) -> Non
 
     query_ast_copy.add_condition_to_ast(combine_and_conditions(mand_conditions))
 
-    assert query.get_condition_from_ast() == query_ast_copy.get_condition_from_ast()
+    assert query.get_condition() == query_ast_copy.get_condition()

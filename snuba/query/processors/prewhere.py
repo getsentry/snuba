@@ -66,7 +66,7 @@ class PrewhereProcessor(QueryProcessor):
         if not prewhere_keys:
             return
 
-        ast_condition = query.get_condition_from_ast()
+        ast_condition = query.get_condition()
         if ast_condition is None:
             return
 

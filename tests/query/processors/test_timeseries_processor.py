@@ -175,20 +175,15 @@ def test_timeseries_format_expressions(
         if isinstance(processor, TimeSeriesProcessor):
             processor.process_query(unprocessed, HTTPRequestSettings())
 
-    assert (
-        expected.get_selected_columns_from_ast()
-        == unprocessed.get_selected_columns_from_ast()
-    )
-    assert expected.get_condition_from_ast() == unprocessed.get_condition_from_ast()
+    assert expected.get_selected_columns() == unprocessed.get_selected_columns()
+    assert expected.get_condition() == unprocessed.get_condition()
 
-    ret = unprocessed.get_selected_columns_from_ast()[1].expression.accept(
+    ret = unprocessed.get_selected_columns()[1].expression.accept(
         ClickhouseExpressionFormatter()
     )
     assert ret == formatted_column
     if condition:
-        ret = unprocessed.get_condition_from_ast().accept(
-            ClickhouseExpressionFormatter()
-        )
+        ret = unprocessed.get_condition().accept(ClickhouseExpressionFormatter())
         assert formatted_condition == ret
 
     assert extract_granularity_from_query(unprocessed, "finish_ts") == granularity

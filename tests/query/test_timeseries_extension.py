@@ -94,5 +94,5 @@ def test_query_extension_processing(
     request_settings = HTTPRequestSettings()
 
     extension.get_processor().process_query(query, valid_data, request_settings)
-    assert query.get_condition_from_ast() == expected_ast_condition
+    assert query.get_condition() == expected_ast_condition
     assert query.get_granularity() == expected_granularity

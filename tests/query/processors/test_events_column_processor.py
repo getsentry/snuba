@@ -36,16 +36,13 @@ def test_events_column_format_expressions() -> None:
     )
 
     GroupIdColumnProcessor().process_query(unprocessed, HTTPRequestSettings())
-    assert (
-        expected.get_selected_columns_from_ast()
-        == unprocessed.get_selected_columns_from_ast()
-    )
+    assert expected.get_selected_columns() == unprocessed.get_selected_columns()
 
     expected = (
         "(nullIf(group_id, 0) AS the_group_id)",
         "(message AS the_message)",
     )
 
-    for idx, column in enumerate(unprocessed.get_selected_columns_from_ast()[1:]):
+    for idx, column in enumerate(unprocessed.get_selected_columns()[1:]):
         formatted = column.expression.accept(ClickhouseExpressionFormatter())
         assert expected[idx] == formatted

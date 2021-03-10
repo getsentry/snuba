@@ -80,12 +80,9 @@ def test_apdex_format_expressions() -> None:
     )
 
     apdex_processor(ColumnSet([])).process_query(unprocessed, HTTPRequestSettings())
-    assert (
-        expected.get_selected_columns_from_ast()
-        == unprocessed.get_selected_columns_from_ast()
-    )
+    assert expected.get_selected_columns() == unprocessed.get_selected_columns()
 
-    ret = unprocessed.get_selected_columns_from_ast()[1].expression.accept(
+    ret = unprocessed.get_selected_columns()[1].expression.accept(
         ClickhouseExpressionFormatter()
     )
     assert ret == (
