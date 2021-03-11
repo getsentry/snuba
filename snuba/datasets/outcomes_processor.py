@@ -26,10 +26,11 @@ class OutcomesProcessor(MessageProcessor):
         assert isinstance(value, dict)
         v_uuid = value.get("event_id")
 
-        if "category" not in value:
-            metrics.increment("missing_category")
-        if "quantity" not in value:
-            metrics.increment("missing_quantity")
+        if value["outcome"] != 4:  # we dont care about abuse outcomes for these metrics
+            if "category" not in value:
+                metrics.increment("missing_category")
+            if "quantity" not in value:
+                metrics.increment("missing_quantity")
 
         message = {
             "org_id": value.get("org_id", 0),
