@@ -39,7 +39,7 @@ class BetterUUIDColumnProcessor(QueryProcessor):
 
     def __init__(self, uuid_columns: Set[str]) -> None:
         self.__uuid_columns = uuid_columns
-        self.__uuid_column_match = Or([String(col) for col in uuid_columns])
+        uuid_column_match = Or([String(col) for col in uuid_columns])
 
         operator = Param(
             "operator",
@@ -62,7 +62,7 @@ class BetterUUIDColumnProcessor(QueryProcessor):
             (
                 FunctionCallMatch(
                     String("toString"),
-                    (Param("col", ColumnMatch(None, self.__uuid_column_match)),),
+                    (Param("col", ColumnMatch(None, uuid_column_match)),),
                 ),
             ),
             with_optionals=True,

@@ -435,7 +435,17 @@ tests_new_processor = [
         ),
         Literal(None, 0),
         "0",
-        id="0",
+        id="invalid uuid",
+    ),
+    pytest.param(
+        binary_condition(
+            ConditionFunctions.IN,
+            Column(None, None, "column1"),
+            FunctionCall(None, "tuple", (Literal(None, "deadbeefabad"),)),
+        ),
+        Literal(None, 0),
+        "0",
+        id="invalid uuid - IN condition",
     ),
 ]
 
