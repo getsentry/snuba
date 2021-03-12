@@ -342,7 +342,9 @@ TEST_CASES = [
                                         Column(None, None, "group_id"),
                                         Literal(None, 0),
                                     ),
-                                ),
+                                )
+                                if events_storage.get_storage_key() == StorageKey.EVENTS
+                                else Column("_snuba_group_id", None, "group_id"),
                             ),
                             SelectedExpression(
                                 "f_release",
