@@ -8,6 +8,7 @@ from snuba.query.conditions import (
     FUNCTION_TO_OPERATOR,
 )
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.exceptions import ValidationException
 from snuba.clickhouse.query import Query
 from snuba.query.matchers import (
     AnyOptionalString,
@@ -27,7 +28,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 metrics = MetricsWrapper(environment.metrics, "api.query.uuid_processor")
 
 
-class UUIDTranslationError(Exception):
+class UUIDTranslationError(ValidationException):
     pass
 
 
@@ -95,44 +96,32 @@ class BetterUUIDColumnProcessor(QueryProcessor):
             match = self.__condition_matcher.match(exp)
 
             if match:
-                try:
-                    return FunctionCall(
-                        exp.alias,
-                        match.string("operator"),
-                        (
-                            match.expression("col"),
-                            translate_uuid_literal(match.expression("literal")),
-                        ),
-                    )
-                except UUIDTranslationError:
-                    # We probably won't get to this point since we should have validations earlier
-                    # in the pipeline, but just in case return 0 otherwise the query is going to
-                    # cause a type mismatch on ClickHouse
-                    return Literal(exp.alias, 0)
+                return FunctionCall(
+                    exp.alias,
+                    match.string("operator"),
+                    (
+                        match.expression("col"),
+                        translate_uuid_literal(match.expression("literal")),
+                    ),
+                )
 
             in_condition_match = self.__in_condition_matcher.match(exp)
 
             if in_condition_match:
-                try:
-                    tuple_func = in_condition_match.expression("tuple")
-                    assert isinstance(tuple_func, FunctionCall)
-                    new_tuple_func = FunctionCall(
-                        tuple_func.alias,
-                        tuple_func.function_name,
-                        parameters=tuple(
-                            [
-                                translate_uuid_literal(lit)
-                                for lit in tuple_func.parameters
-                            ]
-                        ),
-                    )
-                    return FunctionCall(
-                        exp.alias,
-                        in_condition_match.string("operator"),
-                        (in_condition_match.expression("col"), new_tuple_func,),
-                    )
-                except UUIDTranslationError:
-                    return Literal(exp.alias, 0)
+                tuple_func = in_condition_match.expression("tuple")
+                assert isinstance(tuple_func, FunctionCall)
+                new_tuple_func = FunctionCall(
+                    tuple_func.alias,
+                    tuple_func.function_name,
+                    parameters=tuple(
+                        [translate_uuid_literal(lit) for lit in tuple_func.parameters]
+                    ),
+                )
+                return FunctionCall(
+                    exp.alias,
+                    in_condition_match.string("operator"),
+                    (in_condition_match.expression("col"), new_tuple_func,),
+                )
 
             return exp
 

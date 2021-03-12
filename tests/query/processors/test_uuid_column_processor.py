@@ -15,6 +15,7 @@ from snuba.clickhouse.query import Query
 from snuba.query.processors.uuid_column_processor import (
     UUIDColumnProcessor,
     BetterUUIDColumnProcessor,
+    UUIDTranslationError,
 )
 from snuba.request.request_settings import HTTPRequestSettings
 
@@ -427,26 +428,6 @@ tests_new_processor = [
         "equals(column2, 'a7d67cf7-9677-4551-a95b-e6543cacd460') AND equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459')",
         id="equals(column2, 'a7d67cf7-9677-4551-a95b-e6543cacd460') AND equals(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459')",
     ),
-    pytest.param(
-        binary_condition(
-            ConditionFunctions.EQ,
-            Column(None, None, "column1"),
-            Literal(None, "deadbeefabad"),
-        ),
-        Literal(None, 0),
-        "0",
-        id="invalid uuid",
-    ),
-    pytest.param(
-        binary_condition(
-            ConditionFunctions.IN,
-            Column(None, None, "column1"),
-            FunctionCall(None, "tuple", (Literal(None, "deadbeefabad"),)),
-        ),
-        Literal(None, 0),
-        "0",
-        id="invalid uuid - IN condition",
-    ),
 ]
 
 
@@ -488,3 +469,37 @@ def test_better_uuid_column_processor(
     assert condition is not None
     ret = condition.accept(ClickhouseExpressionFormatter())
     assert ret == formatted_value
+
+
+tests_invalid_uuid = [
+    pytest.param(
+        binary_condition(
+            ConditionFunctions.EQ,
+            Column(None, None, "column1"),
+            Literal(None, "deadbeefabad"),
+        ),
+        id="invalid uuid",
+    ),
+    pytest.param(
+        binary_condition(
+            ConditionFunctions.IN,
+            Column(None, None, "column1"),
+            FunctionCall(None, "tuple", (Literal(None, "deadbeefabad"),)),
+        ),
+        id="invalid uuid - IN condition",
+    ),
+]
+
+
+@pytest.mark.parametrize("unprocessed", tests_invalid_uuid)
+def test_invalid_uuid(unprocessed: Expression) -> None:
+    unprocessed_query = Query(
+        Table("transactions", ColumnSet([])),
+        selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
+        condition=unprocessed,
+    )
+
+    with pytest.raises(UUIDTranslationError):
+        BetterUUIDColumnProcessor(set(["column1", "column2"])).process_query(
+            unprocessed_query, HTTPRequestSettings()
+        )
