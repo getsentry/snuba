@@ -1,10 +1,10 @@
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Query
-from snuba.datasets.storages.event_id_column_processor import EventIdColumnProcessor
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.processors.uuid_column_processor import UUIDColumnProcessor
 from snuba.request.request_settings import HTTPRequestSettings
 
 
@@ -43,7 +43,7 @@ def test_event_id_column_format_expressions() -> None:
         ],
     )
 
-    EventIdColumnProcessor().process_query(unprocessed, HTTPRequestSettings())
+    UUIDColumnProcessor({"event_id"}).process_query(unprocessed, HTTPRequestSettings())
     assert expected.get_selected_columns() == unprocessed.get_selected_columns()
 
     formatted = unprocessed.get_selected_columns()[1].expression.accept(
