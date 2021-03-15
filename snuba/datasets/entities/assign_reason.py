@@ -59,6 +59,10 @@ def assign_reason_category(
             if nondeterministic_query is not None:
                 return nondeterministic_query
 
+            agg = check_aggregate(data, expected_data, "count")
+            if agg is not None:
+                return agg
+
         if referrer == "tagstore.get_tag_value_paginator_for_projects":
             nondeterministic_query = check_nondeterministic_query(
                 data, expected_data, ["last_seen"]
@@ -83,7 +87,10 @@ def assign_reason_category(
             if agg is not None:
                 return agg
 
-        if referrer == "api.organization-event-stats.find-topn":
+        if referrer in [
+            "api.organization-event-stats",
+            "api.organization-event-stats.find-topn",
+        ]:
             agg = check_aggregate(data, expected_data, "count")
             if agg is not None:
                 return agg
@@ -96,6 +103,18 @@ def assign_reason_category(
         if referrer == "api.organization-sdk-updates":
             nondeterministic_query = check_nondeterministic_query(
                 data, expected_data, ["project"]
+            )
+            if nondeterministic_query is not None:
+                return nondeterministic_query
+
+        if referrer == "subscription":
+            agg = check_aggregate(data, expected_data, "count")
+            if agg is not None:
+                return agg
+
+        if referrer == "serializers.GroupSerializerSnuba._execute_seen_stats_query":
+            nondeterministic_query = check_nondeterministic_query(
+                data, expected_data, []
             )
             if nondeterministic_query is not None:
                 return nondeterministic_query
