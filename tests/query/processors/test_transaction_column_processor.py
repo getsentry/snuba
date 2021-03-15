@@ -44,12 +44,9 @@ def test_event_id_column_format_expressions() -> None:
     )
 
     EventIdColumnProcessor().process_query(unprocessed, HTTPRequestSettings())
-    assert (
-        expected.get_selected_columns_from_ast()
-        == unprocessed.get_selected_columns_from_ast()
-    )
+    assert expected.get_selected_columns() == unprocessed.get_selected_columns()
 
-    formatted = unprocessed.get_selected_columns_from_ast()[1].expression.accept(
+    formatted = unprocessed.get_selected_columns()[1].expression.accept(
         ClickhouseExpressionFormatter()
     )
     assert formatted == "(replaceAll(toString(event_id), '-', '') AS the_event_id)"

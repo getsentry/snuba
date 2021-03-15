@@ -35,7 +35,7 @@ class SimpleAPITest(BaseApiTest):
         self.project_ids = [1, 2, 3]  # 3 projects
         self.environments = ["prød", "test"]  # 2 environments
         self.platforms = ["a", "b", "c", "d", "e", "f"]  # 6 platforms
-        self.hashes = [x * 32 for x in "0123456789ab"]  # 12 hashes
+        self.hashes = [x * 32 for x in "123456789abc"]  # 12 hashes
         self.group_ids = [int(hsh[:16], 16) for hsh in self.hashes]
         self.minutes = 180
 
@@ -556,30 +556,6 @@ class TestApi(SimpleAPITest):
         )
         assert len(result["data"]) == 1
 
-        # Test null group_id
-        result = json.loads(
-            self.post(
-                json.dumps(
-                    {
-                        "project": [1, 2, 3],
-                        "selected_columns": ["group_id"],
-                        "groupby": ["group_id"],
-                        "aggregations": [["count()", "", "count"]],
-                        "debug": True,
-                        "conditions": [["group_id", "IS NULL", None]],
-                        "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
-                    }
-                ),
-            ).data
-        )
-        assert len(result["data"]) == 1
-        res = result["data"][0]
-        assert res["group_id"] is None
-        assert res["count"] > 0
-
         result = json.loads(
             self.post(
                 json.dumps(
@@ -589,7 +565,10 @@ class TestApi(SimpleAPITest):
                         "selected_columns": [["isNull", ["group_id"], "null_group_id"]],
                         "groupby": ["group_id"],
                         "debug": True,
-                        "conditions": [["group_id", "IS NULL", None]],
+                        "conditions": [
+                            ["group_id", "IS NULL", None],
+                            ["type", "!=", "transaction"],
+                        ],
                         "from_date": self.base_time.isoformat(),
                         "to_date": (
                             self.base_time + timedelta(minutes=self.minutes)
@@ -598,7 +577,7 @@ class TestApi(SimpleAPITest):
                 ),
             ).data
         )
-        assert result["data"][0]["null_group_id"] == 1
+        assert len(result["data"]) == 0
 
     def test_null_array_conditions(self) -> None:
         events = []
@@ -877,6 +856,7 @@ class TestApi(SimpleAPITest):
             ).data
         )
         assert sorted(result["data"][0]["aggregate"]) == [
+            self.group_ids[0],
             self.group_ids[3],
             self.group_ids[6],
             self.group_ids[9],
@@ -897,7 +877,7 @@ class TestApi(SimpleAPITest):
                 ),
             ).data
         )
-        assert result["data"][0]["aggregate"] == 3
+        assert result["data"][0]["aggregate"] == 4
 
         result = json.loads(
             self.post(
@@ -915,7 +895,7 @@ class TestApi(SimpleAPITest):
             ).data
         )
         assert len(result["data"]) == 3  # time buckets
-        assert all(d["aggregate"] == 3 for d in result["data"])
+        assert all(d["aggregate"] == 4 for d in result["data"])
 
         result = json.loads(
             self.post(
@@ -2043,7 +2023,9 @@ class TestLegacyAPI(SimpleAPITest):
                 ),
             ).data
         )
-        assert set([d["group_id"] for d in result["data"]]) == set([self.group_ids[4]])
+        assert set([d["group_id"] for d in result["data"]]) == set(
+            [self.group_ids[0], self.group_ids[4]]
+        )
 
         # Test that a scalar condition on an array column expands to an all() type
         # iterator

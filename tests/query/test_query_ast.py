@@ -127,14 +127,11 @@ def test_replace_expression() -> None:
         order_by=[orderby],
     )
 
-    assert (
-        query.get_selected_columns_from_ast()
-        == expected_query.get_selected_columns_from_ast()
-    )
-    assert query.get_condition_from_ast() == expected_query.get_condition_from_ast()
-    assert query.get_groupby_from_ast() == expected_query.get_groupby_from_ast()
-    assert query.get_having_from_ast() == expected_query.get_having_from_ast()
-    assert query.get_orderby_from_ast() == expected_query.get_orderby_from_ast()
+    assert query.get_selected_columns() == expected_query.get_selected_columns()
+    assert query.get_condition() == expected_query.get_condition()
+    assert query.get_groupby() == expected_query.get_groupby()
+    assert query.get_having() == expected_query.get_having()
+    assert query.get_orderby() == expected_query.get_orderby()
 
     assert list(query.get_all_expressions()) == list(
         expected_query.get_all_expressions()

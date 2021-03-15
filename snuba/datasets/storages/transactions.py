@@ -1,3 +1,9 @@
+from snuba.query.processors.typed_context_promoter import (
+    HexIntContextType,
+    PromotionSpec,
+    TypedContextPromoter,
+    UUIDContextType,
+)
 from snuba import util
 from snuba.clickhouse.columns import (
     UUID,
@@ -30,7 +36,7 @@ columns = ColumnSet(
     [
         ("project_id", UInt(64)),
         ("event_id", UUID()),
-        ("trace_id", UUID()),
+        ("trace_id", UUID(Modifiers(nullable=True))),
         ("span_id", UInt(64)),
         ("transaction_name", String()),
         ("transaction_hash", UInt(64, Modifiers(readonly=True))),
@@ -90,11 +96,27 @@ storage = WritableTableStorage(
     schema=schema,
     query_processors=[
         MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
+        TypedContextPromoter(
+            "contexts",
+            {
+                PromotionSpec("trace.trace_id", "trace_id", UUIDContextType()),
+                PromotionSpec("trace.span_id", "span_id", HexIntContextType()),
+            },
+        ),
         EventIdColumnProcessor(),
         ArrayJoinKeyValueOptimizer("tags"),
         ArrayJoinKeyValueOptimizer("measurements"),
         UUIDColumnProcessor(set(["event_id", "trace_id"])),
-        PrewhereProcessor(["event_id", "transaction_name", "transaction", "title"]),
+        PrewhereProcessor(
+            [
+                "event_id",
+                "trace_id",
+                "span_id",
+                "transaction_name",
+                "transaction",
+                "title",
+            ]
+        ),
     ],
     stream_loader=build_kafka_stream_loader_from_settings(
         StorageKey.TRANSACTIONS,

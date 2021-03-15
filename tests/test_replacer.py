@@ -1,16 +1,20 @@
 import importlib
-import pytz
 import re
 from datetime import datetime
 from functools import partial
+
+import pytz
 import simplejson as json
 
 from snuba import replacer, settings
 from snuba.clickhouse import DATETIME_FORMAT
-from snuba.datasets.errors_replacer import ReplacerState
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets import errors_replacer
+from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
+from snuba.optimize import run_optimize
+from snuba.redis import redis_client
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams import Message, Partition, Topic
@@ -48,6 +52,12 @@ class TestReplacer:
             KafkaPayload(None, json.dumps(msg).encode("utf-8"), []),
             datetime.now(),
         )
+
+    def _clear_redis_and_force_merge(self):
+        redis_client.flushdb()
+        cluster = self.storage.get_cluster()
+        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
+        run_optimize(clickhouse, self.storage, cluster.get_database())
 
     def _issue_count(self, project_id, group_id=None):
         args = {
@@ -275,6 +285,10 @@ class TestReplacer:
         processed = self.replacer.process_message(message)
         self.replacer.flush_batch([processed])
 
+        assert self._issue_count(self.project_id) == []
+
+        # Count is still zero after Redis flushed and parts merged
+        self._clear_redis_and_force_merge()
         assert self._issue_count(self.project_id) == []
 
     def test_merge_insert(self) -> None:

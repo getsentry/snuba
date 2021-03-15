@@ -1,6 +1,6 @@
 import datetime
 import pytest
-from typing import Generator, Optional
+from typing import Generator, Optional, Set
 
 from snuba import state
 from snuba.datasets.entities import EntityKey
@@ -367,7 +367,7 @@ def test_entity_validation(
         )
 
     query = query_fn(condition)
-    assert entity.validate_required_conditions(query)
+    assert entity.validate_required_conditions(query) is None
     expected_query = query_fn(expected_condition)
     matched, reason = query.equals(expected_query)
     assert matched, reason
@@ -375,7 +375,10 @@ def test_entity_validation(
 
 invalid_tests = [
     pytest.param(
-        EntityKey.EVENTS, None, id="entity has columns, but there are no conditions",
+        EntityKey.EVENTS,
+        None,
+        {"project_id", "timestamp"},
+        id="entity has columns, but there are no conditions",
     ),
     pytest.param(
         EntityKey.SPANS,
@@ -384,6 +387,7 @@ invalid_tests = [
             Column(None, None, "project_id"),
             FunctionCall(None, "tuple", (Literal(None, 1),)),
         ),
+        {"project_id"},
         id="spans does not have project with EQ or IN",
     ),
     pytest.param(
@@ -407,14 +411,15 @@ invalid_tests = [
                 ),
             ),
         ),
+        {"timestamp"},
         id="events does not have time with GTE and LT",
     ),
 ]
 
 
-@pytest.mark.parametrize("key, condition", invalid_tests)
+@pytest.mark.parametrize("key, condition, missing", invalid_tests)
 def test_entity_validation_failure(
-    key: EntityKey, condition: Optional[Expression]
+    key: EntityKey, condition: Optional[Expression], missing: Optional[Set[str]]
 ) -> None:
     entity = get_entity(key)
     query = LogicalQuery(
@@ -425,4 +430,4 @@ def test_entity_validation_failure(
         condition=condition,
     )
 
-    assert not entity.validate_required_conditions(query)
+    assert entity.validate_required_conditions(query) == missing

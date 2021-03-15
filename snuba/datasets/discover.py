@@ -66,7 +66,7 @@ def match_query_to_entity(
     query: Query, events_only_columns: ColumnSet, transactions_only_columns: ColumnSet,
 ) -> EntityKey:
     # First check for a top level condition on the event type
-    condition = query.get_condition_from_ast()
+    condition = query.get_condition()
     event_types = set()
     if condition:
         top_level_condition = get_first_level_and_conditions(condition)

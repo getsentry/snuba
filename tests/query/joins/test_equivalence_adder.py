@@ -271,6 +271,6 @@ def test_add_equivalent_condition(
         condition=initial_condition,
     )
     add_equivalent_conditions(query)
-    assert query.get_condition_from_ast() == expected_expr
+    assert query.get_condition() == expected_expr
 
     ENTITY_IMPL.clear()

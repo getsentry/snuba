@@ -24,7 +24,7 @@ def _get_date_range(query: ProcessableQuery[Table]) -> Optional[int]:
         (Column(None, Param("col_name", Any(str))), Literal(Any(datetime))),
     )
 
-    condition = query.get_condition_from_ast()
+    condition = query.get_condition()
     if condition is None:
         return None
     for exp in condition:
@@ -85,7 +85,7 @@ class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
         return self.__all_array_joins
 
     def __find_complex_conditions(self, query: ProcessableQuery[Table]) -> bool:
-        condition = query.get_condition_from_ast()
+        condition = query.get_condition()
         if condition is None:
             return False
         for c in condition:
@@ -107,7 +107,7 @@ class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
 
     def _list_array_join(self, query: ProcessableQuery[Table]) -> Set[Expression]:
         ret = set()
-        query_arrayjoin = query.get_arrayjoin_from_ast()
+        query_arrayjoin = query.get_arrayjoin()
         if query_arrayjoin is not None:
             ret.add(query_arrayjoin)
 
@@ -133,11 +133,11 @@ class TablesCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
             c for c in data_source.get_all_ast_referenced_columns()
         }
 
-        condition = data_source.get_condition_from_ast()
+        condition = data_source.get_condition()
         if condition is not None:
             self.__all_conditions[table_name] = condition
 
-        self.__all_groupby[table_name] = set(data_source.get_groupby_from_ast())
+        self.__all_groupby[table_name] = set(data_source.get_groupby())
 
         self.__all_array_joins[table_name] = self._list_array_join(data_source)
 

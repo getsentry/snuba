@@ -80,7 +80,4 @@ def test_pattern_replacer_format_expressions(
     PatternReplacer(
         Param("column", ColumnMatch(None, StringMatch("column1"))), transform,
     ).process_query(unprocessed, HTTPRequestSettings())
-    assert (
-        expected.get_selected_columns_from_ast()
-        == unprocessed.get_selected_columns_from_ast()
-    )
+    assert expected.get_selected_columns() == unprocessed.get_selected_columns()

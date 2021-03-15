@@ -21,7 +21,7 @@ def test_organization_extension_query_processing_happy_path() -> None:
     request_settings = HTTPRequestSettings()
 
     extension.get_processor().process_query(query, valid_data, request_settings)
-    assert query.get_condition_from_ast() == binary_condition(
+    assert query.get_condition() == binary_condition(
         ConditionFunctions.EQ, Column("_snuba_org_id", None, "org_id"), Literal(None, 2)
     )
 

@@ -239,15 +239,15 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
                 name=s.name,
                 expression=_process_root(s.expression, subqueries, alias_generator),
             )
-            for s in query.get_selected_columns_from_ast()
+            for s in query.get_selected_columns()
         ]
     )
 
-    array_join = query.get_arrayjoin_from_ast()
+    array_join = query.get_arrayjoin()
     if array_join is not None:
         query.set_arrayjoin(_process_root(array_join, subqueries, alias_generator))
 
-    ast_condition = query.get_condition_from_ast()
+    ast_condition = query.get_condition()
     if ast_condition is not None:
         main_conditions = []
         for c in get_first_level_and_conditions(ast_condition):
@@ -277,13 +277,10 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
 
     # TODO: push down the group by when it is the same as the join key.
     query.set_ast_groupby(
-        [
-            _process_root(e, subqueries, alias_generator)
-            for e in query.get_groupby_from_ast()
-        ]
+        [_process_root(e, subqueries, alias_generator) for e in query.get_groupby()]
     )
 
-    having = query.get_having_from_ast()
+    having = query.get_having()
     if having is not None:
         query.set_ast_having(
             combine_and_conditions(
@@ -302,7 +299,7 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
                     orderby.expression, subqueries, alias_generator
                 ),
             )
-            for orderby in query.get_orderby_from_ast()
+            for orderby in query.get_orderby()
         ]
     )
 

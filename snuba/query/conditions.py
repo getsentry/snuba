@@ -1,4 +1,4 @@
-from typing import Mapping, Sequence
+from typing import Mapping, Sequence, Set
 
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Expression, FunctionCall, Literal
@@ -94,7 +94,7 @@ set_condition_pattern = {
 
 
 def __is_set_condition(exp: Expression, operator: str) -> bool:
-    if is_binary_condition(exp, operator):
+    if is_any_binary_condition(exp, operator):
         if operator in set_condition_pattern:
             if set_condition_pattern[operator].match(exp) is not None:
                 assert isinstance(exp, FunctionCall)  # mypy
@@ -141,7 +141,36 @@ binary_condition_patterns = {
 }
 
 
-def is_binary_condition(exp: Expression, operator: str) -> bool:
+def condition_pattern(
+    operators: Set[str],
+    lhs_pattern: Pattern[Expression],
+    rhs_pattern: Pattern[Expression],
+    commutative: bool,
+) -> Pattern[Expression]:
+    """
+    Matches a binary condition given the two operands and the valid
+    operators. It also supports commutative conditions.
+    """
+    pattern: Pattern[Expression]
+    if commutative:
+        pattern = Or(
+            [
+                FunctionCallPattern(
+                    Or([String(op) for op in operators]), (lhs_pattern, rhs_pattern)
+                ),
+                FunctionCallPattern(
+                    Or([String(op) for op in operators]), (rhs_pattern, lhs_pattern)
+                ),
+            ]
+        )
+    else:
+        pattern = FunctionCallPattern(
+            Or([String(op) for op in operators]), (lhs_pattern, rhs_pattern)
+        )
+    return pattern
+
+
+def is_any_binary_condition(exp: Expression, operator: str) -> bool:
     if operator in binary_condition_patterns:
         return binary_condition_patterns[operator].match(exp) is not None
 

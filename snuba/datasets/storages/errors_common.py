@@ -6,17 +6,15 @@ from snuba.clickhouse.columns import (
     IPv4,
     IPv6,
     Nested,
-    String,
-    UInt,
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import String, UInt
 from snuba.datasets.errors_replacer import ReplacerState
-from snuba.datasets.storages.event_id_column_processor import EventIdColumnProcessor
-from snuba.datasets.storages.group_id_column_processor import GroupIdColumnProcessor
-from snuba.datasets.storages.user_column_processor import UserColumnProcessor
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
+from snuba.datasets.storages.type_condition_optimizer import TypeConditionOptimizer
+from snuba.datasets.storages.user_column_processor import UserColumnProcessor
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
@@ -25,10 +23,12 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.uuid_column_processor import BetterUUIDColumnProcessor
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 required_columns = [
     "event_id",
+    "primary_hash",
     "project_id",
     "group_id",
     "timestamp",
@@ -142,8 +142,8 @@ query_processors = [
     ),
     MappingColumnPromoter(mapping_specs={"tags": promoted_tag_columns}),
     UserColumnProcessor(),
-    EventIdColumnProcessor(),
-    GroupIdColumnProcessor(),
+    BetterUUIDColumnProcessor({"event_id"}),
+    TypeConditionOptimizer(),
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
     PrewhereProcessor(prewhere_candidates, omit_if_final=["environment", "release"]),

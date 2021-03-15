@@ -87,7 +87,7 @@ def get_project_ids_in_query_ast(
 
         return None
 
-    condition = query.get_condition_from_ast()
+    condition = query.get_condition()
     return get_project_ids_in_condition(condition) if condition is not None else None
 
 
@@ -144,7 +144,7 @@ def get_time_range(
     say anything on how that compares to the other timestamp conditions.
     """
 
-    condition_clause = query.get_condition_from_ast()
+    condition_clause = query.get_condition()
     if not condition_clause:
         return (None, None)
 
