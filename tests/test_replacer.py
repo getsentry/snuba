@@ -446,3 +446,18 @@ class TestReplacer:
         assert errors_replacer.get_projects_query_flags(
             project_ids, ReplacerState.EVENTS
         ) == (False, [],)
+
+    def test_tombstone_events_process_noop(self) -> None:
+        timestamp = datetime.now(tz=pytz.utc)
+        message = (
+            2,
+            "tombstone_events",
+            {
+                "project_id": self.project_id,
+                "event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"],
+                "datetime": timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                "for_primary_hash_change": True,
+            },
+        )
+
+        assert self.replacer.process_message(self._wrap(message)) is None
