@@ -88,39 +88,24 @@ class TransactionsMessageProcessor(MessageProcessor):
 
         transaction_ctx = data["contexts"]["trace"]
         trace_id = transaction_ctx["trace_id"]
-        try:
-            failure = "event_id"  # This is a hacky way of seeing which field failed
-            processed["event_id"] = str(uuid.UUID(processed["event_id"]))
-            failure = "trace_id"
-            processed["trace_id"] = str(uuid.UUID(trace_id))
-            failure = "span_id"
-            processed["span_id"] = int(transaction_ctx["span_id"], 16)
-            failure = "transaction_op"
-            processed["transaction_op"] = _unicodify(transaction_ctx.get("op") or "")
-            failure = "transaction_name"
-            processed["transaction_name"] = _unicodify(data.get("transaction") or "")
-            failure = "start_ts|start_ms|start_timestamp"
-            processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
-                data["start_timestamp"],
-            )
-            failure = "status"
-            status = transaction_ctx.get("status", None)
-            if status:
-                int_status = SPAN_STATUS_NAME_TO_CODE.get(status, UNKNOWN_SPAN_STATUS)
-            else:
-                int_status = UNKNOWN_SPAN_STATUS
+        processed["event_id"] = str(uuid.UUID(processed["event_id"]))
+        processed["trace_id"] = str(uuid.UUID(trace_id))
+        processed["span_id"] = int(transaction_ctx["span_id"], 16)
+        processed["transaction_op"] = _unicodify(transaction_ctx.get("op") or "")
+        processed["transaction_name"] = _unicodify(data.get("transaction") or "")
+        processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
+            data["start_timestamp"],
+        )
+        status = transaction_ctx.get("status", None)
+        if status:
+            int_status = SPAN_STATUS_NAME_TO_CODE.get(status, UNKNOWN_SPAN_STATUS)
+        else:
+            int_status = UNKNOWN_SPAN_STATUS
 
-            failure = "transaction_status"
-            processed["transaction_status"] = int_status
-            failure = "timestamp|start_timestamp"
-            if data["timestamp"] - data["start_timestamp"] < 0:
-                # Seems we have some negative durations in the DB
-                metrics.increment("negative_duration")
-        except Exception:
-            # all these fields are required but we saw some events go through here
-            # in the past.  For now bail.
-            metrics.increment("missing_field", tags={"field": failure})
-            return None
+        processed["transaction_status"] = int_status
+        if data["timestamp"] - data["start_timestamp"] < 0:
+            # Seems we have some negative durations in the DB
+            metrics.increment("negative_duration")
 
         processed["finish_ts"], processed["finish_ms"] = self.__extract_timestamp(
             data["timestamp"],
