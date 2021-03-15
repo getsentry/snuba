@@ -470,7 +470,7 @@ class TestReplacer:
                 "project_id": self.project_id,
                 "event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"],
                 "datetime": timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-                "for_primary_hash_change": True,
+                "old_primary_hash": "e3d704f3542b44a621ebed70dc0efe13",
             },
         )
 

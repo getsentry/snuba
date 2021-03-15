@@ -383,10 +383,10 @@ def process_tombstone_events(
     if not event_ids:
         return None
 
-    for_primary_hash_change = bool(message.get("for_primary_hash_change"))
+    old_primary_hash = message.get("old_primary_hash")
 
-    if for_primary_hash_change and state_name == ReplacerState.EVENTS:
-        # for_primary_hash_change flag means the event is only tombstoned
+    if old_primary_hash and state_name == ReplacerState.EVENTS:
+        # old_primary_hash flag means the event is only tombstoned
         # because it will be reinserted with a changed primary_hash. Since
         # primary_hash is part of the sortkey/primarykey in the ERRORS table,
         # we need to tombstone the old event. In the old EVENTS table we do
@@ -398,6 +398,7 @@ def process_tombstone_events(
     # use replaceAll(toString()).
     where = """\
         PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s)
+        AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s)
         WHERE project_id = %(project_id)s
         AND NOT deleted
     """
@@ -406,6 +407,9 @@ def process_tombstone_events(
         "event_ids": ", ".join(
             "'%s'" % str(uuid.UUID(eid)).replace("-", "") for eid in event_ids
         ),
+        "old_primary_hash": ("'%s'" % (str(uuid.UUID(old_primary_hash)),))
+        if old_primary_hash
+        else "NULL",
     }
 
     query_time_flags = (None, message["project_id"])
