@@ -3,7 +3,7 @@ from typing import Optional, Sequence
 
 import click
 
-from confluent_kafka import KafkaError
+from confluent_kafka import KafkaError, KafkaException
 from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging
 from snuba.migrations.connect import check_clickhouse_connections
@@ -57,9 +57,9 @@ def bootstrap(
                 )
                 client.list_topics(timeout=1)
                 break
-            except KafkaError as e:
+            except KafkaException as err:
                 logger.debug(
-                    "Connection to Kafka failed (attempt %d)", attempts, exc_info=e
+                    "Connection to Kafka failed (attempt %d)", attempts, exc_info=err
                 )
                 attempts += 1
                 if attempts == 60:
@@ -93,8 +93,8 @@ def bootstrap(
             try:
                 future.result()
                 logger.info("Topic %s created", topic)
-            except KafkaError as err:
-                if err.code() != KafkaError.TOPIC_ALREADY_EXISTS:
+            except KafkaException as err:
+                if err.args[0].code() != KafkaError.TOPIC_ALREADY_EXISTS:
                     logger.error("Failed to create topic %s", topic, exc_info=err)
 
     if migrate:
