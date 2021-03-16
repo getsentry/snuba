@@ -700,6 +700,8 @@ def get_default_kafka_configuration(
         broker_config.update(override_params)
 
     broker_config["log_level"] = pylog_to_syslog_level(logger.getEffectiveLevel())
+    # Without this, rdkafka simply blurts log lines out into stdout/stderr
+    broker_config["log.queue"] = "true"
 
     if settings.DEBUG:
         broker_config["debug"] = "all"
