@@ -5,6 +5,7 @@ from datetime import datetime
 from functools import partial
 from typing import Any, Tuple
 
+import pytest
 import pytz
 import simplejson as json
 
@@ -126,33 +127,40 @@ class TestReplacer:
             [1, 2, 3],
         )
 
-    def test_tombstone_events_process(self) -> None:
+    @pytest.mark.parametrize(
+        "old_primary_hash", ["e3d704f3542b44a621ebed70dc0efe13", False, None]
+    )
+    def test_tombstone_events_process(self, old_primary_hash) -> None:
         timestamp = datetime.now(tz=pytz.utc)
-        message = (
-            2,
-            "tombstone_events",
-            {
-                "project_id": self.project_id,
-                "event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"],
-                "datetime": timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            },
-        )
+        message_kwargs = {
+            "project_id": self.project_id,
+            "event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"],
+            "datetime": timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+        }
+
+        if old_primary_hash is not None:
+            message_kwargs["old_primary_hash"] = old_primary_hash
+
+        message = (2, "tombstone_events", message_kwargs)
 
         replacement = self.replacer.process_message(self._wrap(message))
 
         assert (
             re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == "SELECT count() FROM %(table_name)s FINAL PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted"
+            == "SELECT count() FROM %(table_name)s FINAL PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s) AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s) WHERE project_id = %(project_id)s AND NOT deleted"
         )
         assert (
             re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == "INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted"
+            == "INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s) AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s) WHERE project_id = %(project_id)s AND NOT deleted"
         )
         assert replacement.query_args == {
             "event_ids": "'00e24a150d7f4ee4b142b61b4d893b6d'",
             "project_id": self.project_id,
             "required_columns": "event_id, primary_hash, project_id, group_id, timestamp, deleted, retention_days",
             "select_columns": "event_id, primary_hash, project_id, group_id, timestamp, 1, retention_days",
+            "old_primary_hash": "'e3d704f3-542b-44a6-21eb-ed70dc0efe13'"
+            if old_primary_hash
+            else "NULL",
         }
         assert replacement.query_time_flags == (None, self.project_id,)
 

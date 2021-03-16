@@ -35,7 +35,33 @@ SNAPSHOT_METADATA_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "table": {"type": "string"},
-                    "columns": {"type": "array", "items": {"type": "string"}},
+                    "zip": {"type": "boolean"},
+                    "columns": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "format": {
+                                    "anyOf": [
+                                        # Each object provides a different formatter with different parameters
+                                        {
+                                            "type": "object",
+                                            "properties": {
+                                                "type": {"const": "datetime"},
+                                                "precision": {
+                                                    "type": "string",
+                                                    "enum": ["second"],
+                                                },
+                                            },
+                                            "required": ["type", "format"],
+                                        }
+                                    ]
+                                },
+                            },
+                            "required": ["name"],
+                        },
+                    },
                 },
                 "required": ["table"],
             },
@@ -97,8 +123,7 @@ class PostgresSnapshot(BulkLoadSource):
                 )
 
             desc_content = [
-                TableConfig(table["table"], table.get("columns"))
-                for table in json_desc["content"]
+                TableConfig.from_dict(table) for table in json_desc["content"]
             ]
 
             descriptor = PostgresSnapshotDescriptor(
@@ -126,7 +151,11 @@ class PostgresSnapshot(BulkLoadSource):
                 csv_file = csv.DictReader(table_file)
                 columns = csv_file.fieldnames
 
-                expected_columns = self.__descriptor.get_table(table).columns
+                descriptor_columns = self.__descriptor.get_table(table).columns
+                assert (
+                    descriptor_columns is not None
+                ), "Cannot import a snapshot that does not provide a columns list"
+                expected_columns = [c.name for c in descriptor_columns]
                 if expected_columns:
                     expected_set = set(expected_columns)
                     assert isinstance(columns, Iterable)
