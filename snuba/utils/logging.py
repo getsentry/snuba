@@ -12,4 +12,4 @@ PYTHON_TO_SYSLOG_MAP = {
 
 
 def pylog_to_syslog_level(level: int) -> int:
-    return PYTHON_TO_SYSLOG_MAP.get(level, DEBUG)
+    return PYTHON_TO_SYSLOG_MAP.get(level, 7)
