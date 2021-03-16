@@ -107,6 +107,13 @@ class TransactionEvent:
                         "invalid": None,
                         "invalid2": {},
                     },
+                    "breakdowns": {
+                        "span_ops": {
+                            "ops.db": {"value": 62.512},
+                            "ops.http": {"value": 109.774},
+                            "total.time": {"value": 172.286},
+                        }
+                    },
                     "contexts": {
                         "trace": {
                             "sampled": True,
@@ -207,6 +214,8 @@ class TransactionEvent:
             "retention_days": 90,
             "measurements.key": ["lcp", "lcp.elementSize"],
             "measurements.value": [32.129, 4242.0],
+            "span_op_breakdowns.key": ["ops.db", "ops.http", "total.time"],
+            "span_op_breakdowns.value": [62.512, 109.774, 172.286],
         }
 
         if self.ipv4:
