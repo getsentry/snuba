@@ -48,7 +48,7 @@ def bootstrap(
         attempts = 0
         while True:
             try:
-                logger.info("Attempting to connect to Kafka (attempt %d)", attempts)
+                logger.info("Attempting to connect to Kafka (attempt %d)...", attempts)
                 client = AdminClient(
                     get_default_kafka_configuration(
                         bootstrap_servers=bootstrap_server,
@@ -65,6 +65,8 @@ def bootstrap(
                 if attempts == 60:
                     raise
                 time.sleep(1)
+
+        logger.info("Connected to Kafka on attempt %d", attempts)
 
         topics = {}
         for name in ACTIVE_DATASET_NAMES:
@@ -86,7 +88,7 @@ def bootstrap(
                             replication_factor=topic_spec.replication_factor,
                         )
 
-        logger.debug("Initiating topic creation")
+        logger.info("Creating Kafka topics...")
         for topic, future in client.create_topics(
             list(topics.values()), operation_timeout=1
         ).items():
