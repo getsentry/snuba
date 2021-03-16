@@ -3,6 +3,7 @@ from typing import Optional, Sequence
 
 import click
 
+from confluent_kafka import KafkaError
 from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging
 from snuba.migrations.connect import check_clickhouse_connections
@@ -12,7 +13,9 @@ from snuba.utils.streams.backends.kafka import get_default_kafka_configuration
 
 @click.command()
 @click.option(
-    "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
+    "--bootstrap-server",
+    multiple=True,
+    help="Kafka bootstrap server to use.",
 )
 @click.option("--kafka/--no-kafka", default=True)
 @click.option("--migrate/--no-migrate", default=True)
@@ -45,7 +48,7 @@ def bootstrap(
         attempts = 0
         while True:
             try:
-                logger.debug("Attempting to connect to Kafka (attempt %d)", attempts)
+                logger.info("Attempting to connect to Kafka (attempt %d)", attempts)
                 client = AdminClient(
                     get_default_kafka_configuration(
                         bootstrap_servers=bootstrap_server,
@@ -54,8 +57,8 @@ def bootstrap(
                 )
                 client.list_topics(timeout=1)
                 break
-            except Exception as e:
-                logger.error(
+            except KafkaError as e:
+                logger.debug(
                     "Connection to Kafka failed (attempt %d)", attempts, exc_info=e
                 )
                 attempts += 1
@@ -90,8 +93,9 @@ def bootstrap(
             try:
                 future.result()
                 logger.info("Topic %s created", topic)
-            except Exception as e:
-                logger.error("Failed to create topic %s", topic, exc_info=e)
+            except KafkaError as err:
+                if err.code() != KafkaError.TOPIC_ALREADY_EXISTS:
+                    logger.error("Failed to create topic %s", topic, exc_info=err)
 
     if migrate:
         check_clickhouse_connections()
