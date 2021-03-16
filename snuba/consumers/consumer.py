@@ -489,11 +489,22 @@ class MultistorageConsumerProcessingStrategyFactory(
         storages: Sequence[WritableTableStorage],
         max_batch_size: int,
         max_batch_time: float,
-        processes: int,
-        input_block_size: int,
-        output_block_size: int,
+        processes: Optional[int],
+        input_block_size: Optional[int],
+        output_block_size: Optional[int],
         metrics: MetricsBackend,
     ):
+        if processes is not None:
+            assert input_block_size is not None, "input block size required"
+            assert output_block_size is not None, "output block size required"
+        else:
+            assert (
+                input_block_size is None
+            ), "input block size cannot be used without processes"
+            assert (
+                output_block_size is None
+            ), "output block size cannot be used without processes"
+
         self.__storages = storages
         self.__max_batch_size = max_batch_size
         self.__max_batch_time = max_batch_time
@@ -578,24 +589,32 @@ class MultistorageConsumerProcessingStrategyFactory(
         # 2. Filter out any messages that do not apply to any storage.
         # 3. Transform the messages using the selected storages.
         # 4. Route the messages to the collector for each storage.
+        collect = CollectStep(
+            self.__build_collector,
+            commit,
+            self.__max_batch_size,
+            self.__max_batch_time,
+        )
+
+        strategy: ProcessingStrategy[MultistorageKafkaPayload]
+
+        if self.__processes is None:
+            strategy = TransformStep(process_message_multistorage, collect)
+        else:
+            assert self.__input_block_size is not None
+            assert self.__output_block_size is not None
+            strategy = ParallelTransformStep(
+                process_message_multistorage,
+                collect,
+                self.__processes,
+                self.__max_batch_size,
+                self.__max_batch_time,
+                self.__input_block_size,
+                self.__output_block_size,
+                self.__metrics,
+            )
+
         return TransformStep(
             self.__find_destination_storages,
-            FilterStep(
-                self.__has_destination_storages,
-                ParallelTransformStep(
-                    process_message_multistorage,
-                    CollectStep(
-                        self.__build_collector,
-                        commit,
-                        self.__max_batch_size,
-                        self.__max_batch_time,
-                    ),
-                    self.__processes,
-                    self.__max_batch_size,
-                    self.__max_batch_time,
-                    self.__input_block_size,
-                    self.__output_block_size,
-                    self.__metrics,
-                ),
-            ),
+            FilterStep(self.__has_destination_storages, strategy,),
         )
