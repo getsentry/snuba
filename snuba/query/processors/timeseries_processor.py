@@ -57,10 +57,22 @@ class TimeSeriesProcessor(QueryProcessor):
                                 [
                                     String("toStartOfHour"),
                                     String("toStartOfMinute"),
+                                    String("toStartOfDay"),
                                     String("toDate"),
                                 ]
                             ),
                             (column_match, LiteralMatch(Any(str))),
+                        ),
+                        FunctionCallMatch(
+                            Or(
+                                [
+                                    String("toStartOfHour"),
+                                    String("toStartOfMinute"),
+                                    String("toStartOfDay"),
+                                    String("toDate"),
+                                ]
+                            ),
+                            (column_match,),
                         ),
                         FunctionCallMatch(
                             String("toDateTime"),
