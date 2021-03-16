@@ -40,6 +40,7 @@ from confluent_kafka import TopicPartition as ConfluentTopicPartition
 from snuba import settings
 from snuba.datasets.storages import StorageKey
 from snuba.utils.concurrent import execute
+from snuba.utils.logging import pylog_to_syslog_level
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
 from snuba.utils.streams.backends.abstract import (
     Consumer,
@@ -408,7 +409,9 @@ class KafkaConsumer(Consumer[KafkaPayload]):
             Partition(Topic(message.topic()), message.partition()),
             message.offset(),
             KafkaPayload(
-                message.key(), message.value(), headers if headers is not None else [],
+                message.key(),
+                message.value(),
+                headers if headers is not None else [],
             ),
             datetime.utcfromtimestamp(message.timestamp()[1] / 1000.0),
         )
@@ -695,6 +698,15 @@ def get_default_kafka_configuration(
 
     if override_params:
         broker_config.update(override_params)
+
+    broker_config.update(
+        {
+            "debug": settings.DEBUG,
+            "log_level": pylog_to_syslog_level(getattr(logging, settings.LOG_LEVEL)),
+            "log.queue": True,
+        }
+    )
+
     return broker_config
 
 
@@ -845,7 +857,9 @@ class KafkaProducer(Producer[KafkaPayload]):
                 future.set_exception(error)
 
     def produce(
-        self, destination: Union[Topic, Partition], payload: KafkaPayload,
+        self,
+        destination: Union[Topic, Partition],
+        payload: KafkaPayload,
     ) -> Future[Message[KafkaPayload]]:
         if self.__shutdown_requested.is_set():
             raise RuntimeError("producer has been closed")
