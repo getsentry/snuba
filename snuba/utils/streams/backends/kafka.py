@@ -701,11 +701,13 @@ def get_default_kafka_configuration(
 
     broker_config.update(
         {
-            "debug": settings.DEBUG,
             "log_level": pylog_to_syslog_level(getattr(logging, settings.LOG_LEVEL)),
-            "log.queue": True,
+            "log.queue": "true",
         }
     )
+
+    if settings.DEBUG:
+        broker_config["debug"] = "all"
 
     return broker_config
 
