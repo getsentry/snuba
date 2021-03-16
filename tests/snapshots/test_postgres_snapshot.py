@@ -1,4 +1,8 @@
-import os  # NOQA
+from snuba.snapshots import (
+    ColumnConfig,
+    DateFormatPrecision,
+    DateTimeFormatterConfig,
+)  # NOQA
 import pytest
 
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
@@ -15,15 +19,24 @@ META_FILE = """
     "content": [
         {
             "table": "sentry_groupedmessage",
+            "zip": true,
             "columns": [
-                "id", "status"
+                {"name": "id"},
+                {"name": "status"}
             ]
         },
         {
             "table": "sentry_groupasignee",
+            "zip": false,
             "columns": [
-                "id",
-                "project_id"
+                {"name": "id"},
+                {
+                    "name": "a_date",
+                    "formatter": {
+                        "type": "datetime",
+                        "precision": "second"
+                    }
+                }
             ]
         }
     ],
@@ -63,13 +76,27 @@ class TestPostgresSnapshot:
         assert descriptor.xmin == 3372750
         assert descriptor.xip_list == []
         tables = {
-            table_config.table: table_config.columns
+            table_config.table: (table_config.columns, table_config.zip)
             for table_config in descriptor.tables
         }
         assert "sentry_groupedmessage" in tables
-        assert tables["sentry_groupedmessage"] == ["id", "status"]
+        assert tables["sentry_groupedmessage"] == (
+            [ColumnConfig("id"), ColumnConfig("status")],
+            True,
+        )
         assert "sentry_groupasignee" in tables
-        assert tables["sentry_groupasignee"] == ["id", "project_id"]
+        assert tables["sentry_groupasignee"] == (
+            [
+                ColumnConfig("id"),
+                ColumnConfig(
+                    "a_date",
+                    formatter=DateTimeFormatterConfig(
+                        precision=DateFormatPrecision.SECOND
+                    ),
+                ),
+            ],
+            False,
+        )
 
         with snapshot.get_table_file("sentry_groupedmessage") as table:
             line = next(table)
