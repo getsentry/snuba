@@ -475,3 +475,38 @@ class TestReplacer:
         )
 
         assert self.replacer.process_message(self._wrap(message)) is None
+
+    def test_tombstone_events_process(self) -> None:
+        timestamp = datetime.now(tz=pytz.utc)
+        message = (
+            2,
+            "tombstone_events",
+            {
+                "project_id": self.project_id,
+                "event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"],
+                "datetime": timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            },
+        )
+
+        replacement = self.replacer.process_message(self._wrap(message))
+
+        assert replacement is not None
+
+        assert (
+            re.sub("[\n ]+", " ", replacement.count_query_template).strip()
+            == "SELECT count() FROM %(table_name)s FINAL PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s) AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s) WHERE project_id = %(project_id)s AND NOT deleted"
+        )
+        assert (
+            re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
+            == "INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s) AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s) WHERE project_id = %(project_id)s AND NOT deleted"
+        )
+
+        assert replacement.query_args == {
+            "event_ids": "'00e24a150d7f4ee4b142b61b4d893b6d'",
+            "project_id": self.project_id,
+            "required_columns": "event_id, project_id, group_id, timestamp, deleted, retention_days",
+            "select_columns": "event_id, project_id, group_id, timestamp, 1, retention_days",
+            "old_primary_hash": "NULL",
+        }
+
+        assert replacement.query_time_flags == (None, self.project_id,)
