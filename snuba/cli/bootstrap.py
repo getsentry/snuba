@@ -47,13 +47,16 @@ def bootstrap(
         from confluent_kafka.admin import AdminClient, NewTopic
 
         override_params = {
-            # Override rdkafka loglevel to be critical as we expect
-            # failures when trying to connect (Kafka may not be up yet)
-            "log_level": pylog_to_syslog_level(logging.CRITICAL),
             # Same as above: override socket timeout as we expect Kafka
             # to not getting ready for a while
             "socket.timeout.ms": 1000,
         }
+        if logger.getEffectiveLevel() != logging.DEBUG:
+            # Override rdkafka loglevel to be critical unless we are
+            # debugging as we expect failures when trying to connect
+            # (Kafka may not be up yet)
+            override_params["log_level"] = pylog_to_syslog_level(logging.CRITICAL)
+
         attempts = 0
         while True:
             try:
