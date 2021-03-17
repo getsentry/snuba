@@ -289,9 +289,14 @@ def _build_snql_post_methods(
 
         legacy_data = json.loads(legacy_resp.data)
         snql_data = json.loads(snql_resp.data)
-        assert (
-            legacy_data["sql"] == snql_data["sql"]
-        ), f"LEGACY:\n{legacy_data['sql']}\n\nSNQL:\n{snql_data['sql']}\n"
+
+        if legacy_data.get("sql"):
+            assert (
+                legacy_data["sql"] == snql_data["sql"]
+            ), f"LEGACY:\n{legacy_data['sql']}\n\nSNQL:\n{snql_data['sql']}\n"
+        else:
+            # There was a validation error, the response should be identical
+            assert legacy_data == snql_data
 
         return snql_resp
 

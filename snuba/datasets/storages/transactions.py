@@ -21,7 +21,6 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.event_id_column_processor import EventIdColumnProcessor
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
@@ -103,7 +102,6 @@ storage = WritableTableStorage(
                 PromotionSpec("trace.span_id", "span_id", HexIntContextType()),
             },
         ),
-        EventIdColumnProcessor(),
         ArrayJoinKeyValueOptimizer("tags"),
         ArrayJoinKeyValueOptimizer("measurements"),
         UUIDColumnProcessor(set(["event_id", "trace_id"])),
