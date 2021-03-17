@@ -8,6 +8,7 @@ from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging
 from snuba.migrations.connect import check_clickhouse_connections
 from snuba.migrations.runner import Runner
+from snuba.utils.logging import pylog_to_syslog_level
 from snuba.utils.streams.backends.kafka import get_default_kafka_configuration
 
 
@@ -45,6 +46,14 @@ def bootstrap(
         logger.debug("Using Kafka with %r", bootstrap_server)
         from confluent_kafka.admin import AdminClient, NewTopic
 
+        override_params = {
+            # Override rdkafka loglevel to be critical as we expect
+            # failures when trying to connect (Kafka may not be up yet)
+            "log_level": pylog_to_syslog_level(logging.CRITICAL),
+            # Same as above: override socket timeout as we expect Kafka
+            # to not getting ready for a while
+            "socket.timeout.ms": 1000,
+        }
         attempts = 0
         while True:
             try:
@@ -52,7 +61,7 @@ def bootstrap(
                 client = AdminClient(
                     get_default_kafka_configuration(
                         bootstrap_servers=bootstrap_server,
-                        override_params={"socket.timeout.ms": 1000},
+                        override_params=override_params,
                     )
                 )
                 client.list_topics(timeout=1)

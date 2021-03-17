@@ -696,15 +696,13 @@ def get_default_kafka_configuration(
                 f"The `{configuration_key}` configuration key is not supported."
             )
 
-    if override_params:
-        broker_config.update(override_params)
-
     broker_config["log_level"] = pylog_to_syslog_level(logger.getEffectiveLevel())
-    # Without this, rdkafka simply blurts log lines out into stdout/stderr
-    broker_config["log.queue"] = "true"
 
     if settings.DEBUG:
         broker_config["debug"] = "all"
+
+    if override_params:
+        broker_config.update(override_params)
 
     return broker_config
 
