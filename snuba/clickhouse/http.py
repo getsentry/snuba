@@ -81,6 +81,34 @@ class InsertStatement:
 
 
 class HTTPWriteBatch:
+    """
+    Sends a batch of binary data as payload of a Clickhouse insert statement.
+    It takes care of issuing the HTTP request and parsing the response.
+
+    Data is provided in blocks of data (expressed as bytes). Each call to
+    `append` adds a block to the batch.
+    One HTTP request is created at the initialization and remains alive for
+    the lifetime of the object itself.
+    In order to issue a separate INSERT, a new instance has to be created.
+
+    Batches can be broken into chunks by defining the chunk size. This drives
+    the size of each element of the iterable that is provided to the
+    `urlopen` method.
+    Example:
+    Values appended:
+    [ v1, v2, v3, v4]
+    If chunk size is 2, these values will be sent:
+    [v1, v2] [v3, v4]
+
+    Batches can be partially or entirely buffered locally. This behavior
+    is controlled by `buffer_size`.
+    Setting buffer_size to 0 means all the values are enqueued locally
+    while they are sent to the server. `append` would not block in this
+    case.
+    If the buffer size is higher and the buffer is full, the `append`
+    command will block while the value is sent to the server.
+    """
+
     def __init__(
         self,
         executor: ThreadPoolExecutor,
