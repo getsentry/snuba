@@ -6,7 +6,7 @@ import simplejson as json
 from typing import Any, Callable, Tuple, Union
 
 
-from snuba import settings, state
+from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
@@ -207,7 +207,6 @@ class TestSessionsApi(BaseApiTest):
     def test_session_small_granularity(
         self, get_project_id: Callable[[], int], granularity: int
     ):
-        state.set_config("allow_subhour_sessions", 1)
         project_id = get_project_id()
         self.generate_session_events(project_id)
         response = self.app.post(
@@ -248,3 +247,30 @@ class TestSessionsApi(BaseApiTest):
         assert data["data"][2]["sessions_errored"] == 2
         assert data["data"][2]["users"] == 1
         assert data["data"][2]["users_errored"] == 1
+
+    def test_minute_granularity_range(self, get_project_id: Callable[[], int]):
+        project_id = get_project_id()
+        self.generate_session_events(project_id)
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "sessions",
+                    "organization": 1,
+                    "project": project_id,
+                    "selected_columns": ["bucketed_started", "sessions"],
+                    "groupby": ["bucketed_started"],
+                    "granularity": 60,
+                    # `skew` is 3h
+                    "from_date": (self.started - self.skew - self.skew).isoformat(),
+                    "to_date": (self.started + self.skew + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 400, response.data
+
+        assert data["error"] == {
+            "type": "invalid_query",
+            "message": "Minute-resolution queries are restricted to a 7-hour time window.",
+        }

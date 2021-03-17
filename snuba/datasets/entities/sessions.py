@@ -1,7 +1,7 @@
 from datetime import timedelta
 from typing import Mapping, Sequence
 
-from snuba import environment, state
+from snuba import environment
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToCurriedFunction,
     ColumnToFunction,
@@ -217,10 +217,6 @@ class SessionsQueryStorageSelector(QueryStorageSelector):
                 else "raw",
             },
         )
-
-        allow_subhour_sessions = state.get_config("allow_subhour_sessions", 0)
-        if not allow_subhour_sessions:
-            use_materialized_storage = True
 
         if use_materialized_storage:
             return StorageAndMappers(
