@@ -84,8 +84,6 @@ selector_tests = [
             "selected_columns": ["sessions", "bucketed_started"],
             "groupby": ["bucketed_started"],
             "granularity": 60,
-            # XXX: using `conditions` here, as `from_date`/`to_date` is not being
-            # correctly translated in the test code?
             "conditions": [
                 ("started", ">=", "2019-09-19T10:00:00"),
                 ("started", "<", "2019-09-19T12:00:00"),
@@ -104,13 +102,8 @@ def test_select_storage(
     query_body: MutableMapping[str, Any], expected_table: str
 ) -> None:
     sessions = get_dataset("sessions")
-    sessions_entity = sessions.get_default_entity()
-    settings = HTTPRequestSettings()
-
     query = parse_query(query_body, sessions)
-    for processor in sessions_entity.get_query_processors():
-        processor.process_query(query, settings)
-    request = Request("", query_body, query, settings, "")
+    request = Request("", query_body, query, HTTPRequestSettings(), "")
 
     def query_runner(
         query: Query, settings: RequestSettings, reader: Reader
@@ -118,6 +111,6 @@ def test_select_storage(
         assert query.get_from_clause().table_name == expected_table
         return QueryResult({}, {})
 
-    sessions_entity.get_query_pipeline_builder().build_execution_pipeline(
+    sessions.get_default_entity().get_query_pipeline_builder().build_execution_pipeline(
         request, query_runner
     ).execute()
