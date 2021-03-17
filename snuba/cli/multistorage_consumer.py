@@ -65,14 +65,12 @@ logger = logging.getLogger(__name__)
     type=int,
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
+@click.option("--processes", type=int)
 @click.option(
-    "--processes", type=int, default=1,
+    "--input-block-size", type=int,
 )
 @click.option(
-    "--input-block-size", type=int, default=int(32 * 1e6),
-)
-@click.option(
-    "--output-block-size", type=int, default=int(32 * 1e6),
+    "--output-block-size", type=int,
 )
 @click.option("--log-level")
 def multistorage_consumer(
@@ -83,11 +81,20 @@ def multistorage_consumer(
     auto_offset_reset: str,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
-    processes: int,
-    input_block_size: int,
-    output_block_size: int,
+    processes: Optional[int],
+    input_block_size: Optional[int],
+    output_block_size: Optional[int],
     log_level: Optional[str] = None,
 ) -> None:
+
+    DEFAULT_BLOCK_SIZE = int(32 * 1e6)
+
+    if processes is not None:
+        if input_block_size is None:
+            input_block_size = DEFAULT_BLOCK_SIZE
+
+        if output_block_size is None:
+            output_block_size = DEFAULT_BLOCK_SIZE
 
     setup_logging(log_level)
     setup_sentry()
