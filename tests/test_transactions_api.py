@@ -311,7 +311,7 @@ class TestTransactionsApi(BaseApiTest):
 
         assert len(data["data"]) == 180
         first_trace_id = data["data"][0]["trace_id"]
-        assert len(first_trace_id) == 36
+        assert len(first_trace_id) == 32
         assert data["data"][0]["ip_address"] == "8.8.8.8"
 
         response = self.post(

@@ -33,7 +33,7 @@ class TestDiscoverApi(BaseApiTest):
 
     def setup_method(self, test_method: Any) -> None:
         super().setup_method(test_method)
-        self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
+        self.trace_id = "7400045b25c443b885914600aa83ad04"
         self.event = get_raw_event()
         self.project_id = self.event["project_id"]
         self.skew = timedelta(minutes=180)
@@ -1044,8 +1044,7 @@ class TestDiscoverApi(BaseApiTest):
             entity="discover_transactions",
         )
         data = json.loads(response.data)
-        assert response.status_code == 200, response.data
-        assert len(data["data"]) == 0, data
+        assert data["error"]["message"] == "Not a valid UUID string"
 
     def test_null_processor_with_if_function(self) -> None:
         response = self.post(
