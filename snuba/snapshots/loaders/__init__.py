@@ -14,5 +14,9 @@ class BulkLoader(ABC):
     """
 
     @abstractmethod
-    def load(self, writer: BufferedWriterWrapper[JSONRow, WriterTableRow]) -> None:
+    def load(
+        self,
+        writer: BufferedWriterWrapper[JSONRow, WriterTableRow],
+        ignore_existing_data: bool,
+    ) -> None:
         raise NotImplementedError

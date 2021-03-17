@@ -23,9 +23,20 @@ from snuba.writer import BufferedWriterWrapper
     help="Source of the dump. Depending on the storage it may have different meaning.",
 )
 @click.option("--dest-table", help="Clickhouse destination table.")
+@click.option(
+    "--ignore_existing_data",
+    default=False,
+    type=bool,
+    help="Does not stop if data is present in the table",
+)
 @click.option("--log-level", help="Logging level to use.")
 def bulk_load(
-    *, storage_name: str, dest_table: str, source: str, log_level: Optional[str] = None,
+    *,
+    storage_name: str,
+    dest_table: str,
+    source: str,
+    ignore_existing_data: bool,
+    log_level: Optional[str] = None,
 ) -> None:
     setup_logging(log_level)
     setup_sentry()
@@ -60,4 +71,4 @@ def bulk_load(
         JSONRowEncoder(),
     )
 
-    loader.load(writer)
+    loader.load(writer, ignore_existing_data)
