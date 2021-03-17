@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from snuba.clickhouse.http import JSONRow
-from snuba.writer import BufferedWriterWrapper, WriterTableRow
+from snuba.writer import BatchWriter, BufferedWriterWrapper, WriterTableRow
 
 
 class BulkLoader(ABC):
@@ -18,5 +18,11 @@ class BulkLoader(ABC):
         self,
         writer: BufferedWriterWrapper[JSONRow, WriterTableRow],
         ignore_existing_data: bool,
+    ) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def load_preprocessed(
+        self, writer: BatchWriter[bytes], ignore_existing_data: bool,
     ) -> None:
         raise NotImplementedError

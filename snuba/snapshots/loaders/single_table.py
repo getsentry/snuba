@@ -5,9 +5,11 @@ from snuba.clickhouse.http import JSONRow
 from snuba.clickhouse.native import ClickhousePool
 from snuba.snapshots import BulkLoadSource, SnapshotTableRow
 from snuba.snapshots.loaders import BulkLoader
-from snuba.writer import BufferedWriterWrapper, WriterTableRow
+from snuba.writer import BatchWriter, BufferedWriterWrapper, WriterTableRow
 
 RowProcessor = Callable[[SnapshotTableRow], WriterTableRow]
+
+logger = logging.getLogger("snuba.bulk-loader")
 
 
 class SingleTableBulkLoader(BulkLoader):
@@ -29,13 +31,7 @@ class SingleTableBulkLoader(BulkLoader):
         self.__row_processor = row_processor
         self.__clickhouse = clickhouse
 
-    def load(
-        self,
-        writer: BufferedWriterWrapper[JSONRow, WriterTableRow],
-        ignore_existing_data: bool,
-    ) -> None:
-        logger = logging.getLogger("snuba.bulk-loader")
-
+    def __validate_table(self, ignore_existing_data: bool) -> None:
         clickhouse_tables = self.__clickhouse.execute("show tables")
         if (self.__dest_table,) not in clickhouse_tables:
             raise ValueError("Destination table %s does not exists" % self.__dest_table)
@@ -47,10 +43,16 @@ class SingleTableBulkLoader(BulkLoader):
             if table_content != [(0,)]:
                 raise ValueError("Destination Table is not empty")
 
+    def load(
+        self,
+        writer: BufferedWriterWrapper[JSONRow, WriterTableRow],
+        ignore_existing_data: bool,
+    ) -> None:
+        self.__validate_table(ignore_existing_data)
         descriptor = self.__source.get_descriptor()
         logger.info("Loading snapshot %s", descriptor.id)
 
-        with self.__source.get_table_file(self.__source_table) as table:
+        with self.__source.get_parsed_table_file(self.__source_table) as table:
             logger.info("Loading table %s from file", self.__source_table)
             row_count = 0
             with writer as buffer_writer:
@@ -59,3 +61,15 @@ class SingleTableBulkLoader(BulkLoader):
                     buffer_writer.write(clickhouse_data)
                     row_count += 1
             logger.info("Load complete %d records loaded", row_count)
+
+    def load_preprocessed(
+        self, writer: BatchWriter[bytes], ignore_existing_data: bool,
+    ) -> None:
+        self.__validate_table(ignore_existing_data)
+        descriptor = self.__source.get_descriptor()
+        logger.info("Loading snapshot %s", descriptor.id)
+
+        with self.__source.get_preprocessed_table_file(self.__source_table) as table:
+            logger.info("Loading preprocessed table %s from file", self.__source_table)
+            writer.write(table)
+            logger.info("Load complete")

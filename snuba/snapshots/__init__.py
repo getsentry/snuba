@@ -103,7 +103,14 @@ class BulkLoadSource(ABC):
 
     @abstractmethod
     @contextmanager
-    def get_table_file(
+    def get_parsed_table_file(
         self, table: str
     ) -> Generator[Iterable[SnapshotTableRow], None, None]:
+        raise NotImplementedError
+
+    @abstractmethod
+    @contextmanager
+    def get_preprocessed_table_file(
+        self, table: str
+    ) -> Generator[Iterable[bytes], None, None]:
         raise NotImplementedError
