@@ -4,8 +4,8 @@ import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from queue import SimpleQueue
-from typing import Any, cast, Iterable, Iterator, Mapping, Optional, Union
+from queue import Queue, SimpleQueue
+from typing import Any, Sequence, cast, Iterable, Iterator, Mapping, Optional, Union
 from urllib.parse import urlencode
 
 import rapidjson
@@ -33,7 +33,7 @@ CLICKHOUSE_ERROR_RE = re.compile(
 JSONRow = bytes  # a single row in JSONEachRow format
 
 
-class JSONRowEncoder(Encoder[JSONRow, WriterTableRow]):
+class JSONRowEncoder(Encoder[bytes, WriterTableRow]):
     def __default(self, value: Any) -> Any:
         if isinstance(value, datetime):
             return value.strftime(DATETIME_FORMAT)
@@ -46,22 +46,59 @@ class JSONRowEncoder(Encoder[JSONRow, WriterTableRow]):
         )
 
 
+class InsertStatement:
+    def __init__(self, table_name: str) -> None:
+        self.__table_name = table_name
+        self.__database: Optional[str] = None
+        self.__format: Optional[str] = None
+        self.__column_names: Optional[Sequence[str]] = None
+
+    def with_database(self, database_name: str) -> InsertStatement:
+        self.__database = database_name
+        return self
+
+    def with_format(self, format: str) -> InsertStatement:
+        self.__format = format
+        return self
+
+    def with_columns(self, column_names: Sequence[str]) -> InsertStatement:
+        self.__column_names = column_names
+        return self
+
+    def get_qualified_table(self) -> str:
+        return (
+            f"{self.__database}.{self.__table_name}"
+            if self.__database
+            else self.__table_name
+        )
+
+    def build_statement(self) -> str:
+        columns_statement = (
+            f"({','.join(self.__column_names)}) " if self.__column_names else ""
+        )
+        format_statement = f" FORMAT {self.__format}" if self.__format else ""
+        return f"INSERT INTO {self.__database}.{self.__table_name} {columns_statement} {format_statement}"
+
+
 class HTTPWriteBatch:
     def __init__(
         self,
         executor: ThreadPoolExecutor,
         pool: HTTPConnectionPool,
-        database: str,
-        table_name: str,
         user: str,
         password: str,
+        statement: InsertStatement,
+        encoding: Optional[str],
+        buffer_size: int,  # 0 means unbounded
         options: Mapping[str, Any],  # should be ``Mapping[str, str]``?
         chunk_size: Optional[int] = None,
     ) -> None:
         if chunk_size is None:
             chunk_size = settings.CLICKHOUSE_HTTP_CHUNK_SIZE
 
-        self.__queue: SimpleQueue[Union[JSONRow, None]] = SimpleQueue()
+        self.__queue: Union[
+            Queue[Union[bytes, None]], SimpleQueue[Union[bytes, None]]
+        ] = Queue(buffer_size) if buffer_size else SimpleQueue()
 
         body = self.__read_until_eof()
         if chunk_size > 1:
@@ -69,21 +106,18 @@ class HTTPWriteBatch:
         elif not chunk_size > 0:
             raise ValueError("chunk size must be greater than zero")
 
+        encoding_header = {"Content-Encoding": encoding} if encoding else {}
+
         self.__result = executor.submit(
             pool.urlopen,
             "POST",
-            "/?"
-            + urlencode(
-                {
-                    **options,
-                    "query": f"INSERT INTO {database}.{table_name} FORMAT JSONEachRow",
-                }
-            ),
+            "/?" + urlencode({**options, "query": statement.build_statement()}),
             headers={
                 "X-ClickHouse-User": user,
                 "X-ClickHouse-Key": password,
                 "Connection": "keep-alive",
                 "Accept-Encoding": "gzip,deflate",
+                **encoding_header,
             },
             body=body,
         )
@@ -95,7 +129,7 @@ class HTTPWriteBatch:
     def __repr__(self) -> str:
         return f"<{type(self).__name__}: {self.__rows} rows ({self.__size} bytes)>"
 
-    def __read_until_eof(self) -> Iterator[JSONRow]:
+    def __read_until_eof(self) -> Iterator[bytes]:
         while True:
             value = self.__queue.get()
             if value is None:
@@ -104,7 +138,7 @@ class HTTPWriteBatch:
 
             yield value
 
-    def append(self, value: JSONRow) -> None:
+    def append(self, value: bytes) -> None:
         assert not self.__closed
 
         self.__queue.put(value)
@@ -135,40 +169,43 @@ class HTTPWriteBatch:
                 )
 
 
-class HTTPBatchWriter(BatchWriter[JSONRow]):
+class HTTPBatchWriter(BatchWriter[bytes]):
     def __init__(
         self,
-        table_name: str,
         host: str,
         port: int,
         user: str,
         password: str,
-        database: str,
         metrics: MetricsBackend,  # deprecated
+        statement: InsertStatement,
+        encoding: Optional[str],
         options: Optional[Mapping[str, Any]] = None,
         chunk_size: Optional[int] = None,
+        buffer_size: int = 0,
     ):
         self.__pool = HTTPConnectionPool(host, port)
         self.__executor = ThreadPoolExecutor()
 
         self.__options = options if options is not None else {}
-        self.__table_name = table_name
         self.__user = user
         self.__password = password
-        self.__database = database
+        self.__encoding = encoding
+        self.__statement = statement
+        self.__buffer_size = buffer_size
         self.__chunk_size = chunk_size
 
     def __repr__(self) -> str:
-        return f"<{type(self).__name__}: {self.__database}.{self.__table_name} on {self.__pool.host}:{self.__pool.port}>"
+        return f"<{type(self).__name__}: {self.__statement.get_qualified_table()} on {self.__pool.host}:{self.__pool.port}>"
 
-    def write(self, values: Iterable[JSONRow]) -> None:
+    def write(self, values: Iterable[bytes]) -> None:
         batch = HTTPWriteBatch(
             self.__executor,
             self.__pool,
-            self.__database,
-            self.__table_name,
             self.__user,
             self.__password,
+            self.__statement,
+            self.__encoding,
+            self.__buffer_size,
             self.__options,
             self.__chunk_size,
         )
