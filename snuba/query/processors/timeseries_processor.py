@@ -216,7 +216,8 @@ def extract_granularity_from_query(query: Query, column: str) -> Optional[int]:
                 ]
             ),
         ),
-        (column_match, LiteralMatch(Any(str))),
+        (column_match,),
+        with_optionals=True,
     )
     expr_match = FunctionCallMatch(
         String("toDateTime"),
