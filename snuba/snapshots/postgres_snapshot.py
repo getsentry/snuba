@@ -145,6 +145,17 @@ class PostgresSnapshot(BulkLoadSource):
     def get_descriptor(self) -> PostgresSnapshotDescriptor:
         return self.__descriptor
 
+    def __get_table_path(self, table_name: str) -> str:
+        table_desc = self.__descriptor.get_table(table_name)
+        table_file_name = (
+            f"{table_name}.csv" if not table_desc.zip else f"{table_name}.csv.gz"
+        )
+        return os.path.join(self.__path, "tables", table_file_name)
+
+    def get_table_file_size(self, table_name: str) -> int:
+        path = self.__get_table_path(table_name)
+        return os.stat(path).st_size
+
     @contextmanager
     def get_parsed_table_file(
         self, table: str,
@@ -152,7 +163,7 @@ class PostgresSnapshot(BulkLoadSource):
         table_desc = self.__descriptor.get_table(table)
         assert not table_desc.zip, "Cannot parse a gzip table file on the fly"
 
-        table_path = os.path.join(self.__path, "tables", "%s.csv" % table)
+        table_path = self.__get_table_path(table)
         try:
             with open(table_path, "r") as table_file:
                 csv_file = csv.DictReader(table_file)
@@ -195,10 +206,7 @@ class PostgresSnapshot(BulkLoadSource):
     def get_preprocessed_table_file(
         self, table: str
     ) -> Generator[Iterable[bytes], None, None]:
-        table_desc = self.__descriptor.get_table(table)
-
-        table_file_name = f"{table}.csv" if not table_desc.zip else f"{table}.csv.gz"
-        table_path = os.path.join(self.__path, "tables", table_file_name)
+        table_path = self.__get_table_path(table)
 
         try:
             with open(table_path, "rb") as table_file:

@@ -1,12 +1,15 @@
 import logging
+from functools import partial
 from typing import Optional
 
 import click
+import progressbar
 from snuba import environment, settings
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import CDC_STORAGES, get_cdc_storage
 from snuba.environment import setup_logging, setup_sentry
+from snuba.snapshots.loaders import ProgressCallback
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
 from snuba.writer import BufferedWriterWrapper
 
@@ -35,6 +38,9 @@ from snuba.writer import BufferedWriterWrapper
     is_flag=True,
     help="Signals that the table is ready to pipe into Clickhouse. No need to parse.",
 )
+@click.option(
+    "--show-progress", default=False, is_flag=True, help="Shows a progress bar.",
+)
 @click.option("--log-level", help="Logging level to use.")
 def bulk_load(
     *,
@@ -43,6 +49,7 @@ def bulk_load(
     source: str,
     ignore_existing_data: bool,
     pre_processed: bool,
+    show_progress: bool,
     log_level: Optional[str] = None,
 ) -> None:
     setup_logging(log_level)
@@ -69,6 +76,17 @@ def bulk_load(
     )
     # TODO: see whether we need to pass options to the writer
 
+    def progress_callback(bar: progressbar.ProgressBar, progress: int) -> None:
+        bar.update(progress)
+
+    if show_progress:
+        progress = progressbar.ProgressBar(
+            max_value=snapshot_source.get_table_file_size(storage.get_postgres_table())
+        )
+        progress_func: Optional[ProgressCallback] = partial(progress_callback, progress)
+    else:
+        progress_func = None
+
     table_descriptor = snapshot_source.get_descriptor().get_table(
         storage.get_postgres_table()
     )
@@ -79,7 +97,9 @@ def bulk_load(
             column_names=[c.name for c in table_descriptor.columns or []],
             table_name=dest_table,
         )
-        loader.load_preprocessed(writer, ignore_existing_data)
+        loader.load_preprocessed(
+            writer, ignore_existing_data, progress_callback=progress_func
+        )
     else:
         buffer_writer = BufferedWriterWrapper(
             table_writer.get_batch_writer(
@@ -90,4 +110,6 @@ def bulk_load(
             settings.BULK_CLICKHOUSE_BUFFER,
             JSONRowEncoder(),
         )
-        loader.load(buffer_writer, ignore_existing_data)
+        loader.load(
+            buffer_writer, ignore_existing_data, progress_callback=progress_func
+        )

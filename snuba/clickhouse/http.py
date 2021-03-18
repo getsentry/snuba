@@ -33,7 +33,7 @@ CLICKHOUSE_ERROR_RE = re.compile(
 JSONRow = bytes  # a single row in JSONEachRow format
 
 
-class JSONRowEncoder(Encoder[JSONRow, WriterTableRow]):
+class JSONRowEncoder(Encoder[bytes, WriterTableRow]):
     def __default(self, value: Any) -> Any:
         if isinstance(value, datetime):
             return value.strftime(DATETIME_FORMAT)
