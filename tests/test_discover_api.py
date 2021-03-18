@@ -873,6 +873,54 @@ class TestDiscoverApi(BaseApiTest):
         assert "measurements[lcp]" in data["data"][0]
         assert data["data"][0]["measurements[lcp]"] is None
 
+    def test_individual_breakdown(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": [
+                        "event_id",
+                        "span_op_breakdowns[ops.db]",
+                        "span_op_breakdowns[ops.http]",
+                        "span_op_breakdowns[total.time]",
+                        "span_op_breakdowns[not_found]",
+                    ],
+                    "limit": 1,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+            entity="discover_transactions",
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert data["data"][0]["event_id"] != "0"
+        assert data["data"][0]["span_op_breakdowns[ops.db]"] == 62.512
+        assert data["data"][0]["span_op_breakdowns[ops.http]"] == 109.774
+        assert data["data"][0]["span_op_breakdowns[total.time]"] == 172.286
+        assert data["data"][0]["span_op_breakdowns[not_found]"] is None
+
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["group_id", "span_op_breakdowns[ops.db]"],
+                    "limit": 1,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+            entity="discover",
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert "span_op_breakdowns[ops.db]" in data["data"][0]
+        assert data["data"][0]["span_op_breakdowns[ops.db]"] is None
+
     def test_functions_called_on_null(self) -> None:
         response = self.post(
             json.dumps(

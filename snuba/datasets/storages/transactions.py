@@ -116,6 +116,7 @@ storage = WritableTableStorage(
         ),
         ArrayJoinKeyValueOptimizer("tags"),
         ArrayJoinKeyValueOptimizer("measurements"),
+        ArrayJoinKeyValueOptimizer("span_op_breakdowns"),
         PrewhereProcessor(
             [
                 "event_id",

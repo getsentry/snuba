@@ -272,6 +272,7 @@ def generate_transactions() -> None:
         raw_transaction = get_raw_transaction()
         # Older versions of this table did not have measurements
         del raw_transaction["data"]["measurements"]
+        del raw_transaction["data"]["breakdowns"]
 
         processed = (
             table_writer.get_stream_loader()
