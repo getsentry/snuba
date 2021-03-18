@@ -57,10 +57,12 @@ class TimeSeriesProcessor(QueryProcessor):
                                 [
                                     String("toStartOfHour"),
                                     String("toStartOfMinute"),
+                                    String("toStartOfDay"),
                                     String("toDate"),
                                 ]
                             ),
-                            (column_match, LiteralMatch(Any(str))),
+                            (column_match,),
+                            with_optionals=True,
                         ),
                         FunctionCallMatch(
                             String("toDateTime"),
@@ -205,9 +207,17 @@ def extract_granularity_from_query(query: Query, column: str) -> Optional[int]:
     fn_match = FunctionCallMatch(
         Param(
             "time_fn",
-            Or([String("toStartOfHour"), String("toStartOfMinute"), String("toDate")]),
+            Or(
+                [
+                    String("toStartOfHour"),
+                    String("toStartOfMinute"),
+                    String("toStartOfDay"),
+                    String("toDate"),
+                ]
+            ),
         ),
-        (column_match, LiteralMatch(Any(str))),
+        (column_match,),
+        with_optionals=True,
     )
     expr_match = FunctionCallMatch(
         String("toDateTime"),
