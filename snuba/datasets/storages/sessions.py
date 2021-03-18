@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from snuba.clickhouse.columns import (
     AggregateFunction,
     ColumnSet,
@@ -16,9 +18,14 @@ from snuba.datasets.storage import (
     ReadableTableStorage,
     WritableTableStorage,
 )
+from snuba.clickhouse.query import Query
+from snuba.clickhouse.processors import QueryProcessor
+from snuba.query.exceptions import ValidationException
+from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.request.request_settings import RequestSettings
 
 
 WRITE_LOCAL_TABLE_NAME = "sessions_raw_local"
@@ -98,13 +105,25 @@ materialized_view_schema = TableSchema(
     columns=read_columns,
 )
 
+
+class MinuteResolutionProcessor(QueryProcessor):
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+        # NOTE: the product side is restricted to a 6h window, however it rounds
+        # outwards, which extends the window to 7h.
+        from_date, to_date = get_time_range(query, "started")
+        if not from_date or not to_date or (to_date - from_date) > timedelta(hours=7):
+            raise ValidationException(
+                "Minute-resolution queries are restricted to a 7-hour time window."
+            )
+
+
 # The raw table we write onto, and that potentially we could
 # query.
 raw_storage = WritableTableStorage(
     storage_key=StorageKey.SESSIONS_RAW,
     storage_set_key=StorageSetKey.SESSIONS,
     schema=raw_schema,
-    query_processors=[],
+    query_processors=[MinuteResolutionProcessor()],
     stream_loader=build_kafka_stream_loader_from_settings(
         StorageKey.SESSIONS_RAW,
         processor=SessionsProcessor(),
