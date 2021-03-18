@@ -1,7 +1,6 @@
 import pytest
 from typing import MutableMapping, Any
 
-from snuba import state
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
 from snuba.query import SelectedExpression
@@ -85,6 +84,10 @@ selector_tests = [
             "selected_columns": ["sessions", "bucketed_started"],
             "groupby": ["bucketed_started"],
             "granularity": 60,
+            "conditions": [
+                ("started", ">=", "2019-09-19T10:00:00"),
+                ("started", "<", "2019-09-19T12:00:00"),
+            ],
         },
         "sessions_raw_local",
         id="Select raw depending on granularity",
@@ -98,7 +101,6 @@ selector_tests = [
 def test_select_storage(
     query_body: MutableMapping[str, Any], expected_table: str
 ) -> None:
-    state.set_config("allow_subhour_sessions", 1)
     sessions = get_dataset("sessions")
     query = parse_query(query_body, sessions)
     request = Request("", query_body, query, HTTPRequestSettings(), "")
