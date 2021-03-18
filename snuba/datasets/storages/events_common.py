@@ -16,6 +16,7 @@ from snuba.datasets.storages.group_id_column_processor import GroupIdColumnProce
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
+from snuba.datasets.storages.type_condition_enforcer import TypeConditionEnforcer
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
@@ -272,6 +273,7 @@ query_processors = [
         # into in redis are stored with "EVENTS" in the name, we can change this.
         replacer_state_name=None,
     ),
+    TypeConditionEnforcer(),
     GroupIdColumnProcessor(),
     MappingColumnPromoter(
         mapping_specs={

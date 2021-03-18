@@ -102,6 +102,7 @@ class SimpleAPITest(BaseApiTest):
                                 ],
                                 "retention_days": settings.DEFAULT_RETENTION_DAYS,
                                 "data": {
+                                    "type": "error",
                                     # Project N sends every Nth (mod len(hashes)) hash (and platform)
                                     "received": calendar.timegm(
                                         (
@@ -597,6 +598,7 @@ class TestApi(SimpleAPITest):
                         "primary_hash": self.hashes[0],
                         "retention_days": settings.DEFAULT_RETENTION_DAYS,
                         "data": {
+                            "type": "error",
                             "received": calendar.timegm(self.base_time.timetuple()),
                             "tags": {},
                             "exception": {
