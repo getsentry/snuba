@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import csv
-import jsonschema
 import json
 import logging
 import os.path
-
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import NewType, Generator, Iterable, Sequence
+from typing import Generator, Iterable, NewType, Sequence
 
-from snuba.snapshots import SnapshotDescriptor, TableConfig
-from snuba.snapshots import BulkLoadSource, SnapshotTableRow
+import jsonschema
+from snuba import settings
+from snuba.snapshots import (
+    BulkLoadSource,
+    SnapshotDescriptor,
+    SnapshotTableRow,
+    TableConfig,
+)
 
 Xid = NewType("Xid", int)
 
@@ -142,9 +146,12 @@ class PostgresSnapshot(BulkLoadSource):
         return self.__descriptor
 
     @contextmanager
-    def get_table_file(
+    def get_parsed_table_file(
         self, table: str,
     ) -> Generator[Iterable[SnapshotTableRow], None, None]:
+        table_desc = self.__descriptor.get_table(table)
+        assert not table_desc.zip, "Cannot parse a gzip table file on the fly"
+
         table_path = os.path.join(self.__path, "tables", "%s.csv" % table)
         try:
             with open(table_path, "r") as table_file:
@@ -178,6 +185,31 @@ class PostgresSnapshot(BulkLoadSource):
                     )
 
                 yield csv_file
+
+        except FileNotFoundError:
+            raise ValueError(
+                "The snapshot does not contain the requested table %s" % table,
+            )
+
+    @contextmanager
+    def get_preprocessed_table_file(
+        self, table: str
+    ) -> Generator[Iterable[bytes], None, None]:
+        table_desc = self.__descriptor.get_table(table)
+
+        table_file_name = f"{table}.csv" if not table_desc.zip else f"{table}.csv.gz"
+        table_path = os.path.join(self.__path, "tables", table_file_name)
+
+        try:
+            with open(table_path, "rb") as table_file:
+
+                def chunks_provider() -> Iterable[bytes]:
+                    for chunk in iter(
+                        lambda: table_file.read(settings.BULK_BINARY_LOAD_CHUNK), b""
+                    ):
+                        yield chunk
+
+                yield chunks_provider()
 
         except FileNotFoundError:
             raise ValueError(

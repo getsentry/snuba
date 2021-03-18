@@ -19,7 +19,7 @@ META_FILE = """
     "content": [
         {
             "table": "sentry_groupedmessage",
-            "zip": true,
+            "zip": false,
             "columns": [
                 {"name": "id"},
                 {"name": "status"}
@@ -27,7 +27,7 @@ META_FILE = """
         },
         {
             "table": "sentry_groupasignee",
-            "zip": false,
+            "zip": true,
             "columns": [
                 {"name": "id"},
                 {
@@ -82,7 +82,7 @@ class TestPostgresSnapshot:
         assert "sentry_groupedmessage" in tables
         assert tables["sentry_groupedmessage"] == (
             [ColumnConfig("id"), ColumnConfig("status")],
-            True,
+            False,
         )
         assert "sentry_groupasignee" in tables
         assert tables["sentry_groupasignee"] == (
@@ -95,15 +95,19 @@ class TestPostgresSnapshot:
                     ),
                 ),
             ],
-            False,
+            True,
         )
 
-        with snapshot.get_table_file("sentry_groupedmessage") as table:
+        with snapshot.get_parsed_table_file("sentry_groupedmessage") as table:
             line = next(table)
             assert line == {
                 "id": "0",
                 "status": "1",
             }
+
+        with snapshot.get_preprocessed_table_file("sentry_groupedmessage") as table:
+            line = next(table)
+            assert line == b"id,status\n0,1\n"
 
     def test_parse_invalid_snapshot(self, tmp_path):
         snapshot_base = self.__prepare_directory(
@@ -114,5 +118,5 @@ class TestPostgresSnapshot:
         )
         with pytest.raises(ValueError, match=".+sentry_groupedmessage.+status.+"):
             snapshot = PostgresSnapshot.load("snuba", snapshot_base)
-            with snapshot.get_table_file("sentry_groupedmessage") as table:
+            with snapshot.get_parsed_table_file("sentry_groupedmessage") as table:
                 next(table)

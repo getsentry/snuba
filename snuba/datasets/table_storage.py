@@ -190,7 +190,7 @@ class TableWriter:
     def get_bulk_writer(
         self,
         metrics: MetricsBackend,
-        encoding: str,
+        encoding: Optional[str],
         column_names: Sequence[str],
         options: ClickhouseWriterOptions = None,
         table_name: Optional[str] = None,
