@@ -134,27 +134,17 @@ class TransactionsMessageProcessor(MessageProcessor):
 
         measurements = data.get("measurements")
         if measurements is not None:
-            try:
-                (
-                    processed["measurements.key"],
-                    processed["measurements.value"],
-                ) = extract_nested(
-                    measurements,
-                    lambda value: float(value["value"])
-                    if (
-                        value is not None
-                        and isinstance(value.get("value"), numbers.Number)
-                    )
-                    else None,
+            (
+                processed["measurements.key"],
+                processed["measurements.value"],
+            ) = extract_nested(
+                measurements,
+                lambda value: float(value["value"])
+                if (
+                    value is not None and isinstance(value.get("value"), numbers.Number)
                 )
-            except Exception:
-                # Not failing the event in this case just yet, because we are still
-                # developing this feature.
-                logger.error(
-                    "Invalid measurements field.",
-                    extra={"measurements": measurements},
-                    exc_info=True,
-                )
+                else None,
+            )
         request = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
         http_data: MutableMapping[str, Any] = {}
         extract_http(http_data, request)
