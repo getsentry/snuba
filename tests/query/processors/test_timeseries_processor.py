@@ -91,6 +91,29 @@ tests = [
         id="granularity-60-condition-on-non-time-column",
     ),
     pytest.param(
+        3600,
+        binary_condition(
+            ConditionFunctions.GTE,
+            FunctionCall(None, "toStartOfDay", (Column("my_time", None, "finish_ts"),)),
+            Literal(None, "2020-01-01T01:01:01.000000Z"),
+        ),
+        FunctionCall(
+            "my_time",
+            "toStartOfHour",
+            (Column(None, None, "finish_ts"), Literal(None, "Universal")),
+        ),
+        binary_condition(
+            ConditionFunctions.GTE,
+            FunctionCall(
+                None, "toStartOfDay", (Column("my_time", None, "finish_ts"),),
+            ),
+            Literal(None, parse_datetime("2020-01-01T01:01:01.000000Z")),
+        ),
+        "(toStartOfHour(finish_ts, 'Universal') AS my_time)",
+        "greaterOrEquals(toStartOfDay((finish_ts AS my_time)), toDateTime('2020-01-01T01:01:01', 'Universal'))",
+        id="granularity-3600-function-condition",
+    ),
+    pytest.param(
         86400,
         None,
         FunctionCall(

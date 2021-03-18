@@ -23,7 +23,7 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.processors.uuid_column_processor import BetterUUIDColumnProcessor
+from snuba.query.processors.uuid_column_processor import UUIDColumnProcessor
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 required_columns = [
@@ -142,7 +142,7 @@ query_processors = [
     ),
     MappingColumnPromoter(mapping_specs={"tags": promoted_tag_columns}),
     UserColumnProcessor(),
-    BetterUUIDColumnProcessor({"event_id"}),
+    UUIDColumnProcessor({"event_id", "trace_id"}),
     TypeConditionOptimizer(),
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
