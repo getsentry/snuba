@@ -3,7 +3,7 @@ import json
 import pickle
 from datetime import datetime
 from pickle import PickleBuffer
-from typing import MutableSequence
+from typing import MutableSequence, Optional
 from unittest.mock import Mock, call
 
 import pytest
@@ -119,7 +119,18 @@ def get_row_count(storage: Storage) -> int:
     )
 
 
-def test_multistorage_strategy() -> None:
+@pytest.mark.parametrize(
+    "processes, input_block_size, output_block_size",
+    [
+        pytest.param(1, int(32 * 1e6), int(64 * 1e6), id="multiprocessing"),
+        pytest.param(None, None, None, id="no multiprocessing"),
+    ],
+)
+def test_multistorage_strategy(
+    processes: Optional[int],
+    input_block_size: Optional[int],
+    output_block_size: Optional[int],
+) -> None:
     from snuba.datasets.storages import groupassignees, groupedmessages
 
     from tests.datasets.cdc.test_groupassignee import TestGroupassignee
@@ -130,7 +141,13 @@ def test_multistorage_strategy() -> None:
     storages = [groupassignees.storage, groupedmessages.storage]
 
     strategy = MultistorageConsumerProcessingStrategyFactory(
-        storages, 10, 10, 1, int(32 * 1e6), int(64 * 1e6), TestingMetricsBackend(),
+        storages,
+        10,
+        10,
+        processes,
+        input_block_size,
+        output_block_size,
+        TestingMetricsBackend(),
     ).create(commit)
 
     payloads = [

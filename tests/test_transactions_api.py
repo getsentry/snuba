@@ -311,7 +311,7 @@ class TestTransactionsApi(BaseApiTest):
 
         assert len(data["data"]) == 180
         first_trace_id = data["data"][0]["trace_id"]
-        assert len(first_trace_id) == 36
+        assert len(first_trace_id) == 32
         assert data["data"][0]["ip_address"] == "8.8.8.8"
 
         response = self.post(
@@ -449,6 +449,30 @@ class TestTransactionsApi(BaseApiTest):
                     "conditions": [["transaction", "LIKE", "stuff \\\" ' \\' stuff"]],
                     "limit": 4,
                     "orderby": ["event_id"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 0, data
+
+    def test_escaping_datetimes(self) -> None:
+        # Datetimes come in bizarre formats
+        date_val = (self.base_time - self.skew).isoformat()
+        date_val = date_val[: date_val.index("+")] + ".000000Z"
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["event_id"],
+                    "conditions": [
+                        ["transaction", "=", "fake/transaction"],
+                        ["finish_ts", ">=", date_val],
+                        [["toStartOfHour", ["finish_ts"]], ">=", date_val],
+                    ],
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
