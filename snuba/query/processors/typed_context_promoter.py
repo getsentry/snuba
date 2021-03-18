@@ -1,5 +1,4 @@
 import logging
-import uuid
 from abc import ABC, abstractmethod
 from typing import NamedTuple, Optional, Set
 
@@ -54,11 +53,6 @@ class ContextType(ABC):
     @abstractmethod
     def _build_literal(self, query_value: str) -> LiteralExpr:
         raise NotImplementedError
-
-
-class UUIDContextType(ContextType):
-    def _build_literal(self, query_value: str) -> LiteralExpr:
-        return LiteralExpr(None, str(uuid.UUID(query_value)))
 
 
 class HexIntContextType(ContextType):

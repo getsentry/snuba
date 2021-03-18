@@ -120,6 +120,8 @@ promoted_tag_columns = {
     "level": "level",
 }
 
+promoted_context_columns = {"trace_id": "trace_id"}
+
 mandatory_conditions = [
     binary_condition(
         ConditionFunctions.EQ, Column(None, None, "deleted"), Literal(None, 0),
@@ -128,6 +130,7 @@ mandatory_conditions = [
 
 prewhere_candidates = [
     "event_id",
+    "trace_id",
     "group_id",
     "tags[sentry:release]",
     "release",
@@ -140,7 +143,12 @@ query_processors = [
     PostReplacementConsistencyEnforcer(
         project_column="project_id", replacer_state_name=ReplacerState.ERRORS,
     ),
-    MappingColumnPromoter(mapping_specs={"tags": promoted_tag_columns}),
+    MappingColumnPromoter(
+        mapping_specs={
+            "tags": promoted_tag_columns,
+            "contexts": promoted_context_columns,
+        }
+    ),
     UserColumnProcessor(),
     UUIDColumnProcessor({"event_id", "trace_id"}),
     TypeConditionOptimizer(),

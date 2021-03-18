@@ -10,7 +10,6 @@ from snuba.query.processors.typed_context_promoter import (
     HexIntContextType,
     PromotionSpec,
     TypedContextPromoter,
-    UUIDContextType,
 )
 from snuba.request.request_settings import HTTPRequestSettings
 from tests.query.processors.query_builders import (
@@ -163,11 +162,7 @@ TEST_CASES = [
 @pytest.mark.parametrize("query, expected_query", TEST_CASES)
 def test_tags_hash_map(query: ClickhouseQuery, expected_query: ClickhouseQuery) -> None:
     TypedContextPromoter(
-        "contexts",
-        {
-            PromotionSpec("trace.trace_id", "trace_id", UUIDContextType()),
-            PromotionSpec("trace.span_id", "span_id", HexIntContextType()),
-        },
+        "contexts", {PromotionSpec("trace.span_id", "span_id", HexIntContextType())},
     ).process_query(query, HTTPRequestSettings())
 
     assert expected_query.equals(query)

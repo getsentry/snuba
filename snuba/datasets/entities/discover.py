@@ -6,7 +6,6 @@ from typing import List, Mapping, Optional, Sequence, Set, Tuple, Union
 
 from snuba import state, settings
 from snuba.clickhouse.columns import (
-    UUID,
     Array,
     ColumnSet,
     DateTime,
@@ -245,7 +244,6 @@ EVENTS_COLUMNS = ColumnSet(
 
 TRANSACTIONS_COLUMNS = ColumnSet(
     [
-        ("trace_id", UUID(Modifiers(nullable=True))),
         ("span_id", UInt(64, Modifiers(nullable=True))),
         ("transaction_hash", UInt(64, Modifiers(nullable=True))),
         ("transaction_op", String(Modifiers(nullable=True))),
@@ -314,6 +312,7 @@ class DiscoverEntity(Entity):
                 # Other tags and context
                 ("tags", Nested([("key", String()), ("value", String())])),
                 ("contexts", Nested([("key", String()), ("value", String())])),
+                ("trace_id", String(Modifiers(nullable=True))),
             ]
         )
         self.__events_columns = EVENTS_COLUMNS
