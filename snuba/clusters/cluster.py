@@ -16,7 +16,11 @@ from typing import (
 
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
-from snuba.clickhouse.http import HTTPBatchWriter, JSONRow
+from snuba.clickhouse.http import (
+    HTTPBatchWriter,
+    InsertStatement,
+    JSONRow,
+)
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.reader import Reader
@@ -112,10 +116,12 @@ class Cluster(ABC, Generic[TWriterOptions]):
     @abstractmethod
     def get_batch_writer(
         self,
-        table_name: str,
         metrics: MetricsBackend,
+        insert_statement: InsertStatement,
+        encoding: Optional[str],
         options: TWriterOptions,
         chunk_size: Optional[int],
+        buffer_size: int,
     ) -> BatchWriter[JSONRow]:
         raise NotImplementedError
 
@@ -220,21 +226,24 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
 
     def get_batch_writer(
         self,
-        table_name: str,
         metrics: MetricsBackend,
+        insert_statement: InsertStatement,
+        encoding: Optional[str],
         options: ClickhouseWriterOptions,
         chunk_size: Optional[int],
+        buffer_size: int,
     ) -> BatchWriter[JSONRow]:
         return HTTPBatchWriter(
-            table_name,
             host=self.__query_node.host_name,
             port=self.__http_port,
             user=self.__user,
             password=self.__password,
-            database=self.__database,
             metrics=metrics,
+            statement=insert_statement.with_database(self.__database),
+            encoding=encoding,
             options=options,
             chunk_size=chunk_size,
+            buffer_size=buffer_size,
         )
 
     def is_single_node(self) -> bool:
