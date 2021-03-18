@@ -804,7 +804,7 @@ class TestDiscoverApi(BaseApiTest):
                         ["uniq", "user", "uniq_user"],
                         ["count", None, "count"],
                     ],
-                    "groupby": ["user_email"],
+                    "groupby": ["email"],
                     "conditions": [],
                     "orderby": "uniq_user",
                     "limit": 1000,
