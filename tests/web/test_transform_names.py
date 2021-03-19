@@ -8,6 +8,7 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity
@@ -31,6 +32,8 @@ def test_transform_column_names() -> None:
     """
     events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
 
+    assert isinstance(events_storage, WritableTableStorage)
+
     event_id = uuid.uuid4().hex
 
     event_date = datetime.utcnow()
@@ -46,7 +49,7 @@ def test_transform_column_names() -> None:
                     "message": "a message",
                     "platform": "python",
                     "datetime": event_date.strftime(settings.PAYLOAD_DATETIME_FORMAT),
-                    "data": {"received": time.time()},
+                    "data": {"received": time.time(), "type": "error"},
                     "organization_id": 1,
                     "retention_days": settings.DEFAULT_RETENTION_DAYS,
                 }

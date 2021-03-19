@@ -18,7 +18,11 @@ from snuba.pipeline.composite import (
 )
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
-from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.conditions import (
+    BooleanFunctions,
+    ConditionFunctions,
+    binary_condition,
+)
 from snuba.query.data_source.join import (
     IndividualNode,
     JoinClause,
@@ -66,6 +70,29 @@ groups_table = Table(
     .get_data_source()
     .get_mandatory_conditions(),
 )
+
+
+if events_storage.get_storage_key() == StorageKey.EVENTS:
+    default_events_condition = binary_condition(
+        BooleanFunctions.AND,
+        binary_condition(
+            ConditionFunctions.EQ,
+            Column(alias=None, table_name=None, column_name="deleted"),
+            Literal(alias=None, value=0),
+        ),
+        binary_condition(
+            ConditionFunctions.NEQ,
+            Column(alias="_snuba_type", table_name=None, column_name="type"),
+            Literal(alias=None, value="transaction"),
+        ),
+    )
+else:
+    default_events_condition = binary_condition(
+        ConditionFunctions.EQ,
+        Column(alias=None, table_name=None, column_name="deleted"),
+        Literal(alias=None, value=0),
+    )
+
 
 TEST_CASES = [
     pytest.param(
@@ -187,11 +214,7 @@ TEST_CASES = [
                         ),
                     ),
                 ],
-                condition=binary_condition(
-                    ConditionFunctions.EQ,
-                    Column(alias=None, table_name=None, column_name="deleted"),
-                    Literal(alias=None, value=0),
-                ),
+                condition=default_events_condition,
                 groupby=[Column(None, None, "project_id")],
                 prewhere=binary_condition(
                     ConditionFunctions.EQ,
@@ -364,11 +387,7 @@ TEST_CASES = [
                                 ),
                             ),
                         ],
-                        condition=binary_condition(
-                            ConditionFunctions.EQ,
-                            Column(alias=None, table_name=None, column_name="deleted"),
-                            Literal(alias=None, value=0),
-                        ),
+                        condition=default_events_condition,
                         prewhere=binary_condition(
                             ConditionFunctions.EQ,
                             Column(None, None, "project_id"),

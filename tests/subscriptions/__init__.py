@@ -38,6 +38,7 @@ class BaseSubscriptionTest:
                             settings.PAYLOAD_DATETIME_FORMAT
                         ),
                         "data": {
+                            "type": "error",
                             "received": calendar.timegm(
                                 (self.base_time + timedelta(minutes=tick)).timetuple()
                             ),
