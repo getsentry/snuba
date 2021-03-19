@@ -17,4 +17,4 @@ api-tests:
 
 install-python-dependencies:
 	pip install -e .
-	pip install -r test-requirements.txt
+	pip install -r requirements-test.txt
