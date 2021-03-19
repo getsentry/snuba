@@ -104,21 +104,25 @@ class TestSDKSnQLApi(BaseApiTest):
         assert data["data"] == []
 
     def test_join_query(self) -> None:
-        sp = Entity("spans", "s")
-        tr = Entity("transactions", "tr")
-        join = Join([Relationship(sp, "contained", tr)])
+        ev = Entity("events", "ev")
+        gm = Entity("groupedmessage", "gm")
+        join = Join([Relationship(ev, "grouped", gm)])
         query = (
             Query("discover", join)
             .set_select(
-                [Column("op", sp), Function("avg", [Column("duration_ms", sp)], "avg")]
+                [
+                    Column("group_id", ev),
+                    Column("status", gm),
+                    Function("avg", [Column("retention_days", ev)], "avg"),
+                ]
             )
-            .set_groupby([Column("op", sp)])
+            .set_groupby([Column("group_id", ev), Column("status", gm)])
             .set_where(
                 [
-                    Condition(Column("project_id", sp), Op.EQ, self.project_id),
-                    Condition(Column("project_id", tr), Op.EQ, self.project_id),
-                    Condition(Column("finish_ts", tr), Op.GTE, self.base_time),
-                    Condition(Column("finish_ts", tr), Op.LT, self.next_time),
+                    Condition(Column("project_id", ev), Op.EQ, self.project_id),
+                    Condition(Column("project_id", gm), Op.EQ, self.project_id),
+                    Condition(Column("timestamp", ev), Op.GTE, self.base_time),
+                    Condition(Column("timestamp", ev), Op.LT, self.next_time),
                 ]
             )
         )
