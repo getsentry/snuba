@@ -121,8 +121,8 @@ test_data = [
     ),
     # # No conditions, other referenced columns
     ({"selected_columns": ["group_id"]}, EntityKey.DISCOVER_EVENTS),
-    ({"selected_columns": ["trace_id"]}, EntityKey.DISCOVER_TRANSACTIONS),
-    ({"selected_columns": ["group_id", "trace_id"]}, EntityKey.DISCOVER),
+    ({"selected_columns": ["span_id"]}, EntityKey.DISCOVER_TRANSACTIONS),
+    ({"selected_columns": ["group_id", "span_id"]}, EntityKey.DISCOVER),
     (
         {"aggregations": [["max", "duration", "max_duration"]]},
         EntityKey.DISCOVER_TRANSACTIONS,
