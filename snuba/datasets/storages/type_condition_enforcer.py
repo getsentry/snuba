@@ -18,7 +18,9 @@ class TypeConditionEnforcer(QueryProcessor):
             col.column_name for col in query.get_columns_referenced_in_conditions_ast()
         }
 
-        if "group_id" not in cols:
+        discover_query = "discover" in query.get_hints()
+
+        if not discover_query and "group_id" not in cols:
             query.add_condition_to_ast(
                 binary_condition(
                     ConditionFunctions.NEQ,

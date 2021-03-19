@@ -465,6 +465,7 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
         offset: int = 0,
         totals: bool = False,
         granularity: Optional[int] = None,
+        hints: Optional[Set[str]] = None,
     ):
         super().__init__(
             selected_columns=selected_columns,
@@ -480,6 +481,7 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
             granularity=granularity,
         )
         self.__from_clause = from_clause
+        self.__hints = hints or set()
 
     def get_from_clause(self) -> TSimpleDataSource:
         assert self.__from_clause is not None, "Data source has not been provided yet."
@@ -490,3 +492,9 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
 
     def _eq_functions(self) -> Sequence[str]:
         return tuple(super()._eq_functions()) + ("get_from_clause",)
+
+    def set_hint(self, hint: str) -> None:
+        self.__hints.add(hint)
+
+    def get_hints(self,) -> Set[str]:
+        return self.__hints

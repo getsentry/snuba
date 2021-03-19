@@ -1,4 +1,4 @@
-from typing import Callable, Iterable, Optional, Sequence
+from typing import Callable, Iterable, Optional, Sequence, Set
 
 from snuba.query import LimitBy, OrderBy
 from snuba.query import ProcessableQuery as AbstractQuery
@@ -29,6 +29,7 @@ class Query(AbstractQuery[Table]):
         offset: int = 0,
         totals: bool = False,
         granularity: Optional[int] = None,
+        hints: Optional[Set[str]] = None,
     ) -> None:
         self.__prewhere = prewhere
 
@@ -45,6 +46,7 @@ class Query(AbstractQuery[Table]):
             offset=offset,
             totals=totals,
             granularity=granularity,
+            hints=hints,
         )
 
     def _get_expressions_impl(self) -> Iterable[Expression]:

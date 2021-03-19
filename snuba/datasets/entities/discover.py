@@ -55,6 +55,7 @@ from snuba.query.expressions import (
 )
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
+from snuba.query.mark_discover_query import MarkDiscoverQuery
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or
@@ -477,6 +478,7 @@ class DiscoverEntity(Entity):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
+            MarkDiscoverQuery(),  # temporary
             TimeSeriesProcessor({"time": "timestamp"}, ("timestamp",)),
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
