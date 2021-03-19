@@ -192,3 +192,46 @@ def test_hash() -> None:
     s.add(lm)
 
     assert len(s) == 6
+
+
+def test_copy_on_write() -> None:
+    """
+    Tests that complex expressions are not reinstantiated when the
+    transformation function does no apply changes to the children
+    expression.
+    """
+
+    def do_nothing(e: Expression) -> Expression:
+        return e
+
+    f = FunctionCall(
+        None, "f", (Column(None, None, "col1"), Column(None, None, "col1"))
+    )
+    transformed = f.transform(do_nothing)
+
+    assert f == transformed
+    # Ensures no new instance of the function call is created
+    assert f is transformed
+
+    cf = CurriedFunctionCall(
+        None,
+        FunctionCall(None, "f", (Column(None, None, "col0"),)),
+        (Column(None, None, "col1"), Column(None, None, "col1")),
+    )
+    transformed = cf.transform(do_nothing)
+    assert cf == transformed
+    assert cf is transformed
+
+    sub = SubscriptableReference(
+        None, Column(None, None, "tag"), Literal(None, "something")
+    )
+
+    transformed = sub.transform(do_nothing)
+    assert sub == transformed
+    assert sub is transformed
+
+    le = Lambda(None, ("x",), FunctionCall(None, "f", (Column(None, None, "col0"),)))
+
+    transformed = le.transform(do_nothing)
+    assert le == transformed
+    assert le is transformed
