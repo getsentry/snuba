@@ -95,6 +95,7 @@ storage = WritableTableStorage(
     schema=schema,
     query_processors=[
         MappingColumnPromoter(mapping_specs={"contexts": {"trace_id": "trace_id"}}),
+        UUIDColumnProcessor(set(["event_id", "trace_id"])),
         MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
         TypedContextPromoter(
             "contexts",
@@ -102,7 +103,6 @@ storage = WritableTableStorage(
         ),
         ArrayJoinKeyValueOptimizer("tags"),
         ArrayJoinKeyValueOptimizer("measurements"),
-        UUIDColumnProcessor(set(["event_id", "trace_id"])),
         PrewhereProcessor(
             [
                 "event_id",
