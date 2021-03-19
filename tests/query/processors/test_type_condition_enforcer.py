@@ -27,22 +27,6 @@ test_data = [
             condition=binary_condition(
                 BooleanFunctions.AND,
                 binary_condition(
-                    ConditionFunctions.NEQ,
-                    Column(None, None, "type"),
-                    Literal(None, "transaction"),
-                ),
-                cond1,
-            ),
-        ),
-        "notEquals(type, 'transaction') AND equals(col1, 'val1')",
-        id="has_type_condition",
-    ),
-    pytest.param(
-        Query(
-            Table("events", ColumnSet([])),
-            condition=binary_condition(
-                BooleanFunctions.AND,
-                binary_condition(
                     ConditionFunctions.IN,
                     Column(None, None, "group_id"),
                     FunctionCall(None, "tuple", (Literal(None, 1), Literal(None, 2))),
@@ -56,7 +40,7 @@ test_data = [
     pytest.param(
         Query(Table("events", ColumnSet([])), condition=cond1,),
         "notEquals((type AS _snuba_type), 'transaction') AND equals(col1, 'val1')",
-        id="no_type_or_group_condition",
+        id="no_groupid_condition",
     ),
 ]
 

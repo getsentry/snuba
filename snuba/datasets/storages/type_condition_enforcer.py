@@ -9,18 +9,16 @@ class TypeConditionEnforcer(QueryProcessor):
     """
     Enforces that transactions are never returned from the events entity.
     This condition is required for the events storage only, transactions are never
-    present in errors storage. If the query contains any other (likely more restrictive)
-    condition on type or group ID, do not apply the additional condition.
+    present in errors storage. If the query contains a (likely more restrictive)
+    condition on group ID, do not apply the additional condition.
     """
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
-        type_cols = {"type", "group_id"}
-
         cols = {
             col.column_name for col in query.get_columns_referenced_in_conditions_ast()
         }
 
-        if not cols.intersection(type_cols):
+        if "group_id" not in cols:
             query.add_condition_to_ast(
                 binary_condition(
                     ConditionFunctions.NEQ,
