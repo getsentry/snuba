@@ -35,6 +35,7 @@ pytest-cov==2.10.1
 pytest-watch==4.2.0
 pathtools==0.1.2
 pluggy==0.13.0
+progressbar2==3.53.1
 python-dateutil==2.7.3
 pytz==2018.4
 python-rapidjson==0.9.1

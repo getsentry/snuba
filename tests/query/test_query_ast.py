@@ -181,7 +181,7 @@ VALIDATION_TESTS = [
     pytest.param(
         {
             "selected_columns": ["project_id", "event_id"],
-            "conditions": [["event_id", "IN", ["a", "b"]]],
+            "conditions": [["event_id", "IN", ["a" * 32, "b" * 32]]],
         },
         True,
         id="No alias references",
@@ -189,7 +189,7 @@ VALIDATION_TESTS = [
     pytest.param(
         {
             "selected_columns": ["project_id", ["f", ["event_id"], "not_event"]],
-            "conditions": [["not_event", "IN", ["a", "b"]]],
+            "conditions": [["not_event", "IN", ["a" * 32, "b" * 32]]],
         },
         True,
         id="Alias declared and referenced",
@@ -197,7 +197,7 @@ VALIDATION_TESTS = [
     pytest.param(
         {
             "selected_columns": ["project_id", ["f", ["event_id"], "event_id"]],
-            "conditions": [["event_id", "IN", ["a", "b"]]],
+            "conditions": [["event_id", "IN", ["a" * 32, "b" * 32]]],
         },
         True,
         id="Alias redefines col and referenced",
@@ -205,7 +205,7 @@ VALIDATION_TESTS = [
     pytest.param(
         {
             "selected_columns": ["project_id", ["f", ["event_id"], "event_id"]],
-            "conditions": [["whatsthis", "IN", ["a", "b"]]],
+            "conditions": [["whatsthis", "IN", ["a" * 32, "b" * 32]]],
         },
         False,
         id="Alias referenced and not defined",

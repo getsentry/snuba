@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence
 
 from snuba import settings
-from snuba.clickhouse.http import JSONRow
+from snuba.clickhouse.http import InsertStatement, JSONRow
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
     ClickhouseCluster,
@@ -179,7 +179,35 @@ class TableWriter:
         options = self.__update_writer_options(options)
 
         return self.__cluster.get_batch_writer(
-            table_name, metrics, options, chunk_size=chunk_size,
+            metrics,
+            InsertStatement(table_name).with_format("JSONEachRow"),
+            encoding=None,
+            options=options,
+            chunk_size=chunk_size,
+            buffer_size=0,
+        )
+
+    def get_bulk_writer(
+        self,
+        metrics: MetricsBackend,
+        encoding: Optional[str],
+        column_names: Sequence[str],
+        options: ClickhouseWriterOptions = None,
+        table_name: Optional[str] = None,
+    ) -> BatchWriter[bytes]:
+        table_name = table_name or self.__table_schema.get_table_name()
+
+        options = self.__update_writer_options(options)
+
+        return self.__cluster.get_batch_writer(
+            metrics,
+            InsertStatement(table_name)
+            .with_columns(column_names)
+            .with_format("CSVWithNames"),
+            encoding=encoding,
+            options=options,
+            chunk_size=1,
+            buffer_size=settings.HTTP_WRITER_BUFFER_SIZE,
         )
 
     def get_bulk_loader(
