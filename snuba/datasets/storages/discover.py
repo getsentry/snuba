@@ -18,6 +18,7 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
+from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.uuid_column_processor import UUIDColumnProcessor
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
@@ -67,6 +68,7 @@ storage = ReadableTableStorage(
     storage_set_key=StorageSetKey.DISCOVER,
     schema=schema,
     query_processors=[
+        MappingColumnPromoter(mapping_specs={"contexts": {"trace_id": "trace_id"}}),
         MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
         ArrayJoinKeyValueOptimizer("tags"),
         UUIDColumnProcessor(set(["event_id", "trace_id"])),
