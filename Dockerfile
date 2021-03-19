@@ -98,5 +98,4 @@ CMD [ "api" ]
 
 FROM application AS testing
 
-ENV SNUBA_SETINGS=test
 RUN pip install -r requirements-test.txt
