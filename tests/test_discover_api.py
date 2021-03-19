@@ -206,7 +206,9 @@ class TestDiscoverApi(BaseApiTest):
                 {
                     "dataset": "discover",
                     "project": self.project_id,
-                    "aggregations": [["uniq", ["span_id"], "uniq_span_id"]],
+                    "aggregations": [
+                        ["uniq", ["transaction_status"], "uniq_transaction_status"]
+                    ],
                     "conditions": [["type", "=", "error"]],
                     "groupby": ["type", "group_id"],
                     "limit": 1000,
@@ -218,7 +220,11 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200
         assert data["data"] == [
-            {"type": "error", "group_id": self.event["group_id"], "uniq_span_id": None}
+            {
+                "type": "error",
+                "group_id": self.event["group_id"],
+                "uniq_transaction_status": None,
+            }
         ]
 
     def test_geo_column_empty(self) -> None:
