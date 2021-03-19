@@ -25,6 +25,7 @@ repos:
     rev: 'v0.800'
     hooks:
     -   id: mypy
+        files: snuba
         args: [--config-file, mypy.ini, --ignore-missing-imports, --strict, --warn-unreachable]
 default_language_version:
   python: python3.8
