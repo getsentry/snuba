@@ -94,7 +94,9 @@ storage = WritableTableStorage(
     storage_set_key=StorageSetKey.TRANSACTIONS,
     schema=schema,
     query_processors=[
-        MappingColumnPromoter(mapping_specs={"contexts": {"trace_id": "trace_id"}}),
+        MappingColumnPromoter(
+            mapping_specs={"contexts": {"trace.trace_id": "trace_id"}}
+        ),
         UUIDColumnProcessor(set(["event_id", "trace_id"])),
         MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
         TypedContextPromoter(
