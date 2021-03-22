@@ -120,7 +120,7 @@ promoted_tag_columns = {
     "level": "level",
 }
 
-promoted_context_columns = {"trace_id": "trace_id"}
+promoted_context_columns = {"trace.trace_id": "trace_id"}
 
 mandatory_conditions = [
     binary_condition(
