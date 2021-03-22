@@ -68,7 +68,9 @@ storage = ReadableTableStorage(
     storage_set_key=StorageSetKey.DISCOVER,
     schema=schema,
     query_processors=[
-        MappingColumnPromoter(mapping_specs={"contexts": {"trace_id": "trace_id"}}),
+        MappingColumnPromoter(
+            mapping_specs={"contexts": {"trace.trace_id": "trace_id"}}
+        ),
         MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
         ArrayJoinKeyValueOptimizer("tags"),
         UUIDColumnProcessor(set(["event_id", "trace_id"])),

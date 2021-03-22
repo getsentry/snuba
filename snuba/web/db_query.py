@@ -4,13 +4,14 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial, reduce
 from hashlib import md5
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from typing import Any, Mapping, MutableMapping, Optional, Set, Union, cast
 
 import rapidjson
 import sentry_sdk
 from sentry_sdk.api import configure_scope
 
-from snuba import settings, state
+from snuba import environment, settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.clickhouse.query import Query
@@ -35,6 +36,7 @@ from snuba.state.cache.redis.backend import (
     RedisCache,
 )
 from snuba.state.rate_limit import (
+    GLOBAL_RATE_LIMIT_NAME,
     PROJECT_RATE_LIMIT_NAME,
     RateLimitAggregator,
     RateLimitExceeded,
@@ -43,6 +45,8 @@ from snuba.util import force_bytes, with_span
 from snuba.utils.codecs import Codec
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
+
+metrics = MetricsWrapper(environment.metrics, "db_query")
 
 
 class ResultCacheCodec(Codec[bytes, Result]):
@@ -254,6 +258,16 @@ def execute_query_with_rate_limits(
             maxt = query_settings["max_threads"]
             query_settings["max_threads"] = max(
                 1, maxt - project_rate_limit_stats.concurrent + 1
+            )
+
+        global_rate_limit_stats = rate_limit_stats_container.get_stats(
+            GLOBAL_RATE_LIMIT_NAME
+        )
+        if global_rate_limit_stats is not None:
+            metrics.gauge(
+                name="global_concurrent",
+                value=global_rate_limit_stats.concurrent,
+                tags={"table": stats.get("clickhouse_table", "")},
             )
 
         return execute_query(
