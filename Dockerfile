@@ -1,5 +1,5 @@
 ARG PYTHON_VERSION=3.8
-FROM python:${PYTHON_VERSION}-slim
+FROM python:${PYTHON_VERSION}-slim AS application
 
 # these are required all the way through, and removing them will cause bad things
 RUN set -ex; \
@@ -95,3 +95,7 @@ ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA \
 EXPOSE 1218
 ENTRYPOINT [ "./docker_entrypoint.sh" ]
 CMD [ "api" ]
+
+FROM application AS testing
+
+RUN pip install -r requirements-test.txt

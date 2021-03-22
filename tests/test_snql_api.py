@@ -94,12 +94,12 @@ class TestSnQLApi(BaseApiTest):
             "/discover/snql",
             data=json.dumps(
                 {
-                    "query": f"""MATCH (s: spans) -[contained]-> (t: transactions)
-                    SELECT s.op, avg(s.duration_ms) AS avg BY s.op
-                    WHERE s.project_id = {self.project_id}
-                    AND t.project_id = {self.project_id}
-                    AND t.finish_ts >= toDateTime('2021-01-01')
-                    AND t.finish_ts < toDateTime('2021-01-02')
+                    "query": f"""MATCH (e: events) -[grouped]-> (gm: groupedmessage)
+                    SELECT e.group_id, gm.status, avg(e.retention_days) AS avg BY e.group_id, gm.status
+                    WHERE e.project_id = {self.project_id}
+                    AND gm.project_id = {self.project_id}
+                    AND e.timestamp >= toDateTime('2021-01-01')
+                    AND e.timestamp < toDateTime('2021-01-02')
                     """,
                     "turbo": False,
                     "consistent": False,
