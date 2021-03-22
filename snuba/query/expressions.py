@@ -174,7 +174,7 @@ class SubscriptableReference(Expression):
         if transformed_col != self.column or transformed_key != self.key:
             return func(replace(self, column=transformed_col, key=transformed_key))
         else:
-            # Does instantiate a copy of the this class if the children did
+            # Does not instantiate a copy of the this class if the children did
             # not change. This is possible as this dataclasses are frozen.
             return func(self)
 
@@ -225,7 +225,7 @@ class FunctionCall(Expression):
         if transformed_params != self.parameters:
             return func(replace(self, parameters=transformed_params))
         else:
-            # Does instantiate a copy of the this class if the children did
+            # Does not instantiate a copy of the this class if the children did
             # not change. This is possible as this dataclasses are frozen.
             return func(self)
 
@@ -285,7 +285,7 @@ class CurriedFunctionCall(Expression):
                 )
             )
         else:
-            # Does instantiate a copy of the this class if the children did
+            # Does not instantiate a copy of the this class if the children did
             # not change. This is possible as this dataclasses are frozen.
             return func(self)
 
@@ -346,7 +346,7 @@ class Lambda(Expression):
                 replace(self, transformation=self.transformation.transform(func))
             )
         else:
-            # Does instantiate a copy of the this class if the children did
+            # Does not instantiate a copy of the this class if the children did
             # not change. This is possible as this dataclasses are frozen.
             return func(self)
 
