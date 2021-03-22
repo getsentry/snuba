@@ -193,6 +193,9 @@ SETTINGS_SCHEMAS: Mapping[Type[RequestSettings], Schema] = {
             # first replica, so should only be used when absolutely necessary.
             "consistent": {"type": "boolean", "default": False},
             "debug": {"type": "boolean", "default": False},
+            # Don't actually run the query Clickhouse, just generate the SQL
+            # and return it.
+            "dry_run": {"type": "boolean", "default": False},
         },
         "additionalProperties": False,
     },
