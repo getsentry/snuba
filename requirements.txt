@@ -18,7 +18,7 @@ future==0.16.0
 honcho==1.0.1
 idna==2.7
 itsdangerous==0.24
-Jinja2==2.10.1
+Jinja2==2.11.3
 jsonschema==3.0.1
 lz4==2.0.0
 Markdown==2.6.11
