@@ -169,14 +169,10 @@ class SubscriptableReference(Expression):
         return visitor.visit_subscriptable_reference(self)
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
-        transformed_col = self.column.transform(func)
-        transformed_key = self.key.transform(func)
-        if transformed_col != self.column or transformed_key != self.key:
-            return func(replace(self, column=transformed_col, key=transformed_key))
-        else:
-            # Does not instantiate a copy of the this class if the children did
-            # not change. This is possible as this dataclasses are frozen.
-            return func(self)
+        transformed = replace(
+            self, column=self.column.transform(func), key=self.key.transform(func),
+        )
+        return func(transformed)
 
     def __iter__(self) -> Iterator[Expression]:
         # Since column is a column and key is a literal and since none of
@@ -219,15 +215,11 @@ class FunctionCall(Expression):
         transformation function and we do not run that same function over the
         new children.
         """
-        transformed_params = tuple(
-            map(lambda child: child.transform(func), self.parameters)
+        transformed = replace(
+            self,
+            parameters=tuple(map(lambda child: child.transform(func), self.parameters)),
         )
-        if transformed_params != self.parameters:
-            return func(replace(self, parameters=transformed_params))
-        else:
-            # Does not instantiate a copy of the this class if the children did
-            # not change. This is possible as this dataclasses are frozen.
-            return func(self)
+        return func(transformed)
 
     def __iter__(self) -> Iterator[Expression]:
         """
@@ -269,25 +261,12 @@ class CurriedFunctionCall(Expression):
         one transforms the internal function before applying the function to the
         parameters.
         """
-        replaced_internal = self.internal_function.transform(func)
-        replaced_params = tuple(
-            map(lambda child: child.transform(func), self.parameters)
+        transformed = replace(
+            self,
+            internal_function=self.internal_function.transform(func),
+            parameters=tuple(map(lambda child: child.transform(func), self.parameters)),
         )
-        if (
-            replaced_internal != self.internal_function
-            or replaced_params != self.parameters
-        ):
-            return func(
-                replace(
-                    self,
-                    internal_function=replaced_internal,
-                    parameters=replaced_params,
-                )
-            )
-        else:
-            # Does not instantiate a copy of the this class if the children did
-            # not change. This is possible as this dataclasses are frozen.
-            return func(self)
+        return func(transformed)
 
     def __iter__(self) -> Iterator[Expression]:
         """
@@ -340,15 +319,8 @@ class Lambda(Expression):
         Applies the transformation to the inner expression but not to the parameters
         declaration.
         """
-        transformed_expression = self.transformation.transform(func)
-        if transformed_expression != self.transformation:
-            return func(
-                replace(self, transformation=self.transformation.transform(func))
-            )
-        else:
-            # Does not instantiate a copy of the this class if the children did
-            # not change. This is possible as this dataclasses are frozen.
-            return func(self)
+        transformed = replace(self, transformation=self.transformation.transform(func))
+        return func(transformed)
 
     def __iter__(self) -> Iterator[Expression]:
         """
