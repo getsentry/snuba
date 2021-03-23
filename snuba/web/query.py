@@ -75,7 +75,8 @@ def parse_and_run_query(
         result = _run_query_pipeline(
             dataset=dataset, request=request, timer=timer, query_metadata=query_metadata
         )
-        record_query(request_copy, timer, query_metadata)
+        if not request.settings.get_dry_run():
+            record_query(request_copy, timer, query_metadata)
     except QueryException as error:
         record_query(request_copy, timer, query_metadata)
         raise error
