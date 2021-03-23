@@ -1,4 +1,3 @@
-import copy
 import logging
 from functools import partial
 from typing import MutableMapping, Union
@@ -63,21 +62,17 @@ def parse_and_run_query(
     """
     Runs a Snuba Query, then records the metadata about each split query that was run.
     """
-    request_copy = copy.deepcopy(request)
     query_metadata = SnubaQueryMetadata(
-        request=request_copy,
-        dataset=get_dataset_name(dataset),
-        timer=timer,
-        query_list=[],
+        request=request, dataset=get_dataset_name(dataset), timer=timer, query_list=[],
     )
 
     try:
         result = _run_query_pipeline(
             dataset=dataset, request=request, timer=timer, query_metadata=query_metadata
         )
-        record_query(request_copy, timer, query_metadata)
+        record_query(request, timer, query_metadata)
     except QueryException as error:
-        record_query(request_copy, timer, query_metadata)
+        record_query(request, timer, query_metadata)
         raise error
 
     return result
