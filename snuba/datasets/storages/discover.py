@@ -69,7 +69,15 @@ storage = ReadableTableStorage(
     schema=schema,
     query_processors=[
         MappingColumnPromoter(
-            mapping_specs={"contexts": {"trace.trace_id": "trace_id"}}
+            mapping_specs={
+                "tags": {
+                    "environment": "environment",
+                    "sentry:release": "release",
+                    "sentry:dist": "dist",
+                    "sentry:user": "user",
+                },
+                "contexts": {"trace.trace_id": "trace_id"},
+            }
         ),
         MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
         ArrayJoinKeyValueOptimizer("tags"),
