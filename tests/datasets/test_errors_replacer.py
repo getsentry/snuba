@@ -1,7 +1,7 @@
 import importlib
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from typing import Any, Tuple
 
@@ -147,20 +147,53 @@ class TestReplacer:
 
         assert (
             re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == "SELECT count() FROM %(table_name)s FINAL PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s) AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s) WHERE project_id = %(project_id)s AND NOT deleted"
+            == "SELECT count() FROM %(table_name)s FINAL PREWHERE cityHash64(event_id) IN (%(event_ids)s) AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s) WHERE project_id = %(project_id)s AND NOT deleted"
         )
         assert (
             re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == "INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s) AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s) WHERE project_id = %(project_id)s AND NOT deleted"
+            == "INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE cityHash64(event_id) IN (%(event_ids)s) AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s) WHERE project_id = %(project_id)s AND NOT deleted"
         )
         assert replacement.query_args == {
-            "event_ids": "'00e24a150d7f4ee4b142b61b4d893b6d'",
+            "event_ids": "cityHash64(toUUID('00e24a15-0d7f-4ee4-b142-b61b4d893b6d'))",
             "project_id": self.project_id,
             "required_columns": "event_id, primary_hash, project_id, group_id, timestamp, deleted, retention_days",
             "select_columns": "event_id, primary_hash, project_id, group_id, timestamp, 1, retention_days",
             "old_primary_hash": "'e3d704f3-542b-44a6-21eb-ed70dc0efe13'"
             if old_primary_hash
             else "NULL",
+        }
+        assert replacement.query_time_flags == (None, self.project_id,)
+
+    def test_tombstone_events_process_timestamp(self) -> None:
+        from_ts = datetime.now(tz=pytz.utc)
+        to_ts = datetime.now(tz=pytz.utc) + timedelta(3)
+        message = (
+            2,
+            "tombstone_events",
+            {
+                "project_id": self.project_id,
+                "event_ids": ["00e24a150d7f4ee4b142b61b4d893b6d"],
+                "from_timestamp": from_ts.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                "to_timestamp": to_ts.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            },
+        )
+
+        replacement = self.replacer.process_message(self._wrap(message))
+
+        assert (
+            re.sub("[\n ]+", " ", replacement.count_query_template).strip()
+            == f"SELECT count() FROM %(table_name)s FINAL PREWHERE cityHash64(event_id) IN (%(event_ids)s) AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s) WHERE project_id = %(project_id)s AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}') AND NOT deleted"
+        )
+        assert (
+            re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
+            == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE cityHash64(event_id) IN (%(event_ids)s) AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s) WHERE project_id = %(project_id)s AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}') AND NOT deleted"
+        )
+        assert replacement.query_args == {
+            "event_ids": "cityHash64(toUUID('00e24a15-0d7f-4ee4-b142-b61b4d893b6d'))",
+            "project_id": self.project_id,
+            "required_columns": "event_id, primary_hash, project_id, group_id, timestamp, deleted, retention_days",
+            "select_columns": "event_id, primary_hash, project_id, group_id, timestamp, 1, retention_days",
+            "old_primary_hash": "NULL",
         }
         assert replacement.query_time_flags == (None, self.project_id,)
 
