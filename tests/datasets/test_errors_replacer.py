@@ -146,9 +146,7 @@ class TestReplacer:
         replacement = self.replacer.process_message(self._wrap(message))
 
         old_primary_condition = (
-            " AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s)"
-            if old_primary_hash
-            else ""
+            " AND primary_hash = %(old_primary_hash)s" if old_primary_hash else ""
         )
 
         assert (

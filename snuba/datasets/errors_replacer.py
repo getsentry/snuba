@@ -417,9 +417,7 @@ def process_tombstone_events(
         event_id_list = ", ".join("'%s'" % uuid.UUID(eid) for eid in event_ids)
 
     if old_primary_hash:
-        old_primary_hash_condition = (
-            " AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s)"
-        )
+        old_primary_hash_condition = " AND primary_hash = %(old_primary_hash)s"
     else:
         old_primary_hash_condition = ""
 
