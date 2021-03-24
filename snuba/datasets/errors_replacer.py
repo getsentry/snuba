@@ -405,7 +405,7 @@ def process_tombstone_events(
     to_condition = get_timestamp_condition("to_timestamp", "<=")
 
     if state_name == ReplacerState.EVENTS:
-        event_id_lhs = "cityHash64(event_id)"
+        event_id_lhs = "cityHash64(toString(event_id))"
         event_id_list = ", ".join(
             [
                 f"cityHash64('{str(uuid.UUID(event_id)).replace('-', '')}')"
@@ -413,14 +413,16 @@ def process_tombstone_events(
             ]
         )
     else:
-        event_id_lhs = "cityHash64(event_id)"
-        event_id_list = ", ".join(
-            "cityHash64(toUUID('%s'))" % uuid.UUID(eid) for eid in event_ids
-        )
+        event_id_lhs = "event_id"
+        event_id_list = ", ".join("'%s'" % uuid.UUID(eid) for eid in event_ids)
+
+    if old_primary_hash:
+        old_primary_hash_condition = " AND primary_hash = %(old_primary_hash)s"
+    else:
+        old_primary_hash_condition = ""
 
     where = f"""\
-        PREWHERE {event_id_lhs} IN (%(event_ids)s)
-        AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s)
+        PREWHERE {event_id_lhs} IN (%(event_ids)s){old_primary_hash_condition}
         WHERE project_id = %(project_id)s {from_condition} {to_condition}
         AND NOT deleted
     """
