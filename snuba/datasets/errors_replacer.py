@@ -393,20 +393,39 @@ def process_tombstone_events(
         # not.
         return None
 
-    # XXX: We need to construct a query that works on both event_id columns,
-    # either represented as UUID or as hyphenless FixedString. That's why we
-    # use replaceAll(toString()).
-    where = """\
-        PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s)
+    from_ts = message.get("from_timestamp")
+    to_ts = message.get("to_timestamp")
+    if from_ts is not None and to_ts is not None:
+        from_ts = datetime.strptime(from_ts, settings.PAYLOAD_DATETIME_FORMAT)
+        to_ts = datetime.strptime(to_ts, settings.PAYLOAD_DATETIME_FORMAT)
+        ts_condition = f"""
+        AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND
+            timestamp < toDateTime('{to_ts.strftime(DATETIME_FORMAT)}')
+        """
+    else:
+        ts_condition = ""
+
+    if state_name == ReplacerState.EVENTS:
+        event_id_lhs = "cityHash64(toString(event_id))"
+        event_id_list = ", ".join(
+            [
+                f"cityHash64('{str(uuid.UUID(event_id)).replace('-', '')}')"
+                for event_id in event_ids
+            ]
+        )
+    else:
+        event_id_lhs = "event_id"
+        event_id_list = ", ".join("'%s'" % uuid.UUID(eid) for eid in event_ids)
+
+    where = f"""\
+        PREWHERE {event_id_lhs} IN (%(event_ids)s)
         AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s)
-        WHERE project_id = %(project_id)s
+        WHERE project_id = %(project_id)s {ts_condition}
         AND NOT deleted
     """
 
     query_args = {
-        "event_ids": ", ".join(
-            "'%s'" % str(uuid.UUID(eid)).replace("-", "") for eid in event_ids
-        ),
+        "event_ids": event_id_list,
         "old_primary_hash": ("'%s'" % (str(uuid.UUID(old_primary_hash)),))
         if old_primary_hash
         else "NULL",
