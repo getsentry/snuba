@@ -29,6 +29,10 @@ class RequestSettings(ABC):
         pass
 
     @abstractmethod
+    def get_dry_run(self) -> bool:
+        pass
+
+    @abstractmethod
     def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
         pass
 
@@ -45,11 +49,16 @@ class HTTPRequestSettings(RequestSettings):
     """
 
     def __init__(
-        self, turbo: bool = False, consistent: bool = False, debug: bool = False
+        self,
+        turbo: bool = False,
+        consistent: bool = False,
+        debug: bool = False,
+        dry_run: bool = False,
     ) -> None:
         self.__turbo = turbo
         self.__consistent = consistent
         self.__debug = debug
+        self.__dry_run = dry_run
         self.__rate_limit_params = [get_global_rate_limit_params()]
 
     def get_turbo(self) -> bool:
@@ -60,6 +69,9 @@ class HTTPRequestSettings(RequestSettings):
 
     def get_debug(self) -> bool:
         return self.__debug
+
+    def get_dry_run(self) -> bool:
+        return self.__dry_run
 
     def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
         return self.__rate_limit_params
@@ -81,6 +93,9 @@ class SubscriptionRequestSettings(RequestSettings):
         return True
 
     def get_debug(self) -> bool:
+        return False
+
+    def get_dry_run(self) -> bool:
         return False
 
     def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
