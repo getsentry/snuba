@@ -70,7 +70,8 @@ def parse_and_run_query(
         result = _run_query_pipeline(
             dataset=dataset, request=request, timer=timer, query_metadata=query_metadata
         )
-        record_query(request, timer, query_metadata)
+        if not request.settings.get_dry_run():
+            record_query(request, timer, query_metadata)
     except QueryException as error:
         record_query(request, timer, query_metadata)
         raise error
@@ -103,14 +104,31 @@ def _run_query_pipeline(
     ):
         metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
 
-    query_runner = partial(
-        _run_and_apply_column_names, timer, query_metadata, request.referrer,
-    )
+    if request.settings.get_dry_run():
+        query_runner = _dry_run_query_runner
+    else:
+        query_runner = partial(
+            _run_and_apply_column_names, timer, query_metadata, request.referrer,
+        )
 
     return (
         dataset.get_query_pipeline_builder()
         .build_execution_pipeline(request, query_runner)
         .execute()
+    )
+
+
+def _dry_run_query_runner(
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    request_settings: RequestSettings,
+    reader: Reader,
+) -> QueryResult:
+    with sentry_sdk.start_span(description="dryrun_create_query", op="db") as span:
+        formatted_query = format_query(clickhouse_query, request_settings)
+        span.set_data("query", formatted_query.structured())
+
+    return QueryResult(
+        {"data": [], "meta": []}, {"stats": {}, "sql": formatted_query.get_sql()}
     )
 
 
