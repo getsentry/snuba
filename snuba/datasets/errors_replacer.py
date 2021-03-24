@@ -414,8 +414,10 @@ def process_tombstone_events(
             ]
         )
     else:
-        event_id_lhs = "event_id"
-        event_id_list = ", ".join("'%s'" % uuid.UUID(eid) for eid in event_ids)
+        event_id_lhs = "cityHash64(event_id)"
+        event_id_list = ", ".join(
+            "cityHash64(toUUID('%s'))" % uuid.UUID(eid) for eid in event_ids
+        )
 
     where = f"""\
         PREWHERE {event_id_lhs} IN (%(event_ids)s)
