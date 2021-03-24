@@ -405,7 +405,7 @@ def process_tombstone_events(
     to_condition = get_timestamp_condition("to_timestamp", "<=")
 
     if state_name == ReplacerState.EVENTS:
-        event_id_lhs = "cityHash64(event_id)"
+        event_id_lhs = "cityHash64(toString(event_id))"
         event_id_list = ", ".join(
             [
                 f"cityHash64('{str(uuid.UUID(event_id)).replace('-', '')}')"
