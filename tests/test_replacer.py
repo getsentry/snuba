@@ -494,11 +494,11 @@ class TestReplacer:
 
         assert (
             re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == "SELECT count() FROM %(table_name)s FINAL PREWHERE cityHash64(toString(event_id)) IN (%(event_ids)s) AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s) WHERE project_id = %(project_id)s AND NOT deleted"
+            == "SELECT count() FROM %(table_name)s FINAL PREWHERE cityHash64(event_id) IN (%(event_ids)s) AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s) WHERE project_id = %(project_id)s AND NOT deleted"
         )
         assert (
             re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == "INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE cityHash64(toString(event_id)) IN (%(event_ids)s) AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s) WHERE project_id = %(project_id)s AND NOT deleted"
+            == "INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE cityHash64(event_id) IN (%(event_ids)s) AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s) WHERE project_id = %(project_id)s AND NOT deleted"
         )
 
         assert replacement.query_args == {
@@ -531,11 +531,11 @@ class TestReplacer:
 
         assert (
             re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == f"SELECT count() FROM %(table_name)s FINAL PREWHERE cityHash64(toString(event_id)) IN (%(event_ids)s) AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s) WHERE project_id = %(project_id)s AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp < toDateTime('{to_ts.strftime(DATETIME_FORMAT)}') AND NOT deleted"
+            == f"SELECT count() FROM %(table_name)s FINAL PREWHERE cityHash64(event_id) IN (%(event_ids)s) AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s) WHERE project_id = %(project_id)s AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}') AND NOT deleted"
         )
         assert (
             re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE cityHash64(toString(event_id)) IN (%(event_ids)s) AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s) WHERE project_id = %(project_id)s AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp < toDateTime('{to_ts.strftime(DATETIME_FORMAT)}') AND NOT deleted"
+            == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE cityHash64(event_id) IN (%(event_ids)s) AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s) WHERE project_id = %(project_id)s AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}') AND NOT deleted"
         )
 
         assert replacement.query_args == {
