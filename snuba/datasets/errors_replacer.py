@@ -393,17 +393,16 @@ def process_tombstone_events(
         # not.
         return None
 
-    from_ts = message.get("from_timestamp")
-    to_ts = message.get("to_timestamp")
-    if from_ts is not None and to_ts is not None:
-        from_ts = datetime.strptime(from_ts, settings.PAYLOAD_DATETIME_FORMAT)
-        to_ts = datetime.strptime(to_ts, settings.PAYLOAD_DATETIME_FORMAT)
-        ts_condition = f"""
-        AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND
-            timestamp < toDateTime('{to_ts.strftime(DATETIME_FORMAT)}')
-        """
-    else:
-        ts_condition = ""
+    def get_timestamp_condition(msg_field: str, operator: str) -> str:
+        msg_value = message.get(msg_field)
+        if not msg_value:
+            return ""
+
+        timestamp = datetime.strptime(msg_value, settings.PAYLOAD_DATETIME_FORMAT)
+        return f"AND timestamp {operator} toDateTime('{timestamp.strftime(DATETIME_FORMAT)}')"
+
+    from_condition = get_timestamp_condition("from_timestamp", ">=")
+    to_condition = get_timestamp_condition("to_timestamp", "<")
 
     if state_name == ReplacerState.EVENTS:
         event_id_lhs = "cityHash64(toString(event_id))"
@@ -422,7 +421,7 @@ def process_tombstone_events(
     where = f"""\
         PREWHERE {event_id_lhs} IN (%(event_ids)s)
         AND (%(old_primary_hash)s IS NULL OR primary_hash = %(old_primary_hash)s)
-        WHERE project_id = %(project_id)s {ts_condition}
+        WHERE project_id = %(project_id)s {from_condition} {to_condition}
         AND NOT deleted
     """
 
