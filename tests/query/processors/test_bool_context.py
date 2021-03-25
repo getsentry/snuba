@@ -53,18 +53,8 @@ def test_events_promoted_boolean_context() -> None:
                 "contexts[device.charging]",
                 FunctionCall(
                     "contexts[device.charging]",
-                    "multiIf",
+                    "if",
                     (
-                        binary_condition(
-                            ConditionFunctions.EQ,
-                            FunctionCall(
-                                None,
-                                "toString",
-                                (Column(None, None, "device_charging"),),
-                            ),
-                            Literal(None, ""),
-                        ),
-                        Literal(None, ""),
                         binary_condition(
                             ConditionFunctions.IN,
                             FunctionCall(
