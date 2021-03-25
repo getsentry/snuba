@@ -54,12 +54,8 @@ class EventsBooleanContextsProcessor(QueryProcessor):
                 inner = replace(exp, alias=None)
                 return FunctionCallExpr(
                     exp.alias,
-                    "multiIf",
+                    "if",
                     (
-                        binary_condition(
-                            ConditionFunctions.EQ, inner, Literal(None, "")
-                        ),
-                        Literal(None, ""),
                         binary_condition(
                             ConditionFunctions.IN,
                             inner,
