@@ -11,7 +11,9 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
-from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsProcessor
+from snuba.datasets.storages.events_bool_contexts import (
+    EventsPromotedBooleanContextsProcessor,
+)
 from snuba.datasets.storages.group_id_column_processor import GroupIdColumnProcessor
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
@@ -289,7 +291,7 @@ query_processors = [
     # tags/contexts. Once the errors dataset is in use, we will not have
     # boolean promoted tags/contexts so this constraint will be easy
     # to enforce.
-    EventsBooleanContextsProcessor(),
+    EventsPromotedBooleanContextsProcessor(),
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
     PrewhereProcessor(prewhere_candidates),

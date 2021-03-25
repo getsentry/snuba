@@ -6,12 +6,12 @@ from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
-from snuba.query.expressions import Literal
-from snuba.query.matchers import Column, FunctionCall, Or, String
+from snuba.query.expressions import Literal as LiteralExpr
+from snuba.query.matchers import Column, FunctionCall, Literal, Or, String
 from snuba.request.request_settings import RequestSettings
 
 
-class EventsBooleanContextsProcessor(QueryProcessor):
+class EventsPromotedBooleanContextsProcessor(QueryProcessor):
     """
     When Discover started using contexts it turned out that, if we return
     promoted contexts through the contexts[...] syntax we have an inconsistency
@@ -57,20 +57,78 @@ class EventsBooleanContextsProcessor(QueryProcessor):
                     "multiIf",
                     (
                         binary_condition(
-                            ConditionFunctions.EQ, inner, Literal(None, "")
+                            ConditionFunctions.EQ, inner, LiteralExpr(None, "")
                         ),
-                        Literal(None, ""),
+                        LiteralExpr(None, ""),
                         binary_condition(
                             ConditionFunctions.IN,
                             inner,
                             literals_tuple(
-                                None, [Literal(None, "1"), Literal(None, "True")]
+                                None,
+                                [LiteralExpr(None, "1"), LiteralExpr(None, "True")],
                             ),
                         ),
-                        Literal(None, "True"),
-                        Literal(None, "False"),
+                        LiteralExpr(None, "True"),
+                        LiteralExpr(None, "False"),
                     ),
                 )
             return exp
 
         query.transform_expressions(replace_exp)
+
+
+class EventsBooleanContextsProcessor(QueryProcessor):
+    """
+    Like EventsPromotedBooleanContextsProcessor but operates on the
+    non promoted context fields to ensure the same results get returned
+    from the errors and events storages.
+    """
+
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+        matcher = FunctionCall(
+            String("arrayElement"),
+            (
+                Column(None, String("contexts.value"),),
+                FunctionCall(
+                    String("indexOf"),
+                    (
+                        Column(None, String("contexts.key")),
+                        Literal(
+                            Or(
+                                [
+                                    String("device.simulator"),
+                                    String("device.online"),
+                                    String("device.charging"),
+                                ]
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        def process_column(exp: Expression) -> Expression:
+            match = matcher.match(exp)
+
+            if match:
+                inner = replace(exp, alias=None)
+                return FunctionCallExpr(
+                    exp.alias,
+                    "if",
+                    (
+                        binary_condition(
+                            ConditionFunctions.IN,
+                            inner,
+                            literals_tuple(
+                                None,
+                                [LiteralExpr(None, "1"), LiteralExpr(None, "True")],
+                            ),
+                        ),
+                        LiteralExpr(None, "True"),
+                        LiteralExpr(None, "False"),
+                    ),
+                )
+
+            return exp
+
+        query.transform_expressions(process_column)
