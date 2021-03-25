@@ -147,7 +147,6 @@ def test_events_boolean_context() -> None:
                                     ),
                                 ),
                             ),
-                            # Column(None, None, "device_charging"),
                             literals_tuple(
                                 None, [Literal(None, "1"), Literal(None, "True")]
                             ),
