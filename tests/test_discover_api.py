@@ -1052,6 +1052,97 @@ class TestDiscoverApi(BaseApiTest):
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 0, data
 
+    def test_span_op_breakdown_histogram_function(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": [
+                        [
+                            "arrayJoin",
+                            ["span_op_breakdowns.key"],
+                            "array_join_span_op_breakdowns_key",
+                        ],
+                        [
+                            "plus",
+                            [
+                                [
+                                    "multiply",
+                                    [
+                                        [
+                                            "floor",
+                                            [
+                                                [
+                                                    "divide",
+                                                    [
+                                                        [
+                                                            "minus",
+                                                            [
+                                                                [
+                                                                    "multiply",
+                                                                    [
+                                                                        [
+                                                                            "arrayJoin",
+                                                                            [
+                                                                                "span_op_breakdowns.value"
+                                                                            ],
+                                                                        ],
+                                                                        1,
+                                                                    ],
+                                                                ],
+                                                                0,
+                                                            ],
+                                                        ],
+                                                        200,
+                                                    ],
+                                                ]
+                                            ],
+                                        ],
+                                        200,
+                                    ],
+                                ],
+                                0,
+                            ],
+                            "histogram_span_op_breakdowns_value_200_0_1",
+                        ],
+                    ],
+                    "aggregations": [["count", None, "count"]],
+                    "conditions": [
+                        ["duration", "<", 900000],
+                        ["type", "=", "transaction"],
+                        ["transaction_op", "=", "pageload"],
+                        [
+                            "transaction",
+                            "=",
+                            "/organizations/:orgId/performance/summary/vitals/",
+                        ],
+                        [
+                            "array_join_span_op_breakdowns_key",
+                            "IN",
+                            ["ops.http", "ops.browser", "total.time"],
+                        ],
+                        ["histogram_span_op_breakdowns_value_200_0_1", ">=", 0],
+                        ["histogram_span_op_breakdowns_value_200_0_1", "<=", 20000],
+                        ["project_id", "IN", [1]],
+                    ],
+                    "orderby": ["histogram_span_op_breakdowns_value_200_0_1"],
+                    "having": [],
+                    "groupby": [
+                        "array_join_span_op_breakdowns_key",
+                        "histogram_span_op_breakdowns_value_200_0_1",
+                    ],
+                    "limit": 300,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+            entity="discover_transactions",
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 0, data
+
     def test_max_timestamp_by_timestamp(self) -> None:
         response = self.post(
             json.dumps(
