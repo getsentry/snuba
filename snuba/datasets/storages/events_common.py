@@ -283,6 +283,7 @@ query_processors = [
             ),
             "contexts": get_promoted_context_col_mapping(),
         },
+        cast_to_string=True,
     ),
     # This processor must not be ported to the errors dataset. We should
     # not support promoting tags/contexts with boolean values. There is
