@@ -76,7 +76,7 @@ def test_events_promoted_boolean_context() -> None:
 
     settings = HTTPRequestSettings()
     MappingColumnPromoter(
-        {"contexts": {"device.charging": "device_charging"}}
+        {"contexts": {"device.charging": "device_charging"}}, cast_to_string=True
     ).process_query(query, settings)
     EventsPromotedBooleanContextsProcessor().process_query(query, settings)
 

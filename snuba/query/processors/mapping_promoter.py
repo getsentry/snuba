@@ -78,12 +78,17 @@ class MappingColumnPromoter(QueryProcessor):
     that maps to the myTag tag.
     """
 
-    def __init__(self, mapping_specs: Mapping[str, Mapping[str, str]]) -> None:
+    def __init__(
+        self,
+        mapping_specs: Mapping[str, Mapping[str, str]],
+        cast_to_string: bool = False,  # TODO: remove once events storage is gone
+    ) -> None:
         # The configuration for this processor. The key of the
         # mapping is the name of the nested column. The value is
         # a mapping between key in the mapping column and promoted
         # column name.
         self.__specs = mapping_specs
+        self.__cast_to_string = cast_to_string
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         def transform_nested_column(exp: Expression) -> Expression:
@@ -107,7 +112,7 @@ class MappingColumnPromoter(QueryProcessor):
                     # function when the promoted column is not a string since the
                     # supported values of mapping columns are strings and the clients
                     # expect such.
-                    if (
+                    if not self.__cast_to_string or (
                         col_type_name
                         and "String" in col_type_name
                         and "FixedString" not in col_type_name
