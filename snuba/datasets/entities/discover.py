@@ -250,6 +250,7 @@ TRANSACTIONS_COLUMNS = ColumnSet(
         ("transaction_status", UInt(8, Modifiers(nullable=True))),
         ("duration", UInt(32, Modifiers(nullable=True))),
         ("measurements", Nested([("key", String()), ("value", Float(64))]),),
+        ("span_op_breakdowns", Nested([("key", String()), ("value", Float(64))]),),
     ]
 )
 
@@ -257,7 +258,7 @@ TRANSACTIONS_COLUMNS = ColumnSet(
 events_translation_mappers = TranslationMappers(
     columns=[DefaultNoneColumnMapper(TRANSACTIONS_COLUMNS)],
     functions=[DefaultNoneFunctionMapper({"apdex", "failure_rate"})],
-    subscriptables=[DefaultNoneSubscriptMapper({"measurements"})],
+    subscriptables=[DefaultNoneSubscriptMapper({"measurements", "span_op_breakdowns"})],
 )
 
 transaction_translation_mappers = TranslationMappers(
