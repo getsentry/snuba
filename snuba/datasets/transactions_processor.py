@@ -155,6 +155,33 @@ class TransactionsMessageProcessor(MessageProcessor):
                     extra={"measurements": measurements},
                     exc_info=True,
                 )
+
+        breakdowns = data.get("breakdowns")
+        if breakdowns is not None:
+            span_op_breakdowns = breakdowns.get("span_ops")
+            if span_op_breakdowns is not None:
+                try:
+                    (
+                        processed["span_op_breakdowns.key"],
+                        processed["span_op_breakdowns.value"],
+                    ) = extract_nested(
+                        span_op_breakdowns,
+                        lambda value: float(value["value"])
+                        if (
+                            value is not None
+                            and isinstance(value.get("value"), numbers.Number)
+                        )
+                        else None,
+                    )
+                except Exception:
+                    # Not failing the event in this case just yet, because we are still
+                    # developing this feature.
+                    logger.error(
+                        "Invalid breakdowns.span_ops field.",
+                        extra={"span_op_breakdowns": span_op_breakdowns},
+                        exc_info=True,
+                    )
+
         request = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
         http_data: MutableMapping[str, Any] = {}
         extract_http(http_data, request)

@@ -212,6 +212,13 @@ def get_raw_transaction() -> InsertEvent:
                 "lcp": {"value": 32.129},
                 "lcp.elementSize": {"value": 4242},
             },
+            "breakdowns": {
+                "span_ops": {
+                    "ops.db": {"value": 62.512},
+                    "ops.http": {"value": 109.774},
+                    "total.time": {"value": 172.286},
+                }
+            },
             "sdk": {
                 "name": "sentry.python",
                 "version": "0.13.4",
