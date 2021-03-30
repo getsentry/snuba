@@ -90,11 +90,7 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "tags[promoted_tag]",
-                    FunctionCall(
-                        "tags[promoted_tag]",
-                        "toString",
-                        (Column(None, "table", "promoted"),),
-                    ),
+                    Column("tags[promoted_tag]", "table", "promoted"),
                 )
             ],
         ),

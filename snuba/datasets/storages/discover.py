@@ -14,6 +14,7 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors_common import mandatory_conditions
+from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsProcessor
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
@@ -82,6 +83,7 @@ storage = ReadableTableStorage(
         MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
         ArrayJoinKeyValueOptimizer("tags"),
         UUIDColumnProcessor(set(["event_id", "trace_id"])),
+        EventsBooleanContextsProcessor(),
         PrewhereProcessor(
             [
                 "event_id",

@@ -11,7 +11,9 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
-from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsProcessor
+from snuba.datasets.storages.events_bool_contexts import (
+    EventsPromotedBooleanContextsProcessor,
+)
 from snuba.datasets.storages.group_id_column_processor import GroupIdColumnProcessor
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
@@ -281,6 +283,7 @@ query_processors = [
             ),
             "contexts": get_promoted_context_col_mapping(),
         },
+        cast_to_string=True,
     ),
     # This processor must not be ported to the errors dataset. We should
     # not support promoting tags/contexts with boolean values. There is
@@ -289,7 +292,7 @@ query_processors = [
     # tags/contexts. Once the errors dataset is in use, we will not have
     # boolean promoted tags/contexts so this constraint will be easy
     # to enforce.
-    EventsBooleanContextsProcessor(),
+    EventsPromotedBooleanContextsProcessor(),
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
     PrewhereProcessor(prewhere_candidates),

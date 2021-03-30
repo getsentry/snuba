@@ -10,6 +10,7 @@ from snuba.clickhouse.columns import (
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
 from snuba.datasets.errors_replacer import ReplacerState
+from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsProcessor
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
@@ -151,6 +152,7 @@ query_processors = [
     ),
     UserColumnProcessor(),
     UUIDColumnProcessor({"event_id", "trace_id"}),
+    EventsBooleanContextsProcessor(),
     TypeConditionOptimizer(),
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
