@@ -68,6 +68,7 @@ columns = ColumnSet(
         ("contexts", Nested([("key", String()), ("value", String())])),
         ("_contexts_flattened", String()),
         ("measurements", Nested([("key", String()), ("value", Float(64))]),),
+        ("span_op_breakdowns", Nested([("key", String()), ("value", Float(64))]),),
         ("partition", UInt(16)),
         ("offset", UInt(64)),
         ("message_timestamp", DateTime()),
