@@ -27,7 +27,7 @@ class Migration(migration.ClickhouseNodeMigration):
                         ]
                     ),
                 ),
-                after="measurements",
+                after="measurements.value",
             ),
         ]
 
@@ -52,7 +52,7 @@ class Migration(migration.ClickhouseNodeMigration):
                         ]
                     ),
                 ),
-                after="measurements",
+                after="measurements.value",
             ),
         ]
 
