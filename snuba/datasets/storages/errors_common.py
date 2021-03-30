@@ -151,7 +151,7 @@ query_processors = [
         }
     ),
     UserColumnProcessor(),
-    UUIDColumnProcessor({"event_id", "trace_id"}),
+    UUIDColumnProcessor({"event_id", "primary_hash", "trace_id"}),
     EventsBooleanContextsProcessor(),
     TypeConditionOptimizer(),
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
