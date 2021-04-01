@@ -157,15 +157,17 @@ class TestReplacer:
             re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
             == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s){old_primary_condition} WHERE project_id = %(project_id)s AND NOT deleted"
         )
-        assert replacement.query_args == {
+
+        expected = {
             "event_ids": "'00e24a15-0d7f-4ee4-b142-b61b4d893b6d'",
             "project_id": self.project_id,
             "required_columns": "event_id, primary_hash, project_id, group_id, timestamp, deleted, retention_days",
             "select_columns": "event_id, primary_hash, project_id, group_id, timestamp, 1, retention_days",
-            "old_primary_hash": "'e3d704f3-542b-44a6-21eb-ed70dc0efe13'"
-            if old_primary_hash
-            else "NULL",
         }
+        if old_primary_hash:
+            expected["old_primary_hash"] = "'e3d704f3-542b-44a6-21eb-ed70dc0efe13'"
+
+        assert replacement.query_args == expected
         assert replacement.query_time_flags == (None, self.project_id,)
 
     def test_tombstone_events_process_timestamp(self) -> None:
@@ -186,18 +188,17 @@ class TestReplacer:
 
         assert (
             re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == f"SELECT count() FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s) WHERE project_id = %(project_id)s AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}') AND NOT deleted"
+            == f"SELECT count() FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}')"
         )
         assert (
             re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s) WHERE project_id = %(project_id)s AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}') AND NOT deleted"
+            == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}')"
         )
         assert replacement.query_args == {
             "event_ids": "'00e24a15-0d7f-4ee4-b142-b61b4d893b6d'",
             "project_id": self.project_id,
             "required_columns": "event_id, primary_hash, project_id, group_id, timestamp, deleted, retention_days",
             "select_columns": "event_id, primary_hash, project_id, group_id, timestamp, 1, retention_days",
-            "old_primary_hash": "NULL",
         }
         assert replacement.query_time_flags == (None, self.project_id,)
 
@@ -218,15 +219,15 @@ class TestReplacer:
 
         assert (
             re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == "SELECT count() FROM %(table_name)s FINAL PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted"
+            == "SELECT count() FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted"
         )
 
         assert (
             re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == "INSERT INTO %(table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted"
+            == "INSERT INTO %(table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE event_id IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted"
         )
         assert replacement.query_args == {
-            "event_ids": "'00e24a150d7f4ee4b142b61b4d893b6d'",
+            "event_ids": "'00e24a15-0d7f-4ee4-b142-b61b4d893b6d'",
             "project_id": self.project_id,
             "all_columns": "project_id, timestamp, event_id, platform, environment, release, dist, ip_address_v4, ip_address_v6, user, user_id, user_name, user_email, sdk_name, sdk_version, http_method, http_referer, tags.key, tags.value, contexts.key, contexts.value, transaction_name, span_id, trace_id, partition, offset, message_timestamp, retention_days, deleted, group_id, primary_hash, hierarchical_hashes, received, message, title, culprit, level, location, version, type, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.colno, exception_frames.filename, exception_frames.function, exception_frames.lineno, exception_frames.in_app, exception_frames.package, exception_frames.module, exception_frames.stack_level, sdk_integrations, modules.name, modules.version",
             "select_columns": "project_id, timestamp, event_id, platform, environment, release, dist, ip_address_v4, ip_address_v6, user, user_id, user_name, user_email, sdk_name, sdk_version, http_method, http_referer, tags.key, tags.value, contexts.key, contexts.value, transaction_name, span_id, trace_id, partition, offset, message_timestamp, retention_days, deleted, 2, primary_hash, hierarchical_hashes, received, message, title, culprit, level, location, version, type, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.colno, exception_frames.filename, exception_frames.function, exception_frames.lineno, exception_frames.in_app, exception_frames.package, exception_frames.module, exception_frames.stack_level, sdk_integrations, modules.name, modules.version",
