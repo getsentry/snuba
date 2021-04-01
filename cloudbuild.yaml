@@ -9,6 +9,17 @@ steps:
   args: [
             'build',
             '-t', 'us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA',
+            '-t', 'getsentry/snuba:ci',
+            '--build-arg', 'SNUBA_VERSION_SHA=$COMMIT_SHA',
+            '--cache-from', 'us.gcr.io/$PROJECT_ID/$REPO_NAME:nightly',
+            '.'
+        ]
+# Build image for snuba tests
+- name: 'gcr.io/cloud-builders/docker'
+  args: [
+            'build',
+            '-f', 'Dockerfile.testing',
+            '-t', 'us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA:testing',
             '--build-arg', 'SNUBA_VERSION_SHA=$COMMIT_SHA',
             '--cache-from', 'us.gcr.io/$PROJECT_ID/$REPO_NAME:nightly',
             '.'
@@ -16,7 +27,7 @@ steps:
 # Snuba tests
 - name: 'gcr.io/$PROJECT_ID/docker-compose'
   env:
-  - 'SNUBA_IMAGE=us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA'
+  - 'SNUBA_IMAGE=us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA:testing'
   args:
   - '-f'
   - 'docker-compose.gcb.yml'
@@ -26,7 +37,7 @@ steps:
 # Clean up after tests
 - name: 'gcr.io/$PROJECT_ID/docker-compose'
   env:
-  - 'SNUBA_IMAGE=us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA'
+  - 'SNUBA_IMAGE=us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA:testing'
   args:
   - '-f'
   - 'docker-compose.gcb.yml'

@@ -1,0 +1,3 @@
+FROM getsentry/snuba:ci AS testing
+
+RUN pip install -r requirements-test.txt

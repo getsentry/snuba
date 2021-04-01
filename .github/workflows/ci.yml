@@ -54,11 +54,12 @@ jobs:
       - name: Docker set up
         run: |
           docker pull getsentry/snuba:latest || true
-          docker build --build-arg PYTHON_VERSION=3.8 -t getsentry/snuba . --cache-from getsentry/snuba:latest --target testing
+          docker build --build-arg PYTHON_VERSION=3.8 -t getsentry/snuba -t getsentry/snuba:ci . --cache-from getsentry/snuba:latest
+          docker build -f Dockerfile.testing --build-arg PYTHON_VERSION=3.8 -t getsentry/snuba:testing . --cache-from getsentry/snuba:latest
           docker network create --attachable cloudbuild
       - name: Docker Snuba tests
         run: |
-          SNUBA_IMAGE=getsentry/snuba docker-compose -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=getsentry/snuba:testing docker-compose -f docker-compose.gcb.yml run --rm snuba-test
       - name: Upload to codecov
         run: |
           bash <(curl -s https://codecov.io/bash)
