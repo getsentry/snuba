@@ -63,21 +63,20 @@ class HexIntColumnProcessor(QueryProcessor):
             except AssertionError:
                 raise HexIntValidationError("Invalid hexint")
 
+        def strip_column_alias(exp: Expression) -> Expression:
+            assert isinstance(exp, Column)
+            return Column(
+                alias=None, table_name=exp.table_name, column_name=exp.column_name
+            )
+
         def process_condition(exp: Expression) -> Expression:
             match = self.__condition_matcher.match(exp)
             if match:
-                col = match.expression("col")
-                assert isinstance(col, Column)
-
                 return FunctionCall(
                     exp.alias,
                     match.string("operator"),
                     (
-                        Column(
-                            alias=None,
-                            table_name=col.table_name,
-                            column_name=col.column_name,
-                        ),
+                        strip_column_alias(match.expression("col")),
                         translate_hexint_literal(match.expression("literal")),
                     ),
                 )
@@ -97,7 +96,10 @@ class HexIntColumnProcessor(QueryProcessor):
                 return FunctionCall(
                     exp.alias,
                     in_condition_match.string("operator"),
-                    (in_condition_match.expression("col"), new_tuple_func,),
+                    (
+                        strip_column_alias(in_condition_match.expression("col")),
+                        new_tuple_func,
+                    ),
                 )
 
             return exp
