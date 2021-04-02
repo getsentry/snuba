@@ -7,7 +7,9 @@ from snuba.datasets.spans_processor import SpansMessageProcessor
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
-from snuba.query.processors.hexint_column_processor import HexIntColumnProcessor
+from snuba.query.processors.type_converters.hexint_column_processor import (
+    HexIntColumnProcessor,
+)
 from snuba.web.split import TimeSplitQueryStrategy
 
 columns = ColumnSet(

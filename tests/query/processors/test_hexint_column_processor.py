@@ -11,7 +11,9 @@ from snuba.query.conditions import (
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.clickhouse.query import Query
-from snuba.query.processors.hexint_column_processor import HexIntColumnProcessor
+from snuba.query.processors.type_converters.hexint_column_processor import (
+    HexIntColumnProcessor,
+)
 from snuba.request.request_settings import HTTPRequestSettings
 
 
