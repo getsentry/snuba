@@ -5,7 +5,7 @@ from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import FUNCTION_TO_OPERATOR, ConditionFunctions
 from snuba.query.exceptions import ValidationException
-from snuba.query.expressions import Column, Expression, FunctionCall
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.matchers import Any as AnyMatch
 from snuba.query.matchers import Column as ColumnMatch
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
@@ -52,7 +52,13 @@ class BaseTypeConverter(QueryProcessor, ABC):
 
         self.__in_condition_matcher = FunctionCallMatch(
             in_operators,
-            (col, Param("tuple", FunctionCallMatch(String("tuple"), None)),),
+            (
+                col,
+                Param(
+                    "tuple",
+                    FunctionCallMatch(String("tuple"), all_parameters=LiteralMatch()),
+                ),
+            ),
         )
 
     def strip_column_alias(self, exp: Expression) -> Expression:
@@ -71,6 +77,10 @@ class BaseTypeConverter(QueryProcessor, ABC):
             query.set_ast_condition(condition.transform(self.process_condition))
 
     def process_condition(self, exp: Expression) -> Expression:
+        def assert_literal(lit: Expression) -> Literal:
+            assert isinstance(lit, Literal)
+            return lit
+
         match = self.__condition_matcher.match(exp)
         if match:
             return FunctionCall(
@@ -78,7 +88,7 @@ class BaseTypeConverter(QueryProcessor, ABC):
                 match.string("operator"),
                 (
                     self.strip_column_alias(match.expression("col")),
-                    self.translate_literal(match.expression("literal")),
+                    self.translate_literal(assert_literal(match.expression("literal"))),
                 ),
             )
 
@@ -87,11 +97,19 @@ class BaseTypeConverter(QueryProcessor, ABC):
         if in_condition_match:
             tuple_func = in_condition_match.expression("tuple")
             assert isinstance(tuple_func, FunctionCall)
+
+            params = tuple_func.parameters
+            for param in params:
+                assert isinstance(param, Literal)
+
             new_tuple_func = FunctionCall(
                 tuple_func.alias,
                 tuple_func.function_name,
                 parameters=tuple(
-                    [self.translate_literal(lit) for lit in tuple_func.parameters]
+                    [
+                        self.translate_literal(assert_literal(lit))
+                        for lit in tuple_func.parameters
+                    ]
                 ),
             )
             return FunctionCall(
@@ -106,7 +124,7 @@ class BaseTypeConverter(QueryProcessor, ABC):
         return exp
 
     @abstractmethod
-    def translate_literal(self, exp: Expression) -> Expression:
+    def translate_literal(self, exp: Literal) -> Literal:
         raise NotImplementedError
 
     @abstractmethod

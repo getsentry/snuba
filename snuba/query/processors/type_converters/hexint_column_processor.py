@@ -3,9 +3,8 @@ from snuba.query.processors.type_converters import BaseTypeConverter, ColumnType
 
 
 class HexIntColumnProcessor(BaseTypeConverter):
-    def translate_literal(self, exp: Expression) -> Expression:
+    def translate_literal(self, exp: Literal) -> Literal:
         try:
-            assert isinstance(exp, Literal)
             assert isinstance(exp.value, str)
             return Literal(alias=exp.alias, value=int(exp.value, 16))
         except AssertionError:
