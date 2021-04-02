@@ -21,7 +21,7 @@ class ColumnTypeError(ValidationException):
 class BaseTypeConverter(QueryProcessor, ABC):
     def __init__(self, columns: Set[str]):
         self.columns = columns
-        column_match = Or([String(col) for col in columns])
+        column_match = ColumnMatch(None, Or([String(col) for col in columns]))
 
         literal = Param("literal", LiteralMatch(AnyMatch(str)))
 
@@ -41,7 +41,7 @@ class BaseTypeConverter(QueryProcessor, ABC):
             Or((String(ConditionFunctions.IN), String(ConditionFunctions.NOT_IN))),
         )
 
-        col = Param("col", ColumnMatch(None, column_match))
+        col = Param("col", column_match)
 
         self.__condition_matcher = Or(
             [
@@ -60,6 +60,8 @@ class BaseTypeConverter(QueryProcessor, ABC):
                 ),
             ),
         )
+
+        self.__column_matcher = column_match
 
     def strip_column_alias(self, exp: Expression) -> Expression:
         assert isinstance(exp, Column)
@@ -120,6 +122,10 @@ class BaseTypeConverter(QueryProcessor, ABC):
                     new_tuple_func,
                 ),
             )
+
+        column_match = self.__column_matcher.match(exp)
+        if column_match:
+            return self.process_expressions(exp)
 
         return exp
 
