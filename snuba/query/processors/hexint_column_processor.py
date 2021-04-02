@@ -40,25 +40,18 @@ class HexIntColumnProcessor(QueryProcessor):
             Or((String(ConditionFunctions.IN), String(ConditionFunctions.NOT_IN))),
         )
 
-        col_func = FunctionCallMatch(
-            String("lower"),
-            (
-                FunctionCallMatch(
-                    String("hex"), (Param("col", ColumnMatch(None, column_match)),),
-                ),
-            ),
-        )
+        col = Param("col", ColumnMatch(None, column_match))
 
         self.__condition_matcher = Or(
             [
-                FunctionCallMatch(operator, (literal, col_func)),
-                FunctionCallMatch(operator, (col_func, literal)),
+                FunctionCallMatch(operator, (literal, col)),
+                FunctionCallMatch(operator, (col, literal)),
             ]
         )
 
         self.__in_condition_matcher = FunctionCallMatch(
             in_operators,
-            (col_func, Param("tuple", FunctionCallMatch(String("tuple"), None)),),
+            (col, Param("tuple", FunctionCallMatch(String("tuple"), None)),),
         )
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
@@ -73,11 +66,18 @@ class HexIntColumnProcessor(QueryProcessor):
         def process_condition(exp: Expression) -> Expression:
             match = self.__condition_matcher.match(exp)
             if match:
+                col = match.expression("col")
+                assert isinstance(col, Column)
+
                 return FunctionCall(
                     exp.alias,
                     match.string("operator"),
                     (
-                        match.expression("col"),
+                        Column(
+                            alias=None,
+                            table_name=col.table_name,
+                            column_name=col.column_name,
+                        ),
                         translate_hexint_literal(match.expression("literal")),
                     ),
                 )
@@ -116,7 +116,7 @@ class HexIntColumnProcessor(QueryProcessor):
 
             return exp
 
-        query.transform_expressions(process_all)
+        query.transform_expressions(process_all, skip_transform_condition=True)
 
         condition = query.get_condition()
         if condition:
