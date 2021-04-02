@@ -38,6 +38,15 @@ tests = [
         "in(column1, tuple(12297829382473034410, 13527612320720337851))",
         id="in_operator",
     ),
+    pytest.param(
+        binary_condition(
+            ConditionFunctions.EQ,
+            Column(None, None, "column1"),
+            FunctionCall(None, "toString", (Literal(None, "a" * 16),)),
+        ),
+        "equals(lower(hex(column1)), toString('aaaaaaaaaaaaaaaa'))",
+        id="equals_operator",
+    ),
 ]
 
 
