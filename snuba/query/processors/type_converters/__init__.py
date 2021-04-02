@@ -73,7 +73,7 @@ class BaseTypeConverter(QueryProcessor, ABC):
         )
 
         condition = query.get_condition()
-        if condition:
+        if condition is not None:
             processed = condition.transform(self.process_optimizable_condition)
             if processed == condition:
                 processed = condition.transform(self.process_expressions)
@@ -86,7 +86,7 @@ class BaseTypeConverter(QueryProcessor, ABC):
             return lit
 
         match = self.__condition_matcher.match(exp)
-        if match:
+        if match is not None:
             return FunctionCall(
                 exp.alias,
                 match.string("operator"),
@@ -98,7 +98,7 @@ class BaseTypeConverter(QueryProcessor, ABC):
 
         in_condition_match = self.__in_condition_matcher.match(exp)
 
-        if in_condition_match:
+        if in_condition_match is not None:
             tuple_func = in_condition_match.expression("tuple")
             assert isinstance(tuple_func, FunctionCall)
 
