@@ -45,7 +45,7 @@ tests = [
             FunctionCall(None, "toString", (Literal(None, "a" * 16),)),
         ),
         "equals(lower(hex(column1)), toString('aaaaaaaaaaaaaaaa'))",
-        id="equals_operator",
+        id="non_optimizable_condition_pattern",
     ),
 ]
 
