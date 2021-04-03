@@ -61,26 +61,26 @@ class BaseTypeConverter(QueryProcessor, ABC):
             ),
         )
 
-    def strip_column_alias(self, exp: Expression) -> Expression:
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+        query.transform_expressions(
+            self._process_expressions, skip_transform_condition=True
+        )
+
+        condition = query.get_condition()
+        if condition is not None:
+            processed = condition.transform(self.__process_optimizable_condition)
+            if processed == condition:
+                processed = condition.transform(self._process_expressions)
+
+            query.set_ast_condition(processed)
+
+    def __strip_column_alias(self, exp: Expression) -> Expression:
         assert isinstance(exp, Column)
         return Column(
             alias=None, table_name=exp.table_name, column_name=exp.column_name
         )
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
-        query.transform_expressions(
-            self.process_expressions, skip_transform_condition=True
-        )
-
-        condition = query.get_condition()
-        if condition is not None:
-            processed = condition.transform(self.process_optimizable_condition)
-            if processed == condition:
-                processed = condition.transform(self.process_expressions)
-
-            query.set_ast_condition(processed)
-
-    def process_optimizable_condition(self, exp: Expression) -> Expression:
+    def __process_optimizable_condition(self, exp: Expression) -> Expression:
         def assert_literal(lit: Expression) -> Literal:
             assert isinstance(lit, Literal)
             return lit
@@ -91,8 +91,10 @@ class BaseTypeConverter(QueryProcessor, ABC):
                 exp.alias,
                 match.string("operator"),
                 (
-                    self.strip_column_alias(match.expression("col")),
-                    self.translate_literal(assert_literal(match.expression("literal"))),
+                    self.__strip_column_alias(match.expression("col")),
+                    self._translate_literal(
+                        assert_literal(match.expression("literal"))
+                    ),
                 ),
             )
 
@@ -111,7 +113,7 @@ class BaseTypeConverter(QueryProcessor, ABC):
                 tuple_func.function_name,
                 parameters=tuple(
                     [
-                        self.translate_literal(assert_literal(lit))
+                        self._translate_literal(assert_literal(lit))
                         for lit in tuple_func.parameters
                     ]
                 ),
@@ -120,7 +122,7 @@ class BaseTypeConverter(QueryProcessor, ABC):
                 exp.alias,
                 in_condition_match.string("operator"),
                 (
-                    self.strip_column_alias(in_condition_match.expression("col")),
+                    self.__strip_column_alias(in_condition_match.expression("col")),
                     new_tuple_func,
                 ),
             )
@@ -128,9 +130,9 @@ class BaseTypeConverter(QueryProcessor, ABC):
         return exp
 
     @abstractmethod
-    def translate_literal(self, exp: Literal) -> Literal:
+    def _translate_literal(self, exp: Literal) -> Literal:
         raise NotImplementedError
 
     @abstractmethod
-    def process_expressions(self, exp: Expression) -> Expression:
+    def _process_expressions(self, exp: Expression) -> Expression:
         raise NotImplementedError

@@ -3,14 +3,14 @@ from snuba.query.processors.type_converters import BaseTypeConverter, ColumnType
 
 
 class HexIntColumnProcessor(BaseTypeConverter):
-    def translate_literal(self, exp: Literal) -> Literal:
+    def _translate_literal(self, exp: Literal) -> Literal:
         try:
             assert isinstance(exp.value, str)
             return Literal(alias=exp.alias, value=int(exp.value, 16))
         except AssertionError:
             raise ColumnTypeError("Invalid hexint")
 
-    def process_expressions(self, exp: Expression) -> Expression:
+    def _process_expressions(self, exp: Expression) -> Expression:
         if isinstance(exp, Column) and exp.column_name in self.columns:
             return FunctionCall(
                 exp.alias,
