@@ -287,7 +287,7 @@ class TestTransactionsApi(BaseApiTest):
                 {
                     "dataset": "transactions",
                     "project": 1,
-                    "selected_columns": ["event_id", "project_id"],
+                    "selected_columns": ["event_id", "span_id", "project_id"],
                     "conditions": [["event_id", "=", first_event_id]],
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
@@ -299,6 +299,7 @@ class TestTransactionsApi(BaseApiTest):
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 1
         assert data["data"][0]["event_id"] == first_event_id
+        assert data["data"][0]["span_id"] == "8841662216cc598b"
 
     def test_trace_column_formatting(self) -> None:
         response = self.post(
@@ -548,3 +549,42 @@ class TestTransactionsApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 0, data
+
+    def test_span_id(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["event_id", "span_id"],
+                    "conditions": [["span_id", "=", "8841662216cc598b"]],
+                    "limit": 1,
+                    "orderby": ["event_id"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+
+        assert data["data"][0]["span_id"] == "8841662216cc598b"
+
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["event_id", "span_id"],
+                    "conditions": [["span_id", "IN", ["8841662216cc598b"]]],
+                    "limit": 1,
+                    "orderby": ["event_id"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+
+        assert data["data"][0]["span_id"] == "8841662216cc598b"
