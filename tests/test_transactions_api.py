@@ -132,6 +132,13 @@ class TestTransactionsApi(BaseApiTest):
                                             "lcp": {"value": 32.129},
                                             "lcp.elementSize": {"value": 4242},
                                         },
+                                        "breakdowns": {
+                                            "span_ops": {
+                                                "ops.db": {"value": 62.512},
+                                                "ops.http": {"value": 109.774},
+                                                "total.time": {"value": 172.286},
+                                            }
+                                        },
                                         "spans": [
                                             {
                                                 "op": "db",
@@ -280,7 +287,7 @@ class TestTransactionsApi(BaseApiTest):
                 {
                     "dataset": "transactions",
                     "project": 1,
-                    "selected_columns": ["event_id", "project_id"],
+                    "selected_columns": ["event_id", "span_id", "project_id"],
                     "conditions": [["event_id", "=", first_event_id]],
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
@@ -292,6 +299,7 @@ class TestTransactionsApi(BaseApiTest):
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 1
         assert data["data"][0]["event_id"] == first_event_id
+        assert data["data"][0]["span_id"] == "8841662216cc598b"
 
     def test_trace_column_formatting(self) -> None:
         response = self.post(
@@ -409,6 +417,36 @@ class TestTransactionsApi(BaseApiTest):
         assert data["data"][0]["measurements[lcp]"] == 32.129
         assert data["data"][0]["measurements[asd]"] is None
 
+    def test_individual_breakdown(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": [
+                        "event_id",
+                        "span_op_breakdowns[ops.db]",
+                        "span_op_breakdowns[ops.http]",
+                        "span_op_breakdowns[total.time]",
+                        "span_op_breakdowns[not_found]",
+                    ],
+                    "limit": 1,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert "span_op_breakdowns[ops.db]" in data["data"][0]
+        assert "span_op_breakdowns[ops.http]" in data["data"][0]
+        assert "span_op_breakdowns[total.time]" in data["data"][0]
+        assert data["data"][0]["span_op_breakdowns[ops.db]"] == 62.512
+        assert data["data"][0]["span_op_breakdowns[ops.http]"] == 109.774
+        assert data["data"][0]["span_op_breakdowns[total.time]"] == 172.286
+        assert data["data"][0]["span_op_breakdowns[not_found]"] is None
+
     def test_arrayjoin_measurements(self) -> None:
         response = self.post(
             json.dumps(
@@ -438,6 +476,36 @@ class TestTransactionsApi(BaseApiTest):
         assert data["data"][2]["value"] == 32.129
         assert data["data"][3]["key"] == "lcp.elementSize"
         assert data["data"][3]["value"] == 4242
+
+    def test_arrayjoin_span_op_breakdowns(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": [
+                        "event_id",
+                        ["arrayJoin", ["span_op_breakdowns.key"], "key"],
+                        ["arrayJoin", ["span_op_breakdowns.value"], "value"],
+                    ],
+                    "limit": 4,
+                    "orderby": ["event_id", "key"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 4, data
+        assert data["data"][0]["key"] == "ops.db"
+        assert data["data"][0]["value"] == 62.512
+        assert data["data"][1]["key"] == "ops.http"
+        assert data["data"][1]["value"] == 109.774
+        assert data["data"][2]["key"] == "total.time"
+        assert data["data"][2]["value"] == 172.286
+        assert data["data"][3]["key"] == "ops.db"
+        assert data["data"][3]["value"] == 62.512
 
     def test_escaping_strings(self) -> None:
         response = self.post(
@@ -481,3 +549,42 @@ class TestTransactionsApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 0, data
+
+    def test_span_id(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["event_id", "span_id"],
+                    "conditions": [["span_id", "=", "8841662216cc598b"]],
+                    "limit": 1,
+                    "orderby": ["event_id"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+
+        assert data["data"][0]["span_id"] == "8841662216cc598b"
+
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["event_id", "span_id"],
+                    "conditions": [["span_id", "IN", ["8841662216cc598b"]]],
+                    "limit": 1,
+                    "orderby": ["event_id"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+
+        assert data["data"][0]["span_id"] == "8841662216cc598b"

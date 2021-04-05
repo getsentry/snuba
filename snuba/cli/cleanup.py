@@ -50,7 +50,8 @@ def cleanup(
 
     (clickhouse_user, clickhouse_password,) = storage.get_cluster().get_credentials()
 
-    database = storage.get_cluster().get_database()
+    cluster = storage.get_cluster()
+    database = cluster.get_database()
 
     if clickhouse_host and clickhouse_port:
         connection = ClickhousePool(
@@ -60,12 +61,12 @@ def cleanup(
             clickhouse_password,
             database,
         )
-    elif not storage.get_cluster().is_single_node():
+    elif not cluster.is_single_node():
         raise click.ClickException("Provide ClickHouse host and port for cleanup")
     else:
-        connection = storage.get_cluster().get_query_connection(
+        connection = cluster.get_query_connection(
             ClickhouseClientSettings.CLEANUP
         )
 
     num_dropped = run_cleanup(connection, storage, database, dry_run=dry_run)
-    logger.info("Dropped %s partitions on %s" % (num_dropped, clickhouse_host))
+    logger.info("Dropped %s partitions on %s" % (num_dropped, cluster))

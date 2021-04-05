@@ -256,7 +256,11 @@ class Query(DataSource, ABC):
         """
         raise NotImplementedError
 
-    def transform_expressions(self, func: Callable[[Expression], Expression]) -> None:
+    def transform_expressions(
+        self,
+        func: Callable[[Expression], Expression],
+        skip_transform_condition: bool = False,
+    ) -> None:
         """
         Transforms in place the current query object by applying a transformation
         function to all expressions contained in this query.
@@ -283,9 +287,10 @@ class Query(DataSource, ABC):
         self.__array_join = (
             self.__array_join.transform(func) if self.__array_join else None
         )
-        self.__condition = (
-            self.__condition.transform(func) if self.__condition else None
-        )
+        if not skip_transform_condition:
+            self.__condition = (
+                self.__condition.transform(func) if self.__condition else None
+            )
         self.__groupby = transform_expression_list(self.__groupby)
         self.__having = self.__having.transform(func) if self.__having else None
         self.__order_by = list(

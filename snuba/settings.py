@@ -115,9 +115,9 @@ PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 
-ERRORS_ROLLOUT_ALL: bool = False
+ERRORS_ROLLOUT_ALL: bool = True
 ERRORS_ROLLOUT_BY_REFERRER: Set[str] = set()
-ERRORS_ROLLOUT_WRITABLE_STORAGE: bool = False
+ERRORS_ROLLOUT_WRITABLE_STORAGE: bool = True
 
 ERRORS_QUERY_PERCENTAGE_BY_REFERRER: Mapping[str, float] = {}
 

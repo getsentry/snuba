@@ -141,6 +141,10 @@ test_data = [
         {"selected_columns": ["measurements[lcp.elementSize]"]},
         EntityKey.DISCOVER_TRANSACTIONS,
     ),
+    (
+        {"selected_columns": ["span_op_breakdowns[ops.http]"]},
+        EntityKey.DISCOVER_TRANSACTIONS,
+    ),
 ]
 
 

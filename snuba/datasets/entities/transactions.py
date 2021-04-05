@@ -78,6 +78,9 @@ transaction_translator = TranslationMappers(
         SubscriptableMapper(None, "tags", None, "tags"),
         SubscriptableMapper(None, "contexts", None, "contexts"),
         SubscriptableMapper(None, "measurements", None, "measurements", nullable=True),
+        SubscriptableMapper(
+            None, "span_op_breakdowns", None, "span_op_breakdowns", nullable=True
+        ),
     ],
 )
 
