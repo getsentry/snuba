@@ -8,7 +8,6 @@ from snuba.query.processors.type_converters import BaseTypeConverter, ColumnType
 class UUIDColumnProcessor(BaseTypeConverter):
     def _translate_literal(self, exp: Literal) -> Literal:
         try:
-            assert isinstance(exp, Literal)
             assert isinstance(exp.value, str)
             new_val = str(uuid.UUID(exp.value))
             return Literal(alias=exp.alias, value=new_val)
