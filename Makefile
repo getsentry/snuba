@@ -18,3 +18,7 @@ api-tests:
 install-python-dependencies:
 	pip install -e .
 	pip install -r requirements-test.txt
+
+snubadocs:
+	pip install -U -r ./docs-requirements.txt
+	sphinx-build -W -b html docs/source docs/build
