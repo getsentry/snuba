@@ -331,3 +331,24 @@ class TestSnQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["error"]["type"] == "internal_server_error"
         assert data["error"]["message"] == "stuff"
+
+    def test_sessions_with_function_orderby(self) -> None:
+        response = self.app.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (sessions)
+                    SELECT project_id, release BY release, project_id
+                    WHERE org_id = {self.org_id}
+                    AND started >= toDateTime('2021-04-05T16:52:48.907628')
+                    AND started < toDateTime('2021-04-06T16:52:49.907666')
+                    AND project_id IN tuple({self.project_id})
+                    AND project_id IN tuple({self.project_id})
+                    ORDER BY divide(sessions_crashed, sessions) ASC
+                    LIMIT 21
+                    OFFSET 0
+                    """,
+                }
+            ),
+        )
+        assert response.status_code == 200
