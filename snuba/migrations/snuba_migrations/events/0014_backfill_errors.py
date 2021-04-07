@@ -154,6 +154,9 @@ def backfill_errors() -> None:
 
     timestamp = get_monday(ts.date())
 
+    total_partitions = int((timestamp - BEGINNING_OF_TIME).days / 7)
+    migrated_partitions = 0
+
     print(f"Starting migration from {format_date(timestamp)}")
 
     while True:
@@ -170,7 +173,11 @@ def backfill_errors() -> None:
         )
         clickhouse.execute(operation.format_sql())
 
-        print(f"Migrated {format_date(timestamp)}.")
+        migrated_partitions += 1
+
+        print(
+            f"Migrated {format_date(timestamp)}. ({migrated_partitions} of {total_partitions} partitions done)"
+        )
 
         timestamp -= WINDOW
 
