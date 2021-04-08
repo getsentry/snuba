@@ -55,7 +55,7 @@ jobs:
         run: |
           docker pull getsentry/snuba:latest || true
           docker build --build-arg PYTHON_VERSION=3.8 -t getsentry/snuba -t getsentry/snuba:ci . --cache-from getsentry/snuba:latest
-          docker build -f Dockerfile.testing --build-arg PYTHON_VERSION=3.8 -t getsentry/snuba:testing . --cache-from getsentry/snuba:latest
+          docker build -f Dockerfile.testing --build-arg PARENT_BUILD=getsentry/snuba:ci --build-arg PYTHON_VERSION=3.8 -t getsentry/snuba:testing . --cache-from getsentry/snuba:latest
           docker network create --attachable cloudbuild
       - name: Docker Snuba tests
         run: |

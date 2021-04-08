@@ -1,3 +1,4 @@
-FROM getsentry/snuba:ci AS testing
+ARG PARENT_BUILD
+FROM ${PARENT_BUILD}
 
 RUN pip install -r requirements-test.txt
