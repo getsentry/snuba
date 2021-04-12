@@ -404,7 +404,6 @@ def raw_query(
     timer.mark("get_configs")
 
     sql = formatted_query.get_sql()
-    print(sql)
 
     update_with_status = partial(
         update_query_metadata_and_stats,

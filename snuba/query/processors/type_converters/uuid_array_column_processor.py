@@ -13,11 +13,11 @@ from snuba.query.processors.type_converters import BaseTypeConverter, ColumnType
 
 
 class UUIDArrayColumnProcessor(BaseTypeConverter):
-    def _translate_literal(self, exp: Literal) -> Literal:
+    def _translate_literal(self, exp: Literal) -> Expression:
         try:
             assert isinstance(exp.value, str)
             new_val = str(uuid.UUID(exp.value))
-            return Literal(alias=exp.alias, value=new_val)
+            return FunctionCall(exp.alias, "toUUID", (Literal(None, value=new_val),))
         except (AssertionError, ValueError):
             raise ColumnTypeError("Not a valid UUID string")
 
