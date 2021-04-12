@@ -48,17 +48,17 @@ steps:
       - "local"
       - "-v"
       - "--remove-orphans"
-    - name: 'gcr.io/$PROJECT_ID/docker-compose'
+  - name: "gcr.io/$PROJECT_ID/docker-compose"
     id: e2e-test
     waitFor:
       - runtime-image
       - unit-tests-cleanup
       - get-onpremise-repo
-    entrypoint: 'bash'
+    entrypoint: "bash"
     dir: onpremise
     args:
-      - '-e'
-      - '-c'
+      - "-e"
+      - "-c"
       - |
         ./install.sh
         set +e
@@ -72,15 +72,15 @@ steps:
           exit $test_return;
         fi
     timeout: 450s
-  - name: 'gcr.io/cloud-builders/docker'
+  - name: "gcr.io/cloud-builders/docker"
     id: docker-push
     waitFor:
       - e2e-test
-    secretEnv: ['DOCKER_PASSWORD']
-    entrypoint: 'bash'
+    secretEnv: ["DOCKER_PASSWORD"]
+    entrypoint: "bash"
     args:
-      - '-e'
-      - '-c'
+      - "-e"
+      - "-c"
       - |
         # Only push to Docker Hub from master
         [ "$BRANCH_NAME" != "master" ] && exit 0
