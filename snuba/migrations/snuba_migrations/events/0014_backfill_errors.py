@@ -1,17 +1,11 @@
-"""\
-Backfills the errors table from events.
-
-This script will eventually be moved to a migration - after we have a multistorage
-consumer running in all environments populating new events into both tables.
-
-Errors replacements should be turned off while this script is running.
-"""
 from datetime import date, datetime, timedelta
+from typing import Sequence
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.migrations import migration, operations
 from snuba.migrations.operations import InsertIntoSelect
 
 
@@ -160,6 +154,9 @@ def backfill_errors() -> None:
 
     timestamp = get_monday(ts.date())
 
+    total_partitions = int((timestamp - BEGINNING_OF_TIME).days / 7)
+    migrated_partitions = 0
+
     print(f"Starting migration from {format_date(timestamp)}")
 
     while True:
@@ -176,7 +173,11 @@ def backfill_errors() -> None:
         )
         clickhouse.execute(operation.format_sql())
 
-        print(f"Migrated {format_date(timestamp)}.")
+        migrated_partitions += 1
+
+        print(
+            f"Migrated {format_date(timestamp)}. ({migrated_partitions} of {total_partitions} partitions done)"
+        )
 
         timestamp -= WINDOW
 
@@ -206,3 +207,24 @@ def backfill_errors() -> None:
                 PARTITION {partition} FINAL DEDUPLICATE
                 """
             )
+
+
+class Migration(migration.CodeMigration):
+    """
+    Backfills the errors table from events.
+    Errors replacements should be turned off while this script is running.
+    Note this migration is not reversible.
+    """
+
+    blocking = True
+
+    def forwards_global(self) -> Sequence[operations.RunPython]:
+
+        return [
+            operations.RunPython(
+                func=backfill_errors, description="Backfill errors table from events"
+            ),
+        ]
+
+    def backwards_global(self) -> Sequence[operations.RunPython]:
+        return []
