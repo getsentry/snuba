@@ -17,7 +17,8 @@ from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.writer import BatchWriterEncoderWrapper
-from tests.fixtures import get_raw_transaction
+from tests.fixtures import get_raw_event, get_raw_transaction
+from tests.helpers import write_unprocessed_events
 
 
 def _drop_all_tables() -> None:
@@ -325,6 +326,68 @@ def test_groupedmessages_compatibility() -> None:
     assert connection.execute(
         f"SELECT primary_key FROM system.tables WHERE name = 'groupedmessage_local' AND database = '{database}'"
     ) == [("project_id, id",)]
+
+
+def test_backfill_errors() -> None:
+
+    backfill_migration_id = "0014_backfill_errors"
+    runner = Runner()
+    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+
+    events_migrations = next(
+        group_migrations
+        for (group, group_migrations) in runner.show_all()
+        if group == MigrationGroup.EVENTS
+    )
+
+    # Run migrations up 0014_backfill_errors
+    for migration in events_migrations:
+        if migration.migration_id == backfill_migration_id:
+            break
+
+        runner.run_migration(
+            MigrationKey(MigrationGroup.EVENTS, migration.migration_id), force=True
+        )
+
+    errors_storage = get_writable_storage(StorageKey.ERRORS)
+    clickhouse = errors_storage.get_cluster().get_query_connection(
+        ClickhouseClientSettings.QUERY
+    )
+    errors_table_name = errors_storage.get_table_writer().get_schema().get_table_name()
+
+    def get_errors_count() -> int:
+        return clickhouse.execute(f"SELECT count() from {errors_table_name}")[0][0]
+
+    raw_events = []
+    for i in range(10):
+        event = get_raw_event()
+        raw_events.append(event)
+
+    events_storage = get_writable_storage(StorageKey.EVENTS)
+
+    write_unprocessed_events(events_storage, raw_events)
+
+    assert get_errors_count() == 0
+
+    # Run 0014_backfill_errors
+    runner.run_migration(
+        MigrationKey(MigrationGroup.EVENTS, backfill_migration_id), force=True
+    )
+
+    assert get_errors_count() == 10
+
+    assert clickhouse.execute(
+        f"SELECT contexts.key, contexts.value from {errors_table_name} LIMIT 1;"
+    )[0] == (
+        (
+            "device.model_id",
+            "geo.city",
+            "geo.country_code",
+            "geo.region",
+            "os.kernel_version",
+        ),
+        ("Galaxy", "San Francisco", "US", "CA", "1.1.1"),
+    )
 
 
 def test_settings_skipped_group() -> None:
