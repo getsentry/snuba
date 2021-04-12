@@ -35,11 +35,19 @@ tests = [
             "has",
             (
                 Column(None, None, "column1"),
-                Literal(None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd459"))),
+                FunctionCall(
+                    None,
+                    "toUUID",
+                    (
+                        Literal(
+                            None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd459"))
+                        ),
+                    ),
+                ),
             ),
         ),
-        "has(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459')",
-        id="has(column1, 'a7d67cf7-9677-4551-a95b-e6543cacd459')",
+        "has(column1, toUUID('a7d67cf7-9677-4551-a95b-e6543cacd459'))",
+        id="has(column1, toUUID('a7d67cf7-9677-4551-a95b-e6543cacd459'))",
     ),
 ]
 
