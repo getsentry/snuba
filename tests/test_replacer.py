@@ -506,7 +506,6 @@ class TestReplacer:
             "project_id": self.project_id,
             "required_columns": "event_id, project_id, group_id, timestamp, deleted, retention_days",
             "select_columns": "event_id, project_id, group_id, timestamp, 1, retention_days",
-            "old_primary_hash": "NULL",
         }
 
         assert replacement.query_time_flags == (None, self.project_id,)
@@ -531,11 +530,11 @@ class TestReplacer:
 
         assert (
             re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == f"SELECT count() FROM %(table_name)s FINAL PREWHERE cityHash64(toString(event_id)) IN (%(event_ids)s) WHERE project_id = %(project_id)s AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}') AND NOT deleted"
+            == f"SELECT count() FROM %(table_name)s FINAL PREWHERE cityHash64(toString(event_id)) IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}')"
         )
         assert (
             re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE cityHash64(toString(event_id)) IN (%(event_ids)s) WHERE project_id = %(project_id)s AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}') AND NOT deleted"
+            == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE cityHash64(toString(event_id)) IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}')"
         )
 
         assert replacement.query_args == {
@@ -543,7 +542,6 @@ class TestReplacer:
             "project_id": self.project_id,
             "required_columns": "event_id, project_id, group_id, timestamp, deleted, retention_days",
             "select_columns": "event_id, project_id, group_id, timestamp, 1, retention_days",
-            "old_primary_hash": "NULL",
         }
 
         assert replacement.query_time_flags == (None, self.project_id,)

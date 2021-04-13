@@ -5,7 +5,7 @@ import uuid
 from collections import deque
 from datetime import datetime
 from enum import Enum
-from typing import Any, Deque, Mapping, Optional, Sequence, Tuple
+from typing import Any, Deque, Mapping, Optional, Sequence, Tuple, MutableMapping, List
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
@@ -176,7 +176,9 @@ class ErrorsReplacer(ReplacerProcessor):
                 event, self.__required_columns, self.__state_name
             )
         elif type_ == "replace_group":
-            processed = process_replace_group(event, self.__all_columns)
+            processed = process_replace_group(
+                event, self.__all_columns, self.__state_name
+            )
         elif type_ == "exclude_groups":
             processed = process_exclude_groups(event)
         else:
@@ -298,8 +300,57 @@ def _build_group_replacement(
     )
 
 
+def _build_event_set_filter(
+    message: Mapping[str, Any], state_name: ReplacerState
+) -> Optional[Tuple[List[str], List[str], MutableMapping[str, str]]]:
+    event_ids = message["event_ids"]
+    if not event_ids:
+        return None
+
+    def get_timestamp_condition(msg_field: str, operator: str) -> str:
+        msg_value = message.get(msg_field)
+        if not msg_value:
+            return ""
+
+        timestamp = datetime.strptime(msg_value, settings.PAYLOAD_DATETIME_FORMAT)
+        return (
+            f"timestamp {operator} toDateTime('{timestamp.strftime(DATETIME_FORMAT)}')"
+        )
+
+    from_condition = get_timestamp_condition("from_timestamp", ">=")
+    to_condition = get_timestamp_condition("to_timestamp", "<=")
+
+    if state_name == ReplacerState.EVENTS:
+        event_id_lhs = "cityHash64(toString(event_id))"
+        event_id_list = ", ".join(
+            [
+                f"cityHash64('{str(uuid.UUID(event_id)).replace('-', '')}')"
+                for event_id in event_ids
+            ]
+        )
+    else:
+        event_id_lhs = "event_id"
+        event_id_list = ", ".join("'%s'" % uuid.UUID(eid) for eid in event_ids)
+
+    prewhere = [f"{event_id_lhs} IN (%(event_ids)s)"]
+    where = ["project_id = %(project_id)s", "NOT deleted"]
+    if from_condition:
+        where.append(from_condition)
+    if to_condition:
+        where.append(to_condition)
+
+    query_args = {
+        "event_ids": event_id_list,
+        "project_id": message["project_id"],
+    }
+
+    return prewhere, where, query_args
+
+
 def process_replace_group(
-    message: Mapping[str, Any], all_columns: Sequence[FlattenedColumn]
+    message: Mapping[str, Any],
+    all_columns: Sequence[FlattenedColumn],
+    state_name: ReplacerState,
 ) -> Optional[Replacement]:
     """
     Merge individual events into new group. The old group will have to be
@@ -316,21 +367,13 @@ def process_replace_group(
     if not event_ids:
         return None
 
-    # XXX: We need to construct a query that works on both event_id columns,
-    # either represented as UUID or as hyphenless FixedString. That's why we
-    # use replaceAll(toString()).
-    where = """\
-        PREWHERE replaceAll(toString(event_id), '-', '') IN (%(event_ids)s)
-        WHERE project_id = %(project_id)s
-        AND NOT deleted
-    """
+    event_set_filter = _build_event_set_filter(message, state_name)
+    if event_set_filter is None:
+        return None
 
-    query_args = {
-        "event_ids": ", ".join(
-            "'%s'" % str(uuid.UUID(eid)).replace("-", "") for eid in event_ids
-        ),
-    }
+    prewhere, where, query_args = event_set_filter
 
+    full_where = f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
     project_id: int = message["project_id"]
     query_time_flags = (None, project_id)
 
@@ -338,7 +381,7 @@ def process_replace_group(
         message.get("transaction_id"),
         project_id,
         message["new_group_id"],
-        where,
+        full_where,
         query_args,
         query_time_flags,
         all_columns,
@@ -393,51 +436,27 @@ def process_tombstone_events(
         # not.
         return None
 
-    def get_timestamp_condition(msg_field: str, operator: str) -> str:
-        msg_value = message.get(msg_field)
-        if not msg_value:
-            return ""
+    event_set_filter = _build_event_set_filter(message, state_name)
+    if event_set_filter is None:
+        return None
 
-        timestamp = datetime.strptime(msg_value, settings.PAYLOAD_DATETIME_FORMAT)
-        return f"AND timestamp {operator} toDateTime('{timestamp.strftime(DATETIME_FORMAT)}')"
-
-    from_condition = get_timestamp_condition("from_timestamp", ">=")
-    to_condition = get_timestamp_condition("to_timestamp", "<=")
-
-    if state_name == ReplacerState.EVENTS:
-        event_id_lhs = "cityHash64(toString(event_id))"
-        event_id_list = ", ".join(
-            [
-                f"cityHash64('{str(uuid.UUID(event_id)).replace('-', '')}')"
-                for event_id in event_ids
-            ]
-        )
-    else:
-        event_id_lhs = "event_id"
-        event_id_list = ", ".join("'%s'" % uuid.UUID(eid) for eid in event_ids)
+    prewhere, where, query_args = event_set_filter
 
     if old_primary_hash:
-        old_primary_hash_condition = " AND primary_hash = %(old_primary_hash)s"
-    else:
-        old_primary_hash_condition = ""
+        query_args["old_primary_hash"] = (
+            ("'%s'" % (str(uuid.UUID(old_primary_hash)),))
+            if old_primary_hash
+            else "NULL"
+        )
 
-    where = f"""\
-        PREWHERE {event_id_lhs} IN (%(event_ids)s){old_primary_hash_condition}
-        WHERE project_id = %(project_id)s {from_condition} {to_condition}
-        AND NOT deleted
-    """
-
-    query_args = {
-        "event_ids": event_id_list,
-        "old_primary_hash": ("'%s'" % (str(uuid.UUID(old_primary_hash)),))
-        if old_primary_hash
-        else "NULL",
-    }
+        prewhere.append("primary_hash = %(old_primary_hash)s")
 
     query_time_flags = (None, message["project_id"])
 
+    full_where = f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
+
     return _build_event_tombstone_replacement(
-        message, required_columns, where, query_args, query_time_flags
+        message, required_columns, full_where, query_args, query_time_flags
     )
 
 
