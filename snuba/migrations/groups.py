@@ -101,6 +101,8 @@ class EventsLoader(DirectoryLoader):
             "0011_rebuild_errors",
             "0012_errors_make_level_nullable",
             "0013_errors_add_hierarchical_hashes",
+            "0014_backfill_errors",
+            "0015_truncate_events",
         ]
 
 

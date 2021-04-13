@@ -21,7 +21,9 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.processors.uuid_column_processor import UUIDColumnProcessor
+from snuba.query.processors.type_converters.uuid_column_processor import (
+    UUIDColumnProcessor,
+)
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 columns = ColumnSet(
