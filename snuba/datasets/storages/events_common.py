@@ -299,7 +299,7 @@ query_processors = [
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
     PrewhereProcessor(prewhere_candidates),
-    FixedStringArrayColumnProcessor({"hierarchical_hashes"}),
+    FixedStringArrayColumnProcessor({"hierarchical_hashes"}, 32),
 ]
 
 

@@ -1,3 +1,4 @@
+from typing import Set
 from snuba.query.expressions import (
     Expression,
     FunctionCall,
@@ -7,13 +8,17 @@ from snuba.query.processors.type_converters import BaseTypeConverter, ColumnType
 
 
 class FixedStringArrayColumnProcessor(BaseTypeConverter):
+    def __init__(self, columns: Set[str], fixed_length: int):
+        self.fixed_length = fixed_length
+        super().__init__(columns)
+
     def _translate_literal(self, exp: Literal) -> Expression:
         try:
             assert isinstance(exp.value, str)
             return FunctionCall(
                 exp.alias,
                 "toFixedString",
-                (Literal(None, value=exp.value), Literal(None, 32)),
+                (Literal(None, value=exp.value), Literal(None, self.fixed_length)),
             )
         except (AssertionError, ValueError):
             raise ColumnTypeError("Not a valid UUID string")
