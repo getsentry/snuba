@@ -93,6 +93,8 @@ steps:
         docker push $$DOCKER_REPO:$COMMIT_SHA
         docker tag $$SNUBA_IMAGE $$DOCKER_REPO:nightly
         docker push $$DOCKER_REPO:nightly
+# This is needed for Freight to find matching builds
+images: ['us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA']
 timeout: 2640s
 options:
   # We need more memory for Webpack builds & e2e onpremise tests
