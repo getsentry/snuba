@@ -9,8 +9,6 @@ from snuba.query.expressions import (
     Expression,
     FunctionCall,
     Literal,
-    Lambda,
-    Argument,
 )
 from snuba.clickhouse.query import Query
 from snuba.query.processors.type_converters.fixedstring_array_column_processor import (
@@ -69,21 +67,7 @@ def test_uuid_array_column_processor(
         unprocessed_query, HTTPRequestSettings()
     )
     assert unprocessed_query.get_selected_columns() == [
-        SelectedExpression(
-            "column2",
-            FunctionCall(
-                None,
-                "arrayMap",
-                (
-                    Lambda(
-                        None,
-                        ("x",),
-                        FunctionCall(None, "toString", (Argument(None, "x"),)),
-                    ),
-                    Column(None, None, "column2"),
-                ),
-            ),
-        )
+        SelectedExpression("column2", Column(None, None, "column2"),)
     ]
 
     assert expected_query.get_condition() == unprocessed_query.get_condition()
