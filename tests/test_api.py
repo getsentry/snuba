@@ -1817,6 +1817,30 @@ class TestApi(SimpleAPITest):
         )
         assert "deleted = 0" in result["sql"] or "equals(deleted, 0)" in result["sql"]
 
+    def test_hierarchical_hashes(self) -> None:
+        result = json.loads(
+            self.post(
+                json.dumps(
+                    {
+                        "project": 1,
+                        "granularity": 3600,
+                        "selected_columns": [
+                            ["arraySlice", ["hierarchical_hashes", 0, 2]]
+                        ],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
+                    }
+                ),
+            ).data
+        )
+
+        assert result["sql"].startswith(
+            "SELECT arrayMap((x -> replaceAll(toString(x), '-', '')), "
+            "arraySlice(hierarchical_hashes, 0, 2)) FROM errors_local PREWHERE"
+        )
+
 
 class TestCreateSubscriptionApi(BaseApiTest):
     dataset_name = "events"
