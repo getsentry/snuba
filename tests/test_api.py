@@ -1817,7 +1817,7 @@ class TestApi(SimpleAPITest):
         )
         assert "deleted = 0" in result["sql"] or "equals(deleted, 0)" in result["sql"]
 
-    def test_hierarchical_hashes(self) -> None:
+    def test_hierarchical_hashes_array_slice(self) -> None:
         result = json.loads(
             self.post(
                 json.dumps(
@@ -1839,6 +1839,28 @@ class TestApi(SimpleAPITest):
         assert result["sql"].startswith(
             "SELECT arrayMap((x -> replaceAll(toString(x), '-', '')), "
             "arraySlice(hierarchical_hashes, 0, 2)) FROM errors_local PREWHERE"
+        )
+
+    def test_hierarchical_hashes_array_join(self) -> None:
+        result = json.loads(
+            self.post(
+                json.dumps(
+                    {
+                        "project": 1,
+                        "granularity": 3600,
+                        "selected_columns": [["arrayPoop", ["hierarchical_hashes"]]],
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
+                    }
+                ),
+            ).data
+        )
+
+        assert result["sql"].startswith(
+            "SELECT arrayJoin((arrayMap((x -> replaceAll(toString(x), '-', '')), "
+            "hierarchical_hashes) AS _snuba_hierarchical_hashes)) FROM errors_local PREWHERE"
         )
 
 
