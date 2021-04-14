@@ -1,5 +1,4 @@
 import pytest
-import uuid
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
@@ -14,47 +13,12 @@ from snuba.query.expressions import (
     Argument,
 )
 from snuba.clickhouse.query import Query
-from snuba.query.processors.type_converters.uuid_array_column_processor import (
-    UUIDArrayColumnProcessor,
-)
+from snuba.query.processors.slice_of_map_optimizer import SliceOfMapOptimizer
 from snuba.request.request_settings import HTTPRequestSettings
 
 
 tests = [
     pytest.param(
-        FunctionCall(
-            None,
-            "has",
-            (
-                Column(None, None, "column1"),
-                Literal(None, "a7d67cf796774551a95be6543cacd459"),
-            ),
-        ),
-        FunctionCall(
-            None,
-            "has",
-            (
-                Column(None, None, "column1"),
-                FunctionCall(
-                    None,
-                    "toUUID",
-                    (
-                        Literal(
-                            None, str(uuid.UUID("a7d67cf7-9677-4551-a95b-e6543cacd459"))
-                        ),
-                    ),
-                ),
-            ),
-        ),
-        "has(column1, toUUID('a7d67cf7-9677-4551-a95b-e6543cacd459'))",
-        id="has(column1, toUUID('a7d67cf7-9677-4551-a95b-e6543cacd459'))",
-    ),
-    pytest.param(
-        FunctionCall(
-            None,
-            "arraySlice",
-            (Column(None, None, "column1"), Literal(None, 0), Literal(None, 2),),
-        ),
         FunctionCall(
             None,
             "arraySlice",
@@ -85,9 +49,37 @@ tests = [
                 Literal(None, 2),
             ),
         ),
-        "arraySlice(arrayMap((x -> replaceAll(toString(x), '-', '')), column1), 0, 2)",
-        id="arraySlice(arrayMap((x -> replaceAll(toString(x), '-', '')), column1), 0, 2)",
-    ),
+        FunctionCall(
+            None,
+            "arrayMap",
+            (
+                Lambda(
+                    None,
+                    ("x",),
+                    FunctionCall(
+                        None,
+                        "replaceAll",
+                        (
+                            FunctionCall(None, "toString", (Argument(None, "x"),)),
+                            Literal(None, "-"),
+                            Literal(None, ""),
+                        ),
+                    ),
+                ),
+                FunctionCall(
+                    None,
+                    "arraySlice",
+                    (
+                        Column(None, None, "column1"),
+                        Literal(None, 0),
+                        Literal(None, 2),
+                    ),
+                ),
+            ),
+        ),
+        "arrayMap((x -> replaceAll(toString(x), '-', '')), arraySlice(column1, 0, 2))",
+        id="arrayMap((x -> replaceAll(toString(x), '-', '')), arraySlice(column1, 0, 2))",
+    )
 ]
 
 
@@ -106,34 +98,7 @@ def test_uuid_array_column_processor(
         condition=expected,
     )
 
-    UUIDArrayColumnProcessor(set(["column1", "column2"])).process_query(
-        unprocessed_query, HTTPRequestSettings()
-    )
-    assert unprocessed_query.get_selected_columns() == [
-        SelectedExpression(
-            "column2",
-            FunctionCall(
-                None,
-                "arrayMap",
-                (
-                    Lambda(
-                        None,
-                        ("x",),
-                        FunctionCall(
-                            None,
-                            "replaceAll",
-                            (
-                                FunctionCall(None, "toString", (Argument(None, "x"),)),
-                                Literal(None, "-"),
-                                Literal(None, ""),
-                            ),
-                        ),
-                    ),
-                    Column(None, None, "column2"),
-                ),
-            ),
-        )
-    ]
+    SliceOfMapOptimizer().process_query(unprocessed_query, HTTPRequestSettings())
 
     assert expected_query.get_condition() == unprocessed_query.get_condition()
     condition = unprocessed_query.get_condition()
