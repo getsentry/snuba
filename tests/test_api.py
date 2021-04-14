@@ -1818,23 +1818,22 @@ class TestApi(SimpleAPITest):
         assert "deleted = 0" in result["sql"] or "equals(deleted, 0)" in result["sql"]
 
     def test_hierarchical_hashes_array_slice(self) -> None:
-        result = json.loads(
-            self.post(
-                json.dumps(
-                    {
-                        "project": 1,
-                        "granularity": 3600,
-                        "selected_columns": [
-                            ["arraySlice", ["hierarchical_hashes", 0, 2]]
-                        ],
-                        "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
-                    }
-                ),
-            ).data
+        response = self.post(
+            json.dumps(
+                {
+                    "project": 1,
+                    "granularity": 3600,
+                    "selected_columns": [["arraySlice", ["hierarchical_hashes", 0, 2]]],
+                    "from_date": self.base_time.isoformat(),
+                    "to_date": (
+                        self.base_time + timedelta(minutes=self.minutes)
+                    ).isoformat(),
+                }
+            ),
         )
+
+        assert response.status_code == 200
+        result = json.loads(self.post(response.data))
 
         assert result["sql"].startswith(
             "SELECT arrayMap((x -> replaceAll(toString(x), '-', '')), "
@@ -1842,21 +1841,22 @@ class TestApi(SimpleAPITest):
         )
 
     def test_hierarchical_hashes_array_join(self) -> None:
-        result = json.loads(
-            self.post(
-                json.dumps(
-                    {
-                        "project": 1,
-                        "granularity": 3600,
-                        "selected_columns": [["arrayJoin", ["hierarchical_hashes"]]],
-                        "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
-                    }
-                ),
-            ).data
+        response = self.post(
+            json.dumps(
+                {
+                    "project": 1,
+                    "granularity": 3600,
+                    "selected_columns": [["arrayJoin", ["hierarchical_hashes"]]],
+                    "from_date": self.base_time.isoformat(),
+                    "to_date": (
+                        self.base_time + timedelta(minutes=self.minutes)
+                    ).isoformat(),
+                }
+            ),
         )
+
+        assert response.status_code == 200
+        result = json.loads(response.data)
 
         assert result["sql"].startswith(
             "SELECT arrayJoin((arrayMap((x -> replaceAll(toString(x), '-', '')), "
