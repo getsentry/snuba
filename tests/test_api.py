@@ -1848,7 +1848,7 @@ class TestApi(SimpleAPITest):
                     {
                         "project": 1,
                         "granularity": 3600,
-                        "selected_columns": [["arrayPoop", ["hierarchical_hashes"]]],
+                        "selected_columns": [["arrayJoin", ["hierarchical_hashes"]]],
                         "from_date": self.base_time.isoformat(),
                         "to_date": (
                             self.base_time + timedelta(minutes=self.minutes)
