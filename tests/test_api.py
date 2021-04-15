@@ -1833,7 +1833,7 @@ class TestApi(SimpleAPITest):
         )
 
         assert response.status_code == 200
-        result = json.loads(self.post(response.data))
+        result = json.loads(response.data)
 
         assert result["sql"].startswith(
             "SELECT arrayMap((x -> replaceAll(toString(x), '-', '')), "
