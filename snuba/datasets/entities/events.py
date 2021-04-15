@@ -1,11 +1,8 @@
-import random
 from abc import ABC
 from datetime import timedelta
-from functools import partial
 from typing import List, Mapping, Optional, Sequence, Tuple
 
-import sentry_sdk
-from snuba import environment, settings, state
+from snuba import settings, state
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
     ColumnToFunction,
@@ -15,7 +12,6 @@ from snuba.clickhouse.translators.snuba.mappers import (
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
-from snuba.datasets.entities.assign_reason import assign_reason_category
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import (
     QueryStorageSelector,
@@ -29,7 +25,6 @@ from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall
 from snuba.query.extensions import QueryExtension
-from snuba.query.formatters.tracing import format_query
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
@@ -40,9 +35,6 @@ from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
-from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.threaded_function_delegator import Result
-from snuba.web import QueryResult
 
 event_translator = TranslationMappers(
     columns=[
@@ -95,136 +87,6 @@ errors_translators = TranslationMappers(
         SubscriptableMapper(None, "contexts", None, "contexts"),
     ],
 )
-
-metrics = MetricsWrapper(environment.metrics, "snuplicator")
-
-
-def callback_func(
-    storage: str,
-    query: Query,
-    request_settings: RequestSettings,
-    referrer: str,
-    results: List[Result[QueryResult]],
-) -> None:
-    cache_hit = False
-    is_duplicate = False
-
-    # Captures if any of the queries involved was a cache hit or duplicate, as cache
-    # hits may a cause of inconsistency between results.
-    # Doesn't attempt to distinguish between all of the specific scenarios (one or both
-    # queries, or splits of those queries could have hit the cache).
-    if any([result.result.extra["stats"].get("cache_hit", 0) for result in results]):
-        cache_hit = True
-    elif any(
-        [result.result.extra["stats"].get("is_duplicate", 0) for result in results]
-    ):
-        is_duplicate = True
-
-    consistent = request_settings.get_consistent()
-
-    if not results:
-        metrics.increment(
-            "query_result",
-            tags={"storage": storage, "match": "empty", "referrer": referrer},
-        )
-        return
-
-    primary_result = results.pop(0)
-    primary_result_data = primary_result.result.result["data"]
-
-    for result in results:
-        result_data = result.result.result["data"]
-
-        metrics.timing(
-            "diff_ms",
-            round((result.execution_time - primary_result.execution_time) * 1000),
-            tags={
-                "referrer": referrer,
-                "cache_hit": str(cache_hit),
-                "is_duplicate": str(is_duplicate),
-                "consistent": str(consistent),
-            },
-        )
-
-        # Do not bother diffing the actual results of sampled queries
-        if request_settings.get_turbo() or query.get_sample() not in [None, 1.0]:
-            return
-
-        if result_data == primary_result_data:
-            metrics.increment(
-                "query_result",
-                tags={
-                    "storage": storage,
-                    "match": "true",
-                    "referrer": referrer,
-                    "cache_hit": str(cache_hit),
-                    "is_duplicate": str(is_duplicate),
-                    "consistent": str(consistent),
-                },
-            )
-        else:
-            reason = assign_reason_category(result_data, primary_result_data, referrer)
-
-            metrics.increment(
-                "query_result",
-                tags={
-                    "storage": storage,
-                    "match": "false",
-                    "referrer": referrer,
-                    "reason": reason,
-                    "cache_hit": str(cache_hit),
-                    "is_duplicate": str(is_duplicate),
-                    "consistent": str(consistent),
-                },
-            )
-
-            # Avoid noise in Sentry
-            if cache_hit or reason == "NONDETERMINISTIC_QUERY":
-                continue
-
-            if len(result_data) != len(primary_result_data):
-                sentry_sdk.capture_message(
-                    f"Non matching {storage} result - different length",
-                    level="warning",
-                    tags={
-                        "referrer": referrer,
-                        "storage": storage,
-                        "reason": reason,
-                        "cache_hit": str(cache_hit),
-                        "is_duplicate": str(is_duplicate),
-                        "consistent": str(consistent),
-                    },
-                    extras={
-                        "query": format_query(query),
-                        "primary_result": len(primary_result_data),
-                        "other_result": len(result_data),
-                    },
-                )
-
-                break
-
-            # Avoid sending too much data to Sentry - just one row for now
-            for idx in range(len(result_data)):
-                if result_data[idx] != primary_result_data[idx]:
-                    sentry_sdk.capture_message(
-                        "Non matching result - different result",
-                        level="warning",
-                        tags={
-                            "referrer": referrer,
-                            "storage": storage,
-                            "reason": reason,
-                            "cache_hit": str(cache_hit),
-                            "is_duplicate": str(is_duplicate),
-                            "consistent": str(consistent),
-                        },
-                        extras={
-                            "query": format_query(query),
-                            "primary_result": primary_result_data[idx],
-                            "other_result": result_data[idx],
-                        },
-                    )
-
-                    break
 
 
 class EventsQueryStorageSelector(QueryStorageSelector):
@@ -306,20 +168,8 @@ class BaseEventsEntity(Entity, ABC):
             if int(kill_rollout):
                 return "events", []
 
-            if referrer in settings.ERRORS_ROLLOUT_BY_REFERRER:
-                return "errors", []
-
             if settings.ERRORS_ROLLOUT_ALL:
                 return "errors", []
-
-            default_threshold = state.get_config("errors_query_percentage", 0)
-            assert isinstance(default_threshold, (float, int, str))
-            threshold = settings.ERRORS_QUERY_PERCENTAGE_BY_REFERRER.get(
-                referrer, default_threshold
-            )
-
-            if random.random() < float(threshold):
-                return "events", ["errors"]
 
             return "events", []
 
@@ -337,7 +187,7 @@ class BaseEventsEntity(Entity, ABC):
                     "errors": errors_pipeline_builder,
                 },
                 selector_func=selector_func,
-                callback_func=partial(callback_func, "errors"),
+                callback_func=None,
             ),
             abstract_column_set=columns,
             join_relationships={
