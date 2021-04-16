@@ -334,7 +334,7 @@ class TestSnQLApi(BaseApiTest):
 
     def test_sessions_with_function_orderby(self) -> None:
         response = self.app.post(
-            "/events/snql",
+            "/sessions/snql",
             data=json.dumps(
                 {
                     "query": f"""MATCH (sessions)
@@ -347,6 +347,28 @@ class TestSnQLApi(BaseApiTest):
                     ORDER BY divide(sessions_crashed, sessions) ASC
                     LIMIT 21
                     OFFSET 0
+                    """,
+                }
+            ),
+        )
+        assert response.status_code == 200
+
+    def test_arrayjoin(self) -> None:
+        response = self.app.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT count() AS times_seen, min(timestamp) AS first_seen, max(timestamp) AS last_seen
+                    BY exception_frames.filename
+                    ARRAY JOIN exception_frames.filename
+                    WHERE timestamp >= toDateTime('2021-04-16T17:17:00')
+                    AND timestamp < toDateTime('2021-04-16T23:17:00')
+                    AND project_id IN tuple({self.project_id})
+                    AND exception_frames.filename LIKE '%.java'
+                    AND project_id IN tuple({self.project_id})
+                    ORDER BY last_seen DESC
+                    LIMIT 1000
                     """,
                 }
             ),
