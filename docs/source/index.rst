@@ -3,9 +3,10 @@ with a fast ingestion consumer and a query optimizer.
 
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Contents:
 
    architecture/overview
    architecture/datamodel
    architecture/queryprocessing
+   language/snql

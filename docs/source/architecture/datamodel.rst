@@ -114,7 +114,7 @@ related with an Entity Type. Specifically:
   can run query on), but can be backed by multiple Storages (for example a
   pre-aggregate materialized view). Multiple Storages per Entity Type are meant
   to allow query optimizations.
-- Each Entity Type must be backed by one and only one (for now) Writable
+- Each Entity Type must be backed by one and only one Writable
   Storage that is used to ingest data and fill in the database tables.
 - Each Storage is backing exclusively one Entity Type.
 
