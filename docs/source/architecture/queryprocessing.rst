@@ -78,7 +78,7 @@ before or after and should be independent from each other.
 Storage Selector
 ----------------
 
-As explained in the data model section, each Entity can define multiple Storages.
+As explained in :doc:`/architecture/datamodel`, each Entity can define multiple Storages.
 Multiple storages represent multiple tables and materialized views can be defined
 for performance reasons as some can respond to some queries faster.
 
