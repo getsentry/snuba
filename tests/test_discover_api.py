@@ -1329,84 +1329,6 @@ class TestDiscoverApi(BaseApiTest):
             f"SELECT (type AS _snuba_type), (arrayElement(tags.value, indexOf(tags.key, 'custom_tag')) AS `_snuba_tags[custom_tag]`), ({release_column} AS _snuba_release)"
         )
 
-    def test_exception_stack_column_boolean_condition_with_arrayjoin(self) -> None:
-        response = self.post(
-            json.dumps(
-                {
-                    "dataset": "discover",
-                    "project": self.project_id,
-                    "aggregations": [["count", None, "count"]],
-                    "arrayjoin": "exception_stacks.type",
-                    "groupby": "exception_stacks.type",
-                    "debug": True,
-                    "conditions": [
-                        [
-                            [
-                                "or",
-                                [
-                                    [
-                                        "equals",
-                                        [
-                                            "exception_stacks.type",
-                                            "'ArithmeticException'",
-                                        ],
-                                    ],
-                                    [
-                                        "equals",
-                                        ["exception_stacks.type", "'RuntimeException'"],
-                                    ],
-                                ],
-                            ],
-                            "=",
-                            1,
-                        ],
-                    ],
-                    "limit": 1000,
-                    "from_date": (self.base_time - self.skew).isoformat(),
-                    "to_date": (self.base_time + self.skew).isoformat(),
-                }
-            ),
-            entity="discover_events",
-        )
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data["data"] == [
-            {"count": 1, "exception_stacks.type": "ArithmeticException"}
-        ]
-
-    def test_exception_frames_column_boolean_condition_with_arrayjoin(self) -> None:
-        response = self.post(
-            json.dumps(
-                {
-                    "selected_columns": [],
-                    "debug": True,
-                    "orderby": "-last_seen",
-                    "limit": 1000,
-                    "arrayjoin": "exception_frames.filename",
-                    "project": [self.project_id],
-                    "dataset": "discover",
-                    "from_date": (self.base_time - self.skew).isoformat(),
-                    "to_date": (self.base_time + self.skew).isoformat(),
-                    "groupby": ["exception_frames.filename"],
-                    "conditions": [
-                        ["exception_frames.filename", "LIKE", "%.java"],
-                        ["project_id", "IN", [self.project_id]],
-                    ],
-                    "aggregations": [
-                        ["count()", "", "times_seen"],
-                        ["min", "timestamp", "first_seen"],
-                        ["max", "timestamp", "last_seen"],
-                    ],
-                    "consistent": False,
-                },
-            ),
-            entity="discover_events",
-        )
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert len(data["data"]) == 6
-        assert False
-
 
 class TestArrayJoinDiscoverAPI(BaseApiTest):
     def setup_method(self, test_method: Callable[..., Any]) -> None:
@@ -1489,3 +1411,49 @@ class TestArrayJoinDiscoverAPI(BaseApiTest):
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["data"] == [{"count": 1}]
+
+    def test_exception_stack_column_boolean_condition_with_arrayjoin(self) -> None:
+        response = self.app.post(
+            "/query",
+            headers={"referer": "test"},
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [["count", None, "count"]],
+                    "arrayjoin": "exception_stacks.type",
+                    "groupby": "exception_stacks.type",
+                    "debug": True,
+                    "conditions": [
+                        [
+                            [
+                                "or",
+                                [
+                                    [
+                                        "equals",
+                                        [
+                                            "exception_stacks.type",
+                                            "'ArithmeticException'",
+                                        ],
+                                    ],
+                                    [
+                                        "equals",
+                                        ["exception_stacks.type", "'RuntimeException'"],
+                                    ],
+                                ],
+                            ],
+                            "=",
+                            1,
+                        ],
+                    ],
+                    "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [
+            {"count": 1, "exception_stacks.type": "ArithmeticException"}
+        ]

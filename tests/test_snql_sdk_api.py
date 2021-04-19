@@ -165,39 +165,3 @@ class TestSDKSnQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, data
         assert data["data"] == [{"avg_count": 1.0}]
-
-    def test_arrayjoin(self) -> None:
-        query = (
-            Query("events", Entity("events"))
-            .set_select(
-                [
-                    Function("count", [], "times_seen"),
-                    Function("min", [Column("timestamp")], "first_seen"),
-                    Function("max", [Column("timestamp")], "last_seen"),
-                ]
-            )
-            .set_groupby([Column("exception_frames.filename")])
-            .set_array_join(Column("exception_frames.filename"))
-            .set_where(
-                [
-                    Condition(Column("exception_frames.filename"), Op.LIKE, "%.java"),
-                    Condition(Column("project_id"), Op.EQ, self.project_id),
-                    Condition(Column("timestamp"), Op.GTE, self.base_time),
-                    Condition(Column("timestamp"), Op.LT, self.next_time),
-                ]
-            )
-            .set_orderby(
-                [
-                    OrderBy(
-                        Function("max", [Column("timestamp")], "last_seen"),
-                        Direction.DESC,
-                    )
-                ]
-            )
-            .set_limit(1000)
-        )
-
-        response = self.app.post("/events/snql", data=query.snuba())
-        data = json.loads(response.data)
-        assert response.status_code == 200, data
-        assert len(data["data"]) == 6
