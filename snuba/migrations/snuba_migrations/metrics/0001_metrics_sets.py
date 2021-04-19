@@ -20,11 +20,6 @@ sets_columns: Sequence[Column[Modifiers]] = [
     Column("granularity", UInt(32)),
     Column("timestamp", DateTime()),
     Column("retention_days", UInt(16)),
-    # This cannot rely on Nested columns as they are in the order by,
-    # thus Clickhouse is not capable of resolving the columns when
-    # building the table if they are expressed as nested.
-    # Column("tags.key", Array(UInt(64))),
-    # Column("tags.value", Array(UInt(64))),
     Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
 ]
 
