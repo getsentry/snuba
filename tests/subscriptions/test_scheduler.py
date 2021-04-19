@@ -26,7 +26,9 @@ class TestSubscriptionScheduler:
     def build_subscription(self, resolution: timedelta) -> Subscription:
         return Subscription(
             SubscriptionIdentifier(self.partition_id, uuid.uuid4()),
-            SubscriptionData(1, [], [], timedelta(minutes=1), resolution),
+            SubscriptionData(
+                1, [], [["count()", "", "count"]], timedelta(minutes=1), resolution
+            ),
         )
 
     def build_interval(self, lower: timedelta, upper: timedelta) -> Interval[datetime]:
