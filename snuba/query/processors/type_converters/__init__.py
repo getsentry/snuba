@@ -47,6 +47,7 @@ class BaseTypeConverter(QueryProcessor, ABC):
             [
                 FunctionCallMatch(operator, (literal, col)),
                 FunctionCallMatch(operator, (col, literal)),
+                FunctionCallMatch(Param("operator", String("has")), (col, literal)),
             ]
         )
 
@@ -130,7 +131,7 @@ class BaseTypeConverter(QueryProcessor, ABC):
         return exp
 
     @abstractmethod
-    def _translate_literal(self, exp: Literal) -> Literal:
+    def _translate_literal(self, exp: Literal) -> Expression:
         raise NotImplementedError
 
     @abstractmethod

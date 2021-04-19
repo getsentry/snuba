@@ -27,6 +27,10 @@ from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.type_converters.uuid_column_processor import (
     UUIDColumnProcessor,
 )
+from snuba.query.processors.type_converters.uuid_array_column_processor import (
+    UUIDArrayColumnProcessor,
+)
+from snuba.query.processors.slice_of_map_optimizer import SliceOfMapOptimizer
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 required_columns = [
@@ -154,6 +158,8 @@ query_processors = [
     ),
     UserColumnProcessor(),
     UUIDColumnProcessor({"event_id", "primary_hash", "trace_id"}),
+    UUIDArrayColumnProcessor({"hierarchical_hashes"}),
+    SliceOfMapOptimizer(),
     EventsBooleanContextsProcessor(),
     TypeConditionOptimizer(),
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
