@@ -39,7 +39,6 @@ buckets_storage = WritableTableStorage(
     storage_set_key=StorageSetKey.METRICS,
     schema=WritableTableSchema(
         columns=buckets_columns,
-        # TODO: change to outcomes.raw_local when we add multi DB support
         local_table_name="metrics_buckets_local",
         dist_table_name="metrics_buckets_dist",
         storage_set_key=StorageSetKey.METRICS,
