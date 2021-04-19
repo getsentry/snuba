@@ -1,3 +1,4 @@
+from snuba.datasets.metrics_processor import MetricsProcessor
 from snuba.clickhouse.columns import (
     AggregateFunction,
     Array,
@@ -10,7 +11,6 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.outcomes_processor import OutcomesProcessor
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -47,7 +47,7 @@ buckets_storage = WritableTableStorage(
     query_processors=[],
     stream_loader=build_kafka_stream_loader_from_settings(
         StorageKey.METRICS_BUCKETS,
-        processor=OutcomesProcessor(),
+        processor=MetricsProcessor(),
         default_topic_name="metrics",
     ),
 )
