@@ -1,8 +1,3 @@
-from snuba.query.processors.typed_context_promoter import (
-    HexIntContextType,
-    PromotionSpec,
-    TypedContextPromoter,
-)
 from snuba import util
 from snuba.clickhouse.columns import (
     UUID,
@@ -29,7 +24,12 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.processors.uuid_column_processor import UUIDColumnProcessor
+from snuba.query.processors.type_converters.uuid_column_processor import (
+    UUIDColumnProcessor,
+)
+from snuba.query.processors.type_converters.hexint_column_processor import (
+    HexIntColumnProcessor,
+)
 from snuba.web.split import TimeSplitQueryStrategy
 
 columns = ColumnSet(
@@ -68,6 +68,7 @@ columns = ColumnSet(
         ("contexts", Nested([("key", String()), ("value", String())])),
         ("_contexts_flattened", String()),
         ("measurements", Nested([("key", String()), ("value", Float(64))]),),
+        ("span_op_breakdowns", Nested([("key", String()), ("value", Float(64))]),),
         ("partition", UInt(16)),
         ("offset", UInt(64)),
         ("message_timestamp", DateTime()),
@@ -103,18 +104,16 @@ storage = WritableTableStorage(
                     "sentry:dist": "dist",
                     "sentry:user": "user",
                 },
-                "contexts": {"trace.trace_id": "trace_id"},
+                "contexts": {"trace.trace_id": "trace_id", "trace.span_id": "span_id"},
             }
         ),
         UUIDColumnProcessor(set(["event_id", "trace_id"])),
+        HexIntColumnProcessor({"span_id"}),
         EventsBooleanContextsProcessor(),
         MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
-        TypedContextPromoter(
-            "contexts",
-            {PromotionSpec("trace.span_id", "span_id", HexIntContextType())},
-        ),
         ArrayJoinKeyValueOptimizer("tags"),
         ArrayJoinKeyValueOptimizer("measurements"),
+        ArrayJoinKeyValueOptimizer("span_op_breakdowns"),
         PrewhereProcessor(
             [
                 "event_id",

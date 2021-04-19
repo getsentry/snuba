@@ -12,9 +12,9 @@ from snuba.query.conditions import (
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.clickhouse.query import Query
-from snuba.query.processors.uuid_column_processor import (
+from snuba.query.processors.type_converters import ColumnTypeError
+from snuba.query.processors.type_converters.uuid_column_processor import (
     UUIDColumnProcessor,
-    UUIDTranslationError,
 )
 from snuba.request.request_settings import HTTPRequestSettings
 
@@ -222,7 +222,7 @@ def test_invalid_uuid(unprocessed: Expression) -> None:
         condition=unprocessed,
     )
 
-    with pytest.raises(UUIDTranslationError):
+    with pytest.raises(ColumnTypeError):
         UUIDColumnProcessor(set(["column1", "column2"])).process_query(
             unprocessed_query, HTTPRequestSettings()
         )

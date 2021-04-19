@@ -873,6 +873,54 @@ class TestDiscoverApi(BaseApiTest):
         assert "measurements[lcp]" in data["data"][0]
         assert data["data"][0]["measurements[lcp]"] is None
 
+    def test_individual_breakdown(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": [
+                        "event_id",
+                        "span_op_breakdowns[ops.db]",
+                        "span_op_breakdowns[ops.http]",
+                        "span_op_breakdowns[total.time]",
+                        "span_op_breakdowns[not_found]",
+                    ],
+                    "limit": 1,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+            entity="discover_transactions",
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert data["data"][0]["event_id"] != "0"
+        assert data["data"][0]["span_op_breakdowns[ops.db]"] == 62.512
+        assert data["data"][0]["span_op_breakdowns[ops.http]"] == 109.774
+        assert data["data"][0]["span_op_breakdowns[total.time]"] == 172.286
+        assert data["data"][0]["span_op_breakdowns[not_found]"] is None
+
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["group_id", "span_op_breakdowns[ops.db]"],
+                    "limit": 1,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+            entity="discover",
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert "span_op_breakdowns[ops.db]" in data["data"][0]
+        assert data["data"][0]["span_op_breakdowns[ops.db]"] is None
+
     def test_functions_called_on_null(self) -> None:
         response = self.post(
             json.dumps(
@@ -994,6 +1042,97 @@ class TestDiscoverApi(BaseApiTest):
                         "measurements_histogram_1_0_100",
                     ],
                     "limit": 1,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+            entity="discover_transactions",
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 0, data
+
+    def test_span_op_breakdown_histogram_function(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": [
+                        [
+                            "arrayJoin",
+                            ["span_op_breakdowns.key"],
+                            "array_join_span_op_breakdowns_key",
+                        ],
+                        [
+                            "plus",
+                            [
+                                [
+                                    "multiply",
+                                    [
+                                        [
+                                            "floor",
+                                            [
+                                                [
+                                                    "divide",
+                                                    [
+                                                        [
+                                                            "minus",
+                                                            [
+                                                                [
+                                                                    "multiply",
+                                                                    [
+                                                                        [
+                                                                            "arrayJoin",
+                                                                            [
+                                                                                "span_op_breakdowns.value"
+                                                                            ],
+                                                                        ],
+                                                                        1,
+                                                                    ],
+                                                                ],
+                                                                0,
+                                                            ],
+                                                        ],
+                                                        200,
+                                                    ],
+                                                ]
+                                            ],
+                                        ],
+                                        200,
+                                    ],
+                                ],
+                                0,
+                            ],
+                            "histogram_span_op_breakdowns_value_200_0_1",
+                        ],
+                    ],
+                    "aggregations": [["count", None, "count"]],
+                    "conditions": [
+                        ["duration", "<", 900000],
+                        ["type", "=", "transaction"],
+                        ["transaction_op", "=", "pageload"],
+                        [
+                            "transaction",
+                            "=",
+                            "/organizations/:orgId/performance/summary/vitals/",
+                        ],
+                        [
+                            "array_join_span_op_breakdowns_key",
+                            "IN",
+                            ["ops.http", "ops.browser", "total.time"],
+                        ],
+                        ["histogram_span_op_breakdowns_value_200_0_1", ">=", 0],
+                        ["histogram_span_op_breakdowns_value_200_0_1", "<=", 20000],
+                        ["project_id", "IN", [1]],
+                    ],
+                    "orderby": ["histogram_span_op_breakdowns_value_200_0_1"],
+                    "having": [],
+                    "groupby": [
+                        "array_join_span_op_breakdowns_key",
+                        "histogram_span_op_breakdowns_value_200_0_1",
+                    ],
+                    "limit": 300,
                     "from_date": (self.base_time - self.skew).isoformat(),
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
@@ -1177,8 +1316,17 @@ class TestDiscoverApi(BaseApiTest):
         )
         data = json.loads(response.data)
         assert len(data["data"]) == 0
+
+        # TODO: This can be simplified once errors rollout is complete
+        # and we no longer need to support tests passing on both storages.
+        release_column = (
+            "`sentry:release`"
+            if self.events_storage == get_writable_storage(StorageKey.EVENTS)
+            else "release"
+        )
+
         assert data["sql"].startswith(
-            "SELECT (type AS _snuba_type), (arrayElement(tags.value, indexOf(tags.key, 'custom_tag')) AS `_snuba_tags[custom_tag]`), (`sentry:release` AS _snuba_release)"
+            f"SELECT (type AS _snuba_type), (arrayElement(tags.value, indexOf(tags.key, 'custom_tag')) AS `_snuba_tags[custom_tag]`), ({release_column} AS _snuba_release)"
         )
 
 

@@ -1,7 +1,5 @@
-import random
 from dataclasses import dataclass
 from datetime import timedelta
-from functools import partial
 from typing import List, Mapping, Optional, Sequence, Set, Tuple, Union
 
 from snuba import state, settings
@@ -33,7 +31,6 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.events import (
     BaseEventsEntity,
     EventsQueryStorageSelector,
-    callback_func,
 )
 from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.datasets.entity import Entity
@@ -250,6 +247,7 @@ TRANSACTIONS_COLUMNS = ColumnSet(
         ("transaction_status", UInt(8, Modifiers(nullable=True))),
         ("duration", UInt(32, Modifiers(nullable=True))),
         ("measurements", Nested([("key", String()), ("value", Float(64))]),),
+        ("span_op_breakdowns", Nested([("key", String()), ("value", Float(64))]),),
     ]
 )
 
@@ -257,7 +255,7 @@ TRANSACTIONS_COLUMNS = ColumnSet(
 events_translation_mappers = TranslationMappers(
     columns=[DefaultNoneColumnMapper(TRANSACTIONS_COLUMNS)],
     functions=[DefaultNoneFunctionMapper({"apdex", "failure_rate"})],
-    subscriptables=[DefaultNoneSubscriptMapper({"measurements"})],
+    subscriptables=[DefaultNoneSubscriptMapper({"measurements", "span_op_breakdowns"})],
 )
 
 transaction_translation_mappers = TranslationMappers(
@@ -436,21 +434,8 @@ class DiscoverEntity(Entity):
             if int(kill_rollout):
                 return "events", []
 
-            if referrer in settings.ERRORS_ROLLOUT_BY_REFERRER:
-                return "discover", []
-
             if settings.ERRORS_ROLLOUT_ALL:
                 return "discover", []
-
-            default_threshold = state.get_config("discover_query_percentage", 0)
-            assert isinstance(default_threshold, (float, int, str))
-
-            threshold = settings.ERRORS_QUERY_PERCENTAGE_BY_REFERRER.get(
-                referrer, default_threshold
-            )
-
-            if random.random() < float(threshold):
-                return "events", ["discover"]
 
             return "events", []
 
@@ -462,7 +447,7 @@ class DiscoverEntity(Entity):
                     "discover": discover_pipeline_builder,
                 },
                 selector_func=selector_func,
-                callback_func=partial(callback_func, "discover"),
+                callback_func=None,
             ),
             abstract_column_set=(
                 self.__common_columns

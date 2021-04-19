@@ -1,87 +1,115 @@
 steps:
-- name: 'gcr.io/cloud-builders/docker'
-  entrypoint: 'bash'
-  args: [
-    '-c',
-    'docker pull us.gcr.io/$PROJECT_ID/$REPO_NAME:nightly || true',
-  ]
-- name: 'gcr.io/cloud-builders/docker'
-  args: [
-            'build',
-            '-t', 'us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA',
-            '--build-arg', 'SNUBA_VERSION_SHA=$COMMIT_SHA',
-            '--cache-from', 'us.gcr.io/$PROJECT_ID/$REPO_NAME:nightly',
-            '.'
-        ]
-# Snuba tests
-- name: 'gcr.io/$PROJECT_ID/docker-compose'
-  env:
-  - 'SNUBA_IMAGE=us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA'
-  args:
-  - '-f'
-  - 'docker-compose.gcb.yml'
-  - run
-  - '--rm'
-  - snuba-test
-# Clean up after tests
-- name: 'gcr.io/$PROJECT_ID/docker-compose'
-  env:
-  - 'SNUBA_IMAGE=us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA'
-  args:
-  - '-f'
-  - 'docker-compose.gcb.yml'
-  - down
-  - '--rmi'
-  - 'local'
-  - '-v'
-  - '--remove-orphans'
-# On-premise Integration tests
-- name: 'gcr.io/$PROJECT_ID/docker-compose'
-  entrypoint: 'bash'
-  env:
-  - 'SNUBA_IMAGE=us.gcr.io/$PROJECT_ID/snuba:$COMMIT_SHA'
-  - 'SENTRY_TEST_HOST=http://nginx'
-  - 'CI=1'
-  args:
-  - '-e'
-  - '-c'
-  - |
-    mkdir onpremise && cd onpremise
-    curl -L "https://github.com/getsentry/onpremise/archive/master.tar.gz" | tar xzf - --strip-components=1
-    # The following trick is from https://stackoverflow.com/a/52400857/90297 with great gratuity
-    echo '{"version": "3.4", "networks":{"default":{"external":{"name":"cloudbuild"}}}}' > docker-compose.override.yml
-    ./install.sh
-    ./test.sh || docker-compose logs nginx web relay
-  timeout: 300s
-- name: 'gcr.io/cloud-builders/docker'
-  secretEnv: ['DOCKER_PASSWORD']
-  entrypoint: 'bash'
-  args:
-  - '-e'
-  - '-c'
-  - |
-    # Only tag :nightly and push to Docker Hub from master
-    [ "$BRANCH_NAME" != "master" ] && exit 0
-    docker tag us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA us.gcr.io/$PROJECT_ID/$REPO_NAME:nightly
-    docker push us.gcr.io/$PROJECT_ID/$REPO_NAME:nightly
-    echo "$$DOCKER_PASSWORD" | docker login --username=sentrybuilder --password-stdin
-    docker tag us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA getsentry/snuba:$COMMIT_SHA
-    docker push getsentry/snuba:$COMMIT_SHA
-    docker tag us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA getsentry/snuba:nightly
-    docker push getsentry/snuba:nightly
-images: [
-  'us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA',
-  ]
-timeout: 3600s
+  - name: "gcr.io/kaniko-project/executor:v1.5.1"
+    id: runtime-image
+    waitFor: ["-"]
+    args:
+      [
+        "--cache=true",
+        "--use-new-run",
+        "--build-arg",
+        "SOURCE_COMMIT=$COMMIT_SHA",
+        "--destination=us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA",
+        "-f",
+        "./Dockerfile",
+      ]
+    timeout: 180s
+  - name: "gcr.io/$PROJECT_ID/docker-compose"
+    id: get-onpremise-repo
+    waitFor: ["-"]
+    entrypoint: "bash"
+    args:
+      - "-e"
+      - "-c"
+      - |
+        mkdir onpremise && cd onpremise
+        curl -L "https://github.com/getsentry/onpremise/archive/master.tar.gz" | tar xzf - --strip-components=1
+        echo '{"version": "3.4", "networks":{"default":{"external":{"name":"cloudbuild"}}}}' > docker-compose.override.yml
+  # Unit tests
+  - name: "gcr.io/$PROJECT_ID/docker-compose"
+    id: unit-tests
+    waitFor:
+      - runtime-image
+    args:
+      - "-f"
+      - "docker-compose.gcb.yml"
+      - run
+      - "--rm"
+      - snuba-test
+  # Clean up after tests
+  - name: "gcr.io/$PROJECT_ID/docker-compose"
+    id: unit-tests-cleanup
+    waitFor:
+      - unit-tests
+    args:
+      - "-f"
+      - "docker-compose.gcb.yml"
+      - down
+      - "--rmi"
+      - "local"
+      - "-v"
+      - "--remove-orphans"
+  - name: "gcr.io/$PROJECT_ID/docker-compose"
+    id: e2e-test
+    waitFor:
+      - runtime-image
+      - unit-tests-cleanup
+      - get-onpremise-repo
+    entrypoint: "bash"
+    dir: onpremise
+    args:
+      - "-e"
+      - "-c"
+      - |
+        ./install.sh
+        set +e
+        ./test.sh
+        test_return=$?
+        set -e
+        if [[ $test_return -ne 0 ]]; then
+          echo "Test failed.";
+          docker-compose ps;
+          docker-compose logs;
+          exit $test_return;
+        fi
+    timeout: 450s
+  - name: "gcr.io/cloud-builders/docker"
+    id: docker-push
+    waitFor:
+      - e2e-test
+    secretEnv: ["DOCKER_PASSWORD"]
+    entrypoint: "bash"
+    args:
+      - "-e"
+      - "-c"
+      - |
+        # Only push to Docker Hub from master
+        [ "$BRANCH_NAME" != "master" ] && exit 0
+        # Need to pull the image first due to Kaniko
+        docker pull $$SNUBA_IMAGE
+        echo "$$DOCKER_PASSWORD" | docker login --username=sentrybuilder --password-stdin
+        docker tag $$SNUBA_IMAGE $$DOCKER_REPO:$SHORT_SHA
+        docker push $$DOCKER_REPO:$SHORT_SHA
+        docker tag $$SNUBA_IMAGE $$DOCKER_REPO:$COMMIT_SHA
+        docker push $$DOCKER_REPO:$COMMIT_SHA
+        docker tag $$SNUBA_IMAGE $$DOCKER_REPO:nightly
+        docker push $$DOCKER_REPO:nightly
+# This is needed for Freight to find matching builds
+images: ['us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA']
+timeout: 2640s
 options:
-  # Bigger machines do everything quite faster (especially on-prem integration tests)
-  machineType: 'N1_HIGHCPU_8'
+  # We need more memory for Webpack builds & e2e onpremise tests
+  machineType: "N1_HIGHCPU_8"
+  env:
+    - "CI=1"
+    - "SNUBA_IMAGE=us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA"
+    - "DOCKER_REPO=getsentry/snuba"
+    - "SENTRY_TEST_HOST=http://nginx"
 secrets:
-- kmsKeyName: projects/sentryio/locations/global/keyRings/service-credentials/cryptoKeys/cloudbuild
-  secretEnv:
-    # This is a personal access token for the sentrybuilder account, encrypted using the
-    # short guide at http://bit.ly/2Pg6uw9
-    DOCKER_PASSWORD: |
-      CiQAE8gN7y3OMxn+a1kofmK4Bi8jQZtdRFj2lYYwaZHVeIIBUzMSTQA9tvn8XCv2vqj6u8CHoeSP
-      TVW9pLvSCorKoeNtOp0eb+6V1yNJW/+JC07DNO1KLbTbodbuza6jKJHU5xeAJ4kGQI78UY5Vu1Gp
-      QcMK
+  - kmsKeyName: projects/sentryio/locations/global/keyRings/service-credentials/cryptoKeys/cloudbuild
+    secretEnv:
+      # This is a personal access token for the sentrybuilder account, encrypted using the
+      # short guide at http://bit.ly/2Pg6uw9
+      DOCKER_PASSWORD: |
+        CiQAE8gN7y3OMxn+a1kofmK4Bi8jQZtdRFj2lYYwaZHVeIIBUzMSTQA9tvn8XCv2vqj6u8CHoeSP
+        TVW9pLvSCorKoeNtOp0eb+6V1yNJW/+JC07DNO1KLbTbodbuza6jKJHU5xeAJ4kGQI78UY5Vu1Gp
+        QcMK

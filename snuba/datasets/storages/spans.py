@@ -7,6 +7,9 @@ from snuba.datasets.spans_processor import SpansMessageProcessor
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
+from snuba.query.processors.type_converters.hexint_column_processor import (
+    HexIntColumnProcessor,
+)
 from snuba.web.split import TimeSplitQueryStrategy
 
 columns = ColumnSet(
@@ -44,7 +47,7 @@ storage = WritableTableStorage(
     storage_key=StorageKey.SPANS,
     storage_set_key=StorageSetKey.TRANSACTIONS,
     schema=schema,
-    query_processors=[],
+    query_processors=[HexIntColumnProcessor({"transaction_span_id"})],
     stream_loader=build_kafka_stream_loader_from_settings(
         StorageKey.SPANS,
         processor=SpansMessageProcessor(),

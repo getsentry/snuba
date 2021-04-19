@@ -26,6 +26,9 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.type_converters.fixedstring_array_column_processor import (
+    FixedStringArrayColumnProcessor,
+)
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 metadata_columns = ColumnSet(
@@ -283,6 +286,7 @@ query_processors = [
             ),
             "contexts": get_promoted_context_col_mapping(),
         },
+        cast_to_string=True,
     ),
     # This processor must not be ported to the errors dataset. We should
     # not support promoting tags/contexts with boolean values. There is
@@ -295,6 +299,7 @@ query_processors = [
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
     PrewhereProcessor(prewhere_candidates),
+    FixedStringArrayColumnProcessor({"hierarchical_hashes"}, 32),
 ]
 
 
