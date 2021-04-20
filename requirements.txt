@@ -28,7 +28,7 @@ more-itertools==4.2.0
 mypy>=0.800
 packaging==17.1
 parsimonious==0.8.1
-py==1.5.3
+py==1.10.0
 pyparsing==2.2.0
 pytest==5.2.4
 pytest-cov==2.10.1
