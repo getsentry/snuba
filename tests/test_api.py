@@ -1817,6 +1817,52 @@ class TestApi(SimpleAPITest):
         )
         assert "deleted = 0" in result["sql"] or "equals(deleted, 0)" in result["sql"]
 
+    def test_hierarchical_hashes_array_slice(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "project": 1,
+                    "granularity": 3600,
+                    "selected_columns": [["arraySlice", ["hierarchical_hashes", 0, 2]]],
+                    "from_date": self.base_time.isoformat(),
+                    "to_date": (
+                        self.base_time + timedelta(minutes=self.minutes)
+                    ).isoformat(),
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        result = json.loads(response.data)
+
+        assert result["sql"].startswith(
+            "SELECT arrayMap((x -> replaceAll(toString(x), '-', '')), "
+            "arraySlice(hierarchical_hashes, 0, 2)) FROM errors_local PREWHERE"
+        )
+
+    def test_hierarchical_hashes_array_join(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "project": 1,
+                    "granularity": 3600,
+                    "selected_columns": [["arrayJoin", ["hierarchical_hashes"]]],
+                    "from_date": self.base_time.isoformat(),
+                    "to_date": (
+                        self.base_time + timedelta(minutes=self.minutes)
+                    ).isoformat(),
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        result = json.loads(response.data)
+
+        assert result["sql"].startswith(
+            "SELECT arrayJoin((arrayMap((x -> replaceAll(toString(x), '-', '')), "
+            "hierarchical_hashes) AS _snuba_hierarchical_hashes)) FROM errors_local PREWHERE"
+        )
+
 
 class TestCreateSubscriptionApi(BaseApiTest):
     dataset_name = "events"
@@ -2177,6 +2223,8 @@ class TestLegacyAPI(SimpleAPITest):
                                 "transaction",
                                 "tags[a]",
                                 "tags[b]",
+                                "message",
+                                "project_id",
                             ],
                             "limit": 5,
                             "from_date": self.base_time.isoformat(),
