@@ -85,11 +85,12 @@ logger = logging.getLogger("snuba.snql.parser")
 
 snql_grammar = Grammar(
     r"""
-    query_exp             = match_clause select_clause group_by_clause? where_clause? having_clause? order_by_clause? limit_by_clause? limit_clause? offset_clause? granularity_clause? totals_clause? space*
+    query_exp             = match_clause select_clause group_by_clause? arrayjoin_clause? where_clause? having_clause? order_by_clause? limit_by_clause? limit_clause? offset_clause? granularity_clause? totals_clause? space*
 
     match_clause          = space* "MATCH" space+ (relationships / subquery / entity_single )
     select_clause         = space+ "SELECT" space+ select_list
     group_by_clause       = space+ "BY" space+ group_list
+    arrayjoin_clause      = space+ "ARRAY JOIN" space+ (subscriptable / simple_term)
     where_clause          = space+ "WHERE" space+ or_expression
     having_clause         = space+ "HAVING" space+ or_expression
     order_by_clause       = space+ "ORDER BY" space+ order_list
@@ -194,6 +195,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             data_source,
             args["selected_columns"],
             args["groupby"],
+            args["array_join"],
             args["condition"],
             args["having"],
             args["order_by"],
@@ -683,6 +685,12 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         ret.append(right_column)
         return ret
 
+    def visit_arrayjoin_clause(
+        self, node: Node, visited_children: Tuple[Any, Any, Any, Expression]
+    ) -> Expression:
+        _, _, _, expression = visited_children
+        return expression
+
     def visit_parameter(
         self, node: Node, visited_children: Tuple[Expression, Any, Any, Any]
     ) -> Expression:
@@ -902,7 +910,7 @@ def _mangle_query_aliases(
 
         return replace(exp, column_name=f"{alias_prefix}{exp.column_name}")
 
-    query.transform_expressions(mangle_aliases)
+    query.transform_expressions(mangle_aliases, skip_array_join=True)
 
     # Check if this query has a subquery. If it does, we need to mangle the column name as well
     # and keep track of what we mangled by updating the mappings in memory.

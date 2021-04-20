@@ -7,7 +7,7 @@ project = "Snuba"
 copyright = "2021, Sentry Team and Contributors"
 author = "Sentry Team and Contributors"
 
-release = "21.3.0"
+release = "21.4.0"
 
 
 # -- General configuration ---------------------------------------------------

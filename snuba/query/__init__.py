@@ -260,6 +260,7 @@ class Query(DataSource, ABC):
         self,
         func: Callable[[Expression], Expression],
         skip_transform_condition: bool = False,
+        skip_array_join: bool = False,
     ) -> None:
         """
         Transforms in place the current query object by applying a transformation
@@ -284,9 +285,10 @@ class Query(DataSource, ABC):
                 self.__selected_columns,
             )
         )
-        self.__array_join = (
-            self.__array_join.transform(func) if self.__array_join else None
-        )
+        if not skip_array_join:
+            self.__array_join = (
+                self.__array_join.transform(func) if self.__array_join else None
+            )
         if not skip_transform_condition:
             self.__condition = (
                 self.__condition.transform(func) if self.__condition else None
@@ -374,6 +376,11 @@ class Query(DataSource, ABC):
     def get_columns_referenced_in_conditions_ast(self) -> Set[Column]:
         return self.__get_all_ast_referenced_expressions(
             [self.__condition] if self.__condition is not None else [], Column
+        )
+
+    def get_columns_referenced_in_select(self) -> Set[Column]:
+        return self.__get_all_ast_referenced_expressions(
+            [selected.expression for selected in self.__selected_columns], Column
         )
 
     def validate_aliases(self) -> bool:
