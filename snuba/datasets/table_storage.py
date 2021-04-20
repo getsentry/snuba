@@ -20,12 +20,19 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.writer import BatchWriter
 
+LOG_APPEND_TIME_STORAGES = {
+    StorageKey.EVENTS,
+    StorageKey.ERRORS,
+    StorageKey.TRANSACTIONS,
+}
+
 
 @dataclass(frozen=True)
 class KafkaTopicSpec:
     topic_name: str
     partitions_number: int
     replication_factor: int = 1
+    message_timestamp_type: Optional[str] = None
 
 
 class KafkaStreamLoader:
@@ -76,10 +83,13 @@ class KafkaStreamLoader:
         return ret
 
 
-def build_kafka_topic_spec_from_settings(topic_name: str) -> KafkaTopicSpec:
+def build_kafka_topic_spec_from_settings(
+    topic_name: str, log_append_time: bool = False
+) -> KafkaTopicSpec:
     return KafkaTopicSpec(
         topic_name=topic_name,
         partitions_number=settings.TOPIC_PARTITION_COUNTS.get(topic_name, 1),
+        message_timestamp_type="LogAppendTime" if log_append_time else None,
     )
 
 
@@ -94,7 +104,11 @@ def build_kafka_stream_loader_from_settings(
     storage_topics = {**settings.STORAGE_TOPICS.get(storage_key.value, {})}
 
     default_topic_spec = build_kafka_topic_spec_from_settings(
-        storage_topics.pop("default", default_topic_name)
+        storage_topics.pop("default", default_topic_name),
+        # HACK: The "events" topic (which is by default shared by these errors/transactions
+        # storages) should be created with message.timestamp.type = LogAppendTime. This is
+        # required for subscriptions to work properly.
+        log_append_time=storage_key in LOG_APPEND_TIME_STORAGES,
     )
 
     replacement_topic_spec: Optional[KafkaTopicSpec]
