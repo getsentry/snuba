@@ -165,3 +165,38 @@ class TestSDKSnQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, data
         assert data["data"] == [{"avg_count": 1.0}]
+
+    def test_tags_in_groupby(self) -> None:
+        query = (
+            Query("events", Entity("events"))
+            .set_select(
+                [
+                    Function("count", [], "times_seen"),
+                    Function("min", [Column("timestamp")], "first_seen"),
+                    Function("max", [Column("timestamp")], "last_seen"),
+                ]
+            )
+            .set_groupby([Column("tags[k8s-app]")])
+            .set_where(
+                [
+                    Condition(Column("project_id"), Op.EQ, self.project_id),
+                    Condition(Column("timestamp"), Op.GTE, self.base_time),
+                    Condition(Column("timestamp"), Op.LT, self.next_time),
+                    Condition(Column("tags[k8s-app]"), Op.NEQ, ""),
+                    Condition(Column("type"), Op.NEQ, "transaction"),
+                ]
+            )
+            .set_orderby(
+                [
+                    OrderBy(
+                        Function("max", [Column("timestamp")], "last_seen"),
+                        Direction.DESC,
+                    )
+                ]
+            )
+            .set_limit(1000)
+        )
+
+        response = self.app.post("/events/snql", data=query.snuba())
+        data = json.loads(response.data)
+        assert response.status_code == 200, data

@@ -374,3 +374,24 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
         assert response.status_code == 200
+
+    def test_tags_in_groupby(self) -> None:
+        response = self.app.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT count() AS times_seen, min(timestamp) AS first_seen, max(timestamp) AS last_seen
+                    BY tags[k8s-app]
+                    WHERE timestamp >= toDateTime('2021-04-06T20:42:40')
+                    AND timestamp < toDateTime('2021-04-20T20:42:40')
+                    AND project_id IN tuple({self.project_id}) AND tags[k8s-app] != ''
+                    AND type != 'transaction'
+                    AND project_id IN tuple({self.project_id})
+                    ORDER BY last_seen DESC
+                    LIMIT 1000
+                    """,
+                }
+            ),
+        )
+        assert response.status_code == 200
