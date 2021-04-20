@@ -1405,7 +1405,6 @@ class TestDiscoverApi(BaseApiTest):
         assert response.status_code == 200
         data = json.loads(response.data)
         assert len(data["data"]) == 6
-        assert False
 
 
 class TestArrayJoinDiscoverAPI(BaseApiTest):
