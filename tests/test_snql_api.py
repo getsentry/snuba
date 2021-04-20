@@ -288,7 +288,7 @@ class TestSnQLApi(BaseApiTest):
                     data=json.dumps(
                         {
                             "query": f"""MATCH (events)
-                            SELECT event_id, title, transaction, tags[a], tags[b]
+                            SELECT event_id, title, transaction, tags[a], tags[b], message, project_id
                             WHERE timestamp >= toDateTime('2021-01-01')
                             AND timestamp < toDateTime('2022-01-01')
                             AND project_id IN tuple({self.project_id})

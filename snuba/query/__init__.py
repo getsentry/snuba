@@ -378,6 +378,11 @@ class Query(DataSource, ABC):
             [self.__condition] if self.__condition is not None else [], Column
         )
 
+    def get_columns_referenced_in_select(self) -> Set[Column]:
+        return self.__get_all_ast_referenced_expressions(
+            [selected.expression for selected in self.__selected_columns], Column
+        )
+
     def validate_aliases(self) -> bool:
         """
         Returns true if all the alias reference in this query can be resolved.
