@@ -260,6 +260,7 @@ class Query(DataSource, ABC):
         self,
         func: Callable[[Expression], Expression],
         skip_transform_condition: bool = False,
+        skip_array_join: bool = False,
     ) -> None:
         """
         Transforms in place the current query object by applying a transformation
@@ -284,9 +285,10 @@ class Query(DataSource, ABC):
                 self.__selected_columns,
             )
         )
-        self.__array_join = (
-            self.__array_join.transform(func) if self.__array_join else None
-        )
+        if not skip_array_join:
+            self.__array_join = (
+                self.__array_join.transform(func) if self.__array_join else None
+            )
         if not skip_transform_condition:
             self.__condition = (
                 self.__condition.transform(func) if self.__condition else None
