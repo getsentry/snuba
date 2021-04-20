@@ -216,7 +216,7 @@ column_split_tests = [
         "project_id",
         "timestamp",
         {
-            "selected_columns": ["event_id"],
+            "selected_columns": ["event_id", "level", "logger", "server_name"],
             "conditions": [
                 ("timestamp", ">=", "2019-09-19T10:00:00"),
                 ("timestamp", "<", "2019-09-19T12:00:00"),
@@ -225,29 +225,21 @@ column_split_tests = [
             "limit": 10,
         },
         False,
-    ),  # Valid query but same number of columns between minimal
-    # and original query.
+    ),  # Valid query but not enough columns in the select
     (
         "event_id",
         "project_id",
         "timestamp",
         {
-            "selected_columns": ["event_id"],
-            "conditions": [
-                ("timestamp", ">=", "2019-09-19T10:00:00"),
-                ("timestamp", "<", "2019-09-19T12:00:00"),
-                ("project_id", "IN", [1, 2, 3]),
+            "selected_columns": [
+                "event_id",
+                "level",
+                "logger",
+                "server_name",
+                "transaction",
+                "timestamp",
+                "project_id",
             ],
-            "limit": 10,
-        },
-        False,
-    ),  # Valid query but not enough columns to split.
-    (
-        "event_id",
-        "project_id",
-        "timestamp",
-        {
-            "selected_columns": ["group_id", "message", "tags.key", "level"],
             "conditions": [
                 ("timestamp", ">=", "2019-09-19T10:00:00"),
                 ("timestamp", "<", "2019-09-19T12:00:00"),
@@ -263,7 +255,15 @@ column_split_tests = [
         "project_id",
         "timestamp",
         {
-            "selected_columns": ["group_id", "message", "tags.key", "level"],
+            "selected_columns": [
+                "event_id",
+                "level",
+                "logger",
+                "server_name",
+                "transaction",
+                "timestamp",
+                "project_id",
+            ],
             "conditions": [
                 ("timestamp", ">=", "2019-09-19T10:00:00"),
                 ("timestamp", "<", "2019-09-19T12:00:00"),
@@ -279,7 +279,15 @@ column_split_tests = [
         "project_id",
         "timestamp",
         {
-            "selected_columns": ["group_id", "message", "tags.key", "level"],
+            "selected_columns": [
+                "event_id",
+                "level",
+                "logger",
+                "server_name",
+                "transaction",
+                "timestamp",
+                "project_id",
+            ],
             "conditions": [
                 ("timestamp", ">=", "2019-09-19T10:00:00"),
                 ("timestamp", "<", "2019-09-19T12:00:00"),

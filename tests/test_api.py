@@ -2223,6 +2223,8 @@ class TestLegacyAPI(SimpleAPITest):
                                 "transaction",
                                 "tags[a]",
                                 "tags[b]",
+                                "message",
+                                "project_id",
                             ],
                             "limit": 5,
                             "from_date": self.base_time.isoformat(),

@@ -181,7 +181,7 @@ def backfill_errors() -> None:
 
         timestamp -= WINDOW
 
-        if timestamp < BEGINNING_OF_TIME:
+        if timestamp <= BEGINNING_OF_TIME:
             print("Done. Optimizing.")
             break
 
