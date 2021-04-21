@@ -14,9 +14,7 @@ from snuba.utils.streams.backends.kafka import get_default_kafka_configuration
 
 @click.command()
 @click.option(
-    "--bootstrap-server",
-    multiple=True,
-    help="Kafka bootstrap server to use.",
+    "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
 )
 @click.option("--kafka/--no-kafka", default=True)
 @click.option("--migrate/--no-migrate", default=True)
@@ -98,6 +96,11 @@ def bootstrap(
                             topic_spec.topic_name,
                             num_partitions=topic_spec.partitions_number,
                             replication_factor=topic_spec.replication_factor,
+                            config={
+                                "message.timestamp.type": topic_spec.message_timestamp_type
+                            }
+                            if topic_spec.message_timestamp_type is not None
+                            else {},
                         )
 
         logger.info("Creating Kafka topics...")
