@@ -96,11 +96,7 @@ def bootstrap(
                             topic_spec.topic_name,
                             num_partitions=topic_spec.partitions_number,
                             replication_factor=topic_spec.replication_factor,
-                            config={
-                                "message.timestamp.type": topic_spec.message_timestamp_type
-                            }
-                            if topic_spec.message_timestamp_type is not None
-                            else {},
+                            config=topic_spec.config,
                         )
 
         logger.info("Creating Kafka topics...")

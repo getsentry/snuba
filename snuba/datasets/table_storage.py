@@ -18,13 +18,8 @@ from snuba.snapshots.loaders import BulkLoader
 from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.backends.kafka import KafkaPayload
+from snuba.utils.streams.topics import Topic, get_topic_config
 from snuba.writer import BatchWriter
-
-LOG_APPEND_TIME_STORAGES = {
-    StorageKey.EVENTS,
-    StorageKey.ERRORS,
-    StorageKey.TRANSACTIONS,
-}
 
 
 @dataclass(frozen=True)
@@ -32,7 +27,7 @@ class KafkaTopicSpec:
     topic_name: str
     partitions_number: int
     replication_factor: int = 1
-    message_timestamp_type: Optional[str] = None
+    config: Optional[Mapping[str, str]] = None
 
 
 class KafkaStreamLoader:
@@ -84,38 +79,42 @@ class KafkaStreamLoader:
 
 
 def build_kafka_topic_spec_from_settings(
-    topic_name: str, log_append_time: bool = False
+    topic_name: str, config: Mapping[str, str]
 ) -> KafkaTopicSpec:
     return KafkaTopicSpec(
         topic_name=topic_name,
         partitions_number=settings.TOPIC_PARTITION_COUNTS.get(topic_name, 1),
-        message_timestamp_type="LogAppendTime" if log_append_time else None,
+        config=config,
     )
 
 
+def get_topic_name(topic: Topic) -> str:
+    return settings.KAFKA_TOPIC_MAP.get(topic.value, topic.value)
+
+
 def build_kafka_stream_loader_from_settings(
-    storage_key: StorageKey,
+    storage_key: StorageKey,  # TODO: Remove once STORAGE_TOPICS is no longer supported
     processor: MessageProcessor,
-    default_topic_name: str,
+    default_topic: Topic,
     pre_filter: Optional[StreamMessageFilter[KafkaPayload]] = None,
-    replacement_topic_name: Optional[str] = None,
-    commit_log_topic_name: Optional[str] = None,
+    replacement_topic: Optional[Topic] = None,
+    commit_log_topic: Optional[Topic] = None,
 ) -> KafkaStreamLoader:
     storage_topics = {**settings.STORAGE_TOPICS.get(storage_key.value, {})}
 
     default_topic_spec = build_kafka_topic_spec_from_settings(
-        storage_topics.pop("default", default_topic_name),
-        # HACK: The "events" topic (which is by default shared by these errors/transactions
-        # storages) should be created with message.timestamp.type = LogAppendTime. This is
-        # required for subscriptions to work properly.
-        log_append_time=storage_key in LOG_APPEND_TIME_STORAGES,
+        storage_topics.pop("default", get_topic_name(default_topic)),
+        config=get_topic_config(default_topic),
     )
 
     replacement_topic_spec: Optional[KafkaTopicSpec]
-    if replacement_topic_name is not None:
+
+    if replacement_topic is not None:
         replacement_topic_spec = build_kafka_topic_spec_from_settings(
-            storage_topics.pop("replacements", replacement_topic_name)
+            storage_topics.pop("replacements", get_topic_name(replacement_topic)),
+            config=get_topic_config(replacement_topic),
         )
+
     elif "replacements" in storage_topics:
         raise ValueError(
             f"invalid topic configuration for {storage_key!r}: replacements unsupported"
@@ -124,9 +123,10 @@ def build_kafka_stream_loader_from_settings(
         replacement_topic_spec = None
 
     commit_log_topic_spec: Optional[KafkaTopicSpec]
-    if commit_log_topic_name is not None:
+    if commit_log_topic is not None:
         commit_log_topic_spec = build_kafka_topic_spec_from_settings(
-            storage_topics.pop("commit-log", commit_log_topic_name)
+            storage_topics.pop("commit-log", get_topic_name(commit_log_topic)),
+            config=get_topic_config(commit_log_topic),
         )
     elif "commit-log" in storage_topics:
         raise ValueError(

@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Any, Mapping, MutableMapping, Sequence, Set
 
@@ -81,7 +82,11 @@ BROKER_CONFIG: Mapping[str, Any] = {
     "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092"),
 }
 STORAGE_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
+
+# DEPRECATED, please use KAFKA_TOPIC_MAP instead
 STORAGE_TOPICS: Mapping[str, Mapping[str, Any]] = {}
+
+KAFKA_TOPIC_MAP: Mapping[str, str] = {}
 
 DEFAULT_MAX_BATCH_SIZE = 50000
 DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000
@@ -162,4 +167,28 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
                 obj[attr] = getattr(settings_module, attr)
 
 
+# Rudimentary validation function
+def _validate_settings() -> None:
+    logger = logging.getLogger("snuba.settings")
+
+    if QUERIES_TOPIC != "snuba-queries":
+        logger.warning(
+            "DEPRECATED: QUERIES_TOPIC is deprecated. Use KAFKA_TOPIC_MAP instead."
+        )
+
+    if STORAGE_TOPICS:
+        logger.warning(
+            "DEPRECATED: STORAGE_TOPICS is derpecated. Use KAFKA_TOPIC_MAP instead."
+        )
+
+    from snuba.utils.streams.topics import Topic
+
+    default_topic_names = {t.value for t in Topic}
+
+    for key in KAFKA_TOPIC_MAP.keys():
+        if key not in default_topic_names:
+            raise ValueError(f"Invalid topic value: {key}")
+
+
 _load_settings()
+_validate_settings()
