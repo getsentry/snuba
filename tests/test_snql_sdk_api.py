@@ -200,7 +200,7 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(1000)
         )
 
-        response = self.app.post("/events/snql", data=query.snuba())
+        response = self.post("/events/snql", data=query.snuba())
         data = json.loads(response.data)
         assert response.status_code == 200, data
         assert len(data["data"]) == 6
@@ -236,6 +236,6 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(1000)
         )
 
-        response = self.app.post("/events/snql", data=query.snuba())
+        response = self.post("/events/snql", data=query.snuba())
         data = json.loads(response.data)
         assert response.status_code == 200, data

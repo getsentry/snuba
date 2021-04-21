@@ -378,7 +378,7 @@ class TestSnQLApi(BaseApiTest):
         assert response.status_code == 200
 
     def test_tags_in_groupby(self) -> None:
-        response = self.app.post(
+        response = self.post(
             "/events/snql",
             data=json.dumps(
                 {
