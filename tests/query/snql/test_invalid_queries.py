@@ -17,25 +17,25 @@ test_cases = [
     pytest.param(
         "MATCH (events) SELECT 4-5,3*g(c),c BY d,2+7 WHEREa<3 ORDERBY f DESC",
         ParsingException,
-        "Parsing error at 'WHEREa<3 OR'",
+        "Parsing error on line 1 at '7 WHEREa<3 OR'",
         id="ORDER BY is two words",
     ),
     pytest.param(
         "MATCH (events) SELECT 4-5, 3*g(c), c BY d,2+7 WHERE a<3  ORDER BY fDESC",
         ParsingException,
-        "Parsing error at 'ORDER BY fD'",
+        "Parsing error on line 1 at '  ORDER BY fD'",
         id="Expression before ASC / DESC needs to be separated from ASC / DESC keyword by space",
     ),
     pytest.param(
         "MATCH (events) SELECT 4-5, 3*g(c), c BY d, ,2+7 WHERE a<3  ORDER BY f DESC",
         ParsingException,
-        "Parsing error at 'BY d, ,2+7 '",
+        "Parsing error on line 1 at 'c BY d, ,2+7 '",
         id="In a list, columns are separated by exactly one comma",
     ),
     pytest.param(
         "MATCH (events) SELECT 4-5, 3*g(c), c BY d, 2+7 WHERE a<3ORb>2  ORDER BY f DESC",
         ParsingException,
-        "Parsing error at 'ORb>2  ORDE'",
+        "Parsing error on line 1 at '<3ORb>2  ORDE'",
         id="mandatory spacing",
     ),
     pytest.param(
