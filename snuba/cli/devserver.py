@@ -130,6 +130,18 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--max-query-workers=1",
             ],
         ),
+        (
+            "cdc-consumer",
+            [
+                "snuba",
+                "multistorage-consumer",
+                "--auto-offset-reset=latest",
+                "--log-level=debug",
+                "--storage=groupedmessages",
+                "--storage=groupassignees",
+                "--consumer-group=cdc_group",
+            ],
+        ),
     ]
 
     manager = Manager()
