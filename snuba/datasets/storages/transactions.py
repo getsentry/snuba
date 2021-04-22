@@ -21,14 +21,15 @@ from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
+from snuba.query.processors.conditions_enforcer import MandatoryConditionEnforcer
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.processors.type_converters.uuid_column_processor import (
-    UUIDColumnProcessor,
-)
 from snuba.query.processors.type_converters.hexint_column_processor import (
     HexIntColumnProcessor,
+)
+from snuba.query.processors.type_converters.uuid_column_processor import (
+    UUIDColumnProcessor,
 )
 from snuba.web.split import TimeSplitQueryStrategy
 
@@ -124,6 +125,7 @@ storage = WritableTableStorage(
                 "title",
             ]
         ),
+        MandatoryConditionEnforcer({"project_id", "finish_ts"}),
     ],
     stream_loader=build_kafka_stream_loader_from_settings(
         StorageKey.TRANSACTIONS,
