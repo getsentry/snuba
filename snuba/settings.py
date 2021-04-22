@@ -172,9 +172,7 @@ def _validate_settings() -> None:
     logger = logging.getLogger("snuba.settings")
 
     if QUERIES_TOPIC != "snuba-queries":
-        logger.warning(
-            "DEPRECATED: QUERIES_TOPIC is deprecated. Use KAFKA_TOPIC_MAP instead."
-        )
+        raise ValueError("QUERIES_TOPIC is deprecated. Use KAFKA_TOPIC_MAP instead.")
 
     if STORAGE_TOPICS:
         logger.warning(
