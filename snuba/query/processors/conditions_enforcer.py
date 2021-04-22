@@ -1,15 +1,19 @@
-from snuba.query.expressions import Column
-from snuba.query.matchers import AnyExpression
+import logging
+from typing import Set
+
+from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.query import Expression, Query
 from snuba.query.conditions import (
     FUNCTION_TO_OPERATOR,
     condition_pattern,
     get_first_level_and_conditions,
 )
-from typing import Set
-
-from snuba.clickhouse.processors import QueryProcessor
-from snuba.clickhouse.query import Expression, Query
+from snuba.query.expressions import Column
+from snuba.query.matchers import AnyExpression
 from snuba.request.request_settings import RequestSettings
+from snuba.state import get_config
+
+logger = logging.getLogger(__name__)
 
 
 class MandatoryConditionEnforcer(QueryProcessor):
@@ -59,4 +63,14 @@ class MandatoryConditionEnforcer(QueryProcessor):
             inspect_expression(prewhere)
 
         missing_cols = self.__required_columns - found_cols
-        assert not missing_cols, f"Missing mandatory columns in query {missing_cols}"
+
+        if get_config("mandatory_condition_enforce", 0):
+            assert (
+                not missing_cols
+            ), f"Missing mandatory columns in query {missing_cols}"
+        else:
+            if missing_cols:
+                logger.error(
+                    "Query is missing mandatory columns",
+                    extra={"missing_columns": missing_cols},
+                )
