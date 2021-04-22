@@ -28,6 +28,10 @@ def test() -> None:
 
     query_body = {
         "selected_columns": ["type", "project_id"],
+        "conditions": [
+            ["project_id", "=", 1],
+            ["timestamp", ">", "2020-01-01 12:00:00"],
+        ],
     }
 
     events = get_dataset("events")

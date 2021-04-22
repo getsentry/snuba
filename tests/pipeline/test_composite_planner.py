@@ -1,4 +1,5 @@
 from copy import deepcopy
+from datetime import datetime
 from typing import Union
 
 import pytest
@@ -18,7 +19,11 @@ from snuba.pipeline.composite import (
 )
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
-from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.conditions import (
+    BooleanFunctions,
+    ConditionFunctions,
+    binary_condition,
+)
 from snuba.query.data_source.join import (
     IndividualNode,
     JoinClause,
@@ -91,9 +96,17 @@ TEST_CASES = [
                 ],
                 groupby=[Column(None, None, "project_id")],
                 condition=binary_condition(
-                    ConditionFunctions.EQ,
-                    Column(None, None, "project_id"),
-                    Literal(None, 1),
+                    BooleanFunctions.AND,
+                    binary_condition(
+                        ConditionFunctions.EQ,
+                        Column(None, None, "project_id"),
+                        Literal(None, 1),
+                    ),
+                    binary_condition(
+                        ConditionFunctions.GTE,
+                        Column(None, None, "timestamp"),
+                        Literal(None, datetime(2020, 1, 1, 12, 0)),
+                    ),
                 ),
             ),
             selected_columns=[
@@ -138,9 +151,17 @@ TEST_CASES = [
                     ],
                     groupby=[Column(None, None, "project_id")],
                     condition=binary_condition(
-                        ConditionFunctions.EQ,
-                        Column(None, None, "project_id"),
-                        Literal(None, 1),
+                        BooleanFunctions.AND,
+                        binary_condition(
+                            ConditionFunctions.EQ,
+                            Column(None, None, "project_id"),
+                            Literal(None, 1),
+                        ),
+                        binary_condition(
+                            ConditionFunctions.GTE,
+                            Column(None, None, "timestamp"),
+                            Literal(None, datetime(2020, 1, 1, 12, 0)),
+                        ),
                     ),
                 ),
                 selected_columns=[
@@ -188,9 +209,17 @@ TEST_CASES = [
                     ),
                 ],
                 condition=binary_condition(
-                    ConditionFunctions.EQ,
-                    Column(alias=None, table_name=None, column_name="deleted"),
-                    Literal(alias=None, value=0),
+                    BooleanFunctions.AND,
+                    binary_condition(
+                        ConditionFunctions.EQ,
+                        Column(alias=None, table_name=None, column_name="deleted"),
+                        Literal(alias=None, value=0),
+                    ),
+                    binary_condition(
+                        ConditionFunctions.GTE,
+                        Column(None, None, "timestamp"),
+                        Literal(None, datetime(2020, 1, 1, 12, 0)),
+                    ),
                 ),
                 groupby=[Column(None, None, "project_id")],
                 prewhere=binary_condition(
@@ -233,9 +262,17 @@ TEST_CASES = [
                 ),
             ],
             condition=binary_condition(
-                ConditionFunctions.EQ,
-                Column(None, "err", "project_id"),
-                Literal(None, 1),
+                BooleanFunctions.AND,
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    Column(None, "err", "project_id"),
+                    Literal(None, 1),
+                ),
+                binary_condition(
+                    ConditionFunctions.GTE,
+                    Column(None, "err", "timestamp"),
+                    Literal(None, datetime(2020, 1, 1, 12, 0)),
+                ),
             ),
         ),
         CompositeQueryPlan(
@@ -267,9 +304,17 @@ TEST_CASES = [
                                 ),
                             ],
                             condition=binary_condition(
-                                ConditionFunctions.EQ,
-                                Column(None, None, "project_id"),
-                                Literal(None, 1),
+                                BooleanFunctions.AND,
+                                binary_condition(
+                                    ConditionFunctions.EQ,
+                                    Column(None, None, "project_id"),
+                                    Literal(None, 1),
+                                ),
+                                binary_condition(
+                                    ConditionFunctions.GTE,
+                                    Column(None, None, "timestamp"),
+                                    Literal(None, datetime(2020, 1, 1, 12, 0)),
+                                ),
                             ),
                         ),
                     ),
@@ -365,9 +410,19 @@ TEST_CASES = [
                             ),
                         ],
                         condition=binary_condition(
-                            ConditionFunctions.EQ,
-                            Column(alias=None, table_name=None, column_name="deleted"),
-                            Literal(alias=None, value=0),
+                            BooleanFunctions.AND,
+                            binary_condition(
+                                ConditionFunctions.EQ,
+                                Column(
+                                    alias=None, table_name=None, column_name="deleted"
+                                ),
+                                Literal(alias=None, value=0),
+                            ),
+                            binary_condition(
+                                ConditionFunctions.GTE,
+                                Column(None, None, "timestamp"),
+                                Literal(None, datetime(2020, 1, 1, 12, 0)),
+                            ),
                         ),
                         prewhere=binary_condition(
                             ConditionFunctions.EQ,

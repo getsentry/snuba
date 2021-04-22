@@ -1,32 +1,26 @@
 from datetime import timedelta
 
 from snuba.clickhouse.columns import (
+    UUID,
     AggregateFunction,
     ColumnSet,
     DateTime,
     String,
     UInt,
-    UUID,
 )
-from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.schemas.tables import (
-    TableSchema,
-    WritableTableSchema,
-)
-from snuba.datasets.sessions_processor import SessionsProcessor
-from snuba.datasets.storage import (
-    ReadableTableStorage,
-    WritableTableStorage,
-)
-from snuba.clickhouse.query import Query
 from snuba.clickhouse.processors import QueryProcessor
-from snuba.query.exceptions import ValidationException
+from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range
+from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
+from snuba.datasets.sessions_processor import SessionsProcessor
+from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
+from snuba.query.exceptions import ValidationException
+from snuba.query.processors.conditions_enforcer import MandatoryConditionEnforcer
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.request.request_settings import RequestSettings
-
 
 WRITE_LOCAL_TABLE_NAME = "sessions_raw_local"
 WRITE_DIST_TABLE_NAME = "sessions_raw_dist"
@@ -123,7 +117,10 @@ raw_storage = WritableTableStorage(
     storage_key=StorageKey.SESSIONS_RAW,
     storage_set_key=StorageSetKey.SESSIONS,
     schema=raw_schema,
-    query_processors=[MinuteResolutionProcessor()],
+    query_processors=[
+        MinuteResolutionProcessor(),
+        MandatoryConditionEnforcer({"org_id", "project_id", "started"}),
+    ],
     stream_loader=build_kafka_stream_loader_from_settings(
         StorageKey.SESSIONS_RAW,
         processor=SessionsProcessor(),
@@ -135,5 +132,8 @@ materialized_storage = ReadableTableStorage(
     storage_key=StorageKey.SESSIONS_HOURLY,
     storage_set_key=StorageSetKey.SESSIONS,
     schema=read_schema,
-    query_processors=[PrewhereProcessor(["project_id", "org_id"])],
+    query_processors=[
+        PrewhereProcessor(["project_id", "org_id"]),
+        MandatoryConditionEnforcer({"org_id", "project_id", "started"}),
+    ],
 )

@@ -11,7 +11,13 @@ from snuba.web import QueryResult
 
 
 def test_events_processing() -> None:
-    query_body = {"selected_columns": ["tags[transaction]", "contexts[browser.name]"]}
+    query_body = {
+        "selected_columns": ["tags[transaction]", "contexts[browser.name]"],
+        "conditions": [
+            ["project_id", "=", 1],
+            ["timestamp", ">", "2020-01-01 12:00:00"],
+        ],
+    }
 
     events_dataset = get_dataset("events")
     events_entity = events_dataset.get_default_entity()
