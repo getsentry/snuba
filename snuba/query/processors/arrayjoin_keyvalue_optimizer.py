@@ -1,4 +1,4 @@
-from typing import List, Optional, Sequence, Set
+from typing import Optional, Sequence, Set
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
@@ -80,7 +80,7 @@ def _get_mapping_keys_in_condition(
     return keys_found
 
 
-def get_filtered_mapping_keys(query: Query, column_name: str) -> List[str]:
+def get_filtered_mapping_keys(query: Query, column_name: str) -> Sequence[str]:
     """
     Identifies the conditions we can apply the arrayFilter optimization
     on.
@@ -106,7 +106,7 @@ def get_filtered_mapping_keys(query: Query, column_name: str) -> List[str]:
     if cond_keys is None:
         # This means we found an OR. Cowardly we give up even though there could
         # be cases where this condition is still optimizable.
-        return list()
+        return []
 
     ast_having = query.get_having()
     having_keys = (
@@ -116,7 +116,7 @@ def get_filtered_mapping_keys(query: Query, column_name: str) -> List[str]:
     )
     if having_keys is None:
         # Same as above
-        return list()
+        return []
 
     keys = cond_keys | having_keys
     return sorted(list(keys))
