@@ -1228,6 +1228,49 @@ class TestApi(SimpleAPITest):
 
         assert "os.rooted" in result["data"][0]["top"]
 
+    def test_tag_key_query(self) -> None:
+        tags = [
+            "browser",
+            "environment",
+            "client_os",
+            "browser.name",
+            "client_os.name",
+        ]
+        result = json.loads(
+            self.post(
+                json.dumps(
+                    {
+                        "selected_columns": [],
+                        "orderby": "-count",
+                        "limitby": [9, "tags_key"],
+                        "project": [1],
+                        "dataset": "events",
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
+                        "groupby": ["tags_key", "tags_value"],
+                        "conditions": [
+                            ["type", "!=", "transaction"],
+                            ["project_id", "IN", [1]],
+                            ["tags_key", "IN", tags],
+                            ["group_id", "IN", [self.group_ids[0]]],
+                        ],
+                        "aggregations": [
+                            ["count()", "", "count"],
+                            ["min", "timestamp", "first_seen"],
+                            ["max", "timestamp", "last_seen"],
+                        ],
+                        "consistent": False,
+                        "debug": False,
+                    }
+                ),
+            ).data
+        )
+        formatted = sorted([f"'{t}'" for t in tags])
+        tag_phrase = f"in(tupleElement(pair, 1), tuple({', '.join(formatted)})"
+        assert tag_phrase in result["sql"]
+
     def test_unicode_condition(self) -> None:
         result = json.loads(
             self.post(

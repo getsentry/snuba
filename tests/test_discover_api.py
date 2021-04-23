@@ -778,6 +778,34 @@ class TestDiscoverApi(BaseApiTest):
             }
         ]
 
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [
+                        ["count()", None, "count"],
+                        [
+                            "countIf(not(has(array(0,1,2), transaction_status)))",
+                            None,
+                            "failure_count",
+                        ],
+                    ],
+                    "groupby": ["project_id", "tags[foo]"],
+                    "conditions": [["server_name", "=", "TypeError"]],
+                    "orderby": "count",
+                    "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+            entity="discover",
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data["data"] == []
+
     def test_count_null_user_consistency(self) -> None:
         response = self.post(
             json.dumps(
