@@ -44,7 +44,7 @@ grammar = Grammar(
     enum_str         = ~r"([a-zA-Z0-9\-]+)"
     enum_val         = ~r"\d+"
     agg              = "AggregateFunction" open_paren space* agg_func space* comma space* agg_types space* close_paren
-    agg_func         = ~r"[a-zA-Z]+\([a-zA-Z0-9\,\.\s]+\)|[a-zA-Z]+"
+    agg_func         = ~r"[a-zA-Z0-9]+\([a-zA-Z0-9\,\.\s]+\)|[a-zA-Z0-9]+"
     agg_types        = (primitive (space* comma space*)?)*
     array            = "Array" open_paren space* (array / primitive / lowcardinality / nullable) space* close_paren
     lowcardinality   = "LowCardinality" open_paren space* (primitive / nullable) space* close_paren
@@ -194,6 +194,7 @@ def _strip_cast(default_expr: str) -> str:
 def _get_column(
     column_type: str, default_type: str, default_expr: str, codec_expr: str
 ) -> ColumnType[MigrationModifiers]:
+    print(column_type)
     column: ColumnType[MigrationModifiers] = Visitor().visit(grammar.parse(column_type))
 
     if default_type == "MATERIALIZED":
