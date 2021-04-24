@@ -20,6 +20,7 @@ sets_columns: Sequence[Column[Modifiers]] = [
     Column("granularity", UInt(32)),
     Column("timestamp", DateTime()),
     Column("retention_days", UInt(16)),
+    Column("tags", Nested([Column("key", UInt(64)), Column("value", UInt(64))]),),
     Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
 ]
 
@@ -30,10 +31,7 @@ sets_mv_columns: Sequence[Column[Modifiers]] = [
     Column("granularity", UInt(32)),
     Column("timestamp", DateTime()),
     Column("retention_days", UInt(16)),
-    Column(
-        "tags",
-        Nested([Column("key", Array(UInt(64))), Column("value", Array(UInt(64)))]),
-    ),
+    Column("tags", Nested([Column("key", UInt(64)), Column("value", UInt(64))]),),
     Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
 ]
 
@@ -78,22 +76,6 @@ class Migration(migration.ClickhouseNodeMigration):
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={"index_granularity": "256"},
                 ),
-            ),
-            # TODO: Fix the formatting we do in the migrations framework to be able
-            # to add columns called `tags.key` in the CREATE TABLE statement
-            operations.RunSql(
-                storage_set=StorageSetKey.METRICS,
-                statement="""
-                    ALTER TABLE metrics_sets_local ADD COLUMN IF NOT EXISTS `tags.key` Array(UInt64) AFTER retention_days,
-                    MODIFY ORDER BY (org_id, project_id, metric_id, granularity, timestamp, tags.key);
-                """,
-            ),
-            operations.RunSql(
-                storage_set=StorageSetKey.METRICS,
-                statement="""
-                    ALTER TABLE metrics_sets_local ADD COLUMN IF NOT EXISTS `tags.value` Array(UInt64) AFTER tags.key,
-                    MODIFY ORDER BY (org_id, project_id, metric_id, granularity, timestamp, tags.key, tags.value);
-                """,
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.METRICS,
