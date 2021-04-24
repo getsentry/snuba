@@ -1,7 +1,7 @@
 import uuid
 import simplejson as json
 from datetime import datetime, timedelta
-from functools import partial
+from typing import Any, Callable
 
 from snuba_sdk.column import Column
 from snuba_sdk.conditions import Condition, Op
@@ -22,9 +22,11 @@ from tests.helpers import write_unprocessed_events
 
 
 class TestSDKSnQLApi(BaseApiTest):
-    def setup_method(self, test_method):
+    def post(self, url: str, data: str) -> Any:
+        return self.app.post(url, data=data, headers={"referer": "test"})
+
+    def setup_method(self, test_method: Callable[..., Any]) -> None:
         super().setup_method(test_method)
-        self.app.post = partial(self.app.post, headers={"referer": "test"})
         self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
         self.event = get_raw_event()
         self.project_id = self.event["project_id"]
@@ -34,6 +36,7 @@ class TestSDKSnQLApi(BaseApiTest):
             minute=0, second=0, microsecond=0
         ) - timedelta(minutes=180)
         events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
+        assert events_storage is not None
         write_unprocessed_events(events_storage, [self.event])
         self.next_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0
@@ -61,7 +64,7 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_debug(True)
         )
 
-        response = self.app.post("/discover/snql", data=query.snuba())
+        response = self.post("/discover/snql", data=query.snuba())
         data = json.loads(response.data)
 
         assert response.status_code == 200, data
@@ -97,7 +100,7 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(100)
         )
 
-        response = self.app.post("/sessions/snql", data=query.snuba())
+        response = self.post("/sessions/snql", data=query.snuba())
         data = json.loads(response.data)
 
         assert response.status_code == 200
@@ -127,7 +130,7 @@ class TestSDKSnQLApi(BaseApiTest):
             )
         )
 
-        response = self.app.post("/discover/snql", data=query.snuba())
+        response = self.post("/discover/snql", data=query.snuba())
         data = json.loads(response.data)
 
         assert response.status_code == 200
@@ -161,7 +164,78 @@ class TestSDKSnQLApi(BaseApiTest):
             .set_limit(1000)
         )
 
-        response = self.app.post("/discover/snql", data=query.snuba())
+        response = self.post("/discover/snql", data=query.snuba())
         data = json.loads(response.data)
         assert response.status_code == 200, data
         assert data["data"] == [{"avg_count": 1.0}]
+
+    def test_arrayjoin(self) -> None:
+        query = (
+            Query("events", Entity("events"))
+            .set_select(
+                [
+                    Function("count", [], "times_seen"),
+                    Function("min", [Column("timestamp")], "first_seen"),
+                    Function("max", [Column("timestamp")], "last_seen"),
+                ]
+            )
+            .set_groupby([Column("exception_frames.filename")])
+            .set_array_join(Column("exception_frames.filename"))
+            .set_where(
+                [
+                    Condition(Column("exception_frames.filename"), Op.LIKE, "%.java"),
+                    Condition(Column("project_id"), Op.EQ, self.project_id),
+                    Condition(Column("timestamp"), Op.GTE, self.base_time),
+                    Condition(Column("timestamp"), Op.LT, self.next_time),
+                ]
+            )
+            .set_orderby(
+                [
+                    OrderBy(
+                        Function("max", [Column("timestamp")], "last_seen"),
+                        Direction.DESC,
+                    )
+                ]
+            )
+            .set_limit(1000)
+        )
+
+        response = self.post("/events/snql", data=query.snuba())
+        data = json.loads(response.data)
+        assert response.status_code == 200, data
+        assert len(data["data"]) == 6
+
+    def test_tags_in_groupby(self) -> None:
+        query = (
+            Query("events", Entity("events"))
+            .set_select(
+                [
+                    Function("count", [], "times_seen"),
+                    Function("min", [Column("timestamp")], "first_seen"),
+                    Function("max", [Column("timestamp")], "last_seen"),
+                ]
+            )
+            .set_groupby([Column("tags[k8s-app]")])
+            .set_where(
+                [
+                    Condition(Column("project_id"), Op.EQ, self.project_id),
+                    Condition(Column("timestamp"), Op.GTE, self.base_time),
+                    Condition(Column("timestamp"), Op.LT, self.next_time),
+                    Condition(Column("tags[k8s-app]"), Op.NEQ, ""),
+                    Condition(Column("type"), Op.NEQ, "transaction"),
+                ]
+            )
+            .set_orderby(
+                [
+                    OrderBy(
+                        Function("max", [Column("timestamp")], "last_seen"),
+                        Direction.DESC,
+                    )
+                ]
+            )
+            .set_limit(1000)
+        )
+
+        response = self.post("/events/snql", data=query.snuba())
+        data = json.loads(response.data)
+        assert response.status_code == 200, data

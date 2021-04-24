@@ -1,8 +1,7 @@
 import uuid
 import simplejson as json
 from datetime import datetime, timedelta
-from functools import partial
-from typing import Any
+from typing import Any, Callable
 from unittest.mock import patch, MagicMock
 
 from snuba import state
@@ -16,9 +15,11 @@ from tests.helpers import write_unprocessed_events
 
 
 class TestSnQLApi(BaseApiTest):
-    def setup_method(self, test_method):
+    def post(self, url: str, data: str) -> Any:
+        return self.app.post(url, data=data, headers={"referer": "test"})
+
+    def setup_method(self, test_method: Callable[..., Any]) -> None:
         super().setup_method(test_method)
-        self.app.post = partial(self.app.post, headers={"referer": "test"})
         self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
         self.event = get_raw_event()
         self.project_id = self.event["project_id"]
@@ -28,6 +29,7 @@ class TestSnQLApi(BaseApiTest):
             minute=0, second=0, microsecond=0
         ) - timedelta(minutes=180)
         events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
+        assert events_storage is not None
         write_unprocessed_events(events_storage, [self.event])
         self.next_time = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0
@@ -37,7 +39,7 @@ class TestSnQLApi(BaseApiTest):
         )
 
     def test_simple_query(self) -> None:
-        response = self.app.post(
+        response = self.post(
             "/discover/snql",
             data=json.dumps(
                 {
@@ -67,7 +69,7 @@ class TestSnQLApi(BaseApiTest):
         ]
 
     def test_sessions_query(self) -> None:
-        response = self.app.post(
+        response = self.post(
             "/discover/snql",
             data=json.dumps(
                 {
@@ -90,7 +92,7 @@ class TestSnQLApi(BaseApiTest):
         assert data["data"] == []
 
     def test_join_query(self) -> None:
-        response = self.app.post(
+        response = self.post(
             "/discover/snql",
             data=json.dumps(
                 {
@@ -113,7 +115,7 @@ class TestSnQLApi(BaseApiTest):
         assert data["data"] == []
 
     def test_sub_query(self) -> None:
-        response = self.app.post(
+        response = self.post(
             "/discover/snql",
             data=json.dumps(
                 {
@@ -140,7 +142,7 @@ class TestSnQLApi(BaseApiTest):
         assert data["data"] == [{"avg_count": 1.0}]
 
     def test_max_limit(self) -> None:
-        response = self.app.post(
+        response = self.post(
             "/discover/snql",
             data=json.dumps(
                 {
@@ -162,7 +164,7 @@ class TestSnQLApi(BaseApiTest):
         state.set_config("project_concurrent_limit", self.project_id)
         state.set_config(f"project_concurrent_limit_{self.project_id}", 0)
 
-        response = self.app.post(
+        response = self.post(
             "/events/snql",
             data=json.dumps(
                 {
@@ -177,7 +179,7 @@ class TestSnQLApi(BaseApiTest):
         )
         assert response.status_code == 200
 
-        response = self.app.post(
+        response = self.post(
             "/events/snql",
             data=json.dumps(
                 {
@@ -196,7 +198,7 @@ class TestSnQLApi(BaseApiTest):
         state.set_config("project_concurrent_limit", self.project_id)
         state.set_config(f"project_concurrent_limit_{self.project_id}", 0)
 
-        response = self.app.post(
+        response = self.post(
             "/discover/snql",
             data=json.dumps(
                 {
@@ -212,7 +214,7 @@ class TestSnQLApi(BaseApiTest):
         )
         assert response.status_code == 200
 
-        response = self.app.post(
+        response = self.post(
             "/discover/snql",
             data=json.dumps(
                 {
@@ -232,7 +234,7 @@ class TestSnQLApi(BaseApiTest):
         state.set_config("project_concurrent_limit", self.project_id)
         state.set_config(f"project_concurrent_limit_{self.project_id}", 0)
 
-        response = self.app.post(
+        response = self.post(
             "/discover/snql",
             data=json.dumps(
                 {
@@ -252,7 +254,7 @@ class TestSnQLApi(BaseApiTest):
         )
         assert response.status_code == 200
 
-        response = self.app.post(
+        response = self.post(
             "/discover/snql",
             data=json.dumps(
                 {
@@ -283,12 +285,12 @@ class TestSnQLApi(BaseApiTest):
             state.set_config("use_split", use_split)
             record_query_mock.reset_mock()
             result = json.loads(
-                self.app.post(
+                self.post(
                     "/events/snql",
                     data=json.dumps(
                         {
                             "query": f"""MATCH (events)
-                            SELECT event_id, title, transaction, tags[a], tags[b]
+                            SELECT event_id, title, transaction, tags[a], tags[b], message, project_id
                             WHERE timestamp >= toDateTime('2021-01-01')
                             AND timestamp < toDateTime('2022-01-01')
                             AND project_id IN tuple({self.project_id})
@@ -307,12 +309,12 @@ class TestSnQLApi(BaseApiTest):
 
     @patch("snuba.web.query._run_query_pipeline")
     def test_error_handler(self, pipeline_mock: MagicMock) -> None:
-        from rediscluster.utils import ClusterDownError
+        from rediscluster.utils import ClusterDownError  # type: ignore
 
         hsh = "0" * 32
         group_id = int(hsh[:16], 16)
         pipeline_mock.side_effect = ClusterDownError("stuff")
-        response = self.app.post(
+        response = self.post(
             "/events/snql",
             data=json.dumps(
                 {
@@ -333,8 +335,8 @@ class TestSnQLApi(BaseApiTest):
         assert data["error"]["message"] == "stuff"
 
     def test_sessions_with_function_orderby(self) -> None:
-        response = self.app.post(
-            "/events/snql",
+        response = self.post(
+            "/sessions/snql",
             data=json.dumps(
                 {
                     "query": f"""MATCH (sessions)
@@ -347,6 +349,49 @@ class TestSnQLApi(BaseApiTest):
                     ORDER BY divide(sessions_crashed, sessions) ASC
                     LIMIT 21
                     OFFSET 0
+                    """,
+                }
+            ),
+        )
+        assert response.status_code == 200
+
+    def test_arrayjoin(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT count() AS times_seen, min(timestamp) AS first_seen, max(timestamp) AS last_seen
+                    BY exception_frames.filename
+                    ARRAY JOIN exception_frames.filename
+                    WHERE timestamp >= toDateTime('2021-04-16T17:17:00')
+                    AND timestamp < toDateTime('2021-04-16T23:17:00')
+                    AND project_id IN tuple({self.project_id})
+                    AND exception_frames.filename LIKE '%.java'
+                    AND project_id IN tuple({self.project_id})
+                    ORDER BY last_seen DESC
+                    LIMIT 1000
+                    """,
+                }
+            ),
+        )
+        assert response.status_code == 200
+
+    def test_tags_in_groupby(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT count() AS times_seen, min(timestamp) AS first_seen, max(timestamp) AS last_seen
+                    BY tags[k8s-app]
+                    WHERE timestamp >= toDateTime('2021-04-06T20:42:40')
+                    AND timestamp < toDateTime('2021-04-20T20:42:40')
+                    AND project_id IN tuple({self.project_id}) AND tags[k8s-app] != ''
+                    AND type != 'transaction'
+                    AND project_id IN tuple({self.project_id})
+                    ORDER BY last_seen DESC
+                    LIMIT 1000
                     """,
                 }
             ),

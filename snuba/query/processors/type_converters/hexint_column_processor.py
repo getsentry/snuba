@@ -7,7 +7,7 @@ class HexIntColumnProcessor(BaseTypeConverter):
         try:
             assert isinstance(exp.value, str)
             return Literal(alias=exp.alias, value=int(exp.value, 16))
-        except AssertionError:
+        except (AssertionError, ValueError):
             raise ColumnTypeError("Invalid hexint")
 
     def _process_expressions(self, exp: Expression) -> Expression:

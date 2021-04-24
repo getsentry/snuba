@@ -138,7 +138,7 @@ class BaseEventsEntity(Entity, ABC):
     def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
         events_storage = get_writable_storage(StorageKey.EVENTS)
         errors_storage = get_writable_storage(StorageKey.ERRORS)
-        schema = events_storage.get_table_writer().get_schema()
+        schema = errors_storage.get_table_writer().get_schema()
         columns = schema.get_columns()
 
         events_pipeline_builder = SimplePipelineBuilder(

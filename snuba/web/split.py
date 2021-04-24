@@ -235,12 +235,12 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         # We need to count the number of table/column name pairs
         # not the number of distinct Column objects in the query
         # so to avoid counting aliased columns multiple times.
-        total_columns = {
+        selected_columns = {
             (col.table_name, col.column_name)
-            for col in query.get_all_ast_referenced_columns()
+            for col in query.get_columns_referenced_in_select()
         }
 
-        if len(total_columns) < settings.COLUMN_SPLIT_MIN_COLS:
+        if len(selected_columns) < settings.COLUMN_SPLIT_MIN_COLS:
             metrics.increment("column_splitter.main_query_min_threshold")
             return None
 
@@ -276,13 +276,6 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
                     extra={"expression": exp},
                     exc_info=True,
                 )
-
-        minimal_columns = {
-            (col.table_name, col.column_name)
-            for col in minimal_query.get_all_ast_referenced_columns()
-        }
-        if len(total_columns) <= len(minimal_columns):
-            return None
 
         # Ensures the AST minimal query is actually runnable on its own.
         if not minimal_query.validate_aliases():

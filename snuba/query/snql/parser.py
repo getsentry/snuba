@@ -85,11 +85,12 @@ logger = logging.getLogger("snuba.snql.parser")
 
 snql_grammar = Grammar(
     r"""
-    query_exp             = match_clause select_clause group_by_clause? where_clause? having_clause? order_by_clause? limit_by_clause? limit_clause? offset_clause? granularity_clause? totals_clause? space*
+    query_exp             = match_clause select_clause group_by_clause? arrayjoin_clause? where_clause? having_clause? order_by_clause? limit_by_clause? limit_clause? offset_clause? granularity_clause? totals_clause? space*
 
     match_clause          = space* "MATCH" space+ (relationships / subquery / entity_single )
     select_clause         = space+ "SELECT" space+ select_list
     group_by_clause       = space+ "BY" space+ group_list
+    arrayjoin_clause      = space+ "ARRAY JOIN" space+ (tag_column / subscriptable / simple_term)
     where_clause          = space+ "WHERE" space+ or_expression
     having_clause         = space+ "HAVING" space+ or_expression
     order_by_clause       = space+ "ORDER BY" space+ order_list
@@ -133,7 +134,7 @@ snql_grammar = Grammar(
     low_pri_tuple         = low_pri_op space* high_pri_arithmetic
     high_pri_tuple        = high_pri_op space* arithmetic_term
 
-    arithmetic_term       = space* (function_call / subscriptable / simple_term / parenthesized_arithm)
+    arithmetic_term       = space* (function_call / tag_column / subscriptable / simple_term / parenthesized_arithm)
     parenthesized_arithm  = open_paren low_pri_arithmetic close_paren
 
     low_pri_op            = "+" / "-"
@@ -153,6 +154,8 @@ snql_grammar = Grammar(
     null_literal          = ~r"NULL"i
     subscriptable         = column_name open_square column_name close_square
     column_name           = ~r"[a-zA-Z_][a-zA-Z0-9_\.:]*"
+    tag_column            = "tags" open_square tag_name close_square
+    tag_name             = ~r"[^\[\]]*"
     function_name         = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     entity_alias          = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     entity_name           = ~r"[a-zA-Z_]+"
@@ -194,6 +197,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             data_source,
             args["selected_columns"],
             args["groupby"],
+            args["array_join"],
             args["condition"],
             args["having"],
             args["order_by"],
@@ -364,6 +368,9 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
     def visit_subscriptable(
         self, node: Node, visited_children: Iterable[Any]
     ) -> Column:
+        return visit_column_name(node, visited_children)
+
+    def visit_tag_column(self, node: Node, visited_children: Iterable[Any]) -> Column:
         return visit_column_name(node, visited_children)
 
     def visit_and_tuple(
@@ -683,6 +690,12 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         ret.append(right_column)
         return ret
 
+    def visit_arrayjoin_clause(
+        self, node: Node, visited_children: Tuple[Any, Any, Any, Expression]
+    ) -> Expression:
+        _, _, _, expression = visited_children
+        return expression
+
     def visit_parameter(
         self, node: Node, visited_children: Tuple[Expression, Any, Any, Any]
     ) -> Expression:
@@ -748,10 +761,18 @@ def parse_snql_query_initial(
         logger.warning(f"Invalid SnQL query ({e}): {body}")
         raise e
     except IncompleteParseError as e:
+        lines = body.split("\n")
+        if e.line() > len(lines):
+            line = body
+        else:
+            line = lines[e.line() - 1]
+
         idx = e.column()
-        prefix = body[max(0, idx - 1) : idx]
-        suffix = body[idx : (idx + 10)]
-        raise ParsingException(f"Parsing error at '{prefix}{suffix}'")
+        prefix = line[max(0, idx - 3) : idx]
+        suffix = line[idx : (idx + 10)]
+        raise ParsingException(
+            f"Parsing error on line {e.line()} at '{prefix}{suffix}'"
+        )
     except Exception as e:
         message = str(e)
         if "\n" in message:
@@ -902,7 +923,7 @@ def _mangle_query_aliases(
 
         return replace(exp, column_name=f"{alias_prefix}{exp.column_name}")
 
-    query.transform_expressions(mangle_aliases)
+    query.transform_expressions(mangle_aliases, skip_array_join=True)
 
     # Check if this query has a subquery. If it does, we need to mangle the column name as well
     # and keep track of what we mangled by updating the mappings in memory.

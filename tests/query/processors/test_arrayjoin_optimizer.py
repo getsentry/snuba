@@ -54,7 +54,7 @@ tags_filter_tests = [
                 ),
             ],
         ),
-        set(),
+        [],
         id="no tag filter",
     ),
     pytest.param(
@@ -72,7 +72,7 @@ tags_filter_tests = [
                 Literal(None, "tag"),
             ),
         ),
-        {"tag"},
+        ["tag"],
         id="simple equality",
     ),
     pytest.param(
@@ -89,7 +89,7 @@ tags_filter_tests = [
                 [Literal(None, "tag1"), Literal(None, "tag2")],
             ),
         ),
-        {"tag1", "tag2"},
+        ["tag1", "tag2"],
         id="tag IN condition",
     ),
     pytest.param(
@@ -114,7 +114,7 @@ tags_filter_tests = [
                 Literal(None, "tag2"),
             ),
         ),
-        {"tag", "tag2"},
+        ["tag", "tag2"],
         id="conditions and having",
     ),
     pytest.param(
@@ -144,7 +144,7 @@ tags_filter_tests = [
                 Literal(None, "tag"),
             ),
         ),
-        set(),
+        [],
         id="tag OR condition",
     ),
 ]
