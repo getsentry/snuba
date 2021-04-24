@@ -194,7 +194,6 @@ def _strip_cast(default_expr: str) -> str:
 def _get_column(
     column_type: str, default_type: str, default_expr: str, codec_expr: str
 ) -> ColumnType[MigrationModifiers]:
-    print(column_type)
     column: ColumnType[MigrationModifiers] = Visitor().visit(grammar.parse(column_type))
 
     if default_type == "MATERIALIZED":

@@ -13,6 +13,7 @@ DATASET_NAMES: Set[str] = {
     "events",
     "groupassignee",
     "groupedmessage",
+    "metrics",
     "outcomes",
     "outcomes_raw",
     "sessions",
@@ -41,6 +42,7 @@ def get_dataset(name: str) -> Dataset:
     from snuba.datasets.discover import DiscoverDataset
     from snuba.datasets.events import EventsDataset
 
+    from snuba.datasets.metrics import MetricsDataset
     from snuba.datasets.outcomes import OutcomesDataset
     from snuba.datasets.outcomes_raw import OutcomesRawDataset
     from snuba.datasets.sessions import SessionsDataset
@@ -51,6 +53,7 @@ def get_dataset(name: str) -> Dataset:
         "events": EventsDataset,
         "groupassignee": GroupAssigneeDataset,
         "groupedmessage": GroupedMessageDataset,
+        "metrics": MetricsDataset,
         "outcomes": OutcomesDataset,
         "outcomes_raw": OutcomesRawDataset,
         "sessions": SessionsDataset,
