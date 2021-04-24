@@ -27,8 +27,8 @@ class MetricsProcessor(MessageProcessor):
         tags = message["tags"]
         assert isinstance(tags, Mapping)
         for key, value in sorted(tags.items()):
-            assert isinstance(key, int)
-            keys.append(key)
+            assert key.isdigit()
+            keys.append(int(key))
             assert isinstance(value, int)
             values.append(value)
 
@@ -39,7 +39,7 @@ class MetricsProcessor(MessageProcessor):
             "metric_type": "set",
             "timestamp": timestamp,
             "tags.key": keys,
-            "tags.value": value,
+            "tags.value": values,
             "set_values": message["value"],
             "materialization_version": 0,
             "retention_days": message["retention_days"],
