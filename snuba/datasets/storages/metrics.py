@@ -47,7 +47,7 @@ buckets_storage = WritableTableStorage(
     stream_loader=build_kafka_stream_loader_from_settings(
         StorageKey.METRICS_BUCKETS,
         processor=MetricsProcessor(),
-        default_topic_name="metrics",
+        default_topic_name="ingest-metrics",
     ),
 )
 
