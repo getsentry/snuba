@@ -78,6 +78,9 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
             # TODO: Fix the formatting we do in the migrations framework to be able
             # to add columns called `tags.key` in the CREATE TABLE statement
+            # tags.key and tags.value have to be in the sorting key in order to be
+            # part of the primary key so that data from different tags does not
+            # get aggregated together.
             operations.RunSql(
                 storage_set=StorageSetKey.METRICS,
                 statement="""
