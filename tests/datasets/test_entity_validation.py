@@ -8,8 +8,10 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.query import SelectedExpression
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.parser.validation import validate_entities_with_query
 
 tests = [
     pytest.param(
@@ -103,242 +105,10 @@ tests = [
         ),
         id="filtering time with IN is allowed",
     ),
-    pytest.param(
-        EntityKey.EVENTS,
-        binary_condition(
-            "and",
-            binary_condition(
-                "equals",
-                Column("_snuba_project_id", None, "project_id"),
-                Literal(None, 1),
-            ),
-            binary_condition(
-                "and",
-                binary_condition(
-                    "greaterOrEquals",
-                    Column("_snuba_timestamp", None, "timestamp"),
-                    Literal(None, datetime.datetime(2021, 1, 1, 0, 30)),
-                ),
-                binary_condition(
-                    "less",
-                    Column("_snuba_timestamp", None, "timestamp"),
-                    Literal(None, datetime.datetime(2021, 1, 2, 0, 30)),
-                ),
-            ),
-        ),
-        binary_condition(
-            "and",
-            binary_condition(
-                "equals",
-                Column("_snuba_project_id", None, "project_id"),
-                Literal(None, 1),
-            ),
-            binary_condition(
-                "and",
-                binary_condition(
-                    "greaterOrEquals",
-                    Column("_snuba_timestamp", None, "timestamp"),
-                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-                ),
-                binary_condition(
-                    "less",
-                    Column("_snuba_timestamp", None, "timestamp"),
-                    Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-                ),
-            ),
-        ),
-        id="from/to aligned with date align",
-    ),
-    pytest.param(
-        EntityKey.EVENTS,
-        binary_condition(
-            "and",
-            binary_condition(
-                "equals",
-                Column("_snuba_project_id", None, "project_id"),
-                Literal(None, 1),
-            ),
-            binary_condition(
-                "and",
-                binary_condition(
-                    "greaterOrEquals",
-                    Column("_snuba_timestamp", None, "timestamp"),
-                    Literal(None, datetime.datetime(2021, 1, 1, 0, 30)),
-                ),
-                binary_condition(
-                    "less",
-                    Column("_snuba_timestamp", None, "timestamp"),
-                    Literal(None, datetime.datetime(2021, 1, 20, 0, 30)),
-                ),
-            ),
-        ),
-        binary_condition(
-            "and",
-            binary_condition(
-                "equals",
-                Column("_snuba_project_id", None, "project_id"),
-                Literal(None, 1),
-            ),
-            binary_condition(
-                "and",
-                binary_condition(
-                    "greaterOrEquals",
-                    Column("_snuba_timestamp", None, "timestamp"),
-                    Literal(None, datetime.datetime(2021, 1, 15, 0, 0)),
-                ),
-                binary_condition(
-                    "less",
-                    Column("_snuba_timestamp", None, "timestamp"),
-                    Literal(None, datetime.datetime(2021, 1, 20, 0, 0)),
-                ),
-            ),
-        ),
-        id="from is aligned to max days",
-    ),
-    pytest.param(
-        EntityKey.EVENTS,
-        binary_condition(
-            "and",
-            binary_condition(
-                "equals",
-                Column("_snuba_project_id", None, "project_id"),
-                Literal(None, 1),
-            ),
-            binary_condition(
-                "and",
-                binary_condition(
-                    "greaterOrEquals",
-                    Column("_snuba_timestamp", None, "timestamp"),
-                    Literal(None, datetime.datetime(2021, 1, 1, 0, 30)),
-                ),
-                binary_condition(
-                    "and",
-                    binary_condition(
-                        "less",
-                        Column("_snuba_timestamp", None, "timestamp"),
-                        Literal(None, datetime.datetime(2021, 1, 2, 0, 30)),
-                    ),
-                    binary_condition(
-                        "less",
-                        Column("_snuba_timestamp", None, "timestamp"),
-                        Literal(None, datetime.datetime(2021, 1, 3, 0, 30)),
-                    ),
-                ),
-            ),
-        ),
-        binary_condition(
-            "and",
-            binary_condition(
-                "equals",
-                Column("_snuba_project_id", None, "project_id"),
-                Literal(None, 1),
-            ),
-            binary_condition(
-                "and",
-                binary_condition(
-                    "greaterOrEquals",
-                    Column("_snuba_timestamp", None, "timestamp"),
-                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-                ),
-                binary_condition(
-                    "and",
-                    binary_condition(
-                        "less",
-                        Column("_snuba_timestamp", None, "timestamp"),
-                        Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-                    ),
-                    binary_condition(
-                        "less",
-                        Column("_snuba_timestamp", None, "timestamp"),
-                        Literal(None, datetime.datetime(2021, 1, 3, 0, 30)),
-                    ),
-                ),
-            ),
-        ),
-        id="only minimum time range is adjusted",
-    ),
-    pytest.param(
-        EntityKey.EVENTS,
-        binary_condition(
-            "and",
-            binary_condition(
-                "equals",
-                Column("_snuba_project_id", None, "project_id"),
-                Literal(None, 1),
-            ),
-            binary_condition(
-                "and",
-                binary_condition(
-                    "greaterOrEquals",
-                    Column("_snuba_timestamp", None, "timestamp"),
-                    Literal(None, datetime.datetime(2021, 1, 1, 0, 30)),
-                ),
-                binary_condition(
-                    "and",
-                    binary_condition(
-                        "less",
-                        Column("_snuba_timestamp", None, "timestamp"),
-                        Literal(None, datetime.datetime(2021, 1, 2, 0, 30)),
-                    ),
-                    binary_condition(
-                        "or",
-                        binary_condition(
-                            "less",
-                            Column("_snuba_timestamp", None, "timestamp"),
-                            Literal(None, datetime.datetime(2021, 1, 2, 0, 30)),
-                        ),
-                        binary_condition(
-                            "less",
-                            Column("_snuba_timestamp", None, "timestamp"),
-                            Literal(None, datetime.datetime(2021, 1, 2, 0, 30)),
-                        ),
-                    ),
-                ),
-            ),
-        ),
-        binary_condition(
-            "and",
-            binary_condition(
-                "equals",
-                Column("_snuba_project_id", None, "project_id"),
-                Literal(None, 1),
-            ),
-            binary_condition(
-                "and",
-                binary_condition(
-                    "greaterOrEquals",
-                    Column("_snuba_timestamp", None, "timestamp"),
-                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-                ),
-                binary_condition(
-                    "and",
-                    binary_condition(
-                        "less",
-                        Column("_snuba_timestamp", None, "timestamp"),
-                        Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-                    ),
-                    binary_condition(
-                        "or",
-                        binary_condition(
-                            "less",
-                            Column("_snuba_timestamp", None, "timestamp"),
-                            Literal(None, datetime.datetime(2021, 1, 2, 0, 30)),
-                        ),
-                        binary_condition(
-                            "less",
-                            Column("_snuba_timestamp", None, "timestamp"),
-                            Literal(None, datetime.datetime(2021, 1, 2, 0, 30)),
-                        ),
-                    ),
-                ),
-            ),
-        ),
-        id="nested conditions are not adjusted",
-    ),
 ]
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(autouse=True)  # type: ignore
 def set_configs() -> Generator[None, None, None]:
     state.set_config("max_days", 5)
     state.set_config("date_align_seconds", 3600)
@@ -347,7 +117,7 @@ def set_configs() -> Generator[None, None, None]:
     state.set_config("date_align_seconds", 1)
 
 
-@pytest.mark.parametrize("key, condition, expected_condition", tests)
+@pytest.mark.parametrize("key, condition, expected_condition", tests)  # type: ignore
 def test_entity_validation(
     key: EntityKey,
     condition: Optional[Expression],
@@ -367,7 +137,7 @@ def test_entity_validation(
         )
 
     query = query_fn(condition)
-    assert entity.validate_required_conditions(query) is None
+    validate_entities_with_query(query)
     expected_query = query_fn(expected_condition)
     matched, reason = query.equals(expected_query)
     assert matched, reason
@@ -390,34 +160,10 @@ invalid_tests = [
         {"project_id"},
         id="spans does not have project with EQ or IN",
     ),
-    pytest.param(
-        EntityKey.EVENTS,
-        binary_condition(
-            "and",
-            binary_condition(
-                "equals", Column(None, None, "project_id"), Literal(None, 1),
-            ),
-            binary_condition(
-                "and",
-                binary_condition(
-                    "greater",
-                    Column(None, None, "timestamp"),
-                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-                ),
-                binary_condition(
-                    "less",
-                    Column(None, None, "timestamp"),
-                    Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-                ),
-            ),
-        ),
-        {"timestamp"},
-        id="events does not have time with GTE and LT",
-    ),
 ]
 
 
-@pytest.mark.parametrize("key, condition, missing", invalid_tests)
+@pytest.mark.parametrize("key, condition, missing", invalid_tests)  # type: ignore
 def test_entity_validation_failure(
     key: EntityKey, condition: Optional[Expression], missing: Optional[Set[str]]
 ) -> None:
@@ -430,4 +176,5 @@ def test_entity_validation_failure(
         condition=condition,
     )
 
-    assert entity.validate_required_conditions(query) == missing
+    with pytest.raises(InvalidQueryException):
+        validate_entities_with_query(query)

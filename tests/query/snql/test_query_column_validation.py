@@ -187,11 +187,11 @@ time_validation_tests = [
     pytest.param(
         """MATCH (e: events) -[connected]-> (s: spans) SELECT 4-5, e.c
         WHERE e.project_id=1
-        AND e.timestamp>=toDateTime('2021-01-01T00:30:00')
-        AND e.timestamp<toDateTime('2021-01-03T00:30:00')
+        AND e.timestamp>toDateTime('2021-01-01T00:30:00')
+        AND e.timestamp<=toDateTime('2021-01-03T00:30:00')
         AND s.project_id=1
-        AND s.timestamp>=toDateTime('2021-01-01T00:30:00')
-        AND s.timestamp<toDateTime('2021-01-07T00:30:00')""",
+        AND s.timestamp>toDateTime('2021-01-01T00:30:00')
+        AND s.timestamp<=toDateTime('2021-01-07T00:30:00')""",
         CompositeQuery(
             from_clause=JoinClause(
                 left_node=IndividualNode(
@@ -231,14 +231,14 @@ time_validation_tests = [
                 binary_condition(
                     "and",
                     binary_condition(
-                        "greaterOrEquals",
+                        "greater",
                         Column("_snuba_e.timestamp", "e", "timestamp"),
                         Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
                     ),
                     binary_condition(
                         "and",
                         binary_condition(
-                            "less",
+                            "lessOrEquals",
                             Column("_snuba_e.timestamp", "e", "timestamp"),
                             Literal(None, datetime.datetime(2021, 1, 3, 0, 0)),
                         ),
@@ -252,12 +252,12 @@ time_validation_tests = [
                             binary_condition(
                                 "and",
                                 binary_condition(
-                                    "greaterOrEquals",
+                                    "greater",
                                     Column("_snuba_s.timestamp", "s", "timestamp"),
                                     Literal(None, datetime.datetime(2021, 1, 1, 0, 30)),
                                 ),
                                 binary_condition(
-                                    "less",
+                                    "lessOrEquals",
                                     Column("_snuba_s.timestamp", "s", "timestamp"),
                                     Literal(None, datetime.datetime(2021, 1, 7, 0, 30)),
                                 ),
@@ -269,7 +269,7 @@ time_validation_tests = [
             limit=1000,
             offset=0,
         ),
-        id="times are adjusted in each entity",
+        id="<=/< and >=/> are interchangeable",
     ),
 ]
 
