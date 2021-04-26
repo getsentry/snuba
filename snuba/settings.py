@@ -88,6 +88,8 @@ STORAGE_TOPICS: Mapping[str, Mapping[str, Any]] = {}
 
 KAFKA_TOPIC_MAP: Mapping[str, str] = {}
 
+KAFKA_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
+
 DEFAULT_MAX_BATCH_SIZE = 50000
 DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000
 DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 10000

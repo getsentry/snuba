@@ -96,7 +96,7 @@ def bootstrap(
                             topic_spec.topic_name,
                             num_partitions=topic_spec.partitions_number,
                             replication_factor=topic_spec.replication_factor,
-                            config=topic_spec.config,
+                            config=topic_spec.topic_creation_config,
                         )
 
         logger.info("Creating Kafka topics...")
