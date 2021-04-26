@@ -167,7 +167,7 @@ class MetricsLoader(DirectoryLoader):
     def get_migrations(self) -> Sequence[str]:
         return [
             "0001_metrics_buckets",
-            "0001_metrics_sets",
+            "0002_metrics_sets",
         ]
 
 
