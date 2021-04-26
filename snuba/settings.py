@@ -34,7 +34,9 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "sessions",
             "transactions",
         },
-        "single_node": True,
+        "single_node": False,
+        "cluster_name": "test_shard_localhost",
+        "distributed_cluster_name": "test_shard_localhost",
     },
 ]
 

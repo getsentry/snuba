@@ -36,10 +36,10 @@ LOCAL_TABLE_NAME = "migrations_local"
 DIST_TABLE_NAME = "migrations_dist"
 
 
-def assert_single_node() -> None:
-    assert all(
-        cluster.is_single_node() for cluster in CLUSTERS
-    ), "Cannot run migrations for multi node clusters"
+# def assert_single_node() -> None:
+#    assert all(
+#        cluster.is_single_node() for cluster in CLUSTERS
+#    ), "Cannot run migrations for multi node clusters"
 
 
 class MigrationKey(NamedTuple):
@@ -139,7 +139,7 @@ class Runner:
 
         Requires force to run blocking migrations.
         """
-        assert_single_node()
+        # assert_single_node()
 
         pending_migrations = self._get_pending_migrations()
 
@@ -168,8 +168,8 @@ class Runner:
 
         Blocking migrations must be run with force.
         """
-        if not dry_run:
-            assert_single_node()
+        # if not dry_run:
+        #     assert_single_node()
 
         migration_group, migration_id = migration_key
 
@@ -226,8 +226,8 @@ class Runner:
         """
         Reverses a migration.
         """
-        if not dry_run:
-            assert_single_node()
+        # if not dry_run:
+        #     assert_single_node()
 
         migration_group, migration_id = migration_key
 
