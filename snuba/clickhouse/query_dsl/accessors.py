@@ -109,7 +109,9 @@ def get_time_range_expressions(
                 Or(
                     [
                         String(OPERATOR_TO_FUNCTION[">="]),
+                        String(OPERATOR_TO_FUNCTION[">"]),
                         String(OPERATOR_TO_FUNCTION["<"]),
+                        String(OPERATOR_TO_FUNCTION["<="]),
                     ]
                 ),
             ),
@@ -122,7 +124,10 @@ def get_time_range_expressions(
         if match is not None:
             timestamp = cast(datetime, match.scalar("timestamp"))
             assert isinstance(c, FunctionCallExpr)
-            if match.string("operator") == OPERATOR_TO_FUNCTION[">="]:
+            if match.string("operator") in (
+                OPERATOR_TO_FUNCTION[">="],
+                OPERATOR_TO_FUNCTION[">"],
+            ):
                 if not max_lower_bound or timestamp > max_lower_bound[0]:
                     max_lower_bound = (timestamp, c)
             else:

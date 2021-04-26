@@ -297,9 +297,12 @@ def test_entity_column_validation(
         )
 
     events_entity = get_entity(EntityKey.EVENTS)
-    setattr(events_entity, "get_join_relationship", events_mock)
+    old_get_join = events_entity.get_join_relationship
 
-    query = parse_snql_query(query_body, events)
-
-    eq, reason = query.equals(expected_query)
-    assert eq, reason
+    try:
+        setattr(events_entity, "get_join_relationship", events_mock)
+        query = parse_snql_query(query_body, events)
+        eq, reason = query.equals(expected_query)
+        assert eq, reason
+    finally:
+        setattr(events_entity, "get_join_relationship", old_get_join)
