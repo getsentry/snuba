@@ -33,6 +33,7 @@ from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
+from snuba.query.validation.validators import EntityRequiredColumnValidator
 from snuba.request.request_settings import RequestSettings
 
 event_translator = TranslationMappers(
@@ -198,7 +199,7 @@ class BaseEventsEntity(Entity, ABC):
                 ),
             },
             writable_storage=errors_storage,
-            required_filter_columns=["project_id"],
+            validators=[EntityRequiredColumnValidator({"project_id"})],
             required_time_column="timestamp",
         )
 
