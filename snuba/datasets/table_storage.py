@@ -82,13 +82,13 @@ def build_kafka_stream_loader_from_settings(
 ) -> KafkaStreamLoader:
     storage_topics = {**settings.STORAGE_TOPICS.get(storage_key.value, {})}
 
-    default_topic_spec = KafkaTopicSpec(default_topic, storage_topics.pop("default"),)
+    default_topic_spec = KafkaTopicSpec(default_topic, storage_topics.get("default"))
 
     replacement_topic_spec: Optional[KafkaTopicSpec]
 
     if replacement_topic is not None:
         replacement_topic_spec = KafkaTopicSpec(
-            replacement_topic, storage_topics.pop("replacements"),
+            replacement_topic, storage_topics.get("replacements"),
         )
 
     elif "replacements" in storage_topics:
@@ -101,7 +101,7 @@ def build_kafka_stream_loader_from_settings(
     commit_log_topic_spec: Optional[KafkaTopicSpec]
     if commit_log_topic is not None:
         commit_log_topic_spec = KafkaTopicSpec(
-            commit_log_topic, storage_topics.pop("commit-log"),
+            commit_log_topic, storage_topics.get("commit-log"),
         )
     elif "commit-log" in storage_topics:
         raise ValueError(
