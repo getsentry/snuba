@@ -20,7 +20,6 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.topics import (
     Topic,
-    get_topic_config,
     get_topic_creation_config,
 )
 from snuba.writer import BatchWriter
@@ -33,7 +32,6 @@ class KafkaTopicSpec:
     partitions_number: int
     replication_factor: int = 1
     topic_creation_config: Optional[Mapping[str, str]] = None
-    config: Optional[Mapping[str, Any]] = None
 
 
 class KafkaStreamLoader:
@@ -92,7 +90,6 @@ def build_kafka_topic_spec_from_settings(
         topic_name=topic_name,
         partitions_number=settings.TOPIC_PARTITION_COUNTS.get(topic_name, 1),
         topic_creation_config=get_topic_creation_config(topic),
-        config=get_topic_config(topic),
     )
 
 
