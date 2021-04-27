@@ -677,9 +677,6 @@ def get_default_kafka_configuration(
             default_bootstrap_servers = ",".join(
                 settings.DEFAULT_STORAGE_BROKERS[storage_name]
             )
-        elif settings.DEFAULT_BROKERS:
-            default_config = {}
-            default_bootstrap_servers = ",".join(settings.DEFAULT_BROKERS)
         elif settings.STORAGE_BROKER_CONFIG:
             default_config = settings.STORAGE_BROKER_CONFIG.get(
                 storage_name, settings.BROKER_CONFIG
@@ -690,11 +687,7 @@ def get_default_kafka_configuration(
             )
 
     else:
-        if settings.DEFAULT_BROKERS:
-            default_config = {}
-            default_bootstrap_servers = ",".join(settings.DEFAULT_BROKERS)
-        else:
-            default_config = settings.BROKER_CONFIG
+        default_config = settings.BROKER_CONFIG
     broker_config = copy.deepcopy(default_config)
     assert isinstance(broker_config, dict)
     bootstrap_servers = (
