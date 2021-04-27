@@ -20,7 +20,6 @@ from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.topics import (
     KafkaTopicSpec,
     Topic,
-    get_topic_name,
 )
 from snuba.writer import BatchWriter
 
@@ -73,12 +72,6 @@ class KafkaStreamLoader:
         return ret
 
 
-def build_kafka_topic_spec_from_settings(
-    topic: Topic, topic_name: str
-) -> KafkaTopicSpec:
-    return KafkaTopicSpec(topic=topic,)
-
-
 def build_kafka_stream_loader_from_settings(
     storage_key: StorageKey,  # TODO: Remove once STORAGE_TOPICS is no longer supported
     processor: MessageProcessor,
@@ -89,16 +82,13 @@ def build_kafka_stream_loader_from_settings(
 ) -> KafkaStreamLoader:
     storage_topics = {**settings.STORAGE_TOPICS.get(storage_key.value, {})}
 
-    default_topic_spec = build_kafka_topic_spec_from_settings(
-        default_topic, storage_topics.pop("default", get_topic_name(default_topic)),
-    )
+    default_topic_spec = KafkaTopicSpec(default_topic, storage_topics.pop("default"),)
 
     replacement_topic_spec: Optional[KafkaTopicSpec]
 
     if replacement_topic is not None:
-        replacement_topic_spec = build_kafka_topic_spec_from_settings(
-            replacement_topic,
-            storage_topics.pop("replacements", get_topic_name(replacement_topic)),
+        replacement_topic_spec = KafkaTopicSpec(
+            replacement_topic, storage_topics.pop("replacements"),
         )
 
     elif "replacements" in storage_topics:
@@ -110,9 +100,8 @@ def build_kafka_stream_loader_from_settings(
 
     commit_log_topic_spec: Optional[KafkaTopicSpec]
     if commit_log_topic is not None:
-        commit_log_topic_spec = build_kafka_topic_spec_from_settings(
-            commit_log_topic,
-            storage_topics.pop("commit-log", get_topic_name(commit_log_topic)),
+        commit_log_topic_spec = KafkaTopicSpec(
+            commit_log_topic, storage_topics.pop("commit-log"),
         )
     elif "commit-log" in storage_topics:
         raise ValueError(

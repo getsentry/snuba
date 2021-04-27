@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Mapping
+from typing import Mapping, Optional
 from snuba import settings
 
 # These are the default topic names, they can be changed via settings
@@ -14,8 +14,13 @@ class Topic(Enum):
 
 
 class KafkaTopicSpec:
-    def __init__(self, topic: Topic) -> None:
+    def __init__(
+        self,
+        topic: Topic,
+        storage_topic_name: Optional[str],  # TODO: Remove once STORAGE_TOPICS is gone
+    ) -> None:
         self.__topic = topic
+        self.__storage_topic_name = storage_topic_name
 
     @property
     def topic(self) -> Topic:
@@ -23,7 +28,7 @@ class KafkaTopicSpec:
 
     @property
     def topic_name(self) -> str:
-        return get_topic_name(self.__topic)
+        return self.__storage_topic_name or get_topic_name(self.__topic)
 
     @property
     def partitions_number(self) -> int:
