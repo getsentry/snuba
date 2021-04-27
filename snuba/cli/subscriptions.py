@@ -139,6 +139,7 @@ def subscriptions(
             KafkaConsumer(
                 build_kafka_consumer_configuration(
                     storage_key,
+                    loader.get_default_topic_spec().topic,
                     consumer_group,
                     auto_offset_reset=auto_offset_reset,
                     bootstrap_servers=bootstrap_servers,
@@ -147,6 +148,7 @@ def subscriptions(
             KafkaConsumer(
                 build_kafka_consumer_configuration(
                     storage_key,
+                    loader.get_default_topic_spec().topic,
                     f"subscriptions-commit-log-{uuid.uuid1().hex}",
                     auto_offset_reset="earliest",
                     bootstrap_servers=bootstrap_servers,
@@ -168,6 +170,7 @@ def subscriptions(
         KafkaProducer(
             build_kafka_producer_configuration(
                 storage_key,
+                loader.get_default_topic_spec().topic,
                 bootstrap_servers=bootstrap_servers,
                 override_params={
                     "partitioner": "consistent",

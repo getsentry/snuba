@@ -149,8 +149,18 @@ def multistorage_consumer(
     # piggybacks on the existing configuration method(s), with the assumption
     # that most deployments are going to be using the default configuration.
     storage_keys = [*storages.keys()]
+
+    kafka_topic = (
+        storages[storage_keys[0]]
+        .get_table_writer()
+        .get_stream_loader()
+        .get_default_topic_spec()
+        .topic
+    )
+
     consumer_configuration = build_kafka_consumer_configuration(
         storage_keys[0],
+        kafka_topic,
         consumer_group,
         auto_offset_reset=auto_offset_reset,
         queued_max_messages_kbytes=queued_max_messages_kbytes,
@@ -159,9 +169,15 @@ def multistorage_consumer(
 
     for storage_key in storage_keys[1:]:
         if (
-            build_kafka_consumer_configuration(storage_key, consumer_group)[
-                "bootstrap.servers"
-            ]
+            build_kafka_consumer_configuration(
+                storage_key,
+                storages[storage_key]
+                .get_table_writer()
+                .get_stream_loader()
+                .get_default_topic_spec()
+                .topic,
+                consumer_group,
+            )["bootstrap.servers"]
             != consumer_configuration["bootstrap.servers"]
         ):
             raise ValueError("storages cannot be located on different Kafka clusters")
@@ -174,7 +190,14 @@ def multistorage_consumer(
         # is no way to specify otherwise, at writing) and b.) all storages are
         # located on the same Kafka cluster (validated above.)
         producer = ConfluentKafkaProducer(
-            build_kafka_producer_configuration(storage_keys[0])
+            build_kafka_producer_configuration(
+                storage_keys[0],
+                storages[storage_keys[0]]
+                .get_table_writer()
+                .get_stream_loader()
+                .get_default_topic_spec()
+                .topic,
+            )
         )
         consumer = KafkaConsumerWithCommitLog(
             consumer_configuration,

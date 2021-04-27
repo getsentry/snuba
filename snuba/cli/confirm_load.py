@@ -56,6 +56,8 @@ def confirm_load(
     storage_key = StorageKey(storage_name)
     storage = get_cdc_storage(storage_key)
 
+    stream_loader = storage.get_table_writer().get_stream_loader()
+
     control_topic = control_topic or storage.get_default_control_topic()
 
     snapshot_source = PostgresSnapshot.load(
@@ -67,6 +69,7 @@ def confirm_load(
     producer = Producer(
         build_kafka_producer_configuration(
             storage_key,
+            stream_loader.get_default_topic_spec().topic,
             bootstrap_servers=bootstrap_server,
             override_params={
                 "partitioner": "consistent",

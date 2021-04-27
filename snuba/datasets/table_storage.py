@@ -28,6 +28,7 @@ from snuba.writer import BatchWriter
 
 @dataclass(frozen=True)
 class KafkaTopicSpec:
+    topic: Topic
     topic_name: str
     partitions_number: int
     replication_factor: int = 1
@@ -87,6 +88,7 @@ def build_kafka_topic_spec_from_settings(
     topic: Topic, topic_name: str
 ) -> KafkaTopicSpec:
     return KafkaTopicSpec(
+        topic=topic,
         topic_name=topic_name,
         partitions_number=settings.TOPIC_PARTITION_COUNTS.get(topic_name, 1),
         topic_creation_config=get_topic_creation_config(topic),
