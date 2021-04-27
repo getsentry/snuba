@@ -651,14 +651,22 @@ SUPPORTED_KAFKA_CONFIGURATION = (
 
 
 def get_default_kafka_configuration(
-    storage_key: Optional[StorageKey] = None,  # TODO: deprecate
+    storage_key: Optional[
+        StorageKey
+    ] = None,  # TODO: To be removed once STORAGE_BROKER_CONFIG and DEFUALT_STORAGE_BROKERS are gone
     topic: Optional[KafkaTopic] = None,
     bootstrap_servers: Optional[Sequence[str]] = None,
     override_params: Optional[Mapping[str, Any]] = None,
 ) -> KafkaBrokerConfig:
     default_bootstrap_servers = None
     default_config: Mapping[str, Any]
-    if storage_key is not None:
+
+    if storage_key is None:
+        assert topic is None
+    else:
+        assert topic is not None
+
+    if storage_key is not None and topic is not None:
         storage_name = storage_key.value
         if storage_name in settings.DEFAULT_STORAGE_BROKERS:
             # this is now deprecated
@@ -677,8 +685,10 @@ def get_default_kafka_configuration(
                 storage_name, settings.BROKER_CONFIG
             )
         else:
-            # TODO: Use KAFKA_BROKER_CONFIG
-            default_config = settings.BROKER_CONFIG
+            default_config = settings.KAFKA_BROKER_CONFIG.get(
+                topic.value, settings.BROKER_CONFIG
+            )
+
     else:
         if settings.DEFAULT_BROKERS:
             default_config = {}
