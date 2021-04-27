@@ -1,6 +1,7 @@
-import logging
 import os
 from typing import Any, Mapping, MutableMapping, Sequence, Set
+
+from snuba.settings.validation import _validate_settings
 
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
@@ -139,10 +140,9 @@ SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "spans_experimental"}
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment
-    variable. Defaults to `./snuba/settings_base.py`. Users can provide a
-    short name like `test` that will be expanded to `settings_test.py` in the
-    main Snuba directory, or they can provide a full absolute path such as
-    `/foo/bar/my_settings.py`."""
+    variable if provided. Users can provide a short name like `test` that will
+    be expanded to `settings_test.py` in the main Snuba directory, or they can
+    provide a full absolute path such as `/foo/bar/my_settings.py`."""
 
     import importlib
     import importlib.util
@@ -166,42 +166,14 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
             module_format = (
                 ".%s" if settings.startswith("settings_") else ".settings_%s"
             )
-            settings_module = importlib.import_module(module_format % settings, "snuba")
+            settings_module = importlib.import_module(
+                module_format % settings, "snuba.settings"
+            )
 
         for attr in dir(settings_module):
             if attr.isupper():
                 obj[attr] = getattr(settings_module, attr)
 
 
-# Rudimentary validation function
-def _validate_settings() -> None:
-    logger = logging.getLogger("snuba.settings")
-
-    if QUERIES_TOPIC != "snuba-queries":
-        raise ValueError("QUERIES_TOPIC is deprecated. Use KAFKA_TOPIC_MAP instead.")
-
-    if STORAGE_TOPICS:
-        logger.warning(
-            "DEPRECATED: STORAGE_TOPICS is derpecated. Use KAFKA_TOPIC_MAP instead."
-        )
-
-    if STORAGE_BROKER_CONFIG:
-        logger.warning(
-            "DEPRECATED: STORAGE_BROKER_CONFIG is derpecated. Use KAFKA_BROKER_CONFIG instead."
-        )
-
-    from snuba.utils.streams.topics import Topic
-
-    default_topic_names = {t.value for t in Topic}
-
-    for key in KAFKA_TOPIC_MAP.keys():
-        if key not in default_topic_names:
-            raise ValueError(f"Invalid topic value: {key}")
-
-    for key in KAFKA_BROKER_CONFIG.keys():
-        if key not in default_topic_names:
-            raise ValueError(f"Invalid topic value {key}")
-
-
 _load_settings()
-_validate_settings()
+_validate_settings(locals())

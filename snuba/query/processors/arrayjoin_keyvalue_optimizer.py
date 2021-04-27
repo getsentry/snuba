@@ -80,7 +80,7 @@ def _get_mapping_keys_in_condition(
     return keys_found
 
 
-def get_filtered_mapping_keys(query: Query, column_name: str) -> Set[str]:
+def get_filtered_mapping_keys(query: Query, column_name: str) -> Sequence[str]:
     """
     Identifies the conditions we can apply the arrayFilter optimization
     on.
@@ -95,7 +95,7 @@ def get_filtered_mapping_keys(query: Query, column_name: str) -> Set[str]:
     )
 
     if not array_join_found:
-        return set()
+        return list()
 
     ast_condition = query.get_condition()
     cond_keys = (
@@ -106,7 +106,7 @@ def get_filtered_mapping_keys(query: Query, column_name: str) -> Set[str]:
     if cond_keys is None:
         # This means we found an OR. Cowardly we give up even though there could
         # be cases where this condition is still optimizable.
-        return set()
+        return []
 
     ast_having = query.get_having()
     having_keys = (
@@ -116,9 +116,10 @@ def get_filtered_mapping_keys(query: Query, column_name: str) -> Set[str]:
     )
     if having_keys is None:
         # Same as above
-        return set()
+        return []
 
-    return cond_keys | having_keys
+    keys = cond_keys | having_keys
+    return sorted(list(keys))
 
 
 class ArrayJoinKeyValueOptimizer(QueryProcessor):

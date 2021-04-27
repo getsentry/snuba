@@ -778,6 +778,34 @@ class TestDiscoverApi(BaseApiTest):
             }
         ]
 
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [
+                        ["count()", None, "count"],
+                        [
+                            "countIf(not(has(array(0,1,2), transaction_status)))",
+                            None,
+                            "failure_count",
+                        ],
+                    ],
+                    "groupby": ["project_id", "tags[foo]"],
+                    "conditions": [["server_name", "=", "TypeError"]],
+                    "orderby": "count",
+                    "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+            entity="discover",
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data["data"] == []
+
     def test_count_null_user_consistency(self) -> None:
         response = self.post(
             json.dumps(
@@ -1317,16 +1345,8 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert len(data["data"]) == 0
 
-        # TODO: This can be simplified once errors rollout is complete
-        # and we no longer need to support tests passing on both storages.
-        release_column = (
-            "`sentry:release`"
-            if self.events_storage == get_writable_storage(StorageKey.EVENTS)
-            else "release"
-        )
-
         assert data["sql"].startswith(
-            f"SELECT (type AS _snuba_type), (arrayElement(tags.value, indexOf(tags.key, 'custom_tag')) AS `_snuba_tags[custom_tag]`), ({release_column} AS _snuba_release)"
+            "SELECT (type AS _snuba_type), (arrayElement(tags.value, indexOf(tags.key, 'custom_tag')) AS `_snuba_tags[custom_tag]`), (release AS _snuba_release)"
         )
 
     def test_exception_stack_column_boolean_condition_with_arrayjoin(self) -> None:
