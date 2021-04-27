@@ -1,6 +1,5 @@
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.storages import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.parser import parse_query
@@ -15,7 +14,6 @@ def test_events_processing() -> None:
 
     events_dataset = get_dataset("events")
     events_entity = events_dataset.get_default_entity()
-    events_storage = events_entity.get_writable_storage()
 
     query = parse_query(query_body, events_dataset)
     request = Request("", query_body, query, HTTPRequestSettings(), "")
@@ -23,16 +21,10 @@ def test_events_processing() -> None:
     def query_runner(
         query: Query, settings: RequestSettings, reader: Reader
     ) -> QueryResult:
-
-        if events_storage.get_storage_key() == StorageKey.EVENTS:
-            transaction_col_name = "transaction"
-        else:
-            transaction_col_name = "transaction_name"
-
         assert query.get_selected_columns() == [
             SelectedExpression(
                 "tags[transaction]",
-                Column("_snuba_tags[transaction]", None, transaction_col_name),
+                Column("_snuba_tags[transaction]", None, "transaction_name"),
             ),
             SelectedExpression(
                 "contexts[browser.name]",
