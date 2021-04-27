@@ -1193,6 +1193,48 @@ class TestDiscoverApi(BaseApiTest):
         assert len(data["data"]) == 1, data
         assert data["data"][0]["last_seen"] is not None
 
+    def test_timestamp_functions(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "discover",
+                    "aggregations": [],
+                    "conditions": [
+                        ["project_id", "IN", [self.project_id]],
+                        ["group_id", "IN", [2]],
+                    ],
+                    "granularity": 3600,
+                    "groupby": [],
+                    "having": [],
+                    "limit": 51,
+                    "offset": 0,
+                    "orderby": ["-timestamp.to_day"],
+                    "project": [1],
+                    "selected_columns": [
+                        "tags[url]",
+                        ["toStartOfDay", ["timestamp"], "timestamp.to_day"],
+                        "event_id",
+                        "project_id",
+                        [
+                            "transform",
+                            [
+                                ["toString", ["project_id"]],
+                                ["array", [f"'{self.project_id}'"]],
+                                ["array", ["'things'"]],
+                                "''",
+                            ],
+                            "project.name",
+                        ],
+                    ],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                    "totals": False,
+                }
+            ),
+            entity="discover_events",
+        )
+        assert response.status_code == 200, response.data
+
     def test_invalid_event_id_condition(self) -> None:
         response = self.post(
             json.dumps(
