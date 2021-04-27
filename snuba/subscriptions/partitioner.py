@@ -1,8 +1,8 @@
 from abc import abstractmethod, ABC
 from binascii import crc32
 
-from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.subscriptions.data import PartitionId, SubscriptionData
+from snuba.utils.streams.topics import KafkaTopicSpec
 
 
 class SubscriptionDataPartitioner(ABC):

@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence
 
 from snuba import settings
@@ -19,20 +18,11 @@ from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLo
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.topics import (
+    KafkaTopicSpec,
     Topic,
-    get_topic_creation_config,
     get_topic_name,
 )
 from snuba.writer import BatchWriter
-
-
-@dataclass(frozen=True)
-class KafkaTopicSpec:
-    topic: Topic
-    topic_name: str
-    partitions_number: int
-    replication_factor: int = 1
-    topic_creation_config: Optional[Mapping[str, str]] = None
 
 
 class KafkaStreamLoader:
@@ -86,12 +76,7 @@ class KafkaStreamLoader:
 def build_kafka_topic_spec_from_settings(
     topic: Topic, topic_name: str
 ) -> KafkaTopicSpec:
-    return KafkaTopicSpec(
-        topic=topic,
-        topic_name=topic_name,
-        partitions_number=settings.TOPIC_PARTITION_COUNTS.get(topic_name, 1),
-        topic_creation_config=get_topic_creation_config(topic),
-    )
+    return KafkaTopicSpec(topic=topic,)
 
 
 def build_kafka_stream_loader_from_settings(
