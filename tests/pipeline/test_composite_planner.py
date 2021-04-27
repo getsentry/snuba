@@ -41,6 +41,7 @@ from snuba.web import QueryResult
 
 events_ent = Entity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model())
 events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
+assert events_storage is not None
 events_table_name = events_storage.get_table_writer().get_schema().get_table_name()
 
 events_table = Table(
@@ -335,32 +336,14 @@ TEST_CASES = [
                         selected_columns=[
                             SelectedExpression(
                                 "_snuba_group_id",
-                                FunctionCall(
-                                    "_snuba_group_id",
-                                    function_name="nullIf",
-                                    parameters=(
-                                        Column(None, None, "group_id"),
-                                        Literal(None, 0),
-                                    ),
-                                )
-                                if events_storage.get_storage_key() == StorageKey.EVENTS
-                                else Column("_snuba_group_id", None, "group_id"),
+                                Column("_snuba_group_id", None, "group_id"),
                             ),
                             SelectedExpression(
                                 "f_release",
                                 FunctionCall(
                                     "f_release",
                                     function_name="f",
-                                    parameters=(
-                                        Column(
-                                            None,
-                                            None,
-                                            "sentry:release"
-                                            if events_storage.get_storage_key()
-                                            == StorageKey.EVENTS
-                                            else "release",
-                                        ),
-                                    ),
+                                    parameters=(Column(None, None, "release"),),
                                 ),
                             ),
                         ],
