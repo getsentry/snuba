@@ -185,6 +185,11 @@ def _validate_settings() -> None:
             "DEPRECATED: STORAGE_TOPICS is derpecated. Use KAFKA_TOPIC_MAP instead."
         )
 
+    if STORAGE_BROKER_CONFIG:
+        logger.warning(
+            "DEPRECATED: STORAGE_BROKER_CONFIG is derpecated. Use KAFKA_BROKER_CONFIG instead."
+        )
+
     from snuba.utils.streams.topics import Topic
 
     default_topic_names = {t.value for t in Topic}
