@@ -198,6 +198,10 @@ def _validate_settings() -> None:
         if key not in default_topic_names:
             raise ValueError(f"Invalid topic value: {key}")
 
+    for key in KAFKA_BROKER_CONFIG.keys():
+        if key not in default_topic_names:
+            raise ValueError(f"Invalid topic value {key}")
+
 
 _load_settings()
 _validate_settings()
