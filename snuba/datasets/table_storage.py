@@ -21,6 +21,7 @@ from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.topics import (
     Topic,
     get_topic_creation_config,
+    get_topic_name,
 )
 from snuba.writer import BatchWriter
 
@@ -91,10 +92,6 @@ def build_kafka_topic_spec_from_settings(
         partitions_number=settings.TOPIC_PARTITION_COUNTS.get(topic_name, 1),
         topic_creation_config=get_topic_creation_config(topic),
     )
-
-
-def get_topic_name(topic: Topic) -> str:
-    return settings.KAFKA_TOPIC_MAP.get(topic.value, topic.value)
 
 
 def build_kafka_stream_loader_from_settings(
