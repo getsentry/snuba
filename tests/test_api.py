@@ -174,7 +174,7 @@ class TestApi(SimpleAPITest):
         Test total counts are correct in the hourly time buckets for each project
         """
         clickhouse = (
-            get_storage(StorageKey.EVENTS)
+            get_storage(StorageKey.ERRORS)
             .get_cluster()
             .get_query_connection(ClickhouseClientSettings.QUERY)
         )
@@ -1424,9 +1424,7 @@ class TestApi(SimpleAPITest):
         }
         result1 = json.loads(self.post(json.dumps(query)).data)
 
-        event_id = "9" * 32
-        if self.storage.get_storage_key() == StorageKey.ERRORS:
-            event_id = str(uuid.UUID(event_id))
+        event_id = str(uuid.UUID("9" * 32))
 
         write_processed_messages(
             self.storage,
@@ -2129,7 +2127,7 @@ class TestLegacyAPI(SimpleAPITest):
         # make sure redis has _something_ before we go about dropping all the keys in it
         assert self.redis_db_size() > 0
 
-        storage = get_writable_storage(StorageKey.EVENTS)
+        storage = get_writable_storage(StorageKey.ERRORS)
         clickhouse = storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.QUERY
         )

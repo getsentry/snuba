@@ -8,7 +8,6 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.storages import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -104,12 +103,7 @@ def test_transform_column_names() -> None:
     assert data == [{"event_id": event_id, "message": "a message"}]
     meta = result.result["meta"]
 
-    if events_storage.get_storage_key() == StorageKey.EVENTS:
-        events_meta_type = "FixedString(32)"
-    else:
-        events_meta_type = "String"
-
     assert meta == [
-        MetaColumn(name="event_id", type=events_meta_type),
+        MetaColumn(name="event_id", type="String"),
         MetaColumn(name="message", type="String"),
     ]
