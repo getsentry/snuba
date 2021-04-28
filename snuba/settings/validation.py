@@ -19,14 +19,20 @@ def _validate_settings(locals: Mapping[str, Any]) -> None:
             "DEPRECATED: STORAGE_BROKER_CONFIG is derpecated. Use KAFKA_BROKER_CONFIG instead."
         )
 
-    from snuba.utils.streams.topics import Topic
-
-    default_topic_names = {t.value for t in Topic}
+    topic_names = {
+        "events",
+        "event-replacements",
+        "snuba-commit-log",
+        "cdc",
+        "outcomes",
+        "ingest-sessions",
+        "snuba-queries",
+    }
 
     for key in locals["KAFKA_TOPIC_MAP"].keys():
-        if key not in default_topic_names:
+        if key not in topic_names:
             raise ValueError(f"Invalid topic value: {key}")
 
     for key in locals["KAFKA_BROKER_CONFIG"].keys():
-        if key not in default_topic_names:
+        if key not in topic_names:
             raise ValueError(f"Invalid topic value {key}")
