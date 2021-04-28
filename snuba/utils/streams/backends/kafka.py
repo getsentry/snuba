@@ -409,9 +409,7 @@ class KafkaConsumer(Consumer[KafkaPayload]):
             Partition(Topic(message.topic()), message.partition()),
             message.offset(),
             KafkaPayload(
-                message.key(),
-                message.value(),
-                headers if headers is not None else [],
+                message.key(), message.value(), headers if headers is not None else [],
             ),
             datetime.utcfromtimestamp(message.timestamp()[1] / 1000.0),
         )
@@ -669,19 +667,12 @@ def get_default_kafka_configuration(
             default_bootstrap_servers = ",".join(
                 settings.DEFAULT_STORAGE_BROKERS[storage_name]
             )
-        elif settings.DEFAULT_BROKERS:
-            default_config = {}
-            default_bootstrap_servers = ",".join(settings.DEFAULT_BROKERS)
         else:
             default_config = settings.STORAGE_BROKER_CONFIG.get(
                 storage_name, settings.BROKER_CONFIG
             )
     else:
-        if settings.DEFAULT_BROKERS:
-            default_config = {}
-            default_bootstrap_servers = ",".join(settings.DEFAULT_BROKERS)
-        else:
-            default_config = settings.BROKER_CONFIG
+        default_config = settings.BROKER_CONFIG
     broker_config = copy.deepcopy(default_config)
     assert isinstance(broker_config, dict)
     bootstrap_servers = (
@@ -851,9 +842,7 @@ class KafkaProducer(Producer[KafkaPayload]):
                 future.set_exception(error)
 
     def produce(
-        self,
-        destination: Union[Topic, Partition],
-        payload: KafkaPayload,
+        self, destination: Union[Topic, Partition], payload: KafkaPayload,
     ) -> Future[Message[KafkaPayload]]:
         if self.__shutdown_requested.is_set():
             raise RuntimeError("producer has been closed")
