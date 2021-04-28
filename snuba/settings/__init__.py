@@ -73,8 +73,6 @@ BULK_CLICKHOUSE_BUFFER = 10000
 BULK_BINARY_LOAD_CHUNK = 2 ** 22  # 4 MB
 
 # Processor/Writer Options
-# DEPRECATED, please use BROKER_CONFIG instead
-DEFAULT_BROKERS: Sequence[str] = []
 # DEPRECATED, please use STORAGE_BROKER_CONFIG instead
 DEFAULT_STORAGE_BROKERS: Mapping[str, Sequence[str]] = {}
 
