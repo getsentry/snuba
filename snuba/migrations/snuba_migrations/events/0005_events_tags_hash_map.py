@@ -45,7 +45,10 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="sentry_dist",
-                column=Column("_tags_hash_map", Array(UInt(64)),),
+                column=Column(
+                    "_tags_hash_map",
+                    Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN)),
+                ),
                 after="_tags_flattened",
             ),
         ]
