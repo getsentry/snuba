@@ -18,10 +18,47 @@ from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLo
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.topics import (
-    KafkaTopicSpec,
+    get_topic_creation_config,
     Topic,
 )
 from snuba.writer import BatchWriter
+
+
+class KafkaTopicSpec:
+    def __init__(
+        self,
+        topic: Topic,
+        storage_topic_name: Optional[str],  # TODO: Remove once STORAGE_TOPICS is gone
+    ) -> None:
+        self.__topic = topic
+        self.__storage_topic_name = storage_topic_name
+
+    @property
+    def topic(self) -> Topic:
+        return self.__topic
+
+    @property
+    def topic_name(self) -> str:
+        return self.__storage_topic_name or get_topic_name(self.__topic)
+
+    @property
+    def partitions_number(self) -> int:
+        # TODO: This references the actual topic name for backward compatibility.
+        # It should be changed to the logical name for consistency with KAFKA_TOPIC_MAP
+        # and KAFKA_BROKER_CONFIG
+        return settings.TOPIC_PARTITION_COUNTS.get(self.topic_name, 1)
+
+    @property
+    def replication_factor(self) -> int:
+        return 1
+
+    @property
+    def topic_creation_config(self) -> Mapping[str, str]:
+        return get_topic_creation_config(self.__topic)
+
+
+def get_topic_name(topic: Topic) -> str:
+    return settings.KAFKA_TOPIC_MAP.get(topic.value, topic.value)
 
 
 class KafkaStreamLoader:

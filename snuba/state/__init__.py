@@ -28,7 +28,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.backends.kafka import (
     build_default_kafka_producer_configuration,
 )
-from snuba.utils.streams.topics import Topic, get_topic_name
+from snuba.utils.streams.topics import Topic
 
 metrics = MetricsWrapper(environment.metrics, "snuba.state")
 logger = logging.getLogger("snuba.state")
@@ -236,7 +236,7 @@ def record_query(query_metadata: Mapping[str, Any]) -> None:
 
         kfk.poll(0)  # trigger queued delivery callbacks
         kfk.produce(
-            get_topic_name(Topic.QUERYLOG),
+            settings.KAFKA_TOPIC_MAP.get(Topic.QUERYLOG.value, Topic.QUERYLOG.value),
             data.encode("utf-8"),
             on_delivery=_record_query_delivery_callback,
         )

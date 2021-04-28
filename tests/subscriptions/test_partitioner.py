@@ -1,10 +1,11 @@
 from datetime import timedelta
 
 from snuba import settings
+from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.subscriptions.data import SubscriptionData
 from snuba.subscriptions.partitioner import TopicSubscriptionDataPartitioner
 from tests.subscriptions import BaseSubscriptionTest
-from snuba.utils.streams.topics import KafkaTopicSpec, Topic
+from snuba.utils.streams.topics import Topic
 
 
 class TestBuildRequest(BaseSubscriptionTest):
