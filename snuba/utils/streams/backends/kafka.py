@@ -685,7 +685,6 @@ def get_default_kafka_configuration(
             default_config = settings.KAFKA_BROKER_CONFIG.get(
                 topic.value, settings.BROKER_CONFIG
             )
-
     else:
         default_config = settings.BROKER_CONFIG
     broker_config = copy.deepcopy(default_config)
