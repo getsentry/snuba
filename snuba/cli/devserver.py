@@ -10,12 +10,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
     import sys
     from subprocess import list2cmdline, call
     from honcho.manager import Manager
-    from snuba import settings
-
-    if settings.ERRORS_ROLLOUT_WRITABLE_STORAGE:
-        events_storage = "errors"
-    else:
-        events_storage = "events"
 
     os.environ["PYTHONUNBUFFERED"] = "1"
 
@@ -79,7 +73,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "consumer",
                 "--auto-offset-reset=latest",
                 "--log-level=debug",
-                f"--storage={events_storage}",
+                "--storage=errors",
             ],
         ),
         (
@@ -89,7 +83,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "replacer",
                 "--auto-offset-reset=latest",
                 "--log-level=debug",
-                f"--storage={events_storage}",
+                "--storage=errors",
             ],
         ),
         (
