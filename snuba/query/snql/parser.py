@@ -1,6 +1,6 @@
 import logging
 from dataclasses import replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import (
     Any,
     Callable,
@@ -30,6 +30,7 @@ from snuba.query.conditions import (
     binary_condition,
     combine_and_conditions,
     combine_or_conditions,
+    ConditionFunctions,
     get_first_level_and_conditions,
     unary_condition,
 )
@@ -59,7 +60,7 @@ from snuba.query.parser import (
     _validate_aliases,
 )
 from snuba.query.parser.exceptions import ParsingException
-from snuba.query.parser.validation import validate_entities_with_query, validate_query
+from snuba.query.parser.validation import validate_query
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
     HighPriOperator,
@@ -83,6 +84,7 @@ from snuba.query.snql.expression_visitor import (
     visit_quoted_literal,
 )
 from snuba.query.snql.joins import RelationshipTuple, build_join_clause
+from snuba.query.validation.validators import build_match
 from snuba.util import parse_datetime
 
 logger = logging.getLogger("snuba.snql.parser")
@@ -939,7 +941,9 @@ def _replace_time_condition(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery]
 ) -> None:
     condition = query.get_condition()
-    top_level = get_first_level_and_conditions(condition) if condition else []
+    top_level = (
+        get_first_level_and_conditions(condition) if condition is not None else []
+    )
     max_days, date_align = state.get_configs(
         [("max_days", None), ("date_align_seconds", 1)]
     )
@@ -976,6 +980,13 @@ def _align_max_days_date_align(
 ) -> Sequence[Expression]:
     entity = get_entity(key)
     if not entity.required_time_column:
+        return old_top_level
+
+    # If there is an = or IN condition on time, we don't need to do any of this
+    match = build_match(
+        entity.required_time_column, [ConditionFunctions.EQ], datetime, alias
+    )
+    if any(match.match(cond) for cond in old_top_level):
         return old_top_level
 
     lower, upper = get_time_range_expressions(
@@ -1018,6 +1029,34 @@ def _align_max_days_date_align(
         return exp
 
     return list(map(replace_cond, old_top_level))
+
+
+def validate_entities_with_query(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+) -> None:
+    if isinstance(query, LogicalQuery):
+        entity = get_entity(query.get_from_clause().key)
+        try:
+            for v in entity.get_validators():
+                v.validate(query)
+        except Exception as e:
+            raise ParsingException(
+                f"validation failed for entity {query.get_from_clause().key.value}: {e}"
+            )
+    else:
+        from_clause = query.get_from_clause()
+        if isinstance(from_clause, JoinClause):
+            alias_map = from_clause.get_alias_node_map()
+            for alias, node in alias_map.items():
+                assert isinstance(node.data_source, QueryEntity)  # mypy
+                entity = get_entity(node.data_source.key)
+                try:
+                    for v in entity.get_validators():
+                        v.validate(query)
+                except Exception as e:
+                    raise ParsingException(
+                        f"validation failed for entity {node.data_source.key.value}: {e}"
+                    )
 
 
 def _post_process(

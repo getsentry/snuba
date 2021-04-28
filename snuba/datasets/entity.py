@@ -9,6 +9,7 @@ from snuba.query.data_source.join import JoinRelationship
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.validation import FunctionCallValidator
+from snuba.query.validation.validators import QueryValidator
 
 
 class Entity(ABC):
@@ -25,7 +26,7 @@ class Entity(ABC):
         abstract_column_set: ColumnSet,
         join_relationships: Mapping[str, JoinRelationship],
         writable_storage: Optional[WritableTableStorage],
-        required_filter_columns: Optional[Sequence[str]],
+        validators: Optional[Sequence[QueryValidator]],
         required_time_column: Optional[str],
     ) -> None:
         self.__storages = storages
@@ -33,7 +34,7 @@ class Entity(ABC):
         self.__writable_storage = writable_storage
         self.__data_model = abstract_column_set
         self.__join_relationships = join_relationships
-        self.required_filter_columns = required_filter_columns
+        self.__validators = validators
         self.required_time_column = required_time_column
 
     @abstractmethod
@@ -97,6 +98,16 @@ class Entity(ABC):
         calls to entity specific functions are well formed.
         """
         return {}
+
+    def get_validators(self) -> Sequence[QueryValidator]:
+        """
+        Provides a sequence of QueryValidators that can be used to validate that
+        a query using this Entity is correct.
+
+        :return: A sequence of validators.
+        :rtype: Sequence[QueryValidator]
+        """
+        return self.__validators if self.__validators is not None else []
 
     def get_writable_storage(self) -> Optional[WritableTableStorage]:
         """
