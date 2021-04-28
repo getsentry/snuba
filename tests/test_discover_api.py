@@ -1345,16 +1345,8 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert len(data["data"]) == 0
 
-        # TODO: This can be simplified once errors rollout is complete
-        # and we no longer need to support tests passing on both storages.
-        release_column = (
-            "`sentry:release`"
-            if self.events_storage == get_writable_storage(StorageKey.EVENTS)
-            else "release"
-        )
-
         assert data["sql"].startswith(
-            f"SELECT (type AS _snuba_type), (arrayElement(tags.value, indexOf(tags.key, 'custom_tag')) AS `_snuba_tags[custom_tag]`), ({release_column} AS _snuba_release)"
+            "SELECT (type AS _snuba_type), (arrayElement(tags.value, indexOf(tags.key, 'custom_tag')) AS `_snuba_tags[custom_tag]`), (release AS _snuba_release)"
         )
 
     def test_exception_stack_column_boolean_condition_with_arrayjoin(self) -> None:
