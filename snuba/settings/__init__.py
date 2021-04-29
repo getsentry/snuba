@@ -1,6 +1,8 @@
 import os
 from typing import Any, Mapping, MutableMapping, Sequence, Set
 
+from snuba.settings.validation import _validate_settings
+
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 LOG_FORMAT = "%(asctime)s %(message)s"
@@ -125,10 +127,9 @@ SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "spans_experimental"}
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment
-    variable. Defaults to `./snuba/settings_base.py`. Users can provide a
-    short name like `test` that will be expanded to `settings_test.py` in the
-    main Snuba directory, or they can provide a full absolute path such as
-    `/foo/bar/my_settings.py`."""
+    variable if provided. Users can provide a short name like `test` that will
+    be expanded to `settings_test.py` in the main Snuba directory, or they can
+    provide a full absolute path such as `/foo/bar/my_settings.py`."""
 
     import importlib
     import importlib.util
@@ -152,7 +153,9 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
             module_format = (
                 ".%s" if settings.startswith("settings_") else ".settings_%s"
             )
-            settings_module = importlib.import_module(module_format % settings, "snuba")
+            settings_module = importlib.import_module(
+                module_format % settings, "snuba.settings"
+            )
 
         for attr in dir(settings_module):
             if attr.isupper():
@@ -160,3 +163,4 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
 
 
 _load_settings()
+_validate_settings(locals())
