@@ -11,8 +11,6 @@ DATASETS_NAME_LOOKUP: MutableMapping[Dataset, str] = {}
 DATASET_NAMES: Set[str] = {
     "discover",
     "events",
-    "groupassignee",
-    "groupedmessage",
     "outcomes",
     "outcomes_raw",
     "sessions",
@@ -34,8 +32,6 @@ def get_dataset(name: str) -> Dataset:
             f"dataset {name!r} is not available in this environment"
         )
 
-    from snuba.datasets.cdc.groupassignee import GroupAssigneeDataset
-    from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
     from snuba.datasets.discover import DiscoverDataset
     from snuba.datasets.events import EventsDataset
 
@@ -47,8 +43,6 @@ def get_dataset(name: str) -> Dataset:
     dataset_factories: MutableMapping[str, Callable[[], Dataset]] = {
         "discover": DiscoverDataset,
         "events": EventsDataset,
-        "groupassignee": GroupAssigneeDataset,
-        "groupedmessage": GroupedMessageDataset,
         "outcomes": OutcomesDataset,
         "outcomes_raw": OutcomesRawDataset,
         "sessions": SessionsDataset,
