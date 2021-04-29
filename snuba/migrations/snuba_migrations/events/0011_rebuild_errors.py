@@ -170,7 +170,10 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_dist_new",
-                column=Column("_tags_hash_map", Array(UInt(64)),),
+                column=Column(
+                    "_tags_hash_map",
+                    Array(UInt(64), Modifiers(materialized=TAGS_HASH_MAP_COLUMN)),
+                ),
                 after="tags",
             ),
             operations.DropTable(

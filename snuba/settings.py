@@ -114,7 +114,6 @@ PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 
 ERRORS_ROLLOUT_ALL: bool = True
-ERRORS_ROLLOUT_WRITABLE_STORAGE: bool = True
 
 COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
