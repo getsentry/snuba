@@ -13,28 +13,15 @@ from snuba.datasets.storages.tags_hash_map import INT_TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-pre_tags_columns: Sequence[Column[Modifiers]] = [
+sets_columns: Sequence[Column[Modifiers]] = [
     Column("org_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("metric_id", UInt(64)),
     Column("granularity", UInt(32)),
-]
-
-post_tags_columns: Sequence[Column[Modifiers]] = [
+    Column("tags", Nested([Column("key", UInt(64)), Column("value", UInt(64))])),
     Column("timestamp", DateTime()),
     Column("retention_days", UInt(16)),
     Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
-]
-
-sets_columns: Sequence[Column[Modifiers]] = [
-    *pre_tags_columns,
-    *post_tags_columns,
-]
-
-sets_dist_columns: Sequence[Column[Modifiers]] = [
-    *pre_tags_columns,
-    Column("tags", Nested([Column("key", UInt(64)), Column("value", UInt(64))])),
-    *post_tags_columns,
 ]
 
 sets_mv_columns: Sequence[Column[Modifiers]] = [
@@ -85,29 +72,10 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=sets_columns,
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=StorageSetKey.METRICS,
-                    order_by="(org_id, project_id, metric_id, granularity, timestamp)",
+                    order_by="(org_id, project_id, metric_id, granularity, timestamp, tags.key, tags.value)",
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={"index_granularity": "256"},
                 ),
-            ),
-            # TODO: Fix the formatting we do in the migrations framework to be able
-            # to add columns called `tags.key` in the CREATE TABLE statement
-            # tags.key and tags.value have to be in the sorting key in order to be
-            # part of the primary key so that data from different tags does not
-            # get aggregated together.
-            operations.RunSql(
-                storage_set=StorageSetKey.METRICS,
-                statement="""
-                    ALTER TABLE metrics_sets_local ADD COLUMN IF NOT EXISTS `tags.key` Array(UInt64) AFTER retention_days,
-                    MODIFY ORDER BY (org_id, project_id, metric_id, granularity, timestamp, tags.key);
-                """,
-            ),
-            operations.RunSql(
-                storage_set=StorageSetKey.METRICS,
-                statement="""
-                    ALTER TABLE metrics_sets_local ADD COLUMN IF NOT EXISTS `tags.value` Array(UInt64) AFTER tags.key,
-                    MODIFY ORDER BY (org_id, project_id, metric_id, granularity, timestamp, tags.key, tags.value);
-                """,
             ),
             operations.AddColumn(
                 storage_set=StorageSetKey.METRICS,
@@ -159,7 +127,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.CreateTable(
                 storage_set=StorageSetKey.METRICS,
                 table_name="metrics_sets_dist",
-                columns=sets_dist_columns,
+                columns=sets_columns,
                 engine=table_engines.Distributed(
                     local_table_name="metrics_sets_local", sharding_key=None
                 ),
