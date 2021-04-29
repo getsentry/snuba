@@ -125,8 +125,8 @@ def subscriptions(
     storage_key = storage.get_storage_key()
 
     loader = enforce_table_writer(dataset).get_stream_loader()
-    topic_spec = loader.get_commit_log_topic_spec()
-    assert topic_spec is not None
+    commit_log_topic_spec = loader.get_commit_log_topic_spec()
+    assert commit_log_topic_spec is not None
 
     metrics = MetricsWrapper(
         environment.metrics,
@@ -148,7 +148,7 @@ def subscriptions(
             KafkaConsumer(
                 build_kafka_consumer_configuration(
                     storage_key,
-                    loader.get_default_topic_spec().topic,
+                    commit_log_topic_spec.topic,
                     f"subscriptions-commit-log-{uuid.uuid1().hex}",
                     auto_offset_reset="earliest",
                     bootstrap_servers=bootstrap_servers,
@@ -157,7 +157,7 @@ def subscriptions(
             (
                 Topic(commit_log_topic)
                 if commit_log_topic is not None
-                else Topic(topic_spec.topic_name)
+                else Topic(commit_log_topic_spec.topic_name)
             ),
             set(commit_log_groups),
         ),
