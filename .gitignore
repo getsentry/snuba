@@ -7,3 +7,4 @@
 .venv
 htmlcov/
 snuba.egg-info/
+.DS_Store
