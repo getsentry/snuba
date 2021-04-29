@@ -20,9 +20,11 @@ class MetricsEntity(Entity):
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=SingleStorageQueryPlanBuilder(writable_storage)
             ),
+            # TODO: Add the logical schema
             abstract_column_set=ColumnSet([]),
             join_relationships={},
             writable_storage=writable_storage,
+            # TODO: Add the required columns here
             required_filter_columns=[],
             required_time_column=None,
         )
