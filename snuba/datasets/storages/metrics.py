@@ -57,8 +57,8 @@ sets_columns = ColumnSet(
         Column("granularity", UInt(32)),
         Column("timestamp", DateTime()),
         Column("retention_days", UInt(16)),
-        Column("tags", Nested([("key", String()), ("value", String())])),
-        Column("_tags_hash_map", Array(UInt(64), SchemaModifiers(readonly=True))),
+        Column("tags", Nested([("key", UInt(64)), ("value", UInt(64))])),
+        Column("_tags_hash", Array(UInt(64), SchemaModifiers(readonly=True))),
         Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
     ]
 )
