@@ -17,7 +17,6 @@ from snuba.query.conditions import (
     BooleanFunctions,
 )
 from snuba.query.parser.conditions import parse_conditions_to_expr
-from snuba.util import tuplify
 
 test_conditions = [
     ([], None,),
@@ -471,23 +470,6 @@ test_conditions = [
             (Column(None, None, "tags.key"), Literal(None, "key")),
         ),
     ),  # Array columns not expanded because in arrayjoin
-    (
-        tuplify(
-            [["platform", "IN", ["a", "b", "c"]], ["platform", "IN", ["c", "b", "a"]]]
-        ),
-        FunctionCall(
-            None,
-            ConditionFunctions.IN,
-            (
-                Column(None, None, "platform"),
-                FunctionCall(
-                    None,
-                    "tuple",
-                    (Literal(None, "a"), Literal(None, "b"), Literal(None, "c")),
-                ),
-            ),
-        ),
-    ),  # Test that a duplicate IN condition is de-duplicated even if the lists are in different orders.
     (
         [["group_id", "IS NULL", None]],
         FunctionCall(
