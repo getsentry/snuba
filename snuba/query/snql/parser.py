@@ -28,6 +28,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     binary_condition,
+    build_match,
     combine_and_conditions,
     combine_or_conditions,
     ConditionFunctions,
@@ -84,7 +85,6 @@ from snuba.query.snql.expression_visitor import (
     visit_quoted_literal,
 )
 from snuba.query.snql.joins import RelationshipTuple, build_join_clause
-from snuba.query.validation.validators import build_match
 from snuba.util import parse_datetime
 
 logger = logging.getLogger("snuba.snql.parser")
