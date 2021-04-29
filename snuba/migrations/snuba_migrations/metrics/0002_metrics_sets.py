@@ -13,14 +13,28 @@ from snuba.datasets.storages.tags_hash_map import INT_TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-sets_columns: Sequence[Column[Modifiers]] = [
+pre_tags_columns: Sequence[Column[Modifiers]] = [
     Column("org_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("metric_id", UInt(64)),
     Column("granularity", UInt(32)),
+]
+
+post_tags_columns: Sequence[Column[Modifiers]] = [
     Column("timestamp", DateTime()),
     Column("retention_days", UInt(16)),
     Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
+]
+
+sets_columns: Sequence[Column[Modifiers]] = [
+    *pre_tags_columns,
+    *post_tags_columns,
+]
+
+sets_dist_columns: Sequence[Column[Modifiers]] = [
+    *pre_tags_columns,
+    Column("tags", Nested([Column("key", UInt(64)), Column("value", UInt(64))])),
+    *post_tags_columns,
 ]
 
 sets_mv_columns: Sequence[Column[Modifiers]] = [
@@ -145,10 +159,19 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.CreateTable(
                 storage_set=StorageSetKey.METRICS,
                 table_name="metrics_sets_dist",
-                columns=sets_columns,
+                columns=sets_dist_columns,
                 engine=table_engines.Distributed(
                     local_table_name="metrics_sets_local", sharding_key=None
                 ),
+            ),
+            operations.AddColumn(
+                storage_set=StorageSetKey.METRICS,
+                table_name="metrics_sets_dist",
+                column=Column(
+                    "_tags_hash",
+                    Array(UInt(64), Modifiers(materialized=INT_TAGS_HASH_MAP_COLUMN)),
+                ),
+                after="tags.value",
             ),
         ]
 
