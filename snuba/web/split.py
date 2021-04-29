@@ -18,7 +18,9 @@ from snuba.query.conditions import (
 )
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column as ColumnExpr
+from snuba.query.expressions import CurriedFunctionCall as CurriedFunctionCallExpr
 from snuba.query.expressions import Expression
+from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query import OrderByDirection, SelectedExpression
 from snuba.query.matchers import AnyExpression, Column, FunctionCall, Or, Param, String
@@ -280,6 +282,15 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         # Ensures the AST minimal query is actually runnable on its own.
         if not minimal_query.validate_aliases():
             return None
+
+        # There is a Clickhouse bug where if functions in the ORDER BY clause are not in the SELECT,
+        # they fail on distributed tables. For that specific case, skip the query splitter.
+        for orderby in minimal_query.get_orderby():
+            if isinstance(
+                orderby.expression, (FunctionCallExpr, CurriedFunctionCallExpr)
+            ):
+                metrics.increment("column_splitter.orderby_has_a_function")
+                return None
 
         result = runner(minimal_query, request_settings)
         del minimal_query

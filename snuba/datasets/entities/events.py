@@ -16,7 +16,6 @@ from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import (
     QueryStorageSelector,
     StorageAndMappers,
-    WritableTableStorage,
 )
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
@@ -173,12 +172,6 @@ class BaseEventsEntity(Entity, ABC):
 
             return "events", []
 
-        def writable_storage() -> WritableTableStorage:
-            if settings.ERRORS_ROLLOUT_WRITABLE_STORAGE:
-                return get_writable_storage(StorageKey.ERRORS)
-            else:
-                return get_writable_storage(StorageKey.EVENTS)
-
         super().__init__(
             storages=[events_storage, errors_storage],
             query_pipeline_builder=PipelineDelegator(
@@ -204,7 +197,7 @@ class BaseEventsEntity(Entity, ABC):
                     equivalences=[],
                 ),
             },
-            writable_storage=writable_storage(),
+            writable_storage=errors_storage,
             required_filter_columns=["project_id"],
             required_time_column="timestamp",
         )

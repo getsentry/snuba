@@ -174,7 +174,7 @@ class TestApi(SimpleAPITest):
         Test total counts are correct in the hourly time buckets for each project
         """
         clickhouse = (
-            get_storage(StorageKey.EVENTS)
+            get_storage(StorageKey.ERRORS)
             .get_cluster()
             .get_query_connection(ClickhouseClientSettings.QUERY)
         )
@@ -1228,6 +1228,59 @@ class TestApi(SimpleAPITest):
 
         assert "os.rooted" in result["data"][0]["top"]
 
+    def test_timestamp_functions(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "aggregations": [],
+                    "conditions": [
+                        [
+                            ["coalesce", ["email", "username", "ip_address"]],
+                            "=",
+                            "42.200.228.8",
+                        ],
+                        ["project_id", "IN", [1]],
+                        ["group_id", "IN", [self.group_ids[0]]],
+                    ],
+                    "from_date": self.base_time.isoformat(),
+                    "granularity": 3600,
+                    "groupby": [],
+                    "having": [],
+                    "limit": 51,
+                    "offset": 0,
+                    "orderby": ["-timestamp.to_hour"],
+                    "project": [1],
+                    "selected_columns": [
+                        [
+                            "coalesce",
+                            ["email", "username", "ip_address"],
+                            "user.display",
+                        ],
+                        "release",
+                        ["toStartOfHour", ["timestamp"], "timestamp.to_hour"],
+                        "event_id",
+                        "project_id",
+                        [
+                            "transform",
+                            [
+                                ["toString", ["project_id"]],
+                                ["array", ["'1'"]],
+                                ["array", ["'stuff'"]],
+                                "''",
+                            ],
+                            "project.name",
+                        ],
+                    ],
+                    "to_date": (
+                        self.base_time + timedelta(minutes=self.minutes)
+                    ).isoformat(),
+                    "totals": False,
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+
     def test_tag_key_query(self) -> None:
         tags = [
             "browser",
@@ -1371,9 +1424,7 @@ class TestApi(SimpleAPITest):
         }
         result1 = json.loads(self.post(json.dumps(query)).data)
 
-        event_id = "9" * 32
-        if self.storage.get_storage_key() == StorageKey.ERRORS:
-            event_id = str(uuid.UUID(event_id))
+        event_id = str(uuid.UUID("9" * 32))
 
         write_processed_messages(
             self.storage,
@@ -2076,7 +2127,7 @@ class TestLegacyAPI(SimpleAPITest):
         # make sure redis has _something_ before we go about dropping all the keys in it
         assert self.redis_db_size() > 0
 
-        storage = get_writable_storage(StorageKey.EVENTS)
+        storage = get_writable_storage(StorageKey.ERRORS)
         clickhouse = storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.QUERY
         )

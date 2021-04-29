@@ -72,8 +72,6 @@ BULK_CLICKHOUSE_BUFFER = 10000
 BULK_BINARY_LOAD_CHUNK = 2 ** 22  # 4 MB
 
 # Processor/Writer Options
-# DEPRECATED, please use BROKER_CONFIG instead
-DEFAULT_BROKERS: Sequence[str] = []
 # DEPRECATED, please use STORAGE_BROKER_CONFIG instead
 DEFAULT_STORAGE_BROKERS: Mapping[str, Sequence[str]] = {}
 
@@ -117,7 +115,6 @@ PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 
 ERRORS_ROLLOUT_ALL: bool = True
-ERRORS_ROLLOUT_WRITABLE_STORAGE: bool = True
 
 COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
