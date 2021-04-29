@@ -1,20 +1,13 @@
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Sequence, Set
+from typing import Optional, Set
 
 from snuba.query import Query
 from snuba.query.conditions import (
+    build_match,
     ConditionFunctions,
     get_first_level_and_conditions,
 )
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.expressions import Expression
-from snuba.query.matchers import Any as AnyMatch
-from snuba.query.matchers import AnyOptionalString
-from snuba.query.matchers import Column as ColumnMatch
-from snuba.query.matchers import FunctionCall as FunctionCallMatch
-from snuba.query.matchers import Literal as LiteralMatch
-from snuba.query.matchers import Or
-from snuba.query.matchers import String as StringMatch
 
 
 class QueryValidator(ABC):
@@ -37,33 +30,6 @@ class QueryValidator(ABC):
         :raises InvalidQueryException: [description]
         """
         raise NotImplementedError
-
-
-def build_match(
-    col: str, ops: Sequence[str], param_type: Any, alias: Optional[str] = None
-) -> Or[Expression]:
-    # The IN condition has to be checked separately since each parameter
-    # has to be checked individually.
-    alias_match = AnyOptionalString() if alias is None else StringMatch(alias)
-    column_match = ColumnMatch(alias_match, StringMatch(col))
-    return Or(
-        [
-            FunctionCallMatch(
-                Or([StringMatch(op) for op in ops]),
-                (column_match, LiteralMatch(AnyMatch(param_type))),
-            ),
-            FunctionCallMatch(
-                StringMatch(ConditionFunctions.IN),
-                (
-                    column_match,
-                    FunctionCallMatch(
-                        Or([StringMatch("array"), StringMatch("tuple")]),
-                        all_parameters=LiteralMatch(AnyMatch(param_type)),
-                    ),
-                ),
-            ),
-        ]
-    )
 
 
 class EntityRequiredColumnValidator(QueryValidator):
