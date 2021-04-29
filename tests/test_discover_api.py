@@ -1262,6 +1262,79 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["error"]["message"] == "Not a valid UUID string"
 
+    def test_duplicate_pageload_conditions(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "selected_columns": [],
+                    "having": [],
+                    "limit": 51,
+                    "offset": 0,
+                    "project": [self.project_id],
+                    "dataset": "discover",
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                    "groupby": [],
+                    "conditions": [
+                        ["duration", "<", 900000.0],
+                        ["transaction_op", "=", "pageload"],
+                        ["transaction_op", "=", "pageload"],
+                        ["type", "=", "transaction"],
+                        ["transaction", "=", "/stuff/things"],
+                        [["environment", "=", "production"]],
+                        ["project_id", "IN", [self.project_id]],
+                    ],
+                    "aggregations": [
+                        ["apdex(duration, 300)", None, "apdex_300"],
+                        [
+                            "uniqIf",
+                            ["user", ["greater", ["duration", 1200.0]]],
+                            "count_miserable_user_300",
+                        ],
+                        ["quantile(0.95)", "duration", "p95"],
+                        ["count", None, "count"],
+                        ["uniq", "user", "count_unique_user"],
+                        ["failure_rate()", None, "failure_rate"],
+                        ["divide(count(), divide(86400, 60))", None, "tpm"],
+                        [
+                            "ifNull(divide(plus(uniqIf(user, greater(duration, 1200)), 5.8875), plus(uniq(user), 117.75)), 0)",
+                            None,
+                            "user_misery_300",
+                        ],
+                        [
+                            "quantile(0.75)",
+                            "measurements[fp]",
+                            "percentile_measurements_fp_0_75",
+                        ],
+                        [
+                            "quantile(0.75)",
+                            "measurements[fcp]",
+                            "percentile_measurements_fcp_0_75",
+                        ],
+                        [
+                            "quantile(0.75)",
+                            "measurements[lcp]",
+                            "percentile_measurements_lcp_0_75",
+                        ],
+                        [
+                            "quantile(0.75)",
+                            "measurements[fid]",
+                            "percentile_measurements_fid_0_75",
+                        ],
+                        [
+                            "quantile(0.75)",
+                            "measurements[cls]",
+                            "percentile_measurements_cls_0_75",
+                        ],
+                    ],
+                    "consistent": False,
+                    "debug": False,
+                }
+            ),
+            entity="discover_transactions",
+        )
+        assert response.status_code == 200
+
     def test_null_processor_with_if_function(self) -> None:
         response = self.post(
             json.dumps(
