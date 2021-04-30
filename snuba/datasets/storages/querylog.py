@@ -1,4 +1,3 @@
-from snuba import settings
 from snuba.clickhouse.columns import UUID, Array, ColumnSet, DateTime, Float
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
@@ -8,6 +7,7 @@ from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
+from snuba.utils.streams.topics import Topic
 
 columns = ColumnSet(
     [
@@ -72,6 +72,6 @@ storage = WritableTableStorage(
     stream_loader=build_kafka_stream_loader_from_settings(
         StorageKey.QUERYLOG,
         processor=QuerylogProcessor(),
-        default_topic_name=settings.QUERIES_TOPIC,
+        default_topic=Topic.QUERYLOG,
     ),
 )

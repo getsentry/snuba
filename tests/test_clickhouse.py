@@ -1,6 +1,6 @@
 from unittest.mock import call, patch
 
-from clickhouse_driver import errors
+from clickhouse_driver import Client, errors
 from snuba.clickhouse.columns import Array
 from snuba.clickhouse.columns import SchemaModifiers as Modifier
 from snuba.clickhouse.columns import UInt
@@ -11,7 +11,7 @@ from snuba.datasets.storages.factory import get_writable_storage
 
 def test_flattened() -> None:
     columns = (
-        get_writable_storage(StorageKey.EVENTS)
+        get_writable_storage(StorageKey.ERRORS)
         .get_table_writer()
         .get_schema()
         .get_columns()
@@ -32,7 +32,7 @@ def test_flattened() -> None:
 
 
 @patch("snuba.clickhouse.native.Client")
-def test_reconnect(FakeClient) -> None:
+def test_reconnect(FakeClient: Client) -> None:
     # If the connection NetworkErrors a first time, make sure we call it a second time.
     FakeClient.return_value.execute.side_effect = [
         errors.NetworkError,

@@ -38,7 +38,7 @@ class ClickhouseClientSettings(Enum):
     INSERT = ClickhouseClientSettingsType({}, None)
     MIGRATE = ClickhouseClientSettingsType({"load_balancing": "in_order"}, 10000)
     OPTIMIZE = ClickhouseClientSettingsType({}, 10000)
-    QUERY = ClickhouseClientSettingsType({"readonly": True}, None)
+    QUERY = ClickhouseClientSettingsType({"readonly": 1}, None)
     REPLACE = ClickhouseClientSettingsType(
         {
             # Replacing existing rows requires reconstructing the entire tuple for each

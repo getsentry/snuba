@@ -37,21 +37,24 @@ def test() -> None:
     events = get_dataset("events")
     query = parse_query(query_body, events)
 
-    events_pipeline = SimplePipelineBuilder(
-        query_plan_builder=SingleStorageQueryPlanBuilder(
-            storage=get_storage(StorageKey.EVENTS)
-        ),
-    )
-
     errors_pipeline = SimplePipelineBuilder(
         query_plan_builder=SingleStorageQueryPlanBuilder(
             storage=get_storage(StorageKey.ERRORS)
         ),
     )
 
+    errors_ro_pipeline = SimplePipelineBuilder(
+        query_plan_builder=SingleStorageQueryPlanBuilder(
+            storage=get_storage(StorageKey.ERRORS_RO)
+        ),
+    )
+
     delegator = PipelineDelegator(
-        query_pipeline_builders={"events": events_pipeline, "errors": errors_pipeline},
-        selector_func=lambda query, referrer: ("events", ["errors"]),
+        query_pipeline_builders={
+            "errors": errors_pipeline,
+            "errors_ro": errors_ro_pipeline,
+        },
+        selector_func=lambda query, referrer: ("errors", ["errors_ro"]),
         callback_func=mock_callback,
     )
 
@@ -68,5 +71,5 @@ def test() -> None:
         query,
         request_settings,
         "ref",
-        [Result("events", query_result, ANY), Result("errors", query_result, ANY)],
+        [Result("errors", query_result, ANY), Result("errors_ro", query_result, ANY)],
     )

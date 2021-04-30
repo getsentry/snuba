@@ -1,5 +1,3 @@
-from copy import deepcopy
-from dataclasses import replace
 from typing import List, Sequence
 
 from snuba.clickhouse.columns import (
@@ -14,7 +12,6 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
-from snuba.migrations.columns import Materialized
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 UNKNOWN_SPAN_STATUS = 2
@@ -90,24 +87,11 @@ class Migration(migration.ClickhouseNodeMigration):
         ]
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
-        # We removed the materialized for the dist table DDL.
-        def strip_materialized(columns: Sequence[Column[Modifiers]]) -> None:
-            for col in columns:
-                if col.type.has_modifier(Materialized):
-                    modifiers = col.type.get_modifiers()
-                    assert modifiers is not None
-                    col.type = col.type.set_modifiers(
-                        replace(modifiers, materialized=None)
-                    )
-
-        dist_columns = deepcopy(columns)
-        strip_materialized(dist_columns)
-
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.TRANSACTIONS,
                 table_name="transactions_dist",
-                columns=dist_columns,
+                columns=columns,
                 engine=table_engines.Distributed(
                     local_table_name="transactions_local",
                     sharding_key="cityHash64(span_id)",

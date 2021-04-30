@@ -50,6 +50,7 @@ from snuba.utils.streams.backends.abstract import (
     Producer,
 )
 from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.streams.topics import Topic as KafkaTopic
 
 logger = logging.getLogger(__name__)
 
@@ -409,9 +410,7 @@ class KafkaConsumer(Consumer[KafkaPayload]):
             Partition(Topic(message.topic()), message.partition()),
             message.offset(),
             KafkaPayload(
-                message.key(),
-                message.value(),
-                headers if headers is not None else [],
+                message.key(), message.value(), headers if headers is not None else [],
             ),
             datetime.utcfromtimestamp(message.timestamp()[1] / 1000.0),
         )
@@ -652,13 +651,22 @@ SUPPORTED_KAFKA_CONFIGURATION = (
 
 
 def get_default_kafka_configuration(
-    storage_key: Optional[StorageKey] = None,
+    storage_key: Optional[
+        StorageKey
+    ] = None,  # TODO: To be removed once STORAGE_BROKER_CONFIG and DEFUALT_STORAGE_BROKERS are gone
+    topic: Optional[KafkaTopic] = None,
     bootstrap_servers: Optional[Sequence[str]] = None,
     override_params: Optional[Mapping[str, Any]] = None,
 ) -> KafkaBrokerConfig:
     default_bootstrap_servers = None
     default_config: Mapping[str, Any]
-    if storage_key is not None:
+
+    if storage_key is None:
+        assert topic is None
+    else:
+        assert topic is not None
+
+    if storage_key is not None and topic is not None:
         storage_name = storage_key.value
         if storage_name in settings.DEFAULT_STORAGE_BROKERS:
             # this is now deprecated
@@ -669,19 +677,16 @@ def get_default_kafka_configuration(
             default_bootstrap_servers = ",".join(
                 settings.DEFAULT_STORAGE_BROKERS[storage_name]
             )
-        elif settings.DEFAULT_BROKERS:
-            default_config = {}
-            default_bootstrap_servers = ",".join(settings.DEFAULT_BROKERS)
-        else:
+        elif settings.STORAGE_BROKER_CONFIG:
             default_config = settings.STORAGE_BROKER_CONFIG.get(
                 storage_name, settings.BROKER_CONFIG
             )
-    else:
-        if settings.DEFAULT_BROKERS:
-            default_config = {}
-            default_bootstrap_servers = ",".join(settings.DEFAULT_BROKERS)
         else:
-            default_config = settings.BROKER_CONFIG
+            default_config = settings.KAFKA_BROKER_CONFIG.get(
+                topic.value, settings.BROKER_CONFIG
+            )
+    else:
+        default_config = settings.BROKER_CONFIG
     broker_config = copy.deepcopy(default_config)
     assert isinstance(broker_config, dict)
     bootstrap_servers = (
@@ -705,7 +710,8 @@ def get_default_kafka_configuration(
 
 
 def build_kafka_consumer_configuration(
-    storage_key: Optional[StorageKey],
+    storage_key: Optional[StorageKey],  # TODO: deprecate
+    topic: Optional[KafkaTopic],
     group_id: str,
     auto_offset_reset: str = "error",
     queued_max_messages_kbytes: int = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
@@ -715,6 +721,7 @@ def build_kafka_consumer_configuration(
 ) -> KafkaBrokerConfig:
     broker_config = get_default_kafka_configuration(
         storage_key,
+        topic,
         bootstrap_servers=bootstrap_servers,
         override_params=override_params,
     )
@@ -735,11 +742,13 @@ def build_kafka_consumer_configuration(
 
 def build_kafka_producer_configuration(
     storage_key: Optional[StorageKey],
+    topic: Optional[KafkaTopic],
     bootstrap_servers: Optional[Sequence[str]] = None,
     override_params: Optional[Mapping[str, Any]] = None,
 ) -> KafkaBrokerConfig:
     broker_config = get_default_kafka_configuration(
         storage_key,
+        topic=topic,
         bootstrap_servers=bootstrap_servers,
         override_params=override_params,
     )
@@ -747,7 +756,7 @@ def build_kafka_producer_configuration(
 
 
 def build_default_kafka_producer_configuration() -> KafkaBrokerConfig:
-    return build_kafka_producer_configuration(None)
+    return build_kafka_producer_configuration(None, None)
 
 
 # XXX: This must be imported after `KafkaPayload` to avoid a circular import.
@@ -851,9 +860,7 @@ class KafkaProducer(Producer[KafkaPayload]):
                 future.set_exception(error)
 
     def produce(
-        self,
-        destination: Union[Topic, Partition],
-        payload: KafkaPayload,
+        self, destination: Union[Topic, Partition], payload: KafkaPayload,
     ) -> Future[Message[KafkaPayload]]:
         if self.__shutdown_requested.is_set():
             raise RuntimeError("producer has been closed")
