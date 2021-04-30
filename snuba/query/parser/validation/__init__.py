@@ -2,9 +2,9 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Sequence
 
-from snuba.query import Query
-from snuba.query.data_source import DataSource
 from snuba.query.expressions import Expression
+from snuba.query.data_source import DataSource
+from snuba.query import Query
 
 logger = logging.getLogger(__name__)
 
