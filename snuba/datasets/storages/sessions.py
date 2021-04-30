@@ -26,6 +26,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.request.request_settings import RequestSettings
+from snuba.utils.streams.topics import Topic
 
 
 WRITE_LOCAL_TABLE_NAME = "sessions_raw_local"
@@ -127,7 +128,7 @@ raw_storage = WritableTableStorage(
     stream_loader=build_kafka_stream_loader_from_settings(
         StorageKey.SESSIONS_RAW,
         processor=SessionsProcessor(),
-        default_topic_name="ingest-sessions",
+        default_topic=Topic.SESSIONS,
     ),
 )
 # The materialized view we query aggregate data from.

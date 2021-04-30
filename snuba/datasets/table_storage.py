@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence
 
 from snuba import settings
@@ -18,21 +17,48 @@ from snuba.snapshots.loaders import BulkLoader
 from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.backends.kafka import KafkaPayload
+from snuba.utils.streams.topics import (
+    get_topic_creation_config,
+    Topic,
+)
 from snuba.writer import BatchWriter
 
-LOG_APPEND_TIME_STORAGES = {
-    StorageKey.EVENTS,
-    StorageKey.ERRORS,
-    StorageKey.TRANSACTIONS,
-}
 
-
-@dataclass(frozen=True)
 class KafkaTopicSpec:
-    topic_name: str
-    partitions_number: int
-    replication_factor: int = 1
-    message_timestamp_type: Optional[str] = None
+    def __init__(
+        self,
+        topic: Topic,
+        storage_topic_name: Optional[str],  # TODO: Remove once STORAGE_TOPICS is gone
+    ) -> None:
+        self.__topic = topic
+        self.__storage_topic_name = storage_topic_name
+
+    @property
+    def topic(self) -> Topic:
+        return self.__topic
+
+    @property
+    def topic_name(self) -> str:
+        return self.__storage_topic_name or get_topic_name(self.__topic)
+
+    @property
+    def partitions_number(self) -> int:
+        # TODO: This references the actual topic name for backward compatibility.
+        # It should be changed to the logical name for consistency with KAFKA_TOPIC_MAP
+        # and KAFKA_BROKER_CONFIG
+        return settings.TOPIC_PARTITION_COUNTS.get(self.topic_name, 1)
+
+    @property
+    def replication_factor(self) -> int:
+        return 1
+
+    @property
+    def topic_creation_config(self) -> Mapping[str, str]:
+        return get_topic_creation_config(self.__topic)
+
+
+def get_topic_name(topic: Topic) -> str:
+    return settings.KAFKA_TOPIC_MAP.get(topic.value, topic.value)
 
 
 class KafkaStreamLoader:
@@ -83,39 +109,25 @@ class KafkaStreamLoader:
         return ret
 
 
-def build_kafka_topic_spec_from_settings(
-    topic_name: str, log_append_time: bool = False
-) -> KafkaTopicSpec:
-    return KafkaTopicSpec(
-        topic_name=topic_name,
-        partitions_number=settings.TOPIC_PARTITION_COUNTS.get(topic_name, 1),
-        message_timestamp_type="LogAppendTime" if log_append_time else None,
-    )
-
-
 def build_kafka_stream_loader_from_settings(
-    storage_key: StorageKey,
+    storage_key: StorageKey,  # TODO: Remove once STORAGE_TOPICS is no longer supported
     processor: MessageProcessor,
-    default_topic_name: str,
+    default_topic: Topic,
     pre_filter: Optional[StreamMessageFilter[KafkaPayload]] = None,
-    replacement_topic_name: Optional[str] = None,
-    commit_log_topic_name: Optional[str] = None,
+    replacement_topic: Optional[Topic] = None,
+    commit_log_topic: Optional[Topic] = None,
 ) -> KafkaStreamLoader:
     storage_topics = {**settings.STORAGE_TOPICS.get(storage_key.value, {})}
 
-    default_topic_spec = build_kafka_topic_spec_from_settings(
-        storage_topics.pop("default", default_topic_name),
-        # HACK: The "events" topic (which is by default shared by these errors/transactions
-        # storages) should be created with message.timestamp.type = LogAppendTime. This is
-        # required for subscriptions to work properly.
-        log_append_time=storage_key in LOG_APPEND_TIME_STORAGES,
-    )
+    default_topic_spec = KafkaTopicSpec(default_topic, storage_topics.get("default"))
 
     replacement_topic_spec: Optional[KafkaTopicSpec]
-    if replacement_topic_name is not None:
-        replacement_topic_spec = build_kafka_topic_spec_from_settings(
-            storage_topics.pop("replacements", replacement_topic_name)
+
+    if replacement_topic is not None:
+        replacement_topic_spec = KafkaTopicSpec(
+            replacement_topic, storage_topics.get("replacements"),
         )
+
     elif "replacements" in storage_topics:
         raise ValueError(
             f"invalid topic configuration for {storage_key!r}: replacements unsupported"
@@ -124,9 +136,9 @@ def build_kafka_stream_loader_from_settings(
         replacement_topic_spec = None
 
     commit_log_topic_spec: Optional[KafkaTopicSpec]
-    if commit_log_topic_name is not None:
-        commit_log_topic_spec = build_kafka_topic_spec_from_settings(
-            storage_topics.pop("commit-log", commit_log_topic_name)
+    if commit_log_topic is not None:
+        commit_log_topic_spec = KafkaTopicSpec(
+            commit_log_topic, storage_topics.get("commit-log"),
         )
     elif "commit-log" in storage_topics:
         raise ValueError(
