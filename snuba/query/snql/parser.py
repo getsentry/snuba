@@ -1,5 +1,6 @@
 import logging
 from dataclasses import replace
+from datetime import datetime, timedelta
 from typing import (
     Any,
     Callable,
@@ -17,6 +18,8 @@ from parsimonious.exceptions import IncompleteParseError
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
+from snuba import state
+from snuba.clickhouse.query_dsl.accessors import get_time_range_expressions
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -25,8 +28,11 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     binary_condition,
+    build_match,
     combine_and_conditions,
     combine_or_conditions,
+    ConditionFunctions,
+    get_first_level_and_conditions,
     unary_condition,
 )
 from snuba.query.data_source.join import IndividualNode, JoinClause
@@ -931,31 +937,126 @@ def _mangle_query_aliases(
         query.transform_expressions(mangle_column_value)
 
 
-def _validate_required_conditions(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
+def _replace_time_condition(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
 ) -> None:
+    condition = query.get_condition()
+    top_level = (
+        get_first_level_and_conditions(condition) if condition is not None else []
+    )
+    max_days, date_align = state.get_configs(
+        [("max_days", None), ("date_align_seconds", 1)]
+    )
+    assert isinstance(date_align, int)
+    if max_days is not None:
+        max_days = int(max_days)
+
     if isinstance(query, LogicalQuery):
-        entity = get_entity(query.get_from_clause().key)
-        missing = entity.validate_required_conditions(query)
-        if missing:
-            raise ParsingException(
-                f"{query.get_from_clause().key} is missing conditions on {', '.join(sorted(missing))}"
-            )
+        new_top_level = _align_max_days_date_align(
+            query.get_from_clause().key, top_level, max_days, date_align
+        )
+        query.set_ast_condition(combine_and_conditions(new_top_level))
     else:
         from_clause = query.get_from_clause()
-        if isinstance(from_clause, (LogicalQuery, CompositeQuery)):
-            return _validate_required_conditions(from_clause)
+        if not isinstance(from_clause, JoinClause):
+            return
 
-        assert isinstance(from_clause, JoinClause)  # mypy
         alias_map = from_clause.get_alias_node_map()
         for alias, node in alias_map.items():
             assert isinstance(node.data_source, QueryEntity)  # mypy
-            entity = get_entity(node.data_source.key)
-            missing = entity.validate_required_conditions(query, alias)
-            if missing:
-                raise ParsingException(
-                    f"{node.data_source.key} is missing conditions on {', '.join(sorted(missing))}"
-                )
+            new_top_level = _align_max_days_date_align(
+                node.data_source.key, top_level, max_days, date_align, alias
+            )
+            top_level = new_top_level
+            query.set_ast_condition(combine_and_conditions(new_top_level))
+
+
+def _align_max_days_date_align(
+    key: EntityKey,
+    old_top_level: Sequence[Expression],
+    max_days: Optional[int],
+    date_align: int,
+    alias: Optional[str] = None,
+) -> Sequence[Expression]:
+    entity = get_entity(key)
+    if not entity.required_time_column:
+        return old_top_level
+
+    # If there is an = or IN condition on time, we don't need to do any of this
+    match = build_match(
+        entity.required_time_column, [ConditionFunctions.EQ], datetime, alias
+    )
+    if any(match.match(cond) for cond in old_top_level):
+        return old_top_level
+
+    lower, upper = get_time_range_expressions(
+        old_top_level, entity.required_time_column, alias
+    )
+    if not lower:
+        raise ParsingException(
+            f"missing >/>= condition on column {entity.required_time_column} for entity {key.value}"
+        )
+    elif not upper:
+        raise ParsingException(
+            f"missing </<= condition on column {entity.required_time_column} for entity {key.value}"
+        )
+
+    from_date, from_exp = lower
+    to_date, to_exp = upper
+
+    from_date = from_date - timedelta(
+        seconds=(from_date - from_date.min).seconds % date_align
+    )
+    to_date = to_date - timedelta(seconds=(to_date - to_date.min).seconds % date_align)
+    if from_date > to_date:
+        raise ParsingException(f"invalid time conditions on entity {key.value}")
+
+    if max_days is not None and (to_date - from_date).days > max_days:
+        from_date = to_date - timedelta(days=max_days)
+
+    def replace_cond(exp: Expression) -> Expression:
+        if not isinstance(exp, FunctionCall):
+            return exp
+        elif exp == from_exp:
+            return replace(
+                exp, parameters=(from_exp.parameters[0], Literal(None, from_date)),
+            )
+        elif exp == to_exp:
+            return replace(
+                exp, parameters=(to_exp.parameters[0], Literal(None, to_date))
+            )
+
+        return exp
+
+    return list(map(replace_cond, old_top_level))
+
+
+def validate_entities_with_query(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+) -> None:
+    if isinstance(query, LogicalQuery):
+        entity = get_entity(query.get_from_clause().key)
+        try:
+            for v in entity.get_validators():
+                v.validate(query)
+        except Exception as e:
+            raise ParsingException(
+                f"validation failed for entity {query.get_from_clause().key.value}: {e}"
+            )
+    else:
+        from_clause = query.get_from_clause()
+        if isinstance(from_clause, JoinClause):
+            alias_map = from_clause.get_alias_node_map()
+            for alias, node in alias_map.items():
+                assert isinstance(node.data_source, QueryEntity)  # mypy
+                entity = get_entity(node.data_source.key)
+                try:
+                    for v in entity.get_validators():
+                        v.validate(query)
+                except Exception as e:
+                    raise ParsingException(
+                        f"validation failed for entity {node.data_source.key.value}: {e}"
+                    )
 
 
 def _post_process(
@@ -977,7 +1078,6 @@ def parse_snql_query(
 ) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
     query = parse_snql_query_initial(body)
 
-    # These are the post processing phases
     _post_process(
         query,
         [
@@ -992,6 +1092,9 @@ def parse_snql_query(
         ],
     )
 
+    # Time based processing, which will sometimes be skipped by subscriptions
+    _post_process(query, [_replace_time_condition])
+
     # Validating
-    _post_process(query, [_validate_required_conditions, validate_query])
+    _post_process(query, [validate_query, validate_entities_with_query])
     return query
