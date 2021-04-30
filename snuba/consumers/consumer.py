@@ -532,9 +532,9 @@ class MultistorageConsumerProcessingStrategyFactory(
         self, storage: WritableTableStorage
     ) -> ProcessedMessageBatchWriter:
         replacement_batch_writer: Optional[ReplacementBatchWriter]
-        replacement_topic_spec = (
-            storage.get_table_writer().get_stream_loader().get_replacement_topic_spec()
-        )
+        stream_loader = storage.get_table_writer().get_stream_loader()
+        replacement_topic_spec = stream_loader.get_replacement_topic_spec()
+        default_topic_spec = stream_loader.get_default_topic_spec()
         if replacement_topic_spec is not None:
             # XXX: The producer is flushed when closed on strategy teardown
             # after an assignment is revoked, but never explicitly closed.
@@ -544,6 +544,7 @@ class MultistorageConsumerProcessingStrategyFactory(
                 ConfluentKafkaProducer(
                     build_kafka_producer_configuration(
                         storage.get_storage_key(),
+                        default_topic_spec.topic,
                         override_params={
                             "partitioner": "consistent",
                             "message.max.bytes": 50000000,  # 50MB, default is 1MB
