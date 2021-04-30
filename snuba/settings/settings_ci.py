@@ -1,6 +1,6 @@
 import os
 
-from snuba.settings_test import *  # NOQA
+from snuba.settings.settings_test import *  # NOQA
 
 env = os.environ.get
 
