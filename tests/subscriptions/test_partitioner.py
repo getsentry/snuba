@@ -15,4 +15,5 @@ class TestBuildRequest(BaseSubscriptionTest):
             123, [], [], timedelta(minutes=10), timedelta(minutes=1)
         )
         partitioner = TopicSubscriptionDataPartitioner(KafkaTopicSpec(Topic.EVENTS))
+
         assert partitioner.build_partition_id(data) == 18

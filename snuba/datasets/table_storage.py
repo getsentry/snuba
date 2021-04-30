@@ -24,7 +24,7 @@ from snuba.writer import BatchWriter
 
 
 class KafkaTopicSpec:
-    def __init__(self, topic: Topic,) -> None:
+    def __init__(self, topic: Topic) -> None:
         self.__topic = topic
 
     @property
