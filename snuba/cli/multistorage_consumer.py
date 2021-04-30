@@ -195,7 +195,7 @@ def multistorage_consumer(
         assert commit_log_topic_spec is not None
 
         producer = ConfluentKafkaProducer(
-            build_kafka_producer_configuration(commit_log_topic_spec.topic,)
+            build_kafka_producer_configuration(commit_log_topic_spec.topic)
         )
         consumer = KafkaConsumerWithCommitLog(
             consumer_configuration,
