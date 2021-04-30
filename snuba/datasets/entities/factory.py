@@ -53,10 +53,3 @@ def get_entity(name: EntityKey) -> Entity:
         raise InvalidEntityError(f"entity {name!r} does not exist") from error
 
     return entity
-
-
-def get_entity_name(entity: Entity) -> EntityKey:
-    try:
-        return ENTITY_NAME_LOOKUP[entity]
-    except KeyError as error:
-        raise InvalidEntityError("Entity name not specified") from error
