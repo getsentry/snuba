@@ -15,7 +15,6 @@ from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, Jo
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.validation.validators import EntityRequiredColumnValidator
 
 
 class SpansEntity(Entity):
@@ -69,7 +68,7 @@ class SpansEntity(Entity):
                 )
             },
             writable_storage=storage,
-            validators=[EntityRequiredColumnValidator({"project_id"})],
+            required_filter_columns=["project_id"],
             required_time_column=None,
         )
 

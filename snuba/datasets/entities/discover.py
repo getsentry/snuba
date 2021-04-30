@@ -63,7 +63,6 @@ from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
-from snuba.query.validation.validators import EntityRequiredColumnValidator
 from snuba.util import qualified_column
 
 
@@ -464,7 +463,7 @@ class DiscoverEntity(Entity):
             ),
             join_relationships={},
             writable_storage=None,
-            validators=[EntityRequiredColumnValidator({"project_id"})],
+            required_filter_columns=["project_id"],
             required_time_column="timestamp",
         )
 

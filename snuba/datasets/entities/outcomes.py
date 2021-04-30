@@ -12,7 +12,6 @@ from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.timeseries_extension import TimeSeriesExtension
-from snuba.query.validation.validators import EntityRequiredColumnValidator
 
 
 class OutcomesEntity(Entity):
@@ -42,7 +41,7 @@ class OutcomesEntity(Entity):
             abstract_column_set=read_schema.get_columns(),
             join_relationships={},
             writable_storage=writable_storage,
-            validators=[EntityRequiredColumnValidator({"org_id"})],
+            required_filter_columns=["org_id"],
             required_time_column="timestamp",
         )
 
