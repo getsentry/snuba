@@ -726,7 +726,7 @@ def build_kafka_producer_configuration(
 
 
 def build_default_kafka_producer_configuration() -> KafkaBrokerConfig:
-    return build_kafka_producer_configuration(None)
+    return build_kafka_producer_configuration(None, None)
 
 
 # XXX: This must be imported after `KafkaPayload` to avoid a circular import.
