@@ -11,12 +11,12 @@ def _validate_settings(locals: Mapping[str, Any]) -> None:
 
     if locals["STORAGE_TOPICS"]:
         logger.warning(
-            "DEPRECATED: STORAGE_TOPICS is derpecated. Use KAFKA_TOPIC_MAP instead."
+            "DEPRECATED: STORAGE_TOPICS is deprecated. Use KAFKA_TOPIC_MAP instead."
         )
 
     if locals.get("STORAGE_BROKER_CONFIG"):
         logger.warning(
-            "DEPRECATED: STORAGE_BROKER_CONFIG is derpecated. Use KAFKA_BROKER_CONFIG instead."
+            "DEPRECATED: STORAGE_BROKER_CONFIG is deprecated. Use KAFKA_BROKER_CONFIG instead."
         )
 
     topic_names = {
