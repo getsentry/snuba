@@ -15,8 +15,13 @@ def _validate_settings(locals: Mapping[str, Any]) -> None:
         )
 
     if locals.get("STORAGE_BROKER_CONFIG"):
-        logger.warning(
+        raise ValueError(
             "DEPRECATED: STORAGE_BROKER_CONFIG is deprecated. Use KAFKA_BROKER_CONFIG instead."
+        )
+
+    if locals.get("DEFAULT_STORAGE_BROKERS"):
+        raise ValueError(
+            "DEFAULT_STORAGE_BROKERS is deprecated. Use KAFKA_BROKER_CONFIG instead."
         )
 
     topic_names = {
