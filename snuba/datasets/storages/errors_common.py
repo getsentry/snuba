@@ -21,7 +21,6 @@ from snuba.query.expressions import Column, Literal
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
-from snuba.query.processors.conditions_enforcer import MandatoryConditionEnforcer
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
@@ -166,7 +165,6 @@ query_processors = [
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
     PrewhereProcessor(prewhere_candidates, omit_if_final=["environment", "release"]),
-    MandatoryConditionEnforcer({"project_id", "timestamp"}),
 ]
 
 query_splitters = [

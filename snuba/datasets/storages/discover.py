@@ -18,7 +18,6 @@ from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsPr
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
-from snuba.query.processors.conditions_enforcer import MandatoryConditionEnforcer
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
@@ -97,7 +96,6 @@ storage = ReadableTableStorage(
                 "project_id",
             ]
         ),
-        MandatoryConditionEnforcer({"project_id", "timestamp"}),
     ],
     query_splitters=[
         ColumnSplitQueryStrategy(
