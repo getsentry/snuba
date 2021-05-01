@@ -127,7 +127,6 @@ def build_kafka_stream_loader_from_settings(
         replacement_topic_spec = KafkaTopicSpec(
             replacement_topic, storage_topics.get("replacements"),
         )
-
     elif "replacements" in storage_topics:
         raise ValueError(
             f"invalid topic configuration for {storage_key!r}: replacements unsupported"
