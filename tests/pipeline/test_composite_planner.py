@@ -39,6 +39,7 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.processors.conditions_enforcer import MandatoryConditionEnforcer
 from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
 from snuba.reader import Reader
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
@@ -178,7 +179,11 @@ TEST_CASES = [
             StorageSetKey.EVENTS,
             SubqueryProcessors(
                 [],
-                [*events_storage.get_query_processors(), MandatoryConditionApplier()],
+                [
+                    *events_storage.get_query_processors(),
+                    MandatoryConditionApplier(),
+                    MandatoryConditionEnforcer([]),
+                ],
             ),
             None,
         ),
@@ -361,6 +366,7 @@ TEST_CASES = [
                     [
                         *events_storage.get_query_processors(),
                         MandatoryConditionApplier(),
+                        MandatoryConditionEnforcer([]),
                     ],
                 ),
                 "groups": SubqueryProcessors(
@@ -368,6 +374,7 @@ TEST_CASES = [
                     [
                         *get_storage(StorageKey.GROUPEDMESSAGES).get_query_processors(),
                         MandatoryConditionApplier(),
+                        MandatoryConditionEnforcer([]),
                     ],
                 ),
             },
