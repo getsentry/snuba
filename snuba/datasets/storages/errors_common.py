@@ -164,7 +164,9 @@ query_processors = [
     TypeConditionOptimizer(),
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
-    PrewhereProcessor(prewhere_candidates, omit_if_final=["environment", "release"]),
+    PrewhereProcessor(
+        prewhere_candidates, omit_if_final=["environment", "release", "group_id"]
+    ),
 ]
 
 query_splitters = [
