@@ -1,5 +1,5 @@
 import logging
-from typing import Sequence
+from typing import Mapping
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Expression, Query
@@ -42,41 +42,43 @@ def _check_int_set(expression: Expression, column_name: str) -> bool:
     return False
 
 
-def check_project_id(expression: Expression) -> bool:
+def enforce_project_id(expression: Expression) -> bool:
     return _check_int_set(expression, "project_id")
 
 
-def check_org_id(expression: Expression) -> bool:
+def enforce_org_id(expression: Expression) -> bool:
     return _check_int_set(expression, "org_id")
 
 
 class MandatoryConditionEnforcer(QueryProcessor):
     """
-    Ensures the query contains conditions on aa specific set of columns
-    as top level conditions.
+    Ensures the query contains a set of storage defined conditions on
+    specific columns and blocks the query if this is not true.
 
     This is supposed to be a failsafe mechanism to ensure the query
     processing pipeline does not drop conditions that are essential for
-    safety (like conditions on project_id or timestamp).
+    safety (like conditions on project_id or org_id).
 
-    If this processor fails the query is supposed to fail as in that case
+    If this processor fails, the query is supposed to fail as in that case
     it would be better to make a query fail that accidentally over
     exposing data for missing conditions.
     """
 
-    def __init__(self, condition_checkers: Sequence[condition_checker]) -> None:
+    def __init__(self, condition_checkers: Mapping[str, condition_checker]) -> None:
         self.__condition_checkers = condition_checkers
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
-        missing_checkers = {checker for checker in self.__condition_checkers}
+        missing_checkers = {
+            id: checker for id, checker in self.__condition_checkers.items()
+        }
 
         def inspect_expression(condition: Expression) -> None:
             top_level = get_first_level_and_conditions(condition)
             for condition in top_level:
-                for checker in self.__condition_checkers:
-                    if checker in missing_checkers:
+                for checker_id, checker in self.__condition_checkers.items():
+                    if checker_id in missing_checkers:
                         if checker(condition):
-                            missing_checkers.remove(checker)
+                            del missing_checkers[checker_id]
 
         condition = query.get_condition()
         if condition is not None:
@@ -87,10 +89,12 @@ class MandatoryConditionEnforcer(QueryProcessor):
             inspect_expression(prewhere)
 
         if get_config("mandatory_condition_enforce", 0):
-            assert not missing_checkers, "Missing mandatory columns in query"
+            assert (
+                not missing_checkers
+            ), f"Missing mandatory columns in query. Missing {missing_checkers.keys()}"
         else:
             if missing_checkers:
                 logger.error(
                     "Query is missing mandatory columns",
-                    extra={"missing_columns": missing_checkers},
+                    extra={"missing_checkers": missing_checkers.keys()},
                 )

@@ -8,8 +8,8 @@ from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Literal
 from snuba.query.processors.conditions_enforcer import (
     MandatoryConditionEnforcer,
-    check_org_id,
-    check_project_id,
+    enforce_org_id,
+    enforce_project_id,
 )
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.state import set_config
@@ -90,7 +90,9 @@ test_data = [
 def test_condition_enforcer(query: Query, valid: bool) -> None:
     set_config("mandatory_condition_enforce", 1)
     request_settings = HTTPRequestSettings(consistent=True)
-    processor = MandatoryConditionEnforcer([check_project_id, check_org_id])
+    processor = MandatoryConditionEnforcer(
+        {"project_id": enforce_project_id, "org_id": enforce_org_id}
+    )
     if valid:
         processor.process_query(query, request_settings)
     else:
