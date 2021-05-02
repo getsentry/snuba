@@ -8,12 +8,11 @@ from snuba.query.conditions import (
     ConditionFunctions,
     condition_pattern,
     get_first_level_and_conditions,
-    set_condition_pattern,
 )
-from snuba.query.expressions import Column
-from snuba.query.matchers import Any
+from snuba.query.matchers import Any, String
 from snuba.query.matchers import Column as ColumnPattern
 from snuba.query.matchers import Literal as LiteralPattern
+from snuba.query.matchers import FunctionCall as FunctionCallPattern
 from snuba.query.matchers import Or, Param
 from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config
@@ -24,22 +23,24 @@ CONDITION_PATTERN = Or(
     [
         condition_pattern(
             {ConditionFunctions.EQ},
-            Param("lhs", ColumnPattern(None, Any(str))),
+            ColumnPattern(None, Param("lhs", Any(str))),
             LiteralPattern(Any(int)),
             commutative=True,
         ),
-        set_condition_pattern[ConditionFunctions.IN],
+        FunctionCallPattern(
+            String(ConditionFunctions.IN),
+            (
+                ColumnPattern(None, Param("lhs", Any(str))),
+                FunctionCallPattern(Or([String("tuple"), String("array")]), None),
+            ),
+        ),
     ],
 )
 
 
 def _check_int_set(expression: Expression, column_name: str) -> bool:
     match = CONDITION_PATTERN.match(expression)
-    if match is not None:
-        lhs = match.expression("lhs")
-        if isinstance(lhs, Column) and lhs.column_name == column_name:
-            return True
-    return False
+    return match is not None and match.optional_string("lhs") == column_name
 
 
 class ProjectIdEnforcer(ConditionChecker):

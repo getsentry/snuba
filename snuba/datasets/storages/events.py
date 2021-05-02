@@ -16,8 +16,8 @@ from snuba.datasets.storages.events_common import (
     required_columns,
 )
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
+from snuba.query.processors.conditions_enforcer import ProjectIdEnforcer
 from snuba.utils.streams.topics import Topic
-
 
 schema = WritableTableSchema(
     columns=all_columns,
@@ -42,6 +42,7 @@ storage = WritableTableStorage(
         commit_log_topic=Topic.COMMIT_LOG,
     ),
     query_splitters=query_splitters,
+    mandatory_condition_checkers=[ProjectIdEnforcer()],
     replacer_processor=ErrorsReplacer(
         schema=schema,
         required_columns=[col.escaped for col in required_columns],

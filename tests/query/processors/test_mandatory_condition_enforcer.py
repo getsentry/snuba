@@ -1,9 +1,15 @@
 from datetime import datetime
+from snuba.query.dsl import literals_array
 
 import pytest
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
-from snuba.query.conditions import BooleanFunctions, binary_condition, in_condition
+from snuba.query.conditions import (
+    BooleanFunctions,
+    ConditionFunctions,
+    binary_condition,
+    in_condition,
+)
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Literal
 from snuba.query.processors.conditions_enforcer import (
@@ -29,6 +35,25 @@ test_data = [
         ),
         True,
         id="Valid query. Both mandatory columns are there",
+    ),
+    pytest.param(
+        Query(
+            Table("errors", ColumnSet([])),
+            selected_columns=[],
+            condition=binary_condition(
+                BooleanFunctions.AND,
+                binary_condition(
+                    ConditionFunctions.IN,
+                    Column(None, None, "project_id"),
+                    literals_array(None, [Literal(None, 123)]),
+                ),
+                binary_condition(
+                    "equals", Column(None, None, "org_id"), Literal(None, 1)
+                ),
+            ),
+        ),
+        True,
+        id="Valid query. Both mandatory columns are there (in array)",
     ),
     pytest.param(
         Query(

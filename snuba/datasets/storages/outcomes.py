@@ -7,6 +7,7 @@ from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
+from snuba.query.processors.conditions_enforcer import OrgIdEnforcer
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.utils.streams.topics import Topic
 
@@ -84,6 +85,7 @@ raw_storage = WritableTableStorage(
     storage_set_key=StorageSetKey.OUTCOMES,
     schema=raw_schema,
     query_processors=[],
+    mandatory_condition_checkers=[OrgIdEnforcer()],
     stream_loader=build_kafka_stream_loader_from_settings(
         StorageKey.OUTCOMES_RAW,
         processor=OutcomesProcessor(),
@@ -96,4 +98,5 @@ materialized_storage = ReadableTableStorage(
     storage_set_key=StorageSetKey.OUTCOMES,
     schema=read_schema,
     query_processors=[PrewhereProcessor(["project_id", "org_id"])],
+    mandatory_condition_checkers=[OrgIdEnforcer()],
 )
