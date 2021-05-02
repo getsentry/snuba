@@ -165,7 +165,13 @@ query_processors = [
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
     PrewhereProcessor(
-        prewhere_candidates, omit_if_final=["environment", "release", "group_id"]
+        prewhere_candidates,
+        # Environment and release are excluded from prewhere in case of final
+        # queries because of a Clickhouse bug.
+        # group_id instead is excluded since `final` is applied after prewhere.
+        # thus, in this case, we could be filtering out rows that should be
+        # merged together by the final.
+        omit_if_final=["environment", "release", "group_id"],
     ),
 ]
 
