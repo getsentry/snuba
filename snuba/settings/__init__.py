@@ -3,7 +3,6 @@ from typing import Any, Mapping, MutableMapping, Sequence, Set
 
 from snuba.settings.validation import _validate_settings
 
-
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 LOG_FORMAT = "%(asctime)s %(message)s"
 
@@ -56,7 +55,6 @@ USE_RESULT_CACHE = True
 
 # Query Recording Options
 RECORD_QUERIES = False
-QUERIES_TOPIC = "snuba-queries"
 
 # Runtime Config Options
 CONFIG_MEMOIZE_TIMEOUT = 10
@@ -78,9 +76,6 @@ BROKER_CONFIG: Mapping[str, Any] = {
     # See snuba/utils/streams/backends/kafka.py for the supported options
     "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092"),
 }
-
-# DEPRECATED, please use KAFKA_TOPIC_MAP instead
-STORAGE_TOPICS: Mapping[str, Mapping[str, Any]] = {}
 
 # Mapping of default Kafka topic name to custom names
 KAFKA_TOPIC_MAP: Mapping[str, str] = {}

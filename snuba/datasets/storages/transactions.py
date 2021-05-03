@@ -127,7 +127,6 @@ storage = WritableTableStorage(
         ),
     ],
     stream_loader=build_kafka_stream_loader_from_settings(
-        StorageKey.TRANSACTIONS,
         processor=TransactionsMessageProcessor(),
         default_topic=Topic.EVENTS,
         commit_log_topic=Topic.COMMIT_LOG,
