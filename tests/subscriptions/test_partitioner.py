@@ -10,12 +10,10 @@ from snuba.utils.streams.topics import Topic
 
 class TestBuildRequest(BaseSubscriptionTest):
     def test(self) -> None:
-        topic_name = "events-topic"
-        settings.TOPIC_PARTITION_COUNTS = {topic_name: 64}
+        settings.TOPIC_PARTITION_COUNTS = {"events": 64}
         data = SubscriptionData(
             123, [], [], timedelta(minutes=10), timedelta(minutes=1)
         )
-        partitioner = TopicSubscriptionDataPartitioner(
-            KafkaTopicSpec(Topic.EVENTS, topic_name)
-        )
+        partitioner = TopicSubscriptionDataPartitioner(KafkaTopicSpec(Topic.EVENTS))
+
         assert partitioner.build_partition_id(data) == 18
