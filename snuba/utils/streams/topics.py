@@ -5,6 +5,7 @@ from typing import Mapping
 class Topic(Enum):
     EVENTS = "events"
     EVENT_REPLACEMENTS = "event-replacements"
+    EVENT_REPLACEMENTS_LEGACY = "event-replacements-legacy"
     COMMIT_LOG = "snuba-commit-log"
     CDC = "cdc"
     OUTCOMES = "outcomes"
