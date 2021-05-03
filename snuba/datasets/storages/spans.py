@@ -10,6 +10,7 @@ from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.type_converters.hexint_column_processor import (
     HexIntColumnProcessor,
 )
+from snuba.utils.streams.topics import Topic
 from snuba.web.split import TimeSplitQueryStrategy
 
 columns = ColumnSet(
@@ -51,8 +52,8 @@ storage = WritableTableStorage(
     stream_loader=build_kafka_stream_loader_from_settings(
         StorageKey.SPANS,
         processor=SpansMessageProcessor(),
-        default_topic_name="events",
-        commit_log_topic_name="snuba-commit-log",
+        default_topic=Topic.EVENTS,
+        commit_log_topic=Topic.COMMIT_LOG,
     ),
     query_splitters=[TimeSplitQueryStrategy(timestamp_col="finish_ts")],
 )

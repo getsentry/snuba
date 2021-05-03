@@ -3,6 +3,7 @@ from snuba import settings
 
 from snuba.datasets.storages import StorageKey
 from snuba.utils.streams.backends.kafka import get_default_kafka_configuration
+from snuba.utils.streams.topics import Topic
 
 
 def teardown_function() -> None:
@@ -33,12 +34,16 @@ def test_default_config_legacy_override_storage_servers() -> None:
     storage_key = StorageKey(storage_name)
     default_broker = "my.broker:9092"
     settings.DEFAULT_STORAGE_BROKERS = {storage_name: [default_broker]}
-    broker_config = get_default_kafka_configuration(storage_key=storage_key)
+    broker_config = get_default_kafka_configuration(
+        storage_key=storage_key, topic=Topic.EVENTS
+    )
     assert broker_config["bootstrap.servers"] == default_broker
 
     default_brokers = ["my.broker:9092", "my.second.broker:9092"]
     settings.DEFAULT_STORAGE_BROKERS = {storage_name: default_brokers}
-    broker_config = get_default_kafka_configuration(storage_key=storage_key)
+    broker_config = get_default_kafka_configuration(
+        storage_key=storage_key, topic=Topic.EVENTS
+    )
     assert broker_config["bootstrap.servers"] == ",".join(default_brokers)
 
 
@@ -50,7 +55,9 @@ def test_default_config_legacy_override_storage_servers_fallback() -> None:
         StorageKey.ERRORS_RO.value: default_brokers,
     }
     storage_key = StorageKey(StorageKey.ERRORS)
-    broker_config = get_default_kafka_configuration(storage_key=storage_key)
+    broker_config = get_default_kafka_configuration(
+        storage_key=storage_key, topic=Topic.EVENTS
+    )
     assert broker_config["bootstrap.servers"] == default_broker
 
 
@@ -72,14 +79,14 @@ def test_default_config_override_new_config_storage() -> None:
     settings.STORAGE_BROKER_CONFIG = {
         StorageKey.ERRORS_RO.value: default_broker_config,
     }
-    broker_config = get_default_kafka_configuration(StorageKey.ERRORS_RO)
+    broker_config = get_default_kafka_configuration(StorageKey.ERRORS_RO, Topic.EVENTS)
     assert broker_config["bootstrap.servers"] == default_broker
 
     other_broker = "another.broker:9092"
     settings.BROKER_CONFIG = {
         "bootstrap.servers": other_broker,
     }
-    broker_config = get_default_kafka_configuration(StorageKey.ERRORS)
+    broker_config = get_default_kafka_configuration(StorageKey.ERRORS, Topic.EVENTS)
     assert broker_config["bootstrap.servers"] == other_broker
 
 
@@ -93,7 +100,7 @@ def test_default_config_new_fallback_old() -> None:
     settings.STORAGE_BROKER_CONFIG = {
         StorageKey.ERRORS_RO.value: default_broker_config,
     }
-    broker_config = get_default_kafka_configuration(StorageKey.ERRORS)
+    broker_config = get_default_kafka_configuration(StorageKey.ERRORS, Topic.EVENTS)
     assert broker_config["bootstrap.servers"] == old_default_broker
 
 
@@ -108,5 +115,27 @@ def test_default_config_new_fallback_old_storage() -> None:
     settings.DEFAULT_STORAGE_BROKERS = {
         StorageKey.ERRORS.value: [old_default_broker],
     }
-    broker_config = get_default_kafka_configuration(StorageKey.ERRORS)
+    broker_config = get_default_kafka_configuration(StorageKey.ERRORS, Topic.EVENTS)
     assert broker_config["bootstrap.servers"] == old_default_broker
+
+
+def test_kafka_broker_config() -> None:
+    default_broker = "my.broker:9092"
+    events_broker = "my.other.broker:9092"
+    settings.BROKER_CONFIG = {
+        "bootstrap.servers": default_broker,
+    }
+
+    settings.KAFKA_BROKER_CONFIG = {
+        Topic.EVENTS.value: {"bootstrap.servers": events_broker}
+    }
+
+    events_broker_config = get_default_kafka_configuration(
+        StorageKey.ERRORS, Topic.EVENTS
+    )
+    assert events_broker_config["bootstrap.servers"] == events_broker
+
+    other_broker_config = get_default_kafka_configuration(
+        StorageKey.ERRORS, Topic.EVENT_REPLACEMENTS
+    )
+    assert other_broker_config["bootstrap.servers"] == default_broker

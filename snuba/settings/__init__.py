@@ -80,8 +80,18 @@ BROKER_CONFIG: Mapping[str, Any] = {
     # See snuba/utils/streams/backends/kafka.py for the supported options
     "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092"),
 }
+
+# DEPRECATED, please use KAFKA_BROKER_CONFIG instead
 STORAGE_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
+
+# DEPRECATED, please use KAFKA_TOPIC_MAP instead
 STORAGE_TOPICS: Mapping[str, Mapping[str, Any]] = {}
+
+# Mapping of default Kafka topic name to custom names
+KAFKA_TOPIC_MAP: Mapping[str, str] = {}
+
+# Mapping of default Kafka topic name to broker config
+KAFKA_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
 
 DEFAULT_MAX_BATCH_SIZE = 50000
 DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000
