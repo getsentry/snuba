@@ -27,5 +27,10 @@ repos:
     -   id: mypy
         files: snuba
         args: [--config-file, mypy.ini, --ignore-missing-imports, --strict, --warn-unreachable]
+  - repo: https://github.com/pycqa/isort
+    rev: 5.8.0
+    hooks:
+      - id: isort
+        name: isort (python)
 default_language_version:
   python: python3.8
