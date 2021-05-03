@@ -56,7 +56,6 @@ USE_RESULT_CACHE = True
 
 # Query Recording Options
 RECORD_QUERIES = False
-QUERIES_TOPIC = "snuba-queries"
 
 # Runtime Config Options
 CONFIG_MEMOIZE_TIMEOUT = 10
@@ -83,9 +82,6 @@ BROKER_CONFIG: Mapping[str, Any] = {
 
 # DEPRECATED, please use KAFKA_BROKER_CONFIG instead
 STORAGE_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
-
-# DEPRECATED, please use KAFKA_TOPIC_MAP instead
-STORAGE_TOPICS: Mapping[str, Mapping[str, Any]] = {}
 
 # Mapping of default Kafka topic name to custom names
 KAFKA_TOPIC_MAP: Mapping[str, str] = {}
