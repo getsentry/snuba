@@ -1,5 +1,4 @@
 import logging
-
 from typing import Any, Mapping
 
 
@@ -22,6 +21,7 @@ def _validate_settings(locals: Mapping[str, Any]) -> None:
     topic_names = {
         "events",
         "event-replacements",
+        "event-replacements-legacy",
         "snuba-commit-log",
         "cdc",
         "outcomes",
