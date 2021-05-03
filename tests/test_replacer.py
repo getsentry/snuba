@@ -39,7 +39,6 @@ class TestReplacer:
 
         self.project_id = 1
         self.event = get_raw_event()
-        settings.ERRORS_ROLLOUT_ALL = False
 
     def teardown_method(self):
         importlib.reload(settings)
@@ -58,17 +57,23 @@ class TestReplacer:
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
         run_optimize(clickhouse, self.storage, cluster.get_database())
 
-    def _issue_count(self, project_id, group_id=None):
-        args = {
-            "project": [project_id],
-            "aggregations": [["count()", "", "count"]],
-            "groupby": ["group_id"],
-        }
+    def _issue_count(self, project_id: int):
+        clickhouse = self.storage.get_cluster().get_query_connection(
+            ClickhouseClientSettings.QUERY
+        )
 
-        if group_id:
-            args.setdefault("conditions", []).append(("group_id", "=", group_id))
+        data = clickhouse.execute(
+            f"""
+            SELECT group_id, count()
+            FROM sentry_local
+            FINAL
+            WHERE deleted = 0
+            AND project_id = {project_id}
+            GROUP BY group_id
+            """
+        )
 
-        return json.loads(self.app.post("/query", data=json.dumps(args)).data)["data"]
+        return [{"group_id": row[0], "count": row[1]} for row in data]
 
     def test_delete_groups_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)
@@ -378,21 +383,29 @@ class TestReplacer:
         project_id = self.project_id
 
         def _issue_count(total=False):
-            return json.loads(
-                self.app.post(
-                    "/query",
-                    data=json.dumps(
-                        {
-                            "project": [project_id],
-                            "aggregations": [["count()", "", "count"]],
-                            "conditions": [["tags[browser.name]", "=", "foo"]]
-                            if not total
-                            else [],
-                            "groupby": ["group_id"],
-                        }
-                    ),
-                ).data
-            )["data"]
+            clickhouse = self.storage.get_cluster().get_query_connection(
+                ClickhouseClientSettings.QUERY
+            )
+
+            total_cond = (
+                "AND has(_tags_hash_map, cityHash64('browser.name=foo'))"
+                if not total
+                else ""
+            )
+
+            data = clickhouse.execute(
+                f"""
+                SELECT group_id, count()
+                FROM sentry_local
+                FINAL
+                WHERE deleted = 0
+                AND project_id = {project_id}
+                {total_cond}
+                GROUP BY group_id
+                """
+            )
+
+            return [{"group_id": row[0], "count": row[1]} for row in data]
 
         assert _issue_count() == [{"count": 1, "group_id": 1}]
         assert _issue_count(total=True) == [{"count": 1, "group_id": 1}]
