@@ -117,3 +117,25 @@ def test_default_config_new_fallback_old_storage() -> None:
     }
     broker_config = get_default_kafka_configuration(StorageKey.ERRORS, Topic.EVENTS)
     assert broker_config["bootstrap.servers"] == old_default_broker
+
+
+def test_kafka_broker_config() -> None:
+    default_broker = "my.broker:9092"
+    events_broker = "my.other.broker:9092"
+    settings.BROKER_CONFIG = {
+        "bootstrap.servers": default_broker,
+    }
+
+    settings.KAFKA_BROKER_CONFIG = {
+        Topic.EVENTS.value: {"bootstrap.servers": events_broker}
+    }
+
+    events_broker_config = get_default_kafka_configuration(
+        StorageKey.ERRORS, Topic.EVENTS
+    )
+    assert events_broker_config["bootstrap.servers"] == events_broker
+
+    other_broker_config = get_default_kafka_configuration(
+        StorageKey.ERRORS, Topic.EVENT_REPLACEMENTS
+    )
+    assert other_broker_config["bootstrap.servers"] == default_broker

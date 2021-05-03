@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import List, Mapping, Optional, Sequence, Set, Tuple, Union
+from typing import Mapping, Optional, Sequence, Set, Union
 
-from snuba import state, settings
+from snuba import settings
 from snuba.clickhouse.columns import (
     Array,
     ColumnSet,
@@ -28,10 +28,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entities.events import (
-    BaseEventsEntity,
-    EventsQueryStorageSelector,
-)
+from snuba.datasets.entities.events import BaseEventsEntity, EventsQueryStorageSelector
 from snuba.datasets.entities.transactions import BaseTransactionsEntity
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import (
@@ -40,7 +37,6 @@ from snuba.datasets.plans.single_storage import (
 )
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.dsl import identity
 from snuba.query.expressions import (
@@ -51,7 +47,6 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.extensions import QueryExtension
-from snuba.query.logical import Query
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or
@@ -434,28 +429,16 @@ class DiscoverEntity(Entity):
             )
         )
 
-        def selector_func(_query: Query, referrer: str) -> Tuple[str, List[str]]:
-            # In case something goes wrong, set this to 1 to revert to the events storage.
-            kill_rollout = state.get_config("errors_rollout_killswitch", 0)
-            assert isinstance(kill_rollout, (int, str))
-            if int(kill_rollout):
-                return "events", []
-
-            if settings.ERRORS_ROLLOUT_ALL:
-                return "discover", []
-
-            return "events", []
+        if settings.ERRORS_ROLLOUT_ALL:
+            storage = discover_storage
+            pipeline_builder = discover_pipeline_builder
+        else:
+            storage = events_storage
+            pipeline_builder = events_pipeline_builder
 
         super().__init__(
-            storages=[events_storage, discover_storage],
-            query_pipeline_builder=PipelineDelegator(
-                query_pipeline_builders={
-                    "events": events_pipeline_builder,
-                    "discover": discover_pipeline_builder,
-                },
-                selector_func=selector_func,
-                callback_func=None,
-            ),
+            storages=[storage],
+            query_pipeline_builder=pipeline_builder,
             abstract_column_set=(
                 self.__common_columns
                 + self.__events_columns
