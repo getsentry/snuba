@@ -1,8 +1,9 @@
 import uuid
-import simplejson as json
 from datetime import datetime, timedelta
 from typing import Any, Callable
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import simplejson as json
 
 from snuba import state
 from snuba.datasets.entities import EntityKey
