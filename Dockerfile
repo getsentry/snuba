@@ -12,32 +12,20 @@ RUN set -ex; \
     ; \
     rm -rf /var/lib/apt/lists/*
 
-# grab gosu for easy step-down from root
+ENV GOSU_VERSION=1.12 \
+    GOSU_SHA256=0f25a21cf64e58078057adc78f38705163c1d564a959ff30a891c31917011a54
+
 RUN set -x \
-    && export GOSU_VERSION=1.11 \
-    && fetchDeps=" \
-        dirmngr \
-        gnupg \
-        wget \
+    && buildDeps=" \
+      wget \
     " \
-    && apt-get update && apt-get install -y --no-install-recommends $fetchDeps \
+    && apt-get update && apt-get install -y --no-install-recommends $buildDeps \
+    && rm -rf /var/lib/apt/lists/* \
+    # grab gosu for easy step-down from root
     && wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64" \
-    && wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-amd64.asc" \
-    && export GNUPGHOME="$(mktemp -d)" \
-    && for key in \
-      B42F6819007F00F88E364FD4036A9C25BF357DD4 \
-    ; do \
-      gpg --batch --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys "$key" || \
-      gpg --batch --keyserver hkp://ipv4.pool.sks-keyservers.net --recv-keys "$key" || \
-      gpg --batch --keyserver hkp://pgp.mit.edu:80 --recv-keys "$key" ; \
-    done \
-    && gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu \
-    && gpgconf --kill all \
-    && rm -r "$GNUPGHOME" /usr/local/bin/gosu.asc \
+    && echo "$GOSU_SHA256 /usr/local/bin/gosu" | sha256sum --check --status \
     && chmod +x /usr/local/bin/gosu \
-    && gosu nobody true \
-    && apt-get purge -y --auto-remove $fetchDeps \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get purge -y --auto-remove $buildDeps
 
 WORKDIR /usr/src/snuba
 
@@ -62,7 +50,7 @@ RUN set -ex; \
     \
     mkdir /tmp/uwsgi-dogstatsd; \
     wget -O - https://github.com/DataDog/uwsgi-dogstatsd/archive/bc56a1b5e7ee9e955b7a2e60213fc61323597a78.tar.gz \
-        | tar -xvz -C /tmp/uwsgi-dogstatsd --strip-components=1; \
+    | tar -xvz -C /tmp/uwsgi-dogstatsd --strip-components=1; \
     uwsgi --build-plugin /tmp/uwsgi-dogstatsd; \
     rm -rf /tmp/uwsgi-dogstatsd .uwsgi_plugins_builder; \
     mkdir -p /var/lib/uwsgi; \

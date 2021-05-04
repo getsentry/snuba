@@ -105,7 +105,6 @@ def replacer(
     replacer = StreamProcessor(
         KafkaConsumer(
             build_kafka_consumer_configuration(
-                storage_key,
                 default_replacement_topic_spec.topic,
                 bootstrap_servers=bootstrap_server,
                 group_id=consumer_group,

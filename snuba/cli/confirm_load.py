@@ -68,7 +68,6 @@ def confirm_load(
 
     producer = Producer(
         build_kafka_producer_configuration(
-            storage_key,
             stream_loader.get_default_topic_spec().topic,
             bootstrap_servers=bootstrap_server,
             override_params={
