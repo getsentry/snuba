@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import Mapping
 
+
 # These are the default topic names, they can be changed via settings
 class Topic(Enum):
     EVENTS = "events"

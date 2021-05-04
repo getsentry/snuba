@@ -3,7 +3,6 @@ from typing import Any, Mapping, MutableMapping, Sequence, Set
 
 from snuba.settings.validation import _validate_settings
 
-
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 LOG_FORMAT = "%(asctime)s %(message)s"
 
@@ -72,16 +71,11 @@ BULK_CLICKHOUSE_BUFFER = 10000
 BULK_BINARY_LOAD_CHUNK = 2 ** 22  # 4 MB
 
 # Processor/Writer Options
-# DEPRECATED, please use STORAGE_BROKER_CONFIG instead
-DEFAULT_STORAGE_BROKERS: Mapping[str, Sequence[str]] = {}
 
 BROKER_CONFIG: Mapping[str, Any] = {
     # See snuba/utils/streams/backends/kafka.py for the supported options
     "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092"),
 }
-
-# DEPRECATED, please use KAFKA_BROKER_CONFIG instead
-STORAGE_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
 
 # Mapping of default Kafka topic name to custom names
 KAFKA_TOPIC_MAP: Mapping[str, str] = {}
