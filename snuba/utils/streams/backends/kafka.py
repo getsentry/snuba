@@ -48,8 +48,8 @@ from snuba.utils.streams.backends.abstract import (
     OffsetOutOfRange,
     Producer,
 )
-from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.utils.streams.topics import Topic as KafkaTopic
+from snuba.utils.streams.types import Message, Partition, Topic
 
 logger = logging.getLogger(__name__)
 
