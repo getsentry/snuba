@@ -1,4 +1,3 @@
-from snuba.datasets.metrics_processor import MetricsProcessor
 from snuba.clickhouse.columns import (
     AggregateFunction,
     Array,
@@ -11,10 +10,12 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.metrics_processor import MetricsProcessor
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
+from snuba.utils.streams.topics import Topic
 
 buckets_columns = ColumnSet(
     [
@@ -43,9 +44,7 @@ buckets_storage = WritableTableStorage(
     ),
     query_processors=[],
     stream_loader=build_kafka_stream_loader_from_settings(
-        StorageKey.METRICS_BUCKETS,
-        processor=MetricsProcessor(),
-        default_topic_name="ingest-metrics",
+        processor=MetricsProcessor(), default_topic=Topic.METRICS,
     ),
 )
 
