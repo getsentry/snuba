@@ -1,8 +1,8 @@
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from typing import Mapping, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entity import Entity
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
@@ -25,7 +25,7 @@ class MetricsEntity(Entity):
             join_relationships={},
             writable_storage=writable_storage,
             # TODO: Add the required columns here
-            required_filter_columns=[],
+            validators=[],
             required_time_column=None,
         )
 
