@@ -1,8 +1,10 @@
+from typing import Any, MutableMapping
+
 import pytest
-from typing import MutableMapping, Any
 
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.storages.sessions import raw_schema, read_schema
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
 from snuba.query.parser import parse_query
@@ -71,12 +73,12 @@ selector_tests = [
             "selected_columns": ["sessions", "bucketed_started"],
             "groupby": ["bucketed_started"],
         },
-        "sessions_hourly_local",
+        read_schema.get_table_name(),
         id="Select hourly by default",
     ),
     pytest.param(
         {"selected_columns": ["sessions"], "granularity": 60},
-        "sessions_hourly_local",
+        read_schema.get_table_name(),
         id="Select hourly if not grouped by started time",
     ),
     pytest.param(
@@ -89,7 +91,7 @@ selector_tests = [
                 ("started", "<", "2019-09-19T12:00:00"),
             ],
         },
-        "sessions_raw_local",
+        raw_schema.get_table_name(),
         id="Select raw depending on granularity",
     ),
 ]
