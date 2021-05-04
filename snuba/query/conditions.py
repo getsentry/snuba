@@ -1,8 +1,10 @@
-from typing import Mapping, Sequence, Set
+from typing import Any, Mapping, Optional, Sequence, Set
 
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Expression, FunctionCall, Literal
-from snuba.query.matchers import AnyExpression
+from snuba.query.matchers import Any as AnyPattern
+from snuba.query.matchers import AnyExpression, AnyOptionalString
+from snuba.query.matchers import Column as ColumnPattern
 from snuba.query.matchers import FunctionCall as FunctionCallPattern
 from snuba.query.matchers import Integer
 from snuba.query.matchers import Literal as LiteralPattern
@@ -289,3 +291,30 @@ CONDITION_MATCH = Or(
 
 def is_condition(exp: Expression) -> bool:
     return CONDITION_MATCH.match(exp) is not None
+
+
+def build_match(
+    col: str, ops: Sequence[str], param_type: Any, alias: Optional[str] = None
+) -> Or[Expression]:
+    # The IN condition has to be checked separately since each parameter
+    # has to be checked individually.
+    alias_match = AnyOptionalString() if alias is None else String(alias)
+    column_match = ColumnPattern(alias_match, String(col))
+    return Or(
+        [
+            FunctionCallPattern(
+                Or([String(op) for op in ops]),
+                (column_match, LiteralPattern(AnyPattern(param_type))),
+            ),
+            FunctionCallPattern(
+                String(ConditionFunctions.IN),
+                (
+                    column_match,
+                    FunctionCallPattern(
+                        Or([String("array"), String("tuple")]),
+                        all_parameters=LiteralPattern(AnyPattern(param_type)),
+                    ),
+                ),
+            ),
+        ]
+    )
