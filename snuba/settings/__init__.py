@@ -1,6 +1,7 @@
 import os
 from typing import Any, Mapping, MutableMapping, Sequence, Set
 
+from snuba.settings.validation import _validate_settings
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 LOG_FORMAT = "%(asctime)s %(message)s"
@@ -56,7 +57,6 @@ USE_RESULT_CACHE = True
 
 # Query Recording Options
 RECORD_QUERIES = False
-QUERIES_TOPIC = "snuba-queries"
 
 # Runtime Config Options
 CONFIG_MEMOIZE_TIMEOUT = 10
@@ -73,17 +73,17 @@ BULK_CLICKHOUSE_BUFFER = 10000
 BULK_BINARY_LOAD_CHUNK = 2 ** 22  # 4 MB
 
 # Processor/Writer Options
-# DEPRECATED, please use BROKER_CONFIG instead
-DEFAULT_BROKERS: Sequence[str] = []
-# DEPRECATED, please use STORAGE_BROKER_CONFIG instead
-DEFAULT_STORAGE_BROKERS: Mapping[str, Sequence[str]] = {}
 
 BROKER_CONFIG: Mapping[str, Any] = {
     # See snuba/utils/streams/backends/kafka.py for the supported options
     "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092"),
 }
-STORAGE_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
-STORAGE_TOPICS: Mapping[str, Mapping[str, Any]] = {}
+
+# Mapping of default Kafka topic name to custom names
+KAFKA_TOPIC_MAP: Mapping[str, str] = {}
+
+# Mapping of default Kafka topic name to broker config
+KAFKA_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
 
 DEFAULT_MAX_BATCH_SIZE = 50000
 DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000
@@ -118,7 +118,6 @@ PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 
 ERRORS_ROLLOUT_ALL: bool = True
-ERRORS_ROLLOUT_WRITABLE_STORAGE: bool = True
 
 COLUMN_SPLIT_MIN_COLS = 6
 COLUMN_SPLIT_MAX_LIMIT = 1000
@@ -130,10 +129,9 @@ SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "spans_experimental"}
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment
-    variable. Defaults to `./snuba/settings_base.py`. Users can provide a
-    short name like `test` that will be expanded to `settings_test.py` in the
-    main Snuba directory, or they can provide a full absolute path such as
-    `/foo/bar/my_settings.py`."""
+    variable if provided. Users can provide a short name like `test` that will
+    be expanded to `settings_test.py` in the main Snuba directory, or they can
+    provide a full absolute path such as `/foo/bar/my_settings.py`."""
 
     import importlib
     import importlib.util
@@ -157,7 +155,9 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
             module_format = (
                 ".%s" if settings.startswith("settings_") else ".settings_%s"
             )
-            settings_module = importlib.import_module(module_format % settings, "snuba")
+            settings_module = importlib.import_module(
+                module_format % settings, "snuba.settings"
+            )
 
         for attr in dir(settings_module):
             if attr.isupper():
@@ -165,3 +165,4 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
 
 
 _load_settings()
+_validate_settings(locals())

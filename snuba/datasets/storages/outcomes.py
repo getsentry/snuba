@@ -8,6 +8,7 @@ from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.utils.streams.topics import Topic
 
 WRITE_LOCAL_TABLE_NAME = "outcomes_raw_local"
 WRITE_DIST_TABLE_NAME = "outcomes_raw_dist"
@@ -84,9 +85,7 @@ raw_storage = WritableTableStorage(
     schema=raw_schema,
     query_processors=[],
     stream_loader=build_kafka_stream_loader_from_settings(
-        StorageKey.OUTCOMES_RAW,
-        processor=OutcomesProcessor(),
-        default_topic_name="outcomes",
+        processor=OutcomesProcessor(), default_topic=Topic.OUTCOMES,
     ),
 )
 

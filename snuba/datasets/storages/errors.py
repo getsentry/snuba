@@ -14,6 +14,7 @@ from snuba.datasets.storages.errors_common import (
     required_columns,
 )
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
+from snuba.utils.streams.topics import Topic
 
 schema = WritableTableSchema(
     columns=all_columns,
@@ -31,11 +32,10 @@ storage = WritableTableStorage(
     query_processors=query_processors,
     query_splitters=query_splitters,
     stream_loader=build_kafka_stream_loader_from_settings(
-        StorageKey.ERRORS,
         processor=ErrorsProcessor(promoted_tag_columns),
-        default_topic_name="events",
-        replacement_topic_name="event-replacements",
-        commit_log_topic_name="snuba-commit-log",
+        default_topic=Topic.EVENTS,
+        replacement_topic=Topic.EVENT_REPLACEMENTS,
+        commit_log_topic=Topic.COMMIT_LOG,
     ),
     replacer_processor=ErrorsReplacer(
         schema=schema,

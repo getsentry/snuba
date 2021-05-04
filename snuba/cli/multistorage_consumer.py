@@ -2,9 +2,9 @@ import logging
 import signal
 from typing import Any, Optional, Sequence
 
+import click
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
-import click
 from snuba import environment, settings
 from snuba.consumers.consumer import MultistorageConsumerProcessingStrategyFactory
 from snuba.datasets.storages import StorageKey
@@ -19,7 +19,6 @@ from snuba.utils.streams.backends.kafka import (
 )
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.types import Topic
-
 
 logger = logging.getLogger(__name__)
 
@@ -149,8 +148,17 @@ def multistorage_consumer(
     # piggybacks on the existing configuration method(s), with the assumption
     # that most deployments are going to be using the default configuration.
     storage_keys = [*storages.keys()]
+
+    kafka_topic = (
+        storages[storage_keys[0]]
+        .get_table_writer()
+        .get_stream_loader()
+        .get_default_topic_spec()
+        .topic
+    )
+
     consumer_configuration = build_kafka_consumer_configuration(
-        storage_keys[0],
+        kafka_topic,
         consumer_group,
         auto_offset_reset=auto_offset_reset,
         queued_max_messages_kbytes=queued_max_messages_kbytes,
@@ -159,9 +167,14 @@ def multistorage_consumer(
 
     for storage_key in storage_keys[1:]:
         if (
-            build_kafka_consumer_configuration(storage_key, consumer_group)[
-                "bootstrap.servers"
-            ]
+            build_kafka_consumer_configuration(
+                storages[storage_key]
+                .get_table_writer()
+                .get_stream_loader()
+                .get_default_topic_spec()
+                .topic,
+                consumer_group,
+            )["bootstrap.servers"]
             != consumer_configuration["bootstrap.servers"]
         ):
             raise ValueError("storages cannot be located on different Kafka clusters")
@@ -169,12 +182,19 @@ def multistorage_consumer(
     if commit_log_topic is None:
         consumer = KafkaConsumer(consumer_configuration)
     else:
-        # XXX: This relies on the assumptions that a.) the Kafka cluster where
-        # the commit log topic is located is the same as the input topic (there
-        # is no way to specify otherwise, at writing) and b.) all storages are
+        # XXX: This relies on the assumptions that a.) all storages are
         # located on the same Kafka cluster (validated above.)
+
+        commit_log_topic_spec = (
+            storages[storage_keys[0]]
+            .get_table_writer()
+            .get_stream_loader()
+            .get_commit_log_topic_spec()
+        )
+        assert commit_log_topic_spec is not None
+
         producer = ConfluentKafkaProducer(
-            build_kafka_producer_configuration(storage_keys[0])
+            build_kafka_producer_configuration(commit_log_topic_spec.topic)
         )
         consumer = KafkaConsumerWithCommitLog(
             consumer_configuration,

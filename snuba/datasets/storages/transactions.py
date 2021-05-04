@@ -30,6 +30,7 @@ from snuba.query.processors.type_converters.uuid_column_processor import (
 from snuba.query.processors.type_converters.hexint_column_processor import (
     HexIntColumnProcessor,
 )
+from snuba.utils.streams.topics import Topic
 from snuba.web.split import TimeSplitQueryStrategy
 
 columns = ColumnSet(
@@ -126,10 +127,9 @@ storage = WritableTableStorage(
         ),
     ],
     stream_loader=build_kafka_stream_loader_from_settings(
-        StorageKey.TRANSACTIONS,
         processor=TransactionsMessageProcessor(),
-        default_topic_name="events",
-        commit_log_topic_name="snuba-commit-log",
+        default_topic=Topic.EVENTS,
+        commit_log_topic=Topic.COMMIT_LOG,
     ),
     query_splitters=[TimeSplitQueryStrategy(timestamp_col="finish_ts")],
     writer_options={"insert_allow_materialized_columns": 1},

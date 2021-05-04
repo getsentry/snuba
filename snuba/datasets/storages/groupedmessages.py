@@ -14,6 +14,8 @@ from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.utils.streams.topics import Topic
+
 
 columns = ColumnSet(
     [
@@ -58,9 +60,8 @@ storage = CdcStorage(
     schema=schema,
     query_processors=[PrewhereProcessor(["project_id", "id"])],
     stream_loader=build_kafka_stream_loader_from_settings(
-        StorageKey.GROUPEDMESSAGES,
         processor=GroupedMessageProcessor(POSTGRES_TABLE),
-        default_topic_name="cdc",
+        default_topic=Topic.CDC,
         pre_filter=CdcTableNameMessageFilter(POSTGRES_TABLE),
     ),
     default_control_topic="cdc_control",

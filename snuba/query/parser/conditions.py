@@ -1,4 +1,3 @@
-from collections import OrderedDict
 from typing import Any, Callable, Optional, Sequence, Set, TypeVar
 
 from snuba.clickhouse.columns import ColumnSet
@@ -54,25 +53,21 @@ def parse_conditions(
         return None
 
     if depth == 0:
-        # dedupe conditions at top level, but keep them in order
-        sub = OrderedDict(
-            (
-                parse_conditions(
-                    operand_builder,
-                    and_builder,
-                    or_builder,
-                    unpack_array_condition_builder,
-                    simple_condition_builder,
-                    entity,
-                    cond,
-                    arrayjoin_cols,
-                    depth + 1,
-                ),
-                None,
+        parsed = [
+            parse_conditions(
+                operand_builder,
+                and_builder,
+                or_builder,
+                unpack_array_condition_builder,
+                simple_condition_builder,
+                entity,
+                cond,
+                arrayjoin_cols,
+                depth + 1,
             )
             for cond in conditions
-        )
-        return and_builder([s for s in sub.keys() if s])
+        ]
+        return and_builder([c for c in parsed if c])
     elif is_condition(conditions):
         try:
             lhs, op, lit = conditions
