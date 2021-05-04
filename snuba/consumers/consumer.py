@@ -543,7 +543,6 @@ class MultistorageConsumerProcessingStrategyFactory(
             replacement_batch_writer = ReplacementBatchWriter(
                 ConfluentKafkaProducer(
                     build_kafka_producer_configuration(
-                        storage.get_storage_key(),
                         default_topic_spec.topic,
                         override_params={
                             "partitioner": "consistent",
