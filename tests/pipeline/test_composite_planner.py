@@ -1,4 +1,5 @@
 from copy import deepcopy
+from datetime import datetime
 from typing import Union
 
 import pytest
@@ -18,7 +19,11 @@ from snuba.pipeline.composite import (
 )
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
-from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.conditions import (
+    BooleanFunctions,
+    ConditionFunctions,
+    binary_condition,
+)
 from snuba.query.data_source.join import (
     IndividualNode,
     JoinClause,
@@ -34,6 +39,7 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.processors.conditions_enforcer import MandatoryConditionEnforcer
 from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
 from snuba.reader import Reader
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
@@ -92,9 +98,17 @@ TEST_CASES = [
                 ],
                 groupby=[Column(None, None, "project_id")],
                 condition=binary_condition(
-                    ConditionFunctions.EQ,
-                    Column(None, None, "project_id"),
-                    Literal(None, 1),
+                    BooleanFunctions.AND,
+                    binary_condition(
+                        ConditionFunctions.EQ,
+                        Column(None, None, "project_id"),
+                        Literal(None, 1),
+                    ),
+                    binary_condition(
+                        ConditionFunctions.GTE,
+                        Column(None, None, "timestamp"),
+                        Literal(None, datetime(2020, 1, 1, 12, 0)),
+                    ),
                 ),
             ),
             selected_columns=[
@@ -139,9 +153,17 @@ TEST_CASES = [
                     ],
                     groupby=[Column(None, None, "project_id")],
                     condition=binary_condition(
-                        ConditionFunctions.EQ,
-                        Column(None, None, "project_id"),
-                        Literal(None, 1),
+                        BooleanFunctions.AND,
+                        binary_condition(
+                            ConditionFunctions.EQ,
+                            Column(None, None, "project_id"),
+                            Literal(None, 1),
+                        ),
+                        binary_condition(
+                            ConditionFunctions.GTE,
+                            Column(None, None, "timestamp"),
+                            Literal(None, datetime(2020, 1, 1, 12, 0)),
+                        ),
                     ),
                 ),
                 selected_columns=[
@@ -157,7 +179,11 @@ TEST_CASES = [
             StorageSetKey.EVENTS,
             SubqueryProcessors(
                 [],
-                [*events_storage.get_query_processors(), MandatoryConditionApplier()],
+                [
+                    *events_storage.get_query_processors(),
+                    MandatoryConditionApplier(),
+                    MandatoryConditionEnforcer([]),
+                ],
             ),
             None,
         ),
@@ -189,9 +215,17 @@ TEST_CASES = [
                     ),
                 ],
                 condition=binary_condition(
-                    ConditionFunctions.EQ,
-                    Column(alias=None, table_name=None, column_name="deleted"),
-                    Literal(alias=None, value=0),
+                    BooleanFunctions.AND,
+                    binary_condition(
+                        ConditionFunctions.EQ,
+                        Column(alias=None, table_name=None, column_name="deleted"),
+                        Literal(alias=None, value=0),
+                    ),
+                    binary_condition(
+                        ConditionFunctions.GTE,
+                        Column(None, None, "timestamp"),
+                        Literal(None, datetime(2020, 1, 1, 12, 0)),
+                    ),
                 ),
                 groupby=[Column(None, None, "project_id")],
                 prewhere=binary_condition(
@@ -234,9 +268,17 @@ TEST_CASES = [
                 ),
             ],
             condition=binary_condition(
-                ConditionFunctions.EQ,
-                Column(None, "err", "project_id"),
-                Literal(None, 1),
+                BooleanFunctions.AND,
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    Column(None, "err", "project_id"),
+                    Literal(None, 1),
+                ),
+                binary_condition(
+                    ConditionFunctions.GTE,
+                    Column(None, "err", "timestamp"),
+                    Literal(None, datetime(2020, 1, 1, 12, 0)),
+                ),
             ),
         ),
         CompositeQueryPlan(
@@ -268,9 +310,17 @@ TEST_CASES = [
                                 ),
                             ],
                             condition=binary_condition(
-                                ConditionFunctions.EQ,
-                                Column(None, None, "project_id"),
-                                Literal(None, 1),
+                                BooleanFunctions.AND,
+                                binary_condition(
+                                    ConditionFunctions.EQ,
+                                    Column(None, None, "project_id"),
+                                    Literal(None, 1),
+                                ),
+                                binary_condition(
+                                    ConditionFunctions.GTE,
+                                    Column(None, None, "timestamp"),
+                                    Literal(None, datetime(2020, 1, 1, 12, 0)),
+                                ),
                             ),
                         ),
                     ),
@@ -316,6 +366,7 @@ TEST_CASES = [
                     [
                         *events_storage.get_query_processors(),
                         MandatoryConditionApplier(),
+                        MandatoryConditionEnforcer([]),
                     ],
                 ),
                 "groups": SubqueryProcessors(
@@ -323,6 +374,7 @@ TEST_CASES = [
                     [
                         *get_storage(StorageKey.GROUPEDMESSAGES).get_query_processors(),
                         MandatoryConditionApplier(),
+                        MandatoryConditionEnforcer([]),
                     ],
                 ),
             },
@@ -348,9 +400,19 @@ TEST_CASES = [
                             ),
                         ],
                         condition=binary_condition(
-                            ConditionFunctions.EQ,
-                            Column(alias=None, table_name=None, column_name="deleted"),
-                            Literal(alias=None, value=0),
+                            BooleanFunctions.AND,
+                            binary_condition(
+                                ConditionFunctions.EQ,
+                                Column(
+                                    alias=None, table_name=None, column_name="deleted"
+                                ),
+                                Literal(alias=None, value=0),
+                            ),
+                            binary_condition(
+                                ConditionFunctions.GTE,
+                                Column(None, None, "timestamp"),
+                                Literal(None, datetime(2020, 1, 1, 12, 0)),
+                            ),
                         ),
                         prewhere=binary_condition(
                             ConditionFunctions.EQ,
