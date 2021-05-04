@@ -19,6 +19,7 @@ from typing import (
 
 import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
+
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.message_filters import StreamMessageFilter
@@ -543,7 +544,6 @@ class MultistorageConsumerProcessingStrategyFactory(
             replacement_batch_writer = ReplacementBatchWriter(
                 ConfluentKafkaProducer(
                     build_kafka_producer_configuration(
-                        storage.get_storage_key(),
                         default_topic_spec.topic,
                         override_params={
                             "partitioner": "consistent",

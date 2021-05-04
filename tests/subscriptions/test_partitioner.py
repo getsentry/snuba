@@ -4,8 +4,8 @@ from snuba import settings
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.subscriptions.data import SubscriptionData
 from snuba.subscriptions.partitioner import TopicSubscriptionDataPartitioner
-from tests.subscriptions import BaseSubscriptionTest
 from snuba.utils.streams.topics import Topic
+from tests.subscriptions import BaseSubscriptionTest
 
 
 class TestBuildRequest(BaseSubscriptionTest):
@@ -15,4 +15,5 @@ class TestBuildRequest(BaseSubscriptionTest):
             123, [], [], timedelta(minutes=10), timedelta(minutes=1)
         )
         partitioner = TopicSubscriptionDataPartitioner(KafkaTopicSpec(Topic.EVENTS))
+
         assert partitioner.build_partition_id(data) == 18

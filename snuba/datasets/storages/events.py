@@ -18,7 +18,6 @@ from snuba.datasets.storages.events_common import (
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.utils.streams.topics import Topic
 
-
 schema = WritableTableSchema(
     columns=all_columns,
     local_table_name="sentry_local",
@@ -37,7 +36,7 @@ storage = WritableTableStorage(
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=EventsProcessor(promoted_tag_columns),
         default_topic=Topic.EVENTS,
-        replacement_topic=Topic.EVENT_REPLACEMENTS,
+        replacement_topic=Topic.EVENT_REPLACEMENTS_LEGACY,
         commit_log_topic=Topic.COMMIT_LOG,
     ),
     query_splitters=query_splitters,
