@@ -28,15 +28,6 @@ from snuba.query.logical import Query as LogicalQuery
 from snuba.query.snql.parser import parse_snql_query
 
 
-@pytest.fixture
-def set_configs() -> Generator[None, None, None]:
-    state.set_config("max_days", 5)
-    state.set_config("date_align_seconds", 3600)
-    yield
-    state.set_config("max_days", None)
-    state.set_config("date_align_seconds", 1)
-
-
 time_validation_tests = [
     pytest.param(
         """MATCH {
@@ -185,96 +176,260 @@ time_validation_tests = [
         id="times are adjusted in each entity",
     ),
     pytest.param(
-        """MATCH (e: events) -[connected]-> (s: spans) SELECT 4-5, e.c
-        WHERE e.project_id=1
-        AND e.timestamp>=toDateTime('2021-01-01T00:30:00')
-        AND e.timestamp<toDateTime('2021-01-03T00:30:00')
-        AND s.project_id=1
-        AND s.timestamp>=toDateTime('2021-01-01T00:30:00')
-        AND s.timestamp<toDateTime('2021-01-07T00:30:00')""",
-        CompositeQuery(
-            from_clause=JoinClause(
-                left_node=IndividualNode(
-                    "e",
-                    QueryEntity(
-                        EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
-                    ),
-                ),
-                right_node=IndividualNode(
-                    "s",
-                    QueryEntity(
-                        EntityKey.SPANS, get_entity(EntityKey.SPANS).get_data_model(),
-                    ),
-                ),
-                keys=[
-                    JoinCondition(
-                        JoinConditionExpression("e", "event_id"),
-                        JoinConditionExpression("s", "trace_id"),
-                    )
-                ],
-                join_type=JoinType.INNER,
+        """MATCH (events)
+        SELECT title
+        WHERE project_id=1
+        AND timestamp=toDateTime('2021-01-01T00:00:00')""",
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
             ),
             selected_columns=[
-                SelectedExpression(
-                    "4-5",
-                    FunctionCall(None, "minus", (Literal(None, 4), Literal(None, 5))),
-                ),
-                SelectedExpression("e.c", Column("_snuba_e.c", "e", "c")),
+                SelectedExpression("title", Column("_snuba_title", None, "title")),
             ],
             condition=binary_condition(
                 "and",
                 binary_condition(
                     "equals",
-                    Column("_snuba_e.project_id", "e", "project_id"),
+                    Column("_snuba_project_id", None, "project_id"),
+                    Literal(None, 1),
+                ),
+                binary_condition(
+                    "equals",
+                    Column("_snuba_timestamp", None, "timestamp"),
+                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+                ),
+            ),
+            limit=1000,
+        ),
+        id="specific time conditions are valid",
+    ),
+    pytest.param(
+        """MATCH (events)
+        SELECT title
+        WHERE project_id=1
+        AND timestamp IN tuple(toDateTime('2021-01-01T00:00:00'))""",
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression("title", Column("_snuba_title", None, "title")),
+            ],
+            condition=binary_condition(
+                "and",
+                binary_condition(
+                    "equals",
+                    Column("_snuba_project_id", None, "project_id"),
+                    Literal(None, 1),
+                ),
+                binary_condition(
+                    "in",
+                    Column("_snuba_timestamp", None, "timestamp"),
+                    FunctionCall(
+                        None,
+                        "tuple",
+                        (Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),),
+                    ),
+                ),
+            ),
+            limit=1000,
+        ),
+        id="filtering time with IN is allowed",
+    ),
+    pytest.param(
+        """MATCH (events)
+        SELECT title
+        WHERE project_id=1
+        AND timestamp >= toDateTime('2021-01-01T00:30:00')
+        AND timestamp < toDateTime('2021-01-02T00:30:00')""",
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression("title", Column("_snuba_title", None, "title")),
+            ],
+            condition=binary_condition(
+                "and",
+                binary_condition(
+                    "equals",
+                    Column("_snuba_project_id", None, "project_id"),
                     Literal(None, 1),
                 ),
                 binary_condition(
                     "and",
                     binary_condition(
                         "greaterOrEquals",
-                        Column("_snuba_e.timestamp", "e", "timestamp"),
+                        Column("_snuba_timestamp", None, "timestamp"),
+                        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+                    ),
+                    binary_condition(
+                        "less",
+                        Column("_snuba_timestamp", None, "timestamp"),
+                        Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+                    ),
+                ),
+            ),
+            limit=1000,
+        ),
+        id="from/to aligned with date align",
+    ),
+    pytest.param(
+        """MATCH (events)
+        SELECT title
+        WHERE project_id=1
+        AND timestamp >= toDateTime('2021-01-01T00:30:00')
+        AND timestamp < toDateTime('2021-01-20T00:30:00')""",
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression("title", Column("_snuba_title", None, "title")),
+            ],
+            condition=binary_condition(
+                "and",
+                binary_condition(
+                    "equals",
+                    Column("_snuba_project_id", None, "project_id"),
+                    Literal(None, 1),
+                ),
+                binary_condition(
+                    "and",
+                    binary_condition(
+                        "greaterOrEquals",
+                        Column("_snuba_timestamp", None, "timestamp"),
+                        Literal(None, datetime.datetime(2021, 1, 15, 0, 0)),
+                    ),
+                    binary_condition(
+                        "less",
+                        Column("_snuba_timestamp", None, "timestamp"),
+                        Literal(None, datetime.datetime(2021, 1, 20, 0, 0)),
+                    ),
+                ),
+            ),
+            limit=1000,
+        ),
+        id="from is aligned to max days",
+    ),
+    pytest.param(
+        """MATCH (events)
+        SELECT title
+        WHERE project_id=1
+        AND timestamp >= toDateTime('2021-01-01T00:30:00')
+        AND timestamp < toDateTime('2021-01-02T00:30:00')
+        AND timestamp < toDateTime('2021-01-03T00:30:00')""",
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression("title", Column("_snuba_title", None, "title")),
+            ],
+            condition=binary_condition(
+                "and",
+                binary_condition(
+                    "equals",
+                    Column("_snuba_project_id", None, "project_id"),
+                    Literal(None, 1),
+                ),
+                binary_condition(
+                    "and",
+                    binary_condition(
+                        "greaterOrEquals",
+                        Column("_snuba_timestamp", None, "timestamp"),
                         Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
                     ),
                     binary_condition(
                         "and",
                         binary_condition(
                             "less",
-                            Column("_snuba_e.timestamp", "e", "timestamp"),
-                            Literal(None, datetime.datetime(2021, 1, 3, 0, 0)),
+                            Column("_snuba_timestamp", None, "timestamp"),
+                            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
                         binary_condition(
-                            "and",
+                            "less",
+                            Column("_snuba_timestamp", None, "timestamp"),
+                            Literal(None, datetime.datetime(2021, 1, 3, 0, 30)),
+                        ),
+                    ),
+                ),
+            ),
+            limit=1000,
+        ),
+        id="only minimum time range is adjusted",
+    ),
+    pytest.param(
+        """MATCH (events)
+        SELECT title
+        WHERE project_id=1
+        AND timestamp >= toDateTime('2021-01-01T00:30:00')
+        AND timestamp < toDateTime('2021-01-02T00:30:00')
+        AND (timestamp < toDateTime('2021-01-02T00:30:00') OR timestamp < toDateTime('2021-01-02T00:30:00'))""",
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression("title", Column("_snuba_title", None, "title")),
+            ],
+            condition=binary_condition(
+                "and",
+                binary_condition(
+                    "equals",
+                    Column("_snuba_project_id", None, "project_id"),
+                    Literal(None, 1),
+                ),
+                binary_condition(
+                    "and",
+                    binary_condition(
+                        "greaterOrEquals",
+                        Column("_snuba_timestamp", None, "timestamp"),
+                        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+                    ),
+                    binary_condition(
+                        "and",
+                        binary_condition(
+                            "less",
+                            Column("_snuba_timestamp", None, "timestamp"),
+                            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+                        ),
+                        binary_condition(
+                            "or",
                             binary_condition(
-                                "equals",
-                                Column("_snuba_s.project_id", "s", "project_id"),
-                                Literal(None, 1),
+                                "less",
+                                Column("_snuba_timestamp", None, "timestamp"),
+                                Literal(None, datetime.datetime(2021, 1, 2, 0, 30)),
                             ),
                             binary_condition(
-                                "and",
-                                binary_condition(
-                                    "greaterOrEquals",
-                                    Column("_snuba_s.timestamp", "s", "timestamp"),
-                                    Literal(None, datetime.datetime(2021, 1, 1, 0, 30)),
-                                ),
-                                binary_condition(
-                                    "less",
-                                    Column("_snuba_s.timestamp", "s", "timestamp"),
-                                    Literal(None, datetime.datetime(2021, 1, 7, 0, 30)),
-                                ),
+                                "less",
+                                Column("_snuba_timestamp", None, "timestamp"),
+                                Literal(None, datetime.datetime(2021, 1, 2, 0, 30)),
                             ),
                         ),
                     ),
                 ),
             ),
             limit=1000,
-            offset=0,
         ),
-        id="times are adjusted in each entity",
+        id="nested conditions are not adjusted",
     ),
 ]
 
 
-@pytest.mark.parametrize("query_body, expected_query", time_validation_tests)
+@pytest.fixture(autouse=True)  # type: ignore
+def set_configs() -> Generator[None, None, None]:
+    old_max = state.get_config("max_days")
+    old_align = state.get_config("date_align_seconds")
+    state.set_config("max_days", 5)
+    state.set_config("date_align_seconds", 3600)
+    yield
+    state.set_config("max_days", old_max)
+    state.set_config("date_align_seconds", old_align)
+
+
+@pytest.mark.parametrize("query_body, expected_query", time_validation_tests)  # type: ignore
 def test_entity_column_validation(
     query_body: str, expected_query: LogicalQuery, set_configs: Any
 ) -> None:
@@ -297,9 +452,12 @@ def test_entity_column_validation(
         )
 
     events_entity = get_entity(EntityKey.EVENTS)
-    setattr(events_entity, "get_join_relationship", events_mock)
+    old_get_join = events_entity.get_join_relationship
 
-    query = parse_snql_query(query_body, events)
-
-    eq, reason = query.equals(expected_query)
-    assert eq, reason
+    try:
+        setattr(events_entity, "get_join_relationship", events_mock)
+        query = parse_snql_query(query_body, events)
+        eq, reason = query.equals(expected_query)
+        assert eq, reason
+    finally:
+        setattr(events_entity, "get_join_relationship", old_get_join)

@@ -34,7 +34,6 @@ storage = WritableTableStorage(
     query_splitters=query_splitters,
     mandatory_condition_checkers=[ProjectIdEnforcer()],
     stream_loader=build_kafka_stream_loader_from_settings(
-        StorageKey.ERRORS,
         processor=ErrorsProcessor(promoted_tag_columns),
         default_topic=Topic.EVENTS,
         replacement_topic=Topic.EVENT_REPLACEMENTS,

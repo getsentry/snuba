@@ -87,9 +87,7 @@ raw_storage = WritableTableStorage(
     query_processors=[],
     mandatory_condition_checkers=[OrgIdEnforcer()],
     stream_loader=build_kafka_stream_loader_from_settings(
-        StorageKey.OUTCOMES_RAW,
-        processor=OutcomesProcessor(),
-        default_topic=Topic.OUTCOMES,
+        processor=OutcomesProcessor(), default_topic=Topic.OUTCOMES,
     ),
 )
 
