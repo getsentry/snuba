@@ -38,7 +38,7 @@ class GroupedMessageEntity(Entity):
                 )
             },
             writable_storage=storage,
-            required_filter_columns=None,
+            validators=None,
             required_time_column=None,
         )
 
