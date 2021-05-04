@@ -1,18 +1,15 @@
 import logging
-
 from typing import Any, Mapping
 
 
 def _validate_settings(locals: Mapping[str, Any]) -> None:
     logger = logging.getLogger("snuba.settings")
 
-    if locals["QUERIES_TOPIC"] != "snuba-queries":
+    if locals.get("QUERIES_TOPIC"):
         raise ValueError("QUERIES_TOPIC is deprecated. Use KAFKA_TOPIC_MAP instead.")
 
-    if locals["STORAGE_TOPICS"]:
-        logger.warning(
-            "DEPRECATED: STORAGE_TOPICS is derpecated. Use KAFKA_TOPIC_MAP instead."
-        )
+    if locals.get("STORAGE_TOPICS"):
+        raise ValueError("STORAGE_TOPICS is deprecated. Use KAFKA_TOPIC_MAP instead.")
 
     if locals["STORAGE_BROKER_CONFIG"]:
         logger.warning(
@@ -22,6 +19,7 @@ def _validate_settings(locals: Mapping[str, Any]) -> None:
     topic_names = {
         "events",
         "event-replacements",
+        "event-replacements-legacy",
         "snuba-commit-log",
         "cdc",
         "outcomes",
