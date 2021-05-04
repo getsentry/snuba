@@ -1,6 +1,6 @@
 from abc import ABC
 from datetime import timedelta
-from typing import List, Mapping, Optional, Sequence, Tuple
+from typing import Mapping, Optional, Sequence
 
 from snuba import settings, state
 from snuba.clickhouse.translators.snuba.mappers import (
@@ -13,13 +13,9 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
-from snuba.datasets.storage import (
-    QueryStorageSelector,
-    StorageAndMappers,
-)
+from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
-from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall
@@ -135,53 +131,35 @@ class BaseEventsEntity(Entity, ABC):
     """
 
     def __init__(self, custom_mappers: Optional[TranslationMappers] = None) -> None:
-        events_storage = get_writable_storage(StorageKey.EVENTS)
-        errors_storage = get_writable_storage(StorageKey.ERRORS)
-        schema = errors_storage.get_table_writer().get_schema()
+        if settings.ERRORS_ROLLOUT_ALL:
+            events_storage = get_writable_storage(StorageKey.ERRORS)
+            pipeline_builder = SimplePipelineBuilder(
+                query_plan_builder=SelectedStorageQueryPlanBuilder(
+                    selector=ErrorsQueryStorageSelector(
+                        mappers=errors_translators
+                        if custom_mappers is None
+                        else errors_translators.concat(custom_mappers)
+                    )
+                ),
+            )
+        else:
+            events_storage = get_writable_storage(StorageKey.EVENTS)
+            pipeline_builder = SimplePipelineBuilder(
+                query_plan_builder=SelectedStorageQueryPlanBuilder(
+                    selector=EventsQueryStorageSelector(
+                        mappers=event_translator
+                        if custom_mappers is None
+                        else event_translator.concat(custom_mappers)
+                    )
+                ),
+            )
+
+        schema = events_storage.get_table_writer().get_schema()
         columns = schema.get_columns()
 
-        events_pipeline_builder = SimplePipelineBuilder(
-            query_plan_builder=SelectedStorageQueryPlanBuilder(
-                selector=EventsQueryStorageSelector(
-                    mappers=event_translator
-                    if custom_mappers is None
-                    else event_translator.concat(custom_mappers)
-                )
-            ),
-        )
-
-        errors_pipeline_builder = SimplePipelineBuilder(
-            query_plan_builder=SelectedStorageQueryPlanBuilder(
-                selector=ErrorsQueryStorageSelector(
-                    mappers=errors_translators
-                    if custom_mappers is None
-                    else errors_translators.concat(custom_mappers)
-                )
-            ),
-        )
-
-        def selector_func(_query: Query, referrer: str) -> Tuple[str, List[str]]:
-            # In case something goes wrong, set this to 1 to revert to the events storage.
-            kill_rollout = state.get_config("errors_rollout_killswitch", 0)
-            assert isinstance(kill_rollout, (int, str))
-            if int(kill_rollout):
-                return "events", []
-
-            if settings.ERRORS_ROLLOUT_ALL:
-                return "errors", []
-
-            return "events", []
-
         super().__init__(
-            storages=[events_storage, errors_storage],
-            query_pipeline_builder=PipelineDelegator(
-                query_pipeline_builders={
-                    "events": events_pipeline_builder,
-                    "errors": errors_pipeline_builder,
-                },
-                selector_func=selector_func,
-                callback_func=None,
-            ),
+            storages=[events_storage],
+            query_pipeline_builder=pipeline_builder,
             abstract_column_set=columns,
             join_relationships={
                 "grouped": JoinRelationship(
@@ -197,7 +175,7 @@ class BaseEventsEntity(Entity, ABC):
                     equivalences=[],
                 ),
             },
-            writable_storage=errors_storage,
+            writable_storage=events_storage,
             required_filter_columns=["project_id"],
             required_time_column="timestamp",
         )
