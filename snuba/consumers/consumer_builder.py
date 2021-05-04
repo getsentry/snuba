@@ -19,8 +19,8 @@ from snuba.utils.streams.backends.kafka import (
     KafkaPayload,
     TransportError,
     build_kafka_consumer_configuration,
-    build_kafka_producer_configuration,
     get_default_kafka_configuration,
+    build_kafka_producer_configuration,
 )
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.processing.strategies import ProcessingStrategyFactory
@@ -141,7 +141,6 @@ class ConsumerBuilder:
     def __build_consumer(
         self, strategy_factory: ProcessingStrategyFactory[KafkaPayload]
     ) -> StreamProcessor[KafkaPayload]:
-
         configuration = build_kafka_consumer_configuration(
             self.storage.get_table_writer()
             .get_stream_loader()
