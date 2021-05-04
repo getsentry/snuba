@@ -2,9 +2,9 @@ import logging
 import signal
 from typing import Any, Optional, Sequence
 
+import click
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
-import click
 from snuba import environment, settings
 from snuba.consumers.consumer import MultistorageConsumerProcessingStrategyFactory
 from snuba.datasets.storages import StorageKey
@@ -19,7 +19,6 @@ from snuba.utils.streams.backends.kafka import (
 )
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.types import Topic
-
 
 logger = logging.getLogger(__name__)
 

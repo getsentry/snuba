@@ -16,10 +16,7 @@ from snuba.snapshots.loaders import BulkLoader
 from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.backends.kafka import KafkaPayload
-from snuba.utils.streams.topics import (
-    get_topic_creation_config,
-    Topic,
-)
+from snuba.utils.streams.topics import Topic, get_topic_creation_config
 from snuba.writer import BatchWriter
 
 

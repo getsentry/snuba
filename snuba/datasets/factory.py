@@ -19,8 +19,6 @@ DATASET_NAMES: Set[str] = {
     "transactions",
 }
 
-ACTIVE_DATASET_NAMES: Set[str] = DATASET_NAMES - settings.DISABLED_DATASETS
-
 
 class InvalidDatasetError(Exception):
     """Exception raised on invalid dataset access."""
