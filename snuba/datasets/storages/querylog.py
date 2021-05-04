@@ -70,8 +70,6 @@ storage = WritableTableStorage(
     schema=schema,
     query_processors=[],
     stream_loader=build_kafka_stream_loader_from_settings(
-        StorageKey.QUERYLOG,
-        processor=QuerylogProcessor(),
-        default_topic=Topic.QUERYLOG,
+        processor=QuerylogProcessor(), default_topic=Topic.QUERYLOG,
     ),
 )

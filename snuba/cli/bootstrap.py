@@ -2,14 +2,15 @@ import logging
 from typing import Optional, Sequence
 
 import click
-
 from confluent_kafka import KafkaError, KafkaException
-from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
+
+from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.environment import setup_logging
 from snuba.migrations.connect import check_clickhouse_connections
 from snuba.migrations.runner import Runner
 from snuba.utils.logging import pylog_to_syslog_level
 from snuba.utils.streams.backends.kafka import get_default_kafka_configuration
+from snuba.utils.streams.topics import Topic
 
 
 @click.command()
@@ -79,25 +80,16 @@ def bootstrap(
         logger.info("Connected to Kafka on attempt %d", attempts)
 
         topics = {}
-        for name in ACTIVE_DATASET_NAMES:
-            dataset = get_dataset(name)
-            for entity in dataset.get_all_entities():
-                writable_storage = entity.get_writable_storage()
-                if writable_storage:
-                    table_writer = writable_storage.get_table_writer()
-                    stream_loader = table_writer.get_stream_loader()
-                    for topic_spec in stream_loader.get_all_topic_specs():
-                        if topic_spec.topic_name in topics:
-                            continue
-                        logger.debug(
-                            "Adding topic %s to creation list", topic_spec.topic_name
-                        )
-                        topics[topic_spec.topic_name] = NewTopic(
-                            topic_spec.topic_name,
-                            num_partitions=topic_spec.partitions_number,
-                            replication_factor=topic_spec.replication_factor,
-                            config=topic_spec.topic_creation_config,
-                        )
+
+        for topic in Topic:
+            topic_spec = KafkaTopicSpec(topic)
+            logger.debug("Adding topic %s to creation list", topic_spec.topic_name)
+            topics[topic_spec.topic_name] = NewTopic(
+                topic_spec.topic_name,
+                num_partitions=topic_spec.partitions_number,
+                replication_factor=topic_spec.replication_factor,
+                config=topic_spec.topic_creation_config,
+            )
 
         logger.info("Creating Kafka topics...")
         for topic, future in client.create_topics(

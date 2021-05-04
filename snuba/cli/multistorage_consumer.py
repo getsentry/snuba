@@ -2,9 +2,9 @@ import logging
 import signal
 from typing import Any, Optional, Sequence
 
+import click
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
-import click
 from snuba import environment, settings
 from snuba.consumers.consumer import MultistorageConsumerProcessingStrategyFactory
 from snuba.datasets.storages import StorageKey
@@ -19,7 +19,6 @@ from snuba.utils.streams.backends.kafka import (
 )
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.types import Topic
-
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +158,6 @@ def multistorage_consumer(
     )
 
     consumer_configuration = build_kafka_consumer_configuration(
-        storage_keys[0],
         kafka_topic,
         consumer_group,
         auto_offset_reset=auto_offset_reset,
@@ -170,7 +168,6 @@ def multistorage_consumer(
     for storage_key in storage_keys[1:]:
         if (
             build_kafka_consumer_configuration(
-                storage_key,
                 storages[storage_key]
                 .get_table_writer()
                 .get_stream_loader()
@@ -197,9 +194,7 @@ def multistorage_consumer(
         assert commit_log_topic_spec is not None
 
         producer = ConfluentKafkaProducer(
-            build_kafka_producer_configuration(
-                storage_keys[0], commit_log_topic_spec.topic,
-            )
+            build_kafka_producer_configuration(commit_log_topic_spec.topic)
         )
         consumer = KafkaConsumerWithCommitLog(
             consumer_configuration,

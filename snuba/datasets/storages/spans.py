@@ -50,7 +50,6 @@ storage = WritableTableStorage(
     schema=schema,
     query_processors=[HexIntColumnProcessor({"transaction_span_id"})],
     stream_loader=build_kafka_stream_loader_from_settings(
-        StorageKey.SPANS,
         processor=SpansMessageProcessor(),
         default_topic=Topic.EVENTS,
         commit_log_topic=Topic.COMMIT_LOG,

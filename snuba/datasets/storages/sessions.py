@@ -126,9 +126,7 @@ raw_storage = WritableTableStorage(
     schema=raw_schema,
     query_processors=[MinuteResolutionProcessor()],
     stream_loader=build_kafka_stream_loader_from_settings(
-        StorageKey.SESSIONS_RAW,
-        processor=SessionsProcessor(),
-        default_topic=Topic.SESSIONS,
+        processor=SessionsProcessor(), default_topic=Topic.SESSIONS,
     ),
 )
 # The materialized view we query aggregate data from.
