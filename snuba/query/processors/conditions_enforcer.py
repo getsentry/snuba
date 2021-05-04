@@ -9,24 +9,26 @@ from snuba.query.conditions import (
     condition_pattern,
     get_first_level_and_conditions,
 )
-from snuba.query.matchers import Any, String
+from snuba.query.matchers import Any
 from snuba.query.matchers import Column as ColumnPattern
-from snuba.query.matchers import Literal as LiteralPattern
 from snuba.query.matchers import FunctionCall as FunctionCallPattern
-from snuba.query.matchers import Or, Param
+from snuba.query.matchers import Literal as LiteralPattern
+from snuba.query.matchers import Or, Param, Pattern, String
 from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config
 
 logger = logging.getLogger(__name__)
 
-CONDITION_PATTERN = Or(
+EQ_CONDITION_PATTERN = condition_pattern(
+    {ConditionFunctions.EQ},
+    ColumnPattern(None, Param("lhs", Any(str))),
+    LiteralPattern(Any(int)),
+    commutative=True,
+)
+
+FULL_CONDITION_PATTERN = Or(
     [
-        condition_pattern(
-            {ConditionFunctions.EQ},
-            ColumnPattern(None, Param("lhs", Any(str))),
-            LiteralPattern(Any(int)),
-            commutative=True,
-        ),
+        EQ_CONDITION_PATTERN,
         FunctionCallPattern(
             String(ConditionFunctions.IN),
             (
@@ -38,8 +40,10 @@ CONDITION_PATTERN = Or(
 )
 
 
-def _check_int_set(expression: Expression, column_name: str) -> bool:
-    match = CONDITION_PATTERN.match(expression)
+def _check_expression(
+    pattern: Pattern[Expression], expression: Expression, column_name: str
+) -> bool:
+    match = pattern.match(expression)
     return match is not None and match.optional_string("lhs") == column_name
 
 
@@ -48,7 +52,7 @@ class ProjectIdEnforcer(ConditionChecker):
         return "project_id"
 
     def check(self, expression: Expression) -> bool:
-        return _check_int_set(expression, "project_id")
+        return _check_expression(FULL_CONDITION_PATTERN, expression, "project_id")
 
 
 class OrgIdEnforcer(ConditionChecker):
@@ -56,7 +60,7 @@ class OrgIdEnforcer(ConditionChecker):
         return "org_id"
 
     def check(self, expression: Expression) -> bool:
-        return _check_int_set(expression, "org_id")
+        return _check_expression(EQ_CONDITION_PATTERN, expression, "org_id")
 
 
 class MandatoryConditionEnforcer(QueryProcessor):
