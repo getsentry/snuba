@@ -1,5 +1,6 @@
 import logging
 from dataclasses import replace
+from functools import partial
 from typing import (
     Any,
     Callable,
@@ -9,6 +10,7 @@ from typing import (
     NamedTuple,
     Optional,
     Sequence,
+    Set,
     Tuple,
     Union,
 )
@@ -17,16 +19,19 @@ from parsimonious.exceptions import IncompleteParseError
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
+from snuba.clickhouse.columns import Array, ColumnSet
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
+    FUNCTION_TO_OPERATOR,
     OPERATOR_TO_FUNCTION,
     binary_condition,
     combine_and_conditions,
     combine_or_conditions,
+    is_condition,
     unary_condition,
 )
 from snuba.query.data_source.join import IndividualNode, JoinClause
@@ -56,6 +61,7 @@ from snuba.query.parser import (
 )
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.validation import validate_query
+from snuba.query.schema import POSITIVE_OPERATORS
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
     HighPriOperator,
@@ -895,6 +901,108 @@ def _array_join_transformation(
     query.transform_expressions(parse)
 
 
+def _transform_array_condition(array_columns: Set[str], exp: Expression) -> Expression:
+    if not is_condition(exp) or not isinstance(exp, FunctionCall):
+        return exp
+    elif len(exp.parameters) < 2:
+        return exp
+
+    lhs = exp.parameters[0]
+    if not isinstance(lhs, Column):
+        return exp
+
+    aliased_name = (
+        f"{lhs.table_name + '.' if lhs.table_name is not None else ''}{lhs.column_name}"
+    )
+    if aliased_name not in array_columns:
+        return exp
+
+    function_name = (
+        "arrayExists"
+        if FUNCTION_TO_OPERATOR[exp.function_name] in POSITIVE_OPERATORS
+        else "arrayAll"
+    )
+
+    # This is an expression like:
+    # arrayExists(x -> assumeNotNull(notLike(x, rhs)), lhs)
+    return FunctionCall(
+        None,
+        function_name,
+        (
+            Lambda(
+                None,
+                ("x",),
+                FunctionCall(
+                    None,
+                    "assumeNotNull",
+                    (
+                        FunctionCall(
+                            None,
+                            exp.function_name,
+                            (Argument(None, "x"), exp.parameters[1]),
+                        ),
+                    ),
+                ),
+            ),
+            lhs,
+        ),
+    )
+
+
+def _unpack_array_conditions(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
+    schema: ColumnSet,
+    entity_alias: Optional[str] = None,
+) -> None:
+    array_columns = set()
+    array_join_col = query.get_arrayjoin()
+    array_join = ""
+    if array_join_col is not None:
+        assert isinstance(array_join_col, Column)
+        array_join = f"{array_join_col.table_name + '.' if array_join_col.table_name else ''}{array_join_col.column_name}"
+
+    entity_alias = f"{entity_alias}." if entity_alias is not None else ""
+    for column in schema:
+        if isinstance(column.type, Array):
+            aliased_base_name = f"{entity_alias}{column.base_name}"
+            aliased_flattened = f"{entity_alias}{column.flattened}"
+            if aliased_base_name == array_join or aliased_flattened == array_join:
+                continue
+
+            array_columns.add(aliased_base_name)
+            array_columns.add(aliased_flattened)
+
+    condition = query.get_condition()
+    if condition:
+        query.set_ast_condition(
+            condition.transform(partial(_transform_array_condition, array_columns))
+        )
+
+
+def _array_column_conditions(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+) -> None:
+    """
+    Find conditions on array columns, and if those columns are not in the array join,
+    convert them to the appropriate higher order function.
+    """
+    from_clause = query.get_from_clause()
+    if isinstance(from_clause, (CompositeQuery, LogicalQuery)):
+        # It's difficult to know if a subquery is returning an array,
+        # so we can't easily detect a condition on that.
+        return
+
+    if isinstance(from_clause, QueryEntity):
+        _unpack_array_conditions(query, from_clause.schema)
+    elif isinstance(from_clause, JoinClause):
+        alias_map = from_clause.get_alias_node_map()
+        for alias, node in alias_map.items():
+            assert isinstance(node.data_source, QueryEntity)  # mypy
+            _unpack_array_conditions(query, node.data_source.schema, alias)
+
+    return None
+
+
 def _mangle_query_aliases(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
 ) -> None:
@@ -989,6 +1097,7 @@ def parse_snql_query(
             _mangle_query_aliases,
             _array_join_transformation,
             _qualify_columns,
+            _array_column_conditions,
         ],
     )
 
