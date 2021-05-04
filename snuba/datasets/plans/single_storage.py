@@ -1,3 +1,4 @@
+from snuba.query.processors.conditions_enforcer import MandatoryConditionEnforcer
 from typing import Optional, Sequence
 
 import sentry_sdk
@@ -138,6 +139,9 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             *self.__storage.get_query_processors(),
             *self.__post_processors,
             MandatoryConditionApplier(),
+            MandatoryConditionEnforcer(
+                self.__storage.get_mandatory_condition_checkers()
+            ),
         ]
 
         return [
@@ -201,6 +205,7 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             *storage.get_query_processors(),
             *self.__post_processors,
             MandatoryConditionApplier(),
+            MandatoryConditionEnforcer(storage.get_mandatory_condition_checkers()),
         ]
 
         return [

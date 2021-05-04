@@ -3,7 +3,6 @@ from typing import Any, Mapping, MutableMapping, Sequence, Set
 
 from snuba.settings.validation import _validate_settings
 
-
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 LOG_FORMAT = "%(asctime)s %(message)s"
 
@@ -57,7 +56,6 @@ USE_RESULT_CACHE = True
 
 # Query Recording Options
 RECORD_QUERIES = False
-QUERIES_TOPIC = "snuba-queries"
 
 # Runtime Config Options
 CONFIG_MEMOIZE_TIMEOUT = 10
@@ -74,15 +72,17 @@ BULK_CLICKHOUSE_BUFFER = 10000
 BULK_BINARY_LOAD_CHUNK = 2 ** 22  # 4 MB
 
 # Processor/Writer Options
-# DEPRECATED, please use STORAGE_BROKER_CONFIG instead
-DEFAULT_STORAGE_BROKERS: Mapping[str, Sequence[str]] = {}
 
 BROKER_CONFIG: Mapping[str, Any] = {
     # See snuba/utils/streams/backends/kafka.py for the supported options
     "bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092"),
 }
-STORAGE_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
-STORAGE_TOPICS: Mapping[str, Mapping[str, Any]] = {}
+
+# Mapping of default Kafka topic name to custom names
+KAFKA_TOPIC_MAP: Mapping[str, str] = {}
+
+# Mapping of default Kafka topic name to broker config
+KAFKA_BROKER_CONFIG: Mapping[str, Mapping[str, Any]] = {}
 
 DEFAULT_MAX_BATCH_SIZE = 50000
 DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000

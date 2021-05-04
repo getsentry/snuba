@@ -38,7 +38,6 @@ from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
 from snuba import settings
-from snuba.datasets.storages import StorageKey
 from snuba.utils.concurrent import execute
 from snuba.utils.logging import pylog_to_syslog_level
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
@@ -50,6 +49,7 @@ from snuba.utils.streams.backends.abstract import (
     Producer,
 )
 from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.streams.topics import Topic as KafkaTopic
 
 logger = logging.getLogger(__name__)
 
@@ -650,27 +650,17 @@ SUPPORTED_KAFKA_CONFIGURATION = (
 
 
 def get_default_kafka_configuration(
-    storage_key: Optional[StorageKey] = None,
+    topic: Optional[KafkaTopic] = None,
     bootstrap_servers: Optional[Sequence[str]] = None,
     override_params: Optional[Mapping[str, Any]] = None,
 ) -> KafkaBrokerConfig:
     default_bootstrap_servers = None
     default_config: Mapping[str, Any]
-    if storage_key is not None:
-        storage_name = storage_key.value
-        if storage_name in settings.DEFAULT_STORAGE_BROKERS:
-            # this is now deprecated
-            logger.warning(
-                "DEPRECATED: DEFAULT_STORAGE_BROKERS is defined. Please use STORAGE_BROKER_CONFIG instead"
-            )
-            default_config = {}
-            default_bootstrap_servers = ",".join(
-                settings.DEFAULT_STORAGE_BROKERS[storage_name]
-            )
-        else:
-            default_config = settings.STORAGE_BROKER_CONFIG.get(
-                storage_name, settings.BROKER_CONFIG
-            )
+
+    if topic is not None:
+        default_config = settings.KAFKA_BROKER_CONFIG.get(
+            topic.value, settings.BROKER_CONFIG
+        )
     else:
         default_config = settings.BROKER_CONFIG
     broker_config = copy.deepcopy(default_config)
@@ -696,7 +686,7 @@ def get_default_kafka_configuration(
 
 
 def build_kafka_consumer_configuration(
-    storage_key: Optional[StorageKey],
+    topic: Optional[KafkaTopic],
     group_id: str,
     auto_offset_reset: str = "error",
     queued_max_messages_kbytes: int = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
@@ -705,9 +695,7 @@ def build_kafka_consumer_configuration(
     override_params: Optional[Mapping[str, Any]] = None,
 ) -> KafkaBrokerConfig:
     broker_config = get_default_kafka_configuration(
-        storage_key,
-        bootstrap_servers=bootstrap_servers,
-        override_params=override_params,
+        topic, bootstrap_servers=bootstrap_servers, override_params=override_params,
     )
     broker_config.update(
         {
@@ -725,12 +713,12 @@ def build_kafka_consumer_configuration(
 
 
 def build_kafka_producer_configuration(
-    storage_key: Optional[StorageKey],
+    topic: Optional[KafkaTopic],
     bootstrap_servers: Optional[Sequence[str]] = None,
     override_params: Optional[Mapping[str, Any]] = None,
 ) -> KafkaBrokerConfig:
     broker_config = get_default_kafka_configuration(
-        storage_key,
+        topic=topic,
         bootstrap_servers=bootstrap_servers,
         override_params=override_params,
     )
@@ -738,7 +726,7 @@ def build_kafka_producer_configuration(
 
 
 def build_default_kafka_producer_configuration() -> KafkaBrokerConfig:
-    return build_kafka_producer_configuration(None)
+    return build_kafka_producer_configuration(None, None)
 
 
 # XXX: This must be imported after `KafkaPayload` to avoid a circular import.
