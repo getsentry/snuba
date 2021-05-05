@@ -13,6 +13,8 @@ class StorageKey(Enum):
     ERRORS_RO = "errors_ro"
     GROUPEDMESSAGES = "groupedmessages"
     GROUPASSIGNEES = "groupassignees"
+    METRICS_BUCKETS = "metrics_buckets"
+    METRICS_SETS = "metrics_sets"
     OUTCOMES_RAW = "outcomes_raw"
     OUTCOMES_HOURLY = "outcomes_hourly"
     QUERYLOG = "querylog"

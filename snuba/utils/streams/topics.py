@@ -9,6 +9,7 @@ class Topic(Enum):
     EVENT_REPLACEMENTS_LEGACY = "event-replacements-legacy"
     COMMIT_LOG = "snuba-commit-log"
     CDC = "cdc"
+    METRICS = "ingest-metrics"
     OUTCOMES = "outcomes"
     SESSIONS = "ingest-sessions"
     QUERYLOG = "snuba-queries"
