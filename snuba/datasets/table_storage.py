@@ -210,17 +210,18 @@ class TableWriter:
         self,
         source: BulkLoadSource,
         source_table: str,
-        dest_table: str,
         row_processor: RowProcessor,
+        table_name: Optional[str] = None,
     ) -> BulkLoader:
         """
         Returns the instance of the bulk loader to populate the dataset from an
         external source when present.
         """
+        table_name = table_name or self.__table_schema.get_table_name()
         return SingleTableBulkLoader(
             source=source,
             source_table=source_table,
-            dest_table=dest_table,
+            dest_table=table_name,
             row_processor=row_processor,
             clickhouse=self.__cluster.get_query_connection(
                 ClickhouseClientSettings.QUERY
