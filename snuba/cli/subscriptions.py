@@ -111,8 +111,6 @@ def subscriptions(
 ) -> None:
     """Evaluates subscribed queries for a dataset."""
 
-    assert result_topic is not None
-
     setup_logging(log_level)
     setup_sentry()
 
@@ -126,6 +124,9 @@ def subscriptions(
     loader = enforce_table_writer(dataset).get_stream_loader()
     commit_log_topic_spec = loader.get_commit_log_topic_spec()
     assert commit_log_topic_spec is not None
+
+    result_topic_spec = loader.get_subscription_result_topic_spec()
+    assert result_topic_spec is not None
 
     metrics = MetricsWrapper(
         environment.metrics,
@@ -211,7 +212,9 @@ def subscriptions(
                         )
                     },
                     producer,
-                    Topic(result_topic),
+                    Topic(result_topic)
+                    if result_topic is not None
+                    else Topic(result_topic_spec.topic_name),
                     metrics,
                 ),
                 max_batch_size,
