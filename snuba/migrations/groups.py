@@ -14,7 +14,6 @@ class MigrationGroup(Enum):
     TRANSACTIONS = "transactions"
     DISCOVER = "discover"
     OUTCOMES = "outcomes"
-    METRICS = "metrics"
     SESSIONS = "sessions"
     QUERYLOG = "querylog"
     SPANS_EXPERIMENTAL = "spans_experimental"
@@ -22,7 +21,6 @@ class MigrationGroup(Enum):
 
 # Migration groups are mandatory by default, unless they are on this list
 OPTIONAL_GROUPS = {
-    MigrationGroup.METRICS,
     MigrationGroup.SESSIONS,
     MigrationGroup.QUERYLOG,
     MigrationGroup.SPANS_EXPERIMENTAL,
@@ -160,17 +158,6 @@ class OutcomesLoader(DirectoryLoader):
         ]
 
 
-class MetricsLoader(DirectoryLoader):
-    def __init__(self) -> None:
-        super().__init__("snuba.migrations.snuba_migrations.metrics")
-
-    def get_migrations(self) -> Sequence[str]:
-        return [
-            "0001_metrics_buckets",
-            "0002_metrics_sets",
-        ]
-
-
 class SessionsLoader(DirectoryLoader):
     def __init__(self) -> None:
         super().__init__("snuba.migrations.snuba_migrations.sessions")
@@ -200,7 +187,6 @@ _REGISTERED_GROUPS = {
     MigrationGroup.EVENTS: EventsLoader(),
     MigrationGroup.TRANSACTIONS: TransactionsLoader(),
     MigrationGroup.DISCOVER: DiscoverLoader(),
-    MigrationGroup.METRICS: MetricsLoader(),
     MigrationGroup.OUTCOMES: OutcomesLoader(),
     MigrationGroup.SESSIONS: SessionsLoader(),
     MigrationGroup.QUERYLOG: QuerylogLoader(),

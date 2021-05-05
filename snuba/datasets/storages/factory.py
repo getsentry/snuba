@@ -10,8 +10,6 @@ from snuba.datasets.storages.events import storage as events_storage
 from snuba.datasets.storages.events_ro import storage as events_ro_storage
 from snuba.datasets.storages.groupassignees import storage as groupassignees_storage
 from snuba.datasets.storages.groupedmessages import storage as groupedmessages_storage
-from snuba.datasets.storages.metrics import buckets_storage as metrics_buckets_storage
-from snuba.datasets.storages.metrics import sets_storage as metrics_sets_storage
 from snuba.datasets.storages.outcomes import (
     materialized_storage as outcomes_hourly_storage,
 )
@@ -36,7 +34,6 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
         for storage in [
             errors_storage,
             events_storage,
-            metrics_buckets_storage,
             outcomes_raw_storage,
             querylog_storage,
             sessions_raw_storage,
@@ -52,7 +49,6 @@ NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
         discover_storage,
         errors_ro_storage,
         events_ro_storage,
-        metrics_sets_storage,
         outcomes_hourly_storage,
         sessions_hourly_storage,
     ]

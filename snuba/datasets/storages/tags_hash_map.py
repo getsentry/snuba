@@ -9,9 +9,3 @@ TAGS_HASH_MAP_COLUMN = (
     "replaceRegexpAll(k, '(\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1'), '=', v)), "
     "tags.key, tags.value)"
 )
-
-
-INT_TAGS_HASH_MAP_COLUMN = (
-    "arrayMap((k, v) -> cityHash64(concat(toString(k), '=', toString(v))), "
-    "tags.key, tags.value)"
-)
