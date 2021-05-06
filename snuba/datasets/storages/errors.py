@@ -38,6 +38,7 @@ storage = WritableTableStorage(
         default_topic=Topic.EVENTS,
         replacement_topic=Topic.EVENT_REPLACEMENTS,
         commit_log_topic=Topic.COMMIT_LOG,
+        subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_EVENTS,
     ),
     replacer_processor=ErrorsReplacer(
         schema=schema,
