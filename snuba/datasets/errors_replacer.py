@@ -1,15 +1,14 @@
 import logging
 import time
 import uuid
-
 from collections import deque
 from datetime import datetime
 from enum import Enum
-from typing import Any, Deque, Mapping, Optional, Sequence, Tuple, MutableMapping, List
+from typing import Any, Deque, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
-from snuba.clickhouse.columns import FlattenedColumn, ReadOnly, Nullable
+from snuba.clickhouse.columns import FlattenedColumn, Nullable, ReadOnly
 from snuba.clickhouse.escaping import escape_identifier, escape_string
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import InvalidMessageType, _hashify
@@ -19,7 +18,6 @@ from snuba.replacers.replacer_processor import (
     ReplacementMessage,
     ReplacerProcessor,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -537,17 +535,80 @@ def process_merge(
     )
 
 
+def _convert_hash_list(
+    hashes: Sequence[str], state_name: ReplacerState, convert_types: bool = False
+) -> str:
+    if state_name == ReplacerState.ERRORS:
+        if convert_types:
+            return ", ".join(
+                "toUUID('%s')" % str(uuid.UUID(_hashify(h))) for h in hashes
+            )
+        else:
+            return ", ".join("'%s'" % str(uuid.UUID(_hashify(h))) for h in hashes)
+    else:
+        if convert_types:
+            return ", ".join("toFixedString('%s', 32)" % _hashify(h) for h in hashes)
+        else:
+            return ", ".join("'%s'" % _hashify(h) for h in hashes)
+
+
+def _build_grouping_hashes_filter(
+    message: Mapping[str, Any], state_name: ReplacerState
+) -> Optional[Tuple[List[str], List[str], MutableMapping[str, str]]]:
+    hashes = message.get("hashes") or []
+    hierarchical_hashes = message.get("hierarchical_hashes") or {}
+    if not hashes and not hierarchical_hashes:
+        return None
+
+    assert all(isinstance(h, str) for h in hashes)
+    assert all(isinstance(h, str) for h in hierarchical_hashes.values())
+
+    prewhere = []
+    where = []
+    query_args = {}
+
+    if hashes:
+        prewhere.append("primary_hash IN (%(hashes)s)")
+        query_args["hashes"] = _convert_hash_list(hashes, state_name)
+
+    if hierarchical_hashes:
+        # primary_hash is the root (most coarse) level of the grouping tree,
+        # meaning:
+        #
+        # 1. primary_hash == hierarchical_hashes[0]
+        # 2. <any entry in hierarchical_hashes>:primary_hash is a n:1 relation
+        #
+        # Sentry wants us to filter events by hierarchical_hashes entry using
+        # hasAny, but also tells us the corresponding primary_hash such that we
+        # can filter more efficiently.
+        #
+        # For now this is just converted into
+        #
+        #     PREWHERE primary_hash IN ... WHERE hasAny(hierarchical_hashes, ...)
+        #
+        # ..but perhaps one day we may decide to instead emit multiple replacements of the form
+        #
+        #     PREWHERE primary_hash = ... WHERE has(hierarchical_hashes, ...)
+        #
+        # ..if we think that it would be faster.
+        prewhere.append("primary_hash IN (%(primary_hashes_for_hierarchical_hashes)s)")
+        query_args["primary_hashes_for_hierarchical_hashes"] = _convert_hash_list(
+            list(set(hierarchical_hashes.values())), state_name
+        )
+
+        where.append("hasAny(hierarchical_hashes, [%(hierarchical_hashes)s])")
+        query_args["hierarchical_hashes"] = _convert_hash_list(
+            list(hierarchical_hashes), state_name, convert_types=True
+        )
+
+    return prewhere, where, query_args
+
+
 def process_unmerge(
     message: Mapping[str, Any],
     all_columns: Sequence[FlattenedColumn],
     state_name: ReplacerState,
 ) -> Optional[Replacement]:
-    hashes = message["hashes"]
-    if not hashes:
-        return None
-
-    assert all(isinstance(h, str) for h in hashes)
-
     timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
     all_column_names = [c.escaped for c in all_columns]
     select_columns = map(
@@ -555,20 +616,25 @@ def process_unmerge(
         all_column_names,
     )
 
-    where = """\
-        PREWHERE group_id = %(previous_group_id)s
-        WHERE project_id = %(project_id)s
-        AND primary_hash IN (%(hashes)s)
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
+    hashes_filter = _build_grouping_hashes_filter(message, state_name)
+    if hashes_filter is None:
+        return None
+
+    prewhere, where, query_args = hashes_filter
+
+    prewhere.append("group_id = %(previous_group_id)s")
+    where.append("project_id = %(project_id)s")
+    where.append("received <= CAST('%(timestamp)s' AS DateTime)")
+    where.append("NOT deleted")
+
+    full_where = f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
 
     count_query_template = (
         """\
         SELECT count()
         FROM %(table_name)s FINAL
     """
-        + where
+        + full_where
     )
 
     insert_query_template = (
@@ -577,23 +643,18 @@ def process_unmerge(
         SELECT %(select_columns)s
         FROM %(table_name)s FINAL
     """
-        + where
+        + full_where
     )
 
-    query_args = {
-        "all_columns": ", ".join(all_column_names),
-        "select_columns": ", ".join(select_columns),
-        "previous_group_id": message["previous_group_id"],
-        "project_id": message["project_id"],
-        "timestamp": timestamp.strftime(DATETIME_FORMAT),
-    }
-
-    if state_name == ReplacerState.ERRORS:
-        query_args["hashes"] = ", ".join(
-            ["'%s'" % str(uuid.UUID(_hashify(h))) for h in hashes]
-        )
-    else:
-        query_args["hashes"] = ", ".join("'%s'" % _hashify(h) for h in hashes)
+    query_args.update(
+        {
+            "all_columns": ", ".join(all_column_names),
+            "select_columns": ", ".join(select_columns),
+            "previous_group_id": message["previous_group_id"],
+            "project_id": message["project_id"],
+            "timestamp": timestamp.strftime(DATETIME_FORMAT),
+        }
+    )
 
     query_time_flags = (NEEDS_FINAL, message["project_id"])
 

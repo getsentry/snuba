@@ -56,6 +56,7 @@ class InsertEvent(TypedDict):
     datetime: str  # snuba.settings.PAYLOAD_DATETIME_FORMAT
     data: MutableMapping[str, Any]
     primary_hash: str  # empty string represents None
+    hierarchical_hashes: Sequence[str]
     retention_days: int
 
 

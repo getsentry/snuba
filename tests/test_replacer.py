@@ -164,16 +164,54 @@ class TestReplacer:
 
         assert (
             re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == "SELECT count() FROM %(table_name)s FINAL PREWHERE group_id = %(previous_group_id)s WHERE project_id = %(project_id)s AND primary_hash IN (%(hashes)s) AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "SELECT count() FROM %(table_name)s FINAL PREWHERE primary_hash IN (%(hashes)s) AND group_id = %(previous_group_id)s WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
         )
         assert (
             re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == "INSERT INTO %(table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE group_id = %(previous_group_id)s WHERE project_id = %(project_id)s AND primary_hash IN (%(hashes)s) AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "INSERT INTO %(table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE primary_hash IN (%(hashes)s) AND group_id = %(previous_group_id)s WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
         )
         assert replacement.query_args == {
             "all_columns": "event_id, project_id, group_id, timestamp, deleted, retention_days, platform, message, primary_hash, hierarchical_hashes, received, search_message, title, location, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, message_timestamp, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, `sentry:user`, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, tags.key, tags.value, _tags_flattened, contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level, culprit, sdk_integrations, modules.name, modules.version",
             "select_columns": "event_id, project_id, 2, timestamp, deleted, retention_days, platform, message, primary_hash, hierarchical_hashes, received, search_message, title, location, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, message_timestamp, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, `sentry:user`, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, tags.key, tags.value, _tags_flattened, contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level, culprit, sdk_integrations, modules.name, modules.version",
             "hashes": "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'",
+            "previous_group_id": 1,
+            "project_id": self.project_id,
+            "timestamp": timestamp.strftime(DATETIME_FORMAT),
+        }
+        assert replacement.query_time_flags == (
+            errors_replacer.NEEDS_FINAL,
+            self.project_id,
+        )
+
+    def test_unmerge_process_hierarchical_hashes(self) -> None:
+        timestamp = datetime.now(tz=pytz.utc)
+        message = (
+            2,
+            "end_unmerge",
+            {
+                "project_id": self.project_id,
+                "previous_group_id": 1,
+                "new_group_id": 2,
+                "hierarchical_hashes": {"a" * 32: "b" * 32},
+                "datetime": timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            },
+        )
+
+        replacement = self.replacer.process_message(self._wrap(message))
+
+        assert (
+            re.sub("[\n ]+", " ", replacement.count_query_template).strip()
+            == "SELECT count() FROM %(table_name)s FINAL PREWHERE primary_hash IN (%(primary_hashes_for_hierarchical_hashes)s) AND group_id = %(previous_group_id)s WHERE hasAny(hierarchical_hashes, [%(hierarchical_hashes)s]) AND project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+        )
+        assert (
+            re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
+            == "INSERT INTO %(table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE primary_hash IN (%(primary_hashes_for_hierarchical_hashes)s) AND group_id = %(previous_group_id)s WHERE hasAny(hierarchical_hashes, [%(hierarchical_hashes)s]) AND project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+        )
+        assert replacement.query_args == {
+            "all_columns": "event_id, project_id, group_id, timestamp, deleted, retention_days, platform, message, primary_hash, hierarchical_hashes, received, search_message, title, location, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, message_timestamp, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, `sentry:user`, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, tags.key, tags.value, _tags_flattened, contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level, culprit, sdk_integrations, modules.name, modules.version",
+            "select_columns": "event_id, project_id, 2, timestamp, deleted, retention_days, platform, message, primary_hash, hierarchical_hashes, received, search_message, title, location, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, message_timestamp, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, `sentry:user`, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, tags.key, tags.value, _tags_flattened, contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level, culprit, sdk_integrations, modules.name, modules.version",
+            "hierarchical_hashes": "toFixedString('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 32)",
+            "primary_hashes_for_hierarchical_hashes": "'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'",
             "previous_group_id": 1,
             "project_id": self.project_id,
             "timestamp": timestamp.strftime(DATETIME_FORMAT),
@@ -359,6 +397,47 @@ class TestReplacer:
                             "previous_group_id": 1,
                             "new_group_id": 2,
                             "hashes": ["a" * 32],
+                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                        },
+                    )
+                ).encode("utf-8"),
+                [],
+            ),
+            datetime.now(),
+        )
+
+        processed = self.replacer.process_message(message)
+        self.replacer.flush_batch([processed])
+
+        assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 2}]
+
+    def test_unmerge_insert_hierarchical_hashes(self) -> None:
+        self.event["project_id"] = self.project_id
+        self.event["group_id"] = 1
+        self.event["primary_hash"] = "b" * 32
+        self.event["data"]["hierarchical_hashes"] = ["a" * 32]
+        write_unprocessed_events(self.storage, [self.event])
+
+        assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
+
+        timestamp = datetime.now(tz=pytz.utc)
+
+        project_id = self.project_id
+
+        message: Message[KafkaPayload] = Message(
+            Partition(Topic("replacements"), 1),
+            42,
+            KafkaPayload(
+                None,
+                json.dumps(
+                    (
+                        2,
+                        "end_unmerge",
+                        {
+                            "project_id": project_id,
+                            "previous_group_id": 1,
+                            "new_group_id": 2,
+                            "hierarchical_hashes": {"a" * 32: "b" * 32},
                             "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
                         },
                     )
