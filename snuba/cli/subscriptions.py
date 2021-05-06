@@ -122,7 +122,6 @@ def subscriptions(
     assert (
         storage is not None
     ), f"Dataset {dataset_name} does not have a writable storage by default."
-    storage_key = storage.get_storage_key()
 
     loader = enforce_table_writer(dataset).get_stream_loader()
     commit_log_topic_spec = loader.get_commit_log_topic_spec()
@@ -138,7 +137,6 @@ def subscriptions(
         SynchronizedConsumer(
             KafkaConsumer(
                 build_kafka_consumer_configuration(
-                    storage_key,
                     loader.get_default_topic_spec().topic,
                     consumer_group,
                     auto_offset_reset=auto_offset_reset,
@@ -147,7 +145,6 @@ def subscriptions(
             ),
             KafkaConsumer(
                 build_kafka_consumer_configuration(
-                    storage_key,
                     commit_log_topic_spec.topic,
                     f"subscriptions-commit-log-{uuid.uuid1().hex}",
                     auto_offset_reset="earliest",
@@ -169,7 +166,6 @@ def subscriptions(
     producer = ProducerEncodingWrapper(
         KafkaProducer(
             build_kafka_producer_configuration(
-                storage_key,
                 loader.get_default_topic_spec().topic,
                 bootstrap_servers=bootstrap_servers,
                 override_params={

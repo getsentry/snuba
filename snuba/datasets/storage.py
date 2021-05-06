@@ -14,6 +14,7 @@ from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
+from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.request.request_settings import RequestSettings
@@ -43,6 +44,28 @@ class Storage(ABC):
 
     def get_schema(self) -> Schema:
         return self.__schema
+
+
+class ConditionChecker(ABC):
+    """
+    Checks if an expression matches a specific shape and content.
+
+    These are declared by storages as mandatory conditions that are
+    supposed to be in the query before it is executed for the query
+    to be acceptable.
+
+    This system is meant to be a failsafe mechanism to prevent
+    bugs in any step of query processing to generate queries that are
+    missing project_id and org_id conditions from the query.
+    """
+
+    @abstractmethod
+    def get_id(self) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
+    def check(self, expression: Expression) -> bool:
+        raise NotImplementedError
 
 
 class ReadableStorage(Storage):
@@ -75,6 +98,16 @@ class ReadableStorage(Storage):
         """
         return []
 
+    def get_mandatory_condition_checkers(self) -> Sequence[ConditionChecker]:
+        """
+        Returns a list of expression patterns that need to always be
+        present in the query before executing it on Clickhouse.
+        The kind of patterns we expect here is meant to ensure conditions
+        like "project_id = something" are never missing right before
+        sending the query to Clickhouse.
+        """
+        return []
+
 
 class WritableStorage(Storage):
     """
@@ -103,10 +136,12 @@ class ReadableTableStorage(ReadableStorage):
         schema: Schema,
         query_processors: Optional[Sequence[QueryProcessor]] = None,
         query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
+        mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
     ) -> None:
         self.__storage_key = storage_key
         self.__query_processors = query_processors or []
         self.__query_splitters = query_splitters or []
+        self.__mandatory_condition_checkers = mandatory_condition_checkers or []
         super().__init__(storage_set_key, schema)
 
     def get_storage_key(self) -> StorageKey:
@@ -118,6 +153,9 @@ class ReadableTableStorage(ReadableStorage):
     def get_query_splitters(self) -> Sequence[QuerySplitStrategy]:
         return self.__query_splitters
 
+    def get_mandatory_condition_checkers(self) -> Sequence[ConditionChecker]:
+        return self.__mandatory_condition_checkers
+
 
 class WritableTableStorage(ReadableTableStorage, WritableStorage):
     def __init__(
@@ -128,11 +166,17 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         query_processors: Sequence[QueryProcessor],
         stream_loader: KafkaStreamLoader,
         query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
+        mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
         replacer_processor: Optional[ReplacerProcessor] = None,
         writer_options: ClickhouseWriterOptions = None,
     ) -> None:
         super().__init__(
-            storage_key, storage_set_key, schema, query_processors, query_splitters
+            storage_key,
+            storage_set_key,
+            schema,
+            query_processors,
+            query_splitters,
+            mandatory_condition_checkers,
         )
         assert isinstance(schema, WritableTableSchema)
         self.__table_writer = TableWriter(

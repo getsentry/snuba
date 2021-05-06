@@ -63,10 +63,9 @@ class ConsumerBuilder:
         )
 
         self.broker_config = get_default_kafka_configuration(
-            storage_key, topic, bootstrap_servers=bootstrap_servers
+            topic, bootstrap_servers=bootstrap_servers
         )
         self.producer_broker_config = build_kafka_producer_configuration(
-            storage_key,
             topic,
             bootstrap_servers=bootstrap_servers,
             override_params={
@@ -142,10 +141,7 @@ class ConsumerBuilder:
     def __build_consumer(
         self, strategy_factory: ProcessingStrategyFactory[KafkaPayload]
     ) -> StreamProcessor[KafkaPayload]:
-        storage_key = self.storage.get_storage_key()
-
         configuration = build_kafka_consumer_configuration(
-            storage_key,
             self.storage.get_table_writer()
             .get_stream_loader()
             .get_default_topic_spec()

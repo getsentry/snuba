@@ -16,8 +16,8 @@ from snuba.datasets.storages.events_common import (
     required_columns,
 )
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
+from snuba.query.processors.conditions_enforcer import ProjectIdEnforcer
 from snuba.utils.streams.topics import Topic
-
 
 schema = WritableTableSchema(
     columns=all_columns,
@@ -35,13 +35,13 @@ storage = WritableTableStorage(
     schema=schema,
     query_processors=query_processors,
     stream_loader=build_kafka_stream_loader_from_settings(
-        StorageKey.EVENTS,
         processor=EventsProcessor(promoted_tag_columns),
         default_topic=Topic.EVENTS,
-        replacement_topic=Topic.EVENT_REPLACEMENTS,
+        replacement_topic=Topic.EVENT_REPLACEMENTS_LEGACY,
         commit_log_topic=Topic.COMMIT_LOG,
     ),
     query_splitters=query_splitters,
+    mandatory_condition_checkers=[ProjectIdEnforcer()],
     replacer_processor=ErrorsReplacer(
         schema=schema,
         required_columns=[col.escaped for col in required_columns],
