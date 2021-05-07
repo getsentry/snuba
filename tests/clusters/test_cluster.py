@@ -28,6 +28,7 @@ def setup_function() -> None:
                 "discover",
                 "events",
                 "events_ro",
+                "metrics",
                 "migrations",
                 "querylog",
                 "sessions",
