@@ -1,8 +1,7 @@
 import json
-from typing import Any, Callable, Iterator, Generator, Tuple, Union
+from typing import Any, Callable, Generator, Iterator, Tuple, Union
 
 import pytest
-
 from snuba_sdk.legacy import json_to_snql
 
 from snuba import settings, state
@@ -10,7 +9,7 @@ from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import STORAGES, get_storage
 from snuba.environment import setup_sentry
 from snuba.redis import redis_client
 from snuba.utils.clock import Clock, TestingClock
@@ -58,15 +57,16 @@ def run_migrations() -> Iterator[None]:
     yield
 
     for storage_key in StorageKey:
-        storage = get_storage(storage_key)
-        cluster = storage.get_cluster()
-        connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
-        database = cluster.get_database()
+        if storage_key in STORAGES:
+            storage = get_storage(storage_key)
+            cluster = storage.get_cluster()
+            connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+            database = cluster.get_database()
 
-        schema = storage.get_schema()
-        if isinstance(schema, WritableTableSchema):
-            table_name = schema.get_local_table_name()
-            connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
+            schema = storage.get_schema()
+            if isinstance(schema, WritableTableSchema):
+                table_name = schema.get_local_table_name()
+                connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
 
     redis_client.flushdb()
 

@@ -1,17 +1,19 @@
 import importlib
-import pytest
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
+import pytest
+
+from snuba import settings
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages import StorageKey, factory
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.migrations.errors import MigrationError
-from snuba.migrations.groups import get_group_loader, MigrationGroup
+from snuba.migrations.groups import MigrationGroup, get_group_loader
 from snuba.migrations.parse_schema import get_local_schema
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
@@ -182,6 +184,8 @@ def test_version() -> None:
 
 
 def test_no_schema_differences() -> None:
+    settings.ENABLE_DEV_FEATURES = True
+    importlib.reload(factory)
     runner = Runner()
     runner.run_all(force=True)
 
@@ -202,6 +206,9 @@ def test_no_schema_differences() -> None:
         assert (
             schema.get_column_differences(local_schema) == []
         ), f"Schema mismatch: {table_name} does not match schema"
+
+    importlib.reload(settings)
+    importlib.reload(factory)
 
 
 def test_transactions_compatibility() -> None:
