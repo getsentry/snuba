@@ -39,6 +39,7 @@ storage = WritableTableStorage(
         default_topic=Topic.EVENTS,
         replacement_topic=Topic.EVENT_REPLACEMENTS_LEGACY,
         commit_log_topic=Topic.COMMIT_LOG,
+        subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_EVENTS,
     ),
     query_splitters=query_splitters,
     mandatory_condition_checkers=[ProjectIdEnforcer()],

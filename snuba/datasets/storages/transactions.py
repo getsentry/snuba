@@ -131,6 +131,7 @@ storage = WritableTableStorage(
         processor=TransactionsMessageProcessor(),
         default_topic=Topic.EVENTS,
         commit_log_topic=Topic.COMMIT_LOG,
+        subscription_result_topic=Topic.SUBSCRIPTION_RESULTS_TRANSACTIONS,
     ),
     query_splitters=[TimeSplitQueryStrategy(timestamp_col="finish_ts")],
     mandatory_condition_checkers=[ProjectIdEnforcer()],
