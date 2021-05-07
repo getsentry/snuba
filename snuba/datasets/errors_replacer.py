@@ -1,15 +1,26 @@
 import logging
 import time
 import uuid
-
 from collections import deque
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Deque, Mapping, Optional, Sequence, Tuple, MutableMapping, List
+from typing import (
+    Any,
+    Deque,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    Union,
+)
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
-from snuba.clickhouse.columns import FlattenedColumn, ReadOnly, Nullable
+from snuba.clickhouse.columns import FlattenedColumn, Nullable, ReadOnly
 from snuba.clickhouse.escaping import escape_identifier, escape_string
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import InvalidMessageType, _hashify
@@ -20,11 +31,7 @@ from snuba.replacers.replacer_processor import (
     ReplacerProcessor,
 )
 
-
 logger = logging.getLogger(__name__)
-
-EXCLUDE_GROUPS = object()
-NEEDS_FINAL = object()
 
 """
 Disambiguate the dataset/storage when there are multiple tables representing errors
@@ -36,6 +43,50 @@ In theory this will be needed only during the events to errors migration.
 class ReplacerState(Enum):
     EVENTS = "events"
     ERRORS = "errors"
+
+
+@dataclass
+class ReplacementContext:
+    all_columns: Sequence[FlattenedColumn]
+    state_name: ReplacerState
+
+
+EXCLUDE_GROUPS = object()
+NEEDS_FINAL = object()
+QueryTimeFlags = Union[Tuple[object, int], Tuple[object, int, Any]]
+
+# Separate mixin because of https://github.com/python/mypy/issues/5374
+@dataclass(frozen=True)
+class _LegacyReplacementFieldsMixin:
+    # XXX: For the group_exclude message we need to be able to run a
+    # replacement without running any query.
+    count_query_template: Optional[str]
+    insert_query_template: Optional[str]
+    query_args: Mapping[str, Any]
+    query_time_flags: QueryTimeFlags
+
+
+class LegacyReplacement(_LegacyReplacementFieldsMixin, Replacement[ReplacementContext]):
+    def get_project_id(self) -> int:
+        return self.query_time_flags[1]
+
+    def get_needs_final(self) -> bool:
+        return self.query_time_flags[0] == NEEDS_FINAL
+
+    def get_excluded_groups(self) -> Sequence[int]:
+        if self.query_time_flags[0] == EXCLUDE_GROUPS:
+            return self.query_time_flags[2]  # type: ignore
+
+        return []
+
+    def get_insert_query_template(self) -> Optional[str]:
+        return self.insert_query_template
+
+    def get_count_query_template(self) -> Optional[str]:
+        return self.count_query_template
+
+    def get_query_args(self) -> Mapping[str, Any]:
+        return self.query_args or {}
 
 
 def get_project_exclude_groups_key(
@@ -145,9 +196,15 @@ class ErrorsReplacer(ReplacerProcessor):
         self.__use_promoted_prewhere = use_promoted_prewhere
         self.__schema = schema
 
-    def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
+    def process_message(
+        self, message: ReplacementMessage
+    ) -> Optional[Replacement[ReplacementContext]]:
         type_ = message.action_type
         event = message.data
+
+        context = ReplacementContext(
+            all_columns=self.__all_columns, state_name=self.__state_name
+        )
 
         if type_ in (
             "start_delete_groups",
@@ -176,19 +233,17 @@ class ErrorsReplacer(ReplacerProcessor):
                 event, self.__required_columns, self.__state_name
             )
         elif type_ == "replace_group":
-            processed = process_replace_group(
-                event, self.__all_columns, self.__state_name
-            )
+            processed = ReplaceGroupReplacement.parse_message(event, context)
         elif type_ == "exclude_groups":
-            processed = process_exclude_groups(event)
+            processed = ExcludeGroupsReplacement.parse_message(event, context)
         else:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
 
         return processed
 
-    def pre_replacement(self, replacement: Replacement, matching_records: int) -> bool:
-        # query_time_flags == (type, project_id, [...data...])
-        flag_type, project_id = replacement.query_time_flags[:2]
+    def pre_replacement(
+        self, replacement: Replacement[ReplacementContext], matching_records: int
+    ) -> bool:
         if self.__state_name == ReplacerState.EVENTS:
             # Backward compatibility with the old keys already in Redis, we will let double write
             # the old key structure and the new one for a while then we can get rid of the old one.
@@ -196,17 +251,24 @@ class ErrorsReplacer(ReplacerProcessor):
         else:
             compatibility_double_write = False
 
+        needs_final = replacement.get_needs_final()
+        group_ids_to_exclude = replacement.get_excluded_groups()
+        project_id = replacement.get_project_id()
+
         if not settings.REPLACER_IMMEDIATE_OPTIMIZE:
-            if flag_type == NEEDS_FINAL:
+            if needs_final:
                 if compatibility_double_write:
                     set_project_needs_final(project_id, None)
                 set_project_needs_final(project_id, self.__state_name)
-            elif flag_type == EXCLUDE_GROUPS:
-                group_ids = replacement.query_time_flags[2]
+
+            if group_ids_to_exclude:
                 if compatibility_double_write:
-                    set_project_exclude_groups(project_id, group_ids, None)
-                set_project_exclude_groups(project_id, group_ids, self.__state_name)
-        elif flag_type in {NEEDS_FINAL, EXCLUDE_GROUPS}:
+                    set_project_exclude_groups(project_id, group_ids_to_exclude, None)
+                set_project_exclude_groups(
+                    project_id, group_ids_to_exclude, self.__state_name
+                )
+
+        elif needs_final or group_ids_to_exclude:
             return True
 
         return False
@@ -217,8 +279,8 @@ def _build_event_tombstone_replacement(
     required_columns: Sequence[str],
     where: str,
     query_args: Mapping[str, str],
-    query_time_flags: Tuple[Any, ...],
-) -> Replacement:
+    query_time_flags: QueryTimeFlags,
+) -> Replacement[ReplacementContext]:
     select_columns = map(lambda i: i if i != "deleted" else "1", required_columns)
     count_query_template = (
         """\
@@ -244,20 +306,21 @@ def _build_event_tombstone_replacement(
     }
     final_query_args.update(query_args)
 
-    return Replacement(
+    return LegacyReplacement(
         count_query_template, insert_query_template, final_query_args, query_time_flags
     )
 
 
 def _build_group_replacement(
+    cls: Type[LegacyReplacement],
     txn: Optional[str],
     project_id: int,
     new_group_id: str,
     where: str,
     query_args: Mapping[str, str],
-    query_time_flags: Tuple[Any, ...],
+    query_time_flags: QueryTimeFlags,
     all_columns: Sequence[FlattenedColumn],
-) -> Optional[Replacement]:
+) -> Optional[Replacement[ReplacementContext]]:
     # HACK: We were sending duplicates of the `end_merge` message from Sentry,
     # this is only for performance of the backlog.
     if txn:
@@ -295,7 +358,7 @@ def _build_group_replacement(
     }
     final_query_args.update(query_args)
 
-    return Replacement(
+    return LegacyReplacement(
         count_query_template, insert_query_template, final_query_args, query_time_flags
     )
 
@@ -347,50 +410,51 @@ def _build_event_set_filter(
     return prewhere, where, query_args
 
 
-def process_replace_group(
-    message: Mapping[str, Any],
-    all_columns: Sequence[FlattenedColumn],
-    state_name: ReplacerState,
-) -> Optional[Replacement]:
+class ReplaceGroupReplacement(LegacyReplacement):
     """
     Merge individual events into new group. The old group will have to be
     manually excluded from search queries.
 
-    See docstring of process_exclude_groups for an explanation of how this is used.
+    See docstring of ExcludeGroupsReplacement for an explanation of how this is used.
 
     Note that events merged this way cannot be cleanly unmerged by
     process_unmerge, as their group hashes possibly stand in no correlation to
     how the merging was done.
     """
 
-    event_ids = message["event_ids"]
-    if not event_ids:
-        return None
+    @classmethod
+    def parse_message(
+        cls, message: Mapping[str, Any], context: ReplacementContext
+    ) -> Optional[Replacement[ReplacementContext]]:
+        event_ids = message["event_ids"]
+        if not event_ids:
+            return None
 
-    event_set_filter = _build_event_set_filter(message, state_name)
-    if event_set_filter is None:
-        return None
+        event_set_filter = _build_event_set_filter(message, context.state_name)
+        if event_set_filter is None:
+            return None
 
-    prewhere, where, query_args = event_set_filter
+        prewhere, where, query_args = event_set_filter
 
-    full_where = f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
-    project_id: int = message["project_id"]
-    query_time_flags = (None, project_id)
+        full_where = f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
+        project_id: int = message["project_id"]
+        query_time_flags = (None, project_id)
 
-    return _build_group_replacement(
-        message.get("transaction_id"),
-        project_id,
-        message["new_group_id"],
-        full_where,
-        query_args,
-        query_time_flags,
-        all_columns,
-    )
+        return _build_group_replacement(
+            cls,
+            message.get("transaction_id"),
+            project_id,
+            message["new_group_id"],
+            full_where,
+            query_args,
+            query_time_flags,
+            context.all_columns,
+        )
 
 
 def process_delete_groups(
     message: Mapping[str, Any], required_columns: Sequence[str]
-) -> Optional[Replacement]:
+) -> Optional[Replacement[ReplacementContext]]:
     group_ids = message["group_ids"]
     if not group_ids:
         return None
@@ -421,7 +485,7 @@ def process_tombstone_events(
     message: Mapping[str, Any],
     required_columns: Sequence[str],
     state_name: ReplacerState,
-) -> Optional[Replacement]:
+) -> Optional[Replacement[ReplacementContext]]:
     event_ids = message["event_ids"]
     if not event_ids:
         return None
@@ -460,7 +524,14 @@ def process_tombstone_events(
     )
 
 
-def process_exclude_groups(message: Mapping[str, Any]) -> Optional[Replacement]:
+# Separate mixin because of https://github.com/python/mypy/issues/5374
+@dataclass(frozen=True)
+class _ExcludeGroupsFields:
+    project_id: int
+    group_ids: Sequence[int]
+
+
+class ExcludeGroupsReplacement(_ExcludeGroupsFields, Replacement[ReplacementContext]):
     """
     Exclude a group ID from being searched.
 
@@ -477,12 +548,32 @@ def process_exclude_groups(message: Mapping[str, Any]) -> Optional[Replacement]:
     See docstring in `sentry.reprocessing2` for more information.
     """
 
-    group_ids = message["group_ids"]
-    if not group_ids:
+    @classmethod
+    def parse_message(
+        cls, message: Mapping[str, Any], context: ReplacementContext
+    ) -> Optional["ExcludeGroupsReplacement"]:
+        if not message["group_ids"]:
+            return None
+
+        return cls(message["project_id"], message["group_ids"])
+
+    def get_project_id(self) -> int:
+        return self.project_id
+
+    def get_excluded_groups(self) -> Sequence[int]:
+        return self.group_ids
+
+    def get_needs_final(self) -> bool:
+        return False
+
+    def get_insert_query_template(self) -> Optional[str]:
         return None
 
-    query_time_flags = (EXCLUDE_GROUPS, message["project_id"], group_ids)
-    return Replacement(None, None, {}, query_time_flags)
+    def get_count_query_template(self) -> Optional[str]:
+        return None
+
+    def get_query_args(self) -> Mapping[str, Any]:
+        return {}
 
 
 SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
@@ -490,7 +581,7 @@ SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
 
 def process_merge(
     message: Mapping[str, Any], all_columns: Sequence[FlattenedColumn]
-) -> Optional[Replacement]:
+) -> Optional[Replacement[ReplacementContext]]:
     """
     Merge all events of one group into another group.
 
@@ -500,7 +591,7 @@ def process_merge(
     This is roughly equivalent to sending:
 
         process_merge_events (for each event)
-        process_exclude_groups
+        ExcludeGroupsReplacement
     """
 
     where = """\
@@ -527,6 +618,7 @@ def process_merge(
     query_time_flags = (EXCLUDE_GROUPS, project_id, previous_group_ids)
 
     return _build_group_replacement(
+        LegacyReplacement,
         message.get("transaction_id"),
         project_id,
         message["new_group_id"],
@@ -541,7 +633,7 @@ def process_unmerge(
     message: Mapping[str, Any],
     all_columns: Sequence[FlattenedColumn],
     state_name: ReplacerState,
-) -> Optional[Replacement]:
+) -> Optional[Replacement[ReplacementContext]]:
     hashes = message["hashes"]
     if not hashes:
         return None
@@ -597,7 +689,7 @@ def process_unmerge(
 
     query_time_flags = (NEEDS_FINAL, message["project_id"])
 
-    return Replacement(
+    return LegacyReplacement(
         count_query_template, insert_query_template, query_args, query_time_flags
     )
 
@@ -609,7 +701,7 @@ def process_delete_tag(
     promoted_tags: Mapping[str, Sequence[str]],
     use_promoted_prewhere: bool,
     schema: WritableTableSchema,
-) -> Optional[Replacement]:
+) -> Optional[Replacement[ReplacementContext]]:
     tag = message["tag"]
     if not tag:
         return None
@@ -687,6 +779,6 @@ def process_delete_tag(
 
     query_time_flags = (NEEDS_FINAL, message["project_id"])
 
-    return Replacement(
+    return LegacyReplacement(
         count_query_template, insert_query_template, query_args, query_time_flags
     )
