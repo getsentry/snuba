@@ -9,7 +9,7 @@ from snuba.environment import setup_logging
 from snuba.migrations.connect import check_clickhouse_connections
 from snuba.migrations.runner import Runner
 from snuba.utils.logging import pylog_to_syslog_level
-from snuba.utils.streams.backends.kafka import get_default_kafka_configuration
+from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic
 
 

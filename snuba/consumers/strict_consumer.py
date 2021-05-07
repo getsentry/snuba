@@ -1,10 +1,10 @@
-from confluent_kafka import Consumer, KafkaError, Message, TopicPartition
+import logging
 from enum import Enum
 from typing import Callable, MutableMapping, Optional, Sequence, Tuple
 
-import logging
+from confluent_kafka import Consumer, KafkaError, Message, TopicPartition
 
-from snuba.utils.streams.backends.kafka import KafkaBrokerConfig
+from snuba.utils.streams.backends.configuration import KafkaBrokerConfig
 
 logger = logging.getLogger("snuba.kafka-consumer")
 

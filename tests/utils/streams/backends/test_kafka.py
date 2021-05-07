@@ -17,8 +17,8 @@ from snuba.utils.streams.backends.kafka import (
     KafkaPayload,
     KafkaProducer,
     as_kafka_configuration_bool,
-    get_default_kafka_configuration,
 )
+from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.synchronized import Commit, commit_codec
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
