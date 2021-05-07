@@ -53,11 +53,8 @@ class TableSchema(Schema):
         part_format: Optional[Sequence[util.PartSegment]] = None,
     ):
         self.__local_table_name = local_table_name
-        self.__table_name = (
-            local_table_name
-            if get_cluster(storage_set_key).is_single_node()
-            else dist_table_name
-        )
+        self.__dist_table_name = dist_table_name
+        self.__storage_set_key = storage_set_key
         self.__table_source = TableSource(
             self.get_table_name(), columns, mandatory_conditions
         )
@@ -82,7 +79,11 @@ class TableSchema(Schema):
         This represents the table we interact with to send queries to Clickhouse.
         In distributed mode this will be a distributed table. In local mode it is a local table.
         """
-        return self.__table_name
+        return (
+            self.__local_table_name
+            if get_cluster(self.__storage_set_key).is_single_node()
+            else self.__dist_table_name
+        )
 
     def get_part_format(self) -> Optional[Sequence[util.PartSegment]]:
         """
