@@ -1,14 +1,21 @@
 import importlib
 from unittest.mock import patch
 
+import pytest
+
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters import cluster
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 
 
 def setup_function() -> None:
+    settings.DISABLED_STORAGE_SETS = {
+        "outcomes",  # Disabled and not registered
+        "querylog",  # Disabled still registered
+    }
     settings.CLUSTERS = [
         {
             "host": "host_1",
@@ -22,7 +29,6 @@ def setup_function() -> None:
                 "events",
                 "events_ro",
                 "migrations",
-                "outcomes",
                 "querylog",
                 "sessions",
             },
@@ -59,6 +65,11 @@ def test_clusters() -> None:
         get_storage(StorageKey("events")).get_cluster()
         != get_storage(StorageKey("transactions")).get_cluster()
     )
+
+
+def test_disabled_cluster() -> None:
+    with pytest.raises(AssertionError):
+        cluster.get_cluster(StorageSetKey.OUTCOMES)
 
 
 def test_get_local_nodes() -> None:
