@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from abc import ABC, abstractclassmethod, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import NamedTuple, NewType, Optional, Sequence
+from typing import Any, Mapping, NamedTuple, NewType, Optional, Sequence
 from uuid import UUID
 
 from snuba.datasets.dataset import Dataset
+from snuba.query.exceptions import InvalidQueryException
 from snuba.query.logical import Aggregation
 from snuba.query.types import Condition
 from snuba.request import Language, Request
@@ -38,17 +40,51 @@ class SubscriptionIdentifier:
         return cls(PartitionId(int(partition)), UUID(uuid))
 
 
+# This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
 @dataclass(frozen=True)
-class SubscriptionData:
+class _SubscriptionData:
+    project_id: int
+    resolution: timedelta
+
+
+class SubscriptionData(ABC, _SubscriptionData):
     """
     Represents the state of a subscription.
     """
 
-    project_id: int
+    def __post_init__(self) -> None:
+        if self.resolution < timedelta(minutes=1):
+            raise InvalidSubscriptionError(
+                "Resolution must be greater than or equal to 1 minute"
+            )
+
+        if self.resolution.microseconds > 0:
+            raise InvalidSubscriptionError("Resolution does not support microseconds")
+
+    @abstractmethod
+    def build_request(
+        self, dataset: Dataset, timestamp: datetime, offset: Optional[int], timer: Timer
+    ) -> Request:
+        raise NotImplementedError
+
+    @abstractclassmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> SubscriptionData:
+        raise NotImplementedError
+
+    @abstractmethod
+    def to_dict(self) -> Mapping[str, Any]:
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class LegacySubscriptionData(SubscriptionData):
+    """
+    Represents the state of a legacy subscription (before SnQL).
+    """
+
     conditions: Sequence[Condition]
     aggregations: Sequence[Aggregation]
     time_window: timedelta
-    resolution: timedelta
 
     def __post_init__(self) -> None:
         if self.time_window < timedelta(minutes=1):
@@ -98,6 +134,28 @@ class SubscriptionData:
             dataset,
             SUBSCRIPTION_REFERRER,
         )
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> LegacySubscriptionData:
+        if not data.get("aggregations"):
+            raise InvalidQueryException("No aggregation provided")
+
+        return LegacySubscriptionData(
+            project_id=data["project_id"],
+            conditions=data["conditions"],
+            aggregations=data["aggregations"],
+            time_window=timedelta(seconds=data["time_window"]),
+            resolution=timedelta(seconds=data["resolution"]),
+        )
+
+    def to_dict(self) -> Mapping[str, Any]:
+        return {
+            "project_id": self.project_id,
+            "conditions": self.conditions,
+            "aggregations": self.aggregations,
+            "time_window": int(self.time_window.total_seconds()),
+            "resolution": int(self.resolution.total_seconds()),
+        }
 
 
 class Subscription(NamedTuple):

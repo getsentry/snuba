@@ -2,7 +2,7 @@ from datetime import timedelta
 from uuid import uuid1
 
 from snuba.redis import redis_client
-from snuba.subscriptions.data import SubscriptionData
+from snuba.subscriptions.data import LegacySubscriptionData, SubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.subscriptions import BaseSubscriptionTest
 
@@ -10,7 +10,7 @@ from tests.subscriptions import BaseSubscriptionTest
 class TestRedisSubscriptionStore(BaseSubscriptionTest):
     @property
     def subscription(self) -> SubscriptionData:
-        return SubscriptionData(
+        return LegacySubscriptionData(
             project_id=self.project_id,
             conditions=[["platform", "IN", ["a"]]],
             aggregations=[["count()", "", "count"]],
@@ -41,7 +41,7 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
         subscription_id = uuid1()
         store.create(subscription_id, self.subscription)
         assert store.all() == [(subscription_id, self.subscription)]
-        new_subscription = SubscriptionData(
+        new_subscription = LegacySubscriptionData(
             project_id=self.project_id,
             conditions=[["platform", "IN", ["b"]]],
             aggregations=[["count()", "", "something"]],
@@ -63,7 +63,7 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
         assert store_2.all() == []
         assert store_1.all() == [(subscription_id, self.subscription)]
 
-        new_subscription = SubscriptionData(
+        new_subscription = LegacySubscriptionData(
             project_id=self.project_id,
             conditions=[["platform", "IN", ["b"]]],
             aggregations=[["count()", "", "something"]],

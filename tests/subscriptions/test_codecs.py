@@ -9,9 +9,9 @@ from snuba.subscriptions.codecs import (
     SubscriptionTaskResultEncoder,
 )
 from snuba.subscriptions.data import (
+    LegacySubscriptionData,
     PartitionId,
     Subscription,
-    SubscriptionData,
     SubscriptionIdentifier,
 )
 from snuba.subscriptions.worker import SubscriptionTaskResult
@@ -20,8 +20,8 @@ from snuba.utils.scheduler import ScheduledTask
 
 
 class TestSubscriptionCodec:
-    def build_subscription_data(self) -> SubscriptionData:
-        return SubscriptionData(
+    def build_subscription_data(self) -> LegacySubscriptionData:
+        return LegacySubscriptionData(
             project_id=5,
             conditions=[["platform", "IN", ["a"]]],
             aggregations=[["count()", "", "count"]],
@@ -65,8 +65,12 @@ def test_subscription_task_result_encoder() -> None:
 
     timestamp = datetime.now()
 
-    subscription_data = SubscriptionData(
-        1, [], [["count()", "", "count"]], timedelta(minutes=1), timedelta(minutes=1),
+    subscription_data = LegacySubscriptionData(
+        project_id=1,
+        conditions=[],
+        aggregations=[["count()", "", "count"]],
+        time_window=timedelta(minutes=1),
+        resolution=timedelta(minutes=1),
     )
 
     # XXX: This seems way too coupled to the dataset.

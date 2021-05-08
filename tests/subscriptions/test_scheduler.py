@@ -5,9 +5,9 @@ from typing import Collection, Tuple
 from snuba.datasets.factory import get_dataset
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
+    LegacySubscriptionData,
     PartitionId,
     Subscription,
-    SubscriptionData,
     SubscriptionIdentifier,
 )
 from snuba.subscriptions.scheduler import SubscriptionScheduler
@@ -26,8 +26,12 @@ class TestSubscriptionScheduler:
     def build_subscription(self, resolution: timedelta) -> Subscription:
         return Subscription(
             SubscriptionIdentifier(self.partition_id, uuid.uuid4()),
-            SubscriptionData(
-                1, [], [["count()", "", "count"]], timedelta(minutes=1), resolution
+            LegacySubscriptionData(
+                project_id=1,
+                conditions=[],
+                aggregations=[["count()", "", "count"]],
+                time_window=timedelta(minutes=1),
+                resolution=resolution,
             ),
         )
 
