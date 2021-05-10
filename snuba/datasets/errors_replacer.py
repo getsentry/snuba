@@ -1,6 +1,7 @@
 import logging
 import time
 import uuid
+from abc import abstractclassmethod, abstractmethod
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
@@ -25,11 +26,8 @@ from snuba.clickhouse.escaping import escape_identifier, escape_string
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import InvalidMessageType, _hashify
 from snuba.redis import redis_client
-from snuba.replacers.replacer_processor import (
-    Replacement,
-    ReplacementMessage,
-    ReplacerProcessor,
-)
+from snuba.replacers.replacer_processor import Replacement as ReplacementBase
+from snuba.replacers.replacer_processor import ReplacementMessage, ReplacerProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +49,22 @@ class ReplacementContext:
     state_name: ReplacerState
 
 
+class Replacement(ReplacementBase):
+    @abstractclassmethod
+    def parse_message(
+        cls, message: Mapping[str, Any], context: ReplacementContext,
+    ) -> Optional["Replacement"]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_excluded_groups(self) -> Sequence[int]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_needs_final(self) -> bool:
+        raise NotImplementedError()
+
+
 EXCLUDE_GROUPS = object()
 NEEDS_FINAL = object()
 QueryTimeFlags = Union[Tuple[object, int], Tuple[object, int, Any]]
@@ -66,7 +80,7 @@ class _LegacyReplacementFieldsMixin:
     query_time_flags: QueryTimeFlags
 
 
-class LegacyReplacement(_LegacyReplacementFieldsMixin, Replacement[ReplacementContext]):
+class LegacyReplacement(_LegacyReplacementFieldsMixin, Replacement):
     def get_project_id(self) -> int:
         return self.query_time_flags[1]
 
@@ -196,9 +210,7 @@ class ErrorsReplacer(ReplacerProcessor):
         self.__use_promoted_prewhere = use_promoted_prewhere
         self.__schema = schema
 
-    def process_message(
-        self, message: ReplacementMessage
-    ) -> Optional[Replacement[ReplacementContext]]:
+    def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
         type_ = message.action_type
         event = message.data
 
@@ -241,8 +253,8 @@ class ErrorsReplacer(ReplacerProcessor):
 
         return processed
 
-    def pre_replacement(
-        self, replacement: Replacement[ReplacementContext], matching_records: int
+    def pre_replacement(  # type: ignore[override]
+        self, replacement: Replacement, matching_records: int
     ) -> bool:
         if self.__state_name == ReplacerState.EVENTS:
             # Backward compatibility with the old keys already in Redis, we will let double write
@@ -280,7 +292,7 @@ def _build_event_tombstone_replacement(
     where: str,
     query_args: Mapping[str, str],
     query_time_flags: QueryTimeFlags,
-) -> Replacement[ReplacementContext]:
+) -> Replacement:
     select_columns = map(lambda i: i if i != "deleted" else "1", required_columns)
     count_query_template = (
         """\
@@ -320,7 +332,7 @@ def _build_group_replacement(
     query_args: Mapping[str, str],
     query_time_flags: QueryTimeFlags,
     all_columns: Sequence[FlattenedColumn],
-) -> Optional[Replacement[ReplacementContext]]:
+) -> Optional[Replacement]:
     # HACK: We were sending duplicates of the `end_merge` message from Sentry,
     # this is only for performance of the backlog.
     if txn:
@@ -425,7 +437,7 @@ class ReplaceGroupReplacement(LegacyReplacement):
     @classmethod
     def parse_message(
         cls, message: Mapping[str, Any], context: ReplacementContext
-    ) -> Optional[Replacement[ReplacementContext]]:
+    ) -> Optional[Replacement]:
         event_ids = message["event_ids"]
         if not event_ids:
             return None
@@ -454,7 +466,7 @@ class ReplaceGroupReplacement(LegacyReplacement):
 
 def process_delete_groups(
     message: Mapping[str, Any], required_columns: Sequence[str]
-) -> Optional[Replacement[ReplacementContext]]:
+) -> Optional[Replacement]:
     group_ids = message["group_ids"]
     if not group_ids:
         return None
@@ -485,7 +497,7 @@ def process_tombstone_events(
     message: Mapping[str, Any],
     required_columns: Sequence[str],
     state_name: ReplacerState,
-) -> Optional[Replacement[ReplacementContext]]:
+) -> Optional[Replacement]:
     event_ids = message["event_ids"]
     if not event_ids:
         return None
@@ -531,7 +543,7 @@ class _ExcludeGroupsFields:
     group_ids: Sequence[int]
 
 
-class ExcludeGroupsReplacement(_ExcludeGroupsFields, Replacement[ReplacementContext]):
+class ExcludeGroupsReplacement(_ExcludeGroupsFields, Replacement):
     """
     Exclude a group ID from being searched.
 
@@ -581,7 +593,7 @@ SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
 
 def process_merge(
     message: Mapping[str, Any], all_columns: Sequence[FlattenedColumn]
-) -> Optional[Replacement[ReplacementContext]]:
+) -> Optional[Replacement]:
     """
     Merge all events of one group into another group.
 
@@ -633,7 +645,7 @@ def process_unmerge(
     message: Mapping[str, Any],
     all_columns: Sequence[FlattenedColumn],
     state_name: ReplacerState,
-) -> Optional[Replacement[ReplacementContext]]:
+) -> Optional[Replacement]:
     hashes = message["hashes"]
     if not hashes:
         return None
@@ -701,7 +713,7 @@ def process_delete_tag(
     promoted_tags: Mapping[str, Sequence[str]],
     use_promoted_prewhere: bool,
     schema: WritableTableSchema,
-) -> Optional[Replacement[ReplacementContext]]:
+) -> Optional[Replacement]:
     tag = message["tag"]
     if not tag:
         return None
