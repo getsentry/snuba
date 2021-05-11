@@ -25,7 +25,7 @@ from confluent_kafka import Producer
 from snuba import environment, settings
 from snuba.redis import redis_client
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.streams.backends.kafka import (
+from snuba.utils.streams.configuration_builder import (
     build_default_kafka_producer_configuration,
 )
 from snuba.utils.streams.topics import Topic
