@@ -6,6 +6,7 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from functools import cached_property
 from typing import (
     Any,
     Deque,
@@ -16,7 +17,6 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
-    Type,
     Union,
 )
 
@@ -325,58 +325,6 @@ def _build_event_tombstone_replacement(
     )
 
 
-def _build_group_replacement(
-    cls: Type[LegacyReplacement],
-    txn: Optional[str],
-    project_id: int,
-    new_group_id: str,
-    where: str,
-    query_args: Mapping[str, str],
-    query_time_flags: QueryTimeFlags,
-    all_columns: Sequence[FlattenedColumn],
-) -> Optional[Replacement]:
-    # HACK: We were sending duplicates of the `end_merge` message from Sentry,
-    # this is only for performance of the backlog.
-    if txn:
-        if txn in SEEN_MERGE_TXN_CACHE:
-            return None
-        else:
-            SEEN_MERGE_TXN_CACHE.append(txn)
-
-    all_column_names = [c.escaped for c in all_columns]
-    select_columns = map(
-        lambda i: i if i != "group_id" else str(new_group_id), all_column_names,
-    )
-
-    count_query_template = (
-        """\
-        SELECT count()
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
-
-    insert_query_template = (
-        """\
-        INSERT INTO %(table_name)s (%(all_columns)s)
-        SELECT %(select_columns)s
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
-
-    final_query_args = {
-        "all_columns": ", ".join(all_column_names),
-        "select_columns": ", ".join(select_columns),
-        "project_id": project_id,
-    }
-    final_query_args.update(query_args)
-
-    return LegacyReplacement(
-        count_query_template, insert_query_template, final_query_args, query_time_flags
-    )
-
-
 def _build_event_set_filter(
     message: Mapping[str, Any], state_name: ReplacerState
 ) -> Optional[Tuple[List[str], List[str], MutableMapping[str, str]]]:
@@ -424,7 +372,29 @@ def _build_event_set_filter(
     return prewhere, where, query_args
 
 
-class ReplaceGroupReplacement(LegacyReplacement):
+@dataclass(frozen=True)
+class _EventSetFilterMixin:
+    project_id: int
+    event_ids: int
+    from_timestamp: Optional[datetime]
+    to_timestamp: Optional[datetime]
+
+    def _get_event_set_filter(
+        self, state_name: ReplacerState
+    ) -> Optional[Tuple[List[str], List[str], MutableMapping[str, str]]]:
+        return _build_event_set_filter(
+            {
+                "event_ids": self.event_ids,
+                "from_timestamp": self.from_timestamp,
+                "to_timestamp": self.to_timestamp,
+                "project_id": self.project_id,
+            },
+            state_name,
+        )
+
+
+@dataclass(frozen=True)
+class ReplaceGroupReplacement(Replacement, _EventSetFilterMixin):
     """
     Merge individual events into new group. The old group will have to be
     manually excluded from search queries.
@@ -436,33 +406,96 @@ class ReplaceGroupReplacement(LegacyReplacement):
     how the merging was done.
     """
 
+    new_group_id: int
+    state_name: ReplacerState
+    all_column_names: Sequence[str]
+
+    def get_project_id(self) -> int:
+        return self.project_id
+
     @classmethod
     def parse_message(
         cls, message: Mapping[str, Any], context: ReplacementContext
-    ) -> Optional[Replacement]:
+    ) -> Optional["ReplaceGroupReplacement"]:
+        txn = message.get("transaction_id")
+
+        # HACK: We were sending duplicates of the `end_merge` message from Sentry,
+        # this is only for performance of the backlog.
+        if txn:
+            if txn in SEEN_MERGE_TXN_CACHE:
+                return None
+            else:
+                SEEN_MERGE_TXN_CACHE.append(txn)
+
         event_ids = message["event_ids"]
         if not event_ids:
             return None
 
-        event_set_filter = _build_event_set_filter(message, context.state_name)
-        if event_set_filter is None:
+        new_group_id = message["new_group_id"]
+        project_id: int = message["project_id"]
+        all_column_names = [c.escaped for c in context.all_columns]
+
+        return ReplaceGroupReplacement(
+            project_id=project_id,
+            new_group_id=new_group_id,
+            event_ids=event_ids,
+            from_timestamp=message.get("from_timestamp"),
+            to_timestamp=message.get("to_timestamp"),
+            state_name=context.state_name,
+            all_column_names=all_column_names,
+        )
+
+    def get_excluded_groups(self) -> Sequence[int]:
+        return []
+
+    def get_needs_final(self) -> bool:
+        return False
+
+    @cached_property
+    def _where_clause(self) -> Optional[str]:
+        filter = self._get_event_set_filter(self.state_name)
+        if filter is None:
+            return filter
+
+        prewhere, where, query_args = filter
+        query_template = (
+            f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
+        )
+        return query_template % query_args
+
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        where = self._where_clause
+        if where is None:
             return None
 
-        prewhere, where, query_args = event_set_filter
+        return (
+            f"""\
+            SELECT count()
+            FROM {table_name} FINAL
+        """
+            + where
+        )
 
-        full_where = f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
-        project_id: int = message["project_id"]
-        query_time_flags = (None, project_id)
+    def get_insert_query(self, table_name: str) -> Optional[str]:
+        where = self._where_clause
+        if where is None:
+            return None
 
-        return _build_group_replacement(
-            cls,
-            message.get("transaction_id"),
-            project_id,
-            message["new_group_id"],
-            full_where,
-            query_args,
-            query_time_flags,
-            context.all_columns,
+        all_columns = ", ".join(self.all_column_names)
+        select_columns = ", ".join(
+            map(
+                lambda i: i if i != "group_id" else str(self.new_group_id),
+                self.all_column_names,
+            )
+        )
+
+        return (
+            where
+            + f"""\
+            INSERT INTO {table_name} ({all_columns})
+            SELECT {select_columns}
+            FROM {table_name} FINAL
+        """
         )
 
 
