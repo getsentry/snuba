@@ -680,6 +680,15 @@ class MergeGroupsReplacement(Replacement):
             all_column_names=all_column_names,
         )
 
+    def get_needs_final(self) -> bool:
+        return False
+
+    def get_project_id(self) -> int:
+        return self.project_id
+
+    def get_excluded_groups(self) -> Sequence[int]:
+        return self.previous_group_ids
+
     @cached_property
     def _where_clause(self) -> str:
         previous_group_ids = ", ".join(str(gid) for gid in self.previous_group_ids)
@@ -691,15 +700,6 @@ class MergeGroupsReplacement(Replacement):
             AND received <= CAST('{ts}' AS DateTime)
             AND NOT deleted
         """
-
-    def get_needs_final(self) -> bool:
-        return False
-
-    def get_project_id(self) -> int:
-        return self.project_id
-
-    def get_excluded_groups(self) -> Sequence[int]:
-        return self.previous_group_ids
 
     def get_count_query(self, table_name: str) -> Optional[str]:
         where = self._where_clause
