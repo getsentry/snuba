@@ -9,6 +9,8 @@ LOG_FORMAT = "%(asctime)s %(message)s"
 TESTING = False
 DEBUG = True
 
+DIST = True
+
 PORT = 1218
 
 DEFAULT_DATASET_NAME = "events"
@@ -17,29 +19,54 @@ DISABLED_DATASETS: Set[str] = set()
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
-CLUSTERS: Sequence[Mapping[str, Any]] = [
-    {
-        "host": os.environ.get("CLICKHOUSE_HOST", "localhost"),
-        "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
-        "user": os.environ.get("CLICKHOUSE_USER", "default"),
-        "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
-        "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
-        "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
-        "storage_sets": {
-            "discover",
-            "events",
-            "events_ro",
-            "migrations",
-            "outcomes",
-            "querylog",
-            "sessions",
-            "transactions",
+CLUSTERS: Sequence[Mapping[str, Any]] = []
+if DIST:
+    CLUSTERS = [
+        {
+            "host": os.environ.get("CLICKHOUSE_HOST", "localhost"),
+            "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
+            "user": os.environ.get("CLICKHOUSE_USER", "default"),
+            "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
+            "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
+            "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
+            "storage_sets": {
+                "discover",
+                "events",
+                "events_ro",
+                "migrations",
+                "outcomes",
+                "querylog",
+                "sessions",
+                "transactions",
+            },
+            "single_node": False,
+            "cluster_name": "test_shard_localhost",
+            "distributed_cluster_name": "test_shard_localhost",
         },
-        "single_node": False,
-        "cluster_name": "test_shard_localhost",
-        "distributed_cluster_name": "test_shard_localhost",
-    },
-]
+    ]
+else:
+    CLUSTERS = [
+        {
+            "host": os.environ.get("CLICKHOUSE_HOST", "localhost"),
+            "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
+            "user": os.environ.get("CLICKHOUSE_USER", "default"),
+            "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
+            "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
+            "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
+            "storage_sets": {
+                "discover",
+                "events",
+                "events_ro",
+                "migrations",
+                "outcomes",
+                "querylog",
+                "sessions",
+                "transactions",
+            },
+            "single_node": True,
+        },
+    ]
+
 
 # Dogstatsd Options
 DOGSTATSD_HOST = "localhost"
