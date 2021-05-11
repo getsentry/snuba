@@ -4,7 +4,7 @@ from typing import Callable, MutableMapping, Optional, Sequence, Tuple
 
 from confluent_kafka import Consumer, KafkaError, Message, TopicPartition
 
-from snuba.utils.streams.backends.configuration import KafkaBrokerConfig
+from snuba.utils.streams.backends.kafka.configuration import KafkaBrokerConfig
 
 logger = logging.getLogger("snuba.kafka-consumer")
 

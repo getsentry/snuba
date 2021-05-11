@@ -17,7 +17,7 @@ from snuba.stateful_consumer.control_protocol import (
     parse_control_message,
 )
 from snuba.utils.state_machine import State
-from snuba.utils.streams.backends.configuration import KafkaBrokerConfig
+from snuba.utils.streams.backends.kafka.configuration import KafkaBrokerConfig
 
 logger = logging.getLogger("snuba.snapshot-load")
 

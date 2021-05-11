@@ -2,7 +2,7 @@ import logging
 from typing import Any, Dict, Mapping, Optional, Sequence
 
 from snuba import settings
-from snuba.utils.streams.backends.configuration import (
+from snuba.utils.streams.backends.kafka.configuration import (
     DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
     DEFAULT_QUEUED_MIN_MESSAGES,
     build_kafka_configuration_with_overrides,
