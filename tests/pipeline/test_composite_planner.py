@@ -66,7 +66,7 @@ groups_ent = Entity(
 )
 groups_storage = get_storage(StorageKey.GROUPEDMESSAGES)
 groups_table = Table(
-    "groupedmessage_dist",
+    groups_storage.get_schema().get_table_name(),
     groups_storage.get_schema().get_columns(),
     final=False,
     sampling_rate=None,
