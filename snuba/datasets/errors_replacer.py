@@ -1,7 +1,7 @@
 import logging
 import time
 import uuid
-from abc import abstractclassmethod, abstractmethod
+from abc import abstractmethod
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
@@ -9,6 +9,7 @@ from enum import Enum
 from typing import (
     Any,
     Deque,
+    Dict,
     List,
     Mapping,
     MutableMapping,
@@ -50,18 +51,16 @@ class ReplacementContext:
 
 
 class Replacement(ReplacementBase):
-    @abstractclassmethod
-    def parse_message(
-        cls, message: Mapping[str, Any], context: ReplacementContext,
-    ) -> Optional["Replacement"]:
-        raise NotImplementedError()
-
     @abstractmethod
     def get_excluded_groups(self) -> Sequence[int]:
         raise NotImplementedError()
 
     @abstractmethod
     def get_needs_final(self) -> bool:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_project_id(self) -> int:
         raise NotImplementedError()
 
 
@@ -91,14 +90,21 @@ class LegacyReplacement(Replacement):
 
         return []
 
-    def get_insert_query_template(self) -> Optional[str]:
-        return self.insert_query_template
+    def get_insert_query(self, table_name: str) -> Optional[str]:
+        if self.insert_query_template is None:
+            return None
 
-    def get_count_query_template(self) -> Optional[str]:
-        return self.count_query_template
+        args: Dict[str, Any] = dict(self.query_args or ())
+        args["table_name"] = table_name
+        return self.insert_query_template % args
 
-    def get_query_args(self) -> Mapping[str, Any]:
-        return self.query_args or {}
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        if self.count_query_template is None:
+            return None
+
+        args: Dict[str, Any] = dict(self.query_args or ())
+        args["table_name"] = table_name
+        return self.count_query_template % args
 
 
 def get_project_exclude_groups_key(
@@ -574,10 +580,10 @@ class ExcludeGroupsReplacement(_ExcludeGroupsFields, Replacement):
     def get_needs_final(self) -> bool:
         return False
 
-    def get_insert_query_template(self) -> Optional[str]:
+    def get_insert_query(self, table_name: str) -> Optional[str]:
         return None
 
-    def get_count_query_template(self) -> Optional[str]:
+    def get_count_query(self, table_name: str) -> Optional[str]:
         return None
 
     def get_query_args(self) -> Mapping[str, Any]:

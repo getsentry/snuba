@@ -17,19 +17,11 @@ class ReplacementMessage(NamedTuple):
 
 class Replacement(ABC):
     @abstractmethod
-    def get_project_id(self) -> int:
+    def get_insert_query(self, table_name: str) -> Optional[str]:
         raise NotImplementedError()
 
     @abstractmethod
-    def get_insert_query_template(self) -> Optional[str]:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def get_count_query_template(self) -> Optional[str]:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def get_query_args(self) -> Mapping[str, Any]:
+    def get_count_query(self, table_name: str) -> Optional[str]:
         raise NotImplementedError()
 
 

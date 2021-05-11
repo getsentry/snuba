@@ -156,7 +156,7 @@ class TableWriter:
         cluster: ClickhouseCluster,
         write_schema: WritableTableSchema,
         stream_loader: KafkaStreamLoader,
-        replacer_processor: Optional[ReplacerProcessor] = None,
+        replacer_processor: Optional[ReplacerProcessor[Any]] = None,
         writer_options: ClickhouseWriterOptions = None,
     ) -> None:
         self.__cluster = cluster
@@ -235,7 +235,7 @@ class TableWriter:
     def get_stream_loader(self) -> KafkaStreamLoader:
         return self.__stream_loader
 
-    def get_replacer_processor(self) -> Optional[ReplacerProcessor]:
+    def get_replacer_processor(self) -> Optional[ReplacerProcessor[Any]]:
         """
         Returns a replacement processor if this table writer knows how to do
         replacements on the table it manages.
