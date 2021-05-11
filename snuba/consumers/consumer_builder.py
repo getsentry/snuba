@@ -18,9 +18,11 @@ from snuba.utils.streams.backends.kafka import (
     KafkaConsumerWithCommitLog,
     KafkaPayload,
     TransportError,
+)
+from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
-    get_default_kafka_configuration,
     build_kafka_producer_configuration,
+    get_default_kafka_configuration,
 )
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.processing.strategies import ProcessingStrategyFactory

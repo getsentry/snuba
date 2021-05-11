@@ -5,53 +5,92 @@ import pytest
 
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
-from snuba.clusters import cluster
+from snuba.clusters import cluster, storage_sets
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 
+ENABLED_STORAGE_SETS = {
+    "discover",
+    "events",
+    "events_ro",
+    "metrics",
+    "migrations",
+    "querylog",
+    "sessions",
+}
+
+ALL_STORAGE_SETS = {
+    "outcomes",
+    *ENABLED_STORAGE_SETS,
+}
+
+REDUCED_COPNFIG = [
+    {
+        "host": "host_1",
+        "port": 9000,
+        "user": "default",
+        "password": "",
+        "database": "default",
+        "http_port": 8123,
+        "storage_sets": ENABLED_STORAGE_SETS,
+        "single_node": True,
+    },
+    {
+        "host": "host_2",
+        "port": 9000,
+        "user": "default",
+        "password": "",
+        "database": "default",
+        "http_port": 8123,
+        "storage_sets": {"transactions"},
+        "single_node": False,
+        "cluster_name": "clickhouse_hosts",
+        "distributed_cluster_name": "dist_hosts",
+    },
+]
+
+FULL_CONFIG = [
+    {
+        "host": "host_1",
+        "port": 9000,
+        "user": "default",
+        "password": "",
+        "database": "default",
+        "http_port": 8123,
+        "storage_sets": ALL_STORAGE_SETS,
+        "single_node": True,
+    },
+    {
+        "host": "host_2",
+        "port": 9000,
+        "user": "default",
+        "password": "",
+        "database": "default",
+        "http_port": 8123,
+        "storage_sets": {"transactions"},
+        "single_node": False,
+        "cluster_name": "clickhouse_hosts",
+        "distributed_cluster_name": "dist_hosts",
+    },
+]
+
 
 def setup_function() -> None:
-    settings.DISABLED_STORAGE_SETS = {
-        "outcomes",  # Disabled and not registered
-        "querylog",  # Disabled still registered
-    }
-    settings.CLUSTERS = [
+    storage_sets.DEV_STORAGE_SETS = frozenset(
         {
-            "host": "host_1",
-            "port": 9000,
-            "user": "default",
-            "password": "",
-            "database": "default",
-            "http_port": 8123,
-            "storage_sets": {
-                "discover",
-                "events",
-                "events_ro",
-                "metrics",
-                "migrations",
-                "querylog",
-                "sessions",
-            },
-            "single_node": True,
-        },
-        {
-            "host": "host_2",
-            "port": 9000,
-            "user": "default",
-            "password": "",
-            "database": "default",
-            "http_port": 8123,
-            "storage_sets": {"transactions"},
-            "single_node": False,
-            "cluster_name": "clickhouse_hosts",
-            "distributed_cluster_name": "dist_hosts",
-        },
-    ]
+            StorageSetKey.OUTCOMES,  # Disabled and not registered
+            StorageSetKey.QUERYLOG,  # Disabled still registered
+        }
+    )
+    settings.CLUSTERS = REDUCED_COPNFIG
     importlib.reload(cluster)
 
 
 def teardown_function() -> None:
+    settings.CLUSTERS = FULL_CONFIG
+    storage_sets.DEV_STORAGE_SETS = frozenset()
+
     importlib.reload(settings)
     importlib.reload(cluster)
 
@@ -71,6 +110,12 @@ def test_clusters() -> None:
 def test_disabled_cluster() -> None:
     with pytest.raises(AssertionError):
         cluster.get_cluster(StorageSetKey.OUTCOMES)
+
+    settings.ENABLE_DEV_FEATURES = True
+    settings.CLUSTERS = FULL_CONFIG
+    importlib.reload(cluster)
+    cluster.get_cluster(StorageSetKey.OUTCOMES)
+    settings.ENABLE_DEV_FEATURES = False
 
 
 def test_get_local_nodes() -> None:

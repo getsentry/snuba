@@ -20,9 +20,8 @@ from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.worker import SubscriptionWorker
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams import Topic
-from snuba.utils.streams.backends.kafka import (
-    KafkaConsumer,
-    KafkaProducer,
+from snuba.utils.streams.backends.kafka import KafkaConsumer, KafkaProducer
+from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
     build_kafka_producer_configuration,
 )

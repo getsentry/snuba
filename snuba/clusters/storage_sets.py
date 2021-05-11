@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import FrozenSet
 
 
 class StorageSetKey(Enum):
@@ -24,3 +25,7 @@ class StorageSetKey(Enum):
     QUERYLOG = "querylog"
     SESSIONS = "sessions"
     TRANSACTIONS = "transactions"
+
+
+# Storage sets enabled only when development features are enabled.
+DEV_STORAGE_SETS: FrozenSet[StorageSetKey] = frozenset()

@@ -1,7 +1,7 @@
 import importlib
-from snuba import settings
 
-from snuba.utils.streams.backends.kafka import get_default_kafka_configuration
+from snuba import settings
+from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic
 
 

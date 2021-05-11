@@ -1,23 +1,23 @@
 import json
 import logging
-
 from typing import Optional, Set, Tuple
+
 from confluent_kafka import Message
 
 from snuba import settings
 from snuba.consumers.strict_consumer import CommitDecision, StrictConsumer
 from snuba.datasets.cdc import CdcStorage
-from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
 from snuba.snapshots import SnapshotId
+from snuba.stateful_consumer import ConsumerStateCompletionEvent, ConsumerStateData
 from snuba.stateful_consumer.control_protocol import (
-    parse_control_message,
-    SnapshotInit,
     SnapshotAbort,
+    SnapshotInit,
     SnapshotLoaded,
     TransactionData,
+    parse_control_message,
 )
 from snuba.utils.state_machine import State
-from snuba.utils.streams.backends.kafka import KafkaBrokerConfig
+from snuba.utils.streams.backends.kafka.configuration import KafkaBrokerConfig
 
 logger = logging.getLogger("snuba.snapshot-load")
 
