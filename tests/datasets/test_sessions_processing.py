@@ -15,7 +15,14 @@ from snuba.web import QueryResult
 
 
 def test_sessions_processing() -> None:
-    query_body = {"selected_columns": ["duration_quantiles", "sessions", "users"]}
+    query_body = {
+        "selected_columns": ["duration_quantiles", "sessions", "users"],
+        "conditions": [
+            ["org_id", "=", 1],
+            ["project_id", "=", 1],
+            ["started", ">", "2020-01-01 12:00:00"],
+        ],
+    }
 
     sessions = get_dataset("sessions")
     query = parse_query(query_body, sessions)
@@ -72,13 +79,26 @@ selector_tests = [
         {
             "selected_columns": ["sessions", "bucketed_started"],
             "groupby": ["bucketed_started"],
+            "conditions": [
+                ["org_id", "=", 1],
+                ["project_id", "=", 1],
+                ["started", ">", "2020-01-01 12:00:00"],
+            ],
         },
         read_schema.get_table_name(),
         id="Select hourly by default",
     ),
     pytest.param(
-        {"selected_columns": ["sessions"], "granularity": 60},
-        read_schema.get_table_name(),
+        {
+            "selected_columns": ["sessions"],
+            "granularity": 60,
+            "conditions": [
+                ["org_id", "=", 1],
+                ["project_id", "=", 1],
+                ["started", ">", "2020-01-01 12:00:00"],
+            ],
+        },
+        "sessions_hourly_local",
         id="Select hourly if not grouped by started time",
     ),
     pytest.param(
@@ -87,6 +107,8 @@ selector_tests = [
             "groupby": ["bucketed_started"],
             "granularity": 60,
             "conditions": [
+                ("org_id", "=", 1),
+                ("project_id", "=", 1),
                 ("started", ">=", "2019-09-19T10:00:00"),
                 ("started", "<", "2019-09-19T12:00:00"),
             ],

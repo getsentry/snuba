@@ -11,6 +11,8 @@ class Topic(Enum):
     CDC = "cdc"
     OUTCOMES = "outcomes"
     SESSIONS = "ingest-sessions"
+    SUBSCRIPTION_RESULTS_EVENTS = "events-subscription-results"
+    SUBSCRIPTION_RESULTS_TRANSACTIONS = "transactions-subscription-results"
     QUERYLOG = "snuba-queries"
 
 

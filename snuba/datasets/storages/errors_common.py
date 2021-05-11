@@ -24,13 +24,13 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.processors.type_converters.uuid_column_processor import (
-    UUIDColumnProcessor,
-)
+from snuba.query.processors.slice_of_map_optimizer import SliceOfMapOptimizer
 from snuba.query.processors.type_converters.uuid_array_column_processor import (
     UUIDArrayColumnProcessor,
 )
-from snuba.query.processors.slice_of_map_optimizer import SliceOfMapOptimizer
+from snuba.query.processors.type_converters.uuid_column_processor import (
+    UUIDColumnProcessor,
+)
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 required_columns = [
@@ -164,7 +164,15 @@ query_processors = [
     TypeConditionOptimizer(),
     MappingOptimizer("tags", "_tags_hash_map", "events_tags_hash_map_enabled"),
     ArrayJoinKeyValueOptimizer("tags"),
-    PrewhereProcessor(prewhere_candidates, omit_if_final=["environment", "release"]),
+    PrewhereProcessor(
+        prewhere_candidates,
+        # Environment and release are excluded from prewhere in case of final
+        # queries because of a Clickhouse bug.
+        # group_id instead is excluded since `final` is applied after prewhere.
+        # thus, in this case, we could be filtering out rows that should be
+        # merged together by the final.
+        omit_if_final=["environment", "release", "group_id"],
+    ),
 ]
 
 query_splitters = [
