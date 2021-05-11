@@ -186,7 +186,7 @@ def get_projects_query_flags(
     return (needs_final, exclude_groups)
 
 
-class ErrorsReplacer(ReplacerProcessor):
+class ErrorsReplacer(ReplacerProcessor[Replacement]):
     def __init__(
         self,
         schema: WritableTableSchema,
@@ -251,9 +251,7 @@ class ErrorsReplacer(ReplacerProcessor):
 
         return processed
 
-    def pre_replacement(  # type: ignore[override]
-        self, replacement: Replacement, matching_records: int
-    ) -> bool:
+    def pre_replacement(self, replacement: Replacement, matching_records: int) -> bool:
         if self.__state_name == ReplacerState.EVENTS:
             # Backward compatibility with the old keys already in Redis, we will let double write
             # the old key structure and the new one for a while then we can get rid of the old one.
