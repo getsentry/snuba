@@ -69,9 +69,9 @@ EXCLUDE_GROUPS = object()
 NEEDS_FINAL = object()
 QueryTimeFlags = Union[Tuple[object, int], Tuple[object, int, Any]]
 
-# Separate mixin because of https://github.com/python/mypy/issues/5374
+
 @dataclass(frozen=True)
-class _LegacyReplacementFieldsMixin:
+class LegacyReplacement(Replacement):
     # XXX: For the group_exclude message we need to be able to run a
     # replacement without running any query.
     count_query_template: Optional[str]
@@ -79,8 +79,6 @@ class _LegacyReplacementFieldsMixin:
     query_args: Mapping[str, Any]
     query_time_flags: QueryTimeFlags
 
-
-class LegacyReplacement(_LegacyReplacementFieldsMixin, Replacement):
     def get_project_id(self) -> int:
         return self.query_time_flags[1]
 
