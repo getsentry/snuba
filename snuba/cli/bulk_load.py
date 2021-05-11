@@ -4,6 +4,7 @@ from typing import Optional
 
 import click
 import progressbar
+
 from snuba import environment, settings
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.datasets.storages import StorageKey
@@ -25,7 +26,10 @@ from snuba.writer import BufferedWriterWrapper
     "--source",
     help="Source of the dump. Depending on the storage it may have different meaning.",
 )
-@click.option("--dest-table", help="Clickhouse destination table.")
+@click.option(
+    "--dest-table",
+    help="Clickhouse destination table, if different from storage write table",
+)
 @click.option(
     "--ignore-existing-data",
     default=False,
@@ -45,7 +49,7 @@ from snuba.writer import BufferedWriterWrapper
 def bulk_load(
     *,
     storage_name: str,
-    dest_table: str,
+    dest_table: Optional[str],
     source: str,
     ignore_existing_data: bool,
     pre_processed: bool,
@@ -71,8 +75,8 @@ def bulk_load(
     loader = table_writer.get_bulk_loader(
         snapshot_source,
         storage.get_postgres_table(),
-        dest_table,
         storage.get_row_processor(),
+        dest_table,
     )
     # TODO: see whether we need to pass options to the writer
 
