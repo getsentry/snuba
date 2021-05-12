@@ -1,5 +1,6 @@
 from typing import Callable, MutableMapping
 
+from snuba import settings
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
 from snuba.util import with_span
@@ -29,8 +30,10 @@ def get_entity(name: EntityKey) -> Entity:
     from snuba.datasets.entities.outcomes import OutcomesEntity
     from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
     from snuba.datasets.entities.sessions import SessionsEntity
-    from snuba.datasets.entities.transactions import TransactionsEntity
     from snuba.datasets.entities.spans import SpansEntity
+    from snuba.datasets.entities.transactions import TransactionsEntity
+
+    dev_entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {}
 
     entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {
         EntityKey.DISCOVER: DiscoverEntity,
@@ -44,6 +47,7 @@ def get_entity(name: EntityKey) -> Entity:
         EntityKey.SPANS: SpansEntity,
         EntityKey.DISCOVER_TRANSACTIONS: DiscoverTransactionsEntity,
         EntityKey.DISCOVER_EVENTS: DiscoverEventsEntity,
+        **(dev_entity_factories if settings.ENABLE_DEV_FEATURES else {}),
     }
 
     try:
