@@ -194,7 +194,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         elif type_ == "end_unmerge":
             processed = UnmergeReplacement.parse_message(event, context)
         elif type_ == "end_delete_tag":
-            processed = DeleteTagReplacement.parse_message(event, context,)
+            processed = DeleteTagReplacement.parse_message(event, context)
         elif type_ == "tombstone_events":
             processed = TombstoneEventsReplacement.parse_message(event, context)
         elif type_ == "replace_group":
