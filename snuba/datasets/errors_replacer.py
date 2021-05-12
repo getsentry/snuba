@@ -435,7 +435,7 @@ class ReplaceGroupReplacement(Replacement, _EventSetFilterMixin):
         project_id: int = message["project_id"]
         all_column_names = [c.escaped for c in context.all_columns]
 
-        return ReplaceGroupReplacement(
+        return cls(
             project_id=project_id,
             new_group_id=new_group_id,
             event_ids=event_ids,
@@ -669,7 +669,7 @@ class MergeGroupsReplacement(Replacement):
         project_id: int = message["project_id"]
         all_column_names = [c.escaped for c in context.all_columns]
 
-        return MergeGroupsReplacement(
+        return cls(
             project_id=project_id,
             previous_group_ids=previous_group_ids,
             timestamp=timestamp,
