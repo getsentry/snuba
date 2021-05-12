@@ -105,26 +105,29 @@ class TestReplacer:
 
         replacement = self.replacer.process_message(self._wrap(message))
 
-        assert (
-            re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == "SELECT count() FROM %(table_name)s FINAL PREWHERE group_id IN (%(group_ids)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
-        )
-        assert (
-            re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == "INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE group_id IN (%(group_ids)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
-        )
-        assert replacement.query_args == {
+        query_args = {
             "group_ids": "1, 2, 3",
             "project_id": self.project_id,
             "required_columns": "event_id, primary_hash, project_id, group_id, timestamp, deleted, retention_days",
             "select_columns": "event_id, primary_hash, project_id, group_id, timestamp, 1, retention_days",
             "timestamp": timestamp.strftime(DATETIME_FORMAT),
+            "table_name": "foo",
         }
-        assert replacement.query_time_flags == (
-            errors_replacer.EXCLUDE_GROUPS,
-            self.project_id,
-            [1, 2, 3],
+
+        assert (
+            re.sub("[\n ]+", " ", replacement.get_count_query("foo")).strip()
+            == "SELECT count() FROM %(table_name)s FINAL PREWHERE group_id IN (%(group_ids)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            % query_args
         )
+        assert (
+            re.sub("[\n ]+", " ", replacement.get_insert_query("foo")).strip()
+            == "INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE group_id IN (%(group_ids)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            % query_args
+        )
+
+        assert not replacement.get_needs_final()
+        assert replacement.get_excluded_groups() == [1, 2, 3]
+        assert replacement.get_project_id() == self.project_id
 
     @pytest.mark.parametrize(
         "old_primary_hash", ["e3d704f3542b44a621ebed70dc0efe13", False, None]
