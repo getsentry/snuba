@@ -36,7 +36,7 @@ class Gauge:
         self.__report()
 
     def decrement(self, value: float = 1.0) -> None:
-        self.__value -= 1
+        self.__value -= value
         self.__report()
 
 
