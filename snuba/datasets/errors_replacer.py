@@ -236,23 +236,19 @@ class _TombstoneMixin:
             map(lambda i: i if i != "deleted" else "1", self.required_columns)
         )
 
-        return (
-            f"""\
-           INSERT INTO {table_name} ({required_columns})
-           SELECT {select_columns}
-           FROM {table_name} FINAL
-           """
-            + self._where_clause
-        )
+        return f"""\
+            INSERT INTO {table_name} ({required_columns})
+            SELECT {select_columns}
+            FROM {table_name} FINAL
+            {self._where_clause}
+            """
 
     def get_count_query(self, table_name: str) -> Optional[str]:
-        return (
-            f"""\
+        return f"""\
             SELECT count()
             FROM {table_name} FINAL
-        """
-            + self._where_clause
-        )
+            {self._where_clause}
+            """
 
 
 @dataclass(frozen=True)
@@ -364,19 +360,13 @@ class ReplaceGroupReplacement(Replacement, _EventSetFilterMixin):
         return f"PREWHERE {prewhere} WHERE {where}"
 
     def get_count_query(self, table_name: str) -> Optional[str]:
-        where = self._where_clause
-
-        return (
-            f"""\
+        return f"""\
             SELECT count()
             FROM {table_name} FINAL
+            {self._where_clause}
         """
-            + where
-        )
 
     def get_insert_query(self, table_name: str) -> Optional[str]:
-        where = self._where_clause
-
         all_columns = ", ".join(self.all_column_names)
         select_columns = ", ".join(
             map(
@@ -385,14 +375,12 @@ class ReplaceGroupReplacement(Replacement, _EventSetFilterMixin):
             )
         )
 
-        return (
-            f"""\
+        return f"""\
             INSERT INTO {table_name} ({all_columns})
             SELECT {select_columns}
             FROM {table_name} FINAL
+            {self._where_clause}
         """
-            + where
-        )
 
 
 @dataclass(frozen=True)
@@ -627,19 +615,13 @@ class MergeGroupsReplacement(Replacement):
         """
 
     def get_count_query(self, table_name: str) -> Optional[str]:
-        where = self._where_clause
-
-        return (
-            f"""\
+        return f"""\
             SELECT count()
             FROM {table_name} FINAL
+            {self._where_clause}
         """
-            + where
-        )
 
     def get_insert_query(self, table_name: str) -> Optional[str]:
-        where = self._where_clause
-
         all_columns = ", ".join(self.all_column_names)
         select_columns = ", ".join(
             map(
@@ -648,14 +630,12 @@ class MergeGroupsReplacement(Replacement):
             )
         )
 
-        return (
-            f"""\
+        return f"""\
             INSERT INTO {table_name} ({all_columns})
             SELECT {select_columns}
             FROM {table_name} FINAL
+            {self._where_clause}
         """
-            + where
-        )
 
 
 @dataclass(frozen=True)
@@ -721,13 +701,11 @@ class UnmergeGroupsReplacement(Replacement):
         """
 
     def get_count_query(self, table_name: str) -> Optional[str]:
-        return (
-            f"""\
+        return f"""\
             SELECT count()
             FROM {table_name} FINAL
+            {self._where_clause}
         """
-            + self._where_clause
-        )
 
     def get_insert_query(self, table_name: str) -> Optional[str]:
         all_column_names = [c.escaped for c in self.all_columns]
@@ -740,14 +718,12 @@ class UnmergeGroupsReplacement(Replacement):
 
         all_columns = ", ".join(all_column_names)
 
-        return (
-            f"""\
+        return f"""\
             INSERT INTO {table_name} ({all_columns})
             SELECT {select_columns}
             FROM {table_name} FINAL
+            {self._where_clause}
         """
-            + self._where_clause
-        )
 
 
 @dataclass(frozen=True)
@@ -842,23 +818,19 @@ class DeleteTagReplacement(Replacement):
         all_column_names = [col.escaped for col in self.all_columns]
         all_columns = ", ".join(all_column_names)
         select_columns = ", ".join(self._select_columns)
-        return (
-            f"""\
+        return f"""\
             INSERT INTO {table_name} ({all_columns})
             SELECT {select_columns}
             FROM {table_name} FINAL
+            {self._where_clause}
         """
-            + self._where_clause
-        )
 
     def get_count_query(self, table_name: str) -> Optional[str]:
-        return (
-            f"""\
+        return f"""\
             SELECT count()
             FROM {table_name} FINAL
+            {self._where_clause}
         """
-            + self._where_clause
-        )
 
     def get_needs_final(self) -> bool:
         return True
