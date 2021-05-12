@@ -808,7 +808,17 @@ class UnmergeReplacement(Replacement):
         )
 
 
+@dataclass(frozen=True)
 class DeleteTagReplacement(Replacement):
+    tag: str
+    project_id: int
+    timestamp: datetime
+    is_promoted: bool
+    use_promoted_prewhere: bool
+    tag_column_name: str
+    tag_column_is_nullable: bool
+    all_columns: Sequence[FlattenedColumn]
+
     @classmethod
     def parse_message(
         cls, message: Mapping[str, Any], context: ReplacementContext
@@ -823,77 +833,96 @@ class DeleteTagReplacement(Replacement):
         )
         tag_column_name = context.tag_column_map["tags"].get(tag, tag)
         is_promoted = tag in context.promoted_tags["tags"]
-
-        where = """\
-            WHERE project_id = %(project_id)s
-            AND received <= CAST('%(timestamp)s' AS DateTime)
-            AND NOT deleted
-        """
-
-        if is_promoted and context.use_promoted_prewhere:
-            prewhere = " PREWHERE %(tag_column)s IS NOT NULL "
-        else:
-            prewhere = " PREWHERE has(`tags.key`, %(tag_str)s) "
-
-        insert_query_template = (
-            """\
-            INSERT INTO %(table_name)s (%(all_columns)s)
-            SELECT %(select_columns)s
-            FROM %(table_name)s FINAL
-        """
-            + prewhere
-            + where
+        column_type = (
+            context.schema.get_data_source().get_columns().get(tag_column_name)
+        )
+        tag_column_is_nullable = (
+            column_type is not None and column_type.type.has_modifier(Nullable)
         )
 
+        return cls(
+            tag=tag,
+            timestamp=timestamp,
+            tag_column_name=tag_column_name,
+            is_promoted=is_promoted,
+            use_promoted_prewhere=context.use_promoted_prewhere,
+            tag_column_is_nullable=tag_column_is_nullable,
+            project_id=message["project_id"],
+            all_columns=context.all_columns,
+        )
+
+    @cached_property
+    def _select_columns(self) -> Sequence[str]:
         select_columns = []
-        for col in context.all_columns:
-            if is_promoted and col.flattened == tag_column_name:
+        for col in self.all_columns:
+            if self.is_promoted and col.flattened == self.tag_column_name:
                 # The promoted tag columns of events are non nullable, but those of
                 # errors are non nullable. We check the column against the schema
                 # to determine whether to write an empty string or NULL.
-                column_type = (
-                    context.schema.get_data_source().get_columns().get(tag_column_name)
-                )
-                assert column_type is not None
-                is_nullable = column_type.type.has_modifier(Nullable)
-                if is_nullable:
+                if self.tag_column_is_nullable:
                     select_columns.append("NULL")
                 else:
                     select_columns.append("''")
             elif col.flattened == "tags.key":
                 select_columns.append(
                     "arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, %s)), `tags.key`)"
-                    % escape_string(tag)
+                    % escape_string(self.tag)
                 )
             elif col.flattened == "tags.value":
                 select_columns.append(
                     "arrayMap(x -> arrayElement(`tags.value`, x), arrayFilter(x -> x != indexOf(`tags.key`, %s), arrayEnumerate(`tags.value`)))"
-                    % escape_string(tag)
+                    % escape_string(self.tag)
                 )
             else:
                 select_columns.append(col.escaped)
 
-        all_column_names = [col.escaped for col in context.all_columns]
-        query_args = {
-            "all_columns": ", ".join(all_column_names),
-            "select_columns": ", ".join(select_columns),
-            "project_id": message["project_id"],
-            "tag_str": escape_string(tag),
-            "tag_column": escape_identifier(tag_column_name),
-            "timestamp": timestamp.strftime(DATETIME_FORMAT),
-        }
+        return select_columns
 
-        count_query_template = (
-            """\
-            SELECT count()
-            FROM %(table_name)s FINAL
+    @cached_property
+    def _where_clause(self) -> str:
+        timestamp = self.timestamp.strftime(DATETIME_FORMAT)
+
+        if self.is_promoted and self.use_promoted_prewhere:
+            tag_column = escape_identifier(self.tag_column_name)
+            prewhere = f" PREWHERE {tag_column} IS NOT NULL "
+        else:
+            tag_str = escape_string(self.tag)
+            prewhere = f" PREWHERE has(`tags.key`, {tag_str}) "
+
+        return f"""\
+            {prewhere}
+            WHERE project_id = {self.project_id}
+            AND received <= CAST('{timestamp}' AS DateTime)
+            AND NOT deleted
         """
-            + prewhere
-            + where
+
+    def get_insert_query(self, table_name: str) -> Optional[str]:
+        all_column_names = [col.escaped for col in self.all_columns]
+        all_columns = ", ".join(all_column_names)
+        select_columns = ", ".join(self._select_columns)
+        return (
+            f"""\
+            INSERT INTO {table_name} ({all_columns})
+            SELECT {select_columns}
+            FROM {table_name} FINAL
+        """
+            + self._where_clause
         )
 
-        query_time_flags = (NEEDS_FINAL, message["project_id"])
-
-        return LegacyReplacement(
-            count_query_template, insert_query_template, query_args, query_time_flags
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        return (
+            f"""\
+            SELECT count()
+            FROM {table_name} FINAL
+        """
+            + self._where_clause
         )
+
+    def get_needs_final(self) -> bool:
+        return True
+
+    def get_excluded_groups(self) -> Sequence[int]:
+        return []
+
+    def get_project_id(self) -> int:
+        return self.project_id
