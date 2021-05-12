@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from functools import cached_property
-from typing import Any, Deque, Dict, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Deque, Mapping, Optional, Sequence, Tuple
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
@@ -57,49 +57,6 @@ class Replacement(ReplacementBase):
     @abstractmethod
     def get_project_id(self) -> int:
         raise NotImplementedError()
-
-
-EXCLUDE_GROUPS = object()
-NEEDS_FINAL = object()
-QueryTimeFlags = Union[Tuple[object, int], Tuple[object, int, Any]]
-
-
-@dataclass(frozen=True)
-class LegacyReplacement(Replacement):
-    # XXX: For the group_exclude message we need to be able to run a
-    # replacement without running any query.
-    count_query_template: Optional[str]
-    insert_query_template: Optional[str]
-    query_args: Mapping[str, Any]
-    query_time_flags: QueryTimeFlags
-
-    def get_project_id(self) -> int:
-        return self.query_time_flags[1]
-
-    def get_needs_final(self) -> bool:
-        return self.query_time_flags[0] == NEEDS_FINAL
-
-    def get_excluded_groups(self) -> Sequence[int]:
-        if self.query_time_flags[0] == EXCLUDE_GROUPS:
-            return self.query_time_flags[2]  # type: ignore
-
-        return []
-
-    def get_insert_query(self, table_name: str) -> Optional[str]:
-        if self.insert_query_template is None:
-            return None
-
-        args: Dict[str, Any] = dict(self.query_args or ())
-        args["table_name"] = table_name
-        return self.insert_query_template % args
-
-    def get_count_query(self, table_name: str) -> Optional[str]:
-        if self.count_query_template is None:
-            return None
-
-        args: Dict[str, Any] = dict(self.query_args or ())
-        args["table_name"] = table_name
-        return self.count_query_template % args
 
 
 def get_project_exclude_groups_key(
