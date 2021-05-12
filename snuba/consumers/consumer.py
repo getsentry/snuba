@@ -19,6 +19,7 @@ from typing import (
 
 import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
+
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.message_filters import StreamMessageFilter
@@ -28,10 +29,8 @@ from snuba.processor import InsertBatch, MessageProcessor, ReplacementBatch
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams import Message, Partition, Topic
-from snuba.utils.streams.backends.kafka import (
-    KafkaPayload,
-    build_kafka_producer_configuration,
-)
+from snuba.utils.streams.backends.kafka import KafkaPayload
+from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.processing.strategies import ProcessingStrategy
 from snuba.utils.streams.processing.strategies import (
     ProcessingStrategy as ProcessingStep,
