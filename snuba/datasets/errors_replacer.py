@@ -180,29 +180,14 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         event = message.data
         context = self.__replacement_context
 
-        if type_ in (
-            "start_delete_groups",
-            "start_merge",
-            "start_unmerge",
-            "start_delete_tag",
-        ):
-            return None
-        elif type_ == "end_delete_groups":
-            processed = DeleteGroupsReplacement.parse_message(event, context)
-        elif type_ == "end_merge":
-            processed = MergeGroupsReplacement.parse_message(event, context)
-        elif type_ == "end_unmerge":
-            processed = UnmergeReplacement.parse_message(event, context)
-        elif type_ == "end_delete_tag":
-            processed = DeleteTagReplacement.parse_message(event, context)
-        elif type_ == "tombstone_events":
-            processed = TombstoneEventsReplacement.parse_message(event, context)
-        elif type_ == "replace_group":
-            processed = ReplaceGroupReplacement.parse_message(event, context)
-        elif type_ == "exclude_groups":
-            processed = ExcludeGroupsReplacement.parse_message(event, context)
-        else:
+        if type_ not in _REPLACEMENTS:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
+
+        replacement_cls = _REPLACEMENTS.get(type_, None)
+        if replacement_cls is None:
+            return None
+
+        processed = replacement_cls.parse_message(event, context)
 
         return processed
 
@@ -674,7 +659,7 @@ class MergeGroupsReplacement(Replacement):
 
 
 @dataclass(frozen=True)
-class UnmergeReplacement(Replacement):
+class UnmergeGroupsReplacement(Replacement):
     state_name: ReplacerState
     timestamp: datetime
     hashes: Sequence[str]
@@ -697,7 +682,7 @@ class UnmergeReplacement(Replacement):
             message["datetime"], settings.PAYLOAD_DATETIME_FORMAT
         )
 
-        return UnmergeReplacement(
+        return UnmergeGroupsReplacement(
             state_name=context.state_name,
             timestamp=timestamp,
             hashes=hashes,
@@ -883,3 +868,18 @@ class DeleteTagReplacement(Replacement):
 
     def get_project_id(self) -> int:
         return self.project_id
+
+
+_REPLACEMENTS = {
+    "start_delete_groups": None,
+    "start_merge": None,
+    "start_unmerge": None,
+    "start_delete_tag": None,
+    "end_delete_groups": DeleteGroupsReplacement,
+    "end_merge": MergeGroupsReplacement,
+    "end_unmerge": UnmergeGroupsReplacement,
+    "end_delete_tag": DeleteTagReplacement,
+    "tombstone_events": TombstoneEventsReplacement,
+    "replace_group": ReplaceGroupReplacement,
+    "exclude_groups": ExcludeGroupsReplacement,
+}
