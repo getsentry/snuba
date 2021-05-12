@@ -24,7 +24,7 @@ ALL_STORAGE_SETS = {
     *ENABLED_STORAGE_SETS,
 }
 
-REDUCED_COPNFIG = [
+REDUCED_CONFIG = [
     {
         "host": "host_1",
         "port": 9000,
@@ -82,7 +82,7 @@ def setup_function() -> None:
             StorageSetKey.QUERYLOG,  # Disabled still registered
         }
     )
-    settings.CLUSTERS = REDUCED_COPNFIG
+    settings.CLUSTERS = REDUCED_CONFIG
     importlib.reload(cluster)
 
 
