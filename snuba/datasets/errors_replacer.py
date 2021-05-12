@@ -278,43 +278,6 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         return False
 
 
-def _build_event_tombstone_replacement(
-    message: Mapping[str, Any],
-    required_columns: Sequence[str],
-    where: str,
-    query_args: Mapping[str, str],
-    query_time_flags: QueryTimeFlags,
-) -> Replacement:
-    select_columns = map(lambda i: i if i != "deleted" else "1", required_columns)
-    count_query_template = (
-        """\
-        SELECT count()
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
-
-    insert_query_template = (
-        """\
-        INSERT INTO %(table_name)s (%(required_columns)s)
-        SELECT %(select_columns)s
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
-
-    final_query_args = {
-        "required_columns": ", ".join(required_columns),
-        "select_columns": ", ".join(select_columns),
-        "project_id": message["project_id"],
-    }
-    final_query_args.update(query_args)
-
-    return LegacyReplacement(
-        count_query_template, insert_query_template, final_query_args, query_time_flags
-    )
-
-
 @dataclass(frozen=True)
 class _TombstoneMixin:
     required_columns: Sequence[str]
