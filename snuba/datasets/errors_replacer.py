@@ -794,7 +794,7 @@ class DeleteTagReplacement(Replacement):
             else:
                 select_columns.append(col.escaped)
 
-        return select_columns
+        return ", ".join(select_columns)
 
     @cached_property
     def _where_clause(self) -> str:
@@ -817,10 +817,9 @@ class DeleteTagReplacement(Replacement):
     def get_insert_query(self, table_name: str) -> Optional[str]:
         all_column_names = [col.escaped for col in self.all_columns]
         all_columns = ", ".join(all_column_names)
-        select_columns = ", ".join(self._select_columns)
         return f"""\
             INSERT INTO {table_name} ({all_columns})
-            SELECT {select_columns}
+            SELECT {self._select_columns}
             FROM {table_name} FINAL
             {self._where_clause}
         """
