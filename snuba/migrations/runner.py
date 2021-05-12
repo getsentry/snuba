@@ -1,18 +1,18 @@
 import logging
-
-from clickhouse_driver import errors
 from datetime import datetime
 from functools import partial
 from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Sequence, Tuple
 
-from snuba.clickhouse.escaping import escape_string
+from clickhouse_driver import errors
+
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import (
+    CLUSTERS,
     ClickhouseClientSettings,
     ClickhouseNodeType,
     get_cluster,
-    CLUSTERS,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.context import Context
@@ -23,8 +23,8 @@ from snuba.migrations.errors import (
 )
 from snuba.migrations.groups import (
     ACTIVE_MIGRATION_GROUPS,
-    get_group_loader,
     MigrationGroup,
+    get_group_loader,
 )
 from snuba.migrations.migration import ClickhouseNodeMigration, CodeMigration, Migration
 from snuba.migrations.operations import SqlOperation
