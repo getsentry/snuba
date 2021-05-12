@@ -47,6 +47,7 @@ class ReplacerState(Enum):
 @dataclass
 class ReplacementContext:
     all_columns: Sequence[FlattenedColumn]
+    required_columns: Sequence[str]
     state_name: ReplacerState
 
 
@@ -219,7 +220,9 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         event = message.data
 
         context = ReplacementContext(
-            all_columns=self.__all_columns, state_name=self.__state_name
+            all_columns=self.__all_columns,
+            state_name=self.__state_name,
+            required_columns=self.__required_columns,
         )
 
         if type_ in (
@@ -245,9 +248,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 self.__schema,
             )
         elif type_ == "tombstone_events":
-            processed = process_tombstone_events(
-                event, self.__required_columns, self.__state_name
-            )
+            processed = TombstoneEventsReplacement.parse_message(event, context)
         elif type_ == "replace_group":
             processed = ReplaceGroupReplacement.parse_message(event, context)
         elif type_ == "exclude_groups":
@@ -325,6 +326,39 @@ def _build_event_tombstone_replacement(
     )
 
 
+@dataclass(frozen=True)
+class _TombstoneMixin:
+    required_columns: Sequence[str]
+
+    @cached_property
+    def _where_clause(self) -> str:
+        raise NotImplementedError()
+
+    def get_insert_query(self, table_name: str) -> Optional[str]:
+        required_columns = ", ".join(self.required_columns)
+        select_columns = ", ".join(
+            map(lambda i: i if i != "deleted" else "1", self.required_columns)
+        )
+
+        return (
+            f"""\
+           INSERT INTO {table_name} ({required_columns})
+           SELECT {select_columns}
+           FROM {table_name} FINAL
+           """
+            + self._where_clause
+        )
+
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        return (
+            f"""\
+            SELECT count()
+            FROM {table_name} FINAL
+        """
+            + self._where_clause
+        )
+
+
 def _build_event_set_filter(
     message: Mapping[str, Any], state_name: ReplacerState
 ) -> Optional[Tuple[List[str], List[str], MutableMapping[str, str]]]:
@@ -378,9 +412,10 @@ class _EventSetFilterMixin:
     event_ids: int
     from_timestamp: Optional[datetime]
     to_timestamp: Optional[datetime]
+    state_name: ReplacerState
 
     def _get_event_set_filter(
-        self, state_name: ReplacerState
+        self,
     ) -> Optional[Tuple[List[str], List[str], MutableMapping[str, str]]]:
         return _build_event_set_filter(
             {
@@ -389,7 +424,7 @@ class _EventSetFilterMixin:
                 "to_timestamp": self.to_timestamp,
                 "project_id": self.project_id,
             },
-            state_name,
+            self.state_name,
         )
 
 
@@ -407,7 +442,6 @@ class ReplaceGroupReplacement(Replacement, _EventSetFilterMixin):
     """
 
     new_group_id: int
-    state_name: ReplacerState
     all_column_names: Sequence[str]
 
     def get_project_id(self) -> int:
@@ -453,7 +487,7 @@ class ReplaceGroupReplacement(Replacement, _EventSetFilterMixin):
 
     @cached_property
     def _where_clause(self) -> Optional[str]:
-        filter = self._get_event_set_filter(self.state_name)
+        filter = self._get_event_set_filter()
         if filter is None:
             return filter
 
@@ -528,47 +562,65 @@ def process_delete_groups(
     )
 
 
-def process_tombstone_events(
-    message: Mapping[str, Any],
-    required_columns: Sequence[str],
-    state_name: ReplacerState,
-) -> Optional[Replacement]:
-    event_ids = message["event_ids"]
-    if not event_ids:
-        return None
+@dataclass(frozen=True)
+class TombstoneEventsReplacement(_EventSetFilterMixin, _TombstoneMixin, Replacement):
+    old_primary_hash: Optional[str]
 
-    old_primary_hash = message.get("old_primary_hash")
+    @classmethod
+    def parse_message(
+        cls, message: Mapping[str, Any], context: ReplacementContext
+    ) -> Optional["Replacement"]:
+        event_ids = message["event_ids"]
+        if not event_ids:
+            return None
 
-    if old_primary_hash and state_name == ReplacerState.EVENTS:
-        # old_primary_hash flag means the event is only tombstoned
-        # because it will be reinserted with a changed primary_hash. Since
-        # primary_hash is part of the sortkey/primarykey in the ERRORS table,
-        # we need to tombstone the old event. In the old EVENTS table we do
-        # not.
-        return None
+        old_primary_hash = message.get("old_primary_hash")
 
-    event_set_filter = _build_event_set_filter(message, state_name)
-    if event_set_filter is None:
-        return None
+        if old_primary_hash and context.state_name == ReplacerState.EVENTS:
+            # old_primary_hash flag means the event is only tombstoned
+            # because it will be reinserted with a changed primary_hash. Since
+            # primary_hash is part of the sortkey/primarykey in the ERRORS table,
+            # we need to tombstone the old event. In the old EVENTS table we do
+            # not.
+            return None
 
-    prewhere, where, query_args = event_set_filter
-
-    if old_primary_hash:
-        query_args["old_primary_hash"] = (
-            ("'%s'" % (str(uuid.UUID(old_primary_hash)),))
-            if old_primary_hash
-            else "NULL"
+        return TombstoneEventsReplacement(
+            required_columns=context.required_columns,
+            event_ids=event_ids,
+            from_timestamp=message.get("from_timestamp"),
+            to_timestamp=message.get("to_timestamp"),
+            project_id=message["project_id"],
+            state_name=context.state_name,
+            old_primary_hash=old_primary_hash,
         )
 
-        prewhere.append("primary_hash = %(old_primary_hash)s")
+    def get_excluded_groups(self) -> Sequence[int]:
+        return []
 
-    query_time_flags = (None, message["project_id"])
+    def get_needs_final(self) -> bool:
+        return False
 
-    full_where = f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
+    def get_project_id(self) -> int:
+        return self.project_id
 
-    return _build_event_tombstone_replacement(
-        message, required_columns, full_where, query_args, query_time_flags
-    )
+    @cached_property
+    def _where_clause(self) -> str:
+        # XXX
+        prewhere, where, query_args = self._get_event_set_filter()  # type: ignore
+
+        if self.old_primary_hash:
+            query_args["old_primary_hash"] = (
+                ("'%s'" % (str(uuid.UUID(self.old_primary_hash)),))
+                if self.old_primary_hash
+                else "NULL"
+            )
+
+            prewhere.append("primary_hash = %(old_primary_hash)s")
+
+        return (
+            f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
+            % query_args
+        )
 
 
 @dataclass(frozen=True)
@@ -615,9 +667,6 @@ class ExcludeGroupsReplacement(Replacement):
 
     def get_count_query(self, table_name: str) -> Optional[str]:
         return None
-
-    def get_query_args(self) -> Mapping[str, Any]:
-        return {}
 
 
 SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
