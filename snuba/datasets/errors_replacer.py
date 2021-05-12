@@ -222,7 +222,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         ):
             return None
         elif type_ == "end_delete_groups":
-            processed = process_delete_groups(event, self.__required_columns)
+            processed = DeleteGroupsReplacement.parse_message(event, context)
         elif type_ == "end_merge":
             processed = MergeGroupsReplacement.parse_message(event, context)
         elif type_ == "end_unmerge":
@@ -488,33 +488,52 @@ class ReplaceGroupReplacement(Replacement, _EventSetFilterMixin):
         )
 
 
-def process_delete_groups(
-    message: Mapping[str, Any], required_columns: Sequence[str]
-) -> Optional[Replacement]:
-    group_ids = message["group_ids"]
-    if not group_ids:
-        return None
+@dataclass(frozen=True)
+class DeleteGroupsReplacement(_TombstoneMixin, Replacement):
+    group_ids: Sequence[int]
+    timestamp: datetime
+    project_id: int
 
-    assert all(isinstance(gid, int) for gid in group_ids)
-    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+    @classmethod
+    def parse_message(
+        cls, message: Mapping[str, Any], context: ReplacementContext
+    ) -> Optional["Replacement"]:
+        group_ids = message["group_ids"]
+        if not group_ids:
+            return None
 
-    where = """\
-        PREWHERE group_id IN (%(group_ids)s)
-        WHERE project_id = %(project_id)s
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
+        assert all(isinstance(gid, int) for gid in group_ids)
+        timestamp = datetime.strptime(
+            message["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+        )
 
-    query_args = {
-        "group_ids": ", ".join(str(gid) for gid in group_ids),
-        "timestamp": timestamp.strftime(DATETIME_FORMAT),
-    }
+        return DeleteGroupsReplacement(
+            required_columns=context.required_columns,
+            group_ids=group_ids,
+            timestamp=timestamp,
+            project_id=message["project_id"],
+        )
 
-    query_time_flags = (EXCLUDE_GROUPS, message["project_id"], group_ids)
+    def get_excluded_groups(self) -> Sequence[int]:
+        return self.group_ids
 
-    return _build_event_tombstone_replacement(
-        message, required_columns, where, query_args, query_time_flags
-    )
+    def get_needs_final(self) -> bool:
+        return False
+
+    def get_project_id(self) -> int:
+        return self.project_id
+
+    @cached_property
+    def _where_clause(self) -> str:
+        group_ids = ", ".join(str(gid) for gid in self.group_ids)
+        timestamp = self.timestamp.strftime(DATETIME_FORMAT)
+
+        return f"""\
+            PREWHERE group_id IN ({group_ids})
+            WHERE project_id = {self.project_id}
+            AND received <= CAST('{timestamp}' AS DateTime)
+            AND NOT deleted
+        """
 
 
 @dataclass(frozen=True)
