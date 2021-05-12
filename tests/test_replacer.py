@@ -89,26 +89,28 @@ class TestReplacer:
 
         replacement = self.replacer.process_message(self._wrap(message))
 
-        assert (
-            re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == "SELECT count() FROM %(table_name)s FINAL PREWHERE group_id IN (%(group_ids)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
-        )
-        assert (
-            re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == "INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE group_id IN (%(group_ids)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
-        )
-        assert replacement.query_args == {
+        query_args = {
             "group_ids": "1, 2, 3",
             "project_id": self.project_id,
             "required_columns": "event_id, project_id, group_id, timestamp, deleted, retention_days",
             "select_columns": "event_id, project_id, group_id, timestamp, 1, retention_days",
             "timestamp": timestamp.strftime(DATETIME_FORMAT),
+            "table_name": "foo",
         }
-        assert replacement.query_time_flags == (
-            errors_replacer.EXCLUDE_GROUPS,
-            self.project_id,
-            [1, 2, 3],
+
+        assert (
+            re.sub("[\n ]+", " ", replacement.get_count_query("foo")).strip()
+            == "SELECT count() FROM %(table_name)s FINAL PREWHERE group_id IN (%(group_ids)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            % query_args
         )
+        assert (
+            re.sub("[\n ]+", " ", replacement.get_insert_query("foo")).strip()
+            == "INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE group_id IN (%(group_ids)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            % query_args
+        )
+        assert not replacement.get_needs_final()
+        assert replacement.get_excluded_groups() == [1, 2, 3]
+        assert replacement.get_project_id() == self.project_id
 
     def test_merge_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)
@@ -507,23 +509,28 @@ class TestReplacer:
 
         assert replacement is not None
 
-        assert (
-            re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == "SELECT count() FROM %(table_name)s FINAL PREWHERE cityHash64(toString(event_id)) IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted"
-        )
-        assert (
-            re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == "INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE cityHash64(toString(event_id)) IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted"
-        )
-
-        assert replacement.query_args == {
+        query_args = {
             "event_ids": "cityHash64('00e24a150d7f4ee4b142b61b4d893b6d')",
             "project_id": self.project_id,
             "required_columns": "event_id, project_id, group_id, timestamp, deleted, retention_days",
             "select_columns": "event_id, project_id, group_id, timestamp, 1, retention_days",
+            "table_name": "foo",
         }
 
-        assert replacement.query_time_flags == (None, self.project_id,)
+        assert (
+            re.sub("[\n ]+", " ", replacement.get_count_query("foo")).strip()
+            == "SELECT count() FROM %(table_name)s FINAL PREWHERE cityHash64(toString(event_id)) IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted"
+            % query_args
+        )
+        assert (
+            re.sub("[\n ]+", " ", replacement.get_insert_query("foo")).strip()
+            == "INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE cityHash64(toString(event_id)) IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted"
+            % query_args
+        )
+
+        assert not replacement.get_excluded_groups()  # type: ignore
+        assert replacement.get_project_id() == self.project_id  # type: ignore
+        assert not replacement.get_needs_final()  # type: ignore
 
     def test_tombstone_events_process_timestamp(self) -> None:
         from_ts = datetime.now(tz=pytz.utc)
@@ -543,20 +550,25 @@ class TestReplacer:
 
         assert replacement is not None
 
-        assert (
-            re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == f"SELECT count() FROM %(table_name)s FINAL PREWHERE cityHash64(toString(event_id)) IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}')"
-        )
-        assert (
-            re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE cityHash64(toString(event_id)) IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}')"
-        )
-
-        assert replacement.query_args == {
+        query_args = {
             "event_ids": "cityHash64('00e24a150d7f4ee4b142b61b4d893b6d')",
             "project_id": self.project_id,
             "required_columns": "event_id, project_id, group_id, timestamp, deleted, retention_days",
             "select_columns": "event_id, project_id, group_id, timestamp, 1, retention_days",
+            "table_name": "foo",
         }
 
-        assert replacement.query_time_flags == (None, self.project_id,)
+        assert (
+            re.sub("[\n ]+", " ", replacement.get_count_query("foo")).strip()
+            == f"SELECT count() FROM %(table_name)s FINAL PREWHERE cityHash64(toString(event_id)) IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}')"
+            % query_args
+        )
+        assert (
+            re.sub("[\n ]+", " ", replacement.get_insert_query("foo")).strip()
+            == f"INSERT INTO %(table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE cityHash64(toString(event_id)) IN (%(event_ids)s) WHERE project_id = %(project_id)s AND NOT deleted AND timestamp >= toDateTime('{from_ts.strftime(DATETIME_FORMAT)}') AND timestamp <= toDateTime('{to_ts.strftime(DATETIME_FORMAT)}')"
+            % query_args
+        )
+
+        assert not replacement.get_excluded_groups()  # type: ignore
+        assert replacement.get_project_id() == self.project_id  # type: ignore
+        assert not replacement.get_needs_final()  # type: ignore

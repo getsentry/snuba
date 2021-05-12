@@ -571,7 +571,7 @@ class TombstoneEventsReplacement(_EventSetFilterMixin, _TombstoneMixin, Replacem
                 else "NULL"
             )
 
-            primary_hash_cond = f"AND primary_hash = {old_primary_hash_fmt}"
+            primary_hash_cond = f" AND primary_hash = {old_primary_hash_fmt}"
 
         return f"PREWHERE {prewhere}{primary_hash_cond} WHERE {where}"
 
