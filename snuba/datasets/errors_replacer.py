@@ -7,18 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from functools import cached_property
-from typing import (
-    Any,
-    Deque,
-    Dict,
-    List,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-)
+from typing import Any, Deque, Dict, Mapping, Optional, Sequence, Tuple, Union
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
@@ -359,73 +348,50 @@ class _TombstoneMixin:
         )
 
 
-def _build_event_set_filter(
-    message: Mapping[str, Any], state_name: ReplacerState
-) -> Optional[Tuple[List[str], List[str], MutableMapping[str, str]]]:
-    event_ids = message["event_ids"]
-    if not event_ids:
-        return None
-
-    def get_timestamp_condition(msg_field: str, operator: str) -> str:
-        msg_value = message.get(msg_field)
-        if not msg_value:
-            return ""
-
-        timestamp = datetime.strptime(msg_value, settings.PAYLOAD_DATETIME_FORMAT)
-        return (
-            f"timestamp {operator} toDateTime('{timestamp.strftime(DATETIME_FORMAT)}')"
-        )
-
-    from_condition = get_timestamp_condition("from_timestamp", ">=")
-    to_condition = get_timestamp_condition("to_timestamp", "<=")
-
-    if state_name == ReplacerState.EVENTS:
-        event_id_lhs = "cityHash64(toString(event_id))"
-        event_id_list = ", ".join(
-            [
-                f"cityHash64('{str(uuid.UUID(event_id)).replace('-', '')}')"
-                for event_id in event_ids
-            ]
-        )
-    else:
-        event_id_lhs = "event_id"
-        event_id_list = ", ".join("'%s'" % uuid.UUID(eid) for eid in event_ids)
-
-    prewhere = [f"{event_id_lhs} IN (%(event_ids)s)"]
-    where = ["project_id = %(project_id)s", "NOT deleted"]
-    if from_condition:
-        where.append(from_condition)
-    if to_condition:
-        where.append(to_condition)
-
-    query_args = {
-        "event_ids": event_id_list,
-        "project_id": message["project_id"],
-    }
-
-    return prewhere, where, query_args
-
-
 @dataclass(frozen=True)
 class _EventSetFilterMixin:
     project_id: int
-    event_ids: int
-    from_timestamp: Optional[datetime]
-    to_timestamp: Optional[datetime]
+    event_ids: Sequence[str]
+    from_timestamp: Optional[str]
+    to_timestamp: Optional[str]
     state_name: ReplacerState
 
-    def _get_event_set_filter(
-        self,
-    ) -> Optional[Tuple[List[str], List[str], MutableMapping[str, str]]]:
-        return _build_event_set_filter(
-            {
-                "event_ids": self.event_ids,
-                "from_timestamp": self.from_timestamp,
-                "to_timestamp": self.to_timestamp,
-                "project_id": self.project_id,
-            },
-            self.state_name,
-        )
+    def _get_event_set_filter(self,) -> Tuple[str, str]:
+        def get_timestamp_condition(value: Optional[str], operator: str) -> str:
+            if not value:
+                return ""
+
+            timestamp = datetime.strptime(value, settings.PAYLOAD_DATETIME_FORMAT)
+            return f"timestamp {operator} toDateTime('{timestamp.strftime(DATETIME_FORMAT)}')"
+
+        from_condition = get_timestamp_condition(self.from_timestamp, ">=")
+        to_condition = get_timestamp_condition(self.to_timestamp, "<=")
+
+        if self.state_name == ReplacerState.EVENTS:
+            event_id_lhs = "cityHash64(toString(event_id))"
+            event_id_list = ", ".join(
+                [
+                    f"cityHash64('{str(uuid.UUID(event_id)).replace('-', '')}')"
+                    for event_id in self.event_ids
+                ]
+            )
+        else:
+            event_id_lhs = "event_id"
+            event_id_list = ", ".join("'%s'" % uuid.UUID(eid) for eid in self.event_ids)
+
+        prewhere = [f"{event_id_lhs} IN (%(event_ids)s)"]
+        where = ["project_id = %(project_id)s", "NOT deleted"]
+        if from_condition:
+            where.append(from_condition)
+        if to_condition:
+            where.append(to_condition)
+
+        query_args = {
+            "event_ids": event_id_list,
+            "project_id": self.project_id,
+        }
+
+        return " AND ".join(prewhere) % query_args, " AND ".join(where) % query_args
 
 
 @dataclass(frozen=True)
@@ -486,21 +452,12 @@ class ReplaceGroupReplacement(Replacement, _EventSetFilterMixin):
         return False
 
     @cached_property
-    def _where_clause(self) -> Optional[str]:
-        filter = self._get_event_set_filter()
-        if filter is None:
-            return filter
-
-        prewhere, where, query_args = filter
-        query_template = (
-            f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
-        )
-        return query_template % query_args
+    def _where_clause(self) -> str:
+        prewhere, where = self._get_event_set_filter()
+        return f"PREWHERE {prewhere} WHERE {where}"
 
     def get_count_query(self, table_name: str) -> Optional[str]:
         where = self._where_clause
-        if where is None:
-            return None
 
         return (
             f"""\
@@ -512,8 +469,6 @@ class ReplaceGroupReplacement(Replacement, _EventSetFilterMixin):
 
     def get_insert_query(self, table_name: str) -> Optional[str]:
         where = self._where_clause
-        if where is None:
-            return None
 
         all_columns = ", ".join(self.all_column_names)
         select_columns = ", ".join(
@@ -605,22 +560,20 @@ class TombstoneEventsReplacement(_EventSetFilterMixin, _TombstoneMixin, Replacem
 
     @cached_property
     def _where_clause(self) -> str:
-        # XXX
-        prewhere, where, query_args = self._get_event_set_filter()  # type: ignore
+        prewhere, where = self._get_event_set_filter()
+
+        primary_hash_cond = ""
 
         if self.old_primary_hash:
-            query_args["old_primary_hash"] = (
+            old_primary_hash_fmt = (
                 ("'%s'" % (str(uuid.UUID(self.old_primary_hash)),))
                 if self.old_primary_hash
                 else "NULL"
             )
 
-            prewhere.append("primary_hash = %(old_primary_hash)s")
+            primary_hash_cond = f"AND primary_hash = {old_primary_hash_fmt}"
 
-        return (
-            f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
-            % query_args
-        )
+        return f"PREWHERE {prewhere}{primary_hash_cond} WHERE {where}"
 
 
 @dataclass(frozen=True)
