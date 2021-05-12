@@ -714,7 +714,16 @@ class MergeGroupsReplacement(Replacement):
         )
 
 
+@dataclass(frozen=True)
 class UnmergeReplacement(Replacement):
+    state_name: ReplacerState
+    timestamp: datetime
+    hashes: Sequence[str]
+    all_columns: Sequence[FlattenedColumn]
+    project_id: int
+    previous_group_id: int
+    new_group_id: int
+
     @classmethod
     def parse_message(
         cls, message: Mapping[str, Any], context: ReplacementContext
@@ -728,56 +737,72 @@ class UnmergeReplacement(Replacement):
         timestamp = datetime.strptime(
             message["datetime"], settings.PAYLOAD_DATETIME_FORMAT
         )
-        all_column_names = [c.escaped for c in context.all_columns]
-        select_columns = map(
-            lambda i: i if i != "group_id" else str(message["new_group_id"]),
-            all_column_names,
+
+        return UnmergeReplacement(
+            state_name=context.state_name,
+            timestamp=timestamp,
+            hashes=hashes,
+            project_id=message["project_id"],
+            previous_group_id=message["previous_group_id"],
+            new_group_id=message["new_group_id"],
+            all_columns=context.all_columns,
         )
 
-        where = """\
-            PREWHERE group_id = %(previous_group_id)s
-            WHERE project_id = %(project_id)s
-            AND primary_hash IN (%(hashes)s)
-            AND received <= CAST('%(timestamp)s' AS DateTime)
+    def get_excluded_groups(self) -> Sequence[int]:
+        return []
+
+    def get_needs_final(self) -> bool:
+        return True
+
+    def get_project_id(self) -> int:
+        return self.project_id
+
+    @cached_property
+    def _where_clause(self) -> str:
+        if self.state_name == ReplacerState.ERRORS:
+            hashes = ", ".join(
+                ["'%s'" % str(uuid.UUID(_hashify(h))) for h in self.hashes]
+            )
+        else:
+            hashes = ", ".join("'%s'" % _hashify(h) for h in self.hashes)
+
+        timestamp = self.timestamp.strftime(DATETIME_FORMAT)
+
+        return f"""\
+            PREWHERE group_id = {self.previous_group_id}
+            WHERE project_id = {self.project_id}
+            AND primary_hash IN ({hashes})
+            AND received <= CAST('{timestamp}' AS DateTime)
             AND NOT deleted
         """
 
-        count_query_template = (
-            """\
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        return (
+            f"""\
             SELECT count()
-            FROM %(table_name)s FINAL
+            FROM {table_name} FINAL
         """
-            + where
+            + self._where_clause
         )
 
-        insert_query_template = (
-            """\
-            INSERT INTO %(table_name)s (%(all_columns)s)
-            SELECT %(select_columns)s
-            FROM %(table_name)s FINAL
-        """
-            + where
-        )
-
-        query_args = {
-            "all_columns": ", ".join(all_column_names),
-            "select_columns": ", ".join(select_columns),
-            "previous_group_id": message["previous_group_id"],
-            "project_id": message["project_id"],
-            "timestamp": timestamp.strftime(DATETIME_FORMAT),
-        }
-
-        if context.state_name == ReplacerState.ERRORS:
-            query_args["hashes"] = ", ".join(
-                ["'%s'" % str(uuid.UUID(_hashify(h))) for h in hashes]
+    def get_insert_query(self, table_name: str) -> Optional[str]:
+        all_column_names = [c.escaped for c in self.all_columns]
+        select_columns = ", ".join(
+            map(
+                lambda i: i if i != "group_id" else str(self.new_group_id),
+                all_column_names,
             )
-        else:
-            query_args["hashes"] = ", ".join("'%s'" % _hashify(h) for h in hashes)
+        )
 
-        query_time_flags = (NEEDS_FINAL, message["project_id"])
+        all_columns = ", ".join(all_column_names)
 
-        return LegacyReplacement(
-            count_query_template, insert_query_template, query_args, query_time_flags
+        return (
+            f"""\
+            INSERT INTO {table_name} ({all_columns})
+            SELECT {select_columns}
+            FROM {table_name} FINAL
+        """
+            + self._where_clause
         )
 
 
