@@ -13,12 +13,14 @@ from confluent_kafka.admin import AdminClient, NewTopic
 from snuba.utils.streams.backends.abstract import ConsumerError, EndOfPartition
 from snuba.utils.streams.backends.kafka import (
     KafkaConsumer,
-    KafkaConsumerWithCommitLog,
     KafkaPayload,
     KafkaProducer,
     as_kafka_configuration_bool,
 )
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
+from snuba.utils.streams.kafka_consumer_with_commit_log import (
+    KafkaConsumerWithCommitLog,
+)
 from snuba.utils.streams.synchronized import Commit, commit_codec
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
