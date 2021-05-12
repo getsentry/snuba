@@ -1,15 +1,14 @@
-import pytest
+from unittest.mock import MagicMock, patch
 
+import pytest
 from confluent_kafka import KafkaError
-from unittest.mock import patch
-from unittest.mock import MagicMock
 
 from snuba.consumers.strict_consumer import (
     CommitDecision,
     NoPartitionAssigned,
     StrictConsumer,
 )
-from snuba.utils.streams.backends.kafka import get_default_kafka_configuration
+from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from tests.backends.confluent_kafka import (
     FakeConfluentKafkaConsumer,
     build_confluent_kafka_message,
