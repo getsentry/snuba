@@ -571,14 +571,8 @@ def process_tombstone_events(
     )
 
 
-# Separate mixin because of https://github.com/python/mypy/issues/5374
 @dataclass(frozen=True)
-class _ExcludeGroupsFields:
-    project_id: int
-    group_ids: Sequence[int]
-
-
-class ExcludeGroupsReplacement(_ExcludeGroupsFields, Replacement):
+class ExcludeGroupsReplacement(Replacement):
     """
     Exclude a group ID from being searched.
 
@@ -594,6 +588,9 @@ class ExcludeGroupsReplacement(_ExcludeGroupsFields, Replacement):
 
     See docstring in `sentry.reprocessing2` for more information.
     """
+
+    project_id: int
+    group_ids: Sequence[int]
 
     @classmethod
     def parse_message(
