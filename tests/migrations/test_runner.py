@@ -11,9 +11,13 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import StorageKey, factory
-from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storages.factory import STORAGES, get_storage, get_writable_storage
 from snuba.migrations.errors import MigrationError
-from snuba.migrations.groups import MigrationGroup, get_group_loader
+from snuba.migrations.groups import (
+    ACTIVE_MIGRATION_GROUPS,
+    MigrationGroup,
+    get_group_loader,
+)
 from snuba.migrations.parse_schema import get_local_schema
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
@@ -167,7 +171,7 @@ def test_reverse_all() -> None:
 
 def get_total_migration_count() -> int:
     count = 0
-    for group in MigrationGroup:
+    for group in ACTIVE_MIGRATION_GROUPS:
         count += len(get_group_loader(group).get_migrations())
     return count
 
@@ -189,7 +193,7 @@ def test_no_schema_differences() -> None:
     runner = Runner()
     runner.run_all(force=True)
 
-    for storage_key in StorageKey:
+    for storage_key in STORAGES:
         storage = get_storage(storage_key)
         conn = storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.MIGRATE
