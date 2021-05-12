@@ -21,14 +21,14 @@ from snuba.replacers.replacer_processor import ReplacementMessage, ReplacerProce
 
 logger = logging.getLogger(__name__)
 
-"""
-Disambiguate the dataset/storage when there are multiple tables representing errors
-that perform event replacements.
-In theory this will be needed only during the events to errors migration.
-"""
-
 
 class ReplacerState(Enum):
+    """
+    Disambiguate the dataset/storage when there are multiple tables representing errors
+    that perform event replacements.
+    In theory this will be needed only during the events to errors migration.
+    """
+
     EVENTS = "events"
     ERRORS = "errors"
 
