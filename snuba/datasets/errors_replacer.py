@@ -226,7 +226,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         elif type_ == "end_merge":
             processed = MergeGroupsReplacement.parse_message(event, context)
         elif type_ == "end_unmerge":
-            processed = process_unmerge(event, self.__all_columns, self.__state_name)
+            processed = UnmergeReplacement.parse_message(event, context)
         elif type_ == "end_delete_tag":
             processed = process_delete_tag(
                 event,
@@ -714,69 +714,71 @@ class MergeGroupsReplacement(Replacement):
         )
 
 
-def process_unmerge(
-    message: Mapping[str, Any],
-    all_columns: Sequence[FlattenedColumn],
-    state_name: ReplacerState,
-) -> Optional[Replacement]:
-    hashes = message["hashes"]
-    if not hashes:
-        return None
+class UnmergeReplacement(Replacement):
+    @classmethod
+    def parse_message(
+        cls, message: Mapping[str, Any], context: ReplacementContext
+    ) -> Optional["Replacement"]:
+        hashes = message["hashes"]
+        if not hashes:
+            return None
 
-    assert all(isinstance(h, str) for h in hashes)
+        assert all(isinstance(h, str) for h in hashes)
 
-    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
-    all_column_names = [c.escaped for c in all_columns]
-    select_columns = map(
-        lambda i: i if i != "group_id" else str(message["new_group_id"]),
-        all_column_names,
-    )
-
-    where = """\
-        PREWHERE group_id = %(previous_group_id)s
-        WHERE project_id = %(project_id)s
-        AND primary_hash IN (%(hashes)s)
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
-
-    count_query_template = (
-        """\
-        SELECT count()
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
-
-    insert_query_template = (
-        """\
-        INSERT INTO %(table_name)s (%(all_columns)s)
-        SELECT %(select_columns)s
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
-
-    query_args = {
-        "all_columns": ", ".join(all_column_names),
-        "select_columns": ", ".join(select_columns),
-        "previous_group_id": message["previous_group_id"],
-        "project_id": message["project_id"],
-        "timestamp": timestamp.strftime(DATETIME_FORMAT),
-    }
-
-    if state_name == ReplacerState.ERRORS:
-        query_args["hashes"] = ", ".join(
-            ["'%s'" % str(uuid.UUID(_hashify(h))) for h in hashes]
+        timestamp = datetime.strptime(
+            message["datetime"], settings.PAYLOAD_DATETIME_FORMAT
         )
-    else:
-        query_args["hashes"] = ", ".join("'%s'" % _hashify(h) for h in hashes)
+        all_column_names = [c.escaped for c in context.all_columns]
+        select_columns = map(
+            lambda i: i if i != "group_id" else str(message["new_group_id"]),
+            all_column_names,
+        )
 
-    query_time_flags = (NEEDS_FINAL, message["project_id"])
+        where = """\
+            PREWHERE group_id = %(previous_group_id)s
+            WHERE project_id = %(project_id)s
+            AND primary_hash IN (%(hashes)s)
+            AND received <= CAST('%(timestamp)s' AS DateTime)
+            AND NOT deleted
+        """
 
-    return LegacyReplacement(
-        count_query_template, insert_query_template, query_args, query_time_flags
-    )
+        count_query_template = (
+            """\
+            SELECT count()
+            FROM %(table_name)s FINAL
+        """
+            + where
+        )
+
+        insert_query_template = (
+            """\
+            INSERT INTO %(table_name)s (%(all_columns)s)
+            SELECT %(select_columns)s
+            FROM %(table_name)s FINAL
+        """
+            + where
+        )
+
+        query_args = {
+            "all_columns": ", ".join(all_column_names),
+            "select_columns": ", ".join(select_columns),
+            "previous_group_id": message["previous_group_id"],
+            "project_id": message["project_id"],
+            "timestamp": timestamp.strftime(DATETIME_FORMAT),
+        }
+
+        if context.state_name == ReplacerState.ERRORS:
+            query_args["hashes"] = ", ".join(
+                ["'%s'" % str(uuid.UUID(_hashify(h))) for h in hashes]
+            )
+        else:
+            query_args["hashes"] = ", ".join("'%s'" % _hashify(h) for h in hashes)
+
+        query_time_flags = (NEEDS_FINAL, message["project_id"])
+
+        return LegacyReplacement(
+            count_query_template, insert_query_template, query_args, query_time_flags
+        )
 
 
 def process_delete_tag(
