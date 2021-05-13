@@ -280,6 +280,8 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         output_block_size: int,
         metrics: Metrics = DummyMetricsBackend,
     ) -> None:
+        # Perform a runtime check of metrics instance upon initialization of
+        # this class to avoid errors down the line when it is used.
         assert isinstance(metrics, Metrics)
         self.__transform_function = function
         self.__next_step = next_step
