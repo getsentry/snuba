@@ -21,7 +21,7 @@ class BaseSubscriptionTest:
             minute=0, second=0, microsecond=0
         ) - timedelta(minutes=self.minutes)
 
-        events_storage = get_writable_storage(StorageKey.EVENTS)
+        events_storage = get_writable_storage(StorageKey.ERRORS)
 
         write_unprocessed_events(
             events_storage,
