@@ -1006,8 +1006,6 @@ def _array_column_conditions(
             assert isinstance(node.data_source, QueryEntity)  # mypy
             _unpack_array_conditions(query, node.data_source.schema, alias)
 
-    return None
-
 
 def _mangle_query_aliases(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
