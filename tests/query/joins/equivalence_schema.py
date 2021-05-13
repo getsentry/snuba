@@ -81,7 +81,7 @@ class Events(FakeEntity):
                 ),
             },
             writable_storage=None,
-            required_filter_columns=None,
+            validators=None,
             required_time_column=None,
         )
 
@@ -107,7 +107,7 @@ class GroupedMessage(FakeEntity):
                 ),
             },
             writable_storage=None,
-            required_filter_columns=None,
+            validators=None,
             required_time_column=None,
         )
 
@@ -133,6 +133,6 @@ class GroupAssignee(FakeEntity):
                 ),
             },
             writable_storage=None,
-            required_filter_columns=None,
+            validators=None,
             required_time_column=None,
         )

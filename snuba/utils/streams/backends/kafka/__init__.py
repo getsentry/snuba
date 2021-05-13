@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import logging
 from concurrent.futures import Future
 from datetime import datetime
@@ -11,7 +10,6 @@ from threading import Event
 from typing import (
     Any,
     Callable,
-    Dict,
     Mapping,
     MutableMapping,
     MutableSequence,
@@ -37,9 +35,7 @@ from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
-from snuba import settings
 from snuba.utils.concurrent import execute
-from snuba.utils.logging import pylog_to_syslog_level
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
 from snuba.utils.streams.backends.abstract import (
     Consumer,
@@ -48,7 +44,6 @@ from snuba.utils.streams.backends.abstract import (
     OffsetOutOfRange,
     Producer,
 )
-from snuba.utils.streams.topics import Topic as KafkaTopic
 from snuba.utils.streams.types import Message, Partition, Topic
 
 logger = logging.getLogger(__name__)
@@ -61,8 +56,6 @@ class TransportError(ConsumerError):
 KafkaConsumerState = Enum(
     "KafkaConsumerState", ["CONSUMING", "ERROR", "CLOSED", "ASSIGNING", "REVOKING"]
 )
-
-KafkaBrokerConfig = Dict[str, Any]
 
 
 class InvalidState(RuntimeError):
@@ -618,165 +611,6 @@ class KafkaConsumer(Consumer[KafkaPayload]):
     @property
     def closed(self) -> bool:
         return self.__state is KafkaConsumerState.CLOSED
-
-
-DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
-DEFAULT_QUEUED_MIN_MESSAGES = 10000
-DEFAULT_PARTITIONER = "consistent"
-DEFAULT_MAX_MESSAGE_BYTES = 50000000  # 50MB, default is 1MB
-SUPPORTED_KAFKA_CONFIGURATION = (
-    # Check https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
-    # for the full list of available options
-    "bootstrap.servers",
-    "sasl.mechanism",
-    "sasl.username",
-    "sasl.password",
-    "security.protocol",
-    "ssl.ca.location",
-    "ssl.ca.certificate.stores",
-    "ssl.certificate.location",
-    "ssl.certificate.pem",
-    "ssl.cipher.suites",
-    "ssl.crl.location",
-    "ssl.curves.list",
-    "ssl.endpoint.identification.algorithm",
-    "ssl.key.location",
-    "ssl.key.password",
-    "ssl.key.pem",
-    "ssl.keystore.location",
-    "ssl.keystore.password",
-    "ssl.sigalgs.list",
-)
-
-
-def get_default_kafka_configuration(
-    topic: Optional[KafkaTopic] = None,
-    bootstrap_servers: Optional[Sequence[str]] = None,
-    override_params: Optional[Mapping[str, Any]] = None,
-) -> KafkaBrokerConfig:
-    default_bootstrap_servers = None
-    default_config: Mapping[str, Any]
-
-    if topic is not None:
-        default_config = settings.KAFKA_BROKER_CONFIG.get(
-            topic.value, settings.BROKER_CONFIG
-        )
-    else:
-        default_config = settings.BROKER_CONFIG
-    broker_config = copy.deepcopy(default_config)
-    assert isinstance(broker_config, dict)
-    bootstrap_servers = (
-        ",".join(bootstrap_servers) if bootstrap_servers else default_bootstrap_servers
-    )
-    if bootstrap_servers:
-        broker_config["bootstrap.servers"] = bootstrap_servers
-    broker_config = {k: v for k, v in broker_config.items() if v is not None}
-    for configuration_key in broker_config:
-        if configuration_key not in SUPPORTED_KAFKA_CONFIGURATION:
-            raise ValueError(
-                f"The `{configuration_key}` configuration key is not supported."
-            )
-
-    broker_config["log_level"] = pylog_to_syslog_level(logger.getEffectiveLevel())
-
-    if override_params:
-        broker_config.update(override_params)
-
-    return broker_config
-
-
-def build_kafka_consumer_configuration(
-    topic: Optional[KafkaTopic],
-    group_id: str,
-    auto_offset_reset: str = "error",
-    queued_max_messages_kbytes: int = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
-    queued_min_messages: int = DEFAULT_QUEUED_MIN_MESSAGES,
-    bootstrap_servers: Optional[Sequence[str]] = None,
-    override_params: Optional[Mapping[str, Any]] = None,
-) -> KafkaBrokerConfig:
-    broker_config = get_default_kafka_configuration(
-        topic, bootstrap_servers=bootstrap_servers, override_params=override_params,
-    )
-    broker_config.update(
-        {
-            "enable.auto.commit": False,
-            "enable.auto.offset.store": False,
-            "group.id": group_id,
-            "auto.offset.reset": auto_offset_reset,
-            # overridden to reduce memory usage when there's a large backlog
-            "queued.max.messages.kbytes": queued_max_messages_kbytes,
-            "queued.min.messages": queued_min_messages,
-            "enable.partition.eof": False,
-        }
-    )
-    return broker_config
-
-
-def build_kafka_producer_configuration(
-    topic: Optional[KafkaTopic],
-    bootstrap_servers: Optional[Sequence[str]] = None,
-    override_params: Optional[Mapping[str, Any]] = None,
-) -> KafkaBrokerConfig:
-    broker_config = get_default_kafka_configuration(
-        topic=topic,
-        bootstrap_servers=bootstrap_servers,
-        override_params=override_params,
-    )
-    return broker_config
-
-
-def build_default_kafka_producer_configuration() -> KafkaBrokerConfig:
-    return build_kafka_producer_configuration(None, None)
-
-
-# XXX: This must be imported after `KafkaPayload` to avoid a circular import.
-from snuba.utils.streams.synchronized import Commit, commit_codec
-
-
-class KafkaConsumerWithCommitLog(KafkaConsumer):
-    def __init__(
-        self,
-        configuration: Mapping[str, Any],
-        *,
-        producer: ConfluentProducer,
-        commit_log_topic: Topic,
-        commit_retry_policy: Optional[RetryPolicy] = None,
-    ) -> None:
-        super().__init__(configuration, commit_retry_policy=commit_retry_policy)
-        self.__producer = producer
-        self.__commit_log_topic = commit_log_topic
-        self.__group_id = configuration["group.id"]
-
-    def poll(self, timeout: Optional[float] = None) -> Optional[Message[KafkaPayload]]:
-        self.__producer.poll(0.0)
-        return super().poll(timeout)
-
-    def __commit_message_delivery_callback(
-        self, error: Optional[KafkaError], message: ConfluentMessage
-    ) -> None:
-        if error is not None:
-            raise Exception(error.str())
-
-    def commit_offsets(self) -> Mapping[Partition, int]:
-        offsets = super().commit_offsets()
-
-        for partition, offset in offsets.items():
-            commit = Commit(self.__group_id, partition, offset)
-            payload = commit_codec.encode(commit)
-            self.__producer.produce(
-                self.__commit_log_topic.name,
-                key=payload.key,
-                value=payload.value,
-                on_delivery=self.__commit_message_delivery_callback,
-            )
-
-        return offsets
-
-    def close(self, timeout: Optional[float] = None) -> None:
-        super().close()
-        messages: int = self.__producer.flush(*[timeout] if timeout is not None else [])
-        if messages > 0:
-            raise TimeoutError(f"{messages} commit log messages pending delivery")
 
 
 class KafkaProducer(Producer[KafkaPayload]):

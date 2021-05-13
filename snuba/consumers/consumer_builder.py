@@ -15,12 +15,16 @@ from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
 from snuba.utils.streams import Topic
 from snuba.utils.streams.backends.kafka import (
     KafkaConsumer,
-    KafkaConsumerWithCommitLog,
     KafkaPayload,
     TransportError,
+)
+from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
     build_kafka_producer_configuration,
     get_default_kafka_configuration,
+)
+from snuba.utils.streams.kafka_consumer_with_commit_log import (
+    KafkaConsumerWithCommitLog,
 )
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.processing.strategies import ProcessingStrategyFactory
@@ -141,7 +145,6 @@ class ConsumerBuilder:
     def __build_consumer(
         self, strategy_factory: ProcessingStrategyFactory[KafkaPayload]
     ) -> StreamProcessor[KafkaPayload]:
-
         configuration = build_kafka_consumer_configuration(
             self.storage.get_table_writer()
             .get_stream_loader()

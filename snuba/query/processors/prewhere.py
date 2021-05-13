@@ -53,6 +53,13 @@ class PrewhereProcessor(QueryProcessor):
         )
         prewhere_keys = self.__prewhere_candidates
 
+        # In case the query is final we cannot simply add any candidate
+        # condition to the prewhere.
+        # Final is applied after prewhere, so there are cases where moving
+        # conditions to the prewhere could exclude from the result sets
+        # rows that would be merged under the `final` condition.
+        # Example, rewriting the group_id on an unmerge. If the group_id
+        # is in the prewhere, final wil fail at merging the rows.
         # HACK: If query has final, do not move any condition on a column in the
         # omit_if_final list to prewhere.
         # There is a bug in ClickHouse affecting queries with FINAL and PREWHERE

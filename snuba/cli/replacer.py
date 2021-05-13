@@ -76,9 +76,8 @@ def replacer(
 
     from snuba.replacer import ReplacerWorker
     from snuba.utils.streams import Topic
-    from snuba.utils.streams.backends.kafka import (
-        KafkaConsumer,
-        TransportError,
+    from snuba.utils.streams.backends.kafka import KafkaConsumer, TransportError
+    from snuba.utils.streams.configuration_builder import (
         build_kafka_consumer_configuration,
     )
     from snuba.utils.streams.processing import StreamProcessor

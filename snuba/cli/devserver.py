@@ -8,7 +8,8 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
     "Starts all Snuba processes for local development."
     import os
     import sys
-    from subprocess import list2cmdline, call
+    from subprocess import call, list2cmdline
+
     from honcho.manager import Manager
 
     os.environ["PYTHONUNBUFFERED"] = "1"
@@ -95,8 +96,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--log-level=debug",
                 "--max-batch-size=1",
                 "--consumer-group=snuba-events-subscriptions-consumers",
-                "--topic=events",
-                "--result-topic=events-subscription-results",
                 "--dataset=events",
                 "--commit-log-topic=snuba-commit-log",
                 "--commit-log-group=snuba-consumers",
@@ -114,8 +113,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--log-level=debug",
                 "--max-batch-size=1",
                 "--consumer-group=snuba-transactions-subscriptions-consumers",
-                "--topic=events",
-                "--result-topic=transactions-subscription-results",
                 "--dataset=transactions",
                 "--commit-log-topic=snuba-commit-log",
                 "--commit-log-group=transactions_group",
