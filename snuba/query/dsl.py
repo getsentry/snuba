@@ -10,6 +10,10 @@ def literals_tuple(alias: Optional[str], literals: Sequence[Literal]) -> Functio
     return FunctionCall(alias, "tuple", tuple(literals))
 
 
+def literals_array(alias: Optional[str], literals: Sequence[Literal]) -> FunctionCall:
+    return FunctionCall(alias, "array", tuple(literals))
+
+
 # Array functions
 def arrayElement(
     alias: Optional[str], array: Expression, index: Expression

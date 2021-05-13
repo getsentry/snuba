@@ -33,6 +33,7 @@ from snuba.query.processors.timeseries_processor import (
 )
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
+from snuba.query.validation.validators import EntityRequiredColumnValidator
 from snuba.request.request_settings import RequestSettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -242,7 +243,7 @@ class SessionsEntity(Entity):
             abstract_column_set=read_schema.get_columns(),
             join_relationships={},
             writable_storage=writable_storage,
-            required_filter_columns=["org_id", "project_id"],
+            validators=[EntityRequiredColumnValidator({"org_id", "project_id"})],
             required_time_column="started",
         )
 

@@ -1,11 +1,11 @@
 from unittest.mock import patch
 
+from snuba.consumers.strict_consumer import StrictConsumer
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_cdc_storage
 from snuba.stateful_consumer import ConsumerStateCompletionEvent
-from snuba.consumers.strict_consumer import StrictConsumer
 from snuba.stateful_consumer.states.bootstrap import BootstrapState
-from snuba.utils.streams.backends.kafka import get_default_kafka_configuration
+from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from tests.backends.confluent_kafka import (
     FakeConfluentKafkaConsumer,
     build_confluent_kafka_message,

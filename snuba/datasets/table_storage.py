@@ -4,9 +4,10 @@ from snuba import settings
 from snuba.clickhouse.http import InsertStatement, JSONRow
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
-    ClickhouseCluster,
     ClickhouseWriterOptions,
+    get_cluster,
 )
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import MessageProcessor
@@ -65,11 +66,13 @@ class KafkaStreamLoader:
         pre_filter: Optional[StreamMessageFilter[KafkaPayload]] = None,
         replacement_topic_spec: Optional[KafkaTopicSpec] = None,
         commit_log_topic_spec: Optional[KafkaTopicSpec] = None,
+        subscription_result_topic_spec: Optional[KafkaTopicSpec] = None,
     ) -> None:
         self.__processor = processor
         self.__default_topic_spec = default_topic_spec
         self.__replacement_topic_spec = replacement_topic_spec
         self.__commit_log_topic_spec = commit_log_topic_spec
+        self.__subscription_result_topic_spec = subscription_result_topic_spec
         self.__pre_filter = pre_filter
 
     def get_processor(self) -> MessageProcessor:
@@ -91,13 +94,8 @@ class KafkaStreamLoader:
     def get_commit_log_topic_spec(self) -> Optional[KafkaTopicSpec]:
         return self.__commit_log_topic_spec
 
-    def get_all_topic_specs(self) -> Sequence[KafkaTopicSpec]:
-        ret = [self.__default_topic_spec]
-        if self.__replacement_topic_spec is not None:
-            ret.append(self.__replacement_topic_spec)
-        if self.__commit_log_topic_spec is not None:
-            ret.append(self.__commit_log_topic_spec)
-        return ret
+    def get_subscription_result_topic_spec(self) -> Optional[KafkaTopicSpec]:
+        return self.__subscription_result_topic_spec
 
 
 def build_kafka_stream_loader_from_settings(
@@ -106,6 +104,7 @@ def build_kafka_stream_loader_from_settings(
     pre_filter: Optional[StreamMessageFilter[KafkaPayload]] = None,
     replacement_topic: Optional[Topic] = None,
     commit_log_topic: Optional[Topic] = None,
+    subscription_result_topic: Optional[Topic] = None,
 ) -> KafkaStreamLoader:
     default_topic_spec = KafkaTopicSpec(default_topic)
 
@@ -122,12 +121,19 @@ def build_kafka_stream_loader_from_settings(
     else:
         commit_log_topic_spec = None
 
+    subscription_result_topic_spec: Optional[KafkaTopicSpec]
+    if subscription_result_topic is not None:
+        subscription_result_topic_spec = KafkaTopicSpec(subscription_result_topic)
+    else:
+        subscription_result_topic_spec = None
+
     return KafkaStreamLoader(
         processor,
         default_topic_spec,
         pre_filter,
         replacement_topic_spec,
         commit_log_topic_spec,
+        subscription_result_topic_spec=subscription_result_topic_spec,
     )
 
 
@@ -148,13 +154,13 @@ class TableWriter:
 
     def __init__(
         self,
-        cluster: ClickhouseCluster,
+        storage_set: StorageSetKey,
         write_schema: WritableTableSchema,
         stream_loader: KafkaStreamLoader,
         replacer_processor: Optional[ReplacerProcessor] = None,
         writer_options: ClickhouseWriterOptions = None,
     ) -> None:
-        self.__cluster = cluster
+        self.__storage_set = storage_set
         self.__table_schema = write_schema
         self.__stream_loader = stream_loader
         self.__replacer_processor = replacer_processor
@@ -174,7 +180,7 @@ class TableWriter:
 
         options = self.__update_writer_options(options)
 
-        return self.__cluster.get_batch_writer(
+        return get_cluster(self.__storage_set).get_batch_writer(
             metrics,
             InsertStatement(table_name).with_format("JSONEachRow"),
             encoding=None,
@@ -195,7 +201,7 @@ class TableWriter:
 
         options = self.__update_writer_options(options)
 
-        return self.__cluster.get_batch_writer(
+        return get_cluster(self.__storage_set).get_batch_writer(
             metrics,
             InsertStatement(table_name)
             .with_columns(column_names)
@@ -210,19 +216,20 @@ class TableWriter:
         self,
         source: BulkLoadSource,
         source_table: str,
-        dest_table: str,
         row_processor: RowProcessor,
+        table_name: Optional[str] = None,
     ) -> BulkLoader:
         """
         Returns the instance of the bulk loader to populate the dataset from an
         external source when present.
         """
+        table_name = table_name or self.__table_schema.get_table_name()
         return SingleTableBulkLoader(
             source=source,
             source_table=source_table,
-            dest_table=dest_table,
+            dest_table=table_name,
             row_processor=row_processor,
-            clickhouse=self.__cluster.get_query_connection(
+            clickhouse=get_cluster(self.__storage_set).get_query_connection(
                 ClickhouseClientSettings.QUERY
             ),
         )
