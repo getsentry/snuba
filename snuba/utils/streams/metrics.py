@@ -1,10 +1,11 @@
-from abc import ABC, abstractmethod
-from typing import Any, Mapping, Optional, Union
+from abc import abstractmethod
+from typing import Any, Mapping, Optional, Protocol, Union, runtime_checkable
 
 Tags = Optional[Mapping[str, str]]
 
 
-class Metrics(ABC):
+@runtime_checkable
+class Metrics(Protocol):
     """
     An abstract class that defines the interface for metrics backends.
     """

@@ -280,6 +280,7 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         output_block_size: int,
         metrics: Metrics = DummyMetricsBackend,
     ) -> None:
+        assert isinstance(metrics, Metrics)
         self.__transform_function = function
         self.__next_step = next_step
         self.__max_batch_size = max_batch_size

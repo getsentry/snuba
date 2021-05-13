@@ -38,6 +38,8 @@ class StreamProcessor(Generic[TPayload]):
         metrics: Metrics = DummyMetricsBackend,
         recoverable_errors: Optional[Sequence[Type[ConsumerError]]] = None,
     ) -> None:
+        assert isinstance(metrics, Metrics)
+
         self.__consumer = consumer
         self.__processor_factory = processor_factory
         self.__metrics = metrics

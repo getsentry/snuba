@@ -1,12 +1,11 @@
 from typing import Mapping, Optional, Union
 
 from snuba.utils.metrics import MetricsBackend
-from snuba.utils.streams.metrics import Metrics
 
 Tags = Optional[Mapping[str, str]]
 
 
-class StreamMetricsAdapter(Metrics):
+class StreamMetricsAdapter:
     def __init__(self, metrics: MetricsBackend) -> None:
         self.__wrapper = metrics
 
