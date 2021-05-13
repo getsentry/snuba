@@ -2,10 +2,11 @@ import itertools
 import multiprocessing
 from datetime import datetime
 from multiprocessing.managers import SharedMemoryManager
-from typing import Iterator
+from typing import Any, Iterator
 from unittest.mock import Mock, call
 
 import pytest
+
 from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.processing.strategies.streaming.collect import CollectStep
 from snuba.utils.streams.processing.strategies.streaming.filter import FilterStep
@@ -33,21 +34,21 @@ def test_filter() -> None:
 
     fail_message = Message(Partition(Topic("topic"), 0), 0, False, datetime.now())
 
-    with assert_does_not_change(lambda: next_step.submit.call_count, 0):
+    with assert_does_not_change(lambda: int(next_step.submit.call_count), 0):
         filter_step.submit(fail_message)
 
     pass_message = Message(Partition(Topic("topic"), 0), 0, True, datetime.now())
 
-    with assert_changes(lambda: next_step.submit.call_count, 0, 1):
+    with assert_changes(lambda: int(next_step.submit.call_count), 0, 1):
         filter_step.submit(pass_message)
 
     assert next_step.submit.call_args == call(pass_message)
 
-    with assert_changes(lambda: next_step.poll.call_count, 0, 1):
+    with assert_changes(lambda: int(next_step.poll.call_count), 0, 1):
         filter_step.poll()
 
-    with assert_changes(lambda: next_step.close.call_count, 0, 1), assert_changes(
-        lambda: next_step.join.call_count, 0, 1
+    with assert_changes(lambda: int(next_step.close.call_count), 0, 1), assert_changes(
+        lambda: int(next_step.join.call_count), 0, 1
     ):
         filter_step.join()
 
@@ -62,7 +63,7 @@ def test_transform() -> None:
 
     original_message = Message(Partition(Topic("topic"), 0), 0, 1, datetime.now())
 
-    with assert_changes(lambda: next_step.submit.call_count, 0, 1):
+    with assert_changes(lambda: int(next_step.submit.call_count), 0, 1):
         transform_step.submit(original_message)
 
     assert next_step.submit.call_args == call(
@@ -74,11 +75,11 @@ def test_transform() -> None:
         )
     )
 
-    with assert_changes(lambda: next_step.poll.call_count, 0, 1):
+    with assert_changes(lambda: int(next_step.poll.call_count), 0, 1):
         transform_step.poll()
 
-    with assert_changes(lambda: next_step.close.call_count, 0, 1), assert_changes(
-        lambda: next_step.join.call_count, 0, 1
+    with assert_changes(lambda: int(next_step.close.call_count), 0, 1), assert_changes(
+        lambda: int(next_step.join.call_count), 0, 1
     ):
         transform_step.join()
 
@@ -111,8 +112,8 @@ def test_collect() -> None:
         collect_step.submit(next(messages))  # offset 1
 
     # ...until we hit the batch size limit.
-    with assert_changes(lambda: inner_step.close.call_count, 0, 1), assert_changes(
-        lambda: inner_step.join.call_count, 0, 1
+    with assert_changes(lambda: int(inner_step.close.call_count), 0, 1), assert_changes(
+        lambda: int(inner_step.join.call_count), 0, 1
     ), assert_changes(lambda: commit_function.call_count, 0, 1):
         collect_step.poll()
         assert commit_function.call_args == call({partition: 2})
@@ -123,10 +124,10 @@ def test_collect() -> None:
     with assert_changes(lambda: step_factory.call_count, 1, 2):
         collect_step.submit(next(messages))
 
-    with assert_changes(lambda: inner_step.close.call_count, 0, 1):
+    with assert_changes(lambda: int(inner_step.close.call_count), 0, 1):
         collect_step.close()
 
-    with assert_changes(lambda: inner_step.join.call_count, 0, 1), assert_changes(
+    with assert_changes(lambda: int(inner_step.join.call_count), 0, 1), assert_changes(
         lambda: commit_function.call_count, 1, 2
     ):
         collect_step.join()
@@ -135,25 +136,27 @@ def test_collect() -> None:
 def test_message_batch() -> None:
     partition = Partition(Topic("test"), 0)
 
-    with SharedMemoryManager() as smm:
-        block = smm.SharedMemory(4096)
-        assert block.size == 4096
+    smm = SharedMemoryManager()
+    smm.start()
 
-        message = Message(
-            partition, 0, KafkaPayload(None, b"\x00" * 4000, None), datetime.now()
-        )
+    block = smm.SharedMemory(4096)
+    assert block.size == 4096
 
-        batch: MessageBatch[KafkaPayload] = MessageBatch(block)
-        with assert_changes(lambda: len(batch), 0, 1):
-            batch.append(message)
+    message = Message(
+        partition, 0, KafkaPayload(None, b"\x00" * 4000, []), datetime.now()
+    )
 
-        assert batch[0] == message
-        assert list(batch) == [message]
+    batch: MessageBatch[KafkaPayload] = MessageBatch(block)
+    with assert_changes(lambda: len(batch), 0, 1):
+        batch.append(message)
 
-        with assert_does_not_change(lambda: len(batch), 1), pytest.raises(
-            ValueTooLarge
-        ):
-            batch.append(message)
+    assert batch[0] == message
+    assert list(batch) == [message]
+
+    with assert_does_not_change(lambda: len(batch), 1), pytest.raises(ValueTooLarge):
+        batch.append(message)
+
+    smm.shutdown()
 
 
 def transform_payload_expand(message: Message[KafkaPayload]) -> KafkaPayload:
@@ -167,46 +170,48 @@ def test_parallel_transform_worker_apply() -> None:
         Message(
             Partition(Topic("test"), 0),
             i,
-            KafkaPayload(None, b"\x00" * size, None),
+            KafkaPayload(None, b"\x00" * size, []),
             datetime.now(),
         )
         for i, size in enumerate([1000, 1000, 2000, 4000])
     ]
 
-    with SharedMemoryManager() as smm:
-        input_block = smm.SharedMemory(8192)
-        assert input_block.size == 8192
+    smm = SharedMemoryManager()
+    smm.start()
+    input_block = smm.SharedMemory(8192)
+    assert input_block.size == 8192
 
-        input_batch = MessageBatch(input_block)
-        for message in messages:
-            input_batch.append(message)
+    input_batch = MessageBatch[Any](input_block)
+    for message in messages:
+        input_batch.append(message)
 
-        assert len(input_batch) == 4
+    assert len(input_batch) == 4
 
-        output_block = smm.SharedMemory(4096)
-        assert output_block.size == 4096
+    output_block = smm.SharedMemory(4096)
+    assert output_block.size == 4096
 
-        index, output_batch = parallel_transform_worker_apply(
-            transform_payload_expand, input_batch, output_block,
-        )
+    index, output_batch = parallel_transform_worker_apply(
+        transform_payload_expand, input_batch, output_block,
+    )
 
-        # The first batch should be able to fit 2 messages.
-        assert index == 2
-        assert len(output_batch) == 2
+    # The first batch should be able to fit 2 messages.
+    assert index == 2
+    assert len(output_batch) == 2
 
-        index, output_batch = parallel_transform_worker_apply(
+    index, output_batch = parallel_transform_worker_apply(
+        transform_payload_expand, input_batch, output_block, index,
+    )
+
+    # The second batch should be able to fit one message.
+    assert index == 3
+    assert len(output_batch) == 1
+
+    # The last message is too large to fit in the batch.
+    with pytest.raises(ValueTooLarge):
+        parallel_transform_worker_apply(
             transform_payload_expand, input_batch, output_block, index,
         )
-
-        # The second batch should be able to fit one message.
-        assert index == 3
-        assert len(output_batch) == 1
-
-        # The last message is too large to fit in the batch.
-        with pytest.raises(ValueTooLarge):
-            parallel_transform_worker_apply(
-                transform_payload_expand, input_batch, output_block, index,
-            )
+    smm.shutdown()
 
 
 def get_subprocess_count() -> int:
@@ -220,7 +225,7 @@ def test_parallel_transform_step() -> None:
         Message(
             Partition(Topic("test"), 0),
             i,
-            KafkaPayload(None, b"\x00" * size, None),
+            KafkaPayload(None, b"\x00" * size, []),
             datetime.now(),
         )
         for i, size in enumerate([1000, 1000, 2000, 2000])
@@ -308,5 +313,5 @@ def test_parallel_transform_step_terminate_workers() -> None:
         get_subprocess_count,
         starting_processes + worker_processes + manager_processes,
         starting_processes,
-    ), assert_changes(lambda: next_step.terminate.call_count, 0, 1):
+    ), assert_changes(lambda: int(next_step.terminate.call_count), 0, 1):
         transform_step.terminate()
