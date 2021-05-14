@@ -8,6 +8,7 @@ from unittest.mock import Mock, call
 import pytest
 
 from snuba.utils.streams.backends.kafka import KafkaPayload
+from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.utils.streams.processing.strategies.streaming.collect import CollectStep
 from snuba.utils.streams.processing.strategies.streaming.filter import FilterStep
 from snuba.utils.streams.processing.strategies.streaming.transform import (
@@ -261,7 +262,7 @@ def test_parallel_transform_step() -> None:
             max_batch_time=60,
             input_block_size=4096,
             output_block_size=4096,
-            metrics=metrics,
+            metrics=StreamMetricsAdapter(metrics),
         )
 
         for message in messages:
@@ -306,7 +307,7 @@ def test_parallel_transform_step_terminate_workers() -> None:
             max_batch_time=60,
             input_block_size=4096,
             output_block_size=4096,
-            metrics=TestingMetricsBackend(),
+            metrics=StreamMetricsAdapter(TestingMetricsBackend()),
         )
 
     with assert_changes(
