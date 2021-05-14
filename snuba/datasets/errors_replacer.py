@@ -274,7 +274,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                     set_project_needs_final(project_id, None)
                 set_project_needs_final(project_id, self.__state_name)
 
-            if isinstance(query_time_flags, ExcludeGroups):
+            elif isinstance(query_time_flags, ExcludeGroups):
                 if compatibility_double_write:
                     set_project_exclude_groups(
                         project_id, query_time_flags.group_ids, None
