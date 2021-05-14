@@ -1,8 +1,8 @@
 import uuid
-import simplejson as json
 from datetime import datetime, timedelta
 from typing import Any, Callable
 
+import simplejson as json
 from snuba_sdk.column import Column
 from snuba_sdk.conditions import Condition, Op
 from snuba_sdk.entity import Entity
@@ -15,7 +15,6 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
-
 from tests.base import BaseApiTest
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
@@ -239,3 +238,37 @@ class TestSDKSnQLApi(BaseApiTest):
         response = self.post("/events/snql", data=query.snuba())
         data = json.loads(response.data)
         assert response.status_code == 200, data
+
+    def test_array_condition_unpack_in_join_query(self) -> None:
+        ev = Entity("events", "ev")
+        gm = Entity("groupedmessage", "gm")
+        join = Join([Relationship(ev, "grouped", gm)])
+        query = (
+            Query("discover", join)
+            .set_select(
+                [
+                    Column("group_id", ev),
+                    Column("status", gm),
+                    Function("avg", [Column("retention_days", ev)], "avg"),
+                ]
+            )
+            .set_groupby([Column("group_id", ev), Column("status", gm)])
+            .set_where(
+                [
+                    Condition(Column("project_id", ev), Op.EQ, self.project_id),
+                    Condition(Column("project_id", gm), Op.EQ, self.project_id),
+                    Condition(Column("timestamp", ev), Op.GTE, self.base_time),
+                    Condition(Column("timestamp", ev), Op.LT, self.next_time),
+                    Condition(
+                        Column("exception_stacks.type", ev), Op.LIKE, "Arithmetic%"
+                    ),
+                ]
+            )
+            .set_debug(True)
+        )
+
+        response = self.post("/discover/snql", data=query.snuba())
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data["data"] == []
