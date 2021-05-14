@@ -21,7 +21,7 @@ CLUSTERS = [
             "transactions",
         },
         "single_node": False,
-        "cluster_name": "test_shard_localhost",
-        "distributed_cluster_name": "test_shard_localhost",
+        "cluster_name": "cluster_one_sh",
+        "distributed_cluster_name": "cluster_one_sh",
     },
 ]
