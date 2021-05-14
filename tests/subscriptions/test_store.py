@@ -2,7 +2,7 @@ from datetime import timedelta
 from uuid import uuid1
 
 from snuba.redis import redis_client
-from snuba.subscriptions.data import SubscriptionData
+from snuba.subscriptions.data import PartitionId, SubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.subscriptions import BaseSubscriptionTest
 
@@ -18,8 +18,8 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
             resolution=timedelta(minutes=1),
         )
 
-    def build_store(self, key="1") -> RedisSubscriptionDataStore:
-        return RedisSubscriptionDataStore(redis_client, self.dataset, key)
+    def build_store(self, key: int = 1) -> RedisSubscriptionDataStore:
+        return RedisSubscriptionDataStore(redis_client, self.dataset, PartitionId(key))
 
     def test_create(self) -> None:
         store = self.build_store()
@@ -56,8 +56,8 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
         ]
 
     def test_partitions(self) -> None:
-        store_1 = self.build_store("1")
-        store_2 = self.build_store("2")
+        store_1 = self.build_store(1)
+        store_2 = self.build_store(2)
         subscription_id = uuid1()
         store_1.create(subscription_id, self.subscription)
         assert store_2.all() == []
