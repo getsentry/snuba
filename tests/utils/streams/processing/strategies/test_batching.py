@@ -5,6 +5,8 @@ from unittest.mock import patch
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.backends.local.backend import LocalBroker as Broker
+from snuba.utils.streams.backends.local.backend import LocalConsumer
+from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.utils.streams.processing.processor import StreamProcessor
 from snuba.utils.streams.processing.strategies.batching import (
     AbstractBatchWorker,
@@ -35,6 +37,7 @@ class TestConsumer(object):
             producer.produce(topic, i).result()
 
         consumer = broker.get_consumer("group")
+        assert isinstance(consumer, LocalConsumer)
 
         worker = FakeWorker()
         metrics = DummyMetricsBackend(strict=True)
@@ -44,7 +47,7 @@ class TestConsumer(object):
             BatchProcessingStrategyFactory(
                 worker=worker, max_batch_size=2, max_batch_time=100, metrics=metrics,
             ),
-            metrics=metrics,
+            metrics=StreamMetricsAdapter(metrics),
         )
 
         for _ in range(3):
@@ -63,6 +66,7 @@ class TestConsumer(object):
         broker.create_topic(topic, partitions=1)
         producer = broker.get_producer()
         consumer = broker.get_consumer("group")
+        assert isinstance(consumer, LocalConsumer)
 
         worker = FakeWorker()
         metrics = DummyMetricsBackend(strict=True)
@@ -72,7 +76,7 @@ class TestConsumer(object):
             BatchProcessingStrategyFactory(
                 worker=worker, max_batch_size=100, max_batch_time=2000, metrics=metrics,
             ),
-            metrics=metrics,
+            metrics=StreamMetricsAdapter(metrics),
         )
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())

@@ -52,8 +52,7 @@ class StreamsTestMixin(ABC, Generic[TPayload]):
 
             consumer = self.get_consumer(group)
 
-            def assignment_callback(partitions: Mapping[Partition, int]) -> None:
-                assignment_callback.called = True
+            def _assignment_callback(partitions: Mapping[Partition, int]) -> None:
                 assert partitions == {Partition(topic, 0): messages[0].offset}
 
                 consumer.seek({Partition(topic, 0): messages[1].offset})
@@ -61,17 +60,16 @@ class StreamsTestMixin(ABC, Generic[TPayload]):
                 with pytest.raises(ConsumerError):
                     consumer.seek({Partition(topic, 1): 0})
 
-            assignment_callback.called = False
+            assignment_callback = mock.Mock(side_effect=_assignment_callback)
 
-            def revocation_callback(partitions: Sequence[Partition]) -> None:
-                revocation_callback.called = True
+            def _revocation_callback(partitions: Sequence[Partition]) -> None:
                 assert partitions == [Partition(topic, 0)]
                 assert consumer.tell() == {Partition(topic, 0): messages[1].offset}
 
                 # Not sure why you'd want to do this, but it shouldn't error.
                 consumer.seek({Partition(topic, 0): messages[0].offset})
 
-            revocation_callback.called = False
+            revocation_callback = mock.Mock(side_effect=_revocation_callback)
 
             # TODO: It'd be much nicer if ``subscribe`` returned a future that we could
             # use to wait for assignment, but we'd need to be very careful to avoid
@@ -137,7 +135,7 @@ class StreamsTestMixin(ABC, Generic[TPayload]):
             with pytest.raises(ConsumerError):
                 consumer.seek({Partition(topic, 0): messages[0].offset})
 
-            revocation_callback.called = False
+            revocation_callback.reset_mock()
 
             with assert_changes(
                 lambda: consumer.closed, False, True
