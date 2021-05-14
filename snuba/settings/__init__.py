@@ -8,7 +8,6 @@ LOG_FORMAT = "%(asctime)s %(message)s"
 
 TESTING = False
 DEBUG = True
-DIST = False
 
 PORT = 1218
 

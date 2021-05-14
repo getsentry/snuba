@@ -9,7 +9,6 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import (
-    CLUSTERS,
     ClickhouseClientSettings,
     ClickhouseNodeType,
     get_cluster,
@@ -29,18 +28,11 @@ from snuba.migrations.groups import (
 from snuba.migrations.migration import ClickhouseNodeMigration, CodeMigration, Migration
 from snuba.migrations.operations import SqlOperation
 from snuba.migrations.status import Status
-from snuba.settings import DIST
 
 logger = logging.getLogger("snuba.migrations")
 
 LOCAL_TABLE_NAME = "migrations_local"
 DIST_TABLE_NAME = "migrations_dist"
-
-
-def assert_single_node() -> None:
-    assert all(
-        cluster.is_single_node() for cluster in CLUSTERS
-    ), "Cannot run migrations for multi node clusters"
 
 
 class MigrationKey(NamedTuple):
@@ -141,9 +133,6 @@ class Runner:
         Requires force to run blocking migrations.
         """
 
-        if not DIST:
-            assert_single_node()
-
         pending_migrations = self._get_pending_migrations()
 
         # Do not run migrations if any are blocking
@@ -171,9 +160,6 @@ class Runner:
 
         Blocking migrations must be run with force.
         """
-
-        if not dry_run and not DIST:
-            assert_single_node()
 
         migration_group, migration_id = migration_key
 
@@ -230,8 +216,6 @@ class Runner:
         """
         Reverses a migration.
         """
-        if not dry_run and not DIST:
-            assert_single_node()
 
         migration_group, migration_id = migration_key
 

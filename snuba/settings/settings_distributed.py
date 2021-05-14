@@ -1,7 +1,5 @@
 import os
 
-DIST = True
-
 CLUSTERS = [
     {
         "host": os.environ.get("CLICKHOUSE_HOST", "localhost"),
