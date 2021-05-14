@@ -7,11 +7,11 @@ from confluent_kafka import KafkaError, Message, Producer
 
 from snuba import settings
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_cdc_storage, CDC_STORAGES
+from snuba.datasets.storages.factory import CDC_STORAGES, get_cdc_storage
 from snuba.environment import setup_logging, setup_sentry
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
 from snuba.stateful_consumer.control_protocol import SnapshotLoaded, TransactionData
-from snuba.utils.streams.backends.kafka import build_kafka_producer_configuration
+from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 
 
 @click.command()

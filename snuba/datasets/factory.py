@@ -1,4 +1,4 @@
-from typing import Callable, MutableMapping, Set, Sequence
+from typing import Callable, MutableMapping, Sequence, Set
 
 from snuba import settings
 from snuba.datasets.dataset import Dataset
@@ -7,6 +7,8 @@ from snuba.util import with_span
 
 DATASETS_IMPL: MutableMapping[str, Dataset] = {}
 DATASETS_NAME_LOOKUP: MutableMapping[Dataset, str] = {}
+
+DEV_DATASET_NAMES: Set[str] = set()
 
 DATASET_NAMES: Set[str] = {
     "discover",
@@ -17,6 +19,7 @@ DATASET_NAMES: Set[str] = {
     "outcomes_raw",
     "sessions",
     "transactions",
+    *(DEV_DATASET_NAMES if settings.ENABLE_DEV_FEATURES else set()),
 }
 
 
@@ -30,15 +33,15 @@ def get_dataset(name: str) -> Dataset:
         return DATASETS_IMPL[name]
 
     if name in settings.DISABLED_DATASETS:
-        raise InvalidDatasetError(
-            f"dataset {name!r} is not available in this environment"
-        )
+        raise InvalidDatasetError(f"dataset {name!r} is disabled in this environment")
+
+    if name not in DATASET_NAMES:
+        raise InvalidDatasetError(f"dataset {name!r} is not available")
 
     from snuba.datasets.cdc.groupassignee import GroupAssigneeDataset
     from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
     from snuba.datasets.discover import DiscoverDataset
     from snuba.datasets.events import EventsDataset
-
     from snuba.datasets.outcomes import OutcomesDataset
     from snuba.datasets.outcomes_raw import OutcomesRawDataset
     from snuba.datasets.sessions import SessionsDataset

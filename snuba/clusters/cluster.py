@@ -16,13 +16,9 @@ from typing import (
 
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
-from snuba.clickhouse.http import (
-    HTTPBatchWriter,
-    InsertStatement,
-    JSONRow,
-)
+from snuba.clickhouse.http import HTTPBatchWriter, InsertStatement, JSONRow
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.storage_sets import DEV_STORAGE_SETS, StorageSetKey
 from snuba.reader import Reader
 from snuba.utils.metrics import MetricsBackend
 from snuba.writer import BatchWriter
@@ -316,8 +312,14 @@ assert len(_registered_storage_sets) == len(
     _unique_registered_storage_sets
 ), "Storage set registered to more than one cluster"
 
+expected_storage_sets = {
+    s
+    for s in StorageSetKey
+    if (s not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES)
+}
+
 assert (
-    set(StorageSetKey) == _unique_registered_storage_sets
+    not expected_storage_sets - _unique_registered_storage_sets
 ), "All storage sets must be assigned to a cluster"
 
 # Map all storages to clusters via storage sets
@@ -329,4 +331,7 @@ _STORAGE_SET_CLUSTER_MAP = {
 
 
 def get_cluster(storage_set_key: StorageSetKey) -> ClickhouseCluster:
+    assert (
+        storage_set_key not in DEV_STORAGE_SETS or settings.ENABLE_DEV_FEATURES
+    ), f"Storage set {storage_set_key} is disabled"
     return _STORAGE_SET_CLUSTER_MAP[storage_set_key]

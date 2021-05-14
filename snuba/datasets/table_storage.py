@@ -4,9 +4,10 @@ from snuba import settings
 from snuba.clickhouse.http import InsertStatement, JSONRow
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
-    ClickhouseCluster,
     ClickhouseWriterOptions,
+    get_cluster,
 )
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import MessageProcessor
@@ -153,13 +154,13 @@ class TableWriter:
 
     def __init__(
         self,
-        cluster: ClickhouseCluster,
+        storage_set: StorageSetKey,
         write_schema: WritableTableSchema,
         stream_loader: KafkaStreamLoader,
         replacer_processor: Optional[ReplacerProcessor] = None,
         writer_options: ClickhouseWriterOptions = None,
     ) -> None:
-        self.__cluster = cluster
+        self.__storage_set = storage_set
         self.__table_schema = write_schema
         self.__stream_loader = stream_loader
         self.__replacer_processor = replacer_processor
@@ -179,7 +180,7 @@ class TableWriter:
 
         options = self.__update_writer_options(options)
 
-        return self.__cluster.get_batch_writer(
+        return get_cluster(self.__storage_set).get_batch_writer(
             metrics,
             InsertStatement(table_name).with_format("JSONEachRow"),
             encoding=None,
@@ -200,7 +201,7 @@ class TableWriter:
 
         options = self.__update_writer_options(options)
 
-        return self.__cluster.get_batch_writer(
+        return get_cluster(self.__storage_set).get_batch_writer(
             metrics,
             InsertStatement(table_name)
             .with_columns(column_names)
@@ -228,7 +229,7 @@ class TableWriter:
             source_table=source_table,
             dest_table=table_name,
             row_processor=row_processor,
-            clickhouse=self.__cluster.get_query_connection(
+            clickhouse=get_cluster(self.__storage_set).get_query_connection(
                 ClickhouseClientSettings.QUERY
             ),
         )

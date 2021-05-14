@@ -12,6 +12,8 @@ DIST = False
 
 PORT = 1218
 
+ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
+
 DEFAULT_DATASET_NAME = "events"
 DISABLED_DATASETS: Set[str] = set()
 
