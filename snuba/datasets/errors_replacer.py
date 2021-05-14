@@ -43,13 +43,22 @@ class ReplacerState(Enum):
     ERRORS = "errors"
 
 
+@dataclass(frozen=True)
+class NeedsFinal:
+    pass
+
+
+@dataclass(frozen=True)
+class ExcludeGroups:
+    group_ids: Sequence[int]
+
+
+QueryTimeFlags = Union[NeedsFinal, ExcludeGroups]
+
+
 class Replacement(ReplacementBase):
     @abstractmethod
-    def get_excluded_groups(self) -> Sequence[int]:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def get_needs_final(self) -> bool:
+    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
         raise NotImplementedError()
 
     @abstractmethod
@@ -59,7 +68,7 @@ class Replacement(ReplacementBase):
 
 EXCLUDE_GROUPS = object()
 NEEDS_FINAL = object()
-QueryTimeFlags = Union[Tuple[object, int], Tuple[object, int, Any]]
+LegacyQueryTimeFlags = Union[Tuple[object, int], Tuple[object, int, Any]]
 
 
 @dataclass(frozen=True)
@@ -69,19 +78,19 @@ class LegacyReplacement(Replacement):
     count_query_template: Optional[str]
     insert_query_template: Optional[str]
     query_args: Mapping[str, Any]
-    query_time_flags: QueryTimeFlags
+    query_time_flags: LegacyQueryTimeFlags
 
     def get_project_id(self) -> int:
         return self.query_time_flags[1]
 
-    def get_needs_final(self) -> bool:
-        return self.query_time_flags[0] == NEEDS_FINAL
+    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
+        if self.query_time_flags[0] == NEEDS_FINAL:
+            return NeedsFinal()
 
-    def get_excluded_groups(self) -> Sequence[int]:
         if self.query_time_flags[0] == EXCLUDE_GROUPS:
-            return self.query_time_flags[2]  # type: ignore
+            return ExcludeGroups(group_ids=self.query_time_flags[2])  # type: ignore
 
-        return []
+        return None
 
     def get_insert_query(self, table_name: str) -> Optional[str]:
         if self.insert_query_template is None:
@@ -256,24 +265,25 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         else:
             compatibility_double_write = False
 
-        needs_final = replacement.get_needs_final()
-        group_ids_to_exclude = replacement.get_excluded_groups()
         project_id = replacement.get_project_id()
+        query_time_flags = replacement.get_query_time_flags()
 
         if not settings.REPLACER_IMMEDIATE_OPTIMIZE:
-            if needs_final:
+            if isinstance(query_time_flags, NeedsFinal):
                 if compatibility_double_write:
                     set_project_needs_final(project_id, None)
                 set_project_needs_final(project_id, self.__state_name)
 
-            if group_ids_to_exclude:
+            if isinstance(query_time_flags, ExcludeGroups):
                 if compatibility_double_write:
-                    set_project_exclude_groups(project_id, group_ids_to_exclude, None)
+                    set_project_exclude_groups(
+                        project_id, query_time_flags.group_ids, None
+                    )
                 set_project_exclude_groups(
-                    project_id, group_ids_to_exclude, self.__state_name
+                    project_id, query_time_flags.group_ids, self.__state_name
                 )
 
-        elif needs_final or group_ids_to_exclude:
+        elif query_time_flags is not None:
             return True
 
         return False
@@ -284,7 +294,7 @@ def _build_event_tombstone_replacement(
     required_columns: Sequence[str],
     where: str,
     query_args: Mapping[str, str],
-    query_time_flags: QueryTimeFlags,
+    query_time_flags: LegacyQueryTimeFlags,
 ) -> Replacement:
     select_columns = map(lambda i: i if i != "deleted" else "1", required_columns)
     count_query_template = (
@@ -322,7 +332,7 @@ def _build_group_replacement(
     new_group_id: str,
     where: str,
     query_args: Mapping[str, str],
-    query_time_flags: QueryTimeFlags,
+    query_time_flags: LegacyQueryTimeFlags,
     all_columns: Sequence[FlattenedColumn],
 ) -> Optional[Replacement]:
     # HACK: We were sending duplicates of the `end_merge` message from Sentry,
