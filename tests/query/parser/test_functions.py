@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from snuba.datasets.entities import EntityKey
@@ -7,7 +9,14 @@ from snuba.query.conditions import (
     ConditionFunctions,
     binary_condition,
 )
-from snuba.query.expressions import Argument, Column, FunctionCall, Lambda, Literal
+from snuba.query.expressions import (
+    Argument,
+    Column,
+    Expression,
+    FunctionCall,
+    Lambda,
+    Literal,
+)
 from snuba.query.parser.functions import parse_function_to_expr
 from snuba.util import tuplify
 
@@ -359,7 +368,7 @@ test_data = [
 
 
 @pytest.mark.parametrize("actual, expected", test_data)
-def test_complex_conditions_expr(actual, expected) -> None:
+def test_complex_conditions_expr(actual: Any, expected: Expression) -> None:
     entity = get_entity(EntityKey.EVENTS)
     assert (
         parse_function_to_expr(
