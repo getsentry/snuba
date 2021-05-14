@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timedelta
-from typing import Collection, Tuple
+from typing import Callable, Collection, Optional, Tuple
 
 from snuba.datasets.factory import get_dataset
 from snuba.redis import redis_client
@@ -43,7 +43,9 @@ class TestSubscriptionScheduler:
         start: timedelta,
         end: timedelta,
         expected: Collection[ScheduledTask[Subscription]],
-        sort_key=None,
+        sort_key: Optional[
+            Callable[[ScheduledTask[Subscription]], Tuple[datetime, uuid.UUID]]
+        ] = None,
     ) -> None:
         store = RedisSubscriptionDataStore(
             redis_client, self.dataset, self.partition_id,

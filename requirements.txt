@@ -31,7 +31,7 @@ packaging==17.1
 parsimonious==0.8.1
 py==1.10.0
 pyparsing==2.2.0
-pytest==5.2.4
+pytest==6.1.2
 pytest-cov==2.10.1
 pytest-watch==4.2.0
 pathtools==0.1.2
