@@ -1,9 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple
-
-from typing_extensions import TypedDict
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple, TypedDict
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
