@@ -8,6 +8,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
 
 @click.command()
@@ -119,7 +120,7 @@ def replacer(
             max_batch_time=max_batch_time_ms,
             metrics=metrics,
         ),
-        metrics=metrics,
+        metrics=StreamMetricsAdapter(metrics),
         recoverable_errors=[TransportError],
     )
 
