@@ -4,8 +4,8 @@ import logging
 import time
 from typing import Generic, Mapping, Optional, Sequence, Type
 
-from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.backends.abstract import Consumer, ConsumerError
+from snuba.utils.streams.metrics import DummyMetricsBackend, Metrics
 from snuba.utils.streams.processing.strategies.abstract import (
     MessageRejected,
     ProcessingStrategy,
@@ -35,9 +35,13 @@ class StreamProcessor(Generic[TPayload]):
         consumer: Consumer[TPayload],
         topic: Topic,
         processor_factory: ProcessingStrategyFactory[TPayload],
-        metrics: MetricsBackend,
+        metrics: Metrics = DummyMetricsBackend,
         recoverable_errors: Optional[Sequence[Type[ConsumerError]]] = None,
     ) -> None:
+        # Perform a runtime check of metrics instance upon initialization of
+        # this class to avoid errors down the line when it is used.
+        assert isinstance(metrics, Metrics)
+
         self.__consumer = consumer
         self.__processor_factory = processor_factory
         self.__metrics = metrics

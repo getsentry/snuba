@@ -1,36 +1,49 @@
+from typing import Any, Optional
+from unittest import mock
+
 import pytest
 
 from snuba.utils.clock import TestingClock
 from snuba.utils.retries import BasicRetryPolicy, RetryException, constant_delay
 
+value = object()
 
-def test_basic_retry_policy_no_delay():
 
-    value = object()
+def _good_function() -> Any:
+    return value
 
-    def good_function():
-        good_function.call_count += 1
+
+good_function = mock.Mock(side_effect=_good_function)
+
+
+class CustomException(Exception):
+    pass
+
+
+def _flaky_function() -> Optional[Any]:
+    if flaky_function.call_count % 2 == 0:
         return value
-
-    good_function.call_count = 0
-
-    class CustomException(Exception):
-        pass
-
-    def flaky_function():
-        flaky_function.call_count += 1
-        if flaky_function.call_count % 2 == 0:
-            return value
-        else:
-            raise CustomException()
-
-    flaky_function.call_count = 0
-
-    def bad_function():
-        bad_function.call_count += 1
+    else:
         raise CustomException()
 
-    bad_function.call_count = 0
+
+flaky_function = mock.Mock(side_effect=_flaky_function)
+
+
+def _bad_function() -> None:
+    raise CustomException()
+
+
+bad_function = mock.Mock(side_effect=_bad_function)
+
+
+def setup_function() -> None:
+    good_function.reset_mock()
+    flaky_function.reset_mock()
+    bad_function.reset_mock()
+
+
+def test_basic_retry_policy_no_delay() -> None:
 
     clock = TestingClock()
 
@@ -54,34 +67,7 @@ def test_basic_retry_policy_no_delay():
 
 
 @pytest.mark.parametrize("delay", [1, constant_delay(1)])
-def test_basic_retry_policy_with_delay(delay):
-
-    value = object()
-
-    def good_function():
-        good_function.call_count += 1
-        return value
-
-    good_function.call_count = 0
-
-    class CustomException(Exception):
-        pass
-
-    def flaky_function():
-        flaky_function.call_count += 1
-        if flaky_function.call_count % 2 == 0:
-            return value
-        else:
-            raise CustomException()
-
-    flaky_function.call_count = 0
-
-    def bad_function():
-        bad_function.call_count += 1
-        raise CustomException()
-
-    bad_function.call_count = 0
-
+def test_basic_retry_policy_with_delay(delay: int) -> None:
     clock = TestingClock()
     policy = BasicRetryPolicy(3, delay, clock=clock)
     assert policy.call(good_function) is value
@@ -105,21 +91,20 @@ def test_basic_retry_policy_with_delay(delay):
         assert clock.time() == 2  # two retries
 
 
-def test_basic_retry_policy_with_supression():
+def test_basic_retry_policy_with_supression() -> None:
     class ExpectedError(Exception):
         pass
 
     class UnexpectedError(Exception):
         pass
 
-    def function():
-        function.call_count += 1
-        if function.call_count % 2 == 0:
+    def _test_function() -> None:
+        if test_function.call_count % 2 == 0:
             raise UnexpectedError()
         else:
             raise ExpectedError()
 
-    function.call_count = 0
+    test_function = mock.Mock(side_effect=_test_function)
 
     def suppression_test(exception: Exception) -> bool:
         return isinstance(exception, ExpectedError)
@@ -129,7 +114,7 @@ def test_basic_retry_policy_with_supression():
         3, constant_delay(1), suppression_test=suppression_test, clock=clock
     )
     try:
-        policy.call(function)
+        policy.call(test_function)
     except UnexpectedError:
-        assert function.call_count == 2
+        assert test_function.call_count == 2
         assert clock.time() == 1

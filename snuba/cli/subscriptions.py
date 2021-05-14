@@ -26,6 +26,7 @@ from snuba.utils.streams.configuration_builder import (
     build_kafka_producer_configuration,
 )
 from snuba.utils.streams.encoding import ProducerEncodingWrapper
+from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.processing.strategies.batching import (
     BatchProcessingStrategyFactory,
@@ -220,7 +221,7 @@ def subscriptions(
                 max_batch_time_ms,
                 metrics,
             ),
-            metrics=metrics,
+            metrics=StreamMetricsAdapter(metrics),
         )
 
         def handler(signum: int, frame: Optional[Any]) -> None:
