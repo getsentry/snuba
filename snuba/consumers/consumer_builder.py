@@ -26,6 +26,7 @@ from snuba.utils.streams.configuration_builder import (
 from snuba.utils.streams.kafka_consumer_with_commit_log import (
     KafkaConsumerWithCommitLog,
 )
+from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.processing.strategies import ProcessingStrategyFactory
 from snuba.utils.streams.profiler import ProcessingStrategyProfilerWrapperFactory
@@ -173,7 +174,7 @@ class ConsumerBuilder:
             consumer,
             self.raw_topic,
             strategy_factory,
-            metrics=self.metrics,
+            metrics=StreamMetricsAdapter(self.metrics),
             recoverable_errors=[TransportError],
         )
 

@@ -31,6 +31,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
+from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.utils.streams.processing.strategies import ProcessingStrategy
 from snuba.utils.streams.processing.strategies import (
     ProcessingStrategy as ProcessingStep,
@@ -359,7 +360,7 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
                 max_batch_time=self.__max_batch_time,
                 input_block_size=self.__input_block_size,
                 output_block_size=self.__output_block_size,
-                metrics=MetricsWrapper(self.__metrics, "process"),
+                metrics=StreamMetricsAdapter(MetricsWrapper(self.__metrics, "process")),
             )
 
         if self.__prefilter is not None:
@@ -610,7 +611,7 @@ class MultistorageConsumerProcessingStrategyFactory(
                 self.__max_batch_time,
                 self.__input_block_size,
                 self.__output_block_size,
-                self.__metrics,
+                StreamMetricsAdapter(self.__metrics),
             )
 
         return TransformStep(
