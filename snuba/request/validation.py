@@ -35,7 +35,9 @@ def build_api_snql_parser(dataset: Dataset) -> Parser:
 
 def build_subscriptions_snql_parser(dataset: Dataset) -> Parser:
     """
-    Used for subscriptions
+    Provides a parser for SnQL subscriptions (which does not do the
+    full validation as timestamp conditions are added by the subscription
+    logic).
     """
     raise NotImplementedError
 
