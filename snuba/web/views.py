@@ -22,6 +22,9 @@ import simplejson as json
 from flask import Flask, Request, Response, redirect, render_template
 from flask import request as http_request
 from markdown import markdown
+from werkzeug import Response as WerkzeugResponse
+from werkzeug.exceptions import InternalServerError
+
 from snuba import environment, settings, state, util
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.http import JSONRowEncoder
@@ -58,8 +61,6 @@ from snuba.web import QueryException
 from snuba.web.converters import DatasetConverter
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
-from werkzeug import Response as WerkzeugResponse
-from werkzeug.exceptions import InternalServerError
 
 metrics = MetricsWrapper(environment.metrics, "api")
 
@@ -397,7 +398,9 @@ def dataset_query(
             dataset.get_default_entity().get_extensions(), HTTPRequestSettings, language
         )
 
-    request = build_request(body, schema, timer, dataset, referrer)
+    request = build_request(
+        body, language, HTTPRequestSettings, schema, timer, dataset, referrer
+    )
 
     try:
         result = parse_and_run_query(dataset, request, timer)

@@ -129,6 +129,8 @@ class LegacySubscriptionData(SubscriptionData):
                 "from_date": (timestamp - self.time_window).isoformat(),
                 "to_date": timestamp.isoformat(),
             },
+            Language.LEGACY,
+            SubscriptionRequestSettings,
             schema,
             timer,
             dataset,
