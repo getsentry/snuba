@@ -1,5 +1,5 @@
 import uuid
-from typing import Any, ChainMap, MutableMapping, Type, Union
+from typing import Any, Callable, ChainMap, MutableMapping, Type, Union
 
 import sentry_sdk
 
@@ -11,7 +11,7 @@ from snuba.query.logical import Query
 from snuba.query.parser import parse_query
 from snuba.query.snql.parser import parse_snql_query
 from snuba.querylog import record_error_building_request, record_invalid_request
-from snuba.request import Language, Request
+from snuba.request import Request
 from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.request_settings import (
     HTTPRequestSettings,
@@ -21,28 +21,42 @@ from snuba.request.request_settings import (
 from snuba.request.schema import RequestParts, RequestSchema, apply_query_extensions
 from snuba.utils.metrics.timer import Timer
 
-
-def _snql_parse(
-    parts: RequestParts, settings: RequestSettings, dataset: Dataset
-) -> Union[Query, CompositeQuery[Entity]]:
-    return parse_snql_query(parts.query["query"], dataset)
+Parser = Callable[[RequestParts, RequestSettings], Union[Query, CompositeQuery[Entity]]]
 
 
-def _legacy_parse(
-    parts: RequestParts, settings: RequestSettings, dataset: Dataset
-) -> Union[Query, CompositeQuery[Entity]]:
-    query = parse_query(parts.query, dataset)
-    apply_query_extensions(query, parts.extensions, settings)
-    return query
+def build_api_snql_parser(dataset: Dataset) -> Parser:
+    def parse(
+        request_parts: RequestParts, settings: RequestSettings
+    ) -> Union[Query, CompositeQuery[Entity]]:
+        return parse_snql_query(request_parts.query["query"], dataset)
+
+    return parse
+
+
+def build_subscriptions_snql_parser(dataset: Dataset) -> Parser:
+    """
+    Used for subscriptions
+    """
+    raise NotImplementedError
+
+
+def build_legacy_parser(dataset: Dataset) -> Parser:
+    def parse(
+        request_parts: RequestParts, settings: RequestSettings
+    ) -> Union[Query, CompositeQuery[Entity]]:
+        query = parse_query(request_parts.query, dataset)
+        apply_query_extensions(query, request_parts.extensions, settings)
+        return query
+
+    return parse
 
 
 def build_request(
     body: MutableMapping[str, Any],
-    language: Language,
+    parser: Parser,
     settings_class: Type[RequestSettings],
     schema: RequestSchema,
     timer: Timer,
-    dataset: Dataset,
     referrer: str,
 ) -> Request:
     with sentry_sdk.start_span(description="build_request", op="validate") as span:
@@ -55,10 +69,7 @@ def build_request(
             elif isinstance(settings_class, type(SubscriptionRequestSettings)):
                 settings_obj = settings_class()
 
-            if language == Language.SNQL:
-                query = _snql_parse(request_parts, settings_obj, dataset)
-            else:
-                query = _legacy_parse(request_parts, settings_obj, dataset)
+            query = parser(request_parts, settings_obj)
 
             request_id = uuid.uuid4().hex
             request = Request(
