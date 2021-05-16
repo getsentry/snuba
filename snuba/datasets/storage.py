@@ -180,7 +180,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         )
         assert isinstance(schema, WritableTableSchema)
         self.__table_writer = TableWriter(
-            cluster=get_cluster(storage_set_key),
+            storage_set=storage_set_key,
             write_schema=schema,
             stream_loader=stream_loader,
             replacer_processor=replacer_processor,

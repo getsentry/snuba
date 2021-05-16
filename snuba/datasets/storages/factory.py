@@ -1,5 +1,6 @@
 from typing import Mapping
 
+from snuba import settings
 from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -22,10 +23,17 @@ from snuba.datasets.storages.sessions import raw_storage as sessions_raw_storage
 from snuba.datasets.storages.spans import storage as spans_storage
 from snuba.datasets.storages.transactions import storage as transactions_storage
 
+DEV_CDC_STORAGES: Mapping[StorageKey, CdcStorage] = {}
+
 CDC_STORAGES: Mapping[StorageKey, CdcStorage] = {
-    storage.get_storage_key(): storage
-    for storage in [groupedmessages_storage, groupassignees_storage]
+    **{
+        storage.get_storage_key(): storage
+        for storage in [groupedmessages_storage, groupassignees_storage]
+    },
+    **(DEV_CDC_STORAGES if settings.ENABLE_DEV_FEATURES else {}),
 }
+
+DEV_WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {}
 
 WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
     **CDC_STORAGES,
@@ -41,17 +49,23 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
             spans_storage,
         ]
     },
+    **(DEV_WRITABLE_STORAGES if settings.ENABLE_DEV_FEATURES else {}),
 }
 
+DEV_NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {}
+
 NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
-    storage.get_storage_key(): storage
-    for storage in [
-        discover_storage,
-        errors_ro_storage,
-        events_ro_storage,
-        outcomes_hourly_storage,
-        sessions_hourly_storage,
-    ]
+    **{
+        storage.get_storage_key(): storage
+        for storage in [
+            discover_storage,
+            errors_ro_storage,
+            events_ro_storage,
+            outcomes_hourly_storage,
+            sessions_hourly_storage,
+        ]
+    },
+    **(DEV_NON_WRITABLE_STORAGES if settings.ENABLE_DEV_FEATURES else {}),
 }
 
 STORAGES: Mapping[StorageKey, ReadableTableStorage] = {

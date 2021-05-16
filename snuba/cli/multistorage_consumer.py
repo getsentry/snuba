@@ -11,11 +11,15 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import WRITABLE_STORAGES, get_writable_storage
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.streams.backends.kafka import KafkaConsumer, KafkaConsumerWithCommitLog
+from snuba.utils.streams.backends.kafka import KafkaConsumer
 from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
     build_kafka_producer_configuration,
 )
+from snuba.utils.streams.kafka_consumer_with_commit_log import (
+    KafkaConsumerWithCommitLog,
+)
+from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.types import Topic
 
@@ -214,7 +218,7 @@ def multistorage_consumer(
             output_block_size=output_block_size,
             metrics=metrics,
         ),
-        metrics=metrics,
+        metrics=StreamMetricsAdapter(metrics),
     )
 
     def handler(signum: int, frame: Any) -> None:

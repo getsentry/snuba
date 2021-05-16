@@ -1,8 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
-
-from typing_extensions import Protocol
-
+from typing import Any, Generic, Protocol, TypeVar
 
 TComparable = TypeVar("TComparable", contravariant=True)
 

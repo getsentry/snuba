@@ -3,6 +3,7 @@ from unittest import mock
 
 import pytest
 
+from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.utils.streams.processing.processor import InvalidStateError, StreamProcessor
 from snuba.utils.streams.processing.strategies.abstract import MessageRejected
 from snuba.utils.streams.types import Message, Partition, Topic
@@ -20,9 +21,9 @@ def test_stream_processor_lifecycle() -> None:
 
     metrics = TestingMetricsBackend()
 
-    with assert_changes(lambda: consumer.subscribe.call_count, 0, 1):
+    with assert_changes(lambda: int(consumer.subscribe.call_count), 0, 1):
         processor: StreamProcessor[int] = StreamProcessor(
-            consumer, topic, factory, metrics
+            consumer, topic, factory, StreamMetricsAdapter(metrics)
         )
 
     # The processor should accept heartbeat messages without an assignment or
@@ -46,16 +47,16 @@ def test_stream_processor_lifecycle() -> None:
     # If ``Consumer.poll`` doesn't return a message, we should poll the
     # processing strategy, but not submit anything for processing.
     consumer.poll.return_value = None
-    with assert_changes(lambda: strategy.poll.call_count, 0, 1), assert_does_not_change(
-        lambda: strategy.submit.call_count, 0
-    ):
+    with assert_changes(
+        lambda: int(strategy.poll.call_count), 0, 1
+    ), assert_does_not_change(lambda: int(strategy.submit.call_count), 0):
         processor._run_once()
 
     # If ``Consumer.poll`` **does** return a message, we should poll the
     # processing strategy and submit the message for processing.
     consumer.poll.return_value = message
-    with assert_changes(lambda: strategy.poll.call_count, 1, 2), assert_changes(
-        lambda: strategy.submit.call_count, 0, 1
+    with assert_changes(lambda: int(strategy.poll.call_count), 1, 2), assert_changes(
+        lambda: int(strategy.submit.call_count), 0, 1
     ):
         processor._run_once()
         assert strategy.submit.call_args_list[-1] == mock.call(message)
@@ -65,7 +66,7 @@ def test_stream_processor_lifecycle() -> None:
     consumer.tell.return_value = offsets
     consumer.poll.return_value = message
     strategy.submit.side_effect = MessageRejected()
-    with assert_changes(lambda: consumer.pause.call_count, 0, 1):
+    with assert_changes(lambda: int(consumer.pause.call_count), 0, 1):
         processor._run_once()
         assert strategy.submit.call_args_list[-1] == mock.call(message)
 
@@ -79,10 +80,9 @@ def test_stream_processor_lifecycle() -> None:
     consumer.poll.return_value = None
     strategy.submit.return_value = None
     strategy.submit.side_effect = None
-    with assert_changes(lambda: consumer.resume.call_count, 0, 1):
+    with assert_changes(lambda: int(consumer.resume.call_count), 0, 1):
         processor._run_once()
         assert strategy.submit.call_args_list[-1] == mock.call(message)
-
     metric = metrics.calls[0]
     assert isinstance(metric, Timing)
     assert metric.name == "pause_duration_ms"
@@ -93,7 +93,7 @@ def test_stream_processor_lifecycle() -> None:
 
     # Revocation should succeed with an active assignment, and cause the
     # strategy instance to be closed.
-    with assert_changes(lambda: strategy.close.call_count, 0, 1):
+    with assert_changes(lambda: int(strategy.close.call_count), 0, 1):
         revocation_callback([Partition(topic, 0)])
 
     # Revocation should fail without an active assignment.
@@ -106,7 +106,7 @@ def test_stream_processor_lifecycle() -> None:
     with pytest.raises(InvalidStateError):
         processor._run_once()
 
-    with assert_changes(lambda: consumer.close.call_count, 0, 1):
+    with assert_changes(lambda: int(consumer.close.call_count), 0, 1):
         processor._shutdown()
 
 
@@ -125,15 +125,15 @@ def test_stream_processor_termination_on_error() -> None:
     factory.create.return_value = strategy
 
     processor: StreamProcessor[int] = StreamProcessor(
-        consumer, topic, factory, TestingMetricsBackend()
+        consumer, topic, factory, StreamMetricsAdapter(TestingMetricsBackend())
     )
 
     assignment_callback = consumer.subscribe.call_args.kwargs["on_assign"]
     assignment_callback({Partition(topic, 0): 0})
 
     with pytest.raises(Exception) as e, assert_changes(
-        lambda: strategy.terminate.call_count, 0, 1
-    ), assert_changes(lambda: consumer.close.call_count, 0, 1):
+        lambda: int(strategy.terminate.call_count), 0, 1
+    ), assert_changes(lambda: int(consumer.close.call_count), 0, 1):
         processor.run()
 
     assert e.value == exception

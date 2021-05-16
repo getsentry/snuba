@@ -1,9 +1,15 @@
 from datetime import timedelta
+from typing import List, Tuple, cast
+from uuid import UUID
 
 from pytest import raises
 
 from snuba.redis import redis_client
-from snuba.subscriptions.data import InvalidSubscriptionError, LegacySubscriptionData
+from snuba.subscriptions.data import (
+    InvalidSubscriptionError,
+    LegacySubscriptionData,
+    SubscriptionData,
+)
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.utils.metrics.timer import Timer
@@ -15,7 +21,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
 
     timer = Timer("test")
 
-    def test(self):
+    def test(self) -> None:
         creator = SubscriptionCreator(self.dataset)
         subscription = LegacySubscriptionData(
             project_id=123,
@@ -25,9 +31,15 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             resolution=timedelta(minutes=1),
         )
         identifier = creator.create(subscription, self.timer)
-        RedisSubscriptionDataStore(
-            redis_client, self.dataset, identifier.partition,
-        ).all()[0][1] == subscription
+        assert (
+            cast(
+                List[Tuple[UUID, SubscriptionData]],
+                RedisSubscriptionDataStore(
+                    redis_client, self.dataset, identifier.partition,
+                ).all(),
+            )[0][1]
+            == subscription
+        )
 
     def test_invalid_condition_column(self) -> None:
         creator = SubscriptionCreator(self.dataset)
@@ -99,7 +111,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
 
 
 class TestSubscriptionDeleter(BaseSubscriptionTest):
-    def test(self):
+    def test(self) -> None:
         creator = SubscriptionCreator(self.dataset)
         subscription = LegacySubscriptionData(
             project_id=1,
@@ -109,11 +121,20 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
             resolution=timedelta(minutes=1),
         )
         identifier = creator.create(subscription, Timer("test"))
-        RedisSubscriptionDataStore(
-            redis_client, self.dataset, identifier.partition,
-        ).all()[0][1] == subscription
+        assert (
+            cast(
+                List[Tuple[UUID, SubscriptionData]],
+                RedisSubscriptionDataStore(
+                    redis_client, self.dataset, identifier.partition,
+                ).all(),
+            )[0][1]
+            == subscription
+        )
 
         SubscriptionDeleter(self.dataset, identifier.partition).delete(identifier.uuid)
-        RedisSubscriptionDataStore(
-            redis_client, self.dataset, identifier.partition,
-        ).all() == []
+        assert (
+            RedisSubscriptionDataStore(
+                redis_client, self.dataset, identifier.partition,
+            ).all()
+            == []
+        )

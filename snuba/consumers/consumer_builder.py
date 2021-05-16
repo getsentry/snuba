@@ -15,7 +15,6 @@ from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
 from snuba.utils.streams import Topic
 from snuba.utils.streams.backends.kafka import (
     KafkaConsumer,
-    KafkaConsumerWithCommitLog,
     KafkaPayload,
     TransportError,
 )
@@ -24,6 +23,10 @@ from snuba.utils.streams.configuration_builder import (
     build_kafka_producer_configuration,
     get_default_kafka_configuration,
 )
+from snuba.utils.streams.kafka_consumer_with_commit_log import (
+    KafkaConsumerWithCommitLog,
+)
+from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.processing.strategies import ProcessingStrategyFactory
 from snuba.utils.streams.profiler import ProcessingStrategyProfilerWrapperFactory
@@ -171,7 +174,7 @@ class ConsumerBuilder:
             consumer,
             self.raw_topic,
             strategy_factory,
-            metrics=self.metrics,
+            metrics=StreamMetricsAdapter(self.metrics),
             recoverable_errors=[TransportError],
         )
 

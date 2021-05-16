@@ -1,17 +1,17 @@
 import calendar
-from datetime import datetime, timedelta
 import uuid
+from datetime import datetime, timedelta
 
 from snuba import settings
-from snuba.datasets.factory import get_dataset
-from snuba.datasets.entities import EntityKey
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.events_processor_base import InsertEvent
+from snuba.datasets.factory import get_dataset
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_writable_storage
 from tests.helpers import write_unprocessed_events
 
 
 class BaseSubscriptionTest:
-    def setup_method(self):
+    def setup_method(self) -> None:
         self.project_id = 1
         self.platforms = ["a", "b"]
         self.minutes = 20
@@ -21,7 +21,7 @@ class BaseSubscriptionTest:
             minute=0, second=0, microsecond=0
         ) - timedelta(minutes=self.minutes)
 
-        events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
+        events_storage = get_writable_storage(StorageKey.ERRORS)
 
         write_unprocessed_events(
             events_storage,

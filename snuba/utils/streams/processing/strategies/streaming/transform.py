@@ -21,14 +21,12 @@ from typing import (
     TypeVar,
 )
 
-from snuba.utils.metrics import MetricsBackend
-from snuba.utils.metrics.gauge import Gauge
+from snuba.utils.streams.metrics import DummyMetricsBackend, Gauge, Metrics
 from snuba.utils.streams.processing.strategies.abstract import MessageRejected
 from snuba.utils.streams.processing.strategies.abstract import (
     ProcessingStrategy as ProcessingStep,
 )
 from snuba.utils.streams.types import Message, TPayload
-
 
 logger = logging.getLogger(__name__)
 
@@ -280,8 +278,11 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         max_batch_time: float,
         input_block_size: int,
         output_block_size: int,
-        metrics: MetricsBackend,
+        metrics: Metrics = DummyMetricsBackend,
     ) -> None:
+        # Perform a runtime check of metrics instance upon initialization of
+        # this class to avoid errors down the line when it is used.
+        assert isinstance(metrics, Metrics)
         self.__transform_function = function
         self.__next_step = next_step
         self.__max_batch_size = max_batch_size

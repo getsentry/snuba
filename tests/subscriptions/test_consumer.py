@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Mapping, Optional
+from unittest import mock
 
 import pytest
 
@@ -47,9 +48,7 @@ def test_tick_consumer(
     if time_shift is None:
         time_shift = timedelta()
 
-    def assignment_callback(offsets: Mapping[Partition, int]) -> None:
-        assignment_callback.called = True
-
+    def _assignment_callback(offsets: Mapping[Partition, int]) -> None:
         assert consumer.tell() == {
             Partition(topic, 0): 0,
             Partition(topic, 1): 0,
@@ -60,7 +59,7 @@ def test_tick_consumer(
             Partition(topic, 1): 0,
         }
 
-    assignment_callback.called = False
+    assignment_callback = mock.Mock(side_effect=_assignment_callback)
 
     consumer.subscribe([topic], on_assign=assignment_callback)
 
@@ -207,12 +206,11 @@ def test_tick_consumer_non_monotonic(clock: Clock, broker: Broker[int]) -> None:
 
     consumer = TickConsumer(inner_consumer)
 
-    def assignment_callback(offsets: Mapping[Partition, int]) -> None:
-        assignment_callback.called = True
+    def _assignment_callback(offsets: Mapping[Partition, int]) -> None:
         assert inner_consumer.tell() == {partition: 0}
         assert consumer.tell() == {partition: 0}
 
-    assignment_callback.called = False
+    assignment_callback = mock.Mock(side_effect=_assignment_callback)
 
     consumer.subscribe([topic], on_assign=assignment_callback)
 
