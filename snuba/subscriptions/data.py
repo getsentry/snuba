@@ -44,6 +44,7 @@ class SubscriptionIdentifier:
 class SubscriptionType(Enum):
     LEGACY = "legacy"
     SNQL = "snql"
+    DELEGATE = "delegate"
 
 
 # This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
@@ -187,6 +188,58 @@ class SnQLSubscriptionData(SubscriptionData):
             "project_id": self.project_id,
             "time_window": int(self.time_window.total_seconds()),
             "resolution": int(self.resolution.total_seconds()),
+            "query": self.query,
+        }
+
+
+@dataclass(frozen=True)
+class DelegateSubscriptionData(SubscriptionData):
+    """
+    Embeds two subscription data types for the rollout of SnQL.
+    This allows to switch logic back and forth between the
+    legacy and the SnQL language.
+    """
+
+    # Legacy
+    conditions: Sequence[Condition]
+    aggregations: Sequence[Aggregation]
+    # SnQL
+    query: str
+
+    def build_request(
+        self, dataset: Dataset, timestamp: datetime, offset: Optional[int], timer: Timer
+    ) -> Request:
+        # TODO: Switch to SnQL when we do the rollout
+        return LegacySubscriptionData(
+            project_id=self.project_id,
+            resolution=self.resolution,
+            time_window=self.time_window,
+            conditions=self.conditions,
+            aggregations=self.aggregations,
+        ).build_request(dataset, timestamp, offset, timer)
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> DelegateSubscriptionData:
+        if data.get(cls.TYPE_FIELD) != SubscriptionType.DELEGATE.value:
+            raise InvalidQueryException("Invalid delegate subscription structure")
+
+        return DelegateSubscriptionData(
+            project_id=data["project_id"],
+            time_window=timedelta(seconds=data["time_window"]),
+            resolution=timedelta(seconds=data["resolution"]),
+            conditions=data["conditions"],
+            aggregations=data["aggregations"],
+            query=data["query"],
+        )
+
+    def to_dict(self) -> Mapping[str, Any]:
+        return {
+            self.TYPE_FIELD: SubscriptionType.DELEGATE.value,
+            "project_id": self.project_id,
+            "time_window": int(self.time_window.total_seconds()),
+            "resolution": int(self.resolution.total_seconds()),
+            "conditions": self.conditions,
+            "aggregations": self.aggregations,
             "query": self.query,
         }
 

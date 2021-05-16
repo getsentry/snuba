@@ -2,6 +2,8 @@ import json
 
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.data import (
+    DelegateSubscriptionData,
+    InvalidSubscriptionError,
     LegacySubscriptionData,
     SnQLSubscriptionData,
     SubscriptionData,
@@ -22,10 +24,15 @@ class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):
         except json.JSONDecodeError:
             raise InvalidQueryException("Invalid JSON")
 
-        if data.get(SubscriptionData.TYPE_FIELD) == SubscriptionType.SNQL.value:
+        subscription_type = data.get(SubscriptionData.TYPE_FIELD)
+        if subscription_type == SubscriptionType.SNQL.value:
             return SnQLSubscriptionData.from_dict(data)
-        else:
+        elif subscription_type == SubscriptionType.DELEGATE.value:
+            return DelegateSubscriptionData.from_dict(data)
+        elif subscription_type is None:
             return LegacySubscriptionData.from_dict(data)
+        else:
+            raise InvalidSubscriptionError("Invalid subscription data")
 
 
 class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult]):
