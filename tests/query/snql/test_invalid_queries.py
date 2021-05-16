@@ -6,7 +6,6 @@ import pytest
 from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.factory import get_dataset
 from snuba.query.data_source.join import JoinRelationship, JoinType
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.snql.parser import parse_snql_query
@@ -93,7 +92,6 @@ test_cases = [
 @pytest.mark.parametrize("query_body, exception, message", test_cases)  # type: ignore
 def test_failures(query_body: str, exception: Exception, message: str) -> None:
     state.set_config("query_parsing_expand_aliases", 1)
-    events = get_dataset("events")
 
     # TODO: Potentially remove this once entities have actual join relationships
     mapping = {
@@ -118,4 +116,4 @@ def test_failures(query_body: str, exception: Exception, message: str) -> None:
     setattr(events_entity, "get_join_relationship", events_mock)
 
     with pytest.raises(exception, match=re.escape(message)):
-        parse_snql_query(query_body, events)
+        parse_snql_query(query_body, [])

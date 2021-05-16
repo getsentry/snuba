@@ -1,5 +1,5 @@
 import uuid
-from typing import Any, Callable, ChainMap, MutableMapping, Type, Union
+from typing import Any, Callable, ChainMap, MutableMapping, Sequence, Type, Union
 
 import sentry_sdk
 
@@ -24,22 +24,15 @@ from snuba.utils.metrics.timer import Timer
 Parser = Callable[[RequestParts, RequestSettings], Union[Query, CompositeQuery[Entity]]]
 
 
-def build_api_snql_parser(dataset: Dataset) -> Parser:
+def build_snql_parser(
+    custom_processing: Sequence[Callable[[Union[CompositeQuery[Entity], Query]], None]],
+) -> Parser:
     def parse(
         request_parts: RequestParts, settings: RequestSettings
     ) -> Union[Query, CompositeQuery[Entity]]:
-        return parse_snql_query(request_parts.query["query"], dataset)
+        return parse_snql_query(request_parts.query["query"], custom_processing)
 
     return parse
-
-
-def build_subscriptions_snql_parser(dataset: Dataset) -> Parser:
-    """
-    Provides a parser for SnQL subscriptions (which does not do the
-    full validation as timestamp conditions are added by the subscription
-    logic).
-    """
-    raise NotImplementedError
 
 
 def build_legacy_parser(dataset: Dataset) -> Parser:

@@ -23,7 +23,6 @@ from parsimonious.nodes import Node, NodeVisitor
 from snuba import state
 from snuba.clickhouse.columns import Array, ColumnSet
 from snuba.clickhouse.query_dsl.accessors import get_time_range_expressions
-from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
@@ -1180,7 +1179,10 @@ def _post_process(
 
 
 def parse_snql_query(
-    body: str, dataset: Dataset
+    body: str,
+    custom_processing: Sequence[
+        Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]
+    ],
 ) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
     query = parse_snql_query_initial(body)
 
@@ -1199,7 +1201,10 @@ def parse_snql_query(
         ],
     )
 
-    # Time based processing, which will sometimes be skipped by subscriptions
+    # Custom processing to tweak the AST before validation
+    _post_process(query, custom_processing)
+
+    # Time based processing
     _post_process(query, [_replace_time_condition])
 
     # Validating

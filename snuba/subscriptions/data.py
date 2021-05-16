@@ -14,7 +14,11 @@ from snuba.query.types import Condition
 from snuba.request import Language, Request
 from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
-from snuba.request.validation import build_legacy_parser, build_request
+from snuba.request.validation import (
+    build_legacy_parser,
+    build_request,
+    build_snql_parser,
+)
 from snuba.utils.metrics.timer import Timer
 
 SUBSCRIPTION_REFERRER = "subscription"
@@ -166,10 +170,20 @@ class SnQLSubscriptionData(SubscriptionData):
     def build_request(
         self, dataset: Dataset, timestamp: datetime, offset: Optional[int], timer: Timer
     ) -> Request:
-        # TODO: Parse the query without doing the full validation
+        schema = RequestSchema.build_with_extensions(
+            {}, SubscriptionRequestSettings, Language.SNQL,
+        )
+        request = build_request(
+            {"query": self.query},
+            build_snql_parser([]),
+            SubscriptionRequestSettings,
+            schema,
+            timer,
+            SUBSCRIPTION_REFERRER,
+        )
         # TODO: Add time range conditions
         # TODO: add offset condition
-        raise NotImplementedError
+        return request
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> SnQLSubscriptionData:

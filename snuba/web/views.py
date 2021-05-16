@@ -48,9 +48,9 @@ from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeExce
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import (
-    build_api_snql_parser,
     build_legacy_parser,
     build_request,
+    build_snql_parser,
 )
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
@@ -396,7 +396,7 @@ def dataset_query(
 
     if language == Language.SNQL:
         metrics.increment("snql.query.incoming", tags={"referrer": referrer})
-        parser = build_api_snql_parser(dataset)
+        parser = build_snql_parser([])
     else:
         parser = build_legacy_parser(dataset)
 

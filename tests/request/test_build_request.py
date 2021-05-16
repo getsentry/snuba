@@ -19,9 +19,9 @@ from snuba.request import Language
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import (
-    build_api_snql_parser,
     build_legacy_parser,
     build_request,
+    build_snql_parser,
 )
 from snuba.utils.metrics.timer import Timer
 
@@ -114,7 +114,7 @@ def test_build_request(
         body,
         build_legacy_parser(dataset)
         if language == Language.LEGACY
-        else build_api_snql_parser(dataset),
+        else build_snql_parser([]),
         HTTPRequestSettings,
         schema,
         Timer("test"),
