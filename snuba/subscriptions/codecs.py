@@ -1,7 +1,12 @@
 import json
 
 from snuba.query.exceptions import InvalidQueryException
-from snuba.subscriptions.data import LegacySubscriptionData, SubscriptionData
+from snuba.subscriptions.data import (
+    LegacySubscriptionData,
+    SnQLSubscriptionData,
+    SubscriptionData,
+    SubscriptionType,
+)
 from snuba.subscriptions.worker import SubscriptionTaskResult
 from snuba.utils.codecs import Codec, Encoder
 from snuba.utils.streams.backends.kafka import KafkaPayload
@@ -17,7 +22,10 @@ class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):
         except json.JSONDecodeError:
             raise InvalidQueryException("Invalid JSON")
 
-        return LegacySubscriptionData.from_dict(data)
+        if data.get(SubscriptionData.TYPE_FIELD) == SubscriptionType.SNQL.value:
+            return SnQLSubscriptionData.from_dict(data)
+        else:
+            return LegacySubscriptionData.from_dict(data)
 
 
 class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult]):

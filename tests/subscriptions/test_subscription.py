@@ -48,9 +48,9 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 LegacySubscriptionData(
                     123,
                     timedelta(minutes=1),
+                    timedelta(minutes=10),
                     [["platfo", "IN", ["a"]]],
                     [["count()", "", "count"]],
-                    timedelta(minutes=10),
                 ),
                 self.timer,
             )
@@ -62,9 +62,9 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 LegacySubscriptionData(
                     123,
                     timedelta(minutes=1),
+                    timedelta(minutes=10),
                     [["platform", "IN", ["a"]]],
                     [["cout()", "", "count"]],
-                    timedelta(minutes=10),
                 ),
                 self.timer,
             )
@@ -76,9 +76,9 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 LegacySubscriptionData(
                     123,
                     timedelta(minutes=1),
+                    timedelta(),
                     [["platfo", "IN", ["a"]]],
                     [["count()", "", "count"]],
-                    timedelta(),
                 ),
                 self.timer,
             )
@@ -88,9 +88,9 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 LegacySubscriptionData(
                     123,
                     timedelta(minutes=1),
+                    timedelta(hours=48),
                     [["platfo", "IN", ["a"]]],
                     [["count()", "", "count"]],
-                    timedelta(hours=48),
                 ),
                 self.timer,
             )
@@ -102,9 +102,9 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 LegacySubscriptionData(
                     123,
                     timedelta(),
+                    timedelta(minutes=1),
                     [["platfo", "IN", ["a"]]],
                     [["count()", "", "count"]],
-                    timedelta(minutes=1),
                 ),
                 self.timer,
             )

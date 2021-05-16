@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractclassmethod, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from enum import Enum
 from typing import Any, Mapping, NamedTuple, NewType, Optional, Sequence
 from uuid import UUID
 
@@ -40,11 +41,17 @@ class SubscriptionIdentifier:
         return cls(PartitionId(int(partition)), UUID(uuid))
 
 
+class SubscriptionType(Enum):
+    LEGACY = "legacy"
+    SNQL = "snql"
+
+
 # This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
 @dataclass(frozen=True)
 class _SubscriptionData:
     project_id: int
     resolution: timedelta
+    time_window: timedelta
 
 
 class SubscriptionData(ABC, _SubscriptionData):
@@ -52,7 +59,18 @@ class SubscriptionData(ABC, _SubscriptionData):
     Represents the state of a subscription.
     """
 
+    TYPE_FIELD = "type"
+
     def __post_init__(self) -> None:
+        if self.time_window < timedelta(minutes=1):
+            raise InvalidSubscriptionError(
+                "Time window must be greater than or equal to 1 minute"
+            )
+        elif self.time_window > timedelta(hours=24):
+            raise InvalidSubscriptionError(
+                "Time window must be less than or equal to 24 hours"
+            )
+
         if self.resolution < timedelta(minutes=1):
             raise InvalidSubscriptionError(
                 "Resolution must be greater than or equal to 1 minute"
@@ -84,25 +102,6 @@ class LegacySubscriptionData(SubscriptionData):
 
     conditions: Sequence[Condition]
     aggregations: Sequence[Aggregation]
-    time_window: timedelta
-
-    def __post_init__(self) -> None:
-        if self.time_window < timedelta(minutes=1):
-            raise InvalidSubscriptionError(
-                "Time window must be greater than or equal to 1 minute"
-            )
-        elif self.time_window > timedelta(hours=24):
-            raise InvalidSubscriptionError(
-                "Time window must be less than or equal to 24 hours"
-            )
-
-        if self.resolution < timedelta(minutes=1):
-            raise InvalidSubscriptionError(
-                "Resolution must be greater than or equal to 1 minute"
-            )
-
-        if self.resolution.microseconds > 0:
-            raise InvalidSubscriptionError("Resolution does not support microseconds")
 
     def build_request(
         self, dataset: Dataset, timestamp: datetime, offset: Optional[int], timer: Timer
@@ -155,6 +154,40 @@ class LegacySubscriptionData(SubscriptionData):
             "aggregations": self.aggregations,
             "time_window": int(self.time_window.total_seconds()),
             "resolution": int(self.resolution.total_seconds()),
+        }
+
+
+@dataclass(frozen=True)
+class SnQLSubscriptionData(SubscriptionData):
+    query: str
+
+    def build_request(
+        self, dataset: Dataset, timestamp: datetime, offset: Optional[int], timer: Timer
+    ) -> Request:
+        # TODO: Parse the query without doing the full validation
+        # TODO: Add time range conditions
+        # TODO: add offset condition
+        raise NotImplementedError
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> SnQLSubscriptionData:
+        if data.get(cls.TYPE_FIELD) != SubscriptionType.SNQL.value:
+            raise InvalidQueryException("Invalid SnQL subscription structure")
+
+        return SnQLSubscriptionData(
+            project_id=data["project_id"],
+            time_window=timedelta(seconds=data["time_window"]),
+            resolution=timedelta(seconds=data["resolution"]),
+            query=data["query"],
+        )
+
+    def to_dict(self) -> Mapping[str, Any]:
+        return {
+            self.TYPE_FIELD: SubscriptionType.SNQL.value,
+            "project_id": self.project_id,
+            "time_window": int(self.time_window.total_seconds()),
+            "resolution": int(self.resolution.total_seconds()),
+            "query": self.query,
         }
 
 

@@ -11,8 +11,10 @@ from snuba.subscriptions.codecs import (
 from snuba.subscriptions.data import (
     LegacySubscriptionData,
     PartitionId,
+    SnQLSubscriptionData,
     Subscription,
     SubscriptionIdentifier,
+    SubscriptionType,
 )
 from snuba.subscriptions.worker import SubscriptionTaskResult
 from snuba.utils.metrics.timer import Timer
@@ -20,7 +22,7 @@ from snuba.utils.scheduler import ScheduledTask
 
 
 class TestSubscriptionCodec:
-    def build_subscription_data(self) -> LegacySubscriptionData:
+    def build_legacy_subscription_data(self) -> LegacySubscriptionData:
         return LegacySubscriptionData(
             project_id=5,
             conditions=[["platform", "IN", ["a"]]],
@@ -29,14 +31,26 @@ class TestSubscriptionCodec:
             resolution=timedelta(minutes=1),
         )
 
+    def build_snql_subscription_data(self) -> SnQLSubscriptionData:
+        return SnQLSubscriptionData(
+            project_id=5,
+            time_window=timedelta(minutes=500),
+            resolution=timedelta(minutes=1),
+            query="MATCH events SELECT count() WHERE in(platform, 'a')",
+        )
+
     def test_basic(self) -> None:
-        data = self.build_subscription_data()
+
         codec = SubscriptionDataCodec()
+        data = self.build_legacy_subscription_data()
         assert codec.decode(codec.encode(data)) == data
+
+        snql = self.build_snql_subscription_data()
+        assert codec.decode(codec.encode(snql)) == snql
 
     def test_encode(self) -> None:
         codec = SubscriptionDataCodec()
-        subscription = self.build_subscription_data()
+        subscription = self.build_legacy_subscription_data()
 
         payload = codec.encode(subscription)
         data = json.loads(payload.decode("utf-8"))
@@ -46,15 +60,39 @@ class TestSubscriptionCodec:
         assert data["time_window"] == int(subscription.time_window.total_seconds())
         assert data["resolution"] == int(subscription.resolution.total_seconds())
 
+    def test_encode_snql(self) -> None:
+        codec = SubscriptionDataCodec()
+        subscription = self.build_snql_subscription_data()
+
+        payload = codec.encode(subscription)
+        data = json.loads(payload.decode("utf-8"))
+        assert data["project_id"] == subscription.project_id
+        assert data["time_window"] == int(subscription.time_window.total_seconds())
+        assert data["resolution"] == int(subscription.resolution.total_seconds())
+        assert data["query"] == subscription.query
+
     def test_decode(self) -> None:
         codec = SubscriptionDataCodec()
-        subscription = self.build_subscription_data()
+        subscription = self.build_legacy_subscription_data()
         data = {
             "project_id": subscription.project_id,
             "conditions": subscription.conditions,
             "aggregations": subscription.aggregations,
             "time_window": int(subscription.time_window.total_seconds()),
             "resolution": int(subscription.resolution.total_seconds()),
+        }
+        payload = json.dumps(data).encode("utf-8")
+        assert codec.decode(payload) == subscription
+
+    def test_decode_snql(self) -> None:
+        codec = SubscriptionDataCodec()
+        subscription = self.build_snql_subscription_data()
+        data = {
+            "type": SubscriptionType.SNQL.value,
+            "project_id": subscription.project_id,
+            "time_window": int(subscription.time_window.total_seconds()),
+            "resolution": int(subscription.resolution.total_seconds()),
+            "query": subscription.query,
         }
         payload = json.dumps(data).encode("utf-8")
         assert codec.decode(payload) == subscription
