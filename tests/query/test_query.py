@@ -1,6 +1,6 @@
 from snuba.clickhouse.columns import Any, ColumnSet
 from snuba.clickhouse.query import Query
-from snuba.query import SelectedExpression
+from snuba.query import LimitBy, SelectedExpression
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall
 
@@ -8,14 +8,17 @@ from snuba.query.expressions import Column, FunctionCall
 def test_query_parameters() -> None:
     query = Query(
         Table("my_table", ColumnSet([])),
-        limitby=(100, "environment"),
+        limitby=LimitBy(
+            100, Column(alias=None, table_name="my_table", column_name="environment")
+        ),
         limit=100,
         offset=50,
         totals=True,
         granularity=60,
     )
-
-    assert query.get_limitby() == (100, "environment")
+    assert query.get_limitby() == LimitBy(
+        100, Column(alias=None, table_name="my_table", column_name="environment")
+    )
     assert query.get_limit() == 100
     assert query.get_offset() == 50
     assert query.has_totals() is True
