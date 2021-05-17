@@ -15,7 +15,7 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.scheduler import ScheduledTask, Scheduler
-from snuba.utils.streams import Producer, Message, Topic
+from snuba.utils.streams import Message, Producer, Topic
 from snuba.utils.streams.processing.strategies.batching import AbstractBatchWorker
 from snuba.web.query import parse_and_run_query
 
@@ -39,14 +39,14 @@ class SubscriptionWorker(
         executor: ThreadPoolExecutor,
         schedulers: Mapping[int, Scheduler[Subscription]],
         producer: Producer[SubscriptionTaskResult],
-        topic: Topic,
+        topic: str,
         metrics: MetricsBackend,
     ) -> None:
         self.__dataset = dataset
         self.__executor = executor
         self.__schedulers = schedulers
         self.__producer = producer
-        self.__topic = topic
+        self.__topic = Topic(topic)
         self.__metrics = metrics
 
         self.__concurrent_gauge: Gauge = ThreadSafeGauge(

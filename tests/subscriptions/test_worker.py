@@ -39,7 +39,8 @@ class DummySubscriptionDataStore(SubscriptionDataStore):
 
 
 def test_subscription_worker(broker: Broker[SubscriptionTaskResult],) -> None:
-    result_topic = Topic("subscription-results")
+    result_topic_name = "subscription-results"
+    result_topic = Topic(result_topic_name)
 
     broker.create_topic(result_topic, partitions=1)
 
@@ -68,7 +69,7 @@ def test_subscription_worker(broker: Broker[SubscriptionTaskResult],) -> None:
         ThreadPoolExecutor(),
         {0: SubscriptionScheduler(store, PartitionId(0), timedelta(), metrics)},
         broker.get_producer(),
-        result_topic,
+        result_topic_name,
         metrics,
     )
 

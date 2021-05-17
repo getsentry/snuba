@@ -21,7 +21,6 @@ from snuba.utils.streams.kafka_consumer_with_commit_log import (
 )
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.utils.streams.processing import StreamProcessor
-from snuba.utils.streams.types import Topic
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +116,7 @@ def multistorage_consumer(
     # XXX: The ``StreamProcessor`` only supports a single topic at this time,
     # but is easily modified. The topic routing in the processing strategy is a
     # bit trickier (but also shouldn't be too bad.)
-    topic = Topic(topics.pop())
+    topic = topics.pop()
     if topics:
         raise ValueError("only one topic is supported")
 
@@ -133,9 +132,9 @@ def multistorage_consumer(
         if spec is not None
     }
 
-    commit_log_topic: Optional[Topic]
+    commit_log_topic: Optional[str]
     if commit_log_topics:
-        commit_log_topic = Topic(commit_log_topics.pop())
+        commit_log_topic = commit_log_topics.pop()
     else:
         commit_log_topic = None
 

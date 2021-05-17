@@ -16,12 +16,12 @@ class KafkaConsumerWithCommitLog(KafkaConsumer):
         configuration: Mapping[str, Any],
         *,
         producer: ConfluentProducer,
-        commit_log_topic: Topic,
+        commit_log_topic: str,
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
         super().__init__(configuration, commit_retry_policy=commit_retry_policy)
         self.__producer = producer
-        self.__commit_log_topic = commit_log_topic
+        self.__commit_log_topic = Topic(commit_log_topic)
         self.__group_id = configuration["group.id"]
 
     def poll(self, timeout: Optional[float] = None) -> Optional[Message[KafkaPayload]]:

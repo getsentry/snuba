@@ -28,7 +28,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.processor import InsertBatch, MessageProcessor, ReplacementBatch
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.streams import Message, Partition, Topic
+from snuba.utils.streams import Message, Partition
 from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
@@ -120,7 +120,7 @@ class InsertBatchWriter(ProcessingStep[JSONRowInsertBatch]):
 
 
 class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
-    def __init__(self, producer: ConfluentKafkaProducer, topic: Topic) -> None:
+    def __init__(self, producer: ConfluentKafkaProducer, topic: str) -> None:
         self.__producer = producer
         self.__topic = topic
 
@@ -153,7 +153,7 @@ class ReplacementBatchWriter(ProcessingStep[ReplacementBatch]):
             key = batch.key.encode("utf-8")
             for value in batch.values:
                 self.__producer.produce(
-                    self.__topic.name,
+                    self.__topic,
                     key=key,
                     value=rapidjson.dumps(value).encode("utf-8"),
                     on_delivery=self.__delivery_callback,
@@ -281,7 +281,7 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         input_block_size: Optional[int],
         output_block_size: Optional[int],
         replacements_producer: Optional[ConfluentKafkaProducer] = None,
-        replacements_topic: Optional[Topic] = None,
+        replacements_topic: Optional[str] = None,
     ) -> None:
         self.__prefilter = prefilter
         self.__processor = processor
@@ -550,7 +550,7 @@ class MultistorageConsumerProcessingStrategyFactory(
                         },
                     )
                 ),
-                Topic(replacement_topic_spec.topic_name),
+                replacement_topic_spec.topic_name,
             )
         else:
             replacement_batch_writer = None

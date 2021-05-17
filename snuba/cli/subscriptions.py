@@ -19,7 +19,6 @@ from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.worker import SubscriptionWorker
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.streams import Topic
 from snuba.utils.streams.backends.kafka import KafkaConsumer, KafkaProducer
 from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
@@ -152,11 +151,7 @@ def subscriptions(
                     bootstrap_servers=bootstrap_servers,
                 ),
             ),
-            (
-                Topic(commit_log_topic)
-                if commit_log_topic is not None
-                else Topic(commit_log_topic_spec.topic_name)
-            ),
+            commit_log_topic or commit_log_topic_spec.topic_name,
             set(commit_log_groups),
         ),
         time_shift=(
@@ -188,9 +183,9 @@ def subscriptions(
         batching_consumer = StreamProcessor(
             consumer,
             (
-                Topic(topic)
+                topic
                 if topic is not None
-                else Topic(loader.get_default_topic_spec().topic_name)
+                else loader.get_default_topic_spec().topic_name
             ),
             BatchProcessingStrategyFactory(
                 SubscriptionWorker(
@@ -212,9 +207,7 @@ def subscriptions(
                         )
                     },
                     producer,
-                    Topic(result_topic)
-                    if result_topic is not None
-                    else Topic(result_topic_spec.topic_name),
+                    result_topic or result_topic_spec.topic_name,
                     metrics,
                 ),
                 max_batch_size,

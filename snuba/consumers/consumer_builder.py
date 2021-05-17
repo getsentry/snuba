@@ -12,7 +12,6 @@ from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
-from snuba.utils.streams import Topic
 from snuba.utils.streams.backends.kafka import (
     KafkaConsumer,
     KafkaPayload,
@@ -81,29 +80,25 @@ class ConsumerBuilder:
 
         stream_loader = self.storage.get_table_writer().get_stream_loader()
 
-        self.raw_topic: Topic
-        if raw_topic is not None:
-            self.raw_topic = Topic(raw_topic)
-        else:
-            self.raw_topic = Topic(stream_loader.get_default_topic_spec().topic_name)
+        self.raw_topic = raw_topic or stream_loader.get_default_topic_spec().topic_name
 
-        self.replacements_topic: Optional[Topic]
+        self.replacements_topic: Optional[str]
         if replacements_topic is not None:
-            self.replacements_topic = Topic(replacements_topic)
+            self.replacements_topic = replacements_topic
         else:
             replacement_topic_spec = stream_loader.get_replacement_topic_spec()
             if replacement_topic_spec is not None:
-                self.replacements_topic = Topic(replacement_topic_spec.topic_name)
+                self.replacements_topic = replacement_topic_spec.topic_name
             else:
                 self.replacements_topic = None
 
-        self.commit_log_topic: Optional[Topic]
+        self.commit_log_topic: Optional[str]
         if commit_log_topic is not None:
-            self.commit_log_topic = Topic(commit_log_topic)
+            self.commit_log_topic = commit_log_topic
         else:
             commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
             if commit_log_topic_spec is not None:
-                self.commit_log_topic = Topic(commit_log_topic_spec.topic_name)
+                self.commit_log_topic = commit_log_topic_spec.topic_name
             else:
                 self.commit_log_topic = None
 

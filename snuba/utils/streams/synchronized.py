@@ -13,7 +13,6 @@ from snuba.utils.streams.backends.abstract import (
 from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -81,13 +80,13 @@ class SynchronizedConsumer(Consumer[TPayload]):
         self,
         consumer: Consumer[TPayload],
         commit_log_consumer: Consumer[KafkaPayload],
-        commit_log_topic: Topic,
+        commit_log_topic: str,
         commit_log_groups: Set[str],
     ) -> None:
         self.__consumer = consumer
 
         self.__commit_log_consumer = commit_log_consumer
-        self.__commit_log_topic = commit_log_topic
+        self.__commit_log_topic = Topic(commit_log_topic)
         self.__commit_log_groups = commit_log_groups
 
         self.__remote_offsets: Synchronized[

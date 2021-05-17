@@ -7,8 +7,8 @@ import pytest
 
 from snuba.utils.streams.backends.abstract import Consumer
 from snuba.utils.streams.backends.kafka import KafkaPayload
-from snuba.utils.streams.backends.local.backend import LocalConsumer
 from snuba.utils.streams.backends.local.backend import LocalBroker as Broker
+from snuba.utils.streams.backends.local.backend import LocalConsumer
 from snuba.utils.streams.synchronized import Commit, SynchronizedConsumer, commit_codec
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.assertions import assert_changes, assert_does_not_change
@@ -16,7 +16,9 @@ from tests.assertions import assert_changes, assert_does_not_change
 T = TypeVar("T")
 
 
-def wait_for_consumer(consumer: Consumer[T], message: Message[T], attempts: int = 10):
+def wait_for_consumer(
+    consumer: Consumer[T], message: Message[T], attempts: int = 10
+) -> None:
     """Block until the provided consumer has received the provided message."""
     for i in range(attempts):
         part = consumer.tell().get(message.partition)
@@ -31,8 +33,10 @@ def wait_for_consumer(consumer: Consumer[T], message: Message[T], attempts: int 
 
 
 def test_synchronized_consumer(broker: Broker[KafkaPayload]) -> None:
-    topic = Topic("topic")
-    commit_log_topic = Topic("commit-log")
+    topic_name = "topic"
+    topic = Topic(topic_name)
+    commit_log_topic_name = "commit-log"
+    commit_log_topic = Topic(commit_log_topic_name)
 
     broker.create_topic(topic, partitions=1)
     broker.create_topic(commit_log_topic, partitions=1)
@@ -51,7 +55,7 @@ def test_synchronized_consumer(broker: Broker[KafkaPayload]) -> None:
     synchronized_consumer: Consumer[KafkaPayload] = SynchronizedConsumer(
         consumer,
         commit_log_consumer,
-        commit_log_topic=commit_log_topic,
+        commit_log_topic=commit_log_topic_name,
         commit_log_groups={"leader-a", "leader-b"},
     )
 
@@ -183,7 +187,8 @@ def test_synchronized_consumer(broker: Broker[KafkaPayload]) -> None:
 
 def test_synchronized_consumer_pause_resume(broker: Broker[KafkaPayload]) -> None:
     topic = Topic("topic")
-    commit_log_topic = Topic("commit-log")
+    commit_log_topic_name = "commit-log"
+    commit_log_topic = Topic(commit_log_topic_name)
 
     broker.create_topic(topic, partitions=1)
     broker.create_topic(commit_log_topic, partitions=1)
@@ -202,7 +207,7 @@ def test_synchronized_consumer_pause_resume(broker: Broker[KafkaPayload]) -> Non
     synchronized_consumer: Consumer[KafkaPayload] = SynchronizedConsumer(
         consumer,
         commit_log_consumer,
-        commit_log_topic=commit_log_topic,
+        commit_log_topic=commit_log_topic_name,
         commit_log_groups={"leader"},
     )
 
@@ -268,7 +273,8 @@ def test_synchronized_consumer_handles_end_of_partition(
     broker: Broker[KafkaPayload],
 ) -> None:
     topic = Topic("topic")
-    commit_log_topic = Topic("commit-log")
+    commit_log_topic_name = "commit-log"
+    commit_log_topic = Topic(commit_log_topic_name)
 
     broker.create_topic(topic, partitions=1)
     broker.create_topic(commit_log_topic, partitions=1)
@@ -287,7 +293,7 @@ def test_synchronized_consumer_handles_end_of_partition(
     synchronized_consumer: Consumer[KafkaPayload] = SynchronizedConsumer(
         consumer,
         commit_log_consumer,
-        commit_log_topic=commit_log_topic,
+        commit_log_topic=commit_log_topic_name,
         commit_log_groups={"leader"},
     )
 
@@ -325,7 +331,8 @@ def test_synchronized_consumer_worker_crash_before_assignment(
     broker: Broker[KafkaPayload],
 ) -> None:
     topic = Topic("topic")
-    commit_log_topic = Topic("commit-log")
+    commit_logt_topic_name = "commit-log"
+    commit_log_topic = Topic(commit_logt_topic_name)
 
     broker.create_topic(topic, partitions=1)
     broker.create_topic(commit_log_topic, partitions=1)
@@ -350,10 +357,10 @@ def test_synchronized_consumer_worker_crash_before_assignment(
     )
 
     with pytest.raises(BrokenConsumerException):
-        Consumer[KafkaPayload] = SynchronizedConsumer(
+        SynchronizedConsumer(
             consumer,
             commit_log_consumer,
-            commit_log_topic=commit_log_topic,
+            commit_log_topic=commit_logt_topic_name,
             commit_log_groups={"leader"},
         )
 
@@ -362,7 +369,8 @@ def test_synchronized_consumer_worker_crash_after_assignment(
     broker: Broker[KafkaPayload],
 ) -> None:
     topic = Topic("topic")
-    commit_log_topic = Topic("commit-log")
+    commit_log_topic_name = "commit-log"
+    commit_log_topic = Topic(commit_log_topic_name)
 
     broker.create_topic(topic, partitions=1)
     broker.create_topic(commit_log_topic, partitions=1)
@@ -392,7 +400,7 @@ def test_synchronized_consumer_worker_crash_after_assignment(
     synchronized_consumer: Consumer[KafkaPayload] = SynchronizedConsumer(
         consumer,
         commit_log_consumer,
-        commit_log_topic=commit_log_topic,
+        commit_log_topic=commit_log_topic_name,
         commit_log_groups={"leader"},
     )
 

@@ -1,9 +1,9 @@
 import logging
 import time
-import simplejson as json
-
 from datetime import datetime
 from typing import Optional, Sequence
+
+import simplejson as json
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storage import WritableTableStorage
@@ -13,7 +13,6 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams import Message
 from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.processing.strategies.batching import AbstractBatchWorker
-
 
 logger = logging.getLogger("snuba.replacer")
 
@@ -32,9 +31,6 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         ), f"This storage writer does not support replacements {storage.get_storage_key().value}"
         self.__replacer_processor = processor
         self.__database_name = storage.get_cluster().get_database()
-        self.__table_name = (
-            storage.get_table_writer().get_schema().get_local_table_name()
-        )
 
     def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
         seq_message = json.loads(message.payload.value)

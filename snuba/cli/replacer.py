@@ -76,7 +76,6 @@ def replacer(
 ) -> None:
 
     from snuba.replacer import ReplacerWorker
-    from snuba.utils.streams import Topic
     from snuba.utils.streams.backends.kafka import KafkaConsumer, TransportError
     from snuba.utils.streams.configuration_builder import (
         build_kafka_consumer_configuration,
@@ -113,7 +112,7 @@ def replacer(
                 queued_min_messages=queued_min_messages,
             ),
         ),
-        Topic(replacements_topic),
+        replacements_topic,
         BatchProcessingStrategyFactory(
             worker=ReplacerWorker(storage, metrics=metrics),
             max_batch_size=max_batch_size,

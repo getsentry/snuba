@@ -153,7 +153,7 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
                 "session.timeout.ms": 10000,
             },
             producer=commit_log_producer,
-            commit_log_topic=Topic("commit-log"),
+            commit_log_topic="commit-log",
         )
 
         with self.get_topic() as topic, closing(consumer) as consumer:

@@ -30,7 +30,8 @@ class FakeWorker(AbstractBatchWorker[int, int]):
 
 class TestConsumer(object):
     def test_batch_size(self, broker: Broker[int]) -> None:
-        topic = Topic("topic")
+        topic_name = "topic"
+        topic = Topic(topic_name)
         broker.create_topic(topic, partitions=1)
         producer = broker.get_producer()
         for i in [1, 2, 3]:
@@ -43,7 +44,7 @@ class TestConsumer(object):
         metrics = DummyMetricsBackend(strict=True)
         batching_consumer = StreamProcessor(
             consumer,
-            topic,
+            topic_name,
             BatchProcessingStrategyFactory(
                 worker=worker, max_batch_size=2, max_batch_time=100, metrics=metrics,
             ),
@@ -62,7 +63,8 @@ class TestConsumer(object):
 
     @patch("time.time")
     def test_batch_time(self, mock_time: Any, broker: Broker[int]) -> None:
-        topic = Topic("topic")
+        topic_name = "topic"
+        topic = Topic(topic_name)
         broker.create_topic(topic, partitions=1)
         producer = broker.get_producer()
         consumer = broker.get_consumer("group")
@@ -72,7 +74,7 @@ class TestConsumer(object):
         metrics = DummyMetricsBackend(strict=True)
         batching_consumer = StreamProcessor(
             consumer,
-            topic,
+            topic_name,
             BatchProcessingStrategyFactory(
                 worker=worker, max_batch_size=100, max_batch_time=2000, metrics=metrics,
             ),

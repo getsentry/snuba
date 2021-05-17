@@ -12,7 +12,8 @@ from tests.backends.metrics import TestingMetricsBackend, Timing
 
 
 def test_stream_processor_lifecycle() -> None:
-    topic = Topic("topic")
+    topic_name = "topic"
+    topic = Topic(topic_name)
 
     consumer = mock.Mock()
     strategy = mock.Mock()
@@ -23,7 +24,7 @@ def test_stream_processor_lifecycle() -> None:
 
     with assert_changes(lambda: int(consumer.subscribe.call_count), 0, 1):
         processor: StreamProcessor[int] = StreamProcessor(
-            consumer, topic, factory, StreamMetricsAdapter(metrics)
+            consumer, topic_name, factory, StreamMetricsAdapter(metrics)
         )
 
     # The processor should accept heartbeat messages without an assignment or
@@ -111,7 +112,8 @@ def test_stream_processor_lifecycle() -> None:
 
 
 def test_stream_processor_termination_on_error() -> None:
-    topic = Topic("test")
+    topic_name = "test"
+    topic = Topic(topic_name)
 
     consumer = mock.Mock()
     consumer.poll.return_value = Message(Partition(topic, 0), 0, 0, datetime.now())
@@ -125,7 +127,7 @@ def test_stream_processor_termination_on_error() -> None:
     factory.create.return_value = strategy
 
     processor: StreamProcessor[int] = StreamProcessor(
-        consumer, topic, factory, StreamMetricsAdapter(TestingMetricsBackend())
+        consumer, topic_name, factory, StreamMetricsAdapter(TestingMetricsBackend())
     )
 
     assignment_callback = consumer.subscribe.call_args.kwargs["on_assign"]

@@ -33,7 +33,8 @@ class StreamProcessor(Generic[TPayload]):
     def __init__(
         self,
         consumer: Consumer[TPayload],
-        topic: Topic,
+        topic: str,
+        # topic: Topic,
         processor_factory: ProcessingStrategyFactory[TPayload],
         metrics: Metrics = DummyMetricsBackend,
         recoverable_errors: Optional[Sequence[Type[ConsumerError]]] = None,
@@ -94,7 +95,9 @@ class StreamProcessor(Generic[TPayload]):
             self.__message = None  # avoid leaking buffered messages across assignments
 
         self.__consumer.subscribe(
-            [topic], on_assign=on_partitions_assigned, on_revoke=on_partitions_revoked
+            [Topic(topic)],
+            on_assign=on_partitions_assigned,
+            on_revoke=on_partitions_revoked,
         )
 
     def __commit(self, offsets: Mapping[Partition, int]) -> None:
