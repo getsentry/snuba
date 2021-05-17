@@ -1,4 +1,4 @@
-from typing import List
+from typing import Iterable, List
 
 from snuba.query.expressions import (
     Argument,
@@ -13,7 +13,7 @@ from snuba.query.expressions import (
 )
 
 
-class DummyVisitor(ExpressionVisitor[List[Expression]]):
+class DummyVisitor(ExpressionVisitor[Iterable[Expression]]):
     def __init__(self) -> None:
         self.__visited_nodes: List[Expression] = []
 
@@ -35,7 +35,7 @@ class DummyVisitor(ExpressionVisitor[List[Expression]]):
         return [exp, *exp.column.accept(self), *exp.key.accept(self)]
 
     def visit_function_call(self, exp: FunctionCall) -> List[Expression]:
-        ret = []
+        ret: List[Expression] = []
         self.__visited_nodes.append(exp)
         ret.append(exp)
         for param in exp.parameters:
@@ -43,7 +43,7 @@ class DummyVisitor(ExpressionVisitor[List[Expression]]):
         return ret
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> List[Expression]:
-        ret = []
+        ret: List[Expression] = []
         self.__visited_nodes.append(exp)
         ret.append(exp)
         ret.extend(exp.internal_function.accept(self))
@@ -57,25 +57,25 @@ class DummyVisitor(ExpressionVisitor[List[Expression]]):
 
     def visit_lambda(self, exp: Lambda) -> List[Expression]:
         self.__visited_nodes.append(exp)
-        self.__visited_nodes.append(exp.transform.accept(self))
-        ret = [exp]
-        ret.extend(exp.transform.accept(self))
+        self.__visited_nodes.extend(exp.transformation.accept(self))
+        ret: List[Expression] = [exp]
+        ret.extend(exp.transformation.accept(self))
         return ret
 
 
-def test_visit_expression():
+def test_visit_expression() -> None:
     col1 = Column("al", "t1", "c1")
     literal1 = Literal("al2", "test")
     mapping = Column("al2", "t1", "tags")
     key = Literal(None, "myTag")
     tag = SubscriptableReference(None, mapping, key)
-    f1 = FunctionCall("al3", "f1", [col1, literal1, tag])
+    f1 = FunctionCall("al3", "f1", (col1, literal1, tag))
 
     col2 = Column("al4", "t1", "c2")
     literal2 = Literal("al5", "test2")
-    f2 = FunctionCall("al6", "f2", [col2, literal2])
+    f2 = FunctionCall("al6", "f2", (col2, literal2))
 
-    curried = CurriedFunctionCall("al7", f2, [f1])
+    curried = CurriedFunctionCall("al7", f2, (f1,))
 
     visitor = DummyVisitor()
     ret = curried.accept(visitor)

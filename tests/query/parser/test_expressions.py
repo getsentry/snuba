@@ -1,4 +1,7 @@
+from typing import Any
+
 import pytest
+
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
@@ -223,7 +226,7 @@ test_data = [
 
 
 @pytest.mark.parametrize("aggregation, expected_function", test_data)
-def test_aggregation_parsing(aggregation, expected_function):
+def test_aggregation_parsing(aggregation: Any, expected_function: FunctionCall) -> None:
     entity = get_entity(EntityKey.EVENTS)
     function = parse_aggregation(
         aggregation[0], aggregation[1], aggregation[2], entity.get_data_model(), set(),
