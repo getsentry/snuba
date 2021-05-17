@@ -15,7 +15,7 @@ from tests.helpers import write_unprocessed_events
 
 
 class TestDiscoverApi(BaseApiTest):
-    @pytest.fixture  # type: ignore
+    @pytest.fixture
     def test_entity(self) -> Union[str, Tuple[str, str]]:
         # This can be overridden in the post function
         return (
@@ -23,11 +23,11 @@ class TestDiscoverApi(BaseApiTest):
             "discover",
         )
 
-    @pytest.fixture  # type: ignore
+    @pytest.fixture
     def test_app(self) -> Any:
         return self.app
 
-    @pytest.fixture(autouse=True)  # type: ignore
+    @pytest.fixture(autouse=True)
     def setup_post(self, _build_snql_post_methods: Callable[..., Any]) -> None:
         self.post = _build_snql_post_methods
 

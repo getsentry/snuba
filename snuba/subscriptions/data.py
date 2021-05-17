@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from abc import ABC, abstractclassmethod, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import NamedTuple, NewType, Optional, Sequence
+from enum import Enum
+from typing import Any, Mapping, NamedTuple, NewType, Optional, Sequence
 from uuid import UUID
 
 from snuba.datasets.dataset import Dataset
+from snuba.query.exceptions import InvalidQueryException
 from snuba.query.logical import Aggregation
 from snuba.query.types import Condition
 from snuba.request import Language, Request
@@ -38,17 +41,26 @@ class SubscriptionIdentifier:
         return cls(PartitionId(int(partition)), UUID(uuid))
 
 
+class SubscriptionType(Enum):
+    LEGACY = "legacy"
+    SNQL = "snql"
+    DELEGATE = "delegate"
+
+
+# This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
 @dataclass(frozen=True)
-class SubscriptionData:
+class _SubscriptionData:
+    project_id: int
+    resolution: timedelta
+    time_window: timedelta
+
+
+class SubscriptionData(ABC, _SubscriptionData):
     """
     Represents the state of a subscription.
     """
 
-    project_id: int
-    conditions: Sequence[Condition]
-    aggregations: Sequence[Aggregation]
-    time_window: timedelta
-    resolution: timedelta
+    TYPE_FIELD = "type"
 
     def __post_init__(self) -> None:
         if self.time_window < timedelta(minutes=1):
@@ -67,6 +79,30 @@ class SubscriptionData:
 
         if self.resolution.microseconds > 0:
             raise InvalidSubscriptionError("Resolution does not support microseconds")
+
+    @abstractmethod
+    def build_request(
+        self, dataset: Dataset, timestamp: datetime, offset: Optional[int], timer: Timer
+    ) -> Request:
+        raise NotImplementedError
+
+    @abstractclassmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> SubscriptionData:
+        raise NotImplementedError
+
+    @abstractmethod
+    def to_dict(self) -> Mapping[str, Any]:
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class LegacySubscriptionData(SubscriptionData):
+    """
+    Represents the state of a legacy subscription (before SnQL).
+    """
+
+    conditions: Sequence[Condition]
+    aggregations: Sequence[Aggregation]
 
     def build_request(
         self, dataset: Dataset, timestamp: datetime, offset: Optional[int], timer: Timer
@@ -98,6 +134,114 @@ class SubscriptionData:
             dataset,
             SUBSCRIPTION_REFERRER,
         )
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> LegacySubscriptionData:
+        if not data.get("aggregations"):
+            raise InvalidQueryException("No aggregation provided")
+
+        return LegacySubscriptionData(
+            project_id=data["project_id"],
+            conditions=data["conditions"],
+            aggregations=data["aggregations"],
+            time_window=timedelta(seconds=data["time_window"]),
+            resolution=timedelta(seconds=data["resolution"]),
+        )
+
+    def to_dict(self) -> Mapping[str, Any]:
+        return {
+            "project_id": self.project_id,
+            "conditions": self.conditions,
+            "aggregations": self.aggregations,
+            "time_window": int(self.time_window.total_seconds()),
+            "resolution": int(self.resolution.total_seconds()),
+        }
+
+
+@dataclass(frozen=True)
+class SnQLSubscriptionData(SubscriptionData):
+    query: str
+
+    def build_request(
+        self, dataset: Dataset, timestamp: datetime, offset: Optional[int], timer: Timer
+    ) -> Request:
+        # TODO: Parse the query without doing the full validation
+        # TODO: Add time range conditions
+        # TODO: add offset condition
+        raise NotImplementedError
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> SnQLSubscriptionData:
+        if data.get(cls.TYPE_FIELD) != SubscriptionType.SNQL.value:
+            raise InvalidQueryException("Invalid SnQL subscription structure")
+
+        return SnQLSubscriptionData(
+            project_id=data["project_id"],
+            time_window=timedelta(seconds=data["time_window"]),
+            resolution=timedelta(seconds=data["resolution"]),
+            query=data["query"],
+        )
+
+    def to_dict(self) -> Mapping[str, Any]:
+        return {
+            self.TYPE_FIELD: SubscriptionType.SNQL.value,
+            "project_id": self.project_id,
+            "time_window": int(self.time_window.total_seconds()),
+            "resolution": int(self.resolution.total_seconds()),
+            "query": self.query,
+        }
+
+
+@dataclass(frozen=True)
+class DelegateSubscriptionData(SubscriptionData):
+    """
+    Embeds two subscription data types for the rollout of SnQL.
+    This allows to switch logic back and forth between the
+    legacy and the SnQL language.
+    """
+
+    # Legacy
+    conditions: Sequence[Condition]
+    aggregations: Sequence[Aggregation]
+    # SnQL
+    query: str
+
+    def build_request(
+        self, dataset: Dataset, timestamp: datetime, offset: Optional[int], timer: Timer
+    ) -> Request:
+        # TODO: Switch to SnQL when we do the rollout
+        return LegacySubscriptionData(
+            project_id=self.project_id,
+            resolution=self.resolution,
+            time_window=self.time_window,
+            conditions=self.conditions,
+            aggregations=self.aggregations,
+        ).build_request(dataset, timestamp, offset, timer)
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> DelegateSubscriptionData:
+        if data.get(cls.TYPE_FIELD) != SubscriptionType.DELEGATE.value:
+            raise InvalidQueryException("Invalid delegate subscription structure")
+
+        return DelegateSubscriptionData(
+            project_id=data["project_id"],
+            time_window=timedelta(seconds=data["time_window"]),
+            resolution=timedelta(seconds=data["resolution"]),
+            conditions=data["conditions"],
+            aggregations=data["aggregations"],
+            query=data["query"],
+        )
+
+    def to_dict(self) -> Mapping[str, Any]:
+        return {
+            self.TYPE_FIELD: SubscriptionType.DELEGATE.value,
+            "project_id": self.project_id,
+            "time_window": int(self.time_window.total_seconds()),
+            "resolution": int(self.resolution.total_seconds()),
+            "conditions": self.conditions,
+            "aggregations": self.aggregations,
+            "query": self.query,
+        }
 
 
 class Subscription(NamedTuple):

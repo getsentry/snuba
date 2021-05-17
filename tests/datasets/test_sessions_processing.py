@@ -1,8 +1,10 @@
+from typing import Any, MutableMapping
+
 import pytest
-from typing import MutableMapping, Any
 
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.storages.sessions import raw_schema, read_schema
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
 from snuba.query.parser import parse_query
@@ -83,7 +85,7 @@ selector_tests = [
                 ["started", ">", "2020-01-01 12:00:00"],
             ],
         },
-        "sessions_hourly_local",
+        read_schema.get_table_name(),
         id="Select hourly by default",
     ),
     pytest.param(
@@ -111,7 +113,7 @@ selector_tests = [
                 ("started", "<", "2019-09-19T12:00:00"),
             ],
         },
-        "sessions_raw_local",
+        raw_schema.get_table_name(),
         id="Select raw depending on granularity",
     ),
 ]

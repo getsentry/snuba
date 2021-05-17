@@ -6,6 +6,7 @@ from uuid import UUID, uuid1
 from snuba.datasets.factory import get_dataset
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import (
+    LegacySubscriptionData,
     PartitionId,
     Subscription,
     SubscriptionData,
@@ -13,10 +14,7 @@ from snuba.subscriptions.data import (
 )
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import SubscriptionDataStore
-from snuba.subscriptions.worker import (
-    SubscriptionWorker,
-    SubscriptionTaskResult,
-)
+from snuba.subscriptions.worker import SubscriptionTaskResult, SubscriptionWorker
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.local.backend import LocalBroker as Broker
@@ -50,7 +48,7 @@ def test_subscription_worker(broker: Broker[SubscriptionTaskResult],) -> None:
 
     subscription = Subscription(
         SubscriptionIdentifier(PartitionId(0), uuid1()),
-        SubscriptionData(
+        LegacySubscriptionData(
             project_id=1,
             conditions=[],
             aggregations=[["count()", "", "count"]],
