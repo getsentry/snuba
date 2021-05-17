@@ -5,7 +5,11 @@ from uuid import UUID
 from pytest import raises
 
 from snuba.redis import redis_client
-from snuba.subscriptions.data import InvalidSubscriptionError, SubscriptionData
+from snuba.subscriptions.data import (
+    InvalidSubscriptionError,
+    LegacySubscriptionData,
+    SubscriptionData,
+)
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.utils.metrics.timer import Timer
@@ -19,7 +23,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
 
     def test(self) -> None:
         creator = SubscriptionCreator(self.dataset)
-        subscription = SubscriptionData(
+        subscription = LegacySubscriptionData(
             project_id=123,
             conditions=[["platform", "IN", ["a"]]],
             aggregations=[["count()", "", "count"]],
@@ -41,12 +45,12 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset)
         with raises(QueryException):
             creator.create(
-                SubscriptionData(
+                LegacySubscriptionData(
                     123,
+                    timedelta(minutes=1),
+                    timedelta(minutes=10),
                     [["platfo", "IN", ["a"]]],
                     [["count()", "", "count"]],
-                    timedelta(minutes=10),
-                    timedelta(minutes=1),
                 ),
                 self.timer,
             )
@@ -55,12 +59,12 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset)
         with raises(QueryException):
             creator.create(
-                SubscriptionData(
+                LegacySubscriptionData(
                     123,
+                    timedelta(minutes=1),
+                    timedelta(minutes=10),
                     [["platform", "IN", ["a"]]],
                     [["cout()", "", "count"]],
-                    timedelta(minutes=10),
-                    timedelta(minutes=1),
                 ),
                 self.timer,
             )
@@ -69,24 +73,24 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset)
         with raises(InvalidSubscriptionError):
             creator.create(
-                SubscriptionData(
+                LegacySubscriptionData(
                     123,
+                    timedelta(minutes=1),
+                    timedelta(),
                     [["platfo", "IN", ["a"]]],
                     [["count()", "", "count"]],
-                    timedelta(),
-                    timedelta(minutes=1),
                 ),
                 self.timer,
             )
 
         with raises(InvalidSubscriptionError):
             creator.create(
-                SubscriptionData(
+                LegacySubscriptionData(
                     123,
+                    timedelta(minutes=1),
+                    timedelta(hours=48),
                     [["platfo", "IN", ["a"]]],
                     [["count()", "", "count"]],
-                    timedelta(hours=48),
-                    timedelta(minutes=1),
                 ),
                 self.timer,
             )
@@ -95,12 +99,12 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset)
         with raises(InvalidSubscriptionError):
             creator.create(
-                SubscriptionData(
+                LegacySubscriptionData(
                     123,
+                    timedelta(),
+                    timedelta(minutes=1),
                     [["platfo", "IN", ["a"]]],
                     [["count()", "", "count"]],
-                    timedelta(minutes=1),
-                    timedelta(),
                 ),
                 self.timer,
             )
@@ -109,7 +113,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
 class TestSubscriptionDeleter(BaseSubscriptionTest):
     def test(self) -> None:
         creator = SubscriptionCreator(self.dataset)
-        subscription = SubscriptionData(
+        subscription = LegacySubscriptionData(
             project_id=1,
             conditions=[],
             aggregations=[["count()", "", "count"]],

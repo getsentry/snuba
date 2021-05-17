@@ -1,18 +1,18 @@
 import itertools
-import pytest
-import pytz
 import uuid
 from datetime import datetime, timedelta
-import simplejson as json
-from typing import Any, Callable, Tuple, Union, Optional
+from typing import Any, Callable, Optional, Tuple, Union
 
+import pytest
+import pytz
+import simplejson as json
+from sentry_relay import DataCategory
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
-from sentry_relay import DataCategory
 
 
 class TestOutcomesApi(BaseApiTest):
@@ -51,7 +51,7 @@ class TestOutcomesApi(BaseApiTest):
         num_outcomes: int,
         outcome: int,
         time_since_base: timedelta,
-        category: int,
+        category: Optional[int],
         quantity: Optional[int] = None,
     ) -> None:
         outcomes = []
@@ -177,7 +177,9 @@ class TestOutcomesApi(BaseApiTest):
             other_project_id,
         ]
 
-    def test_category_quantity_sum_querying(self, get_project_id: Callable[[], int]):
+    def test_category_quantity_sum_querying(
+        self, get_project_id: Callable[[], int]
+    ) -> None:
         project_id = get_project_id()
         self.generate_outcomes(
             org_id=1,
@@ -252,7 +254,7 @@ class TestOutcomesApi(BaseApiTest):
         to_date = self.format_time(self.base_time + self.skew)
 
         response = self.post(
-            data=json.dumps(
+            json.dumps(
                 {
                     "dataset": "outcomes",
                     "aggregations": [
