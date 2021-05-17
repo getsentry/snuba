@@ -1,9 +1,9 @@
+from datetime import datetime, timedelta
+from typing import Any, Callable, Tuple, Union
+
 import pytest
 import pytz
-import uuid
-from datetime import datetime, timedelta
 import simplejson as json
-from typing import Any, Callable, Tuple, Union
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -15,7 +15,7 @@ from tests.helpers import write_unprocessed_events
 
 
 class TestDiscoverApi(BaseApiTest):
-    @pytest.fixture  # type: ignore
+    @pytest.fixture
     def test_entity(self) -> Union[str, Tuple[str, str]]:
         # This can be overridden in the post function
         return (
@@ -23,11 +23,11 @@ class TestDiscoverApi(BaseApiTest):
             "discover",
         )
 
-    @pytest.fixture  # type: ignore
+    @pytest.fixture
     def test_app(self) -> Any:
         return self.app
 
-    @pytest.fixture(autouse=True)  # type: ignore
+    @pytest.fixture(autouse=True)
     def setup_post(self, _build_snql_post_methods: Callable[..., Any]) -> None:
         self.post = _build_snql_post_methods
 
@@ -1541,29 +1541,9 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert len(data["data"]) == 6
 
-
-class TestArrayJoinDiscoverAPI(BaseApiTest):
-    def setup_method(self, test_method: Callable[..., Any]) -> None:
-        super().setup_method(test_method)
-        self.trace_id = uuid.UUID("7400045b-25c4-43b8-8591-4600aa83ad04")
-        self.event = get_raw_event()
-        self.project_id = self.event["project_id"]
-        self.skew = timedelta(minutes=180)
-        self.base_time = datetime.utcnow().replace(
-            second=0, microsecond=0, tzinfo=pytz.utc
-        ) - timedelta(minutes=90)
-        events_storage = get_entity(EntityKey.EVENTS).get_writable_storage()
-        assert events_storage is not None
-        write_unprocessed_events(events_storage, [self.event])
-        write_unprocessed_events(
-            get_writable_storage(StorageKey.TRANSACTIONS), [get_raw_transaction()],
-        )
-
     def test_exception_stack_column_condition(self) -> None:
-        response = self.app.post(
-            "/query",
-            headers={"referer": "test"},
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -1577,16 +1557,15 @@ class TestArrayJoinDiscoverAPI(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover_events",
         )
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["data"] == [{"count": 1}]
 
     def test_exception_stack_column_boolean_condition(self) -> None:
-        response = self.app.post(
-            "/query",
-            headers={"referer": "test"},
-            data=json.dumps(
+        response = self.post(
+            json.dumps(
                 {
                     "dataset": "discover",
                     "project": self.project_id,
@@ -1619,6 +1598,7 @@ class TestArrayJoinDiscoverAPI(BaseApiTest):
                     "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
+            entity="discover_events",
         )
         assert response.status_code == 200
         data = json.loads(response.data)

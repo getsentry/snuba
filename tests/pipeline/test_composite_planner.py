@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Union
 
 import pytest
+
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
 from snuba.clusters.cluster import get_cluster
@@ -65,7 +66,7 @@ groups_ent = Entity(
 )
 groups_storage = get_storage(StorageKey.GROUPEDMESSAGES)
 groups_table = Table(
-    "groupedmessage_local",
+    groups_storage.get_schema().get_table_name(),
     groups_storage.get_schema().get_columns(),
     final=False,
     sampling_rate=None,

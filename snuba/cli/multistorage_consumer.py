@@ -19,6 +19,7 @@ from snuba.utils.streams.configuration_builder import (
 from snuba.utils.streams.kafka_consumer_with_commit_log import (
     KafkaConsumerWithCommitLog,
 )
+from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.types import Topic
 
@@ -217,7 +218,7 @@ def multistorage_consumer(
             output_block_size=output_block_size,
             metrics=metrics,
         ),
-        metrics=metrics,
+        metrics=StreamMetricsAdapter(metrics),
     )
 
     def handler(signum: int, frame: Any) -> None:
