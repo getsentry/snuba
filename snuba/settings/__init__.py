@@ -41,6 +41,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
     },
 ]
 
+
 # Dogstatsd Options
 DOGSTATSD_HOST = "localhost"
 DOGSTATSD_PORT = 8125
