@@ -13,8 +13,8 @@ class SpanData(NamedTuple):
     span_id: str
     parent_span_id: str
     op: str
-    start_timestamp: datetime
-    timestamp: datetime
+    start_timestamp: float
+    timestamp: float
 
     def serialize(self) -> Mapping[str, Any]:
         return {
