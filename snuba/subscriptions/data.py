@@ -4,12 +4,22 @@ from abc import ABC, abstractclassmethod, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Mapping, NamedTuple, NewType, Optional, Sequence
+from typing import Any, List, Mapping, NamedTuple, NewType, Optional, Sequence, Union
 from uuid import UUID
 
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities.factory import get_entity
+from snuba.query.composite import CompositeQuery
+from snuba.query.conditions import (
+    ConditionFunctions,
+    binary_condition,
+    combine_and_conditions,
+    get_first_level_and_conditions,
+)
+from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.logical import Aggregation
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.logical import Aggregation, Query
 from snuba.query.types import Condition
 from snuba.request import Language, Request
 from snuba.request.request_settings import SubscriptionRequestSettings
@@ -173,16 +183,67 @@ class SnQLSubscriptionData(SubscriptionData):
         schema = RequestSchema.build_with_extensions(
             {}, SubscriptionRequestSettings, Language.SNQL,
         )
+
+        def add_conditions(query: Union[CompositeQuery[Entity], Query]) -> None:
+            # TODO: Support composite queries with multiple entities.
+            from_clause = query.get_from_clause()
+            if not isinstance(from_clause, Entity):
+                raise InvalidSubscriptionError("Only simple queries are supported")
+            entity = get_entity(from_clause.key)
+            required_timestamp_column = entity.required_time_column
+            if required_timestamp_column is None:
+                raise InvalidSubscriptionError(
+                    "Entity must have a timestamp column for subscriptions"
+                )
+
+            conditions_to_add: List[Expression] = [
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    Column(None, None, "project_id"),
+                    Literal(None, self.project_id),
+                ),
+                binary_condition(
+                    ConditionFunctions.GTE,
+                    Column(None, None, required_timestamp_column),
+                    Literal(None, (timestamp - self.time_window)),
+                ),
+                binary_condition(
+                    ConditionFunctions.LT,
+                    Column(None, None, required_timestamp_column),
+                    Literal(None, timestamp),
+                ),
+            ]
+
+            if offset is not None:
+                conditions_to_add.append(
+                    binary_condition(
+                        ConditionFunctions.LTE,
+                        FunctionCall(
+                            None,
+                            "ifnull",
+                            (Column(None, None, "offset"), Literal(None, 0)),
+                        ),
+                        Literal(None, offset),
+                    )
+                )
+
+            condition = query.get_condition()
+            if condition:
+                conditions_to_add = [
+                    *get_first_level_and_conditions(condition),
+                    *conditions_to_add,
+                ]
+
+            query.set_ast_condition(combine_and_conditions(conditions_to_add))
+
         request = build_request(
             {"query": self.query},
-            build_snql_parser([]),
+            build_snql_parser([add_conditions]),
             SubscriptionRequestSettings,
             schema,
             timer,
             SUBSCRIPTION_REFERRER,
         )
-        # TODO: Add time range conditions
-        # TODO: add offset condition
         return request
 
     @classmethod
