@@ -27,7 +27,7 @@ TESTS = [
             project_id=1,
             query=(
                 "MATCH (events) "
-                "SELECT count() AS count BY time "
+                "SELECT count() AS count "
                 "WHERE "
                 "platform IN tuple('a') "
             ),
