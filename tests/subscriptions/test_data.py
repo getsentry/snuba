@@ -1,14 +1,14 @@
 from datetime import datetime, timedelta
 
-from snuba.subscriptions.data import SubscriptionData
-from snuba.web.query import parse_and_run_query
+from snuba.subscriptions.data import LegacySubscriptionData
 from snuba.utils.metrics.timer import Timer
+from snuba.web.query import parse_and_run_query
 from tests.subscriptions import BaseSubscriptionTest
 
 
 class TestBuildRequest(BaseSubscriptionTest):
     def test_conditions(self) -> None:
-        subscription = SubscriptionData(
+        subscription = LegacySubscriptionData(
             project_id=self.project_id,
             conditions=[["platform", "IN", ["a"]]],
             aggregations=[["count()", "", "count"]],
