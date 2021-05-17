@@ -1,6 +1,5 @@
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from snuba.consumers.strict_consumer import StrictConsumer
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_cdc_storage
 from snuba.stateful_consumer import ConsumerStateCompletionEvent
@@ -15,20 +14,8 @@ from tests.backends.confluent_kafka import (
 class TestBootstrapState:
     broker_config = get_default_kafka_configuration(bootstrap_servers=["somewhere"])
 
-    def __consumer(self, on_message) -> StrictConsumer:
-        return StrictConsumer(
-            topic="topic",
-            group_id="something",
-            broker_config=self.broker_config,
-            auto_offset_reset="earliest",
-            partition_assignment_timeout=1,
-            on_partitions_assigned=None,
-            on_partitions_revoked=None,
-            on_message=on_message,
-        )
-
     @patch("snuba.consumers.strict_consumer.StrictConsumer._create_consumer")
-    def test_empty_topic(self, create_consumer) -> None:
+    def test_empty_topic(self, create_consumer: Mock) -> None:
         kafka_consumer = FakeConfluentKafkaConsumer()
         kafka_consumer.items = [
             build_confluent_kafka_message(0, 0, None, True),
@@ -47,7 +34,7 @@ class TestBootstrapState:
         assert kafka_consumer.commit_calls == 0
 
     @patch("snuba.consumers.strict_consumer.StrictConsumer._create_consumer")
-    def test_snapshot_for_other_table(self, create_consumer) -> None:
+    def test_snapshot_for_other_table(self, create_consumer: Mock) -> None:
         kafka_consumer = FakeConfluentKafkaConsumer()
         kafka_consumer.items = [
             build_confluent_kafka_message(
@@ -72,7 +59,7 @@ class TestBootstrapState:
         assert kafka_consumer.commit_calls == 1
 
     @patch("snuba.consumers.strict_consumer.StrictConsumer._create_consumer")
-    def test_init_snapshot(self, create_consumer) -> None:
+    def test_init_snapshot(self, create_consumer: Mock) -> None:
         kafka_consumer = FakeConfluentKafkaConsumer()
         kafka_consumer.items = [
             build_confluent_kafka_message(
@@ -97,7 +84,7 @@ class TestBootstrapState:
         assert kafka_consumer.commit_calls == 0
 
     @patch("snuba.consumers.strict_consumer.StrictConsumer._create_consumer")
-    def test_snapshot_loaded(self, create_consumer) -> None:
+    def test_snapshot_loaded(self, create_consumer: Mock) -> None:
         kafka_consumer = FakeConfluentKafkaConsumer()
         kafka_consumer.items = [
             build_confluent_kafka_message(
