@@ -50,7 +50,7 @@ test_cases = [
 ]
 
 
-@pytest.mark.parametrize("default_validators, entity_validators, exception", test_cases)  # type: ignore
+@pytest.mark.parametrize("default_validators, entity_validators, exception", test_cases)
 def test_functions(
     default_validators: Mapping[str, FunctionCallValidator],
     entity_validators: Mapping[str, FunctionCallValidator],

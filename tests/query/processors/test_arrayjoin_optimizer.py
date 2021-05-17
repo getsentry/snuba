@@ -1,6 +1,7 @@
-from typing import Any, MutableMapping, Optional, Sequence, Set
+from typing import Any, MutableMapping, Optional, Sequence
 
 import pytest
+
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
@@ -152,7 +153,7 @@ tags_filter_tests = [
 
 @pytest.mark.parametrize("query, expected_result", tags_filter_tests)
 def test_get_filtered_mapping_keys(
-    query: ClickhouseQuery, expected_result: Set[str],
+    query: ClickhouseQuery, expected_result: Sequence[str],
 ) -> None:
     """
     Test the algorithm that identifies potential tag keys we can pre-filter
@@ -333,13 +334,15 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     query = parse_query(query_body, dataset)
     request = Request("a", query_body, query, HTTPRequestSettings(), "r")
     entity = get_entity(query.get_from_clause().key)
+    storage = entity.get_writable_storage()
+    assert storage is not None
     for p in entity.get_query_processors():
         p.process_query(query, request.settings)
 
     ArrayJoinKeyValueOptimizer("tags").process_query(query, request.settings)
 
     query_plan = SingleStorageQueryPlanBuilder(
-        storage=entity.get_writable_storage(), mappers=transaction_translator,
+        storage=storage, mappers=transaction_translator,
     ).build_and_rank_plans(query, request.settings)[0]
 
     return query_plan.query

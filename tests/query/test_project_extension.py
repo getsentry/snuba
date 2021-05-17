@@ -1,12 +1,12 @@
-from typing import Any, Mapping, Sequence
+from typing import Any, MutableMapping, Sequence, cast
 
 import pytest
 
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities import EntityKey
-from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.types import Condition
@@ -40,13 +40,14 @@ project_extension_test_data = [
     project_extension_test_data,
 )
 def test_project_extension_query_processing(
-    raw_data: Mapping[str, Any],
+    raw_data: MutableMapping[str, Any],
     expected_conditions: Sequence[Condition],
     expected_ast_conditions: Expression,
 ) -> None:
     extension = ProjectExtension(project_column="project_id")
-    valid_data = validate_jsonschema(raw_data, extension.get_schema())
-    query = Query({"conditions": []}, QueryEntity(EntityKey.EVENTS, ColumnSet([])))
+    schema = cast(MutableMapping[str, Any], extension.get_schema())
+    valid_data = validate_jsonschema(raw_data, schema)
+    query = Query(QueryEntity(EntityKey.EVENTS, ColumnSet([])))
     request_settings = HTTPRequestSettings()
 
     extension.get_processor().process_query(query, valid_data, request_settings)
@@ -55,9 +56,10 @@ def test_project_extension_query_processing(
 
 def test_project_extension_query_adds_rate_limits() -> None:
     extension = ProjectExtension(project_column="project_id")
+    schema = cast(MutableMapping[str, Any], extension.get_schema())
     raw_data = {"project": [1, 2]}
-    valid_data = validate_jsonschema(raw_data, extension.get_schema())
-    query = Query({"conditions": []}, QueryEntity(EntityKey.EVENTS, ColumnSet([])))
+    valid_data = validate_jsonschema(raw_data, schema)
+    query = Query(QueryEntity(EntityKey.EVENTS, ColumnSet([])))
     request_settings = HTTPRequestSettings()
 
     num_rate_limits_before_processing = len(request_settings.get_rate_limit_params())
@@ -75,9 +77,10 @@ def test_project_extension_query_adds_rate_limits() -> None:
 
 def test_project_extension_project_rate_limits_are_overridden() -> None:
     extension = ProjectExtension(project_column="project_id")
+    schema = cast(MutableMapping[str, Any], extension.get_schema())
     raw_data = {"project": [3, 4]}
-    valid_data = validate_jsonschema(raw_data, extension.get_schema())
-    query = Query({"conditions": []}, QueryEntity(EntityKey.EVENTS, ColumnSet([])))
+    valid_data = validate_jsonschema(raw_data, schema)
+    query = Query(QueryEntity(EntityKey.EVENTS, ColumnSet([])))
     request_settings = HTTPRequestSettings()
     state.set_config("project_per_second_limit_3", 5)
     state.set_config("project_concurrent_limit_3", 10)

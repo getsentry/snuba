@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Mapping, MutableSequence, Optional, Set
+from typing import Any, Dict, Mapping, MutableSequence, Optional, Set
 
 from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
@@ -91,7 +91,7 @@ class SnubaQueryMetadata:
     timer: Timer
     query_list: MutableSequence[ClickhouseQueryMetadata]
 
-    def to_dict(self) -> Mapping[str, Any]:
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "request": {
                 "id": self.request.id,
