@@ -1,13 +1,13 @@
 import uuid
 from datetime import datetime, timedelta
-from typing import Collection, Tuple
+from typing import Callable, Collection, Optional, Tuple
 
 from snuba.datasets.factory import get_dataset
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
+    LegacySubscriptionData,
     PartitionId,
     Subscription,
-    SubscriptionData,
     SubscriptionIdentifier,
 )
 from snuba.subscriptions.scheduler import SubscriptionScheduler
@@ -26,8 +26,12 @@ class TestSubscriptionScheduler:
     def build_subscription(self, resolution: timedelta) -> Subscription:
         return Subscription(
             SubscriptionIdentifier(self.partition_id, uuid.uuid4()),
-            SubscriptionData(
-                1, [], [["count()", "", "count"]], timedelta(minutes=1), resolution
+            LegacySubscriptionData(
+                project_id=1,
+                conditions=[],
+                aggregations=[["count()", "", "count"]],
+                time_window=timedelta(minutes=1),
+                resolution=resolution,
             ),
         )
 
@@ -43,7 +47,9 @@ class TestSubscriptionScheduler:
         start: timedelta,
         end: timedelta,
         expected: Collection[ScheduledTask[Subscription]],
-        sort_key=None,
+        sort_key: Optional[
+            Callable[[ScheduledTask[Subscription]], Tuple[datetime, uuid.UUID]]
+        ] = None,
     ) -> None:
         store = RedisSubscriptionDataStore(
             redis_client, self.dataset, self.partition_id,
