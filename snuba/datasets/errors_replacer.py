@@ -96,16 +96,20 @@ class LegacyReplacement(Replacement):
         if self.insert_query_template is None:
             return None
 
-        args: Dict[str, Any] = dict(self.query_args or ())
-        args["table_name"] = table_name
+        args = {
+            **self.query_args,
+            "table_name": table_name
+        }
         return self.insert_query_template % args
 
     def get_count_query(self, table_name: str) -> Optional[str]:
         if self.count_query_template is None:
             return None
 
-        args: Dict[str, Any] = dict(self.query_args or ())
-        args["table_name"] = table_name
+        args = {
+            **self.query_args,
+            "table_name": table_name
+        }
         return self.count_query_template % args
 
 
