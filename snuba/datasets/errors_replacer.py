@@ -556,6 +556,30 @@ def _build_grouping_hashes_filter(
     message: Mapping[str, Any], state_name: ReplacerState
 ) -> Optional[Tuple[List[str], List[str], MutableMapping[str, str]]]:
     hashes = message.get("hashes") or []
+    # hierarchical_hashes is a mapping from one entry of the
+    # hierarchical_hashes arraycolumn to the corresponding primary hash.
+    #
+    # Example flow:
+    #
+    # 1. Two events, with hierarchical_hashes=[a, b, c] and hierarchical_hashes=[a, b2, c2]
+    #
+    #    a = "hash to group by 1 frame"
+    #    b/b2 = "hash to group by 2 frames"
+    #
+    #    primary_hash = hierarchical_hashes[0]
+    #
+    # 2. Sentry by default has GroupHash(hash=a) in DB
+    #
+    # 3. User wants to split up GroupHash(hash=a) into two: GroupHash(hash=b)
+    #    and GroupHash(hash=b2).
+    #
+    # 4. Sentry creates two group models out of one, with the corresponding group hashes.
+    #
+    # 5. Sentry emits replacement unmerge(hierarchical_hashes={b: a}) and
+    #    unmerge(hierarchical_hashes={b2: a})
+    #
+    #    `a` is passed to Snuba only such that it can do `PREWHERE primary_hash = a`,
+    #    it serves no functional purpose.
     hierarchical_hashes = message.get("hierarchical_hashes") or {}
     if not hashes and not hierarchical_hashes:
         return None
@@ -622,7 +646,16 @@ def process_unmerge(
 
     prewhere, where, query_args = hashes_filter
 
-    prewhere.append("group_id = %(previous_group_id)s")
+    # group_id cannot be part of PREWHERE because FINAL is applied before
+    # PREWHERE, meaning if group_id was part of prewhere we would see events
+    # that are no longer part of this group.
+    #
+    # As long as group_id is not in PREWHERE, the query result is guaranteed to
+    # be constrained to one group. primary_hash can now be in PREWHERE, if that
+    # were not OK it would mean we have a replacement row in storage that did
+    # not change group_id, but did change primary_hash. Only reprocessing can
+    # change primary_hash at the moment, but is guaranteed to change group_id.
+    where.append("group_id = %(previous_group_id)s")
     where.append("project_id = %(project_id)s")
     where.append("received <= CAST('%(timestamp)s' AS DateTime)")
     where.append("NOT deleted")
