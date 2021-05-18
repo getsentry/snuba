@@ -14,7 +14,7 @@ from snuba.query.types import Condition
 from snuba.request import Language, Request
 from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
-from snuba.request.validation import build_legacy_parser, build_request
+from snuba.request.validation import build_request, parse_legacy_query
 from snuba.utils.metrics.timer import Timer
 
 SUBSCRIPTION_REFERRER = "subscription"
@@ -129,9 +129,10 @@ class LegacySubscriptionData(SubscriptionData):
                 "from_date": (timestamp - self.time_window).isoformat(),
                 "to_date": timestamp.isoformat(),
             },
-            build_legacy_parser(dataset),
+            parse_legacy_query,
             SubscriptionRequestSettings,
             schema,
+            dataset,
             timer,
             SUBSCRIPTION_REFERRER,
         )

@@ -48,9 +48,9 @@ from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeExce
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import (
-    build_api_snql_parser,
-    build_legacy_parser,
     build_request,
+    parse_legacy_query,
+    parse_snql_query_api,
 )
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
@@ -396,16 +396,18 @@ def dataset_query(
 
     if language == Language.SNQL:
         metrics.increment("snql.query.incoming", tags={"referrer": referrer})
-        parser = build_api_snql_parser(dataset)
+        parser = parse_snql_query_api
     else:
-        parser = build_legacy_parser(dataset)
+        parser = parse_legacy_query
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build_with_extensions(
             dataset.get_default_entity().get_extensions(), HTTPRequestSettings, language
         )
 
-    request = build_request(body, parser, HTTPRequestSettings, schema, timer, referrer)
+    request = build_request(
+        body, parser, HTTPRequestSettings, schema, dataset, timer, referrer
+    )
 
     try:
         result = parse_and_run_query(dataset, request, timer)

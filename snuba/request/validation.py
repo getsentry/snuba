@@ -21,19 +21,20 @@ from snuba.request.request_settings import (
 from snuba.request.schema import RequestParts, RequestSchema, apply_query_extensions
 from snuba.utils.metrics.timer import Timer
 
-Parser = Callable[[RequestParts, RequestSettings], Union[Query, CompositeQuery[Entity]]]
+Parser = Callable[
+    [RequestParts, RequestSettings, Dataset], Union[Query, CompositeQuery[Entity]]
+]
 
 
-def build_api_snql_parser(dataset: Dataset) -> Parser:
-    def parse(
-        request_parts: RequestParts, settings: RequestSettings
-    ) -> Union[Query, CompositeQuery[Entity]]:
-        return parse_snql_query(request_parts.query["query"], dataset)
-
-    return parse
+def parse_snql_query_api(
+    request_parts: RequestParts, settings: RequestSettings, dataset: Dataset
+) -> Union[Query, CompositeQuery[Entity]]:
+    return parse_snql_query(request_parts.query["query"], dataset)
 
 
-def build_subscriptions_snql_parser(dataset: Dataset) -> Parser:
+def parse_snql_query_subscriptions(
+    request_parts: RequestParts, settings: RequestSettings, dataset: Dataset
+) -> Union[Query, CompositeQuery[Entity]]:
     """
     Provides a parser for SnQL subscriptions (which does not do the
     full validation as timestamp conditions are added by the subscription
@@ -42,15 +43,12 @@ def build_subscriptions_snql_parser(dataset: Dataset) -> Parser:
     raise NotImplementedError
 
 
-def build_legacy_parser(dataset: Dataset) -> Parser:
-    def parse(
-        request_parts: RequestParts, settings: RequestSettings
-    ) -> Union[Query, CompositeQuery[Entity]]:
-        query = parse_query(request_parts.query, dataset)
-        apply_query_extensions(query, request_parts.extensions, settings)
-        return query
-
-    return parse
+def parse_legacy_query(
+    request_parts: RequestParts, settings: RequestSettings, dataset: Dataset
+) -> Union[Query, CompositeQuery[Entity]]:
+    query = parse_query(request_parts.query, dataset)
+    apply_query_extensions(query, request_parts.extensions, settings)
+    return query
 
 
 def build_request(
@@ -58,6 +56,7 @@ def build_request(
     parser: Parser,
     settings_class: Type[RequestSettings],
     schema: RequestSchema,
+    dataset: Dataset,
     timer: Timer,
     referrer: str,
 ) -> Request:
@@ -71,7 +70,7 @@ def build_request(
             elif isinstance(settings_class, type(SubscriptionRequestSettings)):
                 settings_obj = settings_class()
 
-            query = parser(request_parts, settings_obj)
+            query = parser(request_parts, settings_obj, dataset)
 
             request_id = uuid.uuid4().hex
             request = Request(
