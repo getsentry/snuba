@@ -1,14 +1,15 @@
-import pytest
 from datetime import datetime, timedelta
-from typing import Any, Mapping
+from typing import Any, MutableMapping, cast
+
+import pytest
 
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities import EntityKey
 from snuba.query.conditions import (
-    binary_condition,
     BooleanFunctions,
     ConditionFunctions,
+    binary_condition,
 )
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, Expression, Literal
@@ -78,7 +79,7 @@ test_data = [
     "raw_data, expected_ast_condition, expected_granularity", test_data,
 )
 def test_query_extension_processing(
-    raw_data: Mapping[str, Any],
+    raw_data: MutableMapping[str, Any],
     expected_ast_condition: Expression,
     expected_granularity: int,
 ) -> None:
@@ -88,8 +89,11 @@ def test_query_extension_processing(
         default_window=timedelta(days=5),
         timestamp_column="timestamp",
     )
-    valid_data = validate_jsonschema(raw_data, extension.get_schema())
-    query = Query({"conditions": []}, QueryEntity(EntityKey.EVENTS, ColumnSet([])))
+
+    valid_data = validate_jsonschema(
+        raw_data, cast(MutableMapping[str, Any], extension.get_schema())
+    )
+    query = Query(QueryEntity(EntityKey.EVENTS, ColumnSet([])))
 
     request_settings = HTTPRequestSettings()
 

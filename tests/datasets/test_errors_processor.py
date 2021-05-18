@@ -3,8 +3,10 @@ from uuid import UUID
 
 import pytz
 
+from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.errors_processor import ErrorsProcessor
+from snuba.datasets.events_processor_base import InsertEvent
 from snuba.processor import InsertBatch
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 
@@ -16,204 +18,209 @@ def test_error_processor() -> None:
     error = (
         2,
         "insert",
-        {
-            "event_id": "dcb9d002cac548c795d1c9adbfc68040",
-            "group_id": 100,
-            "project_id": 300688,
-            "release": None,
-            "dist": None,
-            "platform": "python",
-            "message": "",
-            "datetime": error_timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-            "primary_hash": "04233d08ac90cf6fc015b1be5932e7e2",
-            "data": {
+        InsertEvent(
+            {
+                "organization_id": 1,
+                "retention_days": settings.DEFAULT_RETENTION_DAYS,
                 "event_id": "dcb9d002cac548c795d1c9adbfc68040",
+                "group_id": 100,
                 "project_id": 300688,
-                "release": None,
-                "dist": None,
                 "platform": "python",
                 "message": "",
                 "datetime": error_timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                "tags": [
-                    ["handled", "no"],
-                    ["level", "error"],
-                    ["mechanism", "excepthook"],
-                    ["runtime", "CPython 3.7.6"],
-                    ["runtime.name", "CPython"],
-                    ["server_name", "snuba"],
-                    ["environment", "dev"],
-                    ["sentry:user", "this_is_me"],
-                    ["sentry:release", "4d23338017cdee67daf25f2c"],
-                ],
-                "user": {
-                    "username": "me",
-                    "ip_address": "127.0.0.1",
-                    "id": "still_me",
-                    "email": "me@myself.org",
-                    "geo": {
-                        "country_code": "XY",
-                        "region": "fake_region",
-                        "city": "fake_city",
+                "primary_hash": "04233d08ac90cf6fc015b1be5932e7e2",
+                "data": {
+                    "event_id": "dcb9d002cac548c795d1c9adbfc68040",
+                    "project_id": 300688,
+                    "release": None,
+                    "dist": None,
+                    "platform": "python",
+                    "message": "",
+                    "datetime": error_timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                    "tags": [
+                        ["handled", "no"],
+                        ["level", "error"],
+                        ["mechanism", "excepthook"],
+                        ["runtime", "CPython 3.7.6"],
+                        ["runtime.name", "CPython"],
+                        ["server_name", "snuba"],
+                        ["environment", "dev"],
+                        ["sentry:user", "this_is_me"],
+                        ["sentry:release", "4d23338017cdee67daf25f2c"],
+                    ],
+                    "user": {
+                        "username": "me",
+                        "ip_address": "127.0.0.1",
+                        "id": "still_me",
+                        "email": "me@myself.org",
+                        "geo": {
+                            "country_code": "XY",
+                            "region": "fake_region",
+                            "city": "fake_city",
+                        },
                     },
-                },
-                "request": {
-                    "url": "http://127.0.0.1:/query",
-                    "headers": [
-                        ["Accept-Encoding", "identity"],
-                        ["Content-Length", "398"],
-                        ["Host", "127.0.0.1:"],
-                        ["Referer", "tagstore.something"],
-                        ["Trace", "8fa73032d-1"],
-                    ],
-                    "data": "",
-                    "method": "POST",
-                    "env": {"SERVER_PORT": "1010", "SERVER_NAME": "snuba"},
-                },
-                "_relay_processed": True,
-                "breadcrumbs": {
-                    "values": [
-                        {
-                            "category": "snuba.utils.streams.batching",
-                            "level": "info",
-                            "timestamp": error_timestamp.timestamp(),
-                            "data": {
-                                "asctime": error_timestamp.strftime(
-                                    PAYLOAD_DATETIME_FORMAT
-                                )
+                    "request": {
+                        "url": "http://127.0.0.1:/query",
+                        "headers": [
+                            ["Accept-Encoding", "identity"],
+                            ["Content-Length", "398"],
+                            ["Host", "127.0.0.1:"],
+                            ["Referer", "tagstore.something"],
+                            ["Trace", "8fa73032d-1"],
+                        ],
+                        "data": "",
+                        "method": "POST",
+                        "env": {"SERVER_PORT": "1010", "SERVER_NAME": "snuba"},
+                    },
+                    "_relay_processed": True,
+                    "breadcrumbs": {
+                        "values": [
+                            {
+                                "category": "snuba.utils.streams.batching",
+                                "level": "info",
+                                "timestamp": error_timestamp.timestamp(),
+                                "data": {
+                                    "asctime": error_timestamp.strftime(
+                                        PAYLOAD_DATETIME_FORMAT
+                                    )
+                                },
+                                "message": "New partitions assigned: {}",
+                                "type": "default",
                             },
-                            "message": "New partitions assigned: {}",
-                            "type": "default",
-                        },
-                        {
-                            "category": "snuba.utils.streams.batching",
-                            "level": "info",
-                            "timestamp": error_timestamp.timestamp(),
-                            "data": {
-                                "asctime": error_timestamp.strftime(
-                                    PAYLOAD_DATETIME_FORMAT
-                                )
+                            {
+                                "category": "snuba.utils.streams.batching",
+                                "level": "info",
+                                "timestamp": error_timestamp.timestamp(),
+                                "data": {
+                                    "asctime": error_timestamp.strftime(
+                                        PAYLOAD_DATETIME_FORMAT
+                                    )
+                                },
+                                "message": "Flushing ",
+                                "type": "default",
                             },
-                            "message": "Flushing ",
-                            "type": "default",
-                        },
-                        {
-                            "category": "httplib",
-                            "timestamp": error_timestamp.timestamp(),
-                            "type": "http",
-                            "data": {
-                                "url": "http://127.0.0.1:8123/",
-                                "status_code": 500,
-                                "reason": "Internal Server Error",
-                                "method": "POST",
+                            {
+                                "category": "httplib",
+                                "timestamp": error_timestamp.timestamp(),
+                                "type": "http",
+                                "data": {
+                                    "url": "http://127.0.0.1:8123/",
+                                    "status_code": 500,
+                                    "reason": "Internal Server Error",
+                                    "method": "POST",
+                                },
+                                "level": "info",
                             },
-                            "level": "info",
-                        },
-                    ]
-                },
-                "contexts": {
-                    "runtime": {
-                        "version": "3.7.6",
-                        "type": "runtime",
-                        "name": "CPython",
-                        "build": "3.7.6",
-                    }
-                },
-                "culprit": "snuba.clickhouse.http in write",
-                "exception": {
-                    "values": [
-                        {
-                            "stacktrace": {
-                                "frames": [
-                                    {
-                                        "function": "<module>",
-                                        "abs_path": "/usr/local/bin/snuba",
-                                        "pre_context": [
-                                            "from pkg_resources import load_entry_point",
-                                            "",
-                                            "if __name__ == '__main__':",
-                                            "    sys.argv[0] = re.sub(r'(-script\\.pyw?|\\.exe)?$', '', sys.argv[0])",
-                                            "    sys.exit(",
-                                        ],
-                                        "post_context": ["    )"],
-                                        "vars": {
-                                            "__spec__": "None",
-                                            "__builtins__": "<module 'builtins' (built-in)>",
-                                            "__annotations__": {},
-                                            "__file__": "'/usr/local/bin/snuba'",
-                                            "__loader__": "<_frozen_importlib_external.SourceFileLoader object at 0x7fbbc3a36ed0>",
-                                            "__requires__": "'snuba'",
-                                            "__cached__": "None",
-                                            "__name__": "'__main__'",
-                                            "__package__": "None",
-                                            "__doc__": "None",
-                                        },
-                                        "module": "__main__",
-                                        "filename": "snuba",
-                                        "lineno": 11,
-                                        "in_app": False,
-                                        "data": {"orig_in_app": 1},
-                                        "context_line": "        load_entry_point('snuba', 'console_scripts', 'snuba')()",
-                                    },
-                                ]
-                            },
-                            "type": "ClickHouseError",
-                            "module": "snuba.clickhouse.http",
-                            "value": "[171] DB::Exception: Block structure mismatch",
-                            "mechanism": {"type": "excepthook", "handled": False},
+                        ]
+                    },
+                    "contexts": {
+                        "runtime": {
+                            "version": "3.7.6",
+                            "type": "runtime",
+                            "name": "CPython",
+                            "build": "3.7.6",
                         }
-                    ]
-                },
-                "extra": {
-                    "sys.argv": [
-                        "/usr/local/bin/snuba",
-                        "consumer",
-                        "--dataset",
-                        "transactions",
-                    ]
-                },
-                "fingerprint": ["{{ default }}"],
-                "hashes": ["c8b21c571231e989060b9110a2ade7d3"],
-                "hierarchical_hashes": [
-                    "04233d08ac90cf6fc015b1be5932e7e3",
-                    "04233d08ac90cf6fc015b1be5932e7e4",
-                ],
-                "key_id": "537125",
-                "level": "error",
-                "location": "snuba/clickhouse/http.py",
-                "logger": "",
-                "metadata": {
-                    "function": "write",
-                    "type": "ClickHouseError",
-                    "value": "[171] DB::Exception: Block structure mismatch",
-                    "filename": "snuba/something.py",
-                },
-                "modules": {
-                    "cffi": "1.13.2",
-                    "ipython-genutils": "0.2.0",
-                    "isodate": "0.6.0",
-                },
-                "received": received_timestamp.timestamp(),
-                "sdk": {
-                    "version": "0.0.0.0.1",
-                    "name": "sentry.python",
-                    "packages": [{"version": "0.0.0.0.1", "name": "pypi:sentry-sdk"}],
-                    "integrations": [
-                        "argv",
-                        "atexit",
-                        "dedupe",
-                        "excepthook",
-                        "logging",
-                        "modules",
-                        "stdlib",
-                        "threading",
+                    },
+                    "culprit": "snuba.clickhouse.http in write",
+                    "exception": {
+                        "values": [
+                            {
+                                "stacktrace": {
+                                    "frames": [
+                                        {
+                                            "function": "<module>",
+                                            "abs_path": "/usr/local/bin/snuba",
+                                            "pre_context": [
+                                                "from pkg_resources import load_entry_point",
+                                                "",
+                                                "if __name__ == '__main__':",
+                                                "    sys.argv[0] = re.sub(r'(-script\\.pyw?|\\.exe)?$', '', sys.argv[0])",
+                                                "    sys.exit(",
+                                            ],
+                                            "post_context": ["    )"],
+                                            "vars": {
+                                                "__spec__": "None",
+                                                "__builtins__": "<module 'builtins' (built-in)>",
+                                                "__annotations__": {},
+                                                "__file__": "'/usr/local/bin/snuba'",
+                                                "__loader__": "<_frozen_importlib_external.SourceFileLoader object at 0x7fbbc3a36ed0>",
+                                                "__requires__": "'snuba'",
+                                                "__cached__": "None",
+                                                "__name__": "'__main__'",
+                                                "__package__": "None",
+                                                "__doc__": "None",
+                                            },
+                                            "module": "__main__",
+                                            "filename": "snuba",
+                                            "lineno": 11,
+                                            "in_app": False,
+                                            "data": {"orig_in_app": 1},
+                                            "context_line": "        load_entry_point('snuba', 'console_scripts', 'snuba')()",
+                                        },
+                                    ]
+                                },
+                                "type": "ClickHouseError",
+                                "module": "snuba.clickhouse.http",
+                                "value": "[171] DB::Exception: Block structure mismatch",
+                                "mechanism": {"type": "excepthook", "handled": False},
+                            }
+                        ]
+                    },
+                    "extra": {
+                        "sys.argv": [
+                            "/usr/local/bin/snuba",
+                            "consumer",
+                            "--dataset",
+                            "transactions",
+                        ]
+                    },
+                    "fingerprint": ["{{ default }}"],
+                    "hashes": ["c8b21c571231e989060b9110a2ade7d3"],
+                    "hierarchical_hashes": [
+                        "04233d08ac90cf6fc015b1be5932e7e3",
+                        "04233d08ac90cf6fc015b1be5932e7e4",
                     ],
+                    "key_id": "537125",
+                    "level": "error",
+                    "location": "snuba/clickhouse/http.py",
+                    "logger": "",
+                    "metadata": {
+                        "function": "write",
+                        "type": "ClickHouseError",
+                        "value": "[171] DB::Exception: Block structure mismatch",
+                        "filename": "snuba/something.py",
+                    },
+                    "modules": {
+                        "cffi": "1.13.2",
+                        "ipython-genutils": "0.2.0",
+                        "isodate": "0.6.0",
+                    },
+                    "received": received_timestamp.timestamp(),
+                    "sdk": {
+                        "version": "0.0.0.0.1",
+                        "name": "sentry.python",
+                        "packages": [
+                            {"version": "0.0.0.0.1", "name": "pypi:sentry-sdk"}
+                        ],
+                        "integrations": [
+                            "argv",
+                            "atexit",
+                            "dedupe",
+                            "excepthook",
+                            "logging",
+                            "modules",
+                            "stdlib",
+                            "threading",
+                        ],
+                    },
+                    "timestamp": error_timestamp.timestamp(),
+                    "title": "ClickHouseError: [171] DB::Exception: Block structure mismatch",
+                    "type": "error",
+                    "version": "7",
                 },
-                "timestamp": error_timestamp.timestamp(),
-                "title": "ClickHouseError: [171] DB::Exception: Block structure mismatch",
-                "type": "error",
-                "version": "7",
-            },
-        },
+            }
+        ),
+        None,
     )
 
     expected_result = {

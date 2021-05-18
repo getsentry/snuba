@@ -1,14 +1,14 @@
 import calendar
-import pytest
-import pytz
 import time
 import uuid
-import simplejson as json
 from datetime import datetime, timedelta
-from dateutil.parser import parse as parse_datetime
 from typing import Any, Callable, List, Sequence, Tuple, Union
 from unittest.mock import MagicMock, patch
 
+import pytest
+import pytz
+import simplejson as json
+from dateutil.parser import parse as parse_datetime
 from sentry_sdk import Client, Hub
 
 from snuba import settings, state
@@ -157,15 +157,15 @@ class SimpleAPITest(BaseApiTest):
 
 
 class TestApi(SimpleAPITest):
-    @pytest.fixture  # type: ignore
+    @pytest.fixture
     def test_entity(self) -> Union[str, Tuple[str, str]]:
         return "events"
 
-    @pytest.fixture  # type: ignore
+    @pytest.fixture
     def test_app(self) -> Any:
         return self.app
 
-    @pytest.fixture(autouse=True)  # type: ignore
+    @pytest.fixture(autouse=True)
     def setup_post(self, _build_snql_post_methods: Callable[..., Any]) -> None:
         self.post = _build_snql_post_methods
 
@@ -1541,7 +1541,7 @@ class TestApi(SimpleAPITest):
         result = json.loads(self.post(json.dumps(query)).data)
         assert result["meta"] == [{"name": "timestamp", "type": "DateTime"}]
 
-    @pytest.mark.xfail  # type: ignore
+    @pytest.mark.xfail
     def test_row_stats(self) -> None:
         query = {
             "project": 1,
