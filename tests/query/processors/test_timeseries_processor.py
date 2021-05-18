@@ -1,6 +1,7 @@
 from typing import Optional
 
 import pytest
+
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.datasets.entities import EntityKey
@@ -206,7 +207,9 @@ def test_timeseries_format_expressions(
     )
     assert ret == formatted_column
     if condition:
-        ret = unprocessed.get_condition().accept(ClickhouseExpressionFormatter())
+        query_condition = unprocessed.get_condition()
+        assert query_condition is not None
+        ret = query_condition.accept(ClickhouseExpressionFormatter())
         assert formatted_condition == ret
 
     assert extract_granularity_from_query(unprocessed, "finish_ts") == granularity

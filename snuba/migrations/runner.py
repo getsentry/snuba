@@ -9,6 +9,7 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import (
+    CLUSTERS,
     ClickhouseClientSettings,
     ClickhouseNodeType,
     get_cluster,
