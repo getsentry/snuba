@@ -13,7 +13,7 @@ Once this boolean variable is set, one of two Clickhouse Docker containers will 
 More information on migrations in general can be found `here <https://github.com/getsentry/snuba/blob/master/MIGRATIONS.md>`_.
 
 Enabling Local Mode
-=======================
+=====================
 
 In your local Sentry environment configuration, set ``SENTRY_DISTRIBUTED_CLICKHOUSE_TABLES``
 to False. Start up the corresponding Clickhouse container (``sentry devservices up clickhouse``).
@@ -24,7 +24,7 @@ migrations, or dropping certain databases/tables), run migrations as expected
 
 
 Enabling Distributed Mode
-==========================
+============================
 
 In your local Sentry environment configuration, set ``SENTRY_DISTRIBUTED_CLICKHOUSE_TABLES``
 to True. Start up the corresponding Clickhouse container (``sentry devservices up clickhouse_dist``).
