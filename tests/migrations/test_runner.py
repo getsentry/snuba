@@ -5,10 +5,8 @@ from unittest.mock import patch
 import pytest
 
 from snuba import settings
-from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import StorageKey, factory
 from snuba.datasets.storages.factory import STORAGES, get_storage, get_writable_storage
@@ -21,8 +19,6 @@ from snuba.migrations.groups import (
 from snuba.migrations.parse_schema import get_local_schema
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
-from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.writer import BatchWriterEncoderWrapper
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
 
@@ -274,32 +270,18 @@ def test_transactions_compatibility() -> None:
 
 
 def generate_transactions() -> None:
-    from datetime import datetime
+    storage = get_writable_storage(StorageKey.TRANSACTIONS)
 
-    table_writer = get_writable_storage(StorageKey.TRANSACTIONS).get_table_writer()
+    transactions = []
 
-    rows = []
-
-    for i in range(5):
+    for _i in range(5):
         raw_transaction = get_raw_transaction()
         # Older versions of this table did not have measurements
         del raw_transaction["data"]["measurements"]
         del raw_transaction["data"]["breakdowns"]
+        transactions.append(raw_transaction)
 
-        processed = (
-            table_writer.get_stream_loader()
-            .get_processor()
-            .process_message(
-                (2, "insert", raw_transaction),
-                KafkaMessageMetadata(0, 0, datetime.utcnow()),
-            )
-        )
-        rows.extend(processed.rows)
-
-    BatchWriterEncoderWrapper(
-        table_writer.get_batch_writer(metrics=DummyMetricsBackend(strict=True)),
-        JSONRowEncoder(),
-    ).write(rows)
+    write_unprocessed_events(storage, transactions)
 
 
 def test_groupedmessages_compatibility() -> None:

@@ -2,28 +2,25 @@ from datetime import datetime
 from typing import MutableSequence, Sequence
 
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.clickhouse.http import JSONRowEncoder
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.storage import WritableStorage
-from snuba.processor import InsertBatch, ProcessedMessage
+from snuba.processor import JSONRowInsertBatch, ProcessedMessage
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 
 def write_processed_messages(
     storage: WritableStorage, messages: Sequence[ProcessedMessage]
 ) -> None:
-    rows: MutableSequence[WriterTableRow] = []
+    rows: MutableSequence[bytes] = []
     for message in messages:
-        assert isinstance(message, InsertBatch)
+        assert isinstance(message, JSONRowInsertBatch)
         rows.extend(message.rows)
 
-    BatchWriterEncoderWrapper(
-        storage.get_table_writer().get_batch_writer(
-            metrics=DummyMetricsBackend(strict=True)
-        ),
-        JSONRowEncoder(),
-    ).write(rows)
+    writer = storage.get_table_writer().get_batch_writer(
+        metrics=DummyMetricsBackend(strict=True)
+    )
+
+    writer.write(rows)
 
 
 def write_unprocessed_events(

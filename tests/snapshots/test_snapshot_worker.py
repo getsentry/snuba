@@ -5,12 +5,12 @@ from uuid import uuid1
 import pytest
 import pytz
 
-from snuba.consumers.types import KafkaMessageMetadata
 from snuba.consumers.snapshot_worker import SnapshotProcessor
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.cdc.types import InsertEvent
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.processor import InsertBatch, ProcessedMessage
+from snuba.processor import InsertBatch, ProcessedMessage, json_encode_insert_batch
 from snuba.snapshots import SnapshotId
 from snuba.snapshots.postgres_snapshot import Xid
 from snuba.stateful_consumer.control_protocol import TransactionData
@@ -111,8 +111,8 @@ test_data = [
     (90, None),
     (100, None),
     (110, None),
-    (120, InsertBatch([PROCESSED], None)),
-    (210, InsertBatch([PROCESSED], None)),
+    (120, json_encode_insert_batch(InsertBatch([PROCESSED], None))),
+    (210, json_encode_insert_batch(InsertBatch([PROCESSED], None))),
 ]
 
 

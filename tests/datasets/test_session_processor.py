@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta, timezone
 
-from snuba.datasets.sessions_processor import SessionsProcessor
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.processor import InsertBatch
+from snuba.datasets.sessions_processor import SessionsProcessor
+from snuba.processor import InsertBatch, json_encode_insert_batch
 
 
 class TestSessionProcessor:
@@ -32,26 +32,30 @@ class TestSessionProcessor:
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)
         )
-        assert SessionsProcessor().process_message(payload, meta) == InsertBatch(
-            [
-                {
-                    "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf",
-                    "quantity": 1,
-                    "duration": 1947490,
-                    "environment": "production",
-                    "org_id": 1,
-                    "project_id": 42,
-                    "release": "sentry-test@1.0.0",
-                    "retention_days": 90,
-                    "seq": 42,
-                    "errors": 0,
-                    "session_id": "8333339f-5675-4f89-a9a0-1c935255ab58",
-                    "started": started.replace(tzinfo=None),
-                    "status": 1,
-                    "received": timestamp.replace(tzinfo=None),
-                }
-            ],
-            None,
+        assert SessionsProcessor().process_message(
+            payload, meta
+        ) == json_encode_insert_batch(
+            InsertBatch(
+                [
+                    {
+                        "session_id": "8333339f-5675-4f89-a9a0-1c935255ab58",
+                        "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf",
+                        "quantity": 1,
+                        "seq": 42,
+                        "org_id": 1,
+                        "project_id": 42,
+                        "retention_days": 90,
+                        "duration": 1947490,
+                        "status": 1,
+                        "errors": 0,
+                        "received": timestamp.replace(tzinfo=None),
+                        "started": started.replace(tzinfo=None),
+                        "release": "sentry-test@1.0.0",
+                        "environment": "production",
+                    }
+                ],
+                None,
+            )
         )
 
     def test_ingest_session_event_abnormal(self) -> None:
@@ -80,27 +84,31 @@ class TestSessionProcessor:
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)
         )
-        assert SessionsProcessor().process_message(payload, meta) == InsertBatch(
-            [
-                {
-                    "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf",
-                    "quantity": 1,
-                    "duration": 1947490,
-                    "environment": "production",
-                    "org_id": 1,
-                    "project_id": 42,
-                    "release": "sentry-test@1.0.0",
-                    "retention_days": 90,
-                    "seq": 42,
-                    # abnormal counts as at least one error
-                    "errors": 1,
-                    "session_id": "8333339f-5675-4f89-a9a0-1c935255ab58",
-                    "started": started.replace(tzinfo=None),
-                    "status": 3,
-                    "received": timestamp.replace(tzinfo=None),
-                }
-            ],
-            None,
+        assert SessionsProcessor().process_message(
+            payload, meta
+        ) == json_encode_insert_batch(
+            InsertBatch(
+                [
+                    {
+                        "session_id": "8333339f-5675-4f89-a9a0-1c935255ab58",
+                        "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf",
+                        "quantity": 1,
+                        "seq": 42,
+                        "org_id": 1,
+                        "project_id": 42,
+                        "retention_days": 90,
+                        "duration": 1947490,
+                        "status": 3,
+                        # abnormal counts as at least one error
+                        "errors": 1,
+                        "received": timestamp.replace(tzinfo=None),
+                        "started": started.replace(tzinfo=None),
+                        "release": "sentry-test@1.0.0",
+                        "environment": "production",
+                    }
+                ],
+                None,
+            )
         )
 
     def test_ingest_session_event_crashed(self) -> None:
@@ -129,25 +137,29 @@ class TestSessionProcessor:
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)
         )
-        assert SessionsProcessor().process_message(payload, meta) == InsertBatch(
-            [
-                {
-                    "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf",
-                    "quantity": 1,
-                    "duration": 1947490,
-                    "environment": "production",
-                    "org_id": 1,
-                    "project_id": 42,
-                    "release": "sentry-test@1.0.0",
-                    "retention_days": 90,
-                    "seq": 42,
-                    # abnormal counts as at least one error
-                    "errors": 1,
-                    "session_id": "8333339f-5675-4f89-a9a0-1c935255ab58",
-                    "started": started.replace(tzinfo=None),
-                    "status": 2,
-                    "received": timestamp.replace(tzinfo=None),
-                }
-            ],
-            None,
+        assert SessionsProcessor().process_message(
+            payload, meta
+        ) == json_encode_insert_batch(
+            InsertBatch(
+                [
+                    {
+                        "session_id": "8333339f-5675-4f89-a9a0-1c935255ab58",
+                        "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf",
+                        "quantity": 1,
+                        "seq": 42,
+                        "org_id": 1,
+                        "project_id": 42,
+                        "retention_days": 90,
+                        "duration": 1947490,
+                        "status": 2,
+                        # abnormal counts as at least one error
+                        "errors": 1,
+                        "received": timestamp.replace(tzinfo=None),
+                        "started": started.replace(tzinfo=None),
+                        "release": "sentry-test@1.0.0",
+                        "environment": "production",
+                    }
+                ],
+                None,
+            )
         )

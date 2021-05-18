@@ -6,9 +6,8 @@ from datetime import datetime
 from typing import Any, List, Mapping, Optional, Sequence, Type
 
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
+from snuba.processor import InsertBatch, ProcessedStreamMessage, StreamMessageProcessor
 from snuba.writer import WriterTableRow
-
 
 POSTGRES_DATE_FORMAT_WITH_NS = "%Y-%m-%d %H:%M:%S.%f%z"
 POSTGRES_DATE_FORMAT_WITHOUT_NS = "%Y-%m-%d %H:%M:%S%z"
@@ -65,7 +64,7 @@ class CdcMessageRow(ABC):
         raise NotImplementedError
 
 
-class CdcProcessor(MessageProcessor):
+class CdcProcessor(StreamMessageProcessor):
     def __init__(self, pg_table: str, message_row_class: Type[CdcMessageRow]):
         self.pg_table = pg_table
         self._message_row_class = message_row_class
@@ -111,9 +110,9 @@ class CdcProcessor(MessageProcessor):
     ) -> Sequence[WriterTableRow]:
         return []
 
-    def process_message(
+    def process_stream_message(
         self, value: Mapping[str, Any], metadata: KafkaMessageMetadata
-    ) -> Optional[ProcessedMessage]:
+    ) -> Optional[ProcessedStreamMessage]:
         assert isinstance(value, dict)
 
         offset = metadata.offset

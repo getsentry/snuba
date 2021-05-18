@@ -3,6 +3,7 @@ import re
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from hashlib import md5
+from pickle import PickleBuffer
 from typing import (
     Any,
     Dict,
@@ -18,10 +19,10 @@ from typing import (
 
 import simplejson as json
 
+from snuba.clickhouse.http import JSONRow, JSONRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.util import force_bytes
 from snuba.writer import WriterTableRow
-
 
 HASH_RE = re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE)
 MAX_UINT16 = 2 ** 16 - 1
@@ -39,7 +40,32 @@ class ReplacementBatch(NamedTuple):
     values: Sequence[Any]
 
 
-ProcessedMessage = Union[InsertBatch, ReplacementBatch]
+class JSONRowInsertBatch(NamedTuple):
+    rows: Sequence[JSONRow]
+    origin_timestamp: Optional[datetime]
+
+    def __reduce_ex__(
+        self, protocol: int
+    ) -> Tuple[Any, Tuple[Sequence[Any], Optional[datetime]]]:
+        if protocol >= 5:
+            return (
+                type(self),
+                ([PickleBuffer(row) for row in self.rows], self.origin_timestamp),
+            )
+        else:
+            return type(self), (self.rows, self.origin_timestamp)
+
+
+ProcessedMessage = Union[JSONRowInsertBatch, ReplacementBatch]
+ProcessedStreamMessage = Union[InsertBatch, ReplacementBatch]
+json_row_encoder = JSONRowEncoder()
+
+
+def json_encode_insert_batch(message: InsertBatch) -> JSONRowInsertBatch:
+    return JSONRowInsertBatch(
+        [json_row_encoder.encode(row) for row in message.rows],
+        message.origin_timestamp,
+    )
 
 
 class MessageProcessor(ABC):
@@ -52,6 +78,23 @@ class MessageProcessor(ABC):
     def process_message(
         self, message: Any, metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
+        raise NotImplementedError
+
+
+class StreamMessageProcessor(MessageProcessor, ABC):
+    def process_message(
+        self, message: Any, metadata: KafkaMessageMetadata
+    ) -> Optional[ProcessedMessage]:
+        result = self.process_stream_message(message, metadata)
+        if isinstance(result, InsertBatch):
+            return json_encode_insert_batch(result)
+        else:
+            return result
+
+    @abstractmethod
+    def process_stream_message(
+        self, message: Any, metadata: KafkaMessageMetadata
+    ) -> Optional[ProcessedStreamMessage]:
         raise NotImplementedError
 
 

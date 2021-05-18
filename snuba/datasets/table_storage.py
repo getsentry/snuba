@@ -10,7 +10,7 @@ from snuba.clusters.cluster import (
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
-from snuba.processor import MessageProcessor
+from snuba.processor import MessageProcessor, StreamMessageProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.snapshots import BulkLoadSource
 from snuba.snapshots.loaders import BulkLoader
@@ -99,7 +99,7 @@ class KafkaStreamLoader:
 
 
 def build_kafka_stream_loader_from_settings(
-    processor: MessageProcessor,
+    processor: StreamMessageProcessor,
     default_topic: Topic,
     pre_filter: Optional[StreamMessageFilter[KafkaPayload]] = None,
     replacement_topic: Optional[Topic] = None,

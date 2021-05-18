@@ -2,27 +2,26 @@ import uuid
 from datetime import datetime
 from typing import Any, Mapping, Optional
 
-from snuba.consumers.types import KafkaMessageMetadata
 from sentry_relay import DataCategory
 
-from snuba import settings, environment
+from snuba import environment, settings
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import (
     InsertBatch,
-    MessageProcessor,
-    ProcessedMessage,
+    ProcessedStreamMessage,
+    StreamMessageProcessor,
     _ensure_valid_date,
     _unicodify,
 )
-
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "outcomes.processor")
 
 
-class OutcomesProcessor(MessageProcessor):
-    def process_message(
+class OutcomesProcessor(StreamMessageProcessor):
+    def process_stream_message(
         self, value: Mapping[str, Any], metadata: KafkaMessageMetadata
-    ) -> Optional[ProcessedMessage]:
+    ) -> Optional[ProcessedStreamMessage]:
         assert isinstance(value, dict)
         v_uuid = value.get("event_id")
 

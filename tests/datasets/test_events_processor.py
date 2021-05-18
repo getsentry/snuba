@@ -1,4 +1,5 @@
 import calendar
+import json
 from collections import OrderedDict
 from datetime import datetime, timedelta
 from typing import Optional
@@ -19,9 +20,9 @@ from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.processor import (
-    InsertBatch,
     InvalidMessageType,
     InvalidMessageVersion,
+    JSONRowInsertBatch,
     ProcessedMessage,
     ReplacementBatch,
 )
@@ -29,7 +30,7 @@ from tests.fixtures import get_raw_event
 
 
 class TestEventsProcessor:
-    def setup_method(self, test_method):
+    def setup_method(self) -> None:
         self.metadata = KafkaMessageMetadata(0, 0, datetime.now())
         self.event = get_raw_event()
 
@@ -56,11 +57,14 @@ class TestEventsProcessor:
         return self.processor.process_message((2, "insert", event, {}), self.metadata)
 
     def test_unexpected_obj(self) -> None:
-        self.event["message"] = {"what": "why is this in the message"}
+        self.event["message"] = {"what": "why is this in the message"}  # type: ignore
 
         processed = self.__process_insert_event(self.event)
-        assert isinstance(processed, InsertBatch)
-        assert processed.rows[0]["message"] == '{"what": "why is this in the message"}'
+        assert isinstance(processed, JSONRowInsertBatch)
+        assert (
+            json.loads(processed.rows[0])["message"]
+            == '{"what": "why is this in the message"}'
+        )
 
     def test_hash_invalid_primary_hash(self) -> None:
         self.event[
@@ -68,8 +72,11 @@ class TestEventsProcessor:
         ] = b"'tinymce' \u063a\u064a\u0631 \u0645\u062d".decode("unicode-escape")
 
         processed = self.__process_insert_event(self.event)
-        assert isinstance(processed, InsertBatch)
-        assert processed.rows[0]["primary_hash"] == "a52ccc1a61c2258e918b43b5aff50db1"
+        assert isinstance(processed, JSONRowInsertBatch)
+        assert (
+            json.loads(processed.rows[0])["primary_hash"]
+            == "a52ccc1a61c2258e918b43b5aff50db1"
+        )
 
     def test_extract_required(self) -> None:
         now = datetime.utcnow()
@@ -607,4 +614,4 @@ class TestEventsProcessor:
         ]
 
         processed = self.__process_insert_event(self.event)
-        assert isinstance(processed, InsertBatch)
+        assert isinstance(processed, JSONRowInsertBatch)

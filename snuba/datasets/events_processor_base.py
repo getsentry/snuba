@@ -16,9 +16,9 @@ from snuba.processor import (
     InsertBatch,
     InvalidMessageType,
     InvalidMessageVersion,
-    MessageProcessor,
-    ProcessedMessage,
+    ProcessedStreamMessage,
     ReplacementBatch,
+    StreamMessageProcessor,
     _as_dict_safe,
     _boolify,
     _collapse_uint32,
@@ -59,7 +59,7 @@ class InsertEvent(TypedDict):
     retention_days: int
 
 
-class EventsProcessorBase(MessageProcessor, ABC):
+class EventsProcessorBase(StreamMessageProcessor, ABC):
     """
     Base class for events and errors processors.
     """
@@ -135,11 +135,11 @@ class EventsProcessorBase(MessageProcessor, ABC):
                 sdk_integrations.append(i)
         output["sdk_integrations"] = sdk_integrations
 
-    def process_message(
+    def process_stream_message(
         self,
         message: Tuple[int, str, InsertEvent, Any],
         metadata: KafkaMessageMetadata,
-    ) -> Optional[ProcessedMessage]:
+    ) -> Optional[ProcessedStreamMessage]:
         """\
         Process a raw message into an insertion or replacement batch. Returns
         `None` if the event is too old to be written.

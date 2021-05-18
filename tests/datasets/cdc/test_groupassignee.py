@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import pytz
+
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.cdc.groupassignee_processor import (
@@ -10,7 +11,7 @@ from snuba.datasets.cdc.groupassignee_processor import (
 from snuba.datasets.cdc.types import DeleteEvent, InsertEvent, UpdateEvent
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.processor import InsertBatch
+from snuba.processor import InsertBatch, json_encode_insert_batch
 from tests.helpers import write_processed_messages
 
 
@@ -131,9 +132,9 @@ class TestGroupassignee:
         "project_id": 2,
         "group_id": 1359,
         "record_deleted": 0,
+        "date_added": datetime(2019, 9, 19, 0, 17, 55, tzinfo=pytz.UTC),
         "user_id": 1,
         "team_id": None,
-        "date_added": datetime(2019, 9, 19, 0, 17, 55, tzinfo=pytz.UTC),
     }
 
     PROCESSED_UPDATE = {
@@ -141,9 +142,9 @@ class TestGroupassignee:
         "project_id": 3,
         "group_id": 1359,
         "record_deleted": 0,
+        "date_added": datetime(2019, 9, 19, 0, 17, 55, tzinfo=pytz.UTC),
         "user_id": 1,
         "team_id": None,
-        "date_added": datetime(2019, 9, 19, 0, 17, 55, tzinfo=pytz.UTC),
     }
 
     DELETED = {
@@ -151,9 +152,9 @@ class TestGroupassignee:
         "project_id": 2,
         "group_id": 1359,
         "record_deleted": 1,
+        "date_added": None,
         "user_id": None,
         "team_id": None,
-        "date_added": None,
     }
 
     def test_messages(self) -> None:
@@ -164,16 +165,20 @@ class TestGroupassignee:
         )
 
         ret = processor.process_message(self.INSERT_MSG, metadata)
-        assert ret == InsertBatch(
-            [self.PROCESSED], datetime(2019, 9, 19, 0, 17, 55, 32443, tzinfo=pytz.UTC)
+        assert ret == json_encode_insert_batch(
+            InsertBatch(
+                [self.PROCESSED],
+                datetime(2019, 9, 19, 0, 17, 55, 32443, tzinfo=pytz.UTC),
+            )
         )
+
         write_processed_messages(self.storage, [ret])
-        ret = (
+        rows = (
             self.storage.get_cluster()
             .get_query_connection(ClickhouseClientSettings.QUERY)
             .execute("SELECT * FROM groupassignee_local;")
         )
-        assert ret[0] == (
+        assert rows[0] == (
             42,  # offset
             0,  # deleted
             2,  # project_id
@@ -184,21 +189,29 @@ class TestGroupassignee:
         )
 
         ret = processor.process_message(self.UPDATE_MSG_NO_KEY_CHANGE, metadata)
-        assert ret == InsertBatch(
-            [self.PROCESSED], datetime(2019, 9, 19, 0, 6, 56, 376853, tzinfo=pytz.UTC)
+        assert ret == json_encode_insert_batch(
+            InsertBatch(
+                [self.PROCESSED],
+                datetime(2019, 9, 19, 0, 6, 56, 376853, tzinfo=pytz.UTC),
+            )
         )
 
         # Tests an update with key change which becomes a two inserts:
         # one deletion and the insertion of the new row.
         ret = processor.process_message(self.UPDATE_MSG_WITH_KEY_CHANGE, metadata)
-        assert ret == InsertBatch(
-            [self.DELETED, self.PROCESSED_UPDATE],
-            datetime(2019, 9, 19, 0, 6, 56, 376853, tzinfo=pytz.UTC),
+        assert ret == json_encode_insert_batch(
+            InsertBatch(
+                [self.DELETED, self.PROCESSED_UPDATE],
+                datetime(2019, 9, 19, 0, 6, 56, 376853, tzinfo=pytz.UTC),
+            )
         )
 
         ret = processor.process_message(self.DELETE_MSG, metadata)
-        assert ret == InsertBatch(
-            [self.DELETED], datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=pytz.UTC)
+        assert ret == json_encode_insert_batch(
+            InsertBatch(
+                [self.DELETED],
+                datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=pytz.UTC),
+            )
         )
 
     def test_bulk_load(self) -> None:
@@ -212,7 +225,8 @@ class TestGroupassignee:
             }
         )
         write_processed_messages(
-            self.storage, [InsertBatch([row.to_clickhouse()], None)]
+            self.storage,
+            [json_encode_insert_batch(InsertBatch([row.to_clickhouse()], None))],
         )
         ret = (
             self.storage.get_cluster()

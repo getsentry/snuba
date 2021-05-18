@@ -22,9 +22,11 @@ import simplejson as json
 from flask import Flask, Request, Response, redirect, render_template
 from flask import request as http_request
 from markdown import markdown
+from werkzeug import Response as WerkzeugResponse
+from werkzeug.exceptions import InternalServerError
+
 from snuba import environment, settings, state, util
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
@@ -57,9 +59,6 @@ from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.web import QueryException
 from snuba.web.converters import DatasetConverter
 from snuba.web.query import parse_and_run_query
-from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
-from werkzeug import Response as WerkzeugResponse
-from werkzeug.exceptions import InternalServerError
 
 metrics = MetricsWrapper(environment.metrics, "api")
 
@@ -497,9 +496,9 @@ if application.debug or application.testing:
 
     @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
     def write(*, dataset: Dataset) -> RespTuple:
-        from snuba.processor import InsertBatch
+        from snuba.processor import JSONRowInsertBatch
 
-        rows: MutableSequence[WriterTableRow] = []
+        rows: MutableSequence[bytes] = []
         offset_base = int(round(time.time() * 1000))
         for index, message in enumerate(json.loads(http_request.data)):
             offset = offset_base + index
@@ -515,12 +514,10 @@ if application.debug or application.testing:
                 )
             )
             if processed_message:
-                assert isinstance(processed_message, InsertBatch)
+                assert isinstance(processed_message, JSONRowInsertBatch)
                 rows.extend(processed_message.rows)
 
-        BatchWriterEncoderWrapper(
-            enforce_table_writer(dataset).get_batch_writer(metrics), JSONRowEncoder(),
-        ).write(rows)
+        enforce_table_writer(dataset).get_batch_writer(metrics).write(rows)
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 

@@ -20,8 +20,8 @@ from snuba.datasets.events_format import (
 )
 from snuba.processor import (
     InsertBatch,
-    MessageProcessor,
-    ProcessedMessage,
+    ProcessedStreamMessage,
+    StreamMessageProcessor,
     _as_dict_safe,
     _ensure_valid_date,
     _ensure_valid_ip,
@@ -37,7 +37,7 @@ metrics = MetricsWrapper(environment.metrics, "transactions.processor")
 UNKNOWN_SPAN_STATUS = 2
 
 
-class TransactionsMessageProcessor(MessageProcessor):
+class TransactionsMessageProcessor(StreamMessageProcessor):
     PROMOTED_TAGS = {
         "environment",
         "sentry:release",
@@ -54,9 +54,9 @@ class TransactionsMessageProcessor(MessageProcessor):
         milliseconds = int(timestamp.microsecond / 1000)
         return (timestamp, milliseconds)
 
-    def process_message(
+    def process_stream_message(
         self, message: Tuple[int, str, Any], metadata: KafkaMessageMetadata
-    ) -> Optional[ProcessedMessage]:
+    ) -> Optional[ProcessedStreamMessage]:
         processed: MutableMapping[str, Any] = {"deleted": 0}
         if not (isinstance(message, (list, tuple)) and len(message) >= 2):
             return None

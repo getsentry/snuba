@@ -9,8 +9,8 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import enforce_retention, extract_extra_tags
 from snuba.processor import (
     InsertBatch,
-    MessageProcessor,
-    ProcessedMessage,
+    ProcessedStreamMessage,
+    StreamMessageProcessor,
     _as_dict_safe,
     _ensure_valid_date,
     _unicodify,
@@ -22,7 +22,7 @@ UNKNOWN_SPAN_STATUS = 2
 metrics = MetricsWrapper(environment.metrics, "spans.processor")
 
 
-class SpansMessageProcessor(MessageProcessor):
+class SpansMessageProcessor(StreamMessageProcessor):
     def __extract_timestamp(self, field: float) -> Tuple[datetime, int]:
         timestamp = _ensure_valid_date(datetime.utcfromtimestamp(field))
         if timestamp is None:
@@ -91,9 +91,9 @@ class SpansMessageProcessor(MessageProcessor):
             metrics.increment("missing_field", tags={"field": field})
         return None
 
-    def process_message(
+    def process_stream_message(
         self, message: Sequence[Any], metadata: KafkaMessageMetadata
-    ) -> Optional[ProcessedMessage]:
+    ) -> Optional[ProcessedStreamMessage]:
         if not (isinstance(message, (list, tuple)) and len(message) >= 2):
             return None
         version = message[0]

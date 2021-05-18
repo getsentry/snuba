@@ -7,7 +7,7 @@ from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.events_processor_base import InsertEvent
-from snuba.processor import InsertBatch
+from snuba.processor import InsertBatch, json_encode_insert_batch
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 
 
@@ -224,22 +224,69 @@ def test_error_processor() -> None:
     )
 
     expected_result = {
+        "deleted": 0,
         "project_id": 300688,
-        "timestamp": error_timestamp,
         "event_id": str(UUID("dcb9d002cac548c795d1c9adbfc68040")),
+        "retention_days": 90,
+        "group_id": 100,
+        "timestamp": error_timestamp,
         "platform": "python",
-        "dist": None,
-        "environment": "dev",
-        "release": "4d23338017cdee67daf25f2c",
-        "ip_address_v4": "127.0.0.1",
-        "user": "this_is_me",
+        "received": received_timestamp.astimezone(pytz.utc).replace(
+            tzinfo=None, microsecond=0
+        ),
+        "version": "7",
+        "location": "snuba/clickhouse/http.py",
+        "modules.name": ["cffi", "ipython-genutils", "isodate"],
+        "modules.version": ["1.13.2", "0.2.0", "0.6.0"],
         "user_name": "me",
         "user_id": "still_me",
         "user_email": "me@myself.org",
-        "sdk_name": "sentry.python",
-        "sdk_version": "0.0.0.0.1",
+        "ip_address_v4": "127.0.0.1",
         "http_method": "POST",
         "http_referer": "tagstore.something",
+        "message": "",
+        "primary_hash": str(UUID("04233d08ac90cf6fc015b1be5932e7e2")),
+        "hierarchical_hashes": [
+            str(UUID("04233d08ac90cf6fc015b1be5932e7e3")),
+            str(UUID("04233d08ac90cf6fc015b1be5932e7e4")),
+        ],
+        "culprit": "snuba.clickhouse.http in write",
+        "type": "error",
+        "title": "ClickHouseError: [171] DB::Exception: Block structure mismatch",
+        "sdk_name": "sentry.python",
+        "sdk_version": "0.0.0.0.1",
+        "sdk_integrations": [
+            "argv",
+            "atexit",
+            "dedupe",
+            "excepthook",
+            "logging",
+            "modules",
+            "stdlib",
+            "threading",
+        ],
+        "environment": "dev",
+        "release": "4d23338017cdee67daf25f2c",
+        "dist": None,
+        "user": "this_is_me",
+        "transaction_name": "",
+        "level": "error",
+        "contexts.key": [
+            "runtime.version",
+            "runtime.name",
+            "runtime.build",
+            "geo.country_code",
+            "geo.region",
+            "geo.city",
+        ],
+        "contexts.value": [
+            "3.7.6",
+            "CPython",
+            "3.7.6",
+            "XY",
+            "fake_region",
+            "fake_city",
+        ],
         "tags.key": [
             "environment",
             "handled",
@@ -262,69 +309,22 @@ def test_error_processor() -> None:
             "this_is_me",
             "snuba",
         ],
-        "contexts.key": [
-            "runtime.version",
-            "runtime.name",
-            "runtime.build",
-            "geo.country_code",
-            "geo.region",
-            "geo.city",
-        ],
-        "contexts.value": [
-            "3.7.6",
-            "CPython",
-            "3.7.6",
-            "XY",
-            "fake_region",
-            "fake_city",
-        ],
-        "partition": 1,
-        "offset": 2,
-        "message_timestamp": datetime(1970, 1, 1),
-        "retention_days": 90,
-        "deleted": 0,
-        "group_id": 100,
-        "primary_hash": str(UUID("04233d08ac90cf6fc015b1be5932e7e2")),
-        "hierarchical_hashes": [
-            str(UUID("04233d08ac90cf6fc015b1be5932e7e3")),
-            str(UUID("04233d08ac90cf6fc015b1be5932e7e4")),
-        ],
-        "received": received_timestamp.astimezone(pytz.utc).replace(
-            tzinfo=None, microsecond=0
-        ),
-        "message": "",
-        "title": "ClickHouseError: [171] DB::Exception: Block structure mismatch",
-        "culprit": "snuba.clickhouse.http in write",
-        "level": "error",
-        "location": "snuba/clickhouse/http.py",
-        "version": "7",
-        "type": "error",
         "exception_stacks.type": ["ClickHouseError"],
         "exception_stacks.value": ["[171] DB::Exception: Block structure mismatch"],
         "exception_stacks.mechanism_type": ["excepthook"],
         "exception_stacks.mechanism_handled": [False],
         "exception_frames.abs_path": ["/usr/local/bin/snuba"],
-        "exception_frames.colno": [None],
         "exception_frames.filename": ["snuba"],
-        "exception_frames.lineno": [11],
-        "exception_frames.in_app": [False],
         "exception_frames.package": [None],
         "exception_frames.module": ["__main__"],
         "exception_frames.function": ["<module>"],
+        "exception_frames.in_app": [False],
+        "exception_frames.colno": [None],
+        "exception_frames.lineno": [11],
         "exception_frames.stack_level": [0],
-        "sdk_integrations": [
-            "argv",
-            "atexit",
-            "dedupe",
-            "excepthook",
-            "logging",
-            "modules",
-            "stdlib",
-            "threading",
-        ],
-        "modules.name": ["cffi", "ipython-genutils", "isodate"],
-        "modules.version": ["1.13.2", "0.2.0", "0.6.0"],
-        "transaction_name": "",
+        "offset": 2,
+        "partition": 1,
+        "message_timestamp": datetime(1970, 1, 1),
     }
 
     meta = KafkaMessageMetadata(offset=2, partition=1, timestamp=datetime(1970, 1, 1))
@@ -339,6 +339,6 @@ def test_error_processor() -> None:
         }
     )
 
-    assert processor.process_message(error, meta) == InsertBatch(
-        [expected_result], None
+    assert processor.process_message(error, meta) == json_encode_insert_batch(
+        InsertBatch([expected_result], None)
     )

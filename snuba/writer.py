@@ -20,17 +20,6 @@ class BatchWriter(ABC, Generic[T]):
         raise NotImplementedError
 
 
-class BatchWriterEncoderWrapper(BatchWriter[TDecoded]):
-    def __init__(
-        self, writer: BatchWriter[TEncoded], encoder: Encoder[TEncoded, TDecoded]
-    ) -> None:
-        self.__writer = writer
-        self.__encoder = encoder
-
-    def write(self, values: Iterable[TDecoded]) -> None:
-        return self.__writer.write(map(self.__encoder.encode, values))
-
-
 class BufferedWriterWrapper(Generic[TEncoded, TDecoded]):
     """
     This is a wrapper that adds a buffer around a BatchWriter.

@@ -12,7 +12,7 @@ from snuba.datasets.cdc.groupedmessage_processor import (
 from snuba.datasets.cdc.types import DeleteEvent, InsertEvent, UpdateEvent
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.processor import InsertBatch
+from snuba.processor import InsertBatch, json_encode_insert_batch
 from tests.helpers import write_processed_messages
 
 
@@ -230,8 +230,11 @@ class TestGroupedMessage:
         )
 
         ret = processor.process_message(self.INSERT_MSG, metadata)
-        assert ret == InsertBatch(
-            [self.PROCESSED], datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=pytz.UTC)
+        assert ret == json_encode_insert_batch(
+            InsertBatch(
+                [self.PROCESSED],
+                datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=pytz.UTC),
+            )
         )
         write_processed_messages(self.storage, [ret])
         ret = (
@@ -252,13 +255,19 @@ class TestGroupedMessage:
         )
 
         ret = processor.process_message(self.UPDATE_MSG, metadata)
-        assert ret == InsertBatch(
-            [self.PROCESSED], datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=pytz.UTC)
+        assert ret == json_encode_insert_batch(
+            InsertBatch(
+                [self.PROCESSED],
+                datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=pytz.UTC),
+            )
         )
 
         ret = processor.process_message(self.DELETE_MSG, metadata)
-        assert ret == InsertBatch(
-            [self.DELETED], datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=pytz.UTC)
+        assert ret == json_encode_insert_batch(
+            InsertBatch(
+                [self.DELETED],
+                datetime(2019, 9, 19, 0, 17, 21, 447870, tzinfo=pytz.UTC),
+            )
         )
 
     def test_bulk_load(self) -> None:
@@ -274,7 +283,8 @@ class TestGroupedMessage:
             }
         )
         write_processed_messages(
-            self.storage, [InsertBatch([row.to_clickhouse()], None)]
+            self.storage,
+            [json_encode_insert_batch(InsertBatch([row.to_clickhouse()], None))],
         )
         ret = (
             get_cluster(StorageSetKey.EVENTS)

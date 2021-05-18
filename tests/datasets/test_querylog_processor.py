@@ -7,7 +7,7 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.processor import InsertBatch
+from snuba.processor import InsertBatch, json_encode_insert_batch
 from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
 from snuba.querylog.query_metadata import (
@@ -80,43 +80,45 @@ def test_simple() -> None:
 
     assert processor.process_message(
         message, KafkaMessageMetadata(0, 0, datetime.now())
-    ) == InsertBatch(
-        [
-            {
-                "request_id": str(uuid.UUID("a" * 32)),
-                "request_body": '{"limit": 100, "offset": 50, "orderby": "event_id", "project": 1, "sample": 0.1, "selected_columns": ["event_id"]}',
-                "referrer": "search",
-                "dataset": "events",
-                "projects": [1],
-                "organization": None,
-                "timestamp": timer.for_json()["timestamp"],
-                "duration_ms": 10,
-                "status": "success",
-                "clickhouse_queries.sql": [
-                    "select event_id from sentry_dist sample 0.1 prewhere project_id in (1) limit 50, 100"
-                ],
-                "clickhouse_queries.status": ["success"],
-                "clickhouse_queries.trace_id": [str(uuid.UUID("b" * 32))],
-                "clickhouse_queries.duration_ms": [0],
-                "clickhouse_queries.stats": ['{"sample": 10}'],
-                "clickhouse_queries.final": [0],
-                "clickhouse_queries.cache_hit": [0],
-                "clickhouse_queries.sample": [10.0],
-                "clickhouse_queries.max_threads": [0],
-                "clickhouse_queries.num_days": [10],
-                "clickhouse_queries.clickhouse_table": [""],
-                "clickhouse_queries.query_id": [""],
-                "clickhouse_queries.is_duplicate": [0],
-                "clickhouse_queries.consistent": [0],
-                "clickhouse_queries.all_columns": [["tags", "timestamp"]],
-                "clickhouse_queries.or_conditions": [False],
-                "clickhouse_queries.where_columns": [["timestamp"]],
-                "clickhouse_queries.where_mapping_columns": [["tags"]],
-                "clickhouse_queries.groupby_columns": [[]],
-                "clickhouse_queries.array_join_columns": [[]],
-            }
-        ],
-        None,
+    ) == json_encode_insert_batch(
+        InsertBatch(
+            [
+                {
+                    "request_id": str(uuid.UUID("a" * 32)),
+                    "request_body": '{"limit": 100, "offset": 50, "orderby": "event_id", "project": 1, "sample": 0.1, "selected_columns": ["event_id"]}',
+                    "referrer": "search",
+                    "dataset": "events",
+                    "projects": [1],
+                    "organization": None,
+                    "clickhouse_queries.sql": [
+                        "select event_id from sentry_dist sample 0.1 prewhere project_id in (1) limit 50, 100"
+                    ],
+                    "clickhouse_queries.status": ["success"],
+                    "clickhouse_queries.trace_id": [str(uuid.UUID("b" * 32))],
+                    "clickhouse_queries.duration_ms": [0],
+                    "clickhouse_queries.stats": ['{"sample": 10}'],
+                    "clickhouse_queries.final": [0],
+                    "clickhouse_queries.cache_hit": [0],
+                    "clickhouse_queries.sample": [10.0],
+                    "clickhouse_queries.max_threads": [0],
+                    "clickhouse_queries.num_days": [10],
+                    "clickhouse_queries.clickhouse_table": [""],
+                    "clickhouse_queries.query_id": [""],
+                    "clickhouse_queries.is_duplicate": [0],
+                    "clickhouse_queries.consistent": [0],
+                    "clickhouse_queries.all_columns": [["tags", "timestamp"]],
+                    "clickhouse_queries.or_conditions": [False],
+                    "clickhouse_queries.where_columns": [["timestamp"]],
+                    "clickhouse_queries.where_mapping_columns": [["tags"]],
+                    "clickhouse_queries.groupby_columns": [[]],
+                    "clickhouse_queries.array_join_columns": [[]],
+                    "timestamp": timer.for_json()["timestamp"],
+                    "duration_ms": 10,
+                    "status": "success",
+                }
+            ],
+            None,
+        )
     )
 
 
@@ -188,38 +190,40 @@ def test_missing_fields() -> None:
 
         assert processor.process_message(
             message, KafkaMessageMetadata(0, 0, datetime.now())
-        ) == InsertBatch(
-            [
-                {
-                    "request_id": str(uuid.UUID("a" * 32)),
-                    "request_body": '{"limit": 100, "offset": 50, "orderby": "event_id", "project": 1, "sample": 0.1, "selected_columns": ["event_id"]}',
-                    "referrer": "search",
-                    "dataset": "events",
-                    "projects": [1],
-                    "organization": None,
-                    "clickhouse_queries.sql": [
-                        "select event_id from sentry_dist sample 0.1 prewhere project_id in (1) limit 50, 100"
-                    ],
-                    "clickhouse_queries.status": ["success"],
-                    "clickhouse_queries.trace_id": [str(uuid.UUID("b" * 32))],
-                    "clickhouse_queries.duration_ms": [0],
-                    "clickhouse_queries.stats": ['{"sample": 10}'],
-                    "clickhouse_queries.final": [0],
-                    "clickhouse_queries.cache_hit": [0],
-                    "clickhouse_queries.sample": [10.0],
-                    "clickhouse_queries.max_threads": [0],
-                    "clickhouse_queries.num_days": [10],
-                    "clickhouse_queries.clickhouse_table": [""],
-                    "clickhouse_queries.query_id": [""],
-                    "clickhouse_queries.is_duplicate": [0],
-                    "clickhouse_queries.consistent": [0],
-                    "clickhouse_queries.all_columns": [["tags", "timestamp"]],
-                    "clickhouse_queries.or_conditions": [False],
-                    "clickhouse_queries.where_columns": [["timestamp"]],
-                    "clickhouse_queries.where_mapping_columns": [["tags"]],
-                    "clickhouse_queries.groupby_columns": [[]],
-                    "clickhouse_queries.array_join_columns": [[]],
-                }
-            ],
-            None,
+        ) == json_encode_insert_batch(
+            InsertBatch(
+                [
+                    {
+                        "request_id": str(uuid.UUID("a" * 32)),
+                        "request_body": '{"limit": 100, "offset": 50, "orderby": "event_id", "project": 1, "sample": 0.1, "selected_columns": ["event_id"]}',
+                        "referrer": "search",
+                        "dataset": "events",
+                        "projects": [1],
+                        "organization": None,
+                        "clickhouse_queries.sql": [
+                            "select event_id from sentry_dist sample 0.1 prewhere project_id in (1) limit 50, 100"
+                        ],
+                        "clickhouse_queries.status": ["success"],
+                        "clickhouse_queries.trace_id": [str(uuid.UUID("b" * 32))],
+                        "clickhouse_queries.duration_ms": [0],
+                        "clickhouse_queries.stats": ['{"sample": 10}'],
+                        "clickhouse_queries.final": [0],
+                        "clickhouse_queries.cache_hit": [0],
+                        "clickhouse_queries.sample": [10.0],
+                        "clickhouse_queries.max_threads": [0],
+                        "clickhouse_queries.num_days": [10],
+                        "clickhouse_queries.clickhouse_table": [""],
+                        "clickhouse_queries.query_id": [""],
+                        "clickhouse_queries.is_duplicate": [0],
+                        "clickhouse_queries.consistent": [0],
+                        "clickhouse_queries.all_columns": [["tags", "timestamp"]],
+                        "clickhouse_queries.or_conditions": [False],
+                        "clickhouse_queries.where_columns": [["timestamp"]],
+                        "clickhouse_queries.where_mapping_columns": [["tags"]],
+                        "clickhouse_queries.groupby_columns": [[]],
+                        "clickhouse_queries.array_join_columns": [[]],
+                    }
+                ],
+                None,
+            )
         )

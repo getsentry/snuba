@@ -8,9 +8,8 @@ from snuba import optimize, settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.processor import InsertBatch
+from snuba.processor import InsertBatch, JSONRowInsertBatch, json_encode_insert_batch
 from tests.helpers import write_processed_messages
-
 
 test_data = [
     pytest.param(
@@ -75,6 +74,9 @@ class TestOptimize:
         storage_key: StorageKey,
         create_event_row_for_date: Callable[[datetime], InsertBatch],
     ) -> None:
+        def create_event(date: datetime) -> JSONRowInsertBatch:
+            return json_encode_insert_batch(create_event_row_for_date(date))
+
         storage = get_writable_storage(storage_key)
         cluster = storage.get_cluster()
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
@@ -91,21 +93,21 @@ class TestOptimize:
         base_monday = base - timedelta(days=base.weekday())
 
         # 1 event, 0 unoptimized parts
-        write_processed_messages(storage, [create_event_row_for_date(base)])
+        write_processed_messages(storage, [create_event(base)])
         parts = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
         assert parts == []
 
         # 2 events in the same part, 1 unoptimized part
-        write_processed_messages(storage, [create_event_row_for_date(base)])
+        write_processed_messages(storage, [create_event(base)])
         parts = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
         assert [(p.date, p.retention_days) for p in parts] == [(base_monday, 90)]
 
         # 3 events in the same part, 1 unoptimized part
-        write_processed_messages(storage, [create_event_row_for_date(base)])
+        write_processed_messages(storage, [create_event(base)])
         parts = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
@@ -116,12 +118,8 @@ class TestOptimize:
         a_month_earlier_monday = a_month_earlier - timedelta(
             days=a_month_earlier.weekday()
         )
-        write_processed_messages(
-            storage, [create_event_row_for_date(a_month_earlier_monday)]
-        )
-        write_processed_messages(
-            storage, [create_event_row_for_date(a_month_earlier_monday)]
-        )
+        write_processed_messages(storage, [create_event(a_month_earlier_monday)])
+        write_processed_messages(storage, [create_event(a_month_earlier_monday)])
         parts = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )

@@ -2,10 +2,7 @@ import functools
 import itertools
 import logging
 import time
-from datetime import datetime
-from pickle import PickleBuffer
 from typing import (
-    Any,
     Callable,
     Mapping,
     MutableSequence,
@@ -20,12 +17,12 @@ from typing import (
 import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
-from snuba.clickhouse.http import JSONRow, JSONRowEncoder
+from snuba.clickhouse.http import JSONRow
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.processor import InsertBatch, MessageProcessor, ReplacementBatch
+from snuba.processor import JSONRowInsertBatch, MessageProcessor, ReplacementBatch
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams import Message, Partition, Topic
@@ -46,22 +43,6 @@ from snuba.utils.streams.processing.strategies.streaming import (
 from snuba.writer import BatchWriter
 
 logger = logging.getLogger("snuba.consumer")
-
-
-class JSONRowInsertBatch(NamedTuple):
-    rows: Sequence[JSONRow]
-    origin_timestamp: Optional[datetime]
-
-    def __reduce_ex__(
-        self, protocol: int
-    ) -> Tuple[Any, Tuple[Sequence[Any], Optional[datetime]]]:
-        if protocol >= 5:
-            return (
-                type(self),
-                ([PickleBuffer(row) for row in self.rows], self.origin_timestamp),
-            )
-        else:
-            return type(self), (self.rows, self.origin_timestamp)
 
 
 class InsertBatchWriter(ProcessingStep[JSONRowInsertBatch]):
@@ -246,28 +227,6 @@ class ProcessedMessageBatchWriter(
             self.__replacement_batch_writer.join(timeout)
 
 
-json_row_encoder = JSONRowEncoder()
-
-
-def process_message(
-    processor: MessageProcessor, message: Message[KafkaPayload]
-) -> Union[None, JSONRowInsertBatch, ReplacementBatch]:
-    result = processor.process_message(
-        rapidjson.loads(message.payload.value),
-        KafkaMessageMetadata(
-            message.offset, message.partition.index, message.timestamp
-        ),
-    )
-
-    if isinstance(result, InsertBatch):
-        return JSONRowInsertBatch(
-            [json_row_encoder.encode(row) for row in result.rows],
-            result.origin_timestamp,
-        )
-    else:
-        return result
-
-
 class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
     def __init__(
         self,
@@ -343,6 +302,16 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             self.__max_batch_size,
             self.__max_batch_time,
         )
+
+        def process_message(
+            processor: MessageProcessor, message: Message[KafkaPayload]
+        ) -> Union[None, JSONRowInsertBatch, ReplacementBatch]:
+            return processor.process_message(
+                rapidjson.loads(message.payload.value),
+                KafkaMessageMetadata(
+                    message.offset, message.partition.index, message.timestamp
+                ),
+            )
 
         transform_function = functools.partial(process_message, self.__processor)
 
@@ -465,18 +434,7 @@ def process_message_multistorage(
             .get_processor()
             .process_message(value, metadata)
         )
-        if isinstance(result, InsertBatch):
-            results.append(
-                (
-                    storage_key,
-                    JSONRowInsertBatch(
-                        [json_row_encoder.encode(row) for row in result.rows],
-                        result.origin_timestamp,
-                    ),
-                )
-            )
-        else:
-            results.append((storage_key, result))
+        results.append((storage_key, result))
 
     return results
 

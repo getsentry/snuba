@@ -5,7 +5,7 @@ from typing import Any, Mapping, NamedTuple, Sequence, Tuple
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.spans_processor import SpansMessageProcessor
-from snuba.processor import InsertBatch
+from snuba.processor import InsertBatch, json_encode_insert_batch
 
 
 class SpanData(NamedTuple):
@@ -102,11 +102,12 @@ class SpanEvent:
                 "deleted": 0,
                 "project_id": 1,
                 "transaction_id": str(uuid.UUID(self.event_id)),
-                "trace_id": str(uuid.UUID(self.trace_id)),
+                "retention_days": 90,
                 "transaction_span_id": int(self.span_id, 16),
+                "trace_id": str(uuid.UUID(self.trace_id)),
+                "transaction_name": self.transaction_name,
                 "span_id": int(self.span_id, 16),
                 "parent_span_id": int(self.parent_span_id, 16),
-                "transaction_name": self.transaction_name,
                 "op": self.op,
                 "status": 0,
                 "start_ts": start_timestamp,
@@ -116,7 +117,6 @@ class SpanEvent:
                 "duration_ms": int(
                     (finish_timestamp - start_timestamp).total_seconds() * 1000
                 ),
-                "retention_days": 90,
             }
         ]
 
@@ -128,12 +128,15 @@ class SpanEvent:
                     "deleted": 0,
                     "project_id": 1,
                     "transaction_id": str(uuid.UUID(self.event_id)),
-                    "trace_id": str(uuid.UUID(self.trace_id)),
+                    "retention_days": 90,
                     "transaction_span_id": int(self.span_id, 16),
+                    "trace_id": str(uuid.UUID(self.trace_id)),
+                    "transaction_name": self.transaction_name,
                     "span_id": int(s.span_id, 16),
                     "parent_span_id": int(s.parent_span_id, 16),
-                    "transaction_name": self.transaction_name,
                     "op": s.op,
+                    "tags.key": ["some_tag"],
+                    "tags.value": ["some_val"],
                     "status": 2,
                     "start_ts": span_start_ts,
                     "start_ns": int(span_start_ts.microsecond * 1000),
@@ -142,9 +145,6 @@ class SpanEvent:
                     "duration_ms": int(
                         (span_finish_ts - span_start_ts).total_seconds() * 1000
                     ),
-                    "tags.key": ["some_tag"],
-                    "tags.value": ["some_val"],
-                    "retention_days": 90,
                 }
             )
         return ret
@@ -183,8 +183,6 @@ def test_span_process() -> None:
     )
     meta = KafkaMessageMetadata(offset=1, partition=2, timestamp=datetime(1970, 1, 1))
     processed = SpansMessageProcessor().process_message(message.serialize(), meta)
-    assert isinstance(processed, InsertBatch)
     expected_rows = message.build_result(meta)
 
-    for span, expected in zip(processed.rows, expected_rows):
-        assert span == expected
+    assert processed == json_encode_insert_batch(InsertBatch(expected_rows, None))

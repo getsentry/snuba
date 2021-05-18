@@ -8,7 +8,7 @@ from snuba import cleanup, settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.processor import InsertBatch
+from snuba.processor import InsertBatch, JSONRowInsertBatch, json_encode_insert_batch
 from tests.helpers import write_processed_messages
 
 test_data = [
@@ -74,6 +74,11 @@ class TestCleanup:
         storage_key: StorageKey,
         create_event_row_for_date: Callable[[datetime, Optional[int]], InsertBatch],
     ) -> None:
+        def create_event(
+            date: datetime, retention: Optional[int]
+        ) -> JSONRowInsertBatch:
+            return json_encode_insert_batch(create_event_row_for_date(date, retention))
+
         def to_monday(d: datetime) -> datetime:
             return d - timedelta(days=d.weekday())
 
@@ -91,7 +96,7 @@ class TestCleanup:
         assert parts == []
 
         # base, 90 retention
-        write_processed_messages(storage, [create_event_row_for_date(base, None)])
+        write_processed_messages(storage, [create_event(base, None)])
         parts = cleanup.get_active_partitions(clickhouse, storage, database, table)
 
         assert [(p.date, p.retention_days) for p in parts] == [(to_monday(base), 90)]
@@ -100,9 +105,7 @@ class TestCleanup:
 
         # -40 days, 90 retention
         three_weeks_ago = base - timedelta(days=7 * 3)
-        write_processed_messages(
-            storage, [create_event_row_for_date(three_weeks_ago, None)]
-        )
+        write_processed_messages(storage, [create_event(three_weeks_ago, None)])
         parts = cleanup.get_active_partitions(clickhouse, storage, database, table)
         assert [(p.date, p.retention_days) for p in parts] == [
             (to_monday(three_weeks_ago), 90),
@@ -113,9 +116,7 @@ class TestCleanup:
 
         # -100 days, 90 retention
         thirteen_weeks_ago = base - timedelta(days=7 * 13)
-        write_processed_messages(
-            storage, [create_event_row_for_date(thirteen_weeks_ago, None)]
-        )
+        write_processed_messages(storage, [create_event(thirteen_weeks_ago, None)])
         parts = cleanup.get_active_partitions(clickhouse, storage, database, table)
         assert [(p.date, p.retention_days) for p in parts] == [
             (to_monday(thirteen_weeks_ago), 90),
@@ -129,7 +130,7 @@ class TestCleanup:
 
         # -1 week, 30 retention
         one_week_ago = base - timedelta(days=7)
-        write_processed_messages(storage, [create_event_row_for_date(one_week_ago, 30)])
+        write_processed_messages(storage, [create_event(one_week_ago, 30)])
         parts = cleanup.get_active_partitions(clickhouse, storage, database, table)
 
         assert {(p.date, p.retention_days) for p in parts} == set(
@@ -147,9 +148,7 @@ class TestCleanup:
 
         # -5 weeks, 30 retention
         five_weeks_ago = base - timedelta(days=7 * 5)
-        write_processed_messages(
-            storage, [create_event_row_for_date(five_weeks_ago, 30)]
-        )
+        write_processed_messages(storage, [create_event(five_weeks_ago, 30)])
         parts = cleanup.get_active_partitions(clickhouse, storage, database, table)
         assert {(p.date, p.retention_days) for p in parts} == set(
             [

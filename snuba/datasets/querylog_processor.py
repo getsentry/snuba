@@ -5,14 +5,13 @@ import simplejson as json
 
 from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
+from snuba.processor import InsertBatch, ProcessedStreamMessage, StreamMessageProcessor
 from snuba.utils.metrics.wrapper import MetricsWrapper
-
 
 metrics = MetricsWrapper(environment.metrics, "snuba.querylog")
 
 
-class QuerylogProcessor(MessageProcessor):
+class QuerylogProcessor(StreamMessageProcessor):
     def __to_json_string(self, map: Mapping[str, Any]) -> str:
         return json.dumps({k: v for k, v in sorted(map.items())})
 
@@ -109,9 +108,9 @@ class QuerylogProcessor(MessageProcessor):
             "clickhouse_queries.array_join_columns": array_join_columns,
         }
 
-    def process_message(
+    def process_stream_message(
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
-    ) -> Optional[ProcessedMessage]:
+    ) -> Optional[ProcessedStreamMessage]:
         projects = message["request"]["body"].get("project", [])
         if not isinstance(projects, (list, tuple)):
             projects = [projects]

@@ -5,7 +5,7 @@ from typing import Any, Mapping, Optional, Tuple
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
-from snuba.processor import InsertBatch
+from snuba.processor import InsertBatch, json_encode_insert_batch
 
 
 @dataclass
@@ -159,32 +159,39 @@ class TransactionEvent:
         start_timestamp = datetime.utcfromtimestamp(self.start_timestamp)
         finish_timestamp = datetime.utcfromtimestamp(self.timestamp)
 
+        if self.ipv4:
+            ip_address = {"ip_address_v4": self.ipv4}
+        else:
+            ip_address = {"ip_address_v6": self.ipv6}
+
         ret = {
             "deleted": 0,
-            "project_id": 1,
             "event_id": str(uuid.UUID(self.event_id)),
+            "project_id": 1,
+            "retention_days": 90,
             "trace_id": str(uuid.UUID(self.trace_id)),
             "span_id": int(self.span_id, 16),
-            "transaction_name": self.transaction_name,
             "transaction_op": self.op,
-            "transaction_status": 1 if self.status == "cancelled" else 2,
+            "transaction_name": self.transaction_name,
             "start_ts": start_timestamp,
             "start_ms": int(start_timestamp.microsecond / 1000),
+            "transaction_status": 1 if self.status == "cancelled" else 2,
             "finish_ts": finish_timestamp,
             "finish_ms": int(finish_timestamp.microsecond / 1000),
             "duration": int(
                 (finish_timestamp - start_timestamp).total_seconds() * 1000
             ),
             "platform": self.platform,
-            "environment": self.environment,
-            "release": self.release,
-            "dist": self.dist,
-            "user": self.user_id,
-            "user_id": self.user_id,
-            "user_name": self.user_name,
-            "user_email": self.user_email,
             "tags.key": ["environment", "sentry:release", "sentry:user", "we|r=d"],
             "tags.value": [self.environment, self.release, self.user_id, "tag"],
+            "release": self.release,
+            "environment": self.environment,
+            "measurements.key": ["lcp", "lcp.elementSize"],
+            "measurements.value": [32.129, 4242.0],
+            "span_op_breakdowns.key": ["ops.db", "ops.http", "total.time"],
+            "span_op_breakdowns.value": [62.512, 109.774, 172.286],
+            "http_method": self.http_method,
+            "http_referer": self.http_referer,
             "contexts.key": [
                 "trace.sampled",
                 "trace.trace_id",
@@ -205,23 +212,18 @@ class TransactionEvent:
                 self.geo["region"],
                 self.geo["city"],
             ],
+            "dist": self.dist,
+            "user": self.user_id,
+            "user_name": self.user_name,
+            "user_id": self.user_id,
+            "user_email": self.user_email,
+            **ip_address,
+            "partition": meta.partition,
+            "offset": meta.offset,
             "sdk_name": "sentry.python",
             "sdk_version": "0.9.0",
-            "http_method": self.http_method,
-            "http_referer": self.http_referer,
-            "offset": meta.offset,
-            "partition": meta.partition,
-            "retention_days": 90,
-            "measurements.key": ["lcp", "lcp.elementSize"],
-            "measurements.value": [32.129, 4242.0],
-            "span_op_breakdowns.key": ["ops.db", "ops.http", "total.time"],
-            "span_op_breakdowns.value": [62.512, 109.774, 172.286],
         }
 
-        if self.ipv4:
-            ret["ip_address_v4"] = self.ipv4
-        else:
-            ret["ip_address_v6"] = self.ipv6
         return ret
 
 
@@ -334,4 +336,4 @@ class TestTransactionsProcessor:
         )
         assert TransactionsMessageProcessor().process_message(
             message.serialize(), meta
-        ) == InsertBatch([message.build_result(meta)], None)
+        ) == json_encode_insert_batch(InsertBatch([message.build_result(meta)], None))
