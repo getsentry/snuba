@@ -8,7 +8,10 @@ The controlling envrionment variable is ``SENTRY_DISTRIBUTED_CLICKHOUSE_TABLES``
 and its default value is set `at this line <https://github.com/getsentry/sentry/blob/master/src/sentry/conf/server.py#L127>`_.
 
 Once this boolean variable is set, one of two Clickhouse Docker containers will be
-(allowed to) start, depending on the mode (distributed or local).
+(allowed to) start, depending on the mode (distributed or local). Whenever a user
+wants to switch between the two modes, they must "turn off" the existing running
+container, alter the environment variable mentioned above, and "turn on" the
+correct container to be in the new mode.
 
 More information on migrations in general can be found `here <https://github.com/getsentry/snuba/blob/master/MIGRATIONS.md>`_.
 
