@@ -6,7 +6,7 @@ import pytest
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.metrics_processor import MetricsProcessor
-from snuba.processor import InsertBatch
+from snuba.processor import InsertBatch, json_encode_insert_batch
 
 TEST_CASES = [
     pytest.param(
@@ -63,6 +63,10 @@ def test_metrics_processor(
 
     meta = KafkaMessageMetadata(offset=100, partition=1, timestamp=datetime(1970, 1, 1))
 
-    expected_result = InsertBatch(expected, None) if expected is not None else None
+    expected_result = (
+        json_encode_insert_batch(InsertBatch(expected, None))
+        if expected is not None
+        else None
+    )
 
     assert MetricsProcessor().process_message(message, meta) == expected_result
