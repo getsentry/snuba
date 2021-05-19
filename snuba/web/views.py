@@ -2,6 +2,7 @@ import logging
 import os
 import time
 from datetime import datetime
+from functools import partial
 from typing import (
     Any,
     Callable,
@@ -41,16 +42,18 @@ from snuba.datasets.factory import (
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import JoinClause
+from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
+from snuba.query.logical import Query
 from snuba.redis import redis_client
 from snuba.request import Language
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
-from snuba.request.request_settings import HTTPRequestSettings
-from snuba.request.schema import RequestSchema
+from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
+from snuba.request.schema import RequestParts, RequestSchema
 from snuba.request.validation import (
-    build_legacy_parser,
     build_request,
-    build_snql_parser,
+    parse_legacy_query,
+    parse_snql_query_api,
 )
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
@@ -396,16 +399,21 @@ def dataset_query(
 
     if language == Language.SNQL:
         metrics.increment("snql.query.incoming", tags={"referrer": referrer})
-        parser = build_snql_parser([])
+        parser: Callable[
+            [RequestParts, RequestSettings, Dataset],
+            Union[Query, CompositeQuery[Entity]],
+        ] = partial(parse_snql_query_api, [])
     else:
-        parser = build_legacy_parser(dataset)
+        parser = parse_legacy_query
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build_with_extensions(
             dataset.get_default_entity().get_extensions(), HTTPRequestSettings, language
         )
 
-    request = build_request(body, parser, HTTPRequestSettings, schema, timer, referrer)
+    request = build_request(
+        body, parser, HTTPRequestSettings, schema, dataset, timer, referrer
+    )
 
     try:
         result = parse_and_run_query(dataset, request, timer)

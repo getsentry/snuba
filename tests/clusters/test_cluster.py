@@ -14,6 +14,7 @@ ENABLED_STORAGE_SETS = {
     "discover",
     "events",
     "events_ro",
+    "metrics",
     "migrations",
     "querylog",
     "sessions",

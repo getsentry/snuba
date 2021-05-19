@@ -14,7 +14,7 @@ PORT = 1218
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 
 DEFAULT_DATASET_NAME = "events"
-DISABLED_DATASETS: Set[str] = set()
+DISABLED_DATASETS: Set[str] = {"metrics"}
 
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
@@ -31,6 +31,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "discover",
             "events",
             "events_ro",
+            "metrics",
             "migrations",
             "outcomes",
             "querylog",
@@ -40,6 +41,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "single_node": True,
     },
 ]
+
 
 # Dogstatsd Options
 DOGSTATSD_HOST = "localhost"
@@ -124,7 +126,7 @@ COLUMN_SPLIT_MAX_LIMIT = 1000
 COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # Migrations in skipped groups will not be run
-SKIPPED_MIGRATION_GROUPS: Set[str] = {"querylog", "spans_experimental"}
+SKIPPED_MIGRATION_GROUPS: Set[str] = {"metrics", "querylog", "spans_experimental"}
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

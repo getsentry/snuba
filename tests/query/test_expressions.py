@@ -1,11 +1,13 @@
+from typing import Set
+
 from snuba.query.expressions import (
     Argument,
     Column,
     CurriedFunctionCall,
     Expression,
+    FunctionCall,
     Lambda,
     Literal,
-    FunctionCall,
     SubscriptableReference,
 )
 
@@ -114,7 +116,7 @@ def test_mapping_complex_expression() -> None:
 
     c1 = Column(None, "t1", "c1")
     f2 = FunctionCall(None, "fB", (f3,))
-    f1 = FunctionCall(None, "f0", (c1, f2))
+    f1: Expression = FunctionCall(None, "f0", (c1, f2))
 
     # Only the external function is going to be replaced since, when map returns a new
     # column, we expect the func to have takern care of its own children.
@@ -181,9 +183,9 @@ def test_hash() -> None:
     function_1 = FunctionCall(None, "f1", (column1, column2))
     literal = Literal(None, "blablabla")
     function_2 = CurriedFunctionCall(None, function_1, (column1,))
-    lm = Lambda(None, ("x", "y"), FunctionCall(None, "test", (Argument(None, "x"))))
+    lm = Lambda(None, ("x", "y"), FunctionCall(None, "test", (Argument(None, "x"),)))
 
-    s = set()
+    s: Set[Expression] = set()
     s.add(column1)
     s.add(column2)
     s.add(function_1)

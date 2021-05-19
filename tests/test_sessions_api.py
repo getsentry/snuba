@@ -1,10 +1,10 @@
 import itertools
+from datetime import datetime, timedelta
+from typing import Any, Callable, Mapping, Sequence, Tuple, Union
+
 import pytest
 import pytz
-from datetime import datetime, timedelta
 import simplejson as json
-from typing import Any, Callable, Tuple, Union
-
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
@@ -66,7 +66,7 @@ class TestSessionsApi(BaseApiTest):
             "started": self.started.replace(tzinfo=None).isoformat(" ", "seconds"),
         }
 
-        sessions = [
+        sessions: Sequence[Mapping[str, Any]] = [
             # individual "exited" session with two updates, a user and errors
             {**template, "session_id": session_1, "distinct_id": user_1, "status": 0},
             {
@@ -206,7 +206,7 @@ class TestSessionsApi(BaseApiTest):
     @pytest.mark.parametrize("granularity", [60, 120, 600])
     def test_session_small_granularity(
         self, get_project_id: Callable[[], int], granularity: int
-    ):
+    ) -> None:
         project_id = get_project_id()
         self.generate_session_events(project_id)
         response = self.app.post(
@@ -248,7 +248,7 @@ class TestSessionsApi(BaseApiTest):
         assert data["data"][2]["users"] == 1
         assert data["data"][2]["users_errored"] == 1
 
-    def test_minute_granularity_range(self, get_project_id: Callable[[], int]):
+    def test_minute_granularity_range(self, get_project_id: Callable[[], int]) -> None:
         project_id = get_project_id()
         self.generate_session_events(project_id)
         response = self.app.post(

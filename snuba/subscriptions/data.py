@@ -4,6 +4,7 @@ from abc import ABC, abstractclassmethod, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
+from functools import partial
 from typing import Any, List, Mapping, NamedTuple, NewType, Optional, Sequence, Union
 from uuid import UUID
 
@@ -25,9 +26,9 @@ from snuba.request import Language, Request
 from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import (
-    build_legacy_parser,
     build_request,
-    build_snql_parser,
+    parse_legacy_query,
+    parse_snql_query_api,
 )
 from snuba.utils.metrics.timer import Timer
 
@@ -143,9 +144,10 @@ class LegacySubscriptionData(SubscriptionData):
                 "from_date": (timestamp - self.time_window).isoformat(),
                 "to_date": timestamp.isoformat(),
             },
-            build_legacy_parser(dataset),
+            parse_legacy_query,
             SubscriptionRequestSettings,
             schema,
+            dataset,
             timer,
             SUBSCRIPTION_REFERRER,
         )
@@ -238,9 +240,10 @@ class SnQLSubscriptionData(SubscriptionData):
 
         request = build_request(
             {"query": self.query},
-            build_snql_parser([add_conditions]),
+            partial(parse_snql_query_api, [add_conditions]),
             SubscriptionRequestSettings,
             schema,
+            dataset,
             timer,
             SUBSCRIPTION_REFERRER,
         )

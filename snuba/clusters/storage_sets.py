@@ -19,6 +19,7 @@ class StorageSetKey(Enum):
     DISCOVER = "discover"
     EVENTS = "events"
     EVENTS_RO = "events_ro"
+    METRICS = "metrics"
     MIGRATIONS = "migrations"
     OUTCOMES = "outcomes"
     QUERYLOG = "querylog"
@@ -27,4 +28,4 @@ class StorageSetKey(Enum):
 
 
 # Storage sets enabled only when development features are enabled.
-DEV_STORAGE_SETS: FrozenSet[StorageSetKey] = frozenset()
+DEV_STORAGE_SETS: FrozenSet[StorageSetKey] = frozenset({StorageSetKey.METRICS})
