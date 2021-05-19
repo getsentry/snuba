@@ -1,9 +1,9 @@
 import logging
 import time
-import simplejson as json
-
 from datetime import datetime
 from typing import Optional, Sequence
+
+import simplejson as json
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storage import WritableTableStorage
@@ -13,7 +13,6 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams import Message
 from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.processing.strategies.batching import AbstractBatchWorker
-
 
 logger = logging.getLogger("snuba.replacer")
 
@@ -50,15 +49,11 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
     def flush_batch(self, batch: Sequence[Replacement]) -> None:
         need_optimize = False
         for replacement in batch:
-            query_args = {
-                **replacement.query_args,
-                "table_name": self.__replacer_processor.get_schema().get_table_name(),
-            }
+            table_name = self.__replacer_processor.get_schema().get_table_name()
+            count_query = replacement.get_count_query(table_name)
 
-            if replacement.count_query_template is not None:
-                count = self.clickhouse.execute_robust(
-                    replacement.count_query_template % query_args
-                )[0][0]
+            if count_query is not None:
+                count = self.clickhouse.execute_robust(count_query)[0][0]
                 if count == 0:
                     continue
             else:
@@ -69,11 +64,12 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
                 or need_optimize
             )
 
-            if replacement.insert_query_template is not None:
+            insert_query = replacement.get_insert_query(table_name)
+
+            if insert_query is not None:
                 t = time.time()
-                query = replacement.insert_query_template % query_args
-                logger.debug("Executing replace query: %s" % query)
-                self.clickhouse.execute_robust(query)
+                logger.debug("Executing replace query: %s" % insert_query)
+                self.clickhouse.execute_robust(insert_query)
                 duration = int((time.time() - t) * 1000)
 
                 logger.info("Replacing %s rows took %sms" % (count, duration))
