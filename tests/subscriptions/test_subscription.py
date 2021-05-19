@@ -1,10 +1,16 @@
 from datetime import timedelta
+from typing import List, Tuple, cast
+from uuid import UUID
 
 from pytest import raises
 
 from snuba.redis import redis_client
+from snuba.subscriptions.data import (
+    InvalidSubscriptionError,
+    LegacySubscriptionData,
+    SubscriptionData,
+)
 from snuba.subscriptions.store import RedisSubscriptionDataStore
-from snuba.subscriptions.data import InvalidSubscriptionError, SubscriptionData
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
@@ -15,9 +21,9 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
 
     timer = Timer("test")
 
-    def test(self):
+    def test(self) -> None:
         creator = SubscriptionCreator(self.dataset)
-        subscription = SubscriptionData(
+        subscription = LegacySubscriptionData(
             project_id=123,
             conditions=[["platform", "IN", ["a"]]],
             aggregations=[["count()", "", "count"]],
@@ -25,20 +31,26 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             resolution=timedelta(minutes=1),
         )
         identifier = creator.create(subscription, self.timer)
-        RedisSubscriptionDataStore(
-            redis_client, self.dataset, identifier.partition,
-        ).all()[0][1] == subscription
+        assert (
+            cast(
+                List[Tuple[UUID, SubscriptionData]],
+                RedisSubscriptionDataStore(
+                    redis_client, self.dataset, identifier.partition,
+                ).all(),
+            )[0][1]
+            == subscription
+        )
 
     def test_invalid_condition_column(self) -> None:
         creator = SubscriptionCreator(self.dataset)
         with raises(QueryException):
             creator.create(
-                SubscriptionData(
+                LegacySubscriptionData(
                     123,
+                    timedelta(minutes=1),
+                    timedelta(minutes=10),
                     [["platfo", "IN", ["a"]]],
                     [["count()", "", "count"]],
-                    timedelta(minutes=10),
-                    timedelta(minutes=1),
                 ),
                 self.timer,
             )
@@ -47,12 +59,12 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset)
         with raises(QueryException):
             creator.create(
-                SubscriptionData(
+                LegacySubscriptionData(
                     123,
+                    timedelta(minutes=1),
+                    timedelta(minutes=10),
                     [["platform", "IN", ["a"]]],
                     [["cout()", "", "count"]],
-                    timedelta(minutes=10),
-                    timedelta(minutes=1),
                 ),
                 self.timer,
             )
@@ -61,24 +73,24 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset)
         with raises(InvalidSubscriptionError):
             creator.create(
-                SubscriptionData(
+                LegacySubscriptionData(
                     123,
+                    timedelta(minutes=1),
+                    timedelta(),
                     [["platfo", "IN", ["a"]]],
                     [["count()", "", "count"]],
-                    timedelta(),
-                    timedelta(minutes=1),
                 ),
                 self.timer,
             )
 
         with raises(InvalidSubscriptionError):
             creator.create(
-                SubscriptionData(
+                LegacySubscriptionData(
                     123,
+                    timedelta(minutes=1),
+                    timedelta(hours=48),
                     [["platfo", "IN", ["a"]]],
                     [["count()", "", "count"]],
-                    timedelta(hours=48),
-                    timedelta(minutes=1),
                 ),
                 self.timer,
             )
@@ -87,21 +99,21 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset)
         with raises(InvalidSubscriptionError):
             creator.create(
-                SubscriptionData(
+                LegacySubscriptionData(
                     123,
+                    timedelta(),
+                    timedelta(minutes=1),
                     [["platfo", "IN", ["a"]]],
                     [["count()", "", "count"]],
-                    timedelta(minutes=1),
-                    timedelta(),
                 ),
                 self.timer,
             )
 
 
 class TestSubscriptionDeleter(BaseSubscriptionTest):
-    def test(self):
+    def test(self) -> None:
         creator = SubscriptionCreator(self.dataset)
-        subscription = SubscriptionData(
+        subscription = LegacySubscriptionData(
             project_id=1,
             conditions=[],
             aggregations=[["count()", "", "count"]],
@@ -109,11 +121,20 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
             resolution=timedelta(minutes=1),
         )
         identifier = creator.create(subscription, Timer("test"))
-        RedisSubscriptionDataStore(
-            redis_client, self.dataset, identifier.partition,
-        ).all()[0][1] == subscription
+        assert (
+            cast(
+                List[Tuple[UUID, SubscriptionData]],
+                RedisSubscriptionDataStore(
+                    redis_client, self.dataset, identifier.partition,
+                ).all(),
+            )[0][1]
+            == subscription
+        )
 
         SubscriptionDeleter(self.dataset, identifier.partition).delete(identifier.uuid)
-        RedisSubscriptionDataStore(
-            redis_client, self.dataset, identifier.partition,
-        ).all() == []
+        assert (
+            RedisSubscriptionDataStore(
+                redis_client, self.dataset, identifier.partition,
+            ).all()
+            == []
+        )

@@ -8,7 +8,7 @@ from snuba.util import with_span
 DATASETS_IMPL: MutableMapping[str, Dataset] = {}
 DATASETS_NAME_LOOKUP: MutableMapping[Dataset, str] = {}
 
-DEV_DATASET_NAMES: Set[str] = set()
+DEV_DATASET_NAMES: Set[str] = {"metrics"}
 
 DATASET_NAMES: Set[str] = {
     "discover",
@@ -42,6 +42,7 @@ def get_dataset(name: str) -> Dataset:
     from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
     from snuba.datasets.discover import DiscoverDataset
     from snuba.datasets.events import EventsDataset
+    from snuba.datasets.metrics import MetricsDataset
     from snuba.datasets.outcomes import OutcomesDataset
     from snuba.datasets.outcomes_raw import OutcomesRawDataset
     from snuba.datasets.sessions import SessionsDataset
@@ -52,6 +53,7 @@ def get_dataset(name: str) -> Dataset:
         "events": EventsDataset,
         "groupassignee": GroupAssigneeDataset,
         "groupedmessage": GroupedMessageDataset,
+        "metrics": MetricsDataset,
         "outcomes": OutcomesDataset,
         "outcomes_raw": OutcomesRawDataset,
         "sessions": SessionsDataset,

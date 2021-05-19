@@ -5,6 +5,7 @@ from typing import Any, Iterable, Mapping, Sequence, Tuple
 from clickhouse_driver import Client
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
+
 from snuba.clickhouse.columns import (
     UUID,
     AggregateFunction,
@@ -44,7 +45,7 @@ grammar = Grammar(
     enum_str         = ~r"([a-zA-Z0-9\-]+)"
     enum_val         = ~r"\d+"
     agg              = "AggregateFunction" open_paren space* agg_func space* comma space* agg_types space* close_paren
-    agg_func         = ~r"[a-zA-Z]+\([a-zA-Z0-9\,\.\s]+\)|[a-zA-Z]+"
+    agg_func         = ~r"[a-zA-Z0-9]+\([a-zA-Z0-9\,\.\s]+\)|[a-zA-Z0-9]+"
     agg_types        = (primitive (space* comma space*)?)*
     array            = "Array" open_paren space* (array / primitive / lowcardinality / nullable) space* close_paren
     lowcardinality   = "LowCardinality" open_paren space* (primitive / nullable) space* close_paren

@@ -404,7 +404,7 @@ def test_backfill_errors() -> None:
 def test_settings_skipped_group() -> None:
     from snuba.migrations import groups, runner
 
-    with patch("snuba.settings.SKIPPED_MIGRATION_GROUPS", {"querylog"}):
+    with patch("snuba.settings.SKIPPED_MIGRATION_GROUPS", {"querylog", "metrics"}):
         importlib.reload(groups)
         importlib.reload(runner)
         runner.Runner().run_all(force=True)
