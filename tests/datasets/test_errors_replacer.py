@@ -307,12 +307,12 @@ class TestReplacer:
             self.project_id,
         )
 
-    def test_unmerge_hierarchical_hashes_process(self) -> None:
+    def test_unmerge_hierarchical_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)
 
         message = (
             2,
-            "end_unmerge",
+            "end_unmerge_hierarchical",
             {
                 "project_id": self.project_id,
                 "previous_group_id": 1,

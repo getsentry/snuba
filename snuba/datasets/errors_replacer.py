@@ -151,6 +151,7 @@ class ErrorsReplacer(ReplacerProcessor):
             "start_delete_groups",
             "start_merge",
             "start_unmerge",
+            "start_unmerge_hierarchical",
             "start_delete_tag",
         ):
             return None
@@ -160,6 +161,10 @@ class ErrorsReplacer(ReplacerProcessor):
             processed = process_merge(event, self.__all_columns)
         elif type_ == "end_unmerge":
             processed = process_unmerge(event, self.__all_columns, self.__state_name)
+        elif type_ == "end_unmerge_hierarchical":
+            processed = process_unmerge_hierarchical(
+                event, self.__all_columns, self.__state_name
+            )
         elif type_ == "end_delete_tag":
             processed = process_delete_tag(
                 event,
@@ -535,6 +540,65 @@ def process_merge(
     )
 
 
+def process_unmerge(
+    message: Mapping[str, Any],
+    all_columns: Sequence[FlattenedColumn],
+    state_name: ReplacerState,
+) -> Optional[Replacement]:
+    hashes = message["hashes"]
+    if not hashes:
+        return None
+
+    assert all(isinstance(h, str) for h in hashes)
+
+    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+    all_column_names = [c.escaped for c in all_columns]
+    select_columns = map(
+        lambda i: i if i != "group_id" else str(message["new_group_id"]),
+        all_column_names,
+    )
+
+    where = """\
+        PREWHERE primary_hash IN (%(hashes)s)
+        WHERE group_id = %(previous_group_id)s
+        AND project_id = %(project_id)s
+        AND received <= CAST('%(timestamp)s' AS DateTime)
+        AND NOT deleted
+    """
+
+    count_query_template = (
+        """\
+        SELECT count()
+        FROM %(table_name)s FINAL
+    """
+        + where
+    )
+
+    insert_query_template = (
+        """\
+        INSERT INTO %(table_name)s (%(all_columns)s)
+        SELECT %(select_columns)s
+        FROM %(table_name)s FINAL
+    """
+        + where
+    )
+
+    query_args = {
+        "all_columns": ", ".join(all_column_names),
+        "select_columns": ", ".join(select_columns),
+        "previous_group_id": message["previous_group_id"],
+        "project_id": message["project_id"],
+        "timestamp": timestamp.strftime(DATETIME_FORMAT),
+        "hashes": _convert_hash_list(hashes, state_name),
+    }
+
+    query_time_flags = (NEEDS_FINAL, message["project_id"])
+
+    return Replacement(
+        count_query_template, insert_query_template, query_args, query_time_flags
+    )
+
+
 def _convert_hash_list(
     hashes: Sequence[str], state_name: ReplacerState, convert_types: bool = False
 ) -> str:
@@ -552,83 +616,7 @@ def _convert_hash_list(
             return ", ".join("'%s'" % _hashify(h) for h in hashes)
 
 
-def _build_grouping_hashes_filter(
-    message: Mapping[str, Any], state_name: ReplacerState
-) -> Optional[Tuple[List[str], List[str], MutableMapping[str, str]]]:
-    hashes = message.get("hashes") or []
-    # hierarchical_hashes is a mapping from one entry of the
-    # hierarchical_hashes arraycolumn to the corresponding primary hash.
-    #
-    # Example flow:
-    #
-    # 1. Two events, with hierarchical_hashes=[a, b, c] and hierarchical_hashes=[a, b2, c2]
-    #
-    #    a = "hash to group by 1 frame"
-    #    b/b2 = "hash to group by 2 frames"
-    #
-    #    primary_hash = hierarchical_hashes[0]
-    #
-    # 2. Sentry by default has GroupHash(hash=a) in DB
-    #
-    # 3. User wants to split up GroupHash(hash=a) into two: GroupHash(hash=b)
-    #    and GroupHash(hash=b2).
-    #
-    # 4. Sentry creates two group models out of one, with the corresponding group hashes.
-    #
-    # 5. Sentry emits replacement unmerge(hierarchical_hashes={b: a}) and
-    #    unmerge(hierarchical_hashes={b2: a})
-    #
-    #    `a` is passed to Snuba only such that it can do `PREWHERE primary_hash = a`,
-    #    it serves no functional purpose.
-    hierarchical_hashes = message.get("hierarchical_hashes") or {}
-    if not hashes and not hierarchical_hashes:
-        return None
-
-    assert all(isinstance(h, str) for h in hashes)
-    assert all(isinstance(h, str) for h in hierarchical_hashes.values())
-
-    prewhere = []
-    where = []
-    query_args = {}
-
-    if hashes:
-        prewhere.append("primary_hash IN (%(hashes)s)")
-        query_args["hashes"] = _convert_hash_list(hashes, state_name)
-
-    if hierarchical_hashes:
-        # primary_hash is the root (most coarse) level of the grouping tree,
-        # meaning:
-        #
-        # 1. primary_hash == hierarchical_hashes[0]
-        # 2. <any entry in hierarchical_hashes>:primary_hash is a n:1 relation
-        #
-        # Sentry wants us to filter events by hierarchical_hashes entry using
-        # hasAny, but also tells us the corresponding primary_hash such that we
-        # can filter more efficiently.
-        #
-        # For now this is just converted into
-        #
-        #     PREWHERE primary_hash IN ... WHERE hasAny(hierarchical_hashes, ...)
-        #
-        # ..but perhaps one day we may decide to instead emit multiple replacements of the form
-        #
-        #     PREWHERE primary_hash = ... WHERE has(hierarchical_hashes, ...)
-        #
-        # ..if we think that it would be faster.
-        prewhere.append("primary_hash IN (%(primary_hashes_for_hierarchical_hashes)s)")
-        query_args["primary_hashes_for_hierarchical_hashes"] = _convert_hash_list(
-            list(set(hierarchical_hashes.values())), state_name
-        )
-
-        where.append("hasAny(hierarchical_hashes, [%(hierarchical_hashes)s])")
-        query_args["hierarchical_hashes"] = _convert_hash_list(
-            list(hierarchical_hashes), state_name, convert_types=True
-        )
-
-    return prewhere, where, query_args
-
-
-def process_unmerge(
+def process_unmerge_hierarchical(
     message: Mapping[str, Any],
     all_columns: Sequence[FlattenedColumn],
     state_name: ReplacerState,
@@ -640,11 +628,44 @@ def process_unmerge(
         all_column_names,
     )
 
-    hashes_filter = _build_grouping_hashes_filter(message, state_name)
-    if hashes_filter is None:
+    hierarchical_hashes = message.get("hierarchical_hashes") or {}
+    if not hierarchical_hashes:
         return None
 
-    prewhere, where, query_args = hashes_filter
+    assert all(isinstance(h, str) for h in hierarchical_hashes.values())
+
+    prewhere = []
+    where = []
+    query_args = {}
+
+    # primary_hash is the root (most coarse) level of the grouping tree,
+    # meaning:
+    #
+    # 1. primary_hash == hierarchical_hashes[0]
+    # 2. <any entry in hierarchical_hashes>:primary_hash is a n:1 relation
+    #
+    # Sentry wants us to filter events by hierarchical_hashes entry using
+    # hasAny, but also tells us the corresponding primary_hash such that we
+    # can filter more efficiently.
+    #
+    # For now this is just converted into
+    #
+    #     PREWHERE primary_hash IN ... WHERE hasAny(hierarchical_hashes, ...)
+    #
+    # ..but perhaps one day we may decide to instead emit multiple replacements of the form
+    #
+    #     PREWHERE primary_hash = ... WHERE has(hierarchical_hashes, ...)
+    #
+    # ..if we think that it would be faster.
+    prewhere.append("primary_hash IN (%(primary_hashes_for_hierarchical_hashes)s)")
+    query_args["primary_hashes_for_hierarchical_hashes"] = _convert_hash_list(
+        list(set(hierarchical_hashes.values())), state_name
+    )
+
+    where.append("hasAny(hierarchical_hashes, [%(hierarchical_hashes)s])")
+    query_args["hierarchical_hashes"] = _convert_hash_list(
+        list(hierarchical_hashes), state_name, convert_types=True
+    )
 
     # group_id cannot be part of PREWHERE because FINAL is applied before
     # PREWHERE, meaning if group_id was part of prewhere we would see events

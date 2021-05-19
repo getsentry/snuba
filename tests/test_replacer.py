@@ -183,11 +183,11 @@ class TestReplacer:
             self.project_id,
         )
 
-    def test_unmerge_process_hierarchical_hashes(self) -> None:
+    def test_unmerge_hierarchical_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)
         message = (
             2,
-            "end_unmerge",
+            "end_unmerge_hierarchical",
             {
                 "project_id": self.project_id,
                 "previous_group_id": 1,
@@ -411,7 +411,7 @@ class TestReplacer:
 
         assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 2}]
 
-    def test_unmerge_insert_hierarchical_hashes(self) -> None:
+    def test_unmerge_hierarchical_insert(self) -> None:
         self.event["project_id"] = self.project_id
         self.event["group_id"] = 1
         self.event["primary_hash"] = "b" * 32
@@ -432,7 +432,7 @@ class TestReplacer:
                 json.dumps(
                     (
                         2,
-                        "end_unmerge",
+                        "end_unmerge_hierarchical",
                         {
                             "project_id": project_id,
                             "previous_group_id": 1,
