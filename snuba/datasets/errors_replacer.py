@@ -1,30 +1,35 @@
 import logging
 import time
 import uuid
-
+from abc import abstractmethod
 from collections import deque
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Deque, Mapping, Optional, Sequence, Tuple, MutableMapping, List
+from typing import (
+    Any,
+    Deque,
+    Dict,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
-from snuba.clickhouse.columns import FlattenedColumn, ReadOnly, Nullable
+from snuba.clickhouse.columns import FlattenedColumn, Nullable, ReadOnly
 from snuba.clickhouse.escaping import escape_identifier, escape_string
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import InvalidMessageType, _hashify
 from snuba.redis import redis_client
-from snuba.replacers.replacer_processor import (
-    Replacement,
-    ReplacementMessage,
-    ReplacerProcessor,
-)
-
+from snuba.replacers.replacer_processor import Replacement as ReplacementBase
+from snuba.replacers.replacer_processor import ReplacementMessage, ReplacerProcessor
 
 logger = logging.getLogger(__name__)
-
-EXCLUDE_GROUPS = object()
-NEEDS_FINAL = object()
 
 """
 Disambiguate the dataset/storage when there are multiple tables representing errors
@@ -36,6 +41,76 @@ In theory this will be needed only during the events to errors migration.
 class ReplacerState(Enum):
     EVENTS = "events"
     ERRORS = "errors"
+
+
+@dataclass(frozen=True)
+class NeedsFinal:
+    pass
+
+
+@dataclass(frozen=True)
+class ExcludeGroups:
+    group_ids: Sequence[int]
+
+
+QueryTimeFlags = Union[NeedsFinal, ExcludeGroups]
+
+
+class Replacement(ReplacementBase):
+    @abstractmethod
+    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_project_id(self) -> int:
+        raise NotImplementedError()
+
+
+EXCLUDE_GROUPS = object()
+NEEDS_FINAL = object()
+LegacyQueryTimeFlags = Union[Tuple[object, int], Tuple[object, int, Any]]
+
+
+@dataclass(frozen=True)
+class LegacyReplacement(Replacement):
+    # XXX: For the group_exclude message we need to be able to run a
+    # replacement without running any query.
+    count_query_template: Optional[str]
+    insert_query_template: Optional[str]
+    query_args: Mapping[str, Any]
+    query_time_flags: LegacyQueryTimeFlags
+
+    def get_project_id(self) -> int:
+        return self.query_time_flags[1]
+
+    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
+        if self.query_time_flags[0] == NEEDS_FINAL:
+            return NeedsFinal()
+
+        if self.query_time_flags[0] == EXCLUDE_GROUPS:
+            return ExcludeGroups(group_ids=self.query_time_flags[2])  # type: ignore
+
+        return None
+
+    def get_insert_query(self, table_name: str) -> Optional[str]:
+        if self.insert_query_template is None:
+            return None
+
+        args = {
+            **self.query_args,
+            "table_name": table_name
+        }
+        return self.insert_query_template % args
+
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        if self.count_query_template is None:
+            return None
+
+        args = {
+            **self.query_args,
+            "table_name": table_name
+        }
+        return self.count_query_template % args
 
 
 def get_project_exclude_groups_key(
@@ -123,7 +198,7 @@ def get_projects_query_flags(
     return (needs_final, exclude_groups)
 
 
-class ErrorsReplacer(ReplacerProcessor):
+class ErrorsReplacer(ReplacerProcessor[Replacement]):
     def __init__(
         self,
         schema: WritableTableSchema,
@@ -187,8 +262,6 @@ class ErrorsReplacer(ReplacerProcessor):
         return processed
 
     def pre_replacement(self, replacement: Replacement, matching_records: int) -> bool:
-        # query_time_flags == (type, project_id, [...data...])
-        flag_type, project_id = replacement.query_time_flags[:2]
         if self.__state_name == ReplacerState.EVENTS:
             # Backward compatibility with the old keys already in Redis, we will let double write
             # the old key structure and the new one for a while then we can get rid of the old one.
@@ -196,17 +269,25 @@ class ErrorsReplacer(ReplacerProcessor):
         else:
             compatibility_double_write = False
 
+        project_id = replacement.get_project_id()
+        query_time_flags = replacement.get_query_time_flags()
+
         if not settings.REPLACER_IMMEDIATE_OPTIMIZE:
-            if flag_type == NEEDS_FINAL:
+            if isinstance(query_time_flags, NeedsFinal):
                 if compatibility_double_write:
                     set_project_needs_final(project_id, None)
                 set_project_needs_final(project_id, self.__state_name)
-            elif flag_type == EXCLUDE_GROUPS:
-                group_ids = replacement.query_time_flags[2]
+
+            elif isinstance(query_time_flags, ExcludeGroups):
                 if compatibility_double_write:
-                    set_project_exclude_groups(project_id, group_ids, None)
-                set_project_exclude_groups(project_id, group_ids, self.__state_name)
-        elif flag_type in {NEEDS_FINAL, EXCLUDE_GROUPS}:
+                    set_project_exclude_groups(
+                        project_id, query_time_flags.group_ids, None
+                    )
+                set_project_exclude_groups(
+                    project_id, query_time_flags.group_ids, self.__state_name
+                )
+
+        elif query_time_flags is not None:
             return True
 
         return False
@@ -217,7 +298,7 @@ def _build_event_tombstone_replacement(
     required_columns: Sequence[str],
     where: str,
     query_args: Mapping[str, str],
-    query_time_flags: Tuple[Any, ...],
+    query_time_flags: LegacyQueryTimeFlags,
 ) -> Replacement:
     select_columns = map(lambda i: i if i != "deleted" else "1", required_columns)
     count_query_template = (
@@ -244,7 +325,7 @@ def _build_event_tombstone_replacement(
     }
     final_query_args.update(query_args)
 
-    return Replacement(
+    return LegacyReplacement(
         count_query_template, insert_query_template, final_query_args, query_time_flags
     )
 
@@ -255,7 +336,7 @@ def _build_group_replacement(
     new_group_id: str,
     where: str,
     query_args: Mapping[str, str],
-    query_time_flags: Tuple[Any, ...],
+    query_time_flags: LegacyQueryTimeFlags,
     all_columns: Sequence[FlattenedColumn],
 ) -> Optional[Replacement]:
     # HACK: We were sending duplicates of the `end_merge` message from Sentry,
@@ -295,7 +376,7 @@ def _build_group_replacement(
     }
     final_query_args.update(query_args)
 
-    return Replacement(
+    return LegacyReplacement(
         count_query_template, insert_query_template, final_query_args, query_time_flags
     )
 
@@ -482,7 +563,7 @@ def process_exclude_groups(message: Mapping[str, Any]) -> Optional[Replacement]:
         return None
 
     query_time_flags = (EXCLUDE_GROUPS, message["project_id"], group_ids)
-    return Replacement(None, None, {}, query_time_flags)
+    return LegacyReplacement(None, None, {}, query_time_flags)
 
 
 SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
@@ -597,7 +678,7 @@ def process_unmerge(
 
     query_time_flags = (NEEDS_FINAL, message["project_id"])
 
-    return Replacement(
+    return LegacyReplacement(
         count_query_template, insert_query_template, query_args, query_time_flags
     )
 
@@ -687,6 +768,6 @@ def process_delete_tag(
 
     query_time_flags = (NEEDS_FINAL, message["project_id"])
 
-    return Replacement(
+    return LegacyReplacement(
         count_query_template, insert_query_template, query_args, query_time_flags
     )

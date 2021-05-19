@@ -1603,3 +1603,24 @@ class TestDiscoverApi(BaseApiTest):
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["data"] == [{"count": 1}]
+
+
+class TestDiscoverAPIEntitySelection(TestDiscoverApi):
+    """
+    Override the original tests to always use the "discover" entity to test the
+    entity selection.
+    """
+
+    @pytest.fixture  # type: ignore
+    def test_entity(self) -> Union[str, Tuple[str, str]]:
+        # This can be overridden in the post function
+        return "discover"
+
+    @pytest.fixture(autouse=True)  # type: ignore
+    def setup_post(self, _build_snql_post_methods: Callable[..., Any]) -> None:
+        orig_post = _build_snql_post_methods
+
+        def fixed_entity_post(data: str, entity: str = "discover") -> Any:
+            return orig_post(data, "discover")
+
+        self.post = fixed_entity_post
