@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-
 from typing import Mapping, Optional
 
 from snuba.clickhouse.escaping import escape_string
@@ -70,12 +69,13 @@ class MergeTree(TableEngine):
         return sql
 
     def _get_engine_type(self, cluster: ClickhouseCluster, table_name: str) -> str:
+        database_name = cluster.get_database()
         if cluster.is_single_node():
             return "MergeTree()"
         elif self._unsharded is True:
-            return f"ReplicatedMergeTree('/clickhouse/tables/{self._storage_set_value}/all/{table_name}', '{{replica}}')"
+            return f"ReplicatedMergeTree('/clickhouse/tables/{self._storage_set_value}/all/{database_name}/{table_name}', '{{replica}}')"
         else:
-            return f"ReplicatedMergeTree('/clickhouse/tables/{self._storage_set_value}/{{shard}}/{table_name}', '{{replica}}')"
+            return f"ReplicatedMergeTree('/clickhouse/tables/{self._storage_set_value}/{{shard}}/{database_name}/{table_name}', '{{replica}}')"
 
 
 class ReplacingMergeTree(MergeTree):
@@ -96,32 +96,35 @@ class ReplacingMergeTree(MergeTree):
         self.__version_column = version_column
 
     def _get_engine_type(self, cluster: ClickhouseCluster, table_name: str) -> str:
+        database_name = cluster.get_database()
         if cluster.is_single_node():
             return f"ReplacingMergeTree({self.__version_column})"
         elif self._unsharded is True:
-            return f"ReplicatedReplacingMergeTree('/clickhouse/tables/{self._storage_set_value}/all/{table_name}', '{{replica}}', {self.__version_column})"
+            return f"ReplicatedReplacingMergeTree('/clickhouse/tables/{self._storage_set_value}/all/{database_name}/{table_name}', '{{replica}}', {self.__version_column})"
         else:
-            return f"ReplicatedReplacingMergeTree('/clickhouse/tables/{self._storage_set_value}/{{shard}}/{table_name}', '{{replica}}', {self.__version_column})"
+            return f"ReplicatedReplacingMergeTree('/clickhouse/tables/{self._storage_set_value}/{{shard}}/{database_name}/{table_name}', '{{replica}}', {self.__version_column})"
 
 
 class SummingMergeTree(MergeTree):
     def _get_engine_type(self, cluster: ClickhouseCluster, table_name: str) -> str:
+        database_name = cluster.get_database()
         if cluster.is_single_node():
             return "SummingMergeTree()"
         elif self._unsharded is True:
-            return f"SummingMergeTree('/clickhouse/tables/{self._storage_set_value}/all/{table_name}', '{{replica}}')"
+            return f"SummingMergeTree('/clickhouse/tables/{self._storage_set_value}/all/{database_name}/{table_name}', '{{replica}}')"
         else:
-            return f"ReplicatedSummingMergeTree('/clickhouse/tables/{self._storage_set_value}/{{shard}}/{table_name}', '{{replica}}')"
+            return f"ReplicatedSummingMergeTree('/clickhouse/tables/{self._storage_set_value}/{{shard}}/{database_name}/{table_name}', '{{replica}}')"
 
 
 class AggregatingMergeTree(MergeTree):
     def _get_engine_type(self, cluster: ClickhouseCluster, table_name: str) -> str:
+        database_name = cluster.get_database()
         if cluster.is_single_node():
             return "AggregatingMergeTree()"
         elif self._unsharded is True:
-            return f"ReplicatedAggregatingMergeTree('/clickhouse/tables/{self._storage_set_value}/all/{table_name}', '{{replica}}')"
+            return f"ReplicatedAggregatingMergeTree('/clickhouse/tables/{self._storage_set_value}/all/{database_name}/{table_name}', '{{replica}}')"
         else:
-            return f"ReplicatedAggregatingMergeTree('/clickhouse/tables/{self._storage_set_value}/{{shard}}/{table_name}', '{{replica}}')"
+            return f"ReplicatedAggregatingMergeTree('/clickhouse/tables/{self._storage_set_value}/{{shard}}/{database_name}/{table_name}', '{{replica}}')"
 
 
 class Distributed(TableEngine):

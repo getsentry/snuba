@@ -2,6 +2,7 @@ from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
     binary_condition,
+    condition_pattern,
     get_first_level_and_conditions,
     get_first_level_or_conditions,
     is_any_binary_condition,
@@ -11,7 +12,6 @@ from snuba.query.conditions import (
     is_not_in_condition,
     is_not_in_condition_pattern,
     is_unary_condition,
-    condition_pattern,
     unary_condition,
 )
 from snuba.query.dsl import literals_tuple
@@ -72,7 +72,7 @@ def test_map_expressions_in_basic_condition() -> None:
             return c3
         return e
 
-    condition = binary_condition(ConditionFunctions.EQ, f1, c2)
+    condition: Expression = binary_condition(ConditionFunctions.EQ, f1, c2)
     condition = condition.transform(replace_col)
 
     condition_b = binary_condition(
@@ -107,7 +107,7 @@ def test_nested_simple_condition() -> None:
     c8 = Column(None, "t1", "c2")
     co5 = binary_condition(ConditionFunctions.EQ, c7, c8)
     or2 = binary_condition(BooleanFunctions.OR, co4, co5)
-    and1 = binary_condition(BooleanFunctions.AND, or1, or2)
+    and1: Expression = binary_condition(BooleanFunctions.AND, or1, or2)
 
     ret = list(and1)
     expected = [c1, c2, co1, c3, c4, co2, or1, c5, c6, co4, c7, c8, co5, or2, and1]

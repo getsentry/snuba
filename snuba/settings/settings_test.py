@@ -12,4 +12,4 @@ USE_RESULT_CACHE = True
 
 SENTRY_DSN = os.getenv("SENTRY_DSN")
 
-SKIPPED_MIGRATION_GROUPS: Set[str] = set()
+SKIPPED_MIGRATION_GROUPS: Set[str] = {"metrics"}

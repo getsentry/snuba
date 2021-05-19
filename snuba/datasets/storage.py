@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import NamedTuple, Optional, Sequence
+from typing import Any, NamedTuple, Optional, Sequence
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
@@ -167,7 +167,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         stream_loader: KafkaStreamLoader,
         query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
-        replacer_processor: Optional[ReplacerProcessor] = None,
+        replacer_processor: Optional[ReplacerProcessor[Any]] = None,
         writer_options: ClickhouseWriterOptions = None,
     ) -> None:
         super().__init__(

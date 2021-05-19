@@ -1,6 +1,7 @@
 import logging
 from dataclasses import replace
 from datetime import datetime, timedelta
+from functools import partial
 from typing import (
     Any,
     Callable,
@@ -10,6 +11,7 @@ from typing import (
     NamedTuple,
     Optional,
     Sequence,
+    Set,
     Tuple,
     Union,
 )
@@ -19,20 +21,24 @@ from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
 from snuba import state
+from snuba.clickhouse.columns import Array, ColumnSet
 from snuba.clickhouse.query_dsl.accessors import get_time_range_expressions
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.factory import get_dataset_name
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
+    FUNCTION_TO_OPERATOR,
     OPERATOR_TO_FUNCTION,
+    ConditionFunctions,
     binary_condition,
     build_match,
     combine_and_conditions,
     combine_or_conditions,
-    ConditionFunctions,
     get_first_level_and_conditions,
+    is_condition,
     unary_condition,
 )
 from snuba.query.data_source.join import IndividualNode, JoinClause
@@ -62,6 +68,7 @@ from snuba.query.parser import (
 )
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.validation import validate_query
+from snuba.query.schema import POSITIVE_OPERATORS
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
     HighPriOperator,
@@ -901,6 +908,106 @@ def _array_join_transformation(
     query.transform_expressions(parse)
 
 
+def _transform_array_condition(array_columns: Set[str], exp: Expression) -> Expression:
+    if not is_condition(exp) or not isinstance(exp, FunctionCall):
+        return exp
+    elif len(exp.parameters) < 2:
+        return exp
+
+    lhs = exp.parameters[0]
+    if not isinstance(lhs, Column):
+        return exp
+
+    aliased_name = (
+        f"{lhs.table_name + '.' if lhs.table_name is not None else ''}{lhs.column_name}"
+    )
+    if aliased_name not in array_columns:
+        return exp
+
+    function_name = (
+        "arrayExists"
+        if FUNCTION_TO_OPERATOR[exp.function_name] in POSITIVE_OPERATORS
+        else "arrayAll"
+    )
+
+    # This is an expression like:
+    # arrayExists(x -> assumeNotNull(notLike(x, rhs)), lhs)
+    return FunctionCall(
+        None,
+        function_name,
+        (
+            Lambda(
+                None,
+                ("x",),
+                FunctionCall(
+                    None,
+                    "assumeNotNull",
+                    (
+                        FunctionCall(
+                            None,
+                            exp.function_name,
+                            (Argument(None, "x"), exp.parameters[1]),
+                        ),
+                    ),
+                ),
+            ),
+            lhs,
+        ),
+    )
+
+
+def _unpack_array_conditions(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
+    schema: ColumnSet,
+    entity_alias: Optional[str] = None,
+) -> None:
+    array_columns = set()
+    array_join_col = query.get_arrayjoin()
+    array_join = ""
+    if array_join_col is not None:
+        assert isinstance(array_join_col, Column)
+        array_join = f"{array_join_col.table_name + '.' if array_join_col.table_name else ''}{array_join_col.column_name}"
+
+    entity_alias = f"{entity_alias}." if entity_alias is not None else ""
+    for column in schema:
+        if isinstance(column.type, Array):
+            aliased_base_name = f"{entity_alias}{column.base_name}"
+            aliased_flattened = f"{entity_alias}{column.flattened}"
+            if aliased_base_name == array_join or aliased_flattened == array_join:
+                continue
+
+            array_columns.add(aliased_base_name)
+            array_columns.add(aliased_flattened)
+
+    condition = query.get_condition()
+    if condition:
+        query.set_ast_condition(
+            condition.transform(partial(_transform_array_condition, array_columns))
+        )
+
+
+def _array_column_conditions(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+) -> None:
+    """
+    Find conditions on array columns, and if those columns are not in the array join,
+    convert them to the appropriate higher order function.
+    """
+    from_clause = query.get_from_clause()
+    if isinstance(from_clause, (CompositeQuery, LogicalQuery)):
+        # It's difficult to know if a subquery is returning an array,
+        # so we can't easily detect a condition on that.
+        return
+
+    if isinstance(from_clause, QueryEntity):
+        _unpack_array_conditions(query, from_clause.schema)
+    elif isinstance(from_clause, JoinClause):
+        alias_map = from_clause.get_alias_node_map()
+        for alias, node in alias_map.items():
+            assert isinstance(node.data_source, QueryEntity)  # mypy
+            _unpack_array_conditions(query, node.data_source.schema, alias)
+
+
 def _mangle_query_aliases(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
 ) -> None:
@@ -1059,6 +1166,59 @@ def validate_entities_with_query(
                     )
 
 
+def _select_entity_for_dataset(
+    dataset: Dataset,
+) -> Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]:
+    def selector(query: Union[CompositeQuery[QueryEntity], LogicalQuery]) -> None:
+        # If you are doing a JOIN, then you have to specify the entity
+        if isinstance(query, CompositeQuery):
+            return
+
+        if get_dataset_name(dataset) == "discover":
+            query_entity = query.get_from_clause()
+            # The legacy -> snql parser will mark queries with no entity specified as the "discover" entity
+            # so only do this selection in that case. If someone wants the "discover" entity specifically
+            # then their query will have to only use fields from that entity.
+            if query_entity.key == EntityKey.DISCOVER:
+                selected_entity_key = dataset.select_entity(query)
+                selected_entity = get_entity(selected_entity_key)
+                query_entity = QueryEntity(
+                    selected_entity_key, selected_entity.get_data_model()
+                )
+                query.set_from_clause(query_entity)
+
+                # XXX: This exists only to ensure that the generated SQL matches legacy queries.
+                def replace_time_condition_aliases(exp: Expression) -> Expression:
+                    if (
+                        isinstance(exp, FunctionCall)
+                        and len(exp.parameters) == 2
+                        and isinstance(exp.parameters[0], Column)
+                        and exp.parameters[0].alias == "_snuba_timestamp"
+                    ):
+                        return FunctionCall(
+                            exp.alias,
+                            exp.function_name,
+                            (
+                                Column(
+                                    f"_snuba_{selected_entity.required_time_column}",
+                                    exp.parameters[0].table_name,
+                                    exp.parameters[0].column_name,
+                                ),
+                                exp.parameters[1],
+                            ),
+                        )
+
+                    return exp
+
+                condition = query.get_condition()
+                if condition is not None:
+                    query.set_ast_condition(
+                        condition.transform(replace_time_condition_aliases)
+                    )
+
+    return selector
+
+
 def _post_process(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
     funcs: Sequence[Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]],
@@ -1073,28 +1233,37 @@ def _post_process(
             query.set_from_clause(from_clause)
 
 
+POST_PROCESSORS = [
+    _parse_datetime_literals,
+    _validate_aliases,
+    _parse_subscriptables,  # -> This should be part of the grammar
+    _apply_column_aliases,
+    _expand_aliases,
+    _mangle_query_aliases,
+    _array_join_transformation,
+    _qualify_columns,
+    _array_column_conditions,
+]
+
+VALIDATORS = [validate_query, validate_entities_with_query]
+
+
 def parse_snql_query(
     body: str, dataset: Dataset
 ) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
     query = parse_snql_query_initial(body)
 
     _post_process(
-        query,
-        [
-            _parse_datetime_literals,
-            _validate_aliases,
-            _parse_subscriptables,  # -> This should be part of the grammar
-            _apply_column_aliases,
-            _expand_aliases,
-            _mangle_query_aliases,
-            _array_join_transformation,
-            _qualify_columns,
-        ],
+        query, POST_PROCESSORS,
     )
 
     # Time based processing, which will sometimes be skipped by subscriptions
     _post_process(query, [_replace_time_condition])
 
+    # XXX: Select the entity to be used for the query. This step is temporary. Eventually
+    # entity selection will be moved to Sentry and specified for all SnQL queries.
+    _post_process(query, [_select_entity_for_dataset(dataset)])
+
     # Validating
-    _post_process(query, [validate_query, validate_entities_with_query])
+    _post_process(query, VALIDATORS)
     return query

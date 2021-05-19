@@ -33,7 +33,7 @@ class TransactionEvent:
     geo: Mapping[str, str]
     status: str
 
-    def serialize(self) -> Mapping[str, Any]:
+    def serialize(self) -> Tuple[int, str, Mapping[str, Any]]:
         return (
             2,
             "insert",
