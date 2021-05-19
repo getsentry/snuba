@@ -227,6 +227,17 @@ class ProcessedMessageBatchWriter(
             self.__replacement_batch_writer.join(timeout)
 
 
+def process_message(
+    processor: MessageProcessor, message: Message[KafkaPayload]
+) -> Union[None, JSONRowInsertBatch, ReplacementBatch]:
+    return processor.process_message(
+        rapidjson.loads(message.payload.value),
+        KafkaMessageMetadata(
+            message.offset, message.partition.index, message.timestamp
+        ),
+    )
+
+
 class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
     def __init__(
         self,
@@ -302,16 +313,6 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             self.__max_batch_size,
             self.__max_batch_time,
         )
-
-        def process_message(
-            processor: MessageProcessor, message: Message[KafkaPayload]
-        ) -> Union[None, JSONRowInsertBatch, ReplacementBatch]:
-            return processor.process_message(
-                rapidjson.loads(message.payload.value),
-                KafkaMessageMetadata(
-                    message.offset, message.partition.index, message.timestamp
-                ),
-            )
 
         transform_function = functools.partial(process_message, self.__processor)
 
