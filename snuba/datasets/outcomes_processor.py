@@ -2,10 +2,10 @@ import uuid
 from datetime import datetime
 from typing import Any, Mapping, Optional
 
-from snuba.consumers.types import KafkaMessageMetadata
 from sentry_relay import DataCategory
 
-from snuba import settings, environment
+from snuba import environment, settings
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import (
     InsertBatch,
     MessageProcessor,
@@ -13,7 +13,6 @@ from snuba.processor import (
     _ensure_valid_date,
     _unicodify,
 )
-
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "outcomes.processor")

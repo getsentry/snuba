@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any, Optional, Mapping
+from typing import Any, Mapping, Optional
 
 from snuba import environment
 from snuba.consumers.types import KafkaMessageMetadata

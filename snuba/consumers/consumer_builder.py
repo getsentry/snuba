@@ -1,9 +1,10 @@
+import functools
 from typing import Callable, Optional, Sequence
 
 from confluent_kafka import KafkaError, KafkaException, Producer
 
 from snuba import environment
-from snuba.consumers.consumer import StreamingConsumerStrategyFactory
+from snuba.consumers.consumer import build_batch_writer, process_message
 from snuba.consumers.snapshot_worker import SnapshotProcessor
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
@@ -30,6 +31,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.processing.strategies import ProcessingStrategyFactory
 from snuba.utils.streams.profiler import ProcessingStrategyProfilerWrapperFactory
+from snuba.utils.streams.strategy_factory import StreamingConsumerStrategyFactory
 
 
 class ConsumerBuilder:
@@ -195,21 +197,21 @@ class ConsumerBuilder:
             KafkaPayload
         ] = StreamingConsumerStrategyFactory(
             stream_loader.get_pre_filter(),
-            processor,
-            table_writer.get_batch_writer(
-                self.metrics,
-                {"load_balancing": "in_order", "insert_distributed_sync": 1},
+            functools.partial(process_message, processor),
+            build_batch_writer(
+                table_writer,
+                metrics=self.metrics,
+                replacements_producer=(
+                    self.producer if self.replacements_topic is not None else None
+                ),
+                replacements_topic=self.replacements_topic,
             ),
-            self.metrics,
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms / 1000.0,
             processes=self.processes,
             input_block_size=self.input_block_size,
             output_block_size=self.output_block_size,
-            replacements_producer=(
-                self.producer if self.replacements_topic is not None else None
-            ),
-            replacements_topic=self.replacements_topic,
+            metrics=StreamMetricsAdapter(self.metrics),
         )
 
         if self.__profile_path is not None:

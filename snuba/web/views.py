@@ -1,3 +1,4 @@
+import functools
 import logging
 import os
 import time
@@ -555,20 +556,24 @@ if application.debug or application.testing:
         assert storage is not None
 
         if type_ == "insert":
-            from snuba.consumers.consumer import StreamingConsumerStrategyFactory
+            from snuba.consumers.consumer import build_batch_writer, process_message
+            from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
+            from snuba.utils.streams.strategy_factory import (
+                StreamingConsumerStrategyFactory,
+            )
 
             table_writer = storage.get_table_writer()
             stream_loader = table_writer.get_stream_loader()
             strategy = StreamingConsumerStrategyFactory(
                 stream_loader.get_pre_filter(),
-                stream_loader.get_processor(),
-                table_writer.get_batch_writer(metrics),
-                metrics,
+                functools.partial(process_message, stream_loader.get_processor()),
+                build_batch_writer(table_writer, metrics=metrics),
                 max_batch_size=1,
                 max_batch_time=1.0,
                 processes=None,
                 input_block_size=None,
                 output_block_size=None,
+                metrics=StreamMetricsAdapter(metrics),
             ).create(lambda offsets: None)
             strategy.submit(message)
             strategy.close()

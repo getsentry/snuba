@@ -29,6 +29,33 @@ class Metrics(Protocol):
         raise NotImplementedError
 
 
+class MetricsWrapper:
+    def __init__(self, backend: Metrics, name: Optional[str] = None) -> None:
+        self.__backend = backend
+        self.__name = name
+
+    def __merge_name(self, name: str) -> str:
+        if self.__name is None:
+            return name
+        else:
+            return f"{self.__name}.{name}"
+
+    def increment(
+        self, name: str, value: Union[int, float] = 1, tags: Optional[Tags] = None
+    ) -> None:
+        self.__backend.increment(self.__merge_name(name), value, tags)
+
+    def gauge(
+        self, name: str, value: Union[int, float], tags: Optional[Tags] = None
+    ) -> None:
+        self.__backend.gauge(self.__merge_name(name), value, tags)
+
+    def timing(
+        self, name: str, value: Union[int, float], tags: Optional[Tags] = None
+    ) -> None:
+        self.__backend.timing(self.__merge_name(name), value, tags)
+
+
 class _DummyMetricsBackend(Metrics):
     """
     Default metrics backend that does not record anything.

@@ -1,12 +1,11 @@
 from datetime import datetime
-from typing import Optional
 from uuid import uuid1
 
 import pytest
 import pytz
 
-from snuba.consumers.types import KafkaMessageMetadata
 from snuba.consumers.snapshot_worker import SnapshotProcessor
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.cdc.types import InsertEvent
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
@@ -117,7 +116,7 @@ test_data = [
 
 
 @pytest.mark.parametrize("xid, expected", test_data)
-def test_send_message(xid: int, expected: Optional[ProcessedMessage]) -> None:
+def test_send_message(xid: int, expected: ProcessedMessage) -> None:
     processor = (
         get_writable_storage(StorageKey.GROUPEDMESSAGES)
         .get_table_writer()
