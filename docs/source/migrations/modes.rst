@@ -36,13 +36,18 @@ Enabling Distributed Mode
 In your local ``server.py``, set ``SENTRY_DISTRIBUTED_CLICKHOUSE_TABLES``
 to True. Start up the corresponding Clickhouse container (``sentry devservices up clickhouse``).
 
-Now, it is important to configure the clusters that can be used in Distributed tables. These are
+Now, we take a look at the cluster configurations that can be used in Distributed tables. These are
 set in `this file <https://github.com/getsentry/sentry/blob/master/config/clickhouse/dist_config.xml>`_.
-Moreover, examples of and information on cluster configurations can be found `here <https://clickhouse.tech/docs/en/engines/table-engines/special/distributed/>`_.
+The current configuration in the file is a default, 1 shard with 1 replica model, and is best to use
+at the moment, as it supports migrations for all storages. Moving forward, we look to adding support
+for multi-sharded configurations, and ensuring storages are placed on the right clusters.
+More examples of and information on cluster configurations can be found `here <https://clickhouse.tech/docs/en/engines/table-engines/special/distributed/>`_.
 
 Finally, set up cluster connection details (for example, which storage is to be assigned
 to be which cluster) in `this file <https://github.com/getsentry/snuba/blob/master/snuba/settings/settings_distributed.py>`_.
 This needs to be done only for distributed migrations, as the default cluster details will be used in local mode.
+The default in this file works with the default cluster configurations mentioned above, so no changes
+are immediately necessary.
 
 Ensuring that your local configuration is prepared for migrations (reverting any existing
 migrations, or dropping certain databases/tables), run migrations with the ``SNUBA_SETTINGS``
