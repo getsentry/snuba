@@ -1,13 +1,21 @@
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Iterable, MutableMapping, Tuple
+from typing import Any, Iterable, MutableMapping, Optional, Tuple
 from uuid import UUID, uuid1
 
 import pytest
 
 from snuba.datasets.factory import get_dataset
 from snuba.query.conditions import ConditionFunctions, get_first_level_and_conditions
-from snuba.query.matchers import Column, Datetime, FunctionCall, Literal, String
+from snuba.query.matchers import (
+    Column,
+    FunctionCall,
+    Literal,
+    MatchResult,
+    Pattern,
+    String,
+)
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import (
     LegacySubscriptionData,
@@ -41,6 +49,18 @@ class DummySubscriptionDataStore(SubscriptionDataStore):
 
     def all(self) -> Iterable[Tuple[UUID, SubscriptionData]]:
         return [*self.__subscriptions.items()]
+
+
+@dataclass(frozen=True)
+class Datetime(Pattern[datetime]):
+    """
+    Matches one specific datetime.
+    """
+
+    value: datetime
+
+    def match(self, node: Any) -> Optional[MatchResult]:
+        return MatchResult() if node == self.value else None
 
 
 @pytest.fixture(

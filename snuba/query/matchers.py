@@ -203,18 +203,6 @@ class Integer(Pattern[int]):
 
 
 @dataclass(frozen=True)
-class Datetime(Pattern[datetime]):
-    """
-    Matches one specific datetime.
-    """
-
-    value: datetime
-
-    def match(self, node: AnyType) -> Optional[MatchResult]:
-        return MatchResult() if node == self.value else None
-
-
-@dataclass(frozen=True)
 class OptionalString(Pattern[Optional[str]]):
     """
     Matches one specific string (or None).

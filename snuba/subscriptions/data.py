@@ -12,10 +12,10 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
+    BooleanFunctions,
     ConditionFunctions,
     binary_condition,
     combine_and_conditions,
-    get_first_level_and_conditions,
 )
 from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
@@ -229,14 +229,14 @@ class SnQLSubscriptionData(SubscriptionData):
                     )
                 )
 
+            new_condition = combine_and_conditions(conditions_to_add)
             condition = query.get_condition()
             if condition:
-                conditions_to_add = [
-                    *get_first_level_and_conditions(condition),
-                    *conditions_to_add,
-                ]
+                new_condition = binary_condition(
+                    BooleanFunctions.AND, condition, new_condition
+                )
 
-            query.set_ast_condition(combine_and_conditions(conditions_to_add))
+            query.set_ast_condition(new_condition)
 
         request = build_request(
             {"query": self.query},
