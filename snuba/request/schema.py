@@ -1,22 +1,17 @@
 from __future__ import annotations
 
 import itertools
-import uuid
-from collections import ChainMap
-from typing import Any, Mapping, MutableMapping, Type, Union
+from typing import Any, Mapping, MutableMapping, NamedTuple, Type
 
 import jsonschema
 import sentry_sdk
 
 from snuba import environment
-from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
-from snuba.query.parser import parse_query
 from snuba.query.schema import GENERIC_QUERY_SCHEMA, SNQL_QUERY_SCHEMA
-from snuba.query.snql.parser import parse_snql_query
-from snuba.request import Language, Request
+from snuba.request import Language
 from snuba.request.exceptions import JsonSchemaValidationException
 from snuba.request.request_settings import (
     HTTPRequestSettings,
@@ -27,6 +22,12 @@ from snuba.schemas import Schema, validate_jsonschema
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "parser")
+
+
+class RequestParts(NamedTuple):
+    query: Mapping[str, Any]
+    settings: Mapping[str, Any]
+    extensions: Mapping[str, Any]
 
 
 class RequestSchema:
@@ -106,9 +107,7 @@ class RequestSchema:
             language,
         )
 
-    def validate(
-        self, value: MutableMapping[str, Any], dataset: Dataset, referrer: str
-    ) -> Request:
+    def validate(self, value: MutableMapping[str, Any]) -> RequestParts:
         try:
             value = validate_jsonschema(value, self.__composite_schema)
         except jsonschema.ValidationError as error:
@@ -125,14 +124,6 @@ class RequestSchema:
             if key in value
         }
 
-        class_name = self.__setting_class
-        if isinstance(class_name, type(HTTPRequestSettings)):
-            settings_obj: Union[
-                HTTPRequestSettings, SubscriptionRequestSettings
-            ] = class_name(**settings)
-        elif isinstance(class_name, type(SubscriptionRequestSettings)):
-            settings_obj = class_name()
-
         extensions = {}
         for extension_name, extension_schema in self.__extension_schemas.items():
             extensions[extension_name] = {
@@ -141,23 +132,7 @@ class RequestSchema:
                 if key in value
             }
 
-        if self.__language == Language.SNQL:
-            query = parse_snql_query(query_body["query"], dataset)
-        else:
-            query = parse_query(query_body, dataset)
-            apply_query_extensions(query, extensions, settings_obj)
-
-        request_id = uuid.uuid4().hex
-        return Request(
-            request_id,
-            # TODO: Replace this with the actual query raw body.
-            # this can have an impact on subscriptions so we need
-            # to be careful with the change.
-            ChainMap(query_body, *extensions.values()),
-            query,
-            settings_obj,
-            referrer,
-        )
+        return RequestParts(query=query_body, settings=settings, extensions=extensions)
 
     def __generate_template_impl(self, schema: Mapping[str, Any]) -> Any:
         """
