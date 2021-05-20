@@ -1,7 +1,8 @@
 from datetime import datetime
 
+from streaming_kafka_consumer import Message, Partition, Topic
+
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
-from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.kafka import KafkaPayload
 
 

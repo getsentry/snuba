@@ -7,6 +7,7 @@ from datetime import timedelta
 from typing import Any, Optional, Sequence
 
 import click
+from streaming_kafka_consumer import Topic
 
 from snuba import environment, settings
 from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
@@ -19,7 +20,6 @@ from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.worker import SubscriptionWorker
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.streams import Topic
 from snuba.utils.streams.backends.kafka import KafkaConsumer, KafkaProducer
 from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,

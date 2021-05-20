@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 from typing import Iterable, MutableMapping, Tuple
 from uuid import UUID, uuid1
 
+from streaming_kafka_consumer import Message, Partition, Topic
+
 from snuba.datasets.factory import get_dataset
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import (
@@ -16,7 +18,6 @@ from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.subscriptions.worker import SubscriptionTaskResult, SubscriptionWorker
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.local.backend import LocalBroker as Broker
 from snuba.utils.types import Interval
 

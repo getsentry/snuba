@@ -7,6 +7,8 @@ from typing import MutableSequence, Optional
 from unittest.mock import Mock, call
 
 import pytest
+from streaming_kafka_consumer import Message, Partition, Topic
+
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
     JSONRowInsertBatch,
@@ -15,9 +17,7 @@ from snuba.consumers.consumer import (
 )
 from snuba.datasets.storage import Storage
 from snuba.processor import InsertBatch, ReplacementBatch
-from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.kafka import KafkaPayload
-
 from tests.assertions import assert_changes
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 from tests.backends.metrics import TestingMetricsBackend, Timing
@@ -132,7 +132,6 @@ def test_multistorage_strategy(
     output_block_size: Optional[int],
 ) -> None:
     from snuba.datasets.storages import groupassignees, groupedmessages
-
     from tests.datasets.cdc.test_groupassignee import TestGroupassignee
     from tests.datasets.cdc.test_groupedmessage import TestGroupedMessage
 
