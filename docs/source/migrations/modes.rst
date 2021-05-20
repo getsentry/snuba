@@ -2,23 +2,27 @@
 Snuba Migration Modes
 ======================
 
-The main "switch" between the two modes for running data migrations (local and
-distributed) lives in a user's local Sentry configuration (in their ``sentry.conf.py``).
-The controlling envrionment variable is ``SENTRY_DISTRIBUTED_CLICKHOUSE_TABLES``,
-and its default value is set `at this line <https://github.com/getsentry/sentry/blob/master/src/sentry/conf/server.py#L127>`_.
+This doc outlines a basic way to try out distributed and local migrations.
+Note that this is experimental, and should be used only for development
+purposes at the moment.
 
-Once this boolean variable is set, one of two Clickhouse Docker containers will be
-(allowed to) start, depending on the mode (distributed or local). Whenever a user
-wants to switch between the two modes, they must "turn off" the existing running
-container, alter the environment variable mentioned above, and "turn on" the
-correct container to be in the new mode.
+The main "switch" between the two modes for running data migrations (local and
+distributed) lives in ``sentry/conf/server.py``.
+The controlling envrionment variable is ``SENTRY_DISTRIBUTED_CLICKHOUSE_TABLES``,
+and its value must be set in order to use a specific mode.
+
+Once this boolean variable is set, one of two Clickhouse Docker volumes will be
+used for data storage, depending on the mode (distributed or local). Whenever a user
+wants to switch between the two modes, they must "turn off" the running Clickhouse
+container, alter the environment variable mentioned above, and then "turn on" the
+same container to be in the new mode.
 
 More information on migrations in general can be found `here <https://github.com/getsentry/snuba/blob/master/MIGRATIONS.md>`_.
 
 Enabling Local Mode
 =====================
 
-In your local Sentry environment configuration, set ``SENTRY_DISTRIBUTED_CLICKHOUSE_TABLES``
+In your local ``server.py``, set ``SENTRY_DISTRIBUTED_CLICKHOUSE_TABLES``
 to False. Start up the corresponding Clickhouse container (``sentry devservices up clickhouse``).
 
 Ensuring that your local configuration is prepared for migrations (reverting any existing
@@ -29,8 +33,8 @@ migrations, or dropping certain databases/tables), run migrations as expected
 Enabling Distributed Mode
 ============================
 
-In your local Sentry environment configuration, set ``SENTRY_DISTRIBUTED_CLICKHOUSE_TABLES``
-to True. Start up the corresponding Clickhouse container (``sentry devservices up clickhouse_dist``).
+In your local ``server.py``, set ``SENTRY_DISTRIBUTED_CLICKHOUSE_TABLES``
+to True. Start up the corresponding Clickhouse container (``sentry devservices up clickhouse``).
 
 Now, it is important to configure the clusters that can be used in Distributed tables. These are
 set in `this file <https://github.com/getsentry/sentry/blob/master/config/clickhouse/dist_config.xml>`_.
