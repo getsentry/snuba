@@ -1,4 +1,5 @@
 from datetime import datetime
+from functools import partial
 from typing import Any, MutableMapping
 
 import pytest
@@ -112,7 +113,9 @@ def test_build_request(
 
     request = build_request(
         body,
-        parse_legacy_query if language == Language.LEGACY else parse_snql_query_api,
+        parse_legacy_query
+        if language == Language.LEGACY
+        else partial(parse_snql_query_api, []),
         HTTPRequestSettings,
         schema,
         dataset,
