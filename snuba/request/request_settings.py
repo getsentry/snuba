@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
-
 from typing import Sequence
 
-from snuba.state.rate_limit import get_global_rate_limit_params, RateLimitParameters
+from snuba.state.rate_limit import RateLimitParameters, get_global_rate_limit_params
 
 
 class RequestSettings(ABC):
@@ -33,6 +32,10 @@ class RequestSettings(ABC):
         pass
 
     @abstractmethod
+    def get_legacy(self) -> bool:
+        pass
+
+    @abstractmethod
     def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
         pass
 
@@ -54,11 +57,13 @@ class HTTPRequestSettings(RequestSettings):
         consistent: bool = False,
         debug: bool = False,
         dry_run: bool = False,
+        legacy: bool = False,
     ) -> None:
         self.__turbo = turbo
         self.__consistent = consistent
         self.__debug = debug
         self.__dry_run = dry_run
+        self.__legacy = legacy
         self.__rate_limit_params = [get_global_rate_limit_params()]
 
     def get_turbo(self) -> bool:
@@ -72,6 +77,9 @@ class HTTPRequestSettings(RequestSettings):
 
     def get_dry_run(self) -> bool:
         return self.__dry_run
+
+    def get_legacy(self) -> bool:
+        return self.__legacy
 
     def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
         return self.__rate_limit_params
@@ -96,6 +104,9 @@ class SubscriptionRequestSettings(RequestSettings):
         return False
 
     def get_dry_run(self) -> bool:
+        return False
+
+    def get_legacy(self) -> bool:
         return False
 
     def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
