@@ -140,6 +140,9 @@ def test_groupedmessages_compatibility() -> None:
     ) == [("project_id, id",)]
 
 
+# provide a migration ID and run all the migrations that come before
+
+
 def test_backfill_errors() -> None:
 
     backfill_migration_id = "0014_backfill_errors"
@@ -179,6 +182,8 @@ def test_backfill_errors() -> None:
 
     write_unprocessed_events(events_storage, raw_events)
 
+    # write a function that will directly fill in data to the table
+
     assert get_errors_count() == 0
 
     # Run 0014_backfill_errors
@@ -200,3 +205,6 @@ def test_backfill_errors() -> None:
         ],
         ["Galaxy", "San Francisco", "US", "CA", "1.1.1"],
     )
+
+
+# fetch some fields, still does some clickhouse query
