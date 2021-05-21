@@ -23,6 +23,7 @@ from streaming_kafka_consumer import Message, Topic
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
+from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import TableWriter
@@ -415,6 +416,19 @@ def process_message_multistorage(
     return results
 
 
+class MultistorageFilterStep(StreamMessageFilter[KafkaPayload]):
+    def __init__(self, storages: Sequence[WritableTableStorage]) -> None:
+        self.__storages = storages
+
+    def should_drop(self, message: Message[KafkaPayload]) -> bool:
+        for storage in self.__storages:
+            filter = storage.get_table_writer().get_stream_loader().get_pre_filter()
+            if filter is None or not filter.should_drop(message):
+                return False
+
+        return True
+
+
 class MultistorageConsumerProcessingStrategyFactory(KafkaConsumerStrategyFactory):
     def __init__(
         self,
@@ -431,8 +445,10 @@ class MultistorageConsumerProcessingStrategyFactory(KafkaConsumerStrategyFactory
         self.__storage_keys = [storage.get_storage_key() for storage in storages]
         self.__metrics_backend = metrics
 
+        filter_step = MultistorageFilterStep(storages)
+
         super().__init__(
-            prefilter=None,
+            prefilter=filter_step,
             process_message=functools.partial(
                 process_message_multistorage, self.__storage_keys
             ),
