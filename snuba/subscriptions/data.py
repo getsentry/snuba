@@ -25,11 +25,7 @@ from snuba.query.types import Condition
 from snuba.request import Language, Request
 from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
-from snuba.request.validation import (
-    build_request,
-    parse_legacy_query,
-    parse_snql_query_api,
-)
+from snuba.request.validation import build_request, parse_legacy_query, parse_snql_query
 from snuba.utils.metrics.timer import Timer
 
 SUBSCRIPTION_REFERRER = "subscription"
@@ -240,7 +236,7 @@ class SnQLSubscriptionData(SubscriptionData):
 
         request = build_request(
             {"query": self.query},
-            partial(parse_snql_query_api, [add_conditions]),
+            partial(parse_snql_query, [add_conditions]),
             SubscriptionRequestSettings,
             schema,
             dataset,

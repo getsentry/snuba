@@ -9,7 +9,7 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.logical import Query
 from snuba.query.parser import parse_query
-from snuba.query.snql.parser import parse_snql_query
+from snuba.query.snql.parser import parse_snql_query as _parse_snql_query
 from snuba.querylog import record_error_building_request, record_invalid_request
 from snuba.request import Request
 from snuba.request.exceptions import InvalidJsonRequestException
@@ -26,13 +26,13 @@ Parser = Callable[
 ]
 
 
-def parse_snql_query_api(
+def parse_snql_query(
     custom_processing: Sequence[Callable[[Union[CompositeQuery[Entity], Query]], None]],
     request_parts: RequestParts,
     settings: RequestSettings,
     dataset: Dataset,
 ) -> Union[Query, CompositeQuery[Entity]]:
-    return parse_snql_query(request_parts.query["query"], custom_processing, dataset)
+    return _parse_snql_query(request_parts.query["query"], custom_processing, dataset)
 
 
 def parse_legacy_query(

@@ -50,11 +50,7 @@ from snuba.request import Language
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.request.schema import RequestParts, RequestSchema
-from snuba.request.validation import (
-    build_request,
-    parse_legacy_query,
-    parse_snql_query_api,
-)
+from snuba.request.validation import build_request, parse_legacy_query, parse_snql_query
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import InvalidSubscriptionError, PartitionId
@@ -402,7 +398,7 @@ def dataset_query(
         parser: Callable[
             [RequestParts, RequestSettings, Dataset],
             Union[Query, CompositeQuery[Entity]],
-        ] = partial(parse_snql_query_api, [])
+        ] = partial(parse_snql_query, [])
     else:
         parser = parse_legacy_query
 
