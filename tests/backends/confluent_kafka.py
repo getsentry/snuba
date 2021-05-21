@@ -146,7 +146,7 @@ def build_confluent_kafka_message(
         topic="topic",
         partition=partition,
         offset=offset,
-        value=value or bytearray(),
+        value=value or b"",
         key=None,
         headers=None,
         error=error,
