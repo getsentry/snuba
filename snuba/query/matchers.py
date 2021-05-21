@@ -8,9 +8,10 @@ from typing import Any as AnyType
 from typing import Generic, Mapping, Optional, Sequence, Tuple, Type, TypeVar, Union
 
 from snuba.query.expressions import Column as ColumnExpr
-from snuba.query.expressions import Expression, OptionalScalarType
+from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
+from snuba.query.expressions import OptionalScalarType
 
 MatchType = Union[Expression, OptionalScalarType]
 

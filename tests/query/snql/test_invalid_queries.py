@@ -81,7 +81,6 @@ test_cases = [
 @pytest.mark.parametrize("query_body, message", test_cases)
 def test_failures(query_body: str, message: str) -> None:
     state.set_config("query_parsing_expand_aliases", 1)
-    events = get_dataset("events")
 
     # TODO: Potentially remove this once entities have actual join relationships
     mapping = {
@@ -102,8 +101,9 @@ def test_failures(query_body: str, message: str) -> None:
             equivalences=[],
         )
 
+    events = get_dataset("events")
     events_entity = get_entity(EntityKey.EVENTS)
     setattr(events_entity, "get_join_relationship", events_mock)
 
     with pytest.raises(ParsingException, match=re.escape(message)):
-        parse_snql_query(query_body, events)
+        parse_snql_query(query_body, [], events)
