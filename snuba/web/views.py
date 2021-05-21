@@ -2,6 +2,7 @@ import logging
 import os
 import time
 from datetime import datetime
+from functools import partial
 from typing import (
     Any,
     Callable,
@@ -22,6 +23,9 @@ import simplejson as json
 from flask import Flask, Request, Response, redirect, render_template
 from flask import request as http_request
 from markdown import markdown
+from werkzeug import Response as WerkzeugResponse
+from werkzeug.exceptions import InternalServerError
+
 from snuba import environment, settings, state, util
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.http import JSONRowEncoder
@@ -38,13 +42,15 @@ from snuba.datasets.factory import (
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import JoinClause
+from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
+from snuba.query.logical import Query
 from snuba.redis import redis_client
 from snuba.request import Language
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
-from snuba.request.request_settings import HTTPRequestSettings
-from snuba.request.schema import RequestSchema
-from snuba.request.validation import build_request
+from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
+from snuba.request.schema import RequestParts, RequestSchema
+from snuba.request.validation import build_request, parse_legacy_query, parse_snql_query
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import InvalidSubscriptionError, PartitionId
@@ -58,8 +64,6 @@ from snuba.web import QueryException
 from snuba.web.converters import DatasetConverter
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
-from werkzeug import Response as WerkzeugResponse
-from werkzeug.exceptions import InternalServerError
 
 metrics = MetricsWrapper(environment.metrics, "api")
 
@@ -391,13 +395,21 @@ def dataset_query(
 
     if language == Language.SNQL:
         metrics.increment("snql.query.incoming", tags={"referrer": referrer})
+        parser: Callable[
+            [RequestParts, RequestSettings, Dataset],
+            Union[Query, CompositeQuery[Entity]],
+        ] = partial(parse_snql_query, [])
+    else:
+        parser = parse_legacy_query
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build_with_extensions(
             dataset.get_default_entity().get_extensions(), HTTPRequestSettings, language
         )
 
-    request = build_request(body, schema, timer, dataset, referrer)
+    request = build_request(
+        body, parser, HTTPRequestSettings, schema, dataset, timer, referrer
+    )
 
     try:
         result = parse_and_run_query(dataset, request, timer)

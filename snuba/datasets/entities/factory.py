@@ -27,13 +27,16 @@ def get_entity(name: EntityKey) -> Entity:
         DiscoverTransactionsEntity,
     )
     from snuba.datasets.entities.events import EventsEntity
+    from snuba.datasets.entities.metrics import MetricsSetsEntity
     from snuba.datasets.entities.outcomes import OutcomesEntity
     from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
     from snuba.datasets.entities.sessions import SessionsEntity
     from snuba.datasets.entities.spans import SpansEntity
     from snuba.datasets.entities.transactions import TransactionsEntity
 
-    dev_entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {}
+    dev_entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {
+        EntityKey.METRICS_SETS: MetricsSetsEntity,
+    }
 
     entity_factories: MutableMapping[EntityKey, Callable[[], Entity]] = {
         EntityKey.DISCOVER: DiscoverEntity,

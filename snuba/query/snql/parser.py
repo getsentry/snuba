@@ -26,6 +26,7 @@ from snuba.clickhouse.query_dsl.accessors import get_time_range_expressions
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.factory import get_dataset_name
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
@@ -1165,6 +1166,59 @@ def validate_entities_with_query(
                     )
 
 
+def _select_entity_for_dataset(
+    dataset: Dataset,
+) -> Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]:
+    def selector(query: Union[CompositeQuery[QueryEntity], LogicalQuery]) -> None:
+        # If you are doing a JOIN, then you have to specify the entity
+        if isinstance(query, CompositeQuery):
+            return
+
+        if get_dataset_name(dataset) == "discover":
+            query_entity = query.get_from_clause()
+            # The legacy -> snql parser will mark queries with no entity specified as the "discover" entity
+            # so only do this selection in that case. If someone wants the "discover" entity specifically
+            # then their query will have to only use fields from that entity.
+            if query_entity.key == EntityKey.DISCOVER:
+                selected_entity_key = dataset.select_entity(query)
+                selected_entity = get_entity(selected_entity_key)
+                query_entity = QueryEntity(
+                    selected_entity_key, selected_entity.get_data_model()
+                )
+                query.set_from_clause(query_entity)
+
+                # XXX: This exists only to ensure that the generated SQL matches legacy queries.
+                def replace_time_condition_aliases(exp: Expression) -> Expression:
+                    if (
+                        isinstance(exp, FunctionCall)
+                        and len(exp.parameters) == 2
+                        and isinstance(exp.parameters[0], Column)
+                        and exp.parameters[0].alias == "_snuba_timestamp"
+                    ):
+                        return FunctionCall(
+                            exp.alias,
+                            exp.function_name,
+                            (
+                                Column(
+                                    f"_snuba_{selected_entity.required_time_column}",
+                                    exp.parameters[0].table_name,
+                                    exp.parameters[0].column_name,
+                                ),
+                                exp.parameters[1],
+                            ),
+                        )
+
+                    return exp
+
+                condition = query.get_condition()
+                if condition is not None:
+                    query.set_ast_condition(
+                        condition.transform(replace_time_condition_aliases)
+                    )
+
+    return selector
+
+
 def _post_process(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
     funcs: Sequence[Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]],
@@ -1179,29 +1233,44 @@ def _post_process(
             query.set_from_clause(from_clause)
 
 
+POST_PROCESSORS = [
+    _parse_datetime_literals,
+    _validate_aliases,
+    _parse_subscriptables,  # -> This should be part of the grammar
+    _apply_column_aliases,
+    _expand_aliases,
+    _mangle_query_aliases,
+    _array_join_transformation,
+    _qualify_columns,
+    _array_column_conditions,
+]
+
+VALIDATORS = [validate_query, validate_entities_with_query]
+
+
 def parse_snql_query(
-    body: str, dataset: Dataset
+    body: str,
+    custom_processing: Sequence[
+        Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]
+    ],
+    dataset: Dataset,
 ) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
     query = parse_snql_query_initial(body)
 
     _post_process(
-        query,
-        [
-            _parse_datetime_literals,
-            _validate_aliases,
-            _parse_subscriptables,  # -> This should be part of the grammar
-            _apply_column_aliases,
-            _expand_aliases,
-            _mangle_query_aliases,
-            _array_join_transformation,
-            _qualify_columns,
-            _array_column_conditions,
-        ],
+        query, POST_PROCESSORS,
     )
 
-    # Time based processing, which will sometimes be skipped by subscriptions
+    # Custom processing to tweak the AST before validation
+    _post_process(query, custom_processing)
+
+    # Time based processing
     _post_process(query, [_replace_time_condition])
 
+    # XXX: Select the entity to be used for the query. This step is temporary. Eventually
+    # entity selection will be moved to Sentry and specified for all SnQL queries.
+    _post_process(query, [_select_entity_for_dataset(dataset)])
+
     # Validating
-    _post_process(query, [validate_query, validate_entities_with_query])
+    _post_process(query, VALIDATORS)
     return query

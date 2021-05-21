@@ -2,30 +2,84 @@ from datetime import timedelta
 from typing import List, Tuple, cast
 from uuid import UUID
 
+import pytest
 from pytest import raises
 
 from snuba.redis import redis_client
-from snuba.subscriptions.data import InvalidSubscriptionError, SubscriptionData
+from snuba.subscriptions.data import (
+    InvalidSubscriptionError,
+    LegacySubscriptionData,
+    SnQLSubscriptionData,
+    SubscriptionData,
+)
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
 from tests.subscriptions import BaseSubscriptionTest
 
-
-class TestSubscriptionCreator(BaseSubscriptionTest):
-
-    timer = Timer("test")
-
-    def test(self) -> None:
-        creator = SubscriptionCreator(self.dataset)
-        subscription = SubscriptionData(
+TESTS_CREATE = [
+    pytest.param(
+        LegacySubscriptionData(
             project_id=123,
             conditions=[["platform", "IN", ["a"]]],
             aggregations=[["count()", "", "count"]],
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
-        )
+        ),
+        id="Legacy subscription",
+    ),
+    pytest.param(
+        SnQLSubscriptionData(
+            project_id=123,
+            query=(
+                "MATCH (events) "
+                "SELECT count() AS count BY time "
+                "WHERE "
+                "platform IN tuple('a') "
+            ),
+            time_window=timedelta(minutes=10),
+            resolution=timedelta(minutes=1),
+        ),
+        id="SnQL subscription",
+    ),
+]
+
+TESTS_INVALID = [
+    pytest.param(
+        LegacySubscriptionData(
+            project_id=123,
+            conditions=[["platfo", "IN", ["a"]]],
+            aggregations=[["count()", "", "count"]],
+            time_window=timedelta(minutes=10),
+            resolution=timedelta(minutes=1),
+        ),
+        id="Legacy subscription",
+    ),
+    pytest.param(
+        SnQLSubscriptionData(
+            project_id=123,
+            query=(
+                "MATCH (events) "
+                "SELECT count() AS count BY time "
+                "WHERE "
+                "platfo IN tuple('a') "
+            ),
+            time_window=timedelta(minutes=10),
+            resolution=timedelta(minutes=1),
+        ),
+        id="SnQL subscription",
+    ),
+]
+
+
+class TestSubscriptionCreator(BaseSubscriptionTest):
+
+    timer = Timer("test")
+
+    @pytest.mark.parametrize("subscription", TESTS_CREATE)
+    def test(self, subscription: SubscriptionData) -> None:
+        creator = SubscriptionCreator(self.dataset)
         identifier = creator.create(subscription, self.timer)
         assert (
             cast(
@@ -37,16 +91,17 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             == subscription
         )
 
-    def test_invalid_condition_column(self) -> None:
+    @pytest.mark.parametrize("subscription", TESTS_INVALID)
+    def test_invalid_condition_column(self, subscription: SubscriptionData) -> None:
         creator = SubscriptionCreator(self.dataset)
         with raises(QueryException):
             creator.create(
-                SubscriptionData(
+                LegacySubscriptionData(
                     123,
+                    timedelta(minutes=1),
+                    timedelta(minutes=10),
                     [["platfo", "IN", ["a"]]],
                     [["count()", "", "count"]],
-                    timedelta(minutes=10),
-                    timedelta(minutes=1),
                 ),
                 self.timer,
             )
@@ -55,12 +110,12 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset)
         with raises(QueryException):
             creator.create(
-                SubscriptionData(
+                LegacySubscriptionData(
                     123,
+                    timedelta(minutes=1),
+                    timedelta(minutes=10),
                     [["platform", "IN", ["a"]]],
                     [["cout()", "", "count"]],
-                    timedelta(minutes=10),
-                    timedelta(minutes=1),
                 ),
                 self.timer,
             )
@@ -69,24 +124,40 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset)
         with raises(InvalidSubscriptionError):
             creator.create(
-                SubscriptionData(
+                LegacySubscriptionData(
                     123,
+                    timedelta(minutes=1),
+                    timedelta(),
                     [["platfo", "IN", ["a"]]],
                     [["count()", "", "count"]],
-                    timedelta(),
-                    timedelta(minutes=1),
                 ),
                 self.timer,
             )
 
         with raises(InvalidSubscriptionError):
             creator.create(
-                SubscriptionData(
+                SnQLSubscriptionData(
+                    project_id=123,
+                    query=(
+                        "MATCH (events) "
+                        "SELECT count() AS count BY time "
+                        "WHERE "
+                        "platform IN tuple('a') "
+                    ),
+                    time_window=timedelta(minutes=1),
+                    resolution=timedelta(),
+                ),
+                self.timer,
+            )
+
+        with raises(InvalidSubscriptionError):
+            creator.create(
+                LegacySubscriptionData(
                     123,
+                    timedelta(minutes=1),
+                    timedelta(hours=48),
                     [["platfo", "IN", ["a"]]],
                     [["count()", "", "count"]],
-                    timedelta(hours=48),
-                    timedelta(minutes=1),
                 ),
                 self.timer,
             )
@@ -95,12 +166,12 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset)
         with raises(InvalidSubscriptionError):
             creator.create(
-                SubscriptionData(
+                LegacySubscriptionData(
                     123,
+                    timedelta(),
+                    timedelta(minutes=1),
                     [["platfo", "IN", ["a"]]],
                     [["count()", "", "count"]],
-                    timedelta(minutes=1),
-                    timedelta(),
                 ),
                 self.timer,
             )
@@ -109,7 +180,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
 class TestSubscriptionDeleter(BaseSubscriptionTest):
     def test(self) -> None:
         creator = SubscriptionCreator(self.dataset)
-        subscription = SubscriptionData(
+        subscription = LegacySubscriptionData(
             project_id=1,
             conditions=[],
             aggregations=[["count()", "", "count"]],

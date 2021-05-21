@@ -1,20 +1,47 @@
 from datetime import datetime, timedelta
 
-from snuba.subscriptions.data import SubscriptionData
-from snuba.web.query import parse_and_run_query
+import pytest
+
+from snuba.subscriptions.data import (
+    LegacySubscriptionData,
+    SnQLSubscriptionData,
+    SubscriptionData,
+)
 from snuba.utils.metrics.timer import Timer
+from snuba.web.query import parse_and_run_query
 from tests.subscriptions import BaseSubscriptionTest
 
-
-class TestBuildRequest(BaseSubscriptionTest):
-    def test_conditions(self) -> None:
-        subscription = SubscriptionData(
-            project_id=self.project_id,
+TESTS = [
+    pytest.param(
+        LegacySubscriptionData(
+            project_id=1,
             conditions=[["platform", "IN", ["a"]]],
             aggregations=[["count()", "", "count"]],
             time_window=timedelta(minutes=500),
             resolution=timedelta(minutes=1),
-        )
+        ),
+        id="Legacy subscription",
+    ),
+    pytest.param(
+        SnQLSubscriptionData(
+            project_id=1,
+            query=(
+                "MATCH (events) "
+                "SELECT count() AS count "
+                "WHERE "
+                "platform IN tuple('a') "
+            ),
+            time_window=timedelta(minutes=500),
+            resolution=timedelta(minutes=1),
+        ),
+        id="SnQL subscription",
+    ),
+]
+
+
+class TestBuildRequest(BaseSubscriptionTest):
+    @pytest.mark.parametrize("subscription", TESTS)
+    def test_conditions(self, subscription: SubscriptionData) -> None:
         timer = Timer("test")
         request = subscription.build_request(
             self.dataset, datetime.utcnow(), 100, timer,
