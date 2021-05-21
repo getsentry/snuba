@@ -6,13 +6,13 @@ from unittest.mock import patch
 from streaming_kafka_consumer.backends.local.backend import LocalBroker as Broker
 from streaming_kafka_consumer.backends.local.backend import LocalConsumer
 from streaming_kafka_consumer.processing.processor import StreamProcessor
-from streaming_kafka_consumer.types import Message, Topic
-
-from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.batching import (
+from streaming_kafka_consumer.processing.strategies.batching import (
     AbstractBatchWorker,
     BatchProcessingStrategyFactory,
 )
+from streaming_kafka_consumer.types import Message, Topic
+
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
 

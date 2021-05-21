@@ -10,6 +10,9 @@ import click
 from streaming_kafka_consumer import Topic
 from streaming_kafka_consumer.backends.kafka import KafkaConsumer, KafkaProducer
 from streaming_kafka_consumer.processing import StreamProcessor
+from streaming_kafka_consumer.processing.strategies.batching import (
+    BatchProcessingStrategyFactory,
+)
 from streaming_kafka_consumer.synchronized import SynchronizedConsumer
 
 from snuba import environment, settings
@@ -23,7 +26,6 @@ from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.worker import SubscriptionWorker
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.streams.batching import BatchProcessingStrategyFactory
 from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
     build_kafka_producer_configuration,
@@ -217,7 +219,7 @@ def subscriptions(
                 ),
                 max_batch_size,
                 max_batch_time_ms,
-                metrics,
+                StreamMetricsAdapter(metrics),
             ),
             metrics=StreamMetricsAdapter(metrics),
         )

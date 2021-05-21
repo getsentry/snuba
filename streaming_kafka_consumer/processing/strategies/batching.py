@@ -15,13 +15,12 @@ from typing import (
     TypeVar,
 )
 
+from streaming_kafka_consumer.metrics import Metrics
 from streaming_kafka_consumer.processing.strategies.abstract import (
     ProcessingStrategy,
     ProcessingStrategyFactory,
 )
 from streaming_kafka_consumer.types import Message, Partition, TPayload
-
-from snuba.utils.metrics import MetricsBackend
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +104,7 @@ class BatchProcessingStrategy(ProcessingStrategy[TPayload]):
         worker: AbstractBatchWorker[TPayload, TResult],
         max_batch_size: int,
         max_batch_time: int,
-        metrics: MetricsBackend,
+        metrics: Metrics,
     ) -> None:
         self.__commit = commit
         self.__worker = worker
@@ -229,7 +228,7 @@ class BatchProcessingStrategyFactory(ProcessingStrategyFactory[TPayload]):
         worker: AbstractBatchWorker[TPayload, TResult],
         max_batch_size: int,
         max_batch_time: int,
-        metrics: MetricsBackend,
+        metrics: Metrics,
     ) -> None:
         self.__worker = worker
         self.__max_batch_size = max_batch_size
