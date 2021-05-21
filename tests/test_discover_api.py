@@ -1604,6 +1604,53 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["data"] == [{"count": 1}]
 
+    def test_extra_group_conditions(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "selected_columns": [
+                        "title",
+                        "type",
+                        [
+                            "coalesce",
+                            ["email", "username", "ip_address"],
+                            "user.display",
+                        ],
+                        "timestamp",
+                        "project_id",
+                        "event_id",
+                        [
+                            "transform",
+                            [
+                                ["toString", ["project_id"]],
+                                ["array", [f"'{self.project_id}'"]],
+                                ["array", ["'my-project'"]],
+                                "''",
+                            ],
+                            "project",
+                        ],
+                    ],
+                    "having": [],
+                    "orderby": ["-timestamp"],
+                    "limit": 51,
+                    "offset": 0,
+                    "project": [self.project_id],
+                    "dataset": "discover",
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                    "groupby": [],
+                    "conditions": [["project_id", "IN", [self.project_id]]],
+                    "aggregations": [],
+                    "consistent": False,
+                    "debug": False,
+                }
+            ),
+            entity="discover",
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert "PREWHERE in(event_id, tuple" in data["sql"]
+
 
 class TestDiscoverAPIEntitySelection(TestDiscoverApi):
     """
