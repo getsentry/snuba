@@ -75,8 +75,9 @@ def replacer(
     log_level: Optional[str] = None,
 ) -> None:
 
+    from streaming_kafka_consumer import Topic
+
     from snuba.replacer import ReplacerWorker
-    from snuba.utils.streams import Topic
     from snuba.utils.streams.backends.kafka import KafkaConsumer, TransportError
     from snuba.utils.streams.configuration_builder import (
         build_kafka_consumer_configuration,

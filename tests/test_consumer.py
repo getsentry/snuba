@@ -8,6 +8,7 @@ from typing import MutableSequence, Optional
 from unittest.mock import Mock, call
 
 import pytest
+from streaming_kafka_consumer import Message, Partition, Topic
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
@@ -21,7 +22,6 @@ from snuba.consumers.consumer import (
 from snuba.datasets.storage import Storage
 from snuba.processor import InsertBatch, ReplacementBatch
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.strategy_factory import KafkaConsumerStrategyFactory
 from tests.assertions import assert_changes

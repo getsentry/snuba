@@ -1,5 +1,6 @@
+from streaming_kafka_consumer import Message
+
 from snuba.datasets.message_filters import StreamMessageFilter
-from snuba.utils.streams import Message
 from snuba.utils.streams.backends.kafka import KafkaPayload
 
 KAFKA_ONLY_PARTITION = (
