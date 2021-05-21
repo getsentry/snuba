@@ -1,5 +1,7 @@
 from typing import Any, Mapping, Optional, Sequence
 
+from streaming_kafka_consumer.backends.kafka import KafkaPayload
+
 from snuba import settings
 from snuba.clickhouse.http import InsertStatement, JSONRow
 from snuba.clusters.cluster import (
@@ -16,7 +18,6 @@ from snuba.snapshots import BulkLoadSource
 from snuba.snapshots.loaders import BulkLoader
 from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
 from snuba.utils.metrics import MetricsBackend
-from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.topics import Topic, get_topic_creation_config
 from snuba.writer import BatchWriter
 

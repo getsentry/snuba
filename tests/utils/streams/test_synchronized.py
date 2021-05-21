@@ -4,13 +4,17 @@ from threading import Event
 from typing import Mapping, Optional, TypeVar
 
 import pytest
+from streaming_kafka_consumer.backends.abstract import Consumer
+from streaming_kafka_consumer.backends.kafka import KafkaPayload
+from streaming_kafka_consumer.backends.local.backend import LocalBroker as Broker
+from streaming_kafka_consumer.backends.local.backend import LocalConsumer
+from streaming_kafka_consumer.synchronized import (
+    Commit,
+    SynchronizedConsumer,
+    commit_codec,
+)
+from streaming_kafka_consumer.types import Message, Partition, Topic
 
-from snuba.utils.streams.backends.abstract import Consumer
-from snuba.utils.streams.backends.kafka import KafkaPayload
-from snuba.utils.streams.backends.local.backend import LocalBroker as Broker
-from snuba.utils.streams.backends.local.backend import LocalConsumer
-from snuba.utils.streams.synchronized import Commit, SynchronizedConsumer, commit_codec
-from snuba.utils.streams.types import Message, Partition, Topic
 from tests.assertions import assert_changes, assert_does_not_change
 
 T = TypeVar("T")

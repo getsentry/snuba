@@ -1,7 +1,7 @@
 import pickle
 from datetime import datetime
 
-from snuba.utils.streams.types import Message, Partition, Topic
+from streaming_kafka_consumer.types import Message, Partition, Topic
 
 
 def test_topic_contains_partition() -> None:

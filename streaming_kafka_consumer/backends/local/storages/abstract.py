@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Iterator, Generic, Optional
+from typing import Generic, Iterator, Optional
 
-from snuba.utils.streams.types import Message, Partition, Topic, TPayload
+from streaming_kafka_consumer.types import Message, Partition, Topic, TPayload
 
 
 class TopicExists(Exception):
