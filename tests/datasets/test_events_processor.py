@@ -1,6 +1,7 @@
 import calendar
 from collections import OrderedDict
 from datetime import datetime, timedelta
+from typing import Optional
 
 import pytest
 
@@ -51,7 +52,7 @@ class TestEventsProcessor:
                 (-1, "insert", self.event), self.metadata,
             )
 
-    def __process_insert_event(self, event: InsertEvent) -> ProcessedMessage:
+    def __process_insert_event(self, event: InsertEvent) -> Optional[ProcessedMessage]:
         return self.processor.process_message((2, "insert", event, {}), self.metadata)
 
     def test_unexpected_obj(self) -> None:

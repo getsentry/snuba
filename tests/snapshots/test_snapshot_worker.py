@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from uuid import uuid1
 
 import pytest
@@ -116,7 +117,7 @@ test_data = [
 
 
 @pytest.mark.parametrize("xid, expected", test_data)
-def test_send_message(xid: int, expected: ProcessedMessage) -> None:
+def test_send_message(xid: int, expected: Optional[ProcessedMessage]) -> None:
     processor = (
         get_writable_storage(StorageKey.GROUPEDMESSAGES)
         .get_table_writer()
