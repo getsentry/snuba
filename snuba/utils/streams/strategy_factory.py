@@ -31,6 +31,23 @@ class StreamMessageFilter(Protocol[TPayload]):
 
 
 class ConsumerStrategyFactory(ProcessingStrategyFactory[TPayload]):
+    """
+    Builds a three step consumer strategy consisting of filter, transform
+    and collect phases.
+
+    The `prefilter` supports passing a test function to determine whether a
+    message should proceed to the next processing steps or be dropped. If no
+    `prefilter` is passed, all messages will proceed through processing.
+
+    The `process_message` function should transform a message containing the
+    raw payload into a processed one for the collector. If a value is passed
+    for `processes` then this step will switch to the parallel transform
+    strategy in order to use multiple processors.
+
+    The `collector` function should return a strategy to be executed on
+    batches of messages. Could be used to write messages to disk in batches.
+    """
+
     def __init__(
         self,
         prefilter: Optional[StreamMessageFilter[TPayload]],
