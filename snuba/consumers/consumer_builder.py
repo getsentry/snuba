@@ -9,6 +9,7 @@ from streaming_kafka_consumer.backends.kafka import (
 )
 from streaming_kafka_consumer.processing import StreamProcessor
 from streaming_kafka_consumer.processing.strategies import ProcessingStrategyFactory
+from streaming_kafka_consumer.profiler import ProcessingStrategyProfilerWrapperFactory
 
 from snuba import environment
 from snuba.consumers.consumer import StreamingConsumerStrategyFactory
@@ -29,7 +30,6 @@ from snuba.utils.streams.kafka_consumer_with_commit_log import (
     KafkaConsumerWithCommitLog,
 )
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
-from snuba.utils.streams.profiler import ProcessingStrategyProfilerWrapperFactory
 
 
 class ConsumerBuilder:
