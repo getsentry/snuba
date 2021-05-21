@@ -451,7 +451,7 @@ def test_entity_column_validation(
 
     try:
         setattr(events_entity, "get_join_relationship", events_mock)
-        query = parse_snql_query(query_body, events)
+        query = parse_snql_query(query_body, [], events)
         eq, reason = query.equals(expected_query)
         assert eq, reason
     finally:
