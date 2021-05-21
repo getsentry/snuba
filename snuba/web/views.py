@@ -559,12 +559,12 @@ if application.debug or application.testing:
             from snuba.consumers.consumer import build_batch_writer, process_message
             from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
             from snuba.utils.streams.strategy_factory import (
-                StreamingConsumerStrategyFactory,
+                KafkaConsumerStrategyFactory,
             )
 
             table_writer = storage.get_table_writer()
             stream_loader = table_writer.get_stream_loader()
-            strategy = StreamingConsumerStrategyFactory(
+            strategy = KafkaConsumerStrategyFactory(
                 stream_loader.get_pre_filter(),
                 functools.partial(process_message, stream_loader.get_processor()),
                 build_batch_writer(table_writer, metrics=metrics),

@@ -23,7 +23,7 @@ from snuba.processor import InsertBatch, ReplacementBatch
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams import Message, Partition, Topic
 from snuba.utils.streams.backends.kafka import KafkaPayload
-from snuba.utils.streams.strategy_factory import StreamingConsumerStrategyFactory
+from snuba.utils.streams.strategy_factory import KafkaConsumerStrategyFactory
 from tests.assertions import assert_changes
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 from tests.backends.metrics import TestingMetricsBackend, Timing
@@ -63,7 +63,7 @@ def test_streaming_consumer_strategy() -> None:
             ),
         )
 
-    factory = StreamingConsumerStrategyFactory(
+    factory = KafkaConsumerStrategyFactory(
         None,
         functools.partial(process_message, processor),
         write_step,

@@ -34,7 +34,7 @@ from snuba.utils.streams.configuration_builder import build_kafka_producer_confi
 from snuba.utils.streams.processing.strategies import (
     ProcessingStrategy as ProcessingStep,
 )
-from snuba.utils.streams.strategy_factory import StreamingConsumerStrategyFactory
+from snuba.utils.streams.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.writer import BatchWriter
 
 logger = logging.getLogger("snuba.consumer")
@@ -415,7 +415,7 @@ def process_message_multistorage(
     return results
 
 
-class MultistorageConsumerProcessingStrategyFactory(StreamingConsumerStrategyFactory):
+class MultistorageConsumerProcessingStrategyFactory(KafkaConsumerStrategyFactory):
     def __init__(
         self,
         storages: Sequence[WritableTableStorage],

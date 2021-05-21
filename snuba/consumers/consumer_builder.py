@@ -31,7 +31,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.processing.strategies import ProcessingStrategyFactory
 from snuba.utils.streams.profiler import ProcessingStrategyProfilerWrapperFactory
-from snuba.utils.streams.strategy_factory import StreamingConsumerStrategyFactory
+from snuba.utils.streams.strategy_factory import KafkaConsumerStrategyFactory
 
 
 class ConsumerBuilder:
@@ -195,7 +195,7 @@ class ConsumerBuilder:
 
         strategy_factory: ProcessingStrategyFactory[
             KafkaPayload
-        ] = StreamingConsumerStrategyFactory(
+        ] = KafkaConsumerStrategyFactory(
             stream_loader.get_pre_filter(),
             functools.partial(process_message, processor),
             build_batch_writer(

@@ -15,26 +15,26 @@ from snuba.utils.streams.processing.strategies.streaming import (
 )
 from snuba.utils.streams.types import Message, Partition
 
+TPayload = TypeVar("TPayload")
+TProcessed = TypeVar("TProcessed")
 
-class StreamMessageFilter(Protocol):
+
+class StreamMessageFilter(Protocol[TPayload]):
     """
     A filter over messages coming from a stream. Can be used to pre filter
     messages during consumption but potentially for other use cases as well.
     """
 
     @abstractmethod
-    def should_drop(self, message: Message[KafkaPayload]) -> bool:
+    def should_drop(self, message: Message[TPayload]) -> bool:
         raise NotImplementedError
 
 
-TProcessed = TypeVar("TProcessed")
-
-
-class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
+class ConsumerStrategyFactory(ProcessingStrategyFactory[TPayload]):
     def __init__(
         self,
-        prefilter: Optional[StreamMessageFilter],
-        process_message: Callable[[Message[KafkaPayload]], TProcessed],
+        prefilter: Optional[StreamMessageFilter[TPayload]],
+        process_message: Callable[[Message[TPayload]], TProcessed],
         collector: Callable[[], ProcessingStrategy[TProcessed]],
         max_batch_size: int,
         max_batch_time: float,
@@ -66,20 +66,20 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         self.__output_block_size = output_block_size
         self.__metrics = metrics
 
-    def __should_accept(self, message: Message[KafkaPayload]) -> bool:
+    def __should_accept(self, message: Message[TPayload]) -> bool:
         assert self.__prefilter is not None
         return not self.__prefilter.should_drop(message)
 
     def create(
         self, commit: Callable[[Mapping[Partition, int]], None]
-    ) -> ProcessingStrategy[KafkaPayload]:
+    ) -> ProcessingStrategy[TPayload]:
         collect = CollectStep(
             self.__collector, commit, self.__max_batch_size, self.__max_batch_time,
         )
 
         transform_function = self.__process_message
 
-        strategy: ProcessingStrategy[KafkaPayload]
+        strategy: ProcessingStrategy[TPayload]
         if self.__processes is None:
             strategy = TransformStep(transform_function, collect)
         else:
@@ -100,3 +100,7 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             strategy = FilterStep(self.__should_accept, strategy)
 
         return strategy
+
+
+class KafkaConsumerStrategyFactory(ConsumerStrategyFactory[KafkaPayload]):
+    pass
