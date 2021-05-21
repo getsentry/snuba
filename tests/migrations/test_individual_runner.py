@@ -140,29 +140,49 @@ def test_groupedmessages_compatibility() -> None:
     ) == [("project_id, id",)]
 
 
-# provide a migration ID and run all the migrations that come before
+# provide a migration ID, group and run all the migrations that come before
+def run_prior_migrations(migration_group, stop_migration_id, runner):
+
+    right_migrations = next(
+        group_migrations
+        for (group, group_migrations) in runner.show_all()
+        if group == migration_group
+    )
+
+    # Run migrations up to the desired 'stop' ID
+    for migration in right_migrations:
+        if migration.migration_id == stop_migration_id:
+            break
+
+        runner.run_migration(
+            MigrationKey(migration_group, migration.migration_id), force=True
+        )
 
 
+# Below is an example of a valid test
+# Write a similar test case potentially ?
 def test_backfill_errors() -> None:
 
     backfill_migration_id = "0014_backfill_errors"
     runner = Runner()
     runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
 
-    events_migrations = next(
-        group_migrations
-        for (group, group_migrations) in runner.show_all()
-        if group == MigrationGroup.EVENTS
-    )
+    run_prior_migrations(MigrationGroup.EVENTS, backfill_migration_id, runner)
 
-    # Run migrations up 0014_backfill_errors
-    for migration in events_migrations:
-        if migration.migration_id == backfill_migration_id:
-            break
+    # events_migrations = next(
+    #     group_migrations
+    #     for (group, group_migrations) in runner.show_all()
+    #     if group == MigrationGroup.EVENTS
+    # )
 
-        runner.run_migration(
-            MigrationKey(MigrationGroup.EVENTS, migration.migration_id), force=True
-        )
+    # # Run migrations up 0014_backfill_errors
+    # for migration in events_migrations:
+    #     if migration.migration_id == backfill_migration_id:
+    #         break
+
+    #     runner.run_migration(
+    #         MigrationKey(MigrationGroup.EVENTS, migration.migration_id), force=True
+    #     )
 
     errors_storage = get_writable_storage(StorageKey.ERRORS)
     clickhouse = errors_storage.get_cluster().get_query_connection(
