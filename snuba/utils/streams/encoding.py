@@ -3,9 +3,10 @@ from __future__ import annotations
 from concurrent.futures import Future
 from typing import Union
 
+from streaming_kafka_consumer.backends.abstract import Producer
+from streaming_kafka_consumer.types import Message, Partition, Topic
+
 from snuba.utils.codecs import Encoder, TDecoded, TEncoded
-from snuba.utils.streams.backends.abstract import Producer
-from snuba.utils.streams.types import Message, Partition, Topic
 
 
 class ProducerEncodingWrapper(Producer[TDecoded]):

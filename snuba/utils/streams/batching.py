@@ -15,13 +15,13 @@ from typing import (
     TypeVar,
 )
 
-from snuba.utils.metrics import MetricsBackend
-from snuba.utils.streams.processing.strategies.abstract import (
+from streaming_kafka_consumer.processing.strategies.abstract import (
     ProcessingStrategy,
     ProcessingStrategyFactory,
 )
-from snuba.utils.streams.types import Message, Partition, TPayload
+from streaming_kafka_consumer.types import Message, Partition, TPayload
 
+from snuba.utils.metrics import MetricsBackend
 
 logger = logging.getLogger(__name__)
 

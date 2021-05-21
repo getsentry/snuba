@@ -3,6 +3,9 @@ from typing import Any, Callable, Generator, Iterator, Tuple, Union
 
 import pytest
 from snuba_sdk.legacy import json_to_snql
+from streaming_kafka_consumer.backends.local.backend import LocalBroker
+from streaming_kafka_consumer.backends.local.storages.memory import MemoryMessageStorage
+from streaming_kafka_consumer.types import TPayload
 
 from snuba import settings, state
 from snuba.clickhouse.native import ClickhousePool
@@ -12,9 +15,6 @@ from snuba.datasets.storages.factory import STORAGES, get_storage
 from snuba.environment import setup_sentry
 from snuba.redis import redis_client
 from snuba.utils.clock import Clock, TestingClock
-from snuba.utils.streams.backends.local.backend import LocalBroker
-from snuba.utils.streams.backends.local.storages.memory import MemoryMessageStorage
-from snuba.utils.streams.types import TPayload
 
 
 def pytest_configure() -> None:

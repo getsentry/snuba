@@ -17,7 +17,7 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.scheduler import ScheduledTask, Scheduler
-from snuba.utils.streams.processing.strategies.batching import AbstractBatchWorker
+from snuba.utils.streams.batching import AbstractBatchWorker
 from snuba.web.query import parse_and_run_query
 
 
