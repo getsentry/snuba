@@ -2,6 +2,7 @@ import logging
 import os
 import time
 from datetime import datetime
+from functools import partial
 from typing import (
     Any,
     Callable,
@@ -41,17 +42,15 @@ from snuba.datasets.factory import (
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import JoinClause
+from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
+from snuba.query.logical import Query
 from snuba.redis import redis_client
 from snuba.request import Language
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
-from snuba.request.request_settings import HTTPRequestSettings
-from snuba.request.schema import RequestSchema
-from snuba.request.validation import (
-    build_request,
-    parse_legacy_query,
-    parse_snql_query_api,
-)
+from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
+from snuba.request.schema import RequestParts, RequestSchema
+from snuba.request.validation import build_request, parse_legacy_query, parse_snql_query
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import InvalidSubscriptionError, PartitionId
@@ -396,7 +395,10 @@ def dataset_query(
 
     if language == Language.SNQL:
         metrics.increment("snql.query.incoming", tags={"referrer": referrer})
-        parser = parse_snql_query_api
+        parser: Callable[
+            [RequestParts, RequestSettings, Dataset],
+            Union[Query, CompositeQuery[Entity]],
+        ] = partial(parse_snql_query, [])
     else:
         parser = parse_legacy_query
 
