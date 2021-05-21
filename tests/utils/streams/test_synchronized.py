@@ -20,7 +20,9 @@ from tests.assertions import assert_changes, assert_does_not_change
 T = TypeVar("T")
 
 
-def wait_for_consumer(consumer: Consumer[T], message: Message[T], attempts: int = 10):
+def wait_for_consumer(
+    consumer: Consumer[T], message: Message[T], attempts: int = 10
+) -> None:
     """Block until the provided consumer has received the provided message."""
     for i in range(attempts):
         part = consumer.tell().get(message.partition)
@@ -354,7 +356,7 @@ def test_synchronized_consumer_worker_crash_before_assignment(
     )
 
     with pytest.raises(BrokenConsumerException):
-        Consumer[KafkaPayload] = SynchronizedConsumer(
+        SynchronizedConsumer(
             consumer,
             commit_log_consumer,
             commit_log_topic=commit_log_topic,
