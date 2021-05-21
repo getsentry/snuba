@@ -15,6 +15,9 @@ from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
+from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
+    ArrayJoinKeyValueOptimizer,
+)
 from snuba.utils.streams.topics import Topic
 
 buckets_columns = ColumnSet(
@@ -71,5 +74,5 @@ sets_storage = ReadableTableStorage(
         storage_set_key=StorageSetKey.METRICS,
         columns=sets_columns,
     ),
-    query_processors=[],
+    query_processors=[ArrayJoinKeyValueOptimizer("tags")],
 )

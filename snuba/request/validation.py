@@ -1,5 +1,5 @@
 import uuid
-from typing import Any, Callable, ChainMap, MutableMapping, Type, Union
+from typing import Any, Callable, ChainMap, MutableMapping, Sequence, Type, Union
 
 import sentry_sdk
 
@@ -9,7 +9,7 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.logical import Query
 from snuba.query.parser import parse_query
-from snuba.query.snql.parser import parse_snql_query
+from snuba.query.snql.parser import parse_snql_query as _parse_snql_query
 from snuba.querylog import record_error_building_request, record_invalid_request
 from snuba.request import Request
 from snuba.request.exceptions import InvalidJsonRequestException
@@ -26,25 +26,17 @@ Parser = Callable[
 ]
 
 
-def parse_snql_query_api(
-    request_parts: RequestParts, settings: RequestSettings, dataset: Dataset
+def parse_snql_query(
+    custom_processing: Sequence[Callable[[Union[CompositeQuery[Entity], Query]], None]],
+    request_parts: RequestParts,
+    settings: RequestSettings,
+    dataset: Dataset,
 ) -> Union[Query, CompositeQuery[Entity]]:
-    return parse_snql_query(request_parts.query["query"], dataset)
-
-
-def parse_snql_query_subscriptions(
-    request_parts: RequestParts, settings: RequestSettings, dataset: Dataset
-) -> Union[Query, CompositeQuery[Entity]]:
-    """
-    Provides a parser for SnQL subscriptions (which does not do the
-    full validation as timestamp conditions are added by the subscription
-    logic).
-    """
-    raise NotImplementedError
+    return _parse_snql_query(request_parts.query["query"], custom_processing, dataset)
 
 
 def parse_legacy_query(
-    request_parts: RequestParts, settings: RequestSettings, dataset: Dataset
+    request_parts: RequestParts, settings: RequestSettings, dataset: Dataset,
 ) -> Union[Query, CompositeQuery[Entity]]:
     query = parse_query(request_parts.query, dataset)
     apply_query_extensions(query, request_parts.extensions, settings)
