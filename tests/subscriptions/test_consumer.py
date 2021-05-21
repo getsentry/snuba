@@ -4,10 +4,10 @@ from unittest import mock
 
 import pytest
 from streaming_kafka_consumer import ConsumerError, Message, Partition, Topic
+from streaming_kafka_consumer.backends.local.backend import LocalBroker as Broker
 
 from snuba.subscriptions.consumer import Tick, TickConsumer
 from snuba.utils.clock import Clock
-from snuba.utils.streams.backends.local.backend import LocalBroker as Broker
 from snuba.utils.types import Interval
 from tests.assertions import assert_changes, assert_does_not_change
 

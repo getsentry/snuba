@@ -6,15 +6,15 @@ from typing import ContextManager, Generic, Iterator, Mapping, Optional, Sequenc
 from unittest import mock
 
 import pytest
-
-from snuba.utils.streams.backends.abstract import (
+from streaming_kafka_consumer.backends.abstract import (
     Consumer,
     ConsumerError,
     EndOfPartition,
     OffsetOutOfRange,
     Producer,
 )
-from snuba.utils.streams.types import Message, Partition, Topic, TPayload
+from streaming_kafka_consumer.types import Message, Partition, Topic, TPayload
+
 from tests.assertions import assert_changes, assert_does_not_change
 
 

@@ -6,19 +6,19 @@ from typing import Any, Iterator
 from unittest.mock import Mock, call
 
 import pytest
-
-from snuba.utils.streams.backends.kafka import KafkaPayload
-from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
-from snuba.utils.streams.processing.strategies.streaming.collect import CollectStep
-from snuba.utils.streams.processing.strategies.streaming.filter import FilterStep
-from snuba.utils.streams.processing.strategies.streaming.transform import (
+from streaming_kafka_consumer.backends.kafka import KafkaPayload
+from streaming_kafka_consumer.processing.strategies.streaming.collect import CollectStep
+from streaming_kafka_consumer.processing.strategies.streaming.filter import FilterStep
+from streaming_kafka_consumer.processing.strategies.streaming.transform import (
     MessageBatch,
     ParallelTransformStep,
     TransformStep,
     ValueTooLarge,
     parallel_transform_worker_apply,
 )
-from snuba.utils.streams.types import Message, Partition, Topic
+from streaming_kafka_consumer.types import Message, Partition, Topic
+
+from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from tests.assertions import assert_changes, assert_does_not_change
 from tests.backends.metrics import Gauge as GaugeCall
 from tests.backends.metrics import TestingMetricsBackend
