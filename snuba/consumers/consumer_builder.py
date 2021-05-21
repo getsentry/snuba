@@ -1,6 +1,7 @@
 from typing import Callable, Optional, Sequence
 
 from confluent_kafka import KafkaError, KafkaException, Producer
+from streaming_kafka_consumer import Topic
 
 from snuba import environment
 from snuba.consumers.consumer import StreamingConsumerStrategyFactory
@@ -12,7 +13,6 @@ from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
-from snuba.utils.streams import Topic
 from snuba.utils.streams.backends.kafka import (
     KafkaConsumer,
     KafkaPayload,
