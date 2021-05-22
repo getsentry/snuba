@@ -558,11 +558,12 @@ if application.debug or application.testing:
         assert storage is not None
 
         if type_ == "insert":
-            from snuba.consumers.consumer import build_batch_writer, process_message
-            from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
-            from snuba.utils.streams.strategy_factory import (
+            from streaming_kafka_consumer.strategy_factory import (
                 KafkaConsumerStrategyFactory,
             )
+
+            from snuba.consumers.consumer import build_batch_writer, process_message
+            from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
             table_writer = storage.get_table_writer()
             stream_loader = table_writer.get_stream_loader()

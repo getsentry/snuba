@@ -20,6 +20,7 @@ from typing import (
 import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
 from streaming_kafka_consumer import Message, Topic
+from streaming_kafka_consumer.strategy_factory import KafkaConsumerStrategyFactory
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
@@ -36,7 +37,6 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.utils.streams.processing.strategies import (
     ProcessingStrategy as ProcessingStep,
 )
-from snuba.utils.streams.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.writer import BatchWriter
 
 logger = logging.getLogger("snuba.consumer")

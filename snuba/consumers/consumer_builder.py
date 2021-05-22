@@ -3,6 +3,7 @@ from typing import Callable, Optional, Sequence
 
 from confluent_kafka import KafkaError, KafkaException, Producer
 from streaming_kafka_consumer import Topic
+from streaming_kafka_consumer.strategy_factory import KafkaConsumerStrategyFactory
 
 from snuba import environment
 from snuba.consumers.consumer import build_batch_writer, process_message
@@ -31,7 +32,6 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.utils.streams.processing import StreamProcessor
 from snuba.utils.streams.processing.strategies import ProcessingStrategyFactory
 from snuba.utils.streams.profiler import ProcessingStrategyProfilerWrapperFactory
-from snuba.utils.streams.strategy_factory import KafkaConsumerStrategyFactory
 
 
 class ConsumerBuilder:
