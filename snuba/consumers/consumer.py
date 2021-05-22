@@ -32,6 +32,7 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
+from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.utils.streams.processing.strategies import (
     ProcessingStrategy as ProcessingStep,
 )
@@ -458,7 +459,7 @@ class MultistorageConsumerProcessingStrategyFactory(KafkaConsumerStrategyFactory
             processes=processes,
             input_block_size=input_block_size,
             output_block_size=output_block_size,
-            metrics=metrics,
+            metrics=StreamMetricsAdapter(metrics),
         )
 
     def __build_batch_writer(
