@@ -10,9 +10,9 @@ This is the query structure.::
     MATCH simple | join | subquery
     SELECT [expressions] | [aggregations BY expressions]
     ARRAY JOIN [column]
-    WHERE condition [AND | OR]* condition*
-    HAVING condition [AND | OR]* condition*
-    ORDER BY expressions ASC|DESC
+    WHERE condition [[AND | OR] condition]*
+    HAVING condition [[AND | OR] condition]*
+    ORDER BY expressions ASC|DESC [, expressions ASC|DESC]*
     LIMIT expression BY n
     LIMIT n
     OFFSET n
@@ -59,7 +59,7 @@ using the aliases specified.
 
 **Join:**
 
-``MATCH (<alias>.<entity> [SAMPLE n]) -[<join>]-> (<alias>.<entity> [SAMPLE n])``
+``MATCH (<alias>: <entity> [SAMPLE n]) -[<join>]-> (<alias>: <entity> [SAMPLE n])``
 
 With JOINs every entity must have an alias, which is a unique string.
 Sampling can also be applied to any of the entities in the join. The
@@ -71,8 +71,12 @@ SELECT .. BY
 ============
 
 This clause specifies which results should be returned in the output.
-If there is an aggregation, then the ``BY`` clause must exist and everything
-in the ``BY`` clause is treated as a grouping key. It's not valid to have
+If there is an aggregation, when everything in the ``BY`` clause is
+treated as a grouping key.
+It is possible to have aggregations without a ``BY`` clause if we want
+to aggregate across the entire result set, but, in such case, nothing
+other than the aggregation can be in the ``SELECT``.
+It's not valid to have
 an empty ``SELECT`` clause, even if there is a ``BY`` clause.
 
 Expressions in the SELECT clause can be columns, arithmetic, functions

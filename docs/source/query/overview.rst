@@ -12,36 +12,32 @@ In order to architect a Snuba query, the first step is being able to
 know which Dataset you should query, which Entities you should select
 and what the schema of each Entity is.
 
-For an introduction about Datasets and entities, see the :doc:`/architecture/datamodel`
+For an introduction about Datasets and Entities, see the :doc:`/architecture/datamodel`
 section.
 
 Unfortunately at present there isn't an easy to browse description of
 the data model, so this will be annoying. (a tool to explore the data
 model will eventually be built).
 
-Datasets can be find `in this module <https://github.com/getsentry/snuba/blob/master/snuba/datasets/factory.py>`_.
-Each dataset is a class that references the Entities.
+Datasets can be found `in this module <https://github.com/getsentry/snuba/blob/master/snuba/datasets/factory.py>`_.
+Each Dataset is a class that references the Entities.
 
 Entity classes are `here <https://github.com/getsentry/snuba/tree/master/snuba/datasets/entities>`_.
 Once you found the Entity (or Entities) you want to query, you will need
 to know the schema of each of them.
 
 Entity schemas are defined as a `ColumnSet <https://github.com/getsentry/snuba/blob/master/snuba/clickhouse/columns.py#L472>`_.
-Each Entity declares one ColumnSet which can be find in the Entity class as
-`abstract_column_set`. An example is in the `Transaction <https://github.com/getsentry/snuba/blob/master/snuba/datasets/entities/transactions.py#L99) for transactions. The transactions Entity relies on the schema of its main storage, which is [here](https://github.com/getsentry/snuba/blob/master/snuba/datasets/storages/transactions.py#L29>`_
+Each Entity declares one ColumnSet which can be found in the Entity class as
+`abstract_column_set`. An example is in the `Transaction <https://github.com/getsentry/snuba/blob/master/snuba/datasets/entities/transactions.py>`_ for transactions. The transactions Entity relies on the schema of its main storage, which is `in the transaction schema <https://github.com/getsentry/snuba/blob/master/snuba/datasets/storages/transactions.py#L29>`_
 entity.
-
-Example: If we wanted a the count and the average of transactions duration
-grouped by transaction op, we would find the String column `transaciton_op`
-on the schema and the integer `duration`.
 
 Preparing a query for Snuba
 ===========================
 
 Snuba query language is called SnQL. It is documented in the :doc:`/language/snql`
-section. So this section is not go into details.
+section. So this section does not go into details.
 
-There is an python sdk that can be used to build Snuba queries and it can
+There is a python sdk that can be used to build Snuba queries and it can
 be used in any Python client including Sentry. `This <https://github.com/getsentry/snuba-sdk>`_
 is where the sdk project is documented.
 
