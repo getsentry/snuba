@@ -1,7 +1,7 @@
 from streaming_kafka_consumer import Message
+from streaming_kafka_consumer.backends.kafka import KafkaPayload
 
 from snuba.datasets.message_filters import StreamMessageFilter
-from snuba.utils.streams.backends.kafka import KafkaPayload
 
 KAFKA_ONLY_PARTITION = (
     0  # CDC only works with single partition topics. So partition must be 0

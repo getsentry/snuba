@@ -5,8 +5,7 @@ from abc import ABC, abstractmethod, abstractproperty
 from concurrent.futures import Future
 from typing import Callable, Generic, Mapping, Optional, Sequence, Union
 
-from snuba.utils.streams.types import Message, Partition, Topic, TPayload
-
+from streaming_kafka_consumer.types import Message, Partition, Topic, TPayload
 
 logger = logging.getLogger(__name__)
 

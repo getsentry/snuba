@@ -1,19 +1,23 @@
 from abc import abstractmethod
 from typing import Callable, Mapping, Optional, Protocol, TypeVar
 
-from snuba.utils.streams.backends.kafka import KafkaPayload
-from snuba.utils.streams.metrics import DummyMetricsBackend, Metrics, MetricsWrapper
-from snuba.utils.streams.processing.strategies import (
+from streaming_kafka_consumer.backends.kafka import KafkaPayload
+from streaming_kafka_consumer.metrics import (
+    DummyMetricsBackend,
+    Metrics,
+    MetricsWrapper,
+)
+from streaming_kafka_consumer.processing.strategies import (
     ProcessingStrategy,
     ProcessingStrategyFactory,
 )
-from snuba.utils.streams.processing.strategies.streaming import (
+from streaming_kafka_consumer.processing.strategies.streaming import (
     CollectStep,
     FilterStep,
     ParallelTransformStep,
     TransformStep,
 )
-from snuba.utils.streams.types import Message, Partition
+from streaming_kafka_consumer.types import Message, Partition
 
 TPayload = TypeVar("TPayload")
 TProcessed = TypeVar("TProcessed")

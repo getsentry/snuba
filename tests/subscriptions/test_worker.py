@@ -6,6 +6,7 @@ from uuid import UUID, uuid1
 
 import pytest
 from streaming_kafka_consumer import Message, Partition, Topic
+from streaming_kafka_consumer.backends.local.backend import LocalBroker as Broker
 
 from snuba.datasets.factory import get_dataset
 from snuba.query.conditions import ConditionFunctions, get_first_level_and_conditions
@@ -30,7 +31,6 @@ from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.subscriptions.worker import SubscriptionTaskResult, SubscriptionWorker
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.backends.local.backend import LocalBroker as Broker
 from snuba.utils.types import Interval
 
 

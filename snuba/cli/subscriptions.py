@@ -8,6 +8,12 @@ from typing import Any, Optional, Sequence
 
 import click
 from streaming_kafka_consumer import Topic
+from streaming_kafka_consumer.backends.kafka import KafkaConsumer, KafkaProducer
+from streaming_kafka_consumer.processing import StreamProcessor
+from streaming_kafka_consumer.processing.strategies.batching import (
+    BatchProcessingStrategyFactory,
+)
+from streaming_kafka_consumer.synchronized import SynchronizedConsumer
 
 from snuba import environment, settings
 from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
@@ -20,18 +26,12 @@ from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.worker import SubscriptionWorker
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.streams.backends.kafka import KafkaConsumer, KafkaProducer
 from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
     build_kafka_producer_configuration,
 )
 from snuba.utils.streams.encoding import ProducerEncodingWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
-from snuba.utils.streams.processing import StreamProcessor
-from snuba.utils.streams.processing.strategies.batching import (
-    BatchProcessingStrategyFactory,
-)
-from snuba.utils.streams.synchronized import SynchronizedConsumer
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +219,7 @@ def subscriptions(
                 ),
                 max_batch_size,
                 max_batch_time_ms,
-                metrics,
+                StreamMetricsAdapter(metrics),
             ),
             metrics=StreamMetricsAdapter(metrics),
         )

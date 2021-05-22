@@ -3,6 +3,14 @@ from typing import Callable, Optional, Sequence
 
 from confluent_kafka import KafkaError, KafkaException, Producer
 from streaming_kafka_consumer import Topic
+from streaming_kafka_consumer.backends.kafka import (
+    KafkaConsumer,
+    KafkaPayload,
+    TransportError,
+)
+from streaming_kafka_consumer.processing import StreamProcessor
+from streaming_kafka_consumer.processing.strategies import ProcessingStrategyFactory
+from streaming_kafka_consumer.profiler import ProcessingStrategyProfilerWrapperFactory
 from streaming_kafka_consumer.strategy_factory import KafkaConsumerStrategyFactory
 
 from snuba import environment
@@ -15,11 +23,6 @@ from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
-from snuba.utils.streams.backends.kafka import (
-    KafkaConsumer,
-    KafkaPayload,
-    TransportError,
-)
 from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
     build_kafka_producer_configuration,
@@ -29,9 +32,6 @@ from snuba.utils.streams.kafka_consumer_with_commit_log import (
     KafkaConsumerWithCommitLog,
 )
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
-from snuba.utils.streams.processing import StreamProcessor
-from snuba.utils.streams.processing.strategies import ProcessingStrategyFactory
-from snuba.utils.streams.profiler import ProcessingStrategyProfilerWrapperFactory
 
 
 class ConsumerBuilder:

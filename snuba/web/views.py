@@ -25,6 +25,7 @@ from flask import Flask, Request, Response, redirect, render_template
 from flask import request as http_request
 from markdown import markdown
 from streaming_kafka_consumer import Message, Partition, Topic
+from streaming_kafka_consumer.backends.kafka import KafkaPayload
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
@@ -60,7 +61,6 @@ from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDe
 from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.web import QueryException
 from snuba.web.converters import DatasetConverter
 from snuba.web.query import parse_and_run_query
