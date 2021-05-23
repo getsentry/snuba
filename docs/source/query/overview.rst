@@ -149,9 +149,15 @@ The request format is the same visible in the screenshot:
             mode to the Clickhouse query in case it was needed to guarantee
             correct results after replacements.
 
+Snuba can respond with 4 http codes. 200 is for a successful query,
+if the query cannot be properly validated it will be a 400. A 500 generally
+means a Clickhouse related issue (that go from timeout to connection issues)
+though there are several invalid queries that Snuba is not able to identify
+in advance still (we are removing them).
+Snuba has an internal rate limiter so 429 is also a possible return code.
 
-The response format is the same discussed above. The complete version
-looks like this (in debug mode) ::
+The response format for a successful query is the same discussed above.
+The complete version looks like this (in debug mode) ::
 
     {
         "data": [],
@@ -210,3 +216,18 @@ The ``stats`` dictionary contains the following keys
 * ``global_rate`` same as for ``project_rate`` but not focused on one project
 * ``global_concurrent`` same as for ``project_concurrent`` but not focused on one project
 * ``query_id`` is a unique identifier for the this query.
+
+A query validation issue would generally have this format::
+
+    {
+        "error": {
+            "type": "invalid_query",
+            "message": "missing >= condition on column timestamp for entity events"
+        }
+    }
+
+A Clickhouse error would have a similar structure. The ``type`` field will say
+``clickhouse``, the message will contain details around the exception.
+Contrarily to the query validation errors, in case of Clickhouse errors, the
+query is actually executed, so all the timing and stats details described for
+successful query are present.

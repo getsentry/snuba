@@ -49,6 +49,8 @@ This is equivalent to all of our current queries. This is querying data from
 a single entity (Errors, Transactions etc.) It is possible to add an optional
 sample to the query by adding it with the entity.
 
+Example ``MATCH (errors)``.
+
 **Subquery:**
 
 ``MATCH { <query> }``
@@ -57,15 +59,51 @@ Inside the curly braces can be another SnQL query in its entirety. Anything
 in the SELECT/BY clause of the subquery will be exposed in the outer query
 using the aliases specified.
 
+Example::
+
+    MATCH {
+        MATCH (transactions)
+        SELECT avg(duration) AS avg_d BY transaction
+    }
+    SELECT max(avg_d)
+
 **Join:**
 
 ``MATCH (<alias>: <entity> [SAMPLE n]) -[<join>]-> (<alias>: <entity> [SAMPLE n])``
+
+A join represents a multi node subgraph is a subgraph that includes
+multiple relationships between different nodes. We only support 1..n,
+n..1 and 1..1 directed relationships between nodes.
 
 With JOINs every entity must have an alias, which is a unique string.
 Sampling can also be applied to any of the entities in the join. The
 ``<join>`` is a string that is specified in the Entity in Snuba, and
 is a short hand for a set of join conditions. It's possible to have more
 than one join clause, separated by commas.
+
+Example::
+
+    MATCH
+        (e: events) -[grouped]-> (g: groupedmessage),
+        (e: events) -[assigned]-> (a: groupassignee)
+    SELECT count() AS tot BY e.project_id, g.id
+    WHERE a.user_id = "somebody"
+
+The type of join (left/inner) and the join key are part of the data model
+and not part of the query. They are hard coded in the entity code.
+This is because not entity can be safely joined with any other entity
+in the distributed version of the underlying database.
+
+The tuples provided by the match clause to the where clause look exactly
+like the ones produced by conventional join clause.::
+
+    [
+        {"e.project_id": 1,  "g.id": 10}
+        {"e.project_id": 1,  "g.id": 11}
+        {"e.project_id": 2,  "g.id": 20}
+        ...
+    ]
+
 
 SELECT .. BY
 ============
@@ -142,53 +180,3 @@ one of the nodes in the query. A sample can be either a float between 0 and
 1, representing a percentage of rows to sample.
 
 Or it can be an integer greater 1 which represents the number of rows to sample.
-
-JOINs
-=====
-
-A multi node subgraph is a subgraph that includes multiple relationships
-between different nodes. We only support 1..n, n..1 and 1..1 directed
-relationships between nodes. No m..n for now.::
-
-    MATCH (g: groups) -[contains]-> (e: events)
-
-
-The ``contains`` keyword represents the 1:n relationship defined in the
-data model between groups and events. The tuples provided to the where
-clause look exactly like the ones produced by a left join.::
-
-    [
-        {"g.id": 10, "g.title": "error", "e.id": "123123123123", ....}
-        {"g.id": 10, "g.title": "error", "e.id": "456456456456", ....}
-        {"g.id": 10, "g.title": "error", "e.id": "789789789789", ....}
-    ]
-
-To query a graph with multiple relationships in the MATCH clause, multiple
-two node relationships can be comma separated as long as the graph between
-all nodes referenced is connected. In the example below, ``groups`` is
-connected to all the relationships.::
-
-    MATCH (g: groups) -[contains]-> (e: events),
-                (g: groups) -[assigned]-> (a: groupAssignnee),
-                (g: groups) -[impacts]-> (r: groupReleases)
-    WHERE .....
-
-Sub-queries
-===========
-
-It is possible to provide another query in the MATCH clause of a query.
-There is currently no limit on how many times queries can be nested, but
-that may change as different use cases appear.::
-
-    MATCH {
-        MATCH (sessions)
-        SELECT
-        	uniqIf(s.user_id, s.event = "crash") / uniq(s.user_id) AS crash_rate
-            BY toStartOfDay(s.timestamp) AS day
-        WHERE s.project_id IN [1,2,3]
-    }
-    SELECT median(crash_rate)
-
-
-Match would be matching a virtual node in the graph that is the result of
-the inner query.
