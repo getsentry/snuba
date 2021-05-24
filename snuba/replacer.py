@@ -4,15 +4,15 @@ from datetime import datetime
 from typing import Optional, Sequence
 
 import simplejson as json
+from streaming_kafka_consumer import Message
+from streaming_kafka_consumer.backends.kafka import KafkaPayload
+from streaming_kafka_consumer.processing.strategies.batching import AbstractBatchWorker
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
 from snuba.replacers.replacer_processor import Replacement, ReplacementMessage
 from snuba.utils.metrics import MetricsBackend
-from snuba.utils.streams import Message
-from snuba.utils.streams.backends.kafka import KafkaPayload
-from snuba.utils.streams.processing.strategies.batching import AbstractBatchWorker
 
 logger = logging.getLogger("snuba.replacer")
 
