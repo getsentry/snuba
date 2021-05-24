@@ -1,5 +1,5 @@
 from snuba.clickhouse.http import JSONRowEncoder
-from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
+from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storages import StorageKey
@@ -11,6 +11,26 @@ from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.writer import BatchWriterEncoderWrapper
 from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
+
+
+def _drop_all_tables() -> None:
+    for cluster in CLUSTERS:
+        connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+        database = cluster.get_database()
+
+        data = connection.execute(
+            f"SELECT name FROM system.tables WHERE database = '{database}'"
+        )
+        for (table,) in data:
+            connection.execute(f"DROP TABLE IF EXISTS {table}")
+
+
+def setup_function() -> None:
+    _drop_all_tables()
+
+
+def teardown_function() -> None:
+    _drop_all_tables()
 
 
 def test_transactions_compatibility() -> None:
