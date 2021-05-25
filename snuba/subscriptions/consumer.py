@@ -12,9 +12,9 @@ from typing import (
     Sequence,
 )
 
-from snuba.utils.streams import Consumer, ConsumerError, Message, Partition, Topic
-from snuba.utils.types import Interval, InvalidRangeError
+from streaming_kafka_consumer import Consumer, ConsumerError, Message, Partition, Topic
 
+from snuba.utils.types import Interval, InvalidRangeError
 
 logger = logging.getLogger(__name__)
 

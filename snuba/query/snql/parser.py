@@ -1249,7 +1249,11 @@ VALIDATORS = [validate_query, validate_entities_with_query]
 
 
 def parse_snql_query(
-    body: str, dataset: Dataset
+    body: str,
+    custom_processing: Sequence[
+        Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]
+    ],
+    dataset: Dataset,
 ) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
     query = parse_snql_query_initial(body)
 
@@ -1257,7 +1261,10 @@ def parse_snql_query(
         query, POST_PROCESSORS,
     )
 
-    # Time based processing, which will sometimes be skipped by subscriptions
+    # Custom processing to tweak the AST before validation
+    _post_process(query, custom_processing)
+
+    # Time based processing
     _post_process(query, [_replace_time_condition])
 
     # XXX: Select the entity to be used for the query. This step is temporary. Eventually

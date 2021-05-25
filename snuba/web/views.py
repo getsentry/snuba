@@ -2,6 +2,7 @@ import logging
 import os
 import time
 from datetime import datetime
+from functools import partial
 from typing import (
     Any,
     Callable,
@@ -22,6 +23,8 @@ import simplejson as json
 from flask import Flask, Request, Response, redirect, render_template
 from flask import request as http_request
 from markdown import markdown
+from streaming_kafka_consumer import Message, Partition, Topic
+from streaming_kafka_consumer.backends.kafka import KafkaPayload
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
@@ -41,17 +44,15 @@ from snuba.datasets.factory import (
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import JoinClause
+from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
+from snuba.query.logical import Query
 from snuba.redis import redis_client
 from snuba.request import Language
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
-from snuba.request.request_settings import HTTPRequestSettings
-from snuba.request.schema import RequestSchema
-from snuba.request.validation import (
-    build_request,
-    parse_legacy_query,
-    parse_snql_query_api,
-)
+from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
+from snuba.request.schema import RequestParts, RequestSchema
+from snuba.request.validation import build_request, parse_legacy_query, parse_snql_query
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import InvalidSubscriptionError, PartitionId
@@ -59,8 +60,6 @@ from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDe
 from snuba.util import with_span
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.streams import Message, Partition, Topic
-from snuba.utils.streams.backends.kafka import KafkaPayload
 from snuba.web import QueryException
 from snuba.web.converters import DatasetConverter
 from snuba.web.query import parse_and_run_query
@@ -396,7 +395,10 @@ def dataset_query(
 
     if language == Language.SNQL:
         metrics.increment("snql.query.incoming", tags={"referrer": referrer})
-        parser = parse_snql_query_api
+        parser: Callable[
+            [RequestParts, RequestSettings, Dataset],
+            Union[Query, CompositeQuery[Entity]],
+        ] = partial(parse_snql_query, [])
     else:
         parser = parse_legacy_query
 

@@ -4,14 +4,14 @@ import logging
 import time
 from typing import Generic, Mapping, Optional, Sequence, Type
 
-from snuba.utils.streams.backends.abstract import Consumer, ConsumerError
-from snuba.utils.streams.metrics import DummyMetricsBackend, Metrics
-from snuba.utils.streams.processing.strategies.abstract import (
+from streaming_kafka_consumer.backends.abstract import Consumer, ConsumerError
+from streaming_kafka_consumer.metrics import DummyMetricsBackend, Metrics
+from streaming_kafka_consumer.processing.strategies.abstract import (
     MessageRejected,
     ProcessingStrategy,
     ProcessingStrategyFactory,
 )
-from snuba.utils.streams.types import Message, Partition, Topic, TPayload
+from streaming_kafka_consumer.types import Message, Partition, Topic, TPayload
 
 logger = logging.getLogger(__name__)
 

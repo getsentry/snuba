@@ -1,11 +1,10 @@
 import logging
 from typing import Callable, Optional
 
-from snuba.utils.streams.processing.strategies.abstract import (
+from streaming_kafka_consumer.processing.strategies.abstract import (
     ProcessingStrategy as ProcessingStep,
 )
-from snuba.utils.streams.types import Message, TPayload
-
+from streaming_kafka_consumer.types import Message, TPayload
 
 logger = logging.getLogger(__name__)
 

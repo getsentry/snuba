@@ -1,7 +1,8 @@
+from streaming_kafka_consumer.backends.local.backend import LocalBroker as Broker
+from streaming_kafka_consumer.types import Message, Topic
+
 from snuba.utils.codecs import Encoder
-from snuba.utils.streams.backends.local.backend import LocalBroker as Broker
 from snuba.utils.streams.encoding import ProducerEncodingWrapper
-from snuba.utils.streams.types import Message, Topic
 
 
 def test_encoding_producer(broker: Broker[str]) -> None:

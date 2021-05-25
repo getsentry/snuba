@@ -1,13 +1,14 @@
 import logging
 from typing import Any, Dict, Mapping, Optional, Sequence
 
-from snuba import settings
-from snuba.utils.streams.backends.kafka.configuration import (
+from streaming_kafka_consumer.backends.kafka.configuration import (
     DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
     DEFAULT_QUEUED_MIN_MESSAGES,
     build_kafka_configuration_with_overrides,
     build_kafka_consumer_configuration_with_overrides,
 )
+
+from snuba import settings
 from snuba.utils.streams.topics import Topic
 
 logger = logging.getLogger(__name__)
