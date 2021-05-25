@@ -29,8 +29,7 @@ to False. This is the default setting, so configuration is already
 set up for local mode migrations. Start up the corresponding ClickHouse
 container (``sentry devservices up clickhouse``).
 
-Ensuring that your local configuration is prepared for migrations,
-run migrations as expected (``snuba migrations migrate --force``).
+Now, run migrations as expected (``snuba migrations migrate --force``).
 
 
 Enabling Distributed Mode
@@ -54,6 +53,5 @@ This needs to be done only for distributed migrations, as the default cluster de
 The default in this file works with the default cluster configurations mentioned above, so no changes
 are immediately necessary.
 
-Ensuring that your local configuration is prepared for migrations,
-run migrations with the ``SNUBA_SETTINGS`` environment variable pointing to distributed mode.
+Now, run migrations with the ``SNUBA_SETTINGS`` environment variable pointing to distributed mode.
 This can be done as follows: ``SNUBA_SETTINGS=distributed snuba migrations migrate --force``.
