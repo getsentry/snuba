@@ -10,12 +10,9 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import factory
 from snuba.datasets.storages.factory import STORAGES, get_storage
+from snuba.migrations import MigrationGroup
 from snuba.migrations.errors import MigrationError
-from snuba.migrations.groups import (
-    ACTIVE_MIGRATION_GROUPS,
-    MigrationGroup,
-    get_group_loader,
-)
+from snuba.migrations.groups import ACTIVE_MIGRATION_GROUPS, get_group_loader
 from snuba.migrations.parse_schema import get_local_schema
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status

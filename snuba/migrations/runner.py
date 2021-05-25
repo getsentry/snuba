@@ -9,23 +9,19 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import (
-    CLUSTERS,
     ClickhouseClientSettings,
     ClickhouseNodeType,
     get_cluster,
 )
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.migrations import MigrationGroup
 from snuba.migrations.context import Context
 from snuba.migrations.errors import (
     InvalidMigrationState,
     MigrationError,
     MigrationInProgress,
 )
-from snuba.migrations.groups import (
-    ACTIVE_MIGRATION_GROUPS,
-    MigrationGroup,
-    get_group_loader,
-)
+from snuba.migrations.groups import ACTIVE_MIGRATION_GROUPS, get_group_loader
 from snuba.migrations.migration import ClickhouseNodeMigration, CodeMigration, Migration
 from snuba.migrations.operations import SqlOperation
 from snuba.migrations.status import Status
