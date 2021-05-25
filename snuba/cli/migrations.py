@@ -5,9 +5,9 @@ import click
 
 from snuba.clusters.cluster import CLUSTERS, ClickhouseNodeType
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations import MigrationGroup
 from snuba.migrations.connect import check_clickhouse_connections
 from snuba.migrations.errors import MigrationError
+from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 

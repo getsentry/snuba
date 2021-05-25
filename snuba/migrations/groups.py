@@ -1,11 +1,23 @@
 from abc import ABC, abstractmethod
+from enum import Enum
 from importlib import import_module
 from typing import Sequence
 
-from snuba import settings
-from snuba.migrations import MigrationGroup
 from snuba.migrations.errors import MigrationDoesNotExist
 from snuba.migrations.migration import Migration
+
+
+class MigrationGroup(Enum):
+    SYSTEM = "system"
+    EVENTS = "events"
+    TRANSACTIONS = "transactions"
+    DISCOVER = "discover"
+    OUTCOMES = "outcomes"
+    METRICS = "metrics"
+    SESSIONS = "sessions"
+    QUERYLOG = "querylog"
+    SPANS_EXPERIMENTAL = "spans_experimental"
+
 
 # Migration groups are mandatory by default, unless they are on this list
 OPTIONAL_GROUPS = {
@@ -14,14 +26,6 @@ OPTIONAL_GROUPS = {
     MigrationGroup.QUERYLOG,
     MigrationGroup.SPANS_EXPERIMENTAL,
 }
-
-ACTIVE_MIGRATION_GROUPS = [
-    group
-    for group in MigrationGroup
-    if not (
-        group in OPTIONAL_GROUPS and group.value in settings.SKIPPED_MIGRATION_GROUPS
-    )
-]
 
 
 class GroupLoader(ABC):
