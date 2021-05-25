@@ -190,21 +190,6 @@ def test_backfill_errors() -> None:
 
     run_prior_migrations(MigrationGroup.EVENTS, backfill_migration_id, runner)
 
-    # events_migrations = next(
-    #     group_migrations
-    #     for (group, group_migrations) in runner.show_all()
-    #     if group == MigrationGroup.EVENTS
-    # )
-
-    # # Run migrations up 0014_backfill_errors
-    # for migration in events_migrations:
-    #     if migration.migration_id == backfill_migration_id:
-    #         break
-
-    #     runner.run_migration(
-    #         MigrationKey(MigrationGroup.EVENTS, migration.migration_id), force=True
-    #     )
-
     errors_storage = get_writable_storage(StorageKey.ERRORS)
     clickhouse = errors_storage.get_cluster().get_query_connection(
         ClickhouseClientSettings.QUERY
