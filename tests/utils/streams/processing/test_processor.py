@@ -2,11 +2,14 @@ from datetime import datetime
 from unittest import mock
 
 import pytest
+from streaming_kafka_consumer.processing.processor import (
+    InvalidStateError,
+    StreamProcessor,
+)
+from streaming_kafka_consumer.processing.strategies.abstract import MessageRejected
+from streaming_kafka_consumer.types import Message, Partition, Topic
 
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
-from snuba.utils.streams.processing.processor import InvalidStateError, StreamProcessor
-from snuba.utils.streams.processing.strategies.abstract import MessageRejected
-from snuba.utils.streams.types import Message, Partition, Topic
 from tests.assertions import assert_changes, assert_does_not_change
 from tests.backends.metrics import TestingMetricsBackend, Timing
 
