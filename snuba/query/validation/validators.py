@@ -1,13 +1,16 @@
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import Optional, Set
 
 from snuba.query import Query
 from snuba.query.conditions import (
-    build_match,
+    FUNCTION_TO_OPERATOR,
     ConditionFunctions,
+    build_match,
     get_first_level_and_conditions,
 )
 from snuba.query.exceptions import InvalidQueryException
+from snuba.query.expressions import FunctionCall, Literal
 
 
 class QueryValidator(ABC):
@@ -52,3 +55,69 @@ class EntityRequiredColumnValidator(QueryValidator):
             raise InvalidQueryException(
                 f"missing required conditions for {', '.join(missing)}"
             )
+
+
+class OneProjectValidator(QueryValidator):
+    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+        match = build_match("project_id", list(FUNCTION_TO_OPERATOR.keys()), int)
+        condition = query.get_condition()
+        top_level = get_first_level_and_conditions(condition) if condition else []
+        matched_id: Optional[int] = None
+        for cond in top_level:
+            result = match.match(cond)
+            if result is not None:
+                rhs = result.expression("rhs")
+                project_id: Optional[int] = None
+                if isinstance(rhs, Literal) and isinstance(rhs.value, int):
+                    project_id = rhs.value
+                elif isinstance(rhs, FunctionCall):
+                    project_ids = set(rhs.parameters)
+                    if len(project_ids) != 1:
+                        raise InvalidQueryException("Must only query one project")
+                    value = project_ids.pop()
+                    assert isinstance(value, Literal) and isinstance(value.value, int)
+                    project_id = value.value
+
+                if matched_id is not None and matched_id != project_id:
+                    raise InvalidQueryException("Must only query one project")
+                else:
+                    matched_id = project_id
+
+
+class NoTimeBasedConditionValidator(QueryValidator):
+    def __init__(self, required_time_column: str) -> None:
+        self.required_time_column = required_time_column
+        self.match = build_match(
+            required_time_column,
+            [
+                ConditionFunctions.EQ,
+                ConditionFunctions.LT,
+                ConditionFunctions.LTE,
+                ConditionFunctions.GT,
+                ConditionFunctions.GTE,
+            ],
+            datetime,
+        )
+
+    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+        condition = query.get_condition()
+        top_level = get_first_level_and_conditions(condition) if condition else []
+        if any([self.match.match(cond) for cond in top_level]):
+            raise InvalidQueryException(
+                f"Cannot have existing conditions on time field {self.required_time_column}"
+            )
+
+
+class SubscriptionAllowedClausesValidator(QueryValidator):
+    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+        selected = query.get_selected_columns()
+        if len(selected) != 1:
+            raise InvalidQueryException("Can only have one aggregation in the select")
+
+        disallowed = ["groupby", "having", "orderby"]
+        for field in disallowed:
+            if getattr(query, f"get_{field}")():
+                print(field, getattr(query, f"get_{field}")())
+                raise InvalidQueryException(
+                    f"Invalid clause {field} in subscription query"
+                )

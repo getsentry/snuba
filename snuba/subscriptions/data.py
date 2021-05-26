@@ -22,6 +22,11 @@ from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Aggregation, Query
 from snuba.query.types import Condition
+from snuba.query.validation.validators import (
+    NoTimeBasedConditionValidator,
+    OneProjectValidator,
+    SubscriptionAllowedClausesValidator,
+)
 from snuba.request import Language, Request
 from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
@@ -93,7 +98,11 @@ class SubscriptionData(ABC, _SubscriptionData):
 
     @abstractmethod
     def build_request(
-        self, dataset: Dataset, timestamp: datetime, offset: Optional[int], timer: Timer
+        self,
+        dataset: Dataset,
+        timestamp: datetime,
+        offset: Optional[int],
+        timer: Timer,
     ) -> Request:
         raise NotImplementedError
 
@@ -116,7 +125,11 @@ class LegacySubscriptionData(SubscriptionData):
     aggregations: Sequence[Aggregation]
 
     def build_request(
-        self, dataset: Dataset, timestamp: datetime, offset: Optional[int], timer: Timer
+        self,
+        dataset: Dataset,
+        timestamp: datetime,
+        offset: Optional[int],
+        timer: Timer,
     ) -> Request:
         """
         Returns a Request that can be used to run a query via `parse_and_run_query`.
@@ -175,68 +188,98 @@ class LegacySubscriptionData(SubscriptionData):
 class SnQLSubscriptionData(SubscriptionData):
     query: str
 
+    def add_conditions(
+        self,
+        timestamp: datetime,
+        offset: Optional[int],
+        query: Union[CompositeQuery[Entity], Query],
+    ) -> None:
+        # TODO: Support composite queries with multiple entities.
+        from_clause = query.get_from_clause()
+        if not isinstance(from_clause, Entity):
+            raise InvalidSubscriptionError("Only simple queries are supported")
+        entity = get_entity(from_clause.key)
+        required_timestamp_column = entity.required_time_column
+        if required_timestamp_column is None:
+            raise InvalidSubscriptionError(
+                "Entity must have a timestamp column for subscriptions"
+            )
+
+        conditions_to_add: List[Expression] = [
+            binary_condition(
+                ConditionFunctions.EQ,
+                Column(None, None, "project_id"),
+                Literal(None, self.project_id),
+            ),
+            binary_condition(
+                ConditionFunctions.GTE,
+                Column(None, None, required_timestamp_column),
+                Literal(None, (timestamp - self.time_window)),
+            ),
+            binary_condition(
+                ConditionFunctions.LT,
+                Column(None, None, required_timestamp_column),
+                Literal(None, timestamp),
+            ),
+        ]
+
+        if offset is not None:
+            conditions_to_add.append(
+                binary_condition(
+                    ConditionFunctions.LTE,
+                    FunctionCall(
+                        None,
+                        "ifnull",
+                        (Column(None, None, "offset"), Literal(None, 0)),
+                    ),
+                    Literal(None, offset),
+                )
+            )
+
+        new_condition = combine_and_conditions(conditions_to_add)
+        condition = query.get_condition()
+        if condition:
+            new_condition = binary_condition(
+                BooleanFunctions.AND, condition, new_condition
+            )
+
+        query.set_ast_condition(new_condition)
+
+    def validate_subscription(
+        self, query: Union[CompositeQuery[Entity], Query]
+    ) -> None:
+        # TODO: Support composite queries with multiple entities.
+        from_clause = query.get_from_clause()
+        if not isinstance(from_clause, Entity):
+            raise InvalidSubscriptionError("Only simple queries are supported")
+        entity = get_entity(from_clause.key)
+
+        SubscriptionAllowedClausesValidator().validate(query)
+        OneProjectValidator().validate(query)
+        if entity.required_time_column:
+            NoTimeBasedConditionValidator(entity.required_time_column).validate(query)
+
     def build_request(
-        self, dataset: Dataset, timestamp: datetime, offset: Optional[int], timer: Timer
+        self,
+        dataset: Dataset,
+        timestamp: datetime,
+        offset: Optional[int],
+        timer: Timer,
+        use_snql: bool = True,
     ) -> Request:
         schema = RequestSchema.build_with_extensions(
             {}, SubscriptionRequestSettings, Language.SNQL,
         )
 
-        def add_conditions(query: Union[CompositeQuery[Entity], Query]) -> None:
-            # TODO: Support composite queries with multiple entities.
-            from_clause = query.get_from_clause()
-            if not isinstance(from_clause, Entity):
-                raise InvalidSubscriptionError("Only simple queries are supported")
-            entity = get_entity(from_clause.key)
-            required_timestamp_column = entity.required_time_column
-            if required_timestamp_column is None:
-                raise InvalidSubscriptionError(
-                    "Entity must have a timestamp column for subscriptions"
-                )
-
-            conditions_to_add: List[Expression] = [
-                binary_condition(
-                    ConditionFunctions.EQ,
-                    Column(None, None, "project_id"),
-                    Literal(None, self.project_id),
-                ),
-                binary_condition(
-                    ConditionFunctions.GTE,
-                    Column(None, None, required_timestamp_column),
-                    Literal(None, (timestamp - self.time_window)),
-                ),
-                binary_condition(
-                    ConditionFunctions.LT,
-                    Column(None, None, required_timestamp_column),
-                    Literal(None, timestamp),
-                ),
-            ]
-
-            if offset is not None:
-                conditions_to_add.append(
-                    binary_condition(
-                        ConditionFunctions.LTE,
-                        FunctionCall(
-                            None,
-                            "ifnull",
-                            (Column(None, None, "offset"), Literal(None, 0)),
-                        ),
-                        Literal(None, offset),
-                    )
-                )
-
-            new_condition = combine_and_conditions(conditions_to_add)
-            condition = query.get_condition()
-            if condition:
-                new_condition = binary_condition(
-                    BooleanFunctions.AND, condition, new_condition
-                )
-
-            query.set_ast_condition(new_condition)
-
         request = build_request(
             {"query": self.query},
-            partial(parse_snql_query, [add_conditions]),
+            partial(
+                parse_snql_query,
+                [
+                    self.validate_subscription,
+                    partial(self.add_conditions, timestamp, offset),
+                ],
+            ),
             SubscriptionRequestSettings,
             schema,
             dataset,
@@ -282,16 +325,15 @@ class DelegateSubscriptionData(SubscriptionData):
     query: str
 
     def build_request(
-        self, dataset: Dataset, timestamp: datetime, offset: Optional[int], timer: Timer
+        self,
+        dataset: Dataset,
+        timestamp: datetime,
+        offset: Optional[int],
+        timer: Timer,
     ) -> Request:
-        # TODO: Switch to SnQL when we do the rollout
-        return LegacySubscriptionData(
-            project_id=self.project_id,
-            resolution=self.resolution,
-            time_window=self.time_window,
-            conditions=self.conditions,
-            aggregations=self.aggregations,
-        ).build_request(dataset, timestamp, offset, timer)
+        # TODO: Add a flag to use the SnQL data if it exists.
+        data = self.to_legacy()
+        return data.build_request(dataset, timestamp, offset, timer)
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> DelegateSubscriptionData:
@@ -317,6 +359,16 @@ class DelegateSubscriptionData(SubscriptionData):
             "aggregations": self.aggregations,
             "query": self.query,
         }
+
+    def to_snql(self) -> SnQLSubscriptionData:
+        return SnQLSubscriptionData.from_dict(
+            {**self.to_dict(), self.TYPE_FIELD: SubscriptionType.SNQL.value}
+        )
+
+    def to_legacy(self) -> LegacySubscriptionData:
+        return LegacySubscriptionData.from_dict(
+            {**self.to_dict(), self.TYPE_FIELD: SubscriptionType.LEGACY.value}
+        )
 
 
 class Subscription(NamedTuple):
