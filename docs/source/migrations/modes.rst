@@ -2,7 +2,7 @@
 Snuba Migration Modes
 ======================
 
-This doc outlines a way to try out distributed migrations.
+This document outlines a way to try out distributed migrations.
 Note that this is experimental, and should be used only for development
 purposes at the moment. Distributed mode is not supported when testing yet.
 Local mode for migrations is currently fully supported.
@@ -41,11 +41,11 @@ Make sure that the Zookeeper container is also running; without it, distributed 
 will not work properly.
 
 Now, we take a look at the cluster configurations that can be used in Distributed tables. These are
-set in `this file <https://github.com/getsentry/sentry/blob/master/config/clickhouse/dist_config.xml>`_.
+set in `this config <https://github.com/getsentry/sentry/blob/master/config/clickhouse/dist_config.xml>`_.
 The current configuration in the file is a default, 1 shard with 1 replica model, and is best to use
 for now, as it supports migrations for all storages. Moving forward, we look to adding support
 for multi-sharded configurations, and ensuring storages are placed on the right clusters.
-More examples of and information on cluster configurations can be found `here <https://clickhouse.tech/docs/en/engines/table-engines/special/distributed/>`_.
+More examples of and information on cluster configurations can be found in `this link <https://clickhouse.tech/docs/en/engines/table-engines/special/distributed/>`_.
 
 Finally, set up cluster connection details (for example, which storage is to be assigned
 to be which cluster) in `this file <https://github.com/getsentry/snuba/blob/master/snuba/settings/settings_distributed.py>`_.
