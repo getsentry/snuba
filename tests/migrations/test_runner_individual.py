@@ -179,6 +179,17 @@ def run_prior_migrations(migration_group, stop_migration_id, runner):
         )
 
 
+def perform_select_query(columns, table, where, limit, connection):
+    select_clause = "SELECT " + (", ".join(columns))
+    from_clause = " FROM " + table
+    where_clause = (" WHERE " + where) if where else ""
+    limit_clause = (" LIMIT" + limit) if limit else ""
+
+    full_query = select_clause + from_clause + where_clause + limit_clause
+
+    return connection.execute(full_query)
+
+
 # Below is an example of a valid test
 # Write a similar test case potentially ?
 def test_backfill_errors() -> None:

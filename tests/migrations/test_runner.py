@@ -16,8 +16,6 @@ from snuba.migrations.parse_schema import get_local_schema
 from snuba.migrations.runner import MigrationKey, Runner, get_active_migration_groups
 from snuba.migrations.status import Status
 
-# ACTIVE_MIGRATION_GROUPS = get_active_migration_groups()
-
 
 def _drop_all_tables() -> None:
     for cluster in CLUSTERS:
