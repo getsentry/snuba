@@ -11,3 +11,4 @@ with a fast ingestion consumer and a query optimizer.
    architecture/queryprocessing
    query/overview
    language/snql
+   migrations/modes
