@@ -14,6 +14,7 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return get_forward_migrations_local(
+            source_table_name="metrics_buckets_local",
             table_name="metrics_sets_local",
             mv_name="metrics_sets_mv_local",
             aggregation_col_schema=[

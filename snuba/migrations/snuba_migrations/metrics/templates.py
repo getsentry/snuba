@@ -87,7 +87,7 @@ SELECT
     toStartOfMinute(timestamp) as timestamp,
     retention_days,
     %(aggregation_states)s
-FROM metrics_buckets_local
+FROM %(raw_table_name)s
 WHERE materialization_version = 0
 GROUP BY
     org_id,
@@ -102,6 +102,7 @@ GROUP BY
 
 
 def get_forward_migrations_local(
+    source_table_name: str,
     table_name: str,
     mv_name: str,
     aggregation_col_schema: Sequence[Column[Modifiers]],
@@ -150,7 +151,11 @@ def get_forward_migrations_local(
             view_name=mv_name,
             destination_table_name=table_name,
             columns=aggregated_cols,
-            query=MATVIEW_STATEMENT % {"aggregation_states": aggregation_states},
+            query=MATVIEW_STATEMENT
+            % {
+                "raw_table_name": source_table_name,
+                "aggregation_states": aggregation_states,
+            },
         ),
     ]
 

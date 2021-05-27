@@ -14,6 +14,7 @@ class StorageKey(Enum):
     GROUPEDMESSAGES = "groupedmessages"
     GROUPASSIGNEES = "groupassignees"
     METRICS_BUCKETS = "metrics_buckets"
+    METRICS_COUNTERS_BUCKETS = "metrics_counters_buckets"
     METRICS_COUNTERS = "metrics_counters"
     METRICS_SETS = "metrics_sets"
     OUTCOMES_RAW = "outcomes_raw"

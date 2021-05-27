@@ -63,14 +63,14 @@ sets_buckets = WritableTableStorage(
 
 
 counters_buckets = WritableTableStorage(
-    storage_key=StorageKey.METRICS_BUCKETS,
+    storage_key=StorageKey.METRICS_COUNTERS_BUCKETS,
     storage_set_key=StorageSetKey.METRICS,
     schema=WritableTableSchema(
         columns=ColumnSet(
             [*PRE_VALUE_COLUMNS, Column("value", Float(64)), *POST_VALUE_COLUMNS]
         ),
-        local_table_name="metrics_buckets_local",
-        dist_table_name="metrics_buckets_dist",
+        local_table_name="metrics_counters_buckets_local",
+        dist_table_name="metrics_counters_buckets_dist",
         storage_set_key=StorageSetKey.METRICS,
     ),
     query_processors=[],
