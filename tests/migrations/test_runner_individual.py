@@ -1,4 +1,7 @@
+from typing import Any, Sequence
+
 from snuba.clickhouse.http import JSONRowEncoder
+from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.consumers.types import KafkaMessageMetadata
@@ -173,7 +176,9 @@ def test_groupedmessages_compatibility() -> None:
 
 
 # provide a migration ID, group and run all the migrations that come before
-def run_prior_migrations(migration_group, stop_migration_id, runner):
+def run_prior_migrations(
+    migration_group: MigrationGroup, stop_migration_id: str, runner: Runner
+) -> None:
 
     right_migrations = next(
         group_migrations
@@ -191,7 +196,13 @@ def run_prior_migrations(migration_group, stop_migration_id, runner):
         )
 
 
-def perform_select_query(columns, table, where, limit, connection):
+def perform_select_query(
+    columns: Sequence[str],
+    table: str,
+    where: dict[str, str],
+    limit: str,
+    connection: ClickhousePool,
+) -> Sequence[Any]:
     select_clause = "SELECT " + (", ".join(columns))
     from_clause = " FROM " + table
     where_clause = ""
