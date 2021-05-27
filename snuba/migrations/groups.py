@@ -168,6 +168,8 @@ class MetricsLoader(DirectoryLoader):
         return [
             "0001_metrics_buckets",
             "0002_metrics_sets",
+            "0003_counters_to_buckets",
+            "0004_metrics_counters",
         ]
 
 

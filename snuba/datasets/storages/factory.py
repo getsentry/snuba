@@ -11,7 +11,9 @@ from snuba.datasets.storages.events import storage as events_storage
 from snuba.datasets.storages.events_ro import storage as events_ro_storage
 from snuba.datasets.storages.groupassignees import storage as groupassignees_storage
 from snuba.datasets.storages.groupedmessages import storage as groupedmessages_storage
-from snuba.datasets.storages.metrics import buckets_storage as metrics_buckets_storage
+from snuba.datasets.storages.metrics import counters_buckets as metrics_counters_buckets
+from snuba.datasets.storages.metrics import counters_storage as metrics_counters_storage
+from snuba.datasets.storages.metrics import sets_buckets as metrics_sets_buckets
 from snuba.datasets.storages.metrics import sets_storage as metrics_sets_storage
 from snuba.datasets.storages.outcomes import (
     materialized_storage as outcomes_hourly_storage,
@@ -36,7 +38,8 @@ CDC_STORAGES: Mapping[StorageKey, CdcStorage] = {
 }
 
 DEV_WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
-    metrics_buckets_storage.get_storage_key(): metrics_buckets_storage,
+    metrics_counters_buckets.get_storage_key(): metrics_counters_buckets,
+    metrics_sets_buckets.get_storage_key(): metrics_sets_buckets,
 }
 
 WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
@@ -57,7 +60,8 @@ WRITABLE_STORAGES: Mapping[StorageKey, WritableTableStorage] = {
 }
 
 DEV_NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
-    metrics_sets_storage.get_storage_key(): metrics_sets_storage
+    metrics_sets_storage.get_storage_key(): metrics_sets_storage,
+    metrics_counters_storage.get_storage_key(): metrics_counters_storage,
 }
 
 NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
