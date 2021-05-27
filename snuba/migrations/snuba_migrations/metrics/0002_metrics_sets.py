@@ -5,7 +5,6 @@ from snuba.migrations import migration, operations
 from snuba.migrations.snuba_migrations.metrics.templates import (
     get_forward_migrations_dist,
     get_forward_migrations_local,
-    get_reverse_mv_migration,
     get_reverse_table_migration,
 )
 
@@ -15,7 +14,6 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return get_forward_migrations_local(
-            metric_type="sets",
             table_name="metrics_sets_local",
             mv_name="metrics_sets_mv_local",
             aggregation_col_schema=[
@@ -26,7 +24,7 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
-            *get_reverse_mv_migration("metrics_sets_mv_local"),
+            *get_reverse_table_migration("metrics_sets_mv_local"),
             *get_reverse_table_migration("metrics_sets_local"),
         ]
 

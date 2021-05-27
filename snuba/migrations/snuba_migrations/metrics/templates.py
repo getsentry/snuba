@@ -6,7 +6,66 @@ from snuba.datasets.storages.tags_hash_map import INT_TAGS_HASH_MAP_COLUMN
 from snuba.migrations import operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-COMMON_COLUMNS: Sequence[Column[Modifiers]] = [
+PRE_VALUE_BUCKETS_COLUMNS: Sequence[Column[Modifiers]] = [
+    Column("org_id", UInt(64)),
+    Column("project_id", UInt(64)),
+    Column("metric_id", UInt(64)),
+    Column("timestamp", DateTime()),
+    Column("tags", Nested([Column("key", UInt(64)), Column("value", UInt(64))])),
+]
+
+POST_VALUES_BUCKETS_COLUMNS: Sequence[Column[Modifiers]] = [
+    Column("materialization_version", UInt(8)),
+    Column("retention_days", UInt(16)),
+    Column("partition", UInt(16)),
+    Column("offset", UInt(64)),
+]
+
+
+def get_forward_bucket_table_local(
+    table_name: str, value_cols: Sequence[Column[Modifiers]],
+) -> Sequence[operations.SqlOperation]:
+    return [
+        operations.CreateTable(
+            storage_set=StorageSetKey.METRICS,
+            table_name=table_name,
+            columns=[
+                *PRE_VALUE_BUCKETS_COLUMNS,
+                *value_cols,
+                *POST_VALUES_BUCKETS_COLUMNS,
+            ],
+            engine=table_engines.MergeTree(
+                storage_set=StorageSetKey.METRICS,
+                order_by="(org_id, project_id, metric_id, timestamp)",
+                partition_by="toMonday(timestamp)",
+                ttl="timestamp + toIntervalDay(14)",
+            ),
+        )
+    ]
+
+
+def get_forward_bucket_table_dist(
+    local_table_name: str,
+    dist_table_name: str,
+    value_cols: Sequence[Column[Modifiers]],
+) -> Sequence[operations.SqlOperation]:
+    return [
+        operations.CreateTable(
+            storage_set=StorageSetKey.METRICS,
+            table_name=dist_table_name,
+            columns=[
+                *PRE_VALUE_BUCKETS_COLUMNS,
+                *value_cols,
+                *POST_VALUES_BUCKETS_COLUMNS,
+            ],
+            engine=table_engines.Distributed(
+                local_table_name=local_table_name, sharding_key=None,
+            ),
+        ),
+    ]
+
+
+COMMON_AGGR_COLUMNS: Sequence[Column[Modifiers]] = [
     Column("org_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("metric_id", UInt(64)),
@@ -29,7 +88,7 @@ SELECT
     retention_days,
     %(aggregation_states)s
 FROM metrics_buckets_local
-WHERE metric_type = '%(metric_type)s' AND materialization_version = 0
+WHERE materialization_version = 0
 GROUP BY
     org_id,
     project_id,
@@ -43,13 +102,12 @@ GROUP BY
 
 
 def get_forward_migrations_local(
-    metric_type: str,
     table_name: str,
     mv_name: str,
     aggregation_col_schema: Sequence[Column[Modifiers]],
     aggregation_states: str,
 ) -> Sequence[operations.SqlOperation]:
-    aggregated_cols = [*COMMON_COLUMNS, *aggregation_col_schema]
+    aggregated_cols = [*COMMON_AGGR_COLUMNS, *aggregation_col_schema]
     return [
         operations.CreateTable(
             storage_set=StorageSetKey.METRICS,
@@ -92,8 +150,7 @@ def get_forward_migrations_local(
             view_name=mv_name,
             destination_table_name=table_name,
             columns=aggregated_cols,
-            query=MATVIEW_STATEMENT
-            % {"metric_type": metric_type, "aggregation_states": aggregation_states},
+            query=MATVIEW_STATEMENT % {"aggregation_states": aggregation_states},
         ),
     ]
 
@@ -107,7 +164,7 @@ def get_forward_migrations_dist(
         operations.CreateTable(
             storage_set=StorageSetKey.METRICS,
             table_name=dist_table_name,
-            columns=[*COMMON_COLUMNS, *aggregation_col_schema],
+            columns=[*COMMON_AGGR_COLUMNS, *aggregation_col_schema],
             engine=table_engines.Distributed(
                 local_table_name=local_table_name, sharding_key=None
             ),
@@ -124,13 +181,7 @@ def get_forward_migrations_dist(
     ]
 
 
-def get_reverse_table_migration(table_name: str,) -> Sequence[operations.SqlOperation]:
+def get_reverse_table_migration(table_name: str) -> Sequence[operations.SqlOperation]:
     return [
         operations.DropTable(storage_set=StorageSetKey.METRICS, table_name=table_name,),
-    ]
-
-
-def get_reverse_mv_migration(mv_name: str,) -> Sequence[operations.SqlOperation]:
-    return [
-        operations.DropTable(storage_set=StorageSetKey.METRICS, table_name=mv_name,),
     ]

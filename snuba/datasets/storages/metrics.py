@@ -1,3 +1,5 @@
+from typing import Sequence
+
 from snuba.clickhouse.columns import (
     AggregateFunction,
     Array,
@@ -7,11 +9,13 @@ from snuba.clickhouse.columns import (
     Float,
     Nested,
     SchemaModifiers,
-    String,
     UInt,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.metrics_processor import MetricsProcessor
+from snuba.datasets.metrics_processor import (
+    CounterMetricsProcessor,
+    SetsMetricsProcessor,
+)
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -21,34 +25,57 @@ from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
 )
 from snuba.utils.streams.topics import Topic
 
-buckets_columns = ColumnSet(
-    [
-        Column("org_id", UInt(64)),
-        Column("project_id", UInt(64)),
-        Column("metric_id", UInt(64)),
-        Column("metric_type", String()),
-        Column("timestamp", DateTime()),
-        Column("tags", Nested([Column("key", UInt(64)), Column("value", UInt(64))])),
-        Column("set_values", Array(UInt(64))),
-        Column("materialization_version", UInt(8)),
-        Column("retention_days", UInt(16)),
-        Column("partition", UInt(16)),
-        Column("offset", UInt(64)),
-    ]
-)
+PRE_VALUE_COLUMNS: Sequence[Column[SchemaModifiers]] = [
+    Column("org_id", UInt(64)),
+    Column("project_id", UInt(64)),
+    Column("metric_id", UInt(64)),
+    Column("timestamp", DateTime()),
+    Column("tags", Nested([Column("key", UInt(64)), Column("value", UInt(64))])),
+]
 
-buckets_storage = WritableTableStorage(
+POST_VALUE_COLUMNS: Sequence[Column[SchemaModifiers]] = [
+    Column("materialization_version", UInt(8)),
+    Column("retention_days", UInt(16)),
+    Column("partition", UInt(16)),
+    Column("offset", UInt(64)),
+]
+
+sets_buckets = WritableTableStorage(
     storage_key=StorageKey.METRICS_BUCKETS,
     storage_set_key=StorageSetKey.METRICS,
     schema=WritableTableSchema(
-        columns=buckets_columns,
+        columns=ColumnSet(
+            [
+                *PRE_VALUE_COLUMNS,
+                Column("set_values", Array(UInt(64))),
+                *POST_VALUE_COLUMNS,
+            ]
+        ),
         local_table_name="metrics_buckets_local",
         dist_table_name="metrics_buckets_dist",
         storage_set_key=StorageSetKey.METRICS,
     ),
     query_processors=[],
     stream_loader=build_kafka_stream_loader_from_settings(
-        processor=MetricsProcessor(), default_topic=Topic.METRICS,
+        processor=SetsMetricsProcessor(), default_topic=Topic.METRICS,
+    ),
+)
+
+
+counters_buckets = WritableTableStorage(
+    storage_key=StorageKey.METRICS_BUCKETS,
+    storage_set_key=StorageSetKey.METRICS,
+    schema=WritableTableSchema(
+        columns=ColumnSet(
+            [*PRE_VALUE_COLUMNS, Column("value", Float(64)), *POST_VALUE_COLUMNS]
+        ),
+        local_table_name="metrics_buckets_local",
+        dist_table_name="metrics_buckets_dist",
+        storage_set_key=StorageSetKey.METRICS,
+    ),
+    query_processors=[],
+    stream_loader=build_kafka_stream_loader_from_settings(
+        processor=CounterMetricsProcessor(), default_topic=Topic.METRICS,
     ),
 )
 
