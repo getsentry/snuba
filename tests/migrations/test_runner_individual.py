@@ -18,9 +18,10 @@ def _drop_all_tables() -> None:
         connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
         database = cluster.get_database()
 
-        data = connection.execute(
-            f"SELECT name FROM system.tables WHERE database = '{database}'"
+        data = perform_select_query(
+            ["name"], "system.tables", {"database": str(database)}, None, connection
         )
+
         for (table,) in data:
             connection.execute(f"DROP TABLE IF EXISTS {table}")
 
@@ -39,9 +40,14 @@ def test_transactions_compatibility() -> None:
 
     def get_sampling_key() -> str:
         database = cluster.get_database()
-        ((sampling_key,),) = connection.execute(
-            f"SELECT sampling_key FROM system.tables WHERE name = 'transactions_local' AND database = '{database}'"
+        ((sampling_key,),) = perform_select_query(
+            ["sampling_key"],
+            "system.tables",
+            {"name": "transactions_local", "database": str(database)},
+            None,
+            connection,
         )
+
         return sampling_key
 
     # Create old style table without sampling expression and insert data
@@ -88,7 +94,9 @@ def test_transactions_compatibility() -> None:
 
     assert get_sampling_key() == "cityHash64(span_id)"
 
-    assert connection.execute("SELECT count(*) FROM transactions_local;") == [(5,)]
+    assert perform_select_query(
+        ["count(*)"], "transactions_local", None, None, connection
+    ) == [(5,)]
 
 
 def generate_transactions() -> None:
@@ -122,7 +130,6 @@ def generate_transactions() -> None:
 
 def test_groupedmessages_compatibility() -> None:
 
-    # these three commands are repeated
     cluster = get_cluster(StorageSetKey.EVENTS)
     database = cluster.get_database()
     connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
@@ -140,7 +147,6 @@ def test_groupedmessages_compatibility() -> None:
 
     migration_id = "0010_groupedmessages_onpremise_compatibility"
 
-    # Runner() instantiation, run_migration(), update status
     runner = Runner()
     runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
     events_migrations = get_group_loader(MigrationGroup.EVENTS).get_migrations()
@@ -155,9 +161,15 @@ def test_groupedmessages_compatibility() -> None:
         MigrationKey(MigrationGroup.EVENTS, migration_id), force=True,
     )
 
-    assert connection.execute(
-        f"SELECT primary_key FROM system.tables WHERE name = 'groupedmessage_local' AND database = '{database}'"
-    ) == [("project_id, id",)]
+    outcome = perform_select_query(
+        ["primary_key"],
+        "system.tables",
+        {"name": "groupedmessage_local", "database": str(database)},
+        None,
+        connection,
+    )
+
+    assert outcome == [("project_id, id",)]
 
 
 # provide a migration ID, group and run all the migrations that come before
@@ -182,16 +194,18 @@ def run_prior_migrations(migration_group, stop_migration_id, runner):
 def perform_select_query(columns, table, where, limit, connection):
     select_clause = "SELECT " + (", ".join(columns))
     from_clause = " FROM " + table
-    where_clause = (" WHERE " + where) if where else ""
-    limit_clause = (" LIMIT" + limit) if limit else ""
+    where_clause = ""
 
+    if where:
+        where_elems = [(key + " = " + "'" + where[key] + "'") for key in where]
+        where_clause = " WHERE " + (" AND ".join(where_elems))
+
+    limit_clause = (" LIMIT " + limit) if limit else ""
     full_query = select_clause + from_clause + where_clause + limit_clause
 
     return connection.execute(full_query)
 
 
-# Below is an example of a valid test
-# Write a similar test case potentially ?
 def test_backfill_errors() -> None:
 
     backfill_migration_id = "0014_backfill_errors"
@@ -207,7 +221,9 @@ def test_backfill_errors() -> None:
     errors_table_name = errors_storage.get_table_writer().get_schema().get_table_name()
 
     def get_errors_count() -> int:
-        return clickhouse.execute(f"SELECT count() from {errors_table_name}")[0][0]
+        return perform_select_query(
+            ["count()"], errors_table_name, None, None, clickhouse
+        )[0][0]
 
     raw_events = []
     for i in range(10):
@@ -229,9 +245,11 @@ def test_backfill_errors() -> None:
 
     assert get_errors_count() == 10
 
-    assert clickhouse.execute(
-        f"SELECT contexts.key, contexts.value from {errors_table_name} LIMIT 1;"
-    )[0] == (
+    outcome = perform_select_query(
+        ["contexts.key", "contexts.value"], errors_table_name, None, str(1), clickhouse
+    )
+
+    assert outcome[0] == (
         [
             "device.model_id",
             "geo.city",
@@ -241,6 +259,3 @@ def test_backfill_errors() -> None:
         ],
         ["Galaxy", "San Francisco", "US", "CA", "1.1.1"],
     )
-
-
-# fetch some fields, still does some clickhouse query

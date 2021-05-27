@@ -32,16 +32,16 @@ LOCAL_TABLE_NAME = "migrations_local"
 DIST_TABLE_NAME = "migrations_dist"
 
 
-def get_active_migration_groups() -> List[MigrationGroup]:
-    groups = []
-    for group in MigrationGroup:
+def get_active_migration_groups() -> Sequence[MigrationGroup]:
+
+    return [
+        group
+        for group in MigrationGroup
         if not (
             group in OPTIONAL_GROUPS
             and group.value in settings.SKIPPED_MIGRATION_GROUPS
-        ):
-            groups.append(group)
-
-    return groups
+        )
+    ]
 
 
 class MigrationKey(NamedTuple):
