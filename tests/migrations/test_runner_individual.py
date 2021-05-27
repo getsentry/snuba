@@ -1,4 +1,4 @@
-from typing import Any, Sequence
+from typing import Any, Dict, Sequence
 
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clickhouse.native import ClickhousePool
@@ -199,7 +199,7 @@ def run_prior_migrations(
 def perform_select_query(
     columns: Sequence[str],
     table: str,
-    where: dict[str, str],
+    where: Dict[str, str],
     limit: str,
     connection: ClickhousePool,
 ) -> Sequence[Any]:
