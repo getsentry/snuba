@@ -62,7 +62,10 @@ class SetsMetricsProcessor(MetricsProcessor):
         return message["type"] is not None and message["type"] == "s"
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
-        return {"set_values": message["value"]}
+        values = message["value"]
+        for v in values:
+            assert isinstance(v, int), "Illegal value in set. Int expected: {v}"
+        return {"set_values": values}
 
 
 class CounterMetricsProcessor(MetricsProcessor):
@@ -70,4 +73,8 @@ class CounterMetricsProcessor(MetricsProcessor):
         return message["type"] is not None and message["type"] == "c"
 
     def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
-        return {"value": message["value"]}
+        value = message["value"]
+        assert isinstance(
+            value, (int, float)
+        ), "Illegal value for counter value. Int/Float expected {value}"
+        return {"value": value}
