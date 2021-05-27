@@ -665,7 +665,7 @@ def process_unmerge(
         "previous_group_id": message["previous_group_id"],
         "project_id": message["project_id"],
         "timestamp": timestamp.strftime(DATETIME_FORMAT),
-        "hashes": _convert_hash_list(hashes, state_name),
+        "hashes": ", ".join(_convert_hash(h, state_name) for h in hashes),
     }
 
     query_time_flags = (NEEDS_FINAL, message["project_id"])
@@ -675,21 +675,19 @@ def process_unmerge(
     )
 
 
-def _convert_hash_list(
-    hashes: Sequence[str], state_name: ReplacerState, convert_types: bool = False
+def _convert_hash(
+    hash: str, state_name: ReplacerState, convert_types: bool = False
 ) -> str:
     if state_name == ReplacerState.ERRORS:
         if convert_types:
-            return ", ".join(
-                "toUUID('%s')" % str(uuid.UUID(_hashify(h))) for h in hashes
-            )
+            return "toUUID('%s')" % str(uuid.UUID(_hashify(hash)))
         else:
-            return ", ".join("'%s'" % str(uuid.UUID(_hashify(h))) for h in hashes)
+            return "'%s'" % str(uuid.UUID(_hashify(hash)))
     else:
         if convert_types:
-            return ", ".join("toFixedString('%s', 32)" % _hashify(h) for h in hashes)
+            return "toFixedString('%s', 32)" % _hashify(hash)
         else:
-            return ", ".join("'%s'" % _hashify(h) for h in hashes)
+            return "'%s'" % _hashify(hash)
 
 
 def process_unmerge_hierarchical(
@@ -704,67 +702,27 @@ def process_unmerge_hierarchical(
         all_column_names,
     )
 
-    hierarchical_hashes = message.get("hierarchical_hashes") or {}
-    if not hierarchical_hashes:
-        return None
+    primary_hash = message["primary_hash"]
+    assert isinstance(primary_hash, str)
 
-    assert all(isinstance(h, str) for h in hierarchical_hashes.values())
+    hierarchical_hash = message["hierarchical_hash"]
+    assert isinstance(hierarchical_hash, str)
 
-    prewhere = []
-    where = []
-    query_args = {}
-
-    # primary_hash is the root (most coarse) level of the grouping tree,
-    # meaning:
-    #
-    # 1. primary_hash == hierarchical_hashes[0]
-    # 2. <any entry in hierarchical_hashes>:primary_hash is a n:1 relation
-    #
-    # Sentry wants us to filter events by hierarchical_hashes entry using
-    # hasAny, but also tells us the corresponding primary_hash such that we
-    # can filter more efficiently.
-    #
-    # For now this is just converted into
-    #
-    #     PREWHERE primary_hash IN ... WHERE hasAny(hierarchical_hashes, ...)
-    #
-    # ..but perhaps one day we may decide to instead emit multiple replacements of the form
-    #
-    #     PREWHERE primary_hash = ... WHERE has(hierarchical_hashes, ...)
-    #
-    # ..if we think that it would be faster.
-    prewhere.append("primary_hash IN (%(primary_hashes_for_hierarchical_hashes)s)")
-    query_args["primary_hashes_for_hierarchical_hashes"] = _convert_hash_list(
-        list(set(hierarchical_hashes.values())), state_name
-    )
-
-    where.append("hasAny(hierarchical_hashes, [%(hierarchical_hashes)s])")
-    query_args["hierarchical_hashes"] = _convert_hash_list(
-        list(hierarchical_hashes), state_name, convert_types=True
-    )
-
-    # group_id cannot be part of PREWHERE because FINAL is applied before
-    # PREWHERE, meaning if group_id was part of prewhere we would see events
-    # that are no longer part of this group.
-    #
-    # As long as group_id is not in PREWHERE, the query result is guaranteed to
-    # be constrained to one group. primary_hash can now be in PREWHERE, if that
-    # were not OK it would mean we have a replacement row in storage that did
-    # not change group_id, but did change primary_hash. Only reprocessing can
-    # change primary_hash at the moment, but is guaranteed to change group_id.
-    where.append("group_id = %(previous_group_id)s")
-    where.append("project_id = %(project_id)s")
-    where.append("received <= CAST('%(timestamp)s' AS DateTime)")
-    where.append("NOT deleted")
-
-    full_where = f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
+    where = """\
+        PREWHERE primary_hash = %(primary_hash)s
+        WHERE group_id = %(previous_group_id)s
+        AND has(hierarchical_hashes, %(hierarchical_hash)s)
+        AND project_id = %(project_id)s
+        AND received <= CAST('%(timestamp)s' AS DateTime)
+        AND NOT deleted
+    """
 
     count_query_template = (
         """\
         SELECT count()
         FROM %(table_name)s FINAL
     """
-        + full_where
+        + where
     )
 
     insert_query_template = (
@@ -773,18 +731,20 @@ def process_unmerge_hierarchical(
         SELECT %(select_columns)s
         FROM %(table_name)s FINAL
     """
-        + full_where
+        + where
     )
 
-    query_args.update(
-        {
-            "all_columns": ", ".join(all_column_names),
-            "select_columns": ", ".join(select_columns),
-            "previous_group_id": message["previous_group_id"],
-            "project_id": message["project_id"],
-            "timestamp": timestamp.strftime(DATETIME_FORMAT),
-        }
-    )
+    query_args = {
+        "all_columns": ", ".join(all_column_names),
+        "select_columns": ", ".join(select_columns),
+        "previous_group_id": message["previous_group_id"],
+        "project_id": message["project_id"],
+        "timestamp": timestamp.strftime(DATETIME_FORMAT),
+        "primary_hash": _convert_hash(primary_hash, state_name),
+        "hierarchical_hash": _convert_hash(
+            hierarchical_hash, state_name, convert_types=True
+        ),
+    }
 
     query_time_flags = (NEEDS_FINAL, message["project_id"])
 

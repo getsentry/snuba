@@ -192,7 +192,8 @@ class TestReplacer:
                 "project_id": self.project_id,
                 "previous_group_id": 1,
                 "new_group_id": 2,
-                "hierarchical_hashes": {"a" * 32: "b" * 32},
+                "hierarchical_hash": "a" * 32,
+                "primary_hash": "b" * 32,
                 "datetime": timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             },
         )
@@ -201,17 +202,17 @@ class TestReplacer:
 
         assert (
             re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == "SELECT count() FROM %(table_name)s FINAL PREWHERE primary_hash IN (%(primary_hashes_for_hierarchical_hashes)s) WHERE hasAny(hierarchical_hashes, [%(hierarchical_hashes)s]) AND group_id = %(previous_group_id)s AND project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "SELECT count() FROM %(table_name)s FINAL PREWHERE primary_hash = %(primary_hash)s WHERE group_id = %(previous_group_id)s AND has(hierarchical_hashes, %(hierarchical_hash)s) AND project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
         )
         assert (
             re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == "INSERT INTO %(table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE primary_hash IN (%(primary_hashes_for_hierarchical_hashes)s) WHERE hasAny(hierarchical_hashes, [%(hierarchical_hashes)s]) AND group_id = %(previous_group_id)s AND project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "INSERT INTO %(table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(table_name)s FINAL PREWHERE primary_hash = %(primary_hash)s WHERE group_id = %(previous_group_id)s AND has(hierarchical_hashes, %(hierarchical_hash)s) AND project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
         )
         assert replacement.query_args == {
             "all_columns": "event_id, project_id, group_id, timestamp, deleted, retention_days, platform, message, primary_hash, hierarchical_hashes, received, search_message, title, location, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, message_timestamp, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, `sentry:user`, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, tags.key, tags.value, _tags_flattened, contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level, culprit, sdk_integrations, modules.name, modules.version",
             "select_columns": "event_id, project_id, 2, timestamp, deleted, retention_days, platform, message, primary_hash, hierarchical_hashes, received, search_message, title, location, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, message_timestamp, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, `sentry:user`, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, tags.key, tags.value, _tags_flattened, contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level, culprit, sdk_integrations, modules.name, modules.version",
-            "hierarchical_hashes": "toFixedString('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 32)",
-            "primary_hashes_for_hierarchical_hashes": "'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'",
+            "hierarchical_hash": "toFixedString('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 32)",
+            "primary_hash": "'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'",
             "previous_group_id": 1,
             "project_id": self.project_id,
             "timestamp": timestamp.strftime(DATETIME_FORMAT),
@@ -437,7 +438,8 @@ class TestReplacer:
                             "project_id": project_id,
                             "previous_group_id": 1,
                             "new_group_id": 2,
-                            "hierarchical_hashes": {"a" * 32: "b" * 32},
+                            "hierarchical_hash": "a" * 32,
+                            "primary_hash": "b" * 32,
                             "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
                         },
                     )
