@@ -746,6 +746,11 @@ def process_unmerge_hierarchical(
         ),
     }
 
+    # TODO: In principle Sentry replaces every single event within the group
+    # and assigns it a new group ID. For that it sends multiple of these
+    # replacement messages. We could get rid of NEEDS_FINAL in favor of
+    # EXCLUDE_GROUPS here if we had a way to run multiple statements as part of
+    # one replacements.
     query_time_flags = (NEEDS_FINAL, message["project_id"])
 
     return LegacyReplacement(
