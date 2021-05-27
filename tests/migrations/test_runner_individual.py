@@ -175,10 +175,17 @@ def test_groupedmessages_compatibility() -> None:
     assert outcome == [("project_id, id",)]
 
 
-# provide a migration ID, group and run all the migrations that come before
 def run_prior_migrations(
     migration_group: MigrationGroup, stop_migration_id: str, runner: Runner
 ) -> None:
+
+    """ Runs all migrations up to the migration denoted by migration ID
+
+    Arguments:
+    migration_group -- the group of the desired migration
+    stop_migration_id -- desired migration ID, as a stopping point
+    runner -- migration runner object
+    """
 
     right_migrations = next(
         group_migrations
@@ -203,6 +210,17 @@ def perform_select_query(
     limit: str,
     connection: ClickhousePool,
 ) -> Sequence[Any]:
+
+    """ Performs a SELECT query, with optional WHERE and LIMIT clauses
+
+    Arguments:
+    columns -- a list of columns to be SELECTed
+    table -- the name of the table, upon which query is being run
+    where -- a dict of WHERE conditions, (str, str) key-value pairs
+    limit -- LIMIT argument, passed in as str
+    connection -- ClickHouse connection object for query execution
+    """
+
     select_clause = "SELECT " + (", ".join(columns))
     from_clause = " FROM " + table
     where_clause = ""
