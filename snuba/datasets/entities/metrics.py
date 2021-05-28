@@ -12,6 +12,7 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.clickhouse.translators.snuba.mappers import (
+    ColumnToCurriedFunction,
     ColumnToFunction,
     SubscriptableMapper,
 )
@@ -23,7 +24,12 @@ from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column as ColumnExpr
-from snuba.query.expressions import Expression, Literal, SubscriptableReference
+from snuba.query.expressions import (
+    Expression,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
@@ -136,6 +142,55 @@ class MetricsCountersEntity(MetricsEntity):
                     ColumnToFunction(
                         None, "value", "sumMerge", (ColumnExpr(None, None, "value"),),
                     ),
+                ],
+            ),
+        )
+
+
+def merge_mapper(name: str) -> ColumnToFunction:
+    return ColumnToFunction(
+        None, name, f"{name}Merge", (ColumnExpr(None, None, name),),
+    )
+
+
+class MetricsDistributionsEntity(MetricsEntity):
+    def __init__(self) -> None:
+        super().__init__(
+            writable_storage_key=StorageKey.METRICS_DISTRIBUTIONS_BUCKETS,
+            readable_storage_key=StorageKey.METRICS_DISTRIBUTIONS,
+            value_schema=[
+                Column(
+                    "percentiles",
+                    AggregateFunction(
+                        "quantiles(0.5, 0.75, 0.9, 0.95, 0.99, 1)", [Float(64)]
+                    ),
+                ),
+                Column("min", AggregateFunction("min", [Float(64)])),
+                Column("max", AggregateFunction("max", [Float(64)])),
+                Column("avg", AggregateFunction("avg", [Float(64)])),
+                Column("sum", AggregateFunction("sum", [Float(64)])),
+                Column("count", AggregateFunction("count", [Float(64)])),
+            ],
+            mappers=TranslationMappers(
+                columns=[
+                    ColumnToCurriedFunction(
+                        None,
+                        "percentiles",
+                        FunctionCall(
+                            None,
+                            "quantilesMerge",
+                            tuple(
+                                Literal(None, quant)
+                                for quant in [0.5, 0.75, 0.9, 0.95, 0.99, 1]
+                            ),
+                        ),
+                        (ColumnExpr(None, None, "percentiles"),),
+                    ),
+                    merge_mapper("min"),
+                    merge_mapper("max"),
+                    merge_mapper("avg"),
+                    merge_mapper("sum"),
+                    merge_mapper("count"),
                 ],
             ),
         )
