@@ -78,3 +78,16 @@ class CounterMetricsProcessor(MetricsProcessor):
             value, (int, float)
         ), "Illegal value for counter value. Int/Float expected {value}"
         return {"value": value}
+
+
+class DistributionsMetricsProcessor(MetricsProcessor):
+    def _should_process(self, message: Mapping[str, Any]) -> bool:
+        return message["type"] is not None and message["type"] == "d"
+
+    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
+        values = message["value"]
+        for v in values:
+            assert isinstance(
+                v, (int, float)
+            ), "Illegal value in set. Int expected: {v}"
+        return {"values": values}
