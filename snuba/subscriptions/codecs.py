@@ -1,5 +1,7 @@
 import json
 
+from streaming_kafka_consumer.backends.kafka import KafkaPayload
+
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.data import (
     DelegateSubscriptionData,
@@ -11,7 +13,6 @@ from snuba.subscriptions.data import (
 )
 from snuba.subscriptions.worker import SubscriptionTaskResult
 from snuba.utils.codecs import Codec, Encoder
-from snuba.utils.streams.backends.kafka import KafkaPayload
 
 
 class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):

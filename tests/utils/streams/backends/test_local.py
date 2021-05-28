@@ -8,22 +8,22 @@ from typing import Iterator, Optional
 from unittest import TestCase
 
 import pytest
-
-from snuba.utils.clock import TestingClock
-from snuba.utils.streams.backends.abstract import Consumer, Producer
-from snuba.utils.streams.backends.local.backend import LocalBroker
-from snuba.utils.streams.backends.local.storages.abstract import (
+from streaming_kafka_consumer.backends.abstract import Consumer, Producer
+from streaming_kafka_consumer.backends.local.backend import LocalBroker
+from streaming_kafka_consumer.backends.local.storages.abstract import (
     MessageStorage,
     PartitionDoesNotExist,
     TopicDoesNotExist,
     TopicExists,
 )
-from snuba.utils.streams.backends.local.storages.file import (
+from streaming_kafka_consumer.backends.local.storages.file import (
     FileMessageStorage,
     InvalidChecksum,
 )
-from snuba.utils.streams.backends.local.storages.memory import MemoryMessageStorage
-from snuba.utils.streams.types import Partition, Topic
+from streaming_kafka_consumer.backends.local.storages.memory import MemoryMessageStorage
+from streaming_kafka_consumer.types import Partition, Topic
+
+from snuba.utils.clock import TestingClock
 from tests.utils.streams.backends.mixins import StreamsTestMixin
 
 

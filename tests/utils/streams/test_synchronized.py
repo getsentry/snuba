@@ -4,19 +4,25 @@ from threading import Event
 from typing import Mapping, Optional, TypeVar
 
 import pytest
+from streaming_kafka_consumer.backends.abstract import Consumer
+from streaming_kafka_consumer.backends.kafka import KafkaPayload
+from streaming_kafka_consumer.backends.local.backend import LocalBroker as Broker
+from streaming_kafka_consumer.backends.local.backend import LocalConsumer
+from streaming_kafka_consumer.synchronized import (
+    Commit,
+    SynchronizedConsumer,
+    commit_codec,
+)
+from streaming_kafka_consumer.types import Message, Partition, Topic
 
-from snuba.utils.streams.backends.abstract import Consumer
-from snuba.utils.streams.backends.kafka import KafkaPayload
-from snuba.utils.streams.backends.local.backend import LocalConsumer
-from snuba.utils.streams.backends.local.backend import LocalBroker as Broker
-from snuba.utils.streams.synchronized import Commit, SynchronizedConsumer, commit_codec
-from snuba.utils.streams.types import Message, Partition, Topic
 from tests.assertions import assert_changes, assert_does_not_change
 
 T = TypeVar("T")
 
 
-def wait_for_consumer(consumer: Consumer[T], message: Message[T], attempts: int = 10):
+def wait_for_consumer(
+    consumer: Consumer[T], message: Message[T], attempts: int = 10
+) -> None:
     """Block until the provided consumer has received the provided message."""
     for i in range(attempts):
         part = consumer.tell().get(message.partition)
@@ -350,7 +356,7 @@ def test_synchronized_consumer_worker_crash_before_assignment(
     )
 
     with pytest.raises(BrokenConsumerException):
-        Consumer[KafkaPayload] = SynchronizedConsumer(
+        SynchronizedConsumer(
             consumer,
             commit_log_consumer,
             commit_log_topic=commit_log_topic,

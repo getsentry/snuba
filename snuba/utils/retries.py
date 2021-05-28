@@ -3,7 +3,6 @@ from typing import Callable, Optional, TypeVar, Union
 
 from snuba.utils.clock import Clock, SystemClock
 
-
 T = TypeVar("T")
 
 
@@ -28,17 +27,6 @@ class RetryPolicy(ABC):
     @abstractmethod
     def call(self, callable: Callable[[], T]) -> T:
         raise NotImplementedError
-
-
-class NoRetryPolicy(RetryPolicy):
-    """
-    The no retry policy implements the retry policy interface, but does not
-    retry. (This is equivalent to a basic retry policy with a limit of a
-    single attempt.)
-    """
-
-    def call(self, callable: Callable[[], T]) -> T:
-        return callable()
 
 
 class BasicRetryPolicy(RetryPolicy):

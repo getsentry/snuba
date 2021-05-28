@@ -1,4 +1,5 @@
 import datetime
+
 import pytest
 
 from snuba import state
@@ -1472,7 +1473,6 @@ test_cases = [
 def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> None:
     state.set_config("query_parsing_expand_aliases", 1)
     events = get_dataset("events")
-
     # TODO: Potentially remove this once entities have actual join relationships
     mapping = {
         "contains": (EntityKey.TRANSACTIONS, "event_id"),
@@ -1493,7 +1493,7 @@ def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> No
     events_entity = get_entity(EntityKey.EVENTS)
     setattr(events_entity, "get_join_relationship", events_mock)
 
-    query = parse_snql_query(query_body, events)
+    query = parse_snql_query(query_body, [], events)
 
     eq, reason = query.equals(expected_query)
     assert eq, reason

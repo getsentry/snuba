@@ -13,7 +13,7 @@ class EntityKey(Enum):
     GROUPASSIGNEE = "groupassignee"
     # TODO: This has an S on the end in solidarity with storages, but it's got to go
     GROUPEDMESSAGES = "groupedmessage"
-    METRICS = "metrics"
+    METRICS_SETS = "metrics_sets"
     OUTCOMES = "outcomes"
     OUTCOMES_RAW = "outcomes_raw"
     SESSIONS = "sessions"

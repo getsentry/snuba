@@ -8,6 +8,8 @@ from typing import Any, Tuple
 import pytest
 import pytz
 import simplejson as json
+from streaming_kafka_consumer import Message, Partition, Topic
+from streaming_kafka_consumer.backends.kafka import KafkaPayload
 
 from snuba import replacer, settings
 from snuba.clickhouse import DATETIME_FORMAT
@@ -19,8 +21,6 @@ from snuba.optimize import run_optimize
 from snuba.redis import redis_client
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams import Message, Partition, Topic
-from snuba.utils.streams.backends.kafka import KafkaPayload
 from tests.fixtures import get_raw_event
 from tests.helpers import write_unprocessed_events
 

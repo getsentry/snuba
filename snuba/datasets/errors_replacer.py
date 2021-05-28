@@ -522,11 +522,13 @@ def process_tombstone_events(
     prewhere, where, query_args = event_set_filter
 
     if old_primary_hash:
-        query_args["old_primary_hash"] = (
-            ("'%s'" % (str(uuid.UUID(old_primary_hash)),))
-            if old_primary_hash
-            else "NULL"
-        )
+        try:
+            parsed_hash = uuid.UUID(old_primary_hash)
+        except Exception as err:
+            logger.error("Invalid old primary hash %s", old_primary_hash, exc_info=err)
+            return None
+
+        query_args["old_primary_hash"] = f"'{str(parsed_hash)}'"
 
         prewhere.append("primary_hash = %(old_primary_hash)s")
 

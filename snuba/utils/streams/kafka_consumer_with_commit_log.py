@@ -3,11 +3,11 @@ from typing import Any, Mapping, Optional
 from confluent_kafka import KafkaError
 from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
+from streaming_kafka_consumer.backends.kafka import KafkaConsumer, KafkaPayload
+from streaming_kafka_consumer.synchronized import Commit, commit_codec
+from streaming_kafka_consumer.types import Message, Partition, Topic
 
 from snuba.utils.retries import RetryPolicy
-from snuba.utils.streams.backends.kafka import KafkaConsumer, KafkaPayload
-from snuba.utils.streams.synchronized import Commit, commit_codec
-from snuba.utils.streams.types import Message, Partition, Topic
 
 
 class KafkaConsumerWithCommitLog(KafkaConsumer):

@@ -1,10 +1,11 @@
 import logging
 from typing import Optional, Tuple
 
+from streaming_kafka_consumer.backends.kafka import KafkaPayload
+from streaming_kafka_consumer.processing import StreamProcessor
+
 from snuba.consumers.consumer_builder import ConsumerBuilder
-from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
-from snuba.utils.streams.backends.kafka import KafkaPayload
-from snuba.utils.streams.processing import StreamProcessor
+from snuba.stateful_consumer import ConsumerStateCompletionEvent, ConsumerStateData
 from snuba.utils.state_machine import State
 
 logger = logging.getLogger("snuba.snapshot-catchup")
