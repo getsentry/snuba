@@ -7,6 +7,7 @@ from pytest import raises
 
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
+    DelegateSubscriptionData,
     InvalidSubscriptionError,
     LegacySubscriptionData,
     SnQLSubscriptionData,
@@ -43,6 +44,22 @@ TESTS_CREATE = [
         ),
         id="SnQL subscription",
     ),
+    pytest.param(
+        DelegateSubscriptionData(
+            project_id=123,
+            conditions=[["platform", "IN", ["a"]]],
+            aggregations=[["count()", "", "count"]],
+            query=(
+                "MATCH (events) "
+                "SELECT count() AS count "
+                "WHERE "
+                "platform IN tuple('a')"
+            ),
+            time_window=timedelta(minutes=10),
+            resolution=timedelta(minutes=1),
+        ),
+        id="Delegate subscription",
+    ),
 ]
 
 TESTS_INVALID = [
@@ -69,6 +86,22 @@ TESTS_INVALID = [
             resolution=timedelta(minutes=1),
         ),
         id="SnQL subscription",
+    ),
+    pytest.param(
+        DelegateSubscriptionData(
+            project_id=123,
+            conditions=[["platform", "IN", ["a"]]],
+            aggregations=[["count()", "", "count"]],
+            query=(
+                "MATCH (events) "
+                "SELECT count() AS count "
+                "WHERE "
+                "platfo IN tuple('a')"
+            ),
+            time_window=timedelta(minutes=10),
+            resolution=timedelta(minutes=1),
+        ),
+        id="Delegate subscription",
     ),
 ]
 

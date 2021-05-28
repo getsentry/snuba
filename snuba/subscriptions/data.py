@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from abc import ABC, abstractclassmethod, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -8,6 +9,7 @@ from functools import partial
 from typing import Any, List, Mapping, NamedTuple, NewType, Optional, Sequence, Union
 from uuid import UUID
 
+from snuba import settings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity
 from snuba.query.composite import CompositeQuery
@@ -331,8 +333,16 @@ class DelegateSubscriptionData(SubscriptionData):
         offset: Optional[int],
         timer: Timer,
     ) -> Request:
-        # TODO: Add a flag to use the SnQL data if it exists.
-        data = self.to_legacy()
+        use_snql = (
+            settings.SNQL_SUBSCRIPTION_ROLLOUT > 0.0
+            and random.random() <= settings.SNQL_SUBSCRIPTION_ROLLOUT
+        )
+        data: SubscriptionData
+        if use_snql:
+            data = self.to_snql()
+        else:
+            data = self.to_legacy()
+
         return data.build_request(dataset, timestamp, offset, timer)
 
     @classmethod
