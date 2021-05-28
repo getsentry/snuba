@@ -343,10 +343,7 @@ class TestReplacer:
             "timestamp": timestamp.strftime(DATETIME_FORMAT),
         }
 
-        assert replacement.query_time_flags == (
-            errors_replacer.NEEDS_FINAL,
-            self.project_id,
-        )
+        assert replacement.query_time_flags == (None, self.project_id,)
 
     def test_delete_promoted_tag_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)
