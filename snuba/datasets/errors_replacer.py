@@ -695,18 +695,31 @@ def process_unmerge_hierarchical(
     all_columns: Sequence[FlattenedColumn],
     state_name: ReplacerState,
 ) -> Optional[Replacement]:
-    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
     all_column_names = [c.escaped for c in all_columns]
     select_columns = map(
         lambda i: i if i != "group_id" else str(message["new_group_id"]),
         all_column_names,
     )
 
-    primary_hash = message["primary_hash"]
-    assert isinstance(primary_hash, str)
+    try:
+        timestamp = datetime.strptime(
+            message["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+        )
 
-    hierarchical_hash = message["hierarchical_hash"]
-    assert isinstance(hierarchical_hash, str)
+        primary_hash = message["primary_hash"]
+        assert isinstance(primary_hash, str)
+
+        hierarchical_hash = message["hierarchical_hash"]
+        assert isinstance(hierarchical_hash, str)
+
+        uuid.UUID(primary_hash)
+        uuid.UUID(hierarchical_hash)
+    except Exception:
+        # TODO(markus): We're sacrificing consistency over uptime as long as
+        # this is in development. At some point this piece of code should be
+        # stable enough to remove this.
+        logger.exception("process_unmerge_hierarchical.failed")
+        return None
 
     where = """\
         PREWHERE primary_hash = %(primary_hash)s
