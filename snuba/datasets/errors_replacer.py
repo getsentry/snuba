@@ -9,6 +9,7 @@ from enum import Enum
 from typing import (
     Any,
     Deque,
+    Dict,
     List,
     Mapping,
     MutableMapping,
@@ -95,14 +96,20 @@ class LegacyReplacement(Replacement):
         if self.insert_query_template is None:
             return None
 
-        args = {**self.query_args, "table_name": table_name}
+        args = {
+            **self.query_args,
+            "table_name": table_name
+        }
         return self.insert_query_template % args
 
     def get_count_query(self, table_name: str) -> Optional[str]:
         if self.count_query_template is None:
             return None
 
-        args = {**self.query_args, "table_name": table_name}
+        args = {
+            **self.query_args,
+            "table_name": table_name
+        }
         return self.count_query_template % args
 
 
@@ -517,13 +524,11 @@ def process_tombstone_events(
     prewhere, where, query_args = event_set_filter
 
     if old_primary_hash:
-        try:
-            parsed_hash = uuid.UUID(old_primary_hash)
-        except Exception as err:
-            logger.error("Invalid old primary hash %s", old_primary_hash, exc_info=err)
-            return None
-
-        query_args["old_primary_hash"] = f"'{str(parsed_hash)}'"
+        query_args["old_primary_hash"] = (
+            ("'%s'" % (str(uuid.UUID(old_primary_hash)),))
+            if old_primary_hash
+            else "NULL"
+        )
 
         prewhere.append("primary_hash = %(old_primary_hash)s")
 
