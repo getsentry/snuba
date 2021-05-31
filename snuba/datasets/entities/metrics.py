@@ -162,7 +162,7 @@ class MetricsDistributionsEntity(MetricsEntity):
                 Column(
                     "percentiles",
                     AggregateFunction(
-                        "quantiles(0.5, 0.75, 0.9, 0.95, 0.99, 1)", [Float(64)]
+                        "quantiles(0.5, 0.75, 0.9, 0.95, 0.99)", [Float(64)]
                     ),
                 ),
                 Column("min", AggregateFunction("min", [Float(64)])),
@@ -181,7 +181,7 @@ class MetricsDistributionsEntity(MetricsEntity):
                             "quantilesMerge",
                             tuple(
                                 Literal(None, quant)
-                                for quant in [0.5, 0.75, 0.9, 0.95, 0.99, 1]
+                                for quant in [0.5, 0.75, 0.9, 0.95, 0.99]
                             ),
                         ),
                         (ColumnExpr(None, None, "percentiles"),),

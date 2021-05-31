@@ -10,7 +10,10 @@ from snuba.migrations.snuba_migrations.metrics.templates import (
 )
 
 COL_SCHEMA: Sequence[Column[MigrationModifiers]] = [
-    Column("percentiles", AggregateFunction("quantiles(0.5, 0.9, 0.99)", [Float(64)]),),
+    Column(
+        "percentiles",
+        AggregateFunction("quantiles(0.5, 0.75, 0.9, 0.95, 0.99)", [Float(64)]),
+    ),
     Column("min", AggregateFunction("min", [Float(64)])),
     Column("max", AggregateFunction("max", [Float(64)])),
     Column("avg", AggregateFunction("avg", [Float(64)])),
@@ -29,7 +32,7 @@ class Migration(migration.ClickhouseNodeMigration):
             mv_name="metrics_distributions_mv_local",
             aggregation_col_schema=COL_SCHEMA,
             aggregation_states=(
-                "quantilesState(0.5, 0.75, 0.9, 0.95, 0.99, 1)((arrayJoin(values) AS values_rows)) as percentiles, "
+                "quantilesState(0.5, 0.75, 0.9, 0.95, 0.99)((arrayJoin(values) AS values_rows)) as percentiles, "
                 "minState(values_rows) as min, "
                 "maxState(values_rows) as max, "
                 "avgState(values_rows) as avg, "
