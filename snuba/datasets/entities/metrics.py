@@ -1,3 +1,4 @@
+from abc import ABC
 from typing import Mapping, Sequence
 
 from snuba.clickhouse.columns import (
@@ -5,7 +6,9 @@ from snuba.clickhouse.columns import (
     Column,
     ColumnSet,
     DateTime,
+    Float,
     Nested,
+    SchemaModifiers,
     UInt,
 )
 from snuba.clickhouse.translators.snuba.mappers import (
@@ -50,30 +53,27 @@ class TagsTypeTransformer(QueryProcessor):
         query.transform_expressions(transform_expression)
 
 
-class MetricsSetsEntity(Entity):
-    def __init__(self) -> None:
-        writable_storage = get_writable_storage(StorageKey.METRICS_BUCKETS)
-        readable_storage = get_storage(StorageKey.METRICS_SETS)
+class MetricsEntity(Entity, ABC):
+    def __init__(
+        self,
+        writable_storage_key: StorageKey,
+        readable_storage_key: StorageKey,
+        value_schema: Sequence[Column[SchemaModifiers]],
+        mappers: TranslationMappers,
+    ) -> None:
+        writable_storage = get_writable_storage(writable_storage_key)
+        readable_storage = get_storage(readable_storage_key)
 
         super().__init__(
-            # TODO: Add the readable storages
             storages=[writable_storage, readable_storage],
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=SingleStorageQueryPlanBuilder(
                     readable_storage,
                     mappers=TranslationMappers(
-                        columns=[
-                            ColumnToFunction(
-                                None,
-                                "value",
-                                "uniqCombined64Merge",
-                                (ColumnExpr(None, None, "value"),),
-                            ),
-                        ],
                         subscriptables=[
                             SubscriptableMapper(None, "tags", None, "tags"),
                         ],
-                    ),
+                    ).concat(mappers),
                 )
             ),
             abstract_column_set=ColumnSet(
@@ -83,9 +83,7 @@ class MetricsSetsEntity(Entity):
                     Column("metric_id", UInt(64)),
                     Column("timestamp", DateTime()),
                     Column("tags", Nested([("key", UInt(64)), ("value", UInt(64))])),
-                    Column(
-                        "value", AggregateFunction("uniqCombined64Merge", [UInt(64)])
-                    ),
+                    *value_schema,
                 ]
             ),
             join_relationships={},
@@ -104,3 +102,40 @@ class MetricsSetsEntity(Entity):
             ProjectRateLimiterProcessor(project_column="project_id"),
             TagsTypeTransformer(),
         ]
+
+
+class MetricsSetsEntity(MetricsEntity):
+    def __init__(self) -> None:
+        super().__init__(
+            writable_storage_key=StorageKey.METRICS_BUCKETS,
+            readable_storage_key=StorageKey.METRICS_SETS,
+            value_schema=[
+                Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
+            ],
+            mappers=TranslationMappers(
+                columns=[
+                    ColumnToFunction(
+                        None,
+                        "value",
+                        "uniqCombined64Merge",
+                        (ColumnExpr(None, None, "value"),),
+                    ),
+                ],
+            ),
+        )
+
+
+class MetricsCountersEntity(MetricsEntity):
+    def __init__(self) -> None:
+        super().__init__(
+            writable_storage_key=StorageKey.METRICS_COUNTERS_BUCKETS,
+            readable_storage_key=StorageKey.METRICS_COUNTERS,
+            value_schema=[Column("value", AggregateFunction("sum", [Float(64)]))],
+            mappers=TranslationMappers(
+                columns=[
+                    ColumnToFunction(
+                        None, "value", "sumMerge", (ColumnExpr(None, None, "value"),),
+                    ),
+                ],
+            ),
+        )
