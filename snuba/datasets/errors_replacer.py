@@ -563,14 +563,17 @@ def process_tombstone_events(
 class ExcludeGroupsReplacement(Replacement):
     """
     Exclude a group ID from being searched.
+
     This together with process_tombstone_events and process_merge_events is
     used by reprocessing to split up a group into multiple, event by event.
     Assuming a group with n events:
+
     1. insert m events that have been selected for reprocessing (with same event ID).
     2. process_merge_events for n - m events that have not been selected, i.e.
        move them into a new group ID
     3. exclude old group ID from search queries. This group ID must not receive
        new events.
+
     See docstring in `sentry.reprocessing2` for more information.
     """
 
