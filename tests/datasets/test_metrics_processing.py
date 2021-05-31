@@ -132,7 +132,7 @@ def test_metrics_processing(
                         FunctionCall(
                             None,
                             "indexOf",
-                            (Column(None, None, "tags.key"), Literal(None, 10),),
+                            (Column(None, None, "tags.key"), Literal(None, 10)),
                         ),
                     ),
                 ),
