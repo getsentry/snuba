@@ -29,7 +29,7 @@ TEST_CASES = [
     pytest.param(
         "metrics_counters",
         EntityKey.METRICS_COUNTERS,
-        FunctionCall("_snuba_value", "sumMerge", (Column(None, None, "value"),),),
+        FunctionCall("_snuba_value", "sumMerge", (Column(None, None, "value"),)),
         id="Test counters entity",
     ),
 ]
