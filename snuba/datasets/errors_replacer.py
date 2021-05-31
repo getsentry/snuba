@@ -55,6 +55,18 @@ class ExcludeGroups:
 QueryTimeFlags = Union[NeedsFinal, ExcludeGroups]
 
 
+@dataclass
+class ReplacementContext:
+    all_columns: Sequence[FlattenedColumn]
+    required_columns: Sequence[str]
+    state_name: ReplacerState
+
+    tag_column_map: Mapping[str, Mapping[str, str]]
+    promoted_tags: Mapping[str, Sequence[str]]
+    use_promoted_prewhere: bool
+    schema: WritableTableSchema
+
+
 class Replacement(ReplacementBase):
     @abstractmethod
     def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
@@ -212,6 +224,15 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         self.__state_name = state_name
         self.__use_promoted_prewhere = use_promoted_prewhere
         self.__schema = schema
+        self.__replacement_context = ReplacementContext(
+            all_columns=self.__all_columns,
+            state_name=self.__state_name,
+            required_columns=self.__required_columns,
+            use_promoted_prewhere=self.__use_promoted_prewhere,
+            schema=self.__schema,
+            tag_column_map=self.__tag_column_map,
+            promoted_tags=self.__promoted_tags,
+        )
 
     def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
         type_ = message.action_type
@@ -248,7 +269,9 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 event, self.__all_columns, self.__state_name
             )
         elif type_ == "exclude_groups":
-            processed = process_exclude_groups(event)
+            processed = ExcludeGroupsReplacement.parse_message(
+                event, self.__replacement_context
+            )
         else:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
 
@@ -536,29 +559,44 @@ def process_tombstone_events(
     )
 
 
-def process_exclude_groups(message: Mapping[str, Any]) -> Optional[Replacement]:
+@dataclass
+class ExcludeGroupsReplacement(Replacement):
     """
     Exclude a group ID from being searched.
-
     This together with process_tombstone_events and process_merge_events is
     used by reprocessing to split up a group into multiple, event by event.
     Assuming a group with n events:
-
     1. insert m events that have been selected for reprocessing (with same event ID).
     2. process_merge_events for n - m events that have not been selected, i.e.
        move them into a new group ID
     3. exclude old group ID from search queries. This group ID must not receive
        new events.
-
     See docstring in `sentry.reprocessing2` for more information.
     """
 
-    group_ids = message["group_ids"]
-    if not group_ids:
+    project_id: int
+    group_ids: Sequence[int]
+
+    @classmethod
+    def parse_message(
+        cls, message: Mapping[str, Any], context: ReplacementContext
+    ) -> Optional["ExcludeGroupsReplacement"]:
+        if not message["group_ids"]:
+            return None
+
+        return cls(project_id=message["project_id"], group_ids=message["group_ids"])
+
+    def get_project_id(self) -> int:
+        return self.project_id
+
+    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
+        return ExcludeGroups(group_ids=self.group_ids)
+
+    def get_insert_query(self, table_name: str) -> Optional[str]:
         return None
 
-    query_time_flags = (EXCLUDE_GROUPS, message["project_id"], group_ids)
-    return LegacyReplacement(None, None, {}, query_time_flags)
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        return None
 
 
 SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
