@@ -5,7 +5,10 @@ import pytest
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.metrics_processor import MetricsProcessor
+from snuba.datasets.metrics_processor import (
+    CounterMetricsProcessor,
+    SetsMetricsProcessor,
+)
 from snuba.processor import InsertBatch
 
 TEST_CASES = [
@@ -25,7 +28,6 @@ TEST_CASES = [
                 "org_id": 1,
                 "project_id": 2,
                 "metric_id": 1232341,
-                "metric_type": "set",
                 "timestamp": datetime(2021, 4, 24, 0, 48, 16),
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
@@ -36,6 +38,7 @@ TEST_CASES = [
                 "offset": 100,
             }
         ],
+        None,
         id="Simple set with valid content",
     ),
     pytest.param(
@@ -43,26 +46,52 @@ TEST_CASES = [
             "org_id": 1,
             "project_id": 2,
             "metric_id": 1232341,
-            "type": "d",
+            "type": "c",
             "timestamp": 1619225296,
             "tags": {"10": 11, "20": 22, "30": 33},
-            "value": [324234, 345345, 456456, 567567],
+            "value": 123.123,
             "retention_days": 30,
         },
         None,
-        id="Unsupported metric type. Ignored",
+        [
+            {
+                "org_id": 1,
+                "project_id": 2,
+                "metric_id": 1232341,
+                "timestamp": datetime(2021, 4, 24, 0, 48, 16),
+                "tags.key": [10, 20, 30],
+                "tags.value": [11, 22, 33],
+                "value": 123.123,
+                "materialization_version": 0,
+                "retention_days": 30,
+                "partition": 1,
+                "offset": 100,
+            }
+        ],
+        id="Simple counter with valid content",
     ),
 ]
 
 
-@pytest.mark.parametrize("message, expected", TEST_CASES)
+@pytest.mark.parametrize("message, expected_set, expected_counter", TEST_CASES)
 def test_metrics_processor(
-    message: Mapping[str, Any], expected: Optional[Sequence[Mapping[str, Any]]]
+    message: Mapping[str, Any],
+    expected_set: Optional[Sequence[Mapping[str, Any]]],
+    expected_counter: Optional[Sequence[Mapping[str, Any]]],
 ) -> None:
     settings.DISABLED_DATASETS = set()
 
     meta = KafkaMessageMetadata(offset=100, partition=1, timestamp=datetime(1970, 1, 1))
 
-    expected_result = InsertBatch(expected, None) if expected is not None else None
+    expected_set_result = (
+        InsertBatch(expected_set, None) if expected_set is not None else None
+    )
+    assert SetsMetricsProcessor().process_message(message, meta) == expected_set_result
 
-    assert MetricsProcessor().process_message(message, meta) == expected_result
+    expected_counter_result = (
+        InsertBatch(expected_counter, None) if expected_counter is not None else None
+    )
+    assert (
+        CounterMetricsProcessor().process_message(message, meta)
+        == expected_counter_result
+    )
