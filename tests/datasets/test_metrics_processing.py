@@ -71,9 +71,7 @@ TEST_CASES = [
             FunctionCall(
                 None,
                 "quantilesMerge",
-                tuple(
-                    Literal(None, quant) for quant in [0.5, 0.75, 0.9, 0.95, 0.99, 1]
-                ),
+                tuple(Literal(None, quant) for quant in [0.5, 0.75, 0.9, 0.95, 0.99]),
             ),
             (Column(None, None, "percentiles"),),
         ),
