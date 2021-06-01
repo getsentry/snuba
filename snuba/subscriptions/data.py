@@ -26,7 +26,6 @@ from snuba.query.logical import Aggregation, Query
 from snuba.query.types import Condition
 from snuba.query.validation.validators import (
     NoTimeBasedConditionValidator,
-    OneProjectValidator,
     SubscriptionAllowedClausesValidator,
 )
 from snuba.request import Language, Request
@@ -257,7 +256,6 @@ class SnQLSubscriptionData(SubscriptionData):
         entity = get_entity(from_clause.key)
 
         SubscriptionAllowedClausesValidator().validate(query)
-        OneProjectValidator().validate(query)
         if entity.required_time_column:
             NoTimeBasedConditionValidator(entity.required_time_column).validate(query)
 

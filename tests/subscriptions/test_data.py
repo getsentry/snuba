@@ -60,21 +60,6 @@ TESTS = [
             project_id=1,
             query=(
                 "MATCH (events) "
-                "SELECT count() AS count "
-                "WHERE platform IN tuple('a') "
-                "AND project_id IN tuple(1, 2) "
-            ),
-            time_window=timedelta(minutes=500),
-            resolution=timedelta(minutes=1),
-        ),
-        InvalidQueryException,
-        id="SnQL subscription with 2 many project ids",
-    ),
-    pytest.param(
-        SnQLSubscriptionData(
-            project_id=1,
-            query=(
-                "MATCH (events) "
                 "SELECT count() AS count BY project_id "
                 "WHERE platform IN tuple('a') "
                 "AND project_id IN tuple(1) "
