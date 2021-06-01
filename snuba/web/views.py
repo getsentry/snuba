@@ -485,8 +485,6 @@ def handle_subscription_error(exception: InvalidSubscriptionError) -> Response:
 @util.time_request("subscription")
 def create_subscription(*, dataset: Dataset, timer: Timer) -> RespTuple:
     subscription = SubscriptionDataCodec().decode(http_request.data)
-    # TODO: Check for valid queries with fields that are invalid for subscriptions. For
-    # example date fields and aggregates.
     identifier = SubscriptionCreator(dataset).create(subscription, timer)
     return (
         json.dumps({"subscription_id": str(identifier)}),

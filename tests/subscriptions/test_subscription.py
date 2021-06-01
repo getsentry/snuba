@@ -34,9 +34,9 @@ TESTS_CREATE = [
             project_id=123,
             query=(
                 "MATCH (events) "
-                "SELECT count() AS count BY time "
+                "SELECT count() AS count "
                 "WHERE "
-                "platform IN tuple('a') "
+                "platform IN tuple('a')"
             ),
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
@@ -61,7 +61,7 @@ TESTS_INVALID = [
             project_id=123,
             query=(
                 "MATCH (events) "
-                "SELECT count() AS count BY time "
+                "SELECT count() AS count "
                 "WHERE "
                 "platfo IN tuple('a') "
             ),
