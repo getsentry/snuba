@@ -1,10 +1,10 @@
-from snuba.utils.streams.backends.abstract import (
+from streaming_kafka_consumer.backends.abstract import (
     Consumer,
     ConsumerError,
     EndOfPartition,
     Producer,
 )
-from snuba.utils.streams.types import Message, Partition, Topic
+from streaming_kafka_consumer.types import Message, Partition, Topic
 
 __all__ = [
     "Consumer",

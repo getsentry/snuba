@@ -4,12 +4,11 @@ from cProfile import Profile
 from pathlib import Path
 from typing import Callable, Mapping, Optional
 
-from snuba.utils.streams.processing.strategies.abstract import (
+from streaming_kafka_consumer.processing.strategies.abstract import (
     ProcessingStrategy,
     ProcessingStrategyFactory,
 )
-from snuba.utils.streams.types import Message, Partition, TPayload
-
+from streaming_kafka_consumer.types import Message, Partition, TPayload
 
 logger = logging.getLogger(__name__)
 

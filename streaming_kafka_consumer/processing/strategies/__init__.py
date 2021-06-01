@@ -1,4 +1,4 @@
-from snuba.utils.streams.processing.strategies.abstract import (
+from streaming_kafka_consumer.processing.strategies.abstract import (
     MessageRejected,
     ProcessingStrategy,
     ProcessingStrategyFactory,

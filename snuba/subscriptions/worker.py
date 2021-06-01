@@ -7,6 +7,7 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import Mapping, NamedTuple, Optional, Sequence, Tuple
 
 from streaming_kafka_consumer import Message, Producer, Topic
+from streaming_kafka_consumer.processing.strategies.batching import AbstractBatchWorker
 
 from snuba.datasets.dataset import Dataset
 from snuba.reader import Result
@@ -17,7 +18,6 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.scheduler import ScheduledTask, Scheduler
-from snuba.utils.streams.processing.strategies.batching import AbstractBatchWorker
 from snuba.web.query import parse_and_run_query
 
 

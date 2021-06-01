@@ -34,17 +34,17 @@ from confluent_kafka import KafkaError
 from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
-
-from snuba.utils.concurrent import execute
-from snuba.utils.streams.backends.abstract import (
+from streaming_kafka_consumer.backends.abstract import (
     Consumer,
     ConsumerError,
     EndOfPartition,
     OffsetOutOfRange,
     Producer,
 )
-from snuba.utils.streams.retries import NoRetryPolicy, RetryPolicy
-from snuba.utils.streams.types import Message, Partition, Topic
+from streaming_kafka_consumer.retries import NoRetryPolicy, RetryPolicy
+from streaming_kafka_consumer.types import Message, Partition, Topic
+
+from snuba.utils.concurrent import execute
 
 logger = logging.getLogger(__name__)
 

@@ -8,6 +8,7 @@ from unittest.mock import Mock, call
 
 import pytest
 from streaming_kafka_consumer import Message, Partition, Topic
+from streaming_kafka_consumer.backends.kafka import KafkaPayload
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
@@ -17,7 +18,6 @@ from snuba.consumers.consumer import (
 )
 from snuba.datasets.storage import Storage
 from snuba.processor import InsertBatch, ReplacementBatch
-from snuba.utils.streams.backends.kafka import KafkaPayload
 from tests.assertions import assert_changes
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 from tests.backends.metrics import TestingMetricsBackend, Timing

@@ -3,11 +3,10 @@ import time
 from dataclasses import dataclass
 from typing import Callable, Generic, Mapping, MutableMapping, Optional
 
-from snuba.utils.streams.processing.strategies.abstract import (
+from streaming_kafka_consumer.processing.strategies.abstract import (
     ProcessingStrategy as ProcessingStep,
 )
-from snuba.utils.streams.types import Message, Partition, TPayload
-
+from streaming_kafka_consumer.types import Message, Partition, TPayload
 
 logger = logging.getLogger(__name__)
 

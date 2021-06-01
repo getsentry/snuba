@@ -1,14 +1,14 @@
 from datetime import datetime
 from typing import Iterator, MutableMapping, MutableSequence, Optional, Sequence, Tuple
 
-from snuba.utils.streams.backends.abstract import OffsetOutOfRange
-from snuba.utils.streams.backends.local.storages.abstract import (
+from streaming_kafka_consumer.backends.abstract import OffsetOutOfRange
+from streaming_kafka_consumer.backends.local.storages.abstract import (
     MessageStorage,
     PartitionDoesNotExist,
     TopicDoesNotExist,
     TopicExists,
 )
-from snuba.utils.streams.types import Message, Partition, Topic, TPayload
+from streaming_kafka_consumer.types import Message, Partition, Topic, TPayload
 
 
 class MemoryMessageStorage(MessageStorage[TPayload]):

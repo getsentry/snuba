@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Callable, Generic, Mapping, Optional
 
-from snuba.utils.streams.types import Message, Partition, TPayload
+from streaming_kafka_consumer.types import Message, Partition, TPayload
 
 
 class MessageRejected(Exception):
