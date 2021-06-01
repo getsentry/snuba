@@ -2049,7 +2049,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
                         "aggregations": [["count()", "", "count"]],
                         "time_window": int(timedelta(minutes=10).total_seconds()),
                         "resolution": int(timedelta(minutes=1).total_seconds()),
-                        "query": "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a') AND project_id IN tuple(1, 2)",
+                        "query": "MATCH (events) SELECT count() AS count BY project_id WHERE platform IN tuple('a')",
                     }
                 ).encode("utf-8"),
             )
@@ -2057,7 +2057,10 @@ class TestCreateSubscriptionApi(BaseApiTest):
         assert resp.status_code == 400
         data = json.loads(resp.data)
         assert data == {
-            "error": {"message": "Must only query one project", "type": "invalid_query"}
+            "error": {
+                "message": "only one aggregation in the select allowed",
+                "type": "invalid_query",
+            }
         }
 
 
