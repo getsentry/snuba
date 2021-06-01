@@ -1,3 +1,4 @@
+from abc import ABC
 from typing import Mapping, Sequence
 
 from snuba.clickhouse.columns import (
@@ -5,10 +6,13 @@ from snuba.clickhouse.columns import (
     Column,
     ColumnSet,
     DateTime,
+    Float,
     Nested,
+    SchemaModifiers,
     UInt,
 )
 from snuba.clickhouse.translators.snuba.mappers import (
+    ColumnToCurriedFunction,
     ColumnToFunction,
     SubscriptableMapper,
 )
@@ -20,7 +24,12 @@ from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column as ColumnExpr
-from snuba.query.expressions import Expression, Literal, SubscriptableReference
+from snuba.query.expressions import (
+    Expression,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
@@ -50,30 +59,27 @@ class TagsTypeTransformer(QueryProcessor):
         query.transform_expressions(transform_expression)
 
 
-class MetricsSetsEntity(Entity):
-    def __init__(self) -> None:
-        writable_storage = get_writable_storage(StorageKey.METRICS_BUCKETS)
-        readable_storage = get_storage(StorageKey.METRICS_SETS)
+class MetricsEntity(Entity, ABC):
+    def __init__(
+        self,
+        writable_storage_key: StorageKey,
+        readable_storage_key: StorageKey,
+        value_schema: Sequence[Column[SchemaModifiers]],
+        mappers: TranslationMappers,
+    ) -> None:
+        writable_storage = get_writable_storage(writable_storage_key)
+        readable_storage = get_storage(readable_storage_key)
 
         super().__init__(
-            # TODO: Add the readable storages
             storages=[writable_storage, readable_storage],
             query_pipeline_builder=SimplePipelineBuilder(
                 query_plan_builder=SingleStorageQueryPlanBuilder(
                     readable_storage,
                     mappers=TranslationMappers(
-                        columns=[
-                            ColumnToFunction(
-                                None,
-                                "value",
-                                "uniqCombined64Merge",
-                                (ColumnExpr(None, None, "value"),),
-                            ),
-                        ],
                         subscriptables=[
                             SubscriptableMapper(None, "tags", None, "tags"),
                         ],
-                    ),
+                    ).concat(mappers),
                 )
             ),
             abstract_column_set=ColumnSet(
@@ -83,9 +89,7 @@ class MetricsSetsEntity(Entity):
                     Column("metric_id", UInt(64)),
                     Column("timestamp", DateTime()),
                     Column("tags", Nested([("key", UInt(64)), ("value", UInt(64))])),
-                    Column(
-                        "value", AggregateFunction("uniqCombined64Merge", [UInt(64)])
-                    ),
+                    *value_schema,
                 ]
             ),
             join_relationships={},
@@ -104,3 +108,89 @@ class MetricsSetsEntity(Entity):
             ProjectRateLimiterProcessor(project_column="project_id"),
             TagsTypeTransformer(),
         ]
+
+
+class MetricsSetsEntity(MetricsEntity):
+    def __init__(self) -> None:
+        super().__init__(
+            writable_storage_key=StorageKey.METRICS_BUCKETS,
+            readable_storage_key=StorageKey.METRICS_SETS,
+            value_schema=[
+                Column("value", AggregateFunction("uniqCombined64", [UInt(64)])),
+            ],
+            mappers=TranslationMappers(
+                columns=[
+                    ColumnToFunction(
+                        None,
+                        "value",
+                        "uniqCombined64Merge",
+                        (ColumnExpr(None, None, "value"),),
+                    ),
+                ],
+            ),
+        )
+
+
+class MetricsCountersEntity(MetricsEntity):
+    def __init__(self) -> None:
+        super().__init__(
+            writable_storage_key=StorageKey.METRICS_COUNTERS_BUCKETS,
+            readable_storage_key=StorageKey.METRICS_COUNTERS,
+            value_schema=[Column("value", AggregateFunction("sum", [Float(64)]))],
+            mappers=TranslationMappers(
+                columns=[
+                    ColumnToFunction(
+                        None, "value", "sumMerge", (ColumnExpr(None, None, "value"),),
+                    ),
+                ],
+            ),
+        )
+
+
+def merge_mapper(name: str) -> ColumnToFunction:
+    return ColumnToFunction(
+        None, name, f"{name}Merge", (ColumnExpr(None, None, name),),
+    )
+
+
+class MetricsDistributionsEntity(MetricsEntity):
+    def __init__(self) -> None:
+        super().__init__(
+            writable_storage_key=StorageKey.METRICS_DISTRIBUTIONS_BUCKETS,
+            readable_storage_key=StorageKey.METRICS_DISTRIBUTIONS,
+            value_schema=[
+                Column(
+                    "percentiles",
+                    AggregateFunction(
+                        "quantiles(0.5, 0.75, 0.9, 0.95, 0.99)", [Float(64)]
+                    ),
+                ),
+                Column("min", AggregateFunction("min", [Float(64)])),
+                Column("max", AggregateFunction("max", [Float(64)])),
+                Column("avg", AggregateFunction("avg", [Float(64)])),
+                Column("sum", AggregateFunction("sum", [Float(64)])),
+                Column("count", AggregateFunction("count", [Float(64)])),
+            ],
+            mappers=TranslationMappers(
+                columns=[
+                    ColumnToCurriedFunction(
+                        None,
+                        "percentiles",
+                        FunctionCall(
+                            None,
+                            "quantilesMerge",
+                            tuple(
+                                Literal(None, quant)
+                                for quant in [0.5, 0.75, 0.9, 0.95, 0.99]
+                            ),
+                        ),
+                        (ColumnExpr(None, None, "percentiles"),),
+                    ),
+                    merge_mapper("min"),
+                    merge_mapper("max"),
+                    merge_mapper("avg"),
+                    merge_mapper("sum"),
+                    merge_mapper("count"),
+                ],
+            ),
+        )

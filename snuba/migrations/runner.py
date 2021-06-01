@@ -5,11 +5,11 @@ from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Sequence
 
 from clickhouse_driver import errors
 
+from snuba import settings
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.escaping import escape_string
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import (
-    CLUSTERS,
     ClickhouseClientSettings,
     ClickhouseNodeType,
     get_cluster,
@@ -21,11 +21,7 @@ from snuba.migrations.errors import (
     MigrationError,
     MigrationInProgress,
 )
-from snuba.migrations.groups import (
-    ACTIVE_MIGRATION_GROUPS,
-    MigrationGroup,
-    get_group_loader,
-)
+from snuba.migrations.groups import OPTIONAL_GROUPS, MigrationGroup, get_group_loader
 from snuba.migrations.migration import ClickhouseNodeMigration, CodeMigration, Migration
 from snuba.migrations.operations import SqlOperation
 from snuba.migrations.status import Status
@@ -34,6 +30,18 @@ logger = logging.getLogger("snuba.migrations")
 
 LOCAL_TABLE_NAME = "migrations_local"
 DIST_TABLE_NAME = "migrations_dist"
+
+
+def get_active_migration_groups() -> Sequence[MigrationGroup]:
+
+    return [
+        group
+        for group in MigrationGroup
+        if not (
+            group in OPTIONAL_GROUPS
+            and group.value in settings.SKIPPED_MIGRATION_GROUPS
+        )
+    ]
 
 
 class MigrationKey(NamedTuple):
@@ -110,7 +118,7 @@ class Runner:
         def get_status(migration_key: MigrationKey) -> Status:
             return migration_status.get(migration_key, Status.NOT_STARTED)
 
-        for group in ACTIVE_MIGRATION_GROUPS:
+        for group in get_active_migration_groups():
             group_migrations: List[MigrationDetails] = []
             group_loader = get_group_loader(group)
 
@@ -274,7 +282,7 @@ class Runner:
         def get_status(migration_key: MigrationKey) -> Status:
             return migration_status.get(migration_key, Status.NOT_STARTED)
 
-        for group in ACTIVE_MIGRATION_GROUPS:
+        for group in get_active_migration_groups():
             group_loader = get_group_loader(group)
             group_migrations: List[MigrationKey] = []
 
@@ -336,7 +344,10 @@ class Runner:
             "("
             + (
                 ", ".join(
-                    [escape_string(group.value) for group in ACTIVE_MIGRATION_GROUPS]
+                    [
+                        escape_string(group.value)
+                        for group in get_active_migration_groups()
+                    ]
                 )
             )
             + ")"
@@ -381,7 +392,7 @@ class Runner:
 
         migrations: List[Migration] = []
 
-        for group in ACTIVE_MIGRATION_GROUPS:
+        for group in get_active_migration_groups():
             group_loader = get_group_loader(group)
 
             for migration_id in group_loader.get_migrations():

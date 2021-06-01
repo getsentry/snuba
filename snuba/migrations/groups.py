@@ -3,7 +3,6 @@ from enum import Enum
 from importlib import import_module
 from typing import Sequence
 
-from snuba import settings
 from snuba.migrations.errors import MigrationDoesNotExist
 from snuba.migrations.migration import Migration
 
@@ -27,14 +26,6 @@ OPTIONAL_GROUPS = {
     MigrationGroup.QUERYLOG,
     MigrationGroup.SPANS_EXPERIMENTAL,
 }
-
-ACTIVE_MIGRATION_GROUPS = [
-    group
-    for group in MigrationGroup
-    if not (
-        group in OPTIONAL_GROUPS and group.value in settings.SKIPPED_MIGRATION_GROUPS
-    )
-]
 
 
 class GroupLoader(ABC):
@@ -168,6 +159,10 @@ class MetricsLoader(DirectoryLoader):
         return [
             "0001_metrics_buckets",
             "0002_metrics_sets",
+            "0003_counters_to_buckets",
+            "0004_metrics_counters",
+            "0005_metrics_distributions_buckets",
+            "0006_metrics_distributions",
         ]
 
 
