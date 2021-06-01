@@ -128,8 +128,6 @@ COLUMN_SPLIT_MAX_RESULTS = 5000
 # Migrations in skipped groups will not be run
 SKIPPED_MIGRATION_GROUPS: Set[str] = {"metrics", "querylog", "spans_experimental"}
 
-SNQL_SUBSCRIPTION_ROLLOUT = 0.0
-
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment

@@ -1,13 +1,14 @@
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Iterable, MutableMapping, Optional, Tuple
+from typing import Any, Generator, Iterable, MutableMapping, Optional, Tuple
 from uuid import UUID, uuid1
 
 import pytest
 from streaming_kafka_consumer import Message, Partition, Topic
 from streaming_kafka_consumer.backends.local.backend import LocalBroker as Broker
 
+from snuba import state
 from snuba.datasets.factory import get_dataset
 from snuba.query.conditions import ConditionFunctions, get_first_level_and_conditions
 from snuba.query.matchers import (
@@ -20,6 +21,7 @@ from snuba.query.matchers import (
 )
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import (
+    DelegateSubscriptionData,
     LegacySubscriptionData,
     PartitionId,
     SnQLSubscriptionData,
@@ -64,7 +66,7 @@ class Datetime(Pattern[datetime]):
 
 
 @pytest.fixture(
-    ids=["Legacy", "SnQL"],
+    ids=["Legacy", "SnQL", "Delegate"],
     params=[
         LegacySubscriptionData(
             project_id=1,
@@ -79,14 +81,32 @@ class Datetime(Pattern[datetime]):
             time_window=timedelta(minutes=60),
             resolution=timedelta(minutes=1),
         ),
+        DelegateSubscriptionData(
+            project_id=1,
+            conditions=[],
+            aggregations=[["count()", "", "count"]],
+            query=("MATCH (events) SELECT count() AS count"),
+            time_window=timedelta(minutes=60),
+            resolution=timedelta(minutes=1),
+        ),
     ],
 )
-def subscription_data(request) -> SubscriptionData:
+def subscription_data(request: Any) -> SubscriptionData:
+    assert isinstance(request.param, SubscriptionData)
     return request.param
 
 
+@pytest.fixture
+def subscription_rollout() -> Generator[None, None, None]:
+    state.set_config("snql_subscription_rollout", 1.0)
+    yield
+    state.set_config("snql_subscription_rollout", 0.0)
+
+
 def test_subscription_worker(
-    broker: Broker[SubscriptionTaskResult], subscription_data: SubscriptionData
+    broker: Broker[SubscriptionTaskResult],
+    subscription_data: SubscriptionData,
+    subscription_rollout: Any,
 ) -> None:
     result_topic = Topic("subscription-results")
 

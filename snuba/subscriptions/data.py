@@ -9,7 +9,7 @@ from functools import partial
 from typing import Any, List, Mapping, NamedTuple, NewType, Optional, Sequence, Union
 from uuid import UUID
 
-from snuba import settings
+from snuba import state
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity
 from snuba.query.composite import CompositeQuery
@@ -331,10 +331,9 @@ class DelegateSubscriptionData(SubscriptionData):
         offset: Optional[int],
         timer: Timer,
     ) -> Request:
-        use_snql = (
-            settings.SNQL_SUBSCRIPTION_ROLLOUT > 0.0
-            and random.random() <= settings.SNQL_SUBSCRIPTION_ROLLOUT
-        )
+        snql_rollout = state.get_config("snql_subscription_rollout", 0.0)
+        assert isinstance(snql_rollout, float)
+        use_snql = snql_rollout > 0.0 and random.random() <= snql_rollout
         data: SubscriptionData
         if use_snql:
             data = self.to_snql()

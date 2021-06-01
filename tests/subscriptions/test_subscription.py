@@ -1,10 +1,11 @@
 from datetime import timedelta
-from typing import List, Tuple, cast
+from typing import Generator, List, Tuple, cast
 from uuid import UUID
 
 import pytest
 from pytest import raises
 
+from snuba import state
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
     DelegateSubscriptionData,
@@ -109,6 +110,12 @@ TESTS_INVALID = [
 class TestSubscriptionCreator(BaseSubscriptionTest):
 
     timer = Timer("test")
+
+    @pytest.fixture(autouse=True)
+    def subscription_rollout(self) -> Generator[None, None, None]:
+        state.set_config("snql_subscription_rollout", 1.0)
+        yield
+        state.set_config("snql_subscription_rollout", 0.0)
 
     @pytest.mark.parametrize("subscription", TESTS_CREATE)
     def test(self, subscription: SubscriptionData) -> None:

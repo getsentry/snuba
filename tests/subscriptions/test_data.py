@@ -3,6 +3,7 @@ from typing import Optional
 
 import pytest
 
+from snuba import state
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.data import (
     LegacySubscriptionData,
@@ -74,6 +75,12 @@ TESTS = [
 
 
 class TestBuildRequest(BaseSubscriptionTest):
+    @pytest.fixture(autouse=True)
+    def subscription_rollout(self) -> None:
+        state.set_config("snql_subscription_rollout", 1.0)
+        yield
+        state.set_config("snql_subscription_rollout", 0.0)
+
     @pytest.mark.parametrize("subscription, exception", TESTS)  # type: ignore
     def test_conditions(
         self, subscription: SubscriptionData, exception: Optional[Exception]
