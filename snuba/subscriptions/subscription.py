@@ -1,13 +1,18 @@
 from datetime import datetime
+from typing import Any, MutableMapping
 from uuid import UUID, uuid1
 
+from snuba import settings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import enforce_table_writer
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
+    DelegateSubscriptionData,
     PartitionId,
+    SnQLSubscriptionData,
     SubscriptionData,
     SubscriptionIdentifier,
+    SubscriptionType,
 )
 from snuba.subscriptions.partitioner import TopicSubscriptionDataPartitioner
 from snuba.subscriptions.store import RedisSubscriptionDataStore
@@ -29,8 +34,13 @@ class SubscriptionCreator:
 
     def create(self, data: SubscriptionData, timer: Timer) -> SubscriptionIdentifier:
         # We want to test the query out here to make sure it's valid and can run
-        request = data.build_request(self.dataset, datetime.utcnow(), None, timer)
-        parse_and_run_query(self.dataset, request, timer)
+        # If there is a delegate subscription, we need to run both the SnQL and Legacy validator
+        if isinstance(data, DelegateSubscriptionData):
+            self._test_request(data.to_snql(), timer)
+            self._test_request(data.to_legacy(), timer)
+        else:
+            self._test_request(data, timer)
+
         identifier = SubscriptionIdentifier(
             self.__partitioner.build_partition_id(data), uuid1(),
         )
@@ -40,6 +50,10 @@ class SubscriptionCreator:
             identifier.uuid, data,
         )
         return identifier
+
+    def _test_request(self, data: SubscriptionData, timer: Timer) -> None:
+        request = data.build_request(self.dataset, datetime.utcnow(), None, timer)
+        parse_and_run_query(self.dataset, request, timer)
 
 
 class SubscriptionDeleter:
