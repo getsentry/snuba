@@ -41,7 +41,7 @@ jobs:
           pip install mypy==0.800
       - name: Run mypy
         run: |
-          mypy --config-file mypy.ini --ignore-missing-imports --strict --warn-unreachable snuba
+          mypy --config-file mypy.ini --ignore-missing-imports --strict --warn-unreachable snuba streaming_kafka_consumer
 
   tests:
     needs: linting
