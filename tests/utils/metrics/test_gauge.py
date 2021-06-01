@@ -3,8 +3,8 @@ from threading import Barrier
 from typing import Callable
 
 import pytest
+from streaming_kafka_consumer.concurrent import execute
 
-from snuba.utils.concurrent import execute
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.types import Tags
