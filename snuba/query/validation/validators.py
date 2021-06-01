@@ -4,13 +4,11 @@ from typing import Optional, Set
 
 from snuba.query import Query
 from snuba.query.conditions import (
-    FUNCTION_TO_OPERATOR,
     ConditionFunctions,
     build_match,
     get_first_level_and_conditions,
 )
-from snuba.query.exceptions import InvalidQueryException
-from snuba.query.expressions import FunctionCall, Literal
+from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
 
 
 class QueryValidator(ABC):
@@ -57,34 +55,14 @@ class EntityRequiredColumnValidator(QueryValidator):
             )
 
 
-class OneProjectValidator(QueryValidator):
-    def validate(self, query: Query, alias: Optional[str] = None) -> None:
-        match = build_match("project_id", list(FUNCTION_TO_OPERATOR.keys()), int)
-        condition = query.get_condition()
-        top_level = get_first_level_and_conditions(condition) if condition else []
-        matched_id: Optional[int] = None
-        for cond in top_level:
-            result = match.match(cond)
-            if result is not None:
-                rhs = result.expression("rhs")
-                project_id: Optional[int] = None
-                if isinstance(rhs, Literal) and isinstance(rhs.value, int):
-                    project_id = rhs.value
-                elif isinstance(rhs, FunctionCall):
-                    project_ids = set(rhs.parameters)
-                    if len(project_ids) != 1:
-                        raise InvalidQueryException("Must only query one project")
-                    value = project_ids.pop()
-                    assert isinstance(value, Literal) and isinstance(value.value, int)
-                    project_id = value.value
-
-                if matched_id is not None and matched_id != project_id:
-                    raise InvalidQueryException("Must only query one project")
-                else:
-                    matched_id = project_id
-
-
 class NoTimeBasedConditionValidator(QueryValidator):
+    """
+    For some logic (e.g. subscriptions) we want to make sure that there are no time conditions
+    on the query, so we can add conditions and ensure a certain time range is being queried.
+    This validator will scan the query for any top level conditions on the specified time
+    column and ensure there are no conditions.
+    """
+
     def __init__(self, required_time_column: str) -> None:
         self.required_time_column = required_time_column
         self.match = build_match(
@@ -102,22 +80,28 @@ class NoTimeBasedConditionValidator(QueryValidator):
     def validate(self, query: Query, alias: Optional[str] = None) -> None:
         condition = query.get_condition()
         top_level = get_first_level_and_conditions(condition) if condition else []
-        if any([self.match.match(cond) for cond in top_level]):
-            raise InvalidQueryException(
-                f"Cannot have existing conditions on time field {self.required_time_column}"
-            )
+        for cond in top_level:
+            if self.match.match(cond):
+                raise InvalidExpressionException(
+                    cond,
+                    f"Cannot have existing conditions on time field {self.required_time_column}",
+                )
 
 
 class SubscriptionAllowedClausesValidator(QueryValidator):
+    """
+    Subscriptions expect a very specific query structure. This will ensure that only the allowed
+    clauses are being used in the query, and that those clauses are in the correct structure.
+    """
+
     def validate(self, query: Query, alias: Optional[str] = None) -> None:
         selected = query.get_selected_columns()
         if len(selected) != 1:
-            raise InvalidQueryException("Can only have one aggregation in the select")
+            raise InvalidQueryException("only one aggregation in the select allowed")
 
         disallowed = ["groupby", "having", "orderby"]
         for field in disallowed:
             if getattr(query, f"get_{field}")():
-                print(field, getattr(query, f"get_{field}")())
                 raise InvalidQueryException(
-                    f"Invalid clause {field} in subscription query"
+                    f"invalid clause {field} in subscription query"
                 )
