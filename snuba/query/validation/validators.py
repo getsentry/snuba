@@ -1,13 +1,14 @@
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import Optional, Set
 
 from snuba.query import Query
 from snuba.query.conditions import (
-    build_match,
     ConditionFunctions,
+    build_match,
     get_first_level_and_conditions,
 )
-from snuba.query.exceptions import InvalidQueryException
+from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
 
 
 class QueryValidator(ABC):
@@ -52,3 +53,55 @@ class EntityRequiredColumnValidator(QueryValidator):
             raise InvalidQueryException(
                 f"missing required conditions for {', '.join(missing)}"
             )
+
+
+class NoTimeBasedConditionValidator(QueryValidator):
+    """
+    For some logic (e.g. subscriptions) we want to make sure that there are no time conditions
+    on the query, so we can add conditions and ensure a certain time range is being queried.
+    This validator will scan the query for any top level conditions on the specified time
+    column and ensure there are no conditions.
+    """
+
+    def __init__(self, required_time_column: str) -> None:
+        self.required_time_column = required_time_column
+        self.match = build_match(
+            required_time_column,
+            [
+                ConditionFunctions.EQ,
+                ConditionFunctions.LT,
+                ConditionFunctions.LTE,
+                ConditionFunctions.GT,
+                ConditionFunctions.GTE,
+            ],
+            datetime,
+        )
+
+    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+        condition = query.get_condition()
+        top_level = get_first_level_and_conditions(condition) if condition else []
+        for cond in top_level:
+            if self.match.match(cond):
+                raise InvalidExpressionException(
+                    cond,
+                    f"Cannot have existing conditions on time field {self.required_time_column}",
+                )
+
+
+class SubscriptionAllowedClausesValidator(QueryValidator):
+    """
+    Subscriptions expect a very specific query structure. This will ensure that only the allowed
+    clauses are being used in the query, and that those clauses are in the correct structure.
+    """
+
+    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+        selected = query.get_selected_columns()
+        if len(selected) != 1:
+            raise InvalidQueryException("only one aggregation in the select allowed")
+
+        disallowed = ["groupby", "having", "orderby"]
+        for field in disallowed:
+            if getattr(query, f"get_{field}")():
+                raise InvalidQueryException(
+                    f"invalid clause {field} in subscription query"
+                )
