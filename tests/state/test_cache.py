@@ -6,12 +6,12 @@ from typing import Iterator
 from unittest import mock
 
 import pytest
+from streaming_kafka_consumer.concurrent import execute
 
 from snuba.redis import redis_client
 from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RedisCache
 from snuba.utils.codecs import PassthroughCodec
-from snuba.utils.concurrent import execute
 from tests.assertions import assert_changes, assert_does_not_change
 
 

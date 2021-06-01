@@ -5,7 +5,6 @@ from contextlib import contextmanager
 from threading import Lock, Thread
 from typing import Callable, Generic, Iterator, Optional, TypeVar
 
-
 T = TypeVar("T")
 
 
