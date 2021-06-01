@@ -170,6 +170,8 @@ class MetricsLoader(DirectoryLoader):
             "0002_metrics_sets",
             "0003_counters_to_buckets",
             "0004_metrics_counters",
+            "0005_metrics_distributions_buckets",
+            "0006_metrics_distributions",
         ]
 
 
