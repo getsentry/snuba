@@ -716,11 +716,11 @@ def process_unmerge_hierarchical(
 
         uuid.UUID(primary_hash)
         uuid.UUID(hierarchical_hash)
-    except Exception:
+    except Exception as exc:
         # TODO(markus): We're sacrificing consistency over uptime as long as
         # this is in development. At some point this piece of code should be
         # stable enough to remove this.
-        logger.exception("process_unmerge_hierarchical.failed")
+        logger.error("process_unmerge_hierarchical.failed", exc_info=exc)
         return None
 
     where = """\
