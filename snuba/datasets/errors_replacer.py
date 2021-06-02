@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import time
 import uuid
@@ -55,7 +57,7 @@ class ExcludeGroups:
 QueryTimeFlags = Union[NeedsFinal, ExcludeGroups]
 
 
-@dataclass
+@dataclass(frozen=True)
 class ReplacementContext:
     all_columns: Sequence[FlattenedColumn]
     required_columns: Sequence[str]
@@ -583,7 +585,7 @@ class ExcludeGroupsReplacement(Replacement):
     @classmethod
     def parse_message(
         cls, message: Mapping[str, Any], context: ReplacementContext
-    ) -> Optional["ExcludeGroupsReplacement"]:
+    ) -> Optional[ExcludeGroupsReplacement]:
         if not message["group_ids"]:
             return None
 
