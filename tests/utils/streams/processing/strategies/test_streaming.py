@@ -16,13 +16,14 @@ from streaming_kafka_consumer.processing.strategies.streaming.transform import (
     ValueTooLarge,
     parallel_transform_worker_apply,
 )
+from streaming_kafka_consumer.tests.assertions import (
+    assert_changes,
+    assert_does_not_change,
+)
+from streaming_kafka_consumer.tests.metrics import Gauge as GaugeCall
+from streaming_kafka_consumer.tests.metrics import TestingMetricsBackend
+from streaming_kafka_consumer.tests.metrics import Timing as TimingCall
 from streaming_kafka_consumer.types import Message, Partition, Topic
-
-from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
-from tests.assertions import assert_changes, assert_does_not_change
-from tests.backends.metrics import Gauge as GaugeCall
-from tests.backends.metrics import TestingMetricsBackend
-from tests.backends.metrics import Timing as TimingCall
 
 
 def test_filter() -> None:
@@ -262,7 +263,7 @@ def test_parallel_transform_step() -> None:
             max_batch_time=60,
             input_block_size=4096,
             output_block_size=4096,
-            metrics=StreamMetricsAdapter(metrics),
+            metrics=metrics,
         )
 
         for message in messages:
@@ -307,7 +308,7 @@ def test_parallel_transform_step_terminate_workers() -> None:
             max_batch_time=60,
             input_block_size=4096,
             output_block_size=4096,
-            metrics=StreamMetricsAdapter(TestingMetricsBackend()),
+            metrics=TestingMetricsBackend(),
         )
 
     with assert_changes(
