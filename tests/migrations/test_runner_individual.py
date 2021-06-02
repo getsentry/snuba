@@ -235,6 +235,10 @@ def perform_select_query(
     return connection.execute(full_query)
 
 
+def get_count_from_storage(storage, connection) -> int:
+    return perform_select_query(["count()"], storage, None, None, connection)[0][0]
+
+
 def test_backfill_errors() -> None:
 
     backfill_migration_id = "0014_backfill_errors"
@@ -249,10 +253,10 @@ def test_backfill_errors() -> None:
     )
     errors_table_name = errors_storage.get_table_writer().get_schema().get_table_name()
 
-    def get_errors_count() -> int:
-        return perform_select_query(
-            ["count()"], errors_table_name, None, None, clickhouse
-        )[0][0]
+    # def get_errors_count() -> int:
+    #     return perform_select_query(
+    #         ["count()"], errors_table_name, None, None, clickhouse
+    #     )[0][0]
 
     raw_events = []
     for i in range(10):
@@ -263,14 +267,14 @@ def test_backfill_errors() -> None:
 
     write_unprocessed_events(events_storage, raw_events)
 
-    assert get_errors_count() == 0
+    assert get_count_from_storage(errors_table_name, clickhouse) == 0
 
     # Run 0014_backfill_errors
     runner.run_migration(
         MigrationKey(MigrationGroup.EVENTS, backfill_migration_id), force=True
     )
 
-    assert get_errors_count() == 10
+    assert get_count_from_storage(errors_table_name, clickhouse) == 10
 
     outcome = perform_select_query(
         ["contexts.key", "contexts.value"], errors_table_name, None, str(1), clickhouse
