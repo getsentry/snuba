@@ -1,4 +1,5 @@
 import logging
+from syslog import LOG_CRIT
 from typing import Optional, Sequence
 
 import click
@@ -8,7 +9,6 @@ from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.environment import setup_logging
 from snuba.migrations.connect import check_clickhouse_connections
 from snuba.migrations.runner import Runner
-from snuba.utils.logging import pylog_to_syslog_level
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic
 
@@ -54,7 +54,7 @@ def bootstrap(
             # Override rdkafka loglevel to be critical unless we are
             # debugging as we expect failures when trying to connect
             # (Kafka may not be up yet)
-            override_params["log_level"] = pylog_to_syslog_level(logging.CRITICAL)
+            override_params["log_level"] = LOG_CRIT
 
         attempts = 0
         while True:
