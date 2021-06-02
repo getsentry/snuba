@@ -5,6 +5,7 @@ import pytest
 from snuba_sdk.legacy import json_to_snql
 from streaming_kafka_consumer.backends.local.backend import LocalBroker
 from streaming_kafka_consumer.backends.local.storages.memory import MemoryMessageStorage
+from streaming_kafka_consumer.clock import Clock, TestingClock
 from streaming_kafka_consumer.types import TPayload
 
 from snuba import settings, state
@@ -14,7 +15,6 @@ from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.factory import STORAGES, get_storage
 from snuba.environment import setup_sentry
 from snuba.redis import redis_client
-from snuba.utils.clock import Clock, TestingClock
 
 
 def pytest_configure() -> None:

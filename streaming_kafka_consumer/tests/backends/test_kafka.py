@@ -16,15 +16,12 @@ from streaming_kafka_consumer.backends.kafka import (
     KafkaProducer,
     as_kafka_configuration_bool,
 )
-from streaming_kafka_consumer.synchronized import Commit, commit_codec
-from streaming_kafka_consumer.types import Message, Partition, Topic
-
-from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
-from snuba.utils.streams.kafka_consumer_with_commit_log import (
-    KafkaConsumerWithCommitLog,
+from streaming_kafka_consumer.backends.kafka.configuration import (
+    build_kafka_configuration_with_overrides,
 )
-from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
-from tests.utils.streams.backends.mixins import StreamsTestMixin
+from streaming_kafka_consumer.synchronized import Commit, commit_codec
+from streaming_kafka_consumer.tests.backends.mixins import StreamsTestMixin
+from streaming_kafka_consumer.types import Message, Partition, Topic
 
 
 def test_payload_equality() -> None:
@@ -54,7 +51,9 @@ def test_payload_pickle_out_of_band() -> None:
 
 class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
 
-    configuration = get_default_kafka_configuration()
+    configuration = build_kafka_configuration_with_overrides(
+        {"bootstrap.servers": "localhost:9092"}
+    )
 
     @contextlib.contextmanager
     def get_topic(self, partitions: int = 1) -> Iterator[Topic]:
@@ -135,53 +134,6 @@ class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
 
                 with pytest.raises(ConsumerError):
                     consumer.poll(10.0)  # XXX: getting the subcription is slow
-
-    def test_commit_log_consumer(self) -> None:
-        # XXX: This would be better as an integration test (or at least a test
-        # against an abstract Producer interface) instead of against a test against
-        # a mock.
-        commit_log_producer = FakeConfluentKafkaProducer()
-
-        consumer: KafkaConsumer = KafkaConsumerWithCommitLog(
-            {
-                **self.configuration,
-                "auto.offset.reset": "earliest",
-                "enable.auto.commit": "false",
-                "enable.auto.offset.store": "false",
-                "enable.partition.eof": "true",
-                "group.id": "test",
-                "session.timeout.ms": 10000,
-            },
-            producer=commit_log_producer,
-            commit_log_topic=Topic("commit-log"),
-        )
-
-        with self.get_topic() as topic, closing(consumer) as consumer:
-            with closing(self.get_producer()) as producer:
-                producer.produce(topic, next(self.get_payloads())).result(5.0)
-
-            consumer.subscribe([topic])
-
-            message = consumer.poll(10.0)  # XXX: getting the subscription is slow
-            assert isinstance(message, Message)
-
-            consumer.stage_offsets({message.partition: message.next_offset})
-
-            assert consumer.commit_offsets() == {
-                Partition(topic, 0): message.next_offset
-            }
-
-            assert len(commit_log_producer.messages) == 1
-            commit_message = commit_log_producer.messages[0]
-            assert commit_message.topic() == "commit-log"
-
-            assert commit_codec.decode(
-                KafkaPayload(
-                    commit_message.key(),
-                    commit_message.value(),
-                    commit_message.headers(),
-                )
-            ) == Commit("test", Partition(topic, 0), message.next_offset)
 
 
 def test_commit_codec() -> None:
