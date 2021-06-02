@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import random
 from abc import ABC, abstractclassmethod, abstractmethod
 from dataclasses import dataclass
@@ -35,6 +36,8 @@ from snuba.request.validation import build_request, parse_legacy_query, parse_sn
 from snuba.utils.metrics.timer import Timer
 
 SUBSCRIPTION_REFERRER = "subscription"
+
+logger = logging.getLogger("snuba.subscriptions")
 
 
 class InvalidSubscriptionError(Exception):
@@ -331,16 +334,34 @@ class DelegateSubscriptionData(SubscriptionData):
         offset: Optional[int],
         timer: Timer,
     ) -> Request:
-        snql_rollout = state.get_config("snql_subscription_rollout", 0.0)
-        assert isinstance(snql_rollout, float)
-        use_snql = snql_rollout > 0.0 and random.random() <= snql_rollout
-        data: SubscriptionData
-        if use_snql:
-            data = self.to_snql()
-        else:
-            data = self.to_legacy()
+        try:
+            snql_rollout_pct = state.get_config("snql_subscription_rollout_pct", 0.0)
+            assert isinstance(snql_rollout_pct, float)
+            snql_rollout_projects_raw = state.get_config(
+                "snql_subscription_rollout_projects", ""
+            )
+            assert isinstance(snql_rollout_projects_raw, str)
+            snql_rollout_projects = set(
+                [int(s.strip()) for s in snql_rollout_projects_raw.split(",")]
+            )
+            use_snql = (
+                snql_rollout_pct > 0.0
+                and self.project_id in snql_rollout_projects
+                and random.random() <= snql_rollout_pct
+            )
+            if use_snql:
+                return self.to_snql().build_request(dataset, timestamp, offset, timer)
+        except Exception as e:
+            logger.warning(
+                f"failed snql subscription project: {e}",
+                extra={
+                    "error": str(e),
+                    "project": self.project_id,
+                    "query": self.query,
+                },
+            )
 
-        return data.build_request(dataset, timestamp, offset, timer)
+        return self.to_legacy().build_request(dataset, timestamp, offset, timer)
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> DelegateSubscriptionData:

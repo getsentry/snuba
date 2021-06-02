@@ -98,9 +98,11 @@ def subscription_data(request: Any) -> SubscriptionData:
 
 @pytest.fixture
 def subscription_rollout() -> Generator[None, None, None]:
-    state.set_config("snql_subscription_rollout", 1.0)
+    state.set_config("snql_subscription_rollout_pct", 1.0)
+    state.set_config("snql_subscription_rollout_projects", "1")
     yield
     state.set_config("snql_subscription_rollout", 0.0)
+    state.set_config("snql_subscription_rollout_projects", "")
 
 
 def test_subscription_worker(
