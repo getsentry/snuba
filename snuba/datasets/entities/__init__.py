@@ -15,6 +15,7 @@ class EntityKey(Enum):
     GROUPEDMESSAGES = "groupedmessage"
     METRICS_SETS = "metrics_sets"
     METRICS_COUNTERS = "metrics_counters"
+    METRICS_DISTRIBUTIONS = "metrics_distributions"
     OUTCOMES = "outcomes"
     OUTCOMES_RAW = "outcomes_raw"
     SESSIONS = "sessions"
