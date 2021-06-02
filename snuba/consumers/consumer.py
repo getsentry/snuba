@@ -1,4 +1,3 @@
-import functools
 import itertools
 import logging
 import time
@@ -21,14 +20,21 @@ import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
 from streaming_kafka_consumer import Message, Topic
 from streaming_kafka_consumer.backends.kafka import KafkaPayload
+from streaming_kafka_consumer.processing.strategies import ProcessingStrategy
 from streaming_kafka_consumer.processing.strategies import (
     ProcessingStrategy as ProcessingStep,
 )
-from streaming_kafka_consumer.strategy_factory import KafkaConsumerStrategyFactory
+from streaming_kafka_consumer.processing.strategies import ProcessingStrategyFactory
+from streaming_kafka_consumer.processing.strategies.streaming.collect import CollectStep
+from streaming_kafka_consumer.processing.strategies.streaming.filter import FilterStep
+from streaming_kafka_consumer.processing.strategies.streaming.transform import (
+    ParallelTransformStep,
+    TransformStep,
+)
+from streaming_kafka_consumer.types import Partition
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import TableWriter
@@ -371,32 +377,25 @@ def process_message(
 
 
 def process_message_multistorage(
-    storage_keys: Sequence[StorageKey], message: Message[KafkaPayload],
+    message: Message[MultistorageKafkaPayload],
 ) -> Sequence[Tuple[StorageKey, Union[None, JSONRowInsertBatch, ReplacementBatch]]]:
     # XXX: Avoid circular import on KafkaMessageMetadata, remove when that type
     # is itself removed.
     from snuba.datasets.storages.factory import get_writable_storage
 
-    storages: MutableSequence[WritableTableStorage] = []
-
-    for storage_key in storage_keys:
-        storage = get_writable_storage(storage_key)
-        filter = storage.get_table_writer().get_stream_loader().get_pre_filter()
-        if filter is None or not filter.should_drop(message):
-            storages.append(storage)
-
+    value = rapidjson.loads(message.payload.payload.value)
     metadata = KafkaMessageMetadata(
         message.offset, message.partition.index, message.timestamp
     )
-    value = rapidjson.loads(message.payload.value)
+
     results: MutableSequence[
         Tuple[StorageKey, Union[None, JSONRowInsertBatch, ReplacementBatch]]
     ] = []
 
-    for storage in storages:
-        storage_key = storage.get_storage_key()
+    for storage_key in message.payload.storage_keys:
         result = (
-            storage.get_table_writer()
+            get_writable_storage(storage_key)
+            .get_table_writer()
             .get_stream_loader()
             .get_processor()
             .process_message(value, metadata)
@@ -417,20 +416,9 @@ def process_message_multistorage(
     return results
 
 
-class MultistorageFilterStep(StreamMessageFilter[KafkaPayload]):
-    def __init__(self, storages: Sequence[WritableTableStorage]) -> None:
-        self.__storages = storages
-
-    def should_drop(self, message: Message[KafkaPayload]) -> bool:
-        for storage in self.__storages:
-            filter = storage.get_table_writer().get_stream_loader().get_pre_filter()
-            if filter is None or not filter.should_drop(message):
-                return False
-
-        return True
-
-
-class MultistorageConsumerProcessingStrategyFactory(KafkaConsumerStrategyFactory):
+class MultistorageConsumerProcessingStrategyFactory(
+    ProcessingStrategyFactory[KafkaPayload]
+):
     def __init__(
         self,
         storages: Sequence[WritableTableStorage],
@@ -441,26 +429,39 @@ class MultistorageConsumerProcessingStrategyFactory(KafkaConsumerStrategyFactory
         output_block_size: Optional[int],
         metrics: MetricsBackend,
     ):
+        if processes is not None:
+            assert input_block_size is not None, "input block size required"
+            assert output_block_size is not None, "output block size required"
+        else:
+            assert (
+                input_block_size is None
+            ), "input block size cannot be used without processes"
+            assert (
+                output_block_size is None
+            ), "output block size cannot be used without processes"
+
         self.__storages = storages
+        self.__max_batch_size = max_batch_size
+        self.__max_batch_time = max_batch_time
+        self.__processes = processes
+        self.__input_block_size = input_block_size
+        self.__output_block_size = output_block_size
+        self.__metrics = metrics
 
-        self.__storage_keys = [storage.get_storage_key() for storage in storages]
-        self.__metrics_backend = metrics
+    def __find_destination_storages(
+        self, message: Message[KafkaPayload]
+    ) -> MultistorageKafkaPayload:
+        storage_keys: MutableSequence[StorageKey] = []
+        for storage in self.__storages:
+            filter = storage.get_table_writer().get_stream_loader().get_pre_filter()
+            if filter is None or not filter.should_drop(message):
+                storage_keys.append(storage.get_storage_key())
+        return MultistorageKafkaPayload(storage_keys, message.payload)
 
-        filter_step = MultistorageFilterStep(storages)
-
-        super().__init__(
-            prefilter=filter_step,
-            process_message=functools.partial(
-                process_message_multistorage, self.__storage_keys
-            ),
-            collector=self.__build_collector,
-            max_batch_size=max_batch_size,
-            max_batch_time=max_batch_time,
-            processes=processes,
-            input_block_size=input_block_size,
-            output_block_size=output_block_size,
-            metrics=StreamMetricsAdapter(metrics),
-        )
+    def __has_destination_storages(
+        self, message: Message[MultistorageKafkaPayload]
+    ) -> bool:
+        return len(message.payload.storage_keys) > 0
 
     def __build_batch_writer(
         self, storage: WritableTableStorage
@@ -492,11 +493,11 @@ class MultistorageConsumerProcessingStrategyFactory(KafkaConsumerStrategyFactory
         return ProcessedMessageBatchWriter(
             InsertBatchWriter(
                 storage.get_table_writer().get_batch_writer(
-                    self.__metrics_backend,
+                    self.__metrics,
                     {"load_balancing": "in_order", "insert_distributed_sync": 1},
                 ),
                 MetricsWrapper(
-                    self.__metrics_backend,
+                    self.__metrics,
                     "insertions",
                     {"storage": storage.get_storage_key().value},
                 ),
@@ -514,4 +515,41 @@ class MultistorageConsumerProcessingStrategyFactory(KafkaConsumerStrategyFactory
                 storage.get_storage_key(): self.__build_batch_writer(storage)
                 for storage in self.__storages
             }
+        )
+
+    def create(
+        self, commit: Callable[[Mapping[Partition, int]], None]
+    ) -> ProcessingStrategy[KafkaPayload]:
+        # 1. Identify the storages that should be used for the input message.
+        # 2. Filter out any messages that do not apply to any storage.
+        # 3. Transform the messages using the selected storages.
+        # 4. Route the messages to the collector for each storage.
+        collect = CollectStep(
+            self.__build_collector,
+            commit,
+            self.__max_batch_size,
+            self.__max_batch_time,
+        )
+
+        strategy: ProcessingStrategy[MultistorageKafkaPayload]
+
+        if self.__processes is None:
+            strategy = TransformStep(process_message_multistorage, collect)
+        else:
+            assert self.__input_block_size is not None
+            assert self.__output_block_size is not None
+            strategy = ParallelTransformStep(
+                process_message_multistorage,
+                collect,
+                self.__processes,
+                self.__max_batch_size,
+                self.__max_batch_time,
+                self.__input_block_size,
+                self.__output_block_size,
+                StreamMetricsAdapter(self.__metrics),
+            )
+
+        return TransformStep(
+            self.__find_destination_storages,
+            FilterStep(self.__has_destination_storages, strategy,),
         )
