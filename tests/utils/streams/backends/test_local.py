@@ -21,9 +21,9 @@ from streaming_kafka_consumer.backends.local.storages.file import (
     InvalidChecksum,
 )
 from streaming_kafka_consumer.backends.local.storages.memory import MemoryMessageStorage
+from streaming_kafka_consumer.clock import TestingClock
 from streaming_kafka_consumer.types import Partition, Topic
 
-from snuba.utils.clock import TestingClock
 from tests.utils.streams.backends.mixins import StreamsTestMixin
 
 
