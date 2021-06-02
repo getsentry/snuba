@@ -1,14 +1,15 @@
-import pytest
+import pickle
+from datetime import datetime
 
-from snuba.utils.types import Interval, InvalidRangeError
+from streaming_kafka_consumer.types import Message, Partition, Topic
 
 
-def test_interval_validation() -> None:
-    Interval(1, 1)
-    Interval(1, 10)
+def test_topic_contains_partition() -> None:
+    assert Partition(Topic("topic"), 0) in Topic("topic")
+    assert Partition(Topic("topic"), 0) not in Topic("other-topic")
+    assert Partition(Topic("other-topic"), 0) not in Topic("topic")
 
-    with pytest.raises(InvalidRangeError) as e:
-        Interval(10, 1)
 
-    assert e.value.lower == 10
-    assert e.value.upper == 1
+def test_message_pickling() -> None:
+    message = Message(Partition(Topic("topic"), 0), 0, b"", datetime.now())
+    assert pickle.loads(pickle.dumps(message)) == message
