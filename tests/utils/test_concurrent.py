@@ -1,10 +1,9 @@
 import threading
 import time
-
-import pytest
 from concurrent.futures import TimeoutError
 
-from snuba.utils.concurrent import Synchronized, execute
+import pytest
+from streaming_kafka_consumer.concurrent import Synchronized, execute
 
 
 def test_execute() -> None:
