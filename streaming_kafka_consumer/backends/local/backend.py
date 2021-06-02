@@ -27,9 +27,8 @@ from streaming_kafka_consumer.backends.abstract import (
     Producer,
 )
 from streaming_kafka_consumer.backends.local.storages.abstract import MessageStorage
+from streaming_kafka_consumer.clock import Clock, SystemClock
 from streaming_kafka_consumer.types import Message, Partition, Topic, TPayload
-
-from snuba.utils.clock import Clock, SystemClock
 
 
 class LocalBroker(Generic[TPayload]):
