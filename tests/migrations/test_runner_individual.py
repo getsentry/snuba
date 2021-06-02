@@ -1,4 +1,4 @@
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, Optional, Sequence
 
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clickhouse.native import ClickhousePool
@@ -41,7 +41,7 @@ def test_transactions_compatibility() -> None:
     cluster = get_cluster(StorageSetKey.TRANSACTIONS)
     connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
-    def get_sampling_key() -> str:
+    def get_sampling_key() -> Any:
         database = cluster.get_database()
         ((sampling_key,),) = perform_select_query(
             ["sampling_key"],
@@ -206,8 +206,8 @@ def run_prior_migrations(
 def perform_select_query(
     columns: Sequence[str],
     table: str,
-    where: Dict[str, str],
-    limit: str,
+    where: Optional[Dict[str, str]],
+    limit: Optional[str],
     connection: ClickhousePool,
 ) -> Sequence[Any]:
 
@@ -235,7 +235,7 @@ def perform_select_query(
     return connection.execute(full_query)
 
 
-def get_count_from_storage(storage, connection) -> int:
+def get_count_from_storage(storage: str, connection: ClickhousePool) -> Any:
     return perform_select_query(["count()"], storage, None, None, connection)[0][0]
 
 
