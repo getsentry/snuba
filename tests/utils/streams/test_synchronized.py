@@ -13,9 +13,11 @@ from streaming_kafka_consumer.synchronized import (
     SynchronizedConsumer,
     commit_codec,
 )
+from streaming_kafka_consumer.tests.assertions import (
+    assert_changes,
+    assert_does_not_change,
+)
 from streaming_kafka_consumer.types import Message, Partition, Topic
-
-from tests.assertions import assert_changes, assert_does_not_change
 
 T = TypeVar("T")
 

@@ -15,7 +15,7 @@ from typing import (
     TypeVar,
 )
 
-from streaming_kafka_consumer.metrics import Metrics
+from streaming_kafka_consumer.metrics import DummyMetricsBackend, Metrics
 from streaming_kafka_consumer.processing.strategies.abstract import (
     ProcessingStrategy,
     ProcessingStrategyFactory,
@@ -228,7 +228,7 @@ class BatchProcessingStrategyFactory(ProcessingStrategyFactory[TPayload]):
         worker: AbstractBatchWorker[TPayload, TResult],
         max_batch_size: int,
         max_batch_time: int,
-        metrics: Metrics,
+        metrics: Metrics = DummyMetricsBackend,
     ) -> None:
         self.__worker = worker
         self.__max_batch_size = max_batch_size
