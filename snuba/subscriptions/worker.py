@@ -69,7 +69,7 @@ class SubscriptionWorker(
         timer = Timer("query")
 
         request = task.task.data.build_request(
-            self.__dataset, task.timestamp, tick.offsets.upper, timer,
+            self.__dataset, task.timestamp, tick.offsets.upper, timer, self.__metrics
         )
 
         with self.__concurrent_gauge:

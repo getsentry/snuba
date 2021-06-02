@@ -33,6 +33,7 @@ from snuba.request import Language, Request
 from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_legacy_query, parse_snql_query
+from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 
 SUBSCRIPTION_REFERRER = "subscription"
@@ -107,6 +108,7 @@ class SubscriptionData(ABC, _SubscriptionData):
         timestamp: datetime,
         offset: Optional[int],
         timer: Timer,
+        metrics: Optional[MetricsBackend] = None,
     ) -> Request:
         raise NotImplementedError
 
@@ -134,6 +136,7 @@ class LegacySubscriptionData(SubscriptionData):
         timestamp: datetime,
         offset: Optional[int],
         timer: Timer,
+        metrics: Optional[MetricsBackend] = None,
     ) -> Request:
         """
         Returns a Request that can be used to run a query via `parse_and_run_query`.
@@ -268,7 +271,7 @@ class SnQLSubscriptionData(SubscriptionData):
         timestamp: datetime,
         offset: Optional[int],
         timer: Timer,
-        use_snql: bool = True,
+        metrics: Optional[MetricsBackend] = None,
     ) -> Request:
         schema = RequestSchema.build_with_extensions(
             {}, SubscriptionRequestSettings, Language.SNQL,
@@ -333,8 +336,14 @@ class DelegateSubscriptionData(SubscriptionData):
         timestamp: datetime,
         offset: Optional[int],
         timer: Timer,
+        metrics: Optional[MetricsBackend] = None,
     ) -> Request:
         try:
+            if metrics is not None:
+                metrics.increment(
+                    "snql.subscription.delegate.incoming",
+                    tags={"project_id": str(self.project_id)},
+                )
             snql_rollout_pct = state.get_config("snql_subscription_rollout_pct", 0.0)
             assert isinstance(snql_rollout_pct, float)
             snql_rollout_projects_raw = state.get_config(
@@ -350,8 +359,18 @@ class DelegateSubscriptionData(SubscriptionData):
                 and random.random() <= snql_rollout_pct
             )
             if use_snql:
+                if metrics is not None:
+                    metrics.increment(
+                        "snql.subscription.delegate.use_snql",
+                        tags={"project_id": str(self.project_id)},
+                    )
                 return self.to_snql().build_request(dataset, timestamp, offset, timer)
         except Exception as e:
+            if metrics is not None:
+                metrics.increment(
+                    "snql.subscription.delegate.error",
+                    tags={"project_id": str(self.project_id)},
+                )
             logger.warning(
                 f"failed snql subscription project: {e}",
                 extra={
@@ -359,6 +378,12 @@ class DelegateSubscriptionData(SubscriptionData):
                     "project": self.project_id,
                     "query": self.query,
                 },
+            )
+
+        if metrics is not None:
+            metrics.increment(
+                "snql.subscription.delegate.use_legacy",
+                tags={"project_id": str(self.project_id)},
             )
 
         return self.to_legacy().build_request(dataset, timestamp, offset, timer)
