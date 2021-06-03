@@ -5,7 +5,7 @@ import pytest
 
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
-from snuba.clusters import cluster, storage_sets
+from snuba.clusters import cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
@@ -75,26 +75,21 @@ FULL_CONFIG = [
     },
 ]
 
+# def setup_function() -> None:
+#     storage_sets.DEV_STORAGE_SETS = frozenset(
+#         {
+#             StorageSetKey.OUTCOMES,  # Disabled and not registered
+#             StorageSetKey.QUERYLOG,  # Disabled still registered
+#         }
+#     )
 
-@patch("snuba.settings.CLUSTERS", REDUCED_CONFIG)
-def setup_function() -> None:
-    storage_sets.DEV_STORAGE_SETS = frozenset(
-        {
-            StorageSetKey.OUTCOMES,  # Disabled and not registered
-            StorageSetKey.QUERYLOG,  # Disabled still registered
-        }
-    )
-
-    importlib.reload(cluster)
-
-    # settings.CLUSTERS = REDUCED_CONFIG
-    # importlib.reload(cluster)
+#     #settings.CLUSTERS = REDUCED_CONFIG
+#     importlib.reload(cluster)
 
 
-@patch("snuba.settings.CLUSTERS", FULL_CONFIG)
 def teardown_function() -> None:
     # settings.CLUSTERS = FULL_CONFIG
-    storage_sets.DEV_STORAGE_SETS = frozenset()
+    # storage_sets.DEV_STORAGE_SETS = frozenset()
 
     importlib.reload(settings)
     importlib.reload(cluster)
@@ -113,19 +108,22 @@ def test_clusters() -> None:
 
 
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
+@patch(
+    "snuba.clusters.storage_sets.DEV_STORAGE_SETS",
+    frozenset(
+        {
+            StorageSetKey.OUTCOMES,  # Disabled and not registered
+            StorageSetKey.QUERYLOG,  # Disabled still registered
+        }
+    ),
+)
 def test_disabled_cluster() -> None:
+    importlib.reload(cluster)
+
     with pytest.raises(AssertionError):
         cluster.get_cluster(StorageSetKey.OUTCOMES)
-
-    settings.ENABLE_DEV_FEATURES = True
-    importlib.reload(cluster)
-    cluster.get_cluster(StorageSetKey.OUTCOMES)
-    settings.ENABLE_DEV_FEATURES = False
-
-    # settings.CLUSTERS = FULL_CONFIG
-    # importlib.reload(cluster)
-    # cluster.get_cluster(StorageSetKey.OUTCOMES)
-    # settings.ENABLE_DEV_FEATURES = False
+    with patch("snuba.settings.ENABLE_DEV_FEATURES", True):
+        cluster.get_cluster(StorageSetKey.OUTCOMES)
 
 
 def test_get_local_nodes() -> None:
