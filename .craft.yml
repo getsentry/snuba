@@ -1,8 +1,4 @@
-minVersion: "0.14.0"
-github:
-  owner: getsentry
-  repo: snuba
-releaseBranchPrefix: releases
+minVersion: "0.23.1"
 changelogPolicy: none
 artifactProvider:
   name: none
@@ -12,7 +8,6 @@ statusProvider:
     contexts:
       - 'build-on-branch-push (sentryio)'
 targets:
-  - name: github
   - id: release
     name: docker
     source: us.gcr.io/sentryio/snuba
@@ -22,3 +17,4 @@ targets:
     source: us.gcr.io/sentryio/snuba
     target: getsentry/snuba
     targetFormat: '{{{target}}}:latest'
+  - name: github
