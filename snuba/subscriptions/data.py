@@ -347,8 +347,10 @@ class DelegateSubscriptionData(SubscriptionData):
                 "snql_subscription_rollout_projects", ""
             )
             assert isinstance(snql_rollout_projects_raw, str)
-            snql_rollout_projects = set(
-                [int(s.strip()) for s in snql_rollout_projects_raw.split(",")]
+            snql_rollout_projects = (
+                set([int(s.strip()) for s in snql_rollout_projects_raw.split(",")])
+                if snql_rollout_projects_raw
+                else set()
             )
             use_snql = (
                 snql_rollout_pct > 0.0
