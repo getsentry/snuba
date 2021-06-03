@@ -1,5 +1,4 @@
-from logging import NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL
-
+from logging import CRITICAL, DEBUG, ERROR, INFO, NOTSET, WARNING
 
 PYTHON_TO_SYSLOG_MAP = {
     NOTSET: 7,

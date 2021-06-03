@@ -2,7 +2,7 @@ import copy
 import logging
 from typing import Any, Dict, Mapping, Optional, Sequence
 
-from snuba.utils.logging import pylog_to_syslog_level
+from streaming_kafka_consumer.logging import pylog_to_syslog_level
 
 logger = logging.getLogger(__name__)
 

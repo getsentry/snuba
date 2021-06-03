@@ -13,9 +13,11 @@ from streaming_kafka_consumer.backends.abstract import (
     OffsetOutOfRange,
     Producer,
 )
+from streaming_kafka_consumer.tests.assertions import (
+    assert_changes,
+    assert_does_not_change,
+)
 from streaming_kafka_consumer.types import Message, Partition, Topic, TPayload
-
-from tests.assertions import assert_changes, assert_does_not_change
 
 
 class StreamsTestMixin(ABC, Generic[TPayload]):
