@@ -75,16 +75,17 @@ FULL_CONFIG = [
     },
 ]
 
-# def setup_function() -> None:
-#     storage_sets.DEV_STORAGE_SETS = frozenset(
-#         {
-#             StorageSetKey.OUTCOMES,  # Disabled and not registered
-#             StorageSetKey.QUERYLOG,  # Disabled still registered
-#         }
-#     )
 
-#     #settings.CLUSTERS = REDUCED_CONFIG
-#     importlib.reload(cluster)
+def setup_function() -> None:
+    # storage_sets.DEV_STORAGE_SETS = frozenset(
+    #     {
+    #         StorageSetKey.OUTCOMES,  # Disabled and not registered
+    #         StorageSetKey.QUERYLOG,  # Disabled still registered
+    #     }
+    # )
+
+    # settings.CLUSTERS = REDUCED_CONFIG
+    importlib.reload(cluster)
 
 
 def teardown_function() -> None:
@@ -95,6 +96,7 @@ def teardown_function() -> None:
     importlib.reload(cluster)
 
 
+@patch("snuba.settings.CLUSTERS", REDUCED_CONFIG)
 def test_clusters() -> None:
     assert (
         get_storage(StorageKey("events")).get_cluster()
