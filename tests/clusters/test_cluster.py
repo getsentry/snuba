@@ -76,6 +76,7 @@ FULL_CONFIG = [
 ]
 
 
+@patch("snuba.settings.CLUSTERS", REDUCED_CONFIG)
 def setup_function() -> None:
     storage_sets.DEV_STORAGE_SETS = frozenset(
         {
@@ -83,12 +84,16 @@ def setup_function() -> None:
             StorageSetKey.QUERYLOG,  # Disabled still registered
         }
     )
-    settings.CLUSTERS = REDUCED_CONFIG
+
     importlib.reload(cluster)
 
+    # settings.CLUSTERS = REDUCED_CONFIG
+    # importlib.reload(cluster)
 
+
+@patch("snuba.settings.CLUSTERS", FULL_CONFIG)
 def teardown_function() -> None:
-    settings.CLUSTERS = FULL_CONFIG
+    # settings.CLUSTERS = FULL_CONFIG
     storage_sets.DEV_STORAGE_SETS = frozenset()
 
     importlib.reload(settings)
@@ -107,15 +112,20 @@ def test_clusters() -> None:
     )
 
 
+@patch("snuba.settings.CLUSTERS", FULL_CONFIG)
 def test_disabled_cluster() -> None:
     with pytest.raises(AssertionError):
         cluster.get_cluster(StorageSetKey.OUTCOMES)
 
     settings.ENABLE_DEV_FEATURES = True
-    settings.CLUSTERS = FULL_CONFIG
     importlib.reload(cluster)
     cluster.get_cluster(StorageSetKey.OUTCOMES)
     settings.ENABLE_DEV_FEATURES = False
+
+    # settings.CLUSTERS = FULL_CONFIG
+    # importlib.reload(cluster)
+    # cluster.get_cluster(StorageSetKey.OUTCOMES)
+    # settings.ENABLE_DEV_FEATURES = False
 
 
 def test_get_local_nodes() -> None:
