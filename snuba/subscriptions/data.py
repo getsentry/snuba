@@ -340,10 +340,7 @@ class DelegateSubscriptionData(SubscriptionData):
     ) -> Request:
         try:
             if metrics is not None:
-                metrics.increment(
-                    "snql.subscription.delegate.incoming",
-                    tags={"project_id": str(self.project_id)},
-                )
+                metrics.increment("snql.subscription.delegate.incoming")
             snql_rollout_pct = state.get_config("snql_subscription_rollout_pct", 0.0)
             assert isinstance(snql_rollout_pct, float)
             snql_rollout_projects_raw = state.get_config(
@@ -360,19 +357,13 @@ class DelegateSubscriptionData(SubscriptionData):
             )
             if use_snql:
                 if metrics is not None:
-                    metrics.increment(
-                        "snql.subscription.delegate.use_snql",
-                        tags={"project_id": str(self.project_id)},
-                    )
+                    metrics.increment("snql.subscription.delegate.use_snql")
                 return self.to_snql().build_request(dataset, timestamp, offset, timer)
         except Exception as e:
             if metrics is not None:
-                metrics.increment(
-                    "snql.subscription.delegate.error",
-                    tags={"project_id": str(self.project_id)},
-                )
+                metrics.increment("snql.subscription.delegate.error")
             logger.warning(
-                f"failed snql subscription project: {e}",
+                f"failed snql subscription: {e}",
                 extra={
                     "error": str(e),
                     "project": self.project_id,
@@ -381,10 +372,7 @@ class DelegateSubscriptionData(SubscriptionData):
             )
 
         if metrics is not None:
-            metrics.increment(
-                "snql.subscription.delegate.use_legacy",
-                tags={"project_id": str(self.project_id)},
-            )
+            metrics.increment("snql.subscription.delegate.use_legacy")
 
         return self.to_legacy().build_request(dataset, timestamp, offset, timer)
 
