@@ -9,10 +9,9 @@ from streaming_kafka_consumer.backends.abstract import (
     EndOfPartition,
 )
 from streaming_kafka_consumer.backends.kafka import KafkaPayload
+from streaming_kafka_consumer.codecs import Codec
 from streaming_kafka_consumer.concurrent import Synchronized, execute
 from streaming_kafka_consumer.types import Message, Partition, Topic, TPayload
-
-from snuba.utils.codecs import Codec
 
 logger = logging.getLogger(__name__)
 

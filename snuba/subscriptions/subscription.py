@@ -1,18 +1,14 @@
 from datetime import datetime
-from typing import Any, MutableMapping
 from uuid import UUID, uuid1
 
-from snuba import settings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import enforce_table_writer
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
     DelegateSubscriptionData,
     PartitionId,
-    SnQLSubscriptionData,
     SubscriptionData,
     SubscriptionIdentifier,
-    SubscriptionType,
 )
 from snuba.subscriptions.partitioner import TopicSubscriptionDataPartitioner
 from snuba.subscriptions.store import RedisSubscriptionDataStore
