@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import itertools
+import logging
 import time
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import Mapping, NamedTuple, Optional, Sequence, Tuple
@@ -13,12 +14,14 @@ from snuba.datasets.dataset import Dataset
 from snuba.reader import Result
 from snuba.request import Request
 from snuba.subscriptions.consumer import Tick
-from snuba.subscriptions.data import Subscription
+from snuba.subscriptions.data import DelegateSubscriptionData, Subscription
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.scheduler import ScheduledTask, Scheduler
 from snuba.web.query import parse_and_run_query
+
+logger = logging.getLogger("snuba.subscriptions")
 
 
 class SubscriptionTaskResultFuture(NamedTuple):
@@ -68,10 +71,37 @@ class SubscriptionWorker(
         # execution environment.
         timer = Timer("query")
 
-        request = task.task.data.build_request(
-            self.__dataset, task.timestamp, tick.offsets.upper, timer,
-        )
+        if isinstance(task.task.data, DelegateSubscriptionData):
+            try:
+                request = task.task.data.build_request(
+                    self.__dataset,
+                    task.timestamp,
+                    tick.offsets.upper,
+                    timer,
+                    self.__metrics,
+                )
+                return self.__execute_query(request, timer)
+            except Exception as e:
+                self.__metrics.increment("snql.subscription.delegate.error.execution")
+                logger.warning(
+                    f"failed snql subscription query: {e}",
+                    extra={"error": str(e), "data": task.task.data.to_dict()},
+                )
+                request = task.task.data.to_legacy().build_request(
+                    self.__dataset,
+                    task.timestamp,
+                    tick.offsets.upper,
+                    timer,
+                    self.__metrics,
+                )
+                return self.__execute_query(request, timer)
 
+        request = task.task.data.build_request(
+            self.__dataset, task.timestamp, tick.offsets.upper, timer, self.__metrics
+        )
+        return self.__execute_query(request, timer)
+
+    def __execute_query(self, request: Request, timer: Timer) -> Tuple[Request, Result]:
         with self.__concurrent_gauge:
             # XXX: The ``extra`` is discarded from ``QueryResult`` since it is
             # not particularly useful in this context and duplicates data that
