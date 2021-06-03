@@ -21,9 +21,11 @@ from streaming_kafka_consumer.backends.local.storages.file import (
     InvalidChecksum,
 )
 from streaming_kafka_consumer.backends.local.storages.memory import MemoryMessageStorage
+
+
 from streaming_kafka_consumer.clock import TestingClock
-from streaming_kafka_consumer.tests.backends.mixins import StreamsTestMixin
 from streaming_kafka_consumer.types import Partition, Topic
+from streaming_kafka_consumer.tests.backends.mixins import StreamsTestMixin
 
 
 class LocalStreamsTestMixin(StreamsTestMixin[int]):
@@ -55,7 +57,7 @@ class LocalStreamsTestMixin(StreamsTestMixin[int]):
     def get_payloads(self) -> Iterator[int]:
         return itertools.count()
 
-    @pytest.mark.xfail(strict=True, reason="rebalancing not implemented")  # type: ignore
+    @pytest.mark.xfail(strict=True, reason="rebalancing not implemented")
     def test_pause_resume_rebalancing(self) -> None:
         return super().test_pause_resume_rebalancing()
 
