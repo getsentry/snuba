@@ -1,3 +1,4 @@
+import functools
 import itertools
 import json
 import pickle
@@ -9,15 +10,20 @@ from unittest.mock import Mock, call
 import pytest
 from streaming_kafka_consumer import Message, Partition, Topic
 from streaming_kafka_consumer.backends.kafka import KafkaPayload
+from streaming_kafka_consumer.strategy_factory import KafkaConsumerStrategyFactory
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
+    InsertBatchWriter,
     JSONRowInsertBatch,
     MultistorageConsumerProcessingStrategyFactory,
-    StreamingConsumerStrategyFactory,
+    ProcessedMessageBatchWriter,
+    ReplacementBatchWriter,
+    process_message,
 )
 from snuba.datasets.storage import Storage
 from snuba.processor import InsertBatch, ReplacementBatch
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from tests.assertions import assert_changes
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 from tests.backends.metrics import TestingMetricsBackend, Timing
@@ -47,18 +53,26 @@ def test_streaming_consumer_strategy() -> None:
 
     metrics = TestingMetricsBackend()
 
-    factory = StreamingConsumerStrategyFactory(
+    def write_step() -> ProcessedMessageBatchWriter:
+        return ProcessedMessageBatchWriter(
+            insert_batch_writer=InsertBatchWriter(
+                writer, MetricsWrapper(metrics, "insertions")
+            ),
+            replacement_batch_writer=ReplacementBatchWriter(
+                replacements_producer, Topic("replacements")
+            ),
+        )
+
+    factory = KafkaConsumerStrategyFactory(
         None,
-        processor,
-        writer,
-        metrics,
+        functools.partial(process_message, processor),
+        write_step,
         max_batch_size=10,
         max_batch_time=60,
         processes=None,
         input_block_size=None,
         output_block_size=None,
-        replacements_producer=replacements_producer,
-        replacements_topic=Topic("replacements"),
+        metrics=metrics,
     )
 
     commit_function = Mock()

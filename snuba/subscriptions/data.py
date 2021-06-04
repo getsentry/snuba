@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import random
 from abc import ABC, abstractclassmethod, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -8,6 +10,7 @@ from functools import partial
 from typing import Any, List, Mapping, NamedTuple, NewType, Optional, Sequence, Union
 from uuid import UUID
 
+from snuba import state
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity
 from snuba.query.composite import CompositeQuery
@@ -30,9 +33,12 @@ from snuba.request import Language, Request
 from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_legacy_query, parse_snql_query
+from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 
 SUBSCRIPTION_REFERRER = "subscription"
+
+logger = logging.getLogger("snuba.subscriptions")
 
 
 class InvalidSubscriptionError(Exception):
@@ -102,6 +108,7 @@ class SubscriptionData(ABC, _SubscriptionData):
         timestamp: datetime,
         offset: Optional[int],
         timer: Timer,
+        metrics: Optional[MetricsBackend] = None,
     ) -> Request:
         raise NotImplementedError
 
@@ -129,6 +136,7 @@ class LegacySubscriptionData(SubscriptionData):
         timestamp: datetime,
         offset: Optional[int],
         timer: Timer,
+        metrics: Optional[MetricsBackend] = None,
     ) -> Request:
         """
         Returns a Request that can be used to run a query via `parse_and_run_query`.
@@ -263,7 +271,7 @@ class SnQLSubscriptionData(SubscriptionData):
         timestamp: datetime,
         offset: Optional[int],
         timer: Timer,
-        use_snql: bool = True,
+        metrics: Optional[MetricsBackend] = None,
     ) -> Request:
         schema = RequestSchema.build_with_extensions(
             {}, SubscriptionRequestSettings, Language.SNQL,
@@ -328,10 +336,47 @@ class DelegateSubscriptionData(SubscriptionData):
         timestamp: datetime,
         offset: Optional[int],
         timer: Timer,
+        metrics: Optional[MetricsBackend] = None,
     ) -> Request:
-        # TODO: Add a flag to use the SnQL data if it exists.
-        data = self.to_legacy()
-        return data.build_request(dataset, timestamp, offset, timer)
+        try:
+            if metrics is not None:
+                metrics.increment("snql.subscription.delegate.incoming")
+            snql_rollout_pct = state.get_config("snql_subscription_rollout_pct", 0.0)
+            assert isinstance(snql_rollout_pct, float)
+            snql_rollout_projects_raw = state.get_config(
+                "snql_subscription_rollout_projects", ""
+            )
+            assert isinstance(snql_rollout_projects_raw, str)
+            snql_rollout_projects = (
+                set([int(s.strip()) for s in snql_rollout_projects_raw.split(",")])
+                if snql_rollout_projects_raw
+                else set()
+            )
+            use_snql = (
+                snql_rollout_pct > 0.0
+                and self.project_id in snql_rollout_projects
+                and random.random() <= snql_rollout_pct
+            )
+            if use_snql:
+                if metrics is not None:
+                    metrics.increment("snql.subscription.delegate.use_snql")
+                return self.to_snql().build_request(dataset, timestamp, offset, timer)
+        except Exception as e:
+            if metrics is not None:
+                metrics.increment("snql.subscription.delegate.error")
+            logger.warning(
+                f"failed snql subscription: {e}",
+                extra={
+                    "error": str(e),
+                    "project": self.project_id,
+                    "query": self.query,
+                },
+            )
+
+        if metrics is not None:
+            metrics.increment("snql.subscription.delegate.use_legacy")
+
+        return self.to_legacy().build_request(dataset, timestamp, offset, timer)
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> DelegateSubscriptionData:
