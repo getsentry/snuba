@@ -72,9 +72,7 @@ def parse_conditions(
         try:
             lhs, op, lit = conditions
         except Exception as cause:
-            raise ParsingException(
-                f"Cannot process condition {conditions}", cause
-            ) from cause
+            raise ParsingException(f"Cannot process condition {conditions}") from cause
 
         # facilitate deduping IN conditions by sorting them.
         if op in ("IN", "NOT IN") and isinstance(lit, tuple):
