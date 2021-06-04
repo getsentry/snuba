@@ -1,5 +1,6 @@
 import contextlib
 import itertools
+import os
 import pickle
 import uuid
 from contextlib import closing
@@ -52,7 +53,7 @@ def test_payload_pickle_out_of_band() -> None:
 class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
 
     configuration = build_kafka_configuration_with_overrides(
-        {"bootstrap.servers": "localhost:9092"}
+        {"bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092")}
     )
 
     @contextlib.contextmanager
