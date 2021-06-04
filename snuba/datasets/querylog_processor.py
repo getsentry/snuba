@@ -8,7 +8,6 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.processor import InsertBatch, MessageProcessor, ProcessedMessage
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
-
 metrics = MetricsWrapper(environment.metrics, "snuba.querylog")
 
 
