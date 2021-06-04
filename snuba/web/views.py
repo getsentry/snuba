@@ -191,8 +191,7 @@ def handle_invalid_query(exception: InvalidQueryException) -> Response:
     if exception.report:
         logger.warning("Invalid query", exc_info=exception)
     else:
-        # Since the exception information will not be added by the logger, adding it to the log message explicitly
-        logger.warning(f"Invalid query: {exception}", exc_info=None)
+        logger.info("Invalid query", exc_info=exception)
 
     # TODO: Add special cases with more structure for specific exceptions
     # if needed.
