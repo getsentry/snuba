@@ -76,37 +76,14 @@ FULL_CONFIG = [
 ]
 
 
-# def setup_function() -> None:
-#     # storage_sets.DEV_STORAGE_SETS = frozenset(
-#     #     {
-#     #         StorageSetKey.OUTCOMES,  # Disabled and not registered
-#     #         StorageSetKey.QUERYLOG,  # Disabled still registered
-#     #     }
-#     # )
-
-#     # settings.CLUSTERS = REDUCED_CONFIG
-#     importlib.reload(cluster)
-
-
 def teardown_function() -> None:
-    # settings.CLUSTERS = FULL_CONFIG
-    # storage_sets.DEV_STORAGE_SETS = frozenset()
-
     importlib.reload(settings)
     importlib.reload(cluster)
 
 
 @patch("snuba.settings.CLUSTERS", FULL_CONFIG)
-@patch(
-    "snuba.clusters.storage_sets.DEV_STORAGE_SETS",
-    frozenset(
-        {
-            StorageSetKey.OUTCOMES,  # Disabled and not registered
-            StorageSetKey.QUERYLOG,  # Disabled still registered
-        }
-    ),
-)
 def test_clusters() -> None:
+    importlib.reload(cluster)
     assert (
         get_storage(StorageKey("events")).get_cluster()
         == get_storage(StorageKey("errors")).get_cluster()
@@ -137,7 +114,9 @@ def test_disabled_cluster() -> None:
         cluster.get_cluster(StorageSetKey.OUTCOMES)
 
 
+@patch("snuba.settings.CLUSTERS", FULL_CONFIG)
 def test_get_local_nodes() -> None:
+    importlib.reload(cluster)
     with patch.object(ClickhousePool, "execute") as execute:
         execute.return_value = [
             ("host_1", 9000, 1, 1),
@@ -145,6 +124,7 @@ def test_get_local_nodes() -> None:
         ]
 
         local_cluster = get_storage(StorageKey("events")).get_cluster()
+        print(local_cluster.get_local_nodes())
         assert len(local_cluster.get_local_nodes()) == 1
         assert local_cluster.get_local_nodes()[0].host_name == "host_1"
         assert local_cluster.get_local_nodes()[0].port == 9000
