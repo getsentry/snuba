@@ -124,7 +124,6 @@ def test_get_local_nodes() -> None:
         ]
 
         local_cluster = get_storage(StorageKey("events")).get_cluster()
-        print(local_cluster.get_local_nodes())
         assert len(local_cluster.get_local_nodes()) == 1
         assert local_cluster.get_local_nodes()[0].host_name == "host_1"
         assert local_cluster.get_local_nodes()[0].port == 9000
