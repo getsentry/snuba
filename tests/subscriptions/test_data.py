@@ -1,7 +1,10 @@
 from datetime import datetime, timedelta
+from typing import Generator, Optional
 
 import pytest
 
+from snuba import state
+from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.data import (
     LegacySubscriptionData,
     SnQLSubscriptionData,
@@ -20,6 +23,7 @@ TESTS = [
             time_window=timedelta(minutes=500),
             resolution=timedelta(minutes=1),
         ),
+        None,
         id="Legacy subscription",
     ),
     pytest.param(
@@ -34,15 +38,64 @@ TESTS = [
             time_window=timedelta(minutes=500),
             resolution=timedelta(minutes=1),
         ),
+        None,
         id="SnQL subscription",
+    ),
+    pytest.param(
+        SnQLSubscriptionData(
+            project_id=1,
+            query=(
+                "MATCH (events) "
+                "SELECT count() AS count, avg(timestamp) AS average_t "
+                "WHERE "
+                "platform IN tuple('a') "
+            ),
+            time_window=timedelta(minutes=500),
+            resolution=timedelta(minutes=1),
+        ),
+        InvalidQueryException,
+        id="SnQL subscription with 2 many aggregates",
+    ),
+    pytest.param(
+        SnQLSubscriptionData(
+            project_id=1,
+            query=(
+                "MATCH (events) "
+                "SELECT count() AS count BY project_id "
+                "WHERE platform IN tuple('a') "
+                "AND project_id IN tuple(1) "
+            ),
+            time_window=timedelta(minutes=500),
+            resolution=timedelta(minutes=1),
+        ),
+        InvalidQueryException,
+        id="SnQL subscription with disallowed clause",
     ),
 ]
 
 
 class TestBuildRequest(BaseSubscriptionTest):
-    @pytest.mark.parametrize("subscription", TESTS)
-    def test_conditions(self, subscription: SubscriptionData) -> None:
+    @pytest.fixture(autouse=True)
+    def subscription_rollout(self) -> Generator[None, None, None]:
+        state.set_config("snql_subscription_rollout_pct", 1.0)
+        state.set_config("snql_subscription_rollout_projects", "1")
+        yield
+        state.set_config("snql_subscription_rollout", 0.0)
+        state.set_config("snql_subscription_rollout_projects", "")
+
+    @pytest.mark.parametrize("subscription, exception", TESTS)  # type: ignore
+    def test_conditions(
+        self, subscription: SubscriptionData, exception: Optional[Exception]
+    ) -> None:
         timer = Timer("test")
+        if exception is not None:
+            with pytest.raises(exception):
+                request = subscription.build_request(
+                    self.dataset, datetime.utcnow(), 100, timer,
+                )
+                result = parse_and_run_query(self.dataset, request, timer)
+            return
+
         request = subscription.build_request(
             self.dataset, datetime.utcnow(), 100, timer,
         )

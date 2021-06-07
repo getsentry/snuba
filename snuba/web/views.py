@@ -1,3 +1,4 @@
+import functools
 import logging
 import os
 import time
@@ -485,8 +486,6 @@ def handle_subscription_error(exception: InvalidSubscriptionError) -> Response:
 @util.time_request("subscription")
 def create_subscription(*, dataset: Dataset, timer: Timer) -> RespTuple:
     subscription = SubscriptionDataCodec().decode(http_request.data)
-    # TODO: Check for valid queries with fields that are invalid for subscriptions. For
-    # example date fields and aggregates.
     identifier = SubscriptionCreator(dataset).create(subscription, timer)
     return (
         json.dumps({"subscription_id": str(identifier)}),
@@ -557,20 +556,25 @@ if application.debug or application.testing:
         assert storage is not None
 
         if type_ == "insert":
-            from snuba.consumers.consumer import StreamingConsumerStrategyFactory
+            from streaming_kafka_consumer.strategy_factory import (
+                KafkaConsumerStrategyFactory,
+            )
+
+            from snuba.consumers.consumer import build_batch_writer, process_message
+            from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
             table_writer = storage.get_table_writer()
             stream_loader = table_writer.get_stream_loader()
-            strategy = StreamingConsumerStrategyFactory(
+            strategy = KafkaConsumerStrategyFactory(
                 stream_loader.get_pre_filter(),
-                stream_loader.get_processor(),
-                table_writer.get_batch_writer(metrics),
-                metrics,
+                functools.partial(process_message, stream_loader.get_processor()),
+                build_batch_writer(table_writer, metrics=metrics),
                 max_batch_size=1,
                 max_batch_time=1.0,
                 processes=None,
                 input_block_size=None,
                 output_block_size=None,
+                metrics=StreamMetricsAdapter(metrics),
             ).create(lambda offsets: None)
             strategy.submit(message)
             strategy.close()

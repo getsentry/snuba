@@ -5,8 +5,8 @@ from uuid import uuid1
 import pytest
 import pytz
 
-from snuba.consumers.types import KafkaMessageMetadata
 from snuba.consumers.snapshot_worker import SnapshotProcessor
+from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.cdc.types import InsertEvent
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage

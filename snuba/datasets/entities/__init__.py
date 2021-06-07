@@ -14,6 +14,8 @@ class EntityKey(Enum):
     # TODO: This has an S on the end in solidarity with storages, but it's got to go
     GROUPEDMESSAGES = "groupedmessage"
     METRICS_SETS = "metrics_sets"
+    METRICS_COUNTERS = "metrics_counters"
+    METRICS_DISTRIBUTIONS = "metrics_distributions"
     OUTCOMES = "outcomes"
     OUTCOMES_RAW = "outcomes_raw"
     SESSIONS = "sessions"

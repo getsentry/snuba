@@ -41,10 +41,9 @@ from streaming_kafka_consumer.backends.abstract import (
     OffsetOutOfRange,
     Producer,
 )
+from streaming_kafka_consumer.concurrent import execute
 from streaming_kafka_consumer.retries import NoRetryPolicy, RetryPolicy
 from streaming_kafka_consumer.types import Message, Partition, Topic
-
-from snuba.utils.concurrent import execute
 
 logger = logging.getLogger(__name__)
 
