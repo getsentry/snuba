@@ -8,7 +8,7 @@ from typing import MutableSequence, Optional
 from unittest.mock import Mock, call
 
 import pytest
-from streaming_kafka_consumer import Message, Partition, Topic
+from streaming_kafka_consumer import Message, Partition, Topic, configure_metrics
 from streaming_kafka_consumer.backends.kafka import KafkaPayload
 from streaming_kafka_consumer.strategy_factory import KafkaConsumerStrategyFactory
 
@@ -53,6 +53,8 @@ def test_streaming_consumer_strategy() -> None:
 
     metrics = TestingMetricsBackend()
 
+    configure_metrics(metrics)
+
     def write_step() -> ProcessedMessageBatchWriter:
         return ProcessedMessageBatchWriter(
             insert_batch_writer=InsertBatchWriter(
@@ -72,7 +74,6 @@ def test_streaming_consumer_strategy() -> None:
         processes=None,
         input_block_size=None,
         output_block_size=None,
-        metrics=metrics,
     )
 
     commit_function = Mock()

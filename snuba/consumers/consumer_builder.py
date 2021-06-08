@@ -2,7 +2,7 @@ import functools
 from typing import Callable, Optional, Sequence
 
 from confluent_kafka import KafkaError, KafkaException, Producer
-from streaming_kafka_consumer import Topic
+from streaming_kafka_consumer import Topic, configure_metrics
 from streaming_kafka_consumer.backends.kafka import (
     KafkaConsumer,
     KafkaPayload,
@@ -119,6 +119,8 @@ class ConsumerBuilder:
             tags={"group": group_id, "storage": storage_key.value},
         )
 
+        configure_metrics(StreamMetricsAdapter(self.metrics))
+
         self.max_batch_size = max_batch_size
         self.max_batch_time_ms = max_batch_time_ms
         self.group_id = group_id
@@ -176,7 +178,6 @@ class ConsumerBuilder:
             consumer,
             self.raw_topic,
             strategy_factory,
-            metrics=StreamMetricsAdapter(self.metrics),
             recoverable_errors=[TransportError],
         )
 
@@ -211,7 +212,6 @@ class ConsumerBuilder:
             processes=self.processes,
             input_block_size=self.input_block_size,
             output_block_size=self.output_block_size,
-            metrics=StreamMetricsAdapter(self.metrics),
         )
 
         if self.__profile_path is not None:

@@ -56,7 +56,7 @@ class MetricsWrapper:
         self.__backend.timing(self.__merge_name(name), value, tags)
 
 
-class _DummyMetricsBackend(Metrics):
+class DummyMetricsBackend(Metrics):
     """
     Default metrics backend that does not record anything.
     """
@@ -75,9 +75,6 @@ class _DummyMetricsBackend(Metrics):
         self, name: str, value: Union[int, float], tags: Optional[Tags] = None
     ) -> None:
         pass
-
-
-DummyMetricsBackend = _DummyMetricsBackend()
 
 
 class Gauge:
@@ -113,3 +110,18 @@ class Gauge:
     def decrement(self, value: float = 1.0) -> None:
         self.__value -= value
         self.__report()
+
+
+_metrics_backend: Metrics = DummyMetricsBackend()
+
+
+def configure_metrics(metrics: Metrics) -> None:
+    global _metrics_backend
+    # Perform a runtime check of metrics instance upon initialization of
+    # this class to avoid errors down the line when it is used.
+    assert isinstance(metrics, Metrics)
+    _metrics_backend = metrics
+
+
+def get_metrics() -> Metrics:
+    return _metrics_backend
