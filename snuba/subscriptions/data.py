@@ -383,6 +383,7 @@ class DelegateSubscriptionData(SubscriptionData):
                 metrics.increment("snql.subscription.delegate.error")
             logger.warning(
                 f"failed snql subscription: {e}",
+                exc_info=e,
                 extra={
                     "error": str(e),
                     "project": self.project_id,
