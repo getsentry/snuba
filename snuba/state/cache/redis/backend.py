@@ -5,7 +5,6 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
 
 from pkg_resources import resource_string
-from sentry_sdk import Hub
 
 from redis.exceptions import ResponseError
 from snuba.redis import RedisClientType
@@ -135,12 +134,9 @@ class RedisCache(Cache[TValue]):
         # This updates the stats object and querylog
         record_cache_hit_type(result[0])
 
-        span = Hub.current.scope.span
         if result[0] == RESULT_VALUE:
             # If we got a cache hit, this is easy -- we just return it.
             logger.debug("Immediately returning result from cache hit.")
-            if span:
-                span.set_data("backend", "cache")
             return self.__codec.decode(result[1])
         elif result[0] == RESULT_EXECUTE:
             # If we were the first in line, we need to execute the function.
@@ -155,8 +151,6 @@ class RedisCache(Cache[TValue]):
                 task_ident,
                 task_timeout,
             )
-            if span:
-                span.set_data("backend", "db")
 
             argv = [task_ident, 60]
             try:
@@ -207,8 +201,6 @@ class RedisCache(Cache[TValue]):
                 task_ident,
                 effective_timeout,
             )
-            if span:
-                span.set_data("backend", "cache_wait")
 
             notification_received = (
                 self.__client.blpop(

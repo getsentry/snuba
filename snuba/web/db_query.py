@@ -4,11 +4,11 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial, reduce
 from hashlib import md5
-from snuba.utils.metrics.wrapper import MetricsWrapper
 from typing import Any, Mapping, MutableMapping, Optional, Set, Union, cast
 
 import rapidjson
 import sentry_sdk
+from sentry_sdk import Hub
 from sentry_sdk.api import configure_scope
 
 from snuba import environment, settings, state
@@ -30,11 +30,7 @@ from snuba.reader import Reader, Result
 from snuba.redis import redis_client
 from snuba.request.request_settings import RequestSettings
 from snuba.state.cache.abstract import Cache
-from snuba.state.cache.redis.backend import (
-    RESULT_VALUE,
-    RESULT_WAIT,
-    RedisCache,
-)
+from snuba.state.cache.redis.backend import RESULT_VALUE, RESULT_WAIT, RedisCache
 from snuba.state.rate_limit import (
     GLOBAL_RATE_LIMIT_NAME,
     PROJECT_RATE_LIMIT_NAME,
@@ -44,6 +40,7 @@ from snuba.state.rate_limit import (
 from snuba.util import force_bytes, with_span
 from snuba.utils.codecs import Codec
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException, QueryResult
 
 metrics = MetricsWrapper(environment.metrics, "db_query")
@@ -350,11 +347,19 @@ def execute_query_with_readthrough_caching(
     query_id = get_query_cache_key(formatted_query)
     query_settings["query_id"] = query_id
 
+    span = Hub.current.scope.span
+
     def record_cache_hit_type(hit_type: int) -> None:
+        span_tag = "db"
         if hit_type == RESULT_VALUE:
             stats["cache_hit"] = 1
+            span_tag = "cache"
         elif hit_type == RESULT_WAIT:
             stats["is_duplicate"] = 1
+            span_tag = "cache_wait"
+
+        if span:
+            span.set_data("backend", span_tag)
 
     return cache.get_readthrough(
         query_id,
