@@ -6,6 +6,7 @@ import pytest
 from snuba import state
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.data import (
+    DelegateSubscriptionData,
     LegacySubscriptionData,
     SnQLSubscriptionData,
     SubscriptionData,
@@ -40,6 +41,23 @@ TESTS = [
         ),
         None,
         id="SnQL subscription",
+    ),
+    pytest.param(
+        DelegateSubscriptionData(
+            project_id=1,
+            query=(
+                "MATCH (events) "
+                "SELECT count() AS count "
+                "WHERE "
+                "platform IN tuple('a') "
+            ),
+            conditions=[["platform", "IN", ["a"]]],
+            aggregations=[["count()", "", "count"]],
+            time_window=timedelta(minutes=500),
+            resolution=timedelta(minutes=1),
+        ),
+        None,
+        id="Delegate subscription",
     ),
     pytest.param(
         SnQLSubscriptionData(

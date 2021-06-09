@@ -85,6 +85,7 @@ class SubscriptionWorker(
                 self.__metrics.increment("snql.subscription.delegate.error.execution")
                 logger.warning(
                     f"failed snql subscription query: {e}",
+                    exc_info=e,
                     extra={"error": str(e), "data": task.task.data.to_dict()},
                 )
                 request = task.task.data.to_legacy().build_request(
