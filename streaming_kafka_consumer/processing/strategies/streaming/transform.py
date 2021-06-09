@@ -21,7 +21,7 @@ from typing import (
     TypeVar,
 )
 
-from streaming_kafka_consumer.metrics import Gauge, MetricsWrapper, get_metrics
+from streaming_kafka_consumer.metrics import Gauge, get_metrics
 from streaming_kafka_consumer.processing.strategies.abstract import MessageRejected
 from streaming_kafka_consumer.processing.strategies.abstract import (
     ProcessingStrategy as ProcessingStep,
@@ -312,7 +312,7 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
             ]
         ] = deque()
 
-        self.__metrics = MetricsWrapper(get_metrics(), "process")
+        self.__metrics = get_metrics()
         self.__batches_in_progress = Gauge(self.__metrics, "batches_in_progress")
         self.__pool_waiting_time: Optional[float] = None
 
