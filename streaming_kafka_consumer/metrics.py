@@ -85,11 +85,18 @@ class Gauge:
         self.__report()
 
 
-_metrics_backend: Metrics = DummyMetricsBackend()
+_metrics_backend: Optional[Metrics] = None
+_dummy_metrics_backend = DummyMetricsBackend()
 
 
 def configure_metrics(metrics: Metrics) -> None:
+    """
+    Metrics can only be configured once
+    """
     global _metrics_backend
+
+    assert _metrics_backend is None, "Metrics is already set"
+
     # Perform a runtime check of metrics instance upon initialization of
     # this class to avoid errors down the line when it is used.
     assert isinstance(metrics, Metrics)
@@ -97,4 +104,6 @@ def configure_metrics(metrics: Metrics) -> None:
 
 
 def get_metrics() -> Metrics:
+    if _metrics_backend is None:
+        return _dummy_metrics_backend
     return _metrics_backend
