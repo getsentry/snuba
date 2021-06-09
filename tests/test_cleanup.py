@@ -85,6 +85,8 @@ class TestCleanup:
         )
 
         table = storage.get_table_writer().get_schema().get_table_name()
+        table = table.split("_")[0] + "_local"
+
         database = storage.get_cluster().get_database()
 
         parts = cleanup.get_active_partitions(clickhouse, storage, database, table)

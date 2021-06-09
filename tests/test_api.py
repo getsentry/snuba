@@ -1931,7 +1931,7 @@ class TestApi(SimpleAPITest):
 
         assert result["sql"].startswith(
             "SELECT arrayMap((x -> replaceAll(toString(x), '-', '')), "
-            "arraySlice(hierarchical_hashes, 0, 2)) FROM errors_local PREWHERE"
+            "arraySlice(hierarchical_hashes, 0, 2)) FROM errors_dist PREWHERE"
         )
 
     def test_hierarchical_hashes_array_join(self) -> None:
@@ -1954,7 +1954,7 @@ class TestApi(SimpleAPITest):
 
         assert result["sql"].startswith(
             "SELECT arrayJoin((arrayMap((x -> replaceAll(toString(x), '-', '')), "
-            "hierarchical_hashes) AS _snuba_hierarchical_hashes)) FROM errors_local PREWHERE"
+            "hierarchical_hashes) AS _snuba_hierarchical_hashes)) FROM errors_dist PREWHERE"
         )
 
 
