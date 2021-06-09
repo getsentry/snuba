@@ -350,16 +350,17 @@ def execute_query_with_readthrough_caching(
     span = Hub.current.scope.span
 
     def record_cache_hit_type(hit_type: int) -> None:
-        span_tag = "db"
+        span_tag = "cache_miss"
         if hit_type == RESULT_VALUE:
             stats["cache_hit"] = 1
-            span_tag = "cache"
+            span_tag = "cache_hit"
         elif hit_type == RESULT_WAIT:
             stats["is_duplicate"] = 1
             span_tag = "cache_wait"
 
+        sentry_sdk.set_tag("cache_status", span_tag)
         if span:
-            span.set_data("backend", span_tag)
+            span.set_data("cache_status", span_tag)
 
     return cache.get_readthrough(
         query_id,
