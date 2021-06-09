@@ -187,7 +187,6 @@ def handle_invalid_dataset(exception: InvalidDatasetError) -> Response:
 def handle_invalid_query(exception: InvalidQueryException) -> Response:
     # TODO: Remove this logging as soon as the query validation code is
     # mature enough that we can trust it.
-    metrics.increment("query.invalid")
     if exception.report:
         logger.warning("Invalid query", exc_info=exception)
     else:
