@@ -108,11 +108,10 @@ An example query body might look like:
             ["tags[environment]", "=", "prod"]
         ],
         "from_date": "2011-07-01T19:54:15",
-        "to_date": "2018-07-06T19:54:15"
+        "to_date": "2018-07-06T19:54:15",
         "granularity": 3600,
         "groupby": ["group_id", "time"],
-        "having": [],
-        "issues": [],
+        "having": []
     }
 
 #### selected_columns, groupby

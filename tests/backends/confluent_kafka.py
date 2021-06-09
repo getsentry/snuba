@@ -41,7 +41,7 @@ class FakeConfluentKafkaMessage(object):
     def offset(self) -> int:
         return self._offset
 
-    def value(self) -> Optional[bytes]:
+    def value(self) -> bytes:
         return self._value
 
     def key(self) -> Any:
