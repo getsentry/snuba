@@ -312,7 +312,7 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
             ]
         ] = deque()
 
-        self.__metrics = MetricsWrapper(get_metrics())
+        self.__metrics = MetricsWrapper(get_metrics(), "process")
         self.__batches_in_progress = Gauge(self.__metrics, "batches_in_progress")
         self.__pool_waiting_time: Optional[float] = None
 
