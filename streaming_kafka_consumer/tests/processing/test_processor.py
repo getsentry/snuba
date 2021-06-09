@@ -2,7 +2,6 @@ from datetime import datetime
 from unittest import mock
 
 import pytest
-from streaming_kafka_consumer import configure_metrics
 from streaming_kafka_consumer.processing.processor import (
     InvalidStateError,
     StreamProcessor,
@@ -24,9 +23,7 @@ def test_stream_processor_lifecycle() -> None:
     factory = mock.Mock()
     factory.create.return_value = strategy
 
-    metrics = TestingMetricsBackend()
-
-    configure_metrics(metrics)
+    metrics = TestingMetricsBackend
 
     with assert_changes(lambda: int(consumer.subscribe.call_count), 0, 1):
         processor: StreamProcessor[int] = StreamProcessor(consumer, topic, factory)

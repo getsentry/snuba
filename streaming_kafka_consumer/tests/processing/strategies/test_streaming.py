@@ -6,7 +6,6 @@ from typing import Any, Iterator
 from unittest.mock import Mock, call
 
 import pytest
-from streaming_kafka_consumer import configure_metrics
 from streaming_kafka_consumer.backends.kafka import KafkaPayload
 from streaming_kafka_consumer.processing.strategies.streaming.collect import CollectStep
 from streaming_kafka_consumer.processing.strategies.streaming.filter import FilterStep
@@ -237,9 +236,7 @@ def test_parallel_transform_step() -> None:
     starting_processes = get_subprocess_count()
     worker_processes = 2
     manager_processes = 1
-    metrics = TestingMetricsBackend()
-
-    configure_metrics(metrics)
+    metrics = TestingMetricsBackend
 
     with assert_changes(
         get_subprocess_count,
