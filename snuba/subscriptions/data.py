@@ -7,7 +7,17 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from functools import partial
-from typing import Any, List, Mapping, NamedTuple, NewType, Optional, Sequence, Union
+from typing import (
+    Any,
+    List,
+    Mapping,
+    NamedTuple,
+    NewType,
+    Optional,
+    Sequence,
+    Set,
+    Union,
+)
 from uuid import UUID
 
 from snuba import state
@@ -346,12 +356,19 @@ class DelegateSubscriptionData(SubscriptionData):
             snql_rollout_projects_raw = state.get_config(
                 "snql_subscription_rollout_projects", ""
             )
-            assert isinstance(snql_rollout_projects_raw, str)
-            snql_rollout_projects = (
-                set([int(s.strip()) for s in snql_rollout_projects_raw.split(",")])
-                if snql_rollout_projects_raw
-                else set()
-            )
+            snql_rollout_projects: Set[int]
+            if isinstance(snql_rollout_projects_raw, int):
+                snql_rollout_projects = {snql_rollout_projects_raw}
+            elif isinstance(snql_rollout_projects_raw, str):
+                snql_rollout_projects = (
+                    set([int(s.strip()) for s in snql_rollout_projects_raw.split(",")])
+                    if snql_rollout_projects_raw
+                    else set()
+                )
+            else:
+                raise ValueError(
+                    f"invalid project setting: '{snql_rollout_projects_raw}'"
+                )
             use_snql = (
                 snql_rollout_pct > 0.0
                 and self.project_id in snql_rollout_projects
@@ -366,6 +383,7 @@ class DelegateSubscriptionData(SubscriptionData):
                 metrics.increment("snql.subscription.delegate.error")
             logger.warning(
                 f"failed snql subscription: {e}",
+                exc_info=e,
                 extra={
                     "error": str(e),
                     "project": self.project_id,
