@@ -1,4 +1,5 @@
 import json
+import os
 from typing import Any, Callable, Generator, Iterator, Tuple, Union
 
 import pytest
@@ -135,3 +136,11 @@ def disable_query_cache() -> Generator[None, None, None]:
     state.set_configs({"use_cache": 0, "use_readthrough_query_cache": 0})
     yield
     state.set_configs({"use_cache": cache, "use_readthrough_query_cache": readthrough})
+
+
+@pytest.fixture
+def errors_table_name():
+    if "distributed" in os.environ["SNUBA_SETTINGS"]:
+        return "errors_dist"
+    else:
+        return "errors_local"
