@@ -205,7 +205,7 @@ def multistorage_consumer(
             commit_log_topic=commit_log_topic,
         )
 
-    metrics = MetricsWrapper(environment.metrics, "consumer")
+    metrics = MetricsWrapper(environment.metrics, "multistorage-consumer")
     processor = StreamProcessor(
         consumer,
         topic,
