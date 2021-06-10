@@ -10,9 +10,11 @@ from streaming_kafka_consumer.backends.kafka import (
 )
 from streaming_kafka_consumer.processing import StreamProcessor
 from streaming_kafka_consumer.processing.strategies import ProcessingStrategyFactory
+from streaming_kafka_consumer.processing.strategies.streaming import (
+    KafkaConsumerStrategyFactory,
+)
 from streaming_kafka_consumer.profiler import ProcessingStrategyProfilerWrapperFactory
 from streaming_kafka_consumer.retries import BasicRetryPolicy, RetryPolicy
-from streaming_kafka_consumer.strategy_factory import KafkaConsumerStrategyFactory
 
 from snuba import environment
 from snuba.consumers.consumer import build_batch_writer, process_message

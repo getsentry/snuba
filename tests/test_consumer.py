@@ -10,7 +10,9 @@ from unittest.mock import Mock, call
 import pytest
 from streaming_kafka_consumer import Message, Partition, Topic
 from streaming_kafka_consumer.backends.kafka import KafkaPayload
-from streaming_kafka_consumer.strategy_factory import KafkaConsumerStrategyFactory
+from streaming_kafka_consumer.processing.strategies.streaming import (
+    KafkaConsumerStrategyFactory,
+)
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (

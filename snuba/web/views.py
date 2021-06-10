@@ -559,7 +559,7 @@ if application.debug or application.testing:
         assert storage is not None
 
         if type_ == "insert":
-            from streaming_kafka_consumer.strategy_factory import (
+            from streaming_kafka_consumer.processing.strategies.streaming import (
                 KafkaConsumerStrategyFactory,
             )
 
