@@ -76,7 +76,8 @@ def replacer(
 ) -> None:
 
     from streaming_kafka_consumer import Topic
-    from streaming_kafka_consumer.backends.kafka import KafkaConsumer, TransportError
+    from streaming_kafka_consumer.backends.kafka import KafkaConsumer
+    from streaming_kafka_consumer.errors import TransportError
     from streaming_kafka_consumer.processing import StreamProcessor
     from streaming_kafka_consumer.processing.strategies.batching import (
         BatchProcessingStrategyFactory,
