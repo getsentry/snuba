@@ -6,9 +6,19 @@ class InvalidQueryException(Exception):
     Common parent class used for invalid queries during parsing
     and validation.
     This should not be used for system errors.
+
+    Attributes:
+        message: Message of the exception
+        report: Should we report the exception to Sentry or not
     """
 
-    pass
+    def __init__(self, message: str, *, report: bool = True):
+        self.message = message
+        self.report = report
+        super().__init__(self.message, self.report)
+
+    def __str__(self) -> str:
+        return f"{self.message}"
 
 
 class ValidationException(InvalidQueryException):
