@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from typing import Any, Mapping, Optional, Protocol, Union, runtime_checkable
 
-Tags = Optional[Mapping[str, str]]
+Tags = Mapping[str, str]
 
 
 @runtime_checkable
