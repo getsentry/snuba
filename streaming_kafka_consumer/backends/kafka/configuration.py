@@ -69,12 +69,21 @@ def build_kafka_configuration_with_overrides(
 def build_kafka_consumer_configuration_with_overrides(
     default_config: Mapping[str, Any],
     group_id: str,
-    auto_offset_reset: str = "error",
-    queued_max_messages_kbytes: int = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
-    queued_min_messages: int = DEFAULT_QUEUED_MIN_MESSAGES,
+    auto_offset_reset: Optional[str] = None,
+    queued_max_messages_kbytes: Optional[int] = None,
+    queued_min_messages: Optional[int] = None,
     bootstrap_servers: Optional[Sequence[str]] = None,
     override_params: Optional[Mapping[str, Any]] = None,
 ) -> KafkaBrokerConfig:
+
+    if auto_offset_reset is None:
+        auto_offset_reset = "error"
+
+    if queued_max_messages_kbytes is None:
+        queued_max_messages_kbytes = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES
+
+    if queued_min_messages is None:
+        queued_min_messages = DEFAULT_QUEUED_MIN_MESSAGES
 
     broker_config = build_kafka_configuration_with_overrides(
         default_config, bootstrap_servers, override_params

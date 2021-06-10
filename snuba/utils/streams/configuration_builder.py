@@ -2,8 +2,6 @@ import logging
 from typing import Any, Dict, Mapping, Optional, Sequence
 
 from streaming_kafka_consumer.backends.kafka.configuration import (
-    DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
-    DEFAULT_QUEUED_MIN_MESSAGES,
     build_kafka_configuration_with_overrides,
     build_kafka_consumer_configuration_with_overrides,
 )
@@ -38,9 +36,9 @@ def get_default_kafka_configuration(
 def build_kafka_consumer_configuration(
     topic: Optional[Topic],
     group_id: str,
-    auto_offset_reset: str = "error",
-    queued_max_messages_kbytes: int = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
-    queued_min_messages: int = DEFAULT_QUEUED_MIN_MESSAGES,
+    auto_offset_reset: Optional[str] = None,
+    queued_max_messages_kbytes: Optional[int] = None,
+    queued_min_messages: Optional[int] = None,
     bootstrap_servers: Optional[Sequence[str]] = None,
     override_params: Optional[Mapping[str, Any]] = None,
 ) -> KafkaBrokerConfig:
