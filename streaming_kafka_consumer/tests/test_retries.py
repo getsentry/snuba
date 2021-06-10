@@ -2,9 +2,12 @@ from typing import Any, Optional
 from unittest import mock
 
 import pytest
-
-from snuba.utils.clock import TestingClock
-from snuba.utils.retries import BasicRetryPolicy, RetryException, constant_delay
+from streaming_kafka_consumer.clock import TestingClock
+from streaming_kafka_consumer.retries import (
+    BasicRetryPolicy,
+    RetryException,
+    constant_delay,
+)
 
 value = object()
 
