@@ -4,10 +4,9 @@ from confluent_kafka import KafkaError
 from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
 from streaming_kafka_consumer.backends.kafka import KafkaConsumer, KafkaPayload
+from streaming_kafka_consumer.retries import RetryPolicy
 from streaming_kafka_consumer.synchronized import Commit, commit_codec
 from streaming_kafka_consumer.types import Message, Partition, Topic
-
-from snuba.utils.retries import RetryPolicy
 
 
 class KafkaConsumerWithCommitLog(KafkaConsumer):

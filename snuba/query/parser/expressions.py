@@ -186,7 +186,7 @@ def parse_clickhouse_function(function: str) -> Expression:
     try:
         expression_tree = minimal_clickhouse_grammar.parse(function)
     except Exception as cause:
-        raise ParsingException(f"Cannot parse aggregation {function}", cause) from cause
+        raise ParsingException(f"Cannot parse aggregation {function}") from cause
 
     return ClickhouseVisitor().visit(expression_tree)  # type: ignore
 
