@@ -6,9 +6,9 @@ from streaming_kafka_consumer.processing.strategies import (
     ProcessingStrategy,
     ProcessingStrategyFactory,
 )
-from streaming_kafka_consumer.processing.strategies.streaming import (
-    CollectStep,
-    FilterStep,
+from streaming_kafka_consumer.processing.strategies.streaming.collect import CollectStep
+from streaming_kafka_consumer.processing.strategies.streaming.filter import FilterStep
+from streaming_kafka_consumer.processing.strategies.streaming.transform import (
     ParallelTransformStep,
     TransformStep,
 )

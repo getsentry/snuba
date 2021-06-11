@@ -10,8 +10,11 @@ from streaming_kafka_consumer.backends.kafka import (
 )
 from streaming_kafka_consumer.processing import StreamProcessor
 from streaming_kafka_consumer.processing.strategies import ProcessingStrategyFactory
+from streaming_kafka_consumer.processing.strategies.streaming import (
+    KafkaConsumerStrategyFactory,
+)
 from streaming_kafka_consumer.profiler import ProcessingStrategyProfilerWrapperFactory
-from streaming_kafka_consumer.strategy_factory import KafkaConsumerStrategyFactory
+from streaming_kafka_consumer.retries import BasicRetryPolicy, RetryPolicy
 
 from snuba.consumers.consumer import build_batch_writer, process_message
 from snuba.consumers.snapshot_worker import SnapshotProcessor
@@ -21,7 +24,6 @@ from snuba.processor import MessageProcessor
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics import MetricsBackend
-from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
 from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
     build_kafka_producer_configuration,
@@ -128,7 +130,7 @@ class ConsumerBuilder:
         if commit_retry_policy is None:
             commit_retry_policy = BasicRetryPolicy(
                 3,
-                constant_delay(1),
+                1,
                 lambda e: isinstance(e, KafkaException)
                 and e.args[0].code()
                 in (
