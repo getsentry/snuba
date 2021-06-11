@@ -21,7 +21,7 @@ from typing import (
     TypeVar,
 )
 
-from streaming_kafka_consumer.metrics import DummyMetricsBackend, Gauge, Metrics
+from streaming_kafka_consumer.metrics import Gauge, get_metrics
 from streaming_kafka_consumer.processing.strategies.abstract import MessageRejected
 from streaming_kafka_consumer.processing.strategies.abstract import (
     ProcessingStrategy as ProcessingStep,
@@ -278,11 +278,7 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
         max_batch_time: float,
         input_block_size: int,
         output_block_size: int,
-        metrics: Metrics = DummyMetricsBackend,
     ) -> None:
-        # Perform a runtime check of metrics instance upon initialization of
-        # this class to avoid errors down the line when it is used.
-        assert isinstance(metrics, Metrics)
         self.__transform_function = function
         self.__next_step = next_step
         self.__max_batch_size = max_batch_size
@@ -316,8 +312,8 @@ class ParallelTransformStep(ProcessingStep[TPayload]):
             ]
         ] = deque()
 
-        self.__metrics = metrics
-        self.__batches_in_progress = Gauge(metrics, "batches_in_progress")
+        self.__metrics = get_metrics()
+        self.__batches_in_progress = Gauge(self.__metrics, "batches_in_progress")
         self.__pool_waiting_time: Optional[float] = None
 
         self.__closed = False
