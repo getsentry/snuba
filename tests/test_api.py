@@ -19,6 +19,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.errors import storage as errors_storage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.processor import InsertBatch
 from snuba.redis import redis_client
@@ -1911,7 +1912,7 @@ class TestApi(SimpleAPITest):
         )
         assert "deleted = 0" in result["sql"] or "equals(deleted, 0)" in result["sql"]
 
-    def test_hierarchical_hashes_array_slice(self, errors_table_name) -> None:
+    def test_hierarchical_hashes_array_slice(self) -> None:
         response = self.post(
             json.dumps(
                 {
@@ -1932,12 +1933,12 @@ class TestApi(SimpleAPITest):
         val = (
             "SELECT arrayMap((x -> replaceAll(toString(x), '-', '')), "
             "arraySlice(hierarchical_hashes, 0, 2)) FROM %s PREWHERE"
-            % errors_table_name
+            % (errors_storage.get_table_writer().get_schema().get_table_name())
         )
 
         assert result["sql"].startswith(val)
 
-    def test_hierarchical_hashes_array_join(self, errors_table_name) -> None:
+    def test_hierarchical_hashes_array_join(self) -> None:
         response = self.post(
             json.dumps(
                 {
@@ -1958,7 +1959,7 @@ class TestApi(SimpleAPITest):
         val = (
             "SELECT arrayJoin((arrayMap((x -> replaceAll(toString(x), '-', '')), "
             "hierarchical_hashes) AS _snuba_hierarchical_hashes)) FROM %s PREWHERE"
-            % errors_table_name
+            % (errors_storage.get_table_writer().get_schema().get_table_name())
         )
 
         assert result["sql"].startswith(val)
