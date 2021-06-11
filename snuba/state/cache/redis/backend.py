@@ -1,12 +1,12 @@
+import concurrent.futures
 import logging
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
 
-import concurrent.futures
-from concurrent.futures import ThreadPoolExecutor
 from pkg_resources import resource_string
-from redis.exceptions import ResponseError
 
+from redis.exceptions import ResponseError
 from snuba.redis import RedisClientType
 from snuba.state import get_config
 from snuba.state.cache.abstract import (
@@ -17,7 +17,6 @@ from snuba.state.cache.abstract import (
 )
 from snuba.utils.codecs import Codec
 from snuba.utils.metrics.timer import Timer
-
 
 logger = logging.getLogger(__name__)
 

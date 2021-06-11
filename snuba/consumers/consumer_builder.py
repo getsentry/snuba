@@ -3,17 +3,16 @@ from typing import Callable, Optional, Sequence
 
 from confluent_kafka import KafkaError, KafkaException, Producer
 from streaming_kafka_consumer import Topic
-from streaming_kafka_consumer.backends.kafka import (
-    KafkaConsumer,
-    KafkaPayload,
-    TransportError,
-)
+from streaming_kafka_consumer.backends.kafka import KafkaConsumer, KafkaPayload
+from streaming_kafka_consumer.errors import TransportError
 from streaming_kafka_consumer.processing import StreamProcessor
 from streaming_kafka_consumer.processing.strategies import ProcessingStrategyFactory
+from streaming_kafka_consumer.processing.strategies.streaming import (
+    KafkaConsumerStrategyFactory,
+)
 from streaming_kafka_consumer.profiler import ProcessingStrategyProfilerWrapperFactory
-from streaming_kafka_consumer.strategy_factory import KafkaConsumerStrategyFactory
+from streaming_kafka_consumer.retries import BasicRetryPolicy, RetryPolicy
 
-from snuba import environment
 from snuba.consumers.consumer import build_batch_writer, process_message
 from snuba.consumers.snapshot_worker import SnapshotProcessor
 from snuba.datasets.storages import StorageKey
@@ -21,8 +20,7 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.processor import MessageProcessor
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
-from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
+from snuba.utils.metrics import MetricsBackend
 from snuba.utils.streams.configuration_builder import (
     build_kafka_consumer_configuration,
     build_kafka_producer_configuration,
@@ -31,7 +29,6 @@ from snuba.utils.streams.configuration_builder import (
 from snuba.utils.streams.kafka_consumer_with_commit_log import (
     KafkaConsumerWithCommitLog,
 )
-from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
 
 class ConsumerBuilder:
@@ -54,6 +51,7 @@ class ConsumerBuilder:
         auto_offset_reset: str,
         queued_max_messages_kbytes: int,
         queued_min_messages: int,
+        metrics: MetricsBackend,
         processes: Optional[int],
         input_block_size: Optional[int],
         output_block_size: Optional[int],
@@ -113,11 +111,7 @@ class ConsumerBuilder:
         # not actually required.
         self.producer = Producer(self.producer_broker_config)
 
-        self.metrics = MetricsWrapper(
-            environment.metrics,
-            "consumer",
-            tags={"group": group_id, "storage": storage_key.value},
-        )
+        self.metrics = metrics
 
         self.max_batch_size = max_batch_size
         self.max_batch_time_ms = max_batch_time_ms
@@ -133,7 +127,7 @@ class ConsumerBuilder:
         if commit_retry_policy is None:
             commit_retry_policy = BasicRetryPolicy(
                 3,
-                constant_delay(1),
+                1,
                 lambda e: isinstance(e, KafkaException)
                 and e.args[0].code()
                 in (
@@ -176,7 +170,6 @@ class ConsumerBuilder:
             consumer,
             self.raw_topic,
             strategy_factory,
-            metrics=StreamMetricsAdapter(self.metrics),
             recoverable_errors=[TransportError],
         )
 
@@ -211,7 +204,6 @@ class ConsumerBuilder:
             processes=self.processes,
             input_block_size=self.input_block_size,
             output_block_size=self.output_block_size,
-            metrics=StreamMetricsAdapter(self.metrics),
         )
 
         if self.__profile_path is not None:

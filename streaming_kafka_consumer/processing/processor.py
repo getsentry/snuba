@@ -4,8 +4,9 @@ import logging
 import time
 from typing import Generic, Mapping, Optional, Sequence, Type
 
-from streaming_kafka_consumer.backends.abstract import Consumer, ConsumerError
-from streaming_kafka_consumer.metrics import DummyMetricsBackend, Metrics
+from streaming_kafka_consumer.backends.abstract import Consumer
+from streaming_kafka_consumer.errors import ConsumerError
+from streaming_kafka_consumer.metrics import get_metrics
 from streaming_kafka_consumer.processing.strategies.abstract import (
     MessageRejected,
     ProcessingStrategy,
@@ -35,16 +36,11 @@ class StreamProcessor(Generic[TPayload]):
         consumer: Consumer[TPayload],
         topic: Topic,
         processor_factory: ProcessingStrategyFactory[TPayload],
-        metrics: Metrics = DummyMetricsBackend,
         recoverable_errors: Optional[Sequence[Type[ConsumerError]]] = None,
     ) -> None:
-        # Perform a runtime check of metrics instance upon initialization of
-        # this class to avoid errors down the line when it is used.
-        assert isinstance(metrics, Metrics)
-
         self.__consumer = consumer
         self.__processor_factory = processor_factory
-        self.__metrics = metrics
+        self.__metrics = get_metrics()
 
         # The types passed to the `except` clause must be a tuple, not a Sequence.
         self.__recoverable_errors = tuple(recoverable_errors or [])

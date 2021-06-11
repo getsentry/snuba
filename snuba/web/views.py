@@ -187,7 +187,10 @@ def handle_invalid_dataset(exception: InvalidDatasetError) -> Response:
 def handle_invalid_query(exception: InvalidQueryException) -> Response:
     # TODO: Remove this logging as soon as the query validation code is
     # mature enough that we can trust it.
-    logger.warning("Invalid query", exc_info=True)
+    if exception.report:
+        logger.warning("Invalid query", exc_info=exception)
+    else:
+        logger.info("Invalid query", exc_info=exception)
 
     # TODO: Add special cases with more structure for specific exceptions
     # if needed.
@@ -556,12 +559,11 @@ if application.debug or application.testing:
         assert storage is not None
 
         if type_ == "insert":
-            from streaming_kafka_consumer.strategy_factory import (
+            from streaming_kafka_consumer.processing.strategies.streaming import (
                 KafkaConsumerStrategyFactory,
             )
 
             from snuba.consumers.consumer import build_batch_writer, process_message
-            from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
             table_writer = storage.get_table_writer()
             stream_loader = table_writer.get_stream_loader()
@@ -574,7 +576,6 @@ if application.debug or application.testing:
                 processes=None,
                 input_block_size=None,
                 output_block_size=None,
-                metrics=StreamMetricsAdapter(metrics),
             ).create(lambda offsets: None)
             strategy.submit(message)
             strategy.close()
