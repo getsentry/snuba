@@ -4,6 +4,7 @@ from typing import Any, Optional, Sequence
 
 import click
 from confluent_kafka import Producer as ConfluentKafkaProducer
+from streaming_kafka_consumer import configure_metrics
 from streaming_kafka_consumer.backends.kafka import KafkaConsumer
 from streaming_kafka_consumer.processing import StreamProcessor
 from streaming_kafka_consumer.types import Topic
@@ -206,6 +207,8 @@ def multistorage_consumer(
         )
 
     metrics = MetricsWrapper(environment.metrics, "consumer")
+
+    configure_metrics(StreamMetricsAdapter(metrics))
     processor = StreamProcessor(
         consumer,
         topic,
@@ -218,7 +221,6 @@ def multistorage_consumer(
             output_block_size=output_block_size,
             metrics=metrics,
         ),
-        metrics=StreamMetricsAdapter(metrics),
     )
 
     def handler(signum: int, frame: Any) -> None:

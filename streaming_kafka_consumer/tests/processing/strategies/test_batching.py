@@ -5,7 +5,6 @@ from unittest.mock import patch
 
 from streaming_kafka_consumer.backends.local.backend import LocalBroker as Broker
 from streaming_kafka_consumer.backends.local.backend import LocalConsumer
-from streaming_kafka_consumer.metrics import DummyMetricsBackend
 from streaming_kafka_consumer.processing.processor import StreamProcessor
 from streaming_kafka_consumer.processing.strategies.batching import (
     AbstractBatchWorker,
@@ -43,10 +42,7 @@ class TestConsumer(object):
             consumer,
             topic,
             BatchProcessingStrategyFactory(
-                worker=worker,
-                max_batch_size=2,
-                max_batch_time=100,
-                metrics=DummyMetricsBackend,
+                worker=worker, max_batch_size=2, max_batch_time=100,
             ),
         )
 
@@ -69,14 +65,12 @@ class TestConsumer(object):
         assert isinstance(consumer, LocalConsumer)
 
         worker = FakeWorker()
-        metrics = DummyMetricsBackend
         batching_consumer = StreamProcessor(
             consumer,
             topic,
             BatchProcessingStrategyFactory(
-                worker=worker, max_batch_size=100, max_batch_time=2000, metrics=metrics,
+                worker=worker, max_batch_size=100, max_batch_time=2000
             ),
-            metrics=metrics,
         )
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())
