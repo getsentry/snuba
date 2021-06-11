@@ -15,11 +15,10 @@ Features:
 ---------
 
 - Provides a database access layer to the Clickhouse distributed data store.
-- Provides a graph logical data model the client can query through the SnQL
-    language which provides functionalities similar to those of SQL.
+
+- Provides a graph logical data model the client can query through the SnQL language which provides functionalities similar to those of SQL.
 - Support multiple separate data sets in a single installation.
 - Provides a rule based query optimizer.
-- Provides a migration system to apply DDL changes to Clickhouse both in a
-    single node and distributed environment.
+- Provides a migration system to apply DDL changes to Clickhouse both in a single node and distributed environment.
 - Ingest data directly from Kafka
 - Supports both point in time queries and streaming queries.
