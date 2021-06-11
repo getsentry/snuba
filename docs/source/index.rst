@@ -1,14 +1,16 @@
-Snuba is a service that provides a rich data model on top of Clickhouse together
-with a fast ingestion consumer and a query optimizer.
+.. include:: intro.rst
 
+Contents:
+---------
 
 .. toctree::
    :maxdepth: 1
-   :caption: Contents:
 
+   getstarted
    architecture/overview
    architecture/datamodel
    architecture/queryprocessing
    query/overview
    language/snql
    migrations/modes
+   contributing/environment
