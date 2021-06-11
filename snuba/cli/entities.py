@@ -1,7 +1,35 @@
+from typing import Optional, Tuple
+
 import click
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import InvalidEntityError, get_entity
+from snuba.utils.describer import Description, DescriptionVisitor
+
+
+class CLIDescriber(DescriptionVisitor):
+    def __init__(self) -> None:
+        self.__current_indentation = 0
+
+    def __indent(self) -> str:
+        return " " * self.__current_indentation
+
+    def visit_header(self, header: Optional[str]) -> None:
+        if header is not None:
+            click.echo(f"{self.__indent()}{header}")
+            click.echo(f"{self.__indent()}--------------------------------")
+
+    def visit_description(self, desc: Description) -> None:
+        self.__current_indentation += 1
+        desc.accept(self)
+        self.__current_indentation -= 1
+        click.echo("")
+
+    def visit_string(self, string: str) -> None:
+        click.echo(f"{self.__indent()}{string}")
+
+    def visit_tuple(self, tuple: Tuple[str, str]) -> None:
+        click.echo(f"{self.__indent()}{tuple[0]}: {tuple[1]}")
 
 
 @click.group()
@@ -25,28 +53,7 @@ def list() -> None:
 def describe(entity_name: str) -> None:
     try:
         entity = get_entity(EntityKey(entity_name))
-
-        schema = entity.get_data_model()
-        click.echo(f"Entity {entity_name} schema:")
-        click.echo("===============================================")
-        for column in schema.columns:
-            click.echo(f"{column.for_schema()}")
-        click.echo("===============================================")
-        click.echo("")
-
-        joins = entity.get_all_join_relationships()
-        if joins:
-            click.echo("Relationships:")
-            click.echo("===============================================")
-            for name, destination in joins.items():
-                click.echo(f"Name: {name}")
-                click.echo(f"Destination: {destination.rhs_entity.value}")
-                click.echo(f"Type: {destination.join_type.value}")
-                click.echo("Keys:")
-                for lhs, rhs in destination.columns:
-                    click.echo(
-                        f"- {entity_name}.{lhs} = {destination.rhs_entity.value}.{rhs}"
-                    )
-                click.echo("----------------------------------------------")
+        click.echo(f"Entity {entity_name}")
+        entity.describe().accept(CLIDescriber())
     except InvalidEntityError:
         click.echo(f"Entity {entity_name} does not exists or it is not registered.")

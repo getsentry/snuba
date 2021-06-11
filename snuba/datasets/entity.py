@@ -10,9 +10,10 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.validation import FunctionCallValidator
 from snuba.query.validation.validators import QueryValidator
+from snuba.utils.describer import Describable, Description
 
 
-class Entity(ABC):
+class Entity(Describable, ABC):
     """
     The Entity has access to multiple Storage objects, which represent the physical
     data model. Each one represents a table/view on the DB we can query.
@@ -116,3 +117,35 @@ class Entity(ABC):
         and entity can have more than one writable storage.
         """
         return self.__writable_storage
+
+    def describe(self) -> Description:
+        relationships = []
+        for name, destination in self.get_all_join_relationships().items():
+            relationships.append(
+                Description(
+                    header=name,
+                    content=[
+                        ("Destination", destination.rhs_entity.value),
+                        ("Type", destination.join_type.value),
+                        Description(
+                            header="Join keys",
+                            content=[
+                                f"{lhs} = {destination.join_type.value}.{rhs}"
+                                for lhs, rhs in destination.columns
+                            ],
+                        ),
+                    ],
+                )
+            )
+        return Description(
+            header=None,
+            content=[
+                Description(
+                    header="Entity schema",
+                    content=[
+                        column.for_schema() for column in self.get_data_model().columns
+                    ],
+                ),
+                Description(header="Relationships", content=relationships),
+            ],
+        )
