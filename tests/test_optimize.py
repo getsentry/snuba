@@ -77,10 +77,9 @@ class TestOptimize:
         storage = get_writable_storage(storage_key)
         cluster = storage.get_cluster()
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
-        table = (
-            storage.get_table_writer().get_schema().get_table_name().split("_")[0]
-            + "_local"
-        )
+
+        table = storage.get_table_writer().get_schema().get_local_table_name()
+
         database = cluster.get_database()
 
         # no data, 0 partitions to optimize
