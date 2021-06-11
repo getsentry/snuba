@@ -77,7 +77,6 @@ def replacer(
 
     from streaming_kafka_consumer import Topic, configure_metrics
     from streaming_kafka_consumer.backends.kafka import KafkaConsumer
-    from streaming_kafka_consumer.errors import TransportError
     from streaming_kafka_consumer.processing import StreamProcessor
     from streaming_kafka_consumer.processing.strategies.batching import (
         BatchProcessingStrategyFactory,
@@ -123,7 +122,6 @@ def replacer(
             max_batch_size=max_batch_size,
             max_batch_time=max_batch_time_ms,
         ),
-        recoverable_errors=[TransportError],
     )
 
     def handler(signum: int, frame: Any) -> None:

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Generic, Mapping, Optional, Sequence, Type
+from typing import Generic, Mapping, Optional, Sequence
 
 from streaming_kafka_consumer.backends.abstract import Consumer
-from streaming_kafka_consumer.errors import ConsumerError
+from streaming_kafka_consumer.errors import RecoverableError
 from streaming_kafka_consumer.metrics import get_metrics
 from streaming_kafka_consumer.processing.strategies.abstract import (
     MessageRejected,
@@ -36,14 +36,10 @@ class StreamProcessor(Generic[TPayload]):
         consumer: Consumer[TPayload],
         topic: Topic,
         processor_factory: ProcessingStrategyFactory[TPayload],
-        recoverable_errors: Optional[Sequence[Type[ConsumerError]]] = None,
     ) -> None:
         self.__consumer = consumer
         self.__processor_factory = processor_factory
         self.__metrics = get_metrics()
-
-        # The types passed to the `except` clause must be a tuple, not a Sequence.
-        self.__recoverable_errors = tuple(recoverable_errors or [])
 
         self.__processing_strategy: Optional[ProcessingStrategy[TPayload]] = None
 
@@ -140,7 +136,7 @@ class StreamProcessor(Generic[TPayload]):
             # even if there is no active assignment and/or processing strategy.
             try:
                 self.__message = self.__consumer.poll(timeout=1.0)
-            except self.__recoverable_errors:
+            except RecoverableError:
                 return
 
         if self.__processing_strategy is not None:
