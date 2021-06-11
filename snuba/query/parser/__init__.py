@@ -125,7 +125,8 @@ def _parse_query_impl(body: Mapping[str, Any], entity: Entity) -> Query:
                 (
                     f"Invalid aggregation structure {aggregation}. "
                     "It must be a sequence containing expression, column and alias."
-                )
+                ),
+                report=False,
             )
         aggregation_function = aggregation[0]
         column_expr = aggregation[1]
@@ -172,7 +173,8 @@ def _parse_query_impl(body: Mapping[str, Any], entity: Entity) -> Query:
                     parameters = select_expr.expression.parameters
                     if len(parameters) != 1:
                         raise ParsingException(
-                            "arrayJoin(...) only accepts a single parameter."
+                            "arrayJoin(...) only accepts a single parameter.",
+                            report=False,
                         )
                     if isinstance(parameters[0], Column):
                         array_join_cols.add(parameters[0].column_name)
@@ -185,7 +187,8 @@ def _parse_query_impl(body: Mapping[str, Any], entity: Entity) -> Query:
                         for e in parameters[0]:
                             if isinstance(e, Column):
                                 raise ParsingException(
-                                    "arrayJoin(...) cannot contain columns nested in functions."
+                                    "arrayJoin(...) cannot contain columns nested in functions.",
+                                    report=False,
                                 )
 
     where_expr = parse_conditions_to_expr(
@@ -204,7 +207,8 @@ def _parse_query_impl(body: Mapping[str, Any], entity: Entity) -> Query:
                     (
                         f"Invalid Order By clause {orderby}. If the Order By is a string, "
                         "it must respect the format `[-]column`"
-                    )
+                    ),
+                    report=False,
                 )
             direction, col = match.groups()
             orderby = col
@@ -215,7 +219,8 @@ def _parse_query_impl(body: Mapping[str, Any], entity: Entity) -> Query:
                     (
                         f"Invalid Order By clause {orderby}. If the Order By is an expression, "
                         "the function name must respect the format `[-]func_name`"
-                    )
+                    ),
+                    report=False,
                 )
             direction, col = match.groups()
             orderby = [col] + orderby[1:]
@@ -224,7 +229,8 @@ def _parse_query_impl(body: Mapping[str, Any], entity: Entity) -> Query:
                 (
                     f"Invalid Order By clause {orderby}. The Clause was neither "
                     "a string nor a function call."
-                )
+                ),
+                report=False,
             )
         orderby_parsed = parse_expression(
             tuplify(orderby), entity.get_data_model(), set()
@@ -301,7 +307,8 @@ def _validate_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
                     (
                         f"Shadowing aliases detected for alias: {exp.alias}. "
                         + f"Expressions: {all_declared_aliases[exp.alias]}"
-                    )
+                    ),
+                    report=False,
                 )
             else:
                 all_declared_aliases[exp.alias] = exp
@@ -519,7 +526,8 @@ class AliasExpanderVisitor(ExpressionVisitor[Expression]):
                 # In `f(g(a) as b) as a`, instead, b would be on top of the
                 # stack instead of a.
                 raise CyclicAliasException(
-                    f"Cyclic aliases {name} resolves to {self.__alias_lookup_table[name]}"
+                    f"Cyclic aliases {name} resolves to {self.__alias_lookup_table[name]}",
+                    report=False,
                 )
             return exp
 

@@ -5,15 +5,11 @@ from snuba.query.dsl import multiply
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
-from snuba.query.matchers import (
-    Any,
-    Column as ColumnMatch,
-    FunctionCall as FunctionCallMatch,
-    Literal as LiteralMatch,
-    Or,
-    Param,
-    String,
-)
+from snuba.query.matchers import Any
+from snuba.query.matchers import Column as ColumnMatch
+from snuba.query.matchers import FunctionCall as FunctionCallMatch
+from snuba.query.matchers import Literal as LiteralMatch
+from snuba.query.matchers import Or, Param, String
 from snuba.query.processors import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 from snuba.util import parse_datetime
@@ -163,7 +159,8 @@ class TimeSeriesProcessor(QueryProcessor):
             except ValueError as err:
                 column_name = result.string("column_name")
                 raise InvalidQueryException(
-                    f"Illegal datetime in condition on column {column_name}: '{literal.value}''"
+                    f"Illegal datetime in condition on column {column_name}: '{literal.value}''",
+                    report=False,
                 ) from err
 
             return FunctionCall(
