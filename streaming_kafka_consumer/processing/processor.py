@@ -4,7 +4,8 @@ import logging
 import time
 from typing import Generic, Mapping, Optional, Sequence, Type
 
-from streaming_kafka_consumer.backends.abstract import Consumer, ConsumerError
+from streaming_kafka_consumer.backends.abstract import Consumer
+from streaming_kafka_consumer.errors import ConsumerError
 from streaming_kafka_consumer.metrics import get_metrics
 from streaming_kafka_consumer.processing.strategies.abstract import (
     MessageRejected,

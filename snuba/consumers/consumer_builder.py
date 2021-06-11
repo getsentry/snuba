@@ -3,11 +3,8 @@ from typing import Callable, Optional, Sequence
 
 from confluent_kafka import KafkaError, KafkaException, Producer
 from streaming_kafka_consumer import Topic
-from streaming_kafka_consumer.backends.kafka import (
-    KafkaConsumer,
-    KafkaPayload,
-    TransportError,
-)
+from streaming_kafka_consumer.backends.kafka import KafkaConsumer, KafkaPayload
+from streaming_kafka_consumer.errors import TransportError
 from streaming_kafka_consumer.processing import StreamProcessor
 from streaming_kafka_consumer.processing.strategies import ProcessingStrategyFactory
 from streaming_kafka_consumer.processing.strategies.streaming import (

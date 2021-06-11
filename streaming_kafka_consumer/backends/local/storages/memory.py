@@ -1,13 +1,13 @@
 from datetime import datetime
 from typing import Iterator, MutableMapping, MutableSequence, Optional, Sequence, Tuple
 
-from streaming_kafka_consumer.backends.abstract import OffsetOutOfRange
 from streaming_kafka_consumer.backends.local.storages.abstract import (
     MessageStorage,
     PartitionDoesNotExist,
     TopicDoesNotExist,
     TopicExists,
 )
+from streaming_kafka_consumer.errors import OffsetOutOfRange
 from streaming_kafka_consumer.types import Message, Partition, Topic, TPayload
 
 

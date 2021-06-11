@@ -34,22 +34,18 @@ from confluent_kafka import KafkaError
 from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
-from streaming_kafka_consumer.backends.abstract import (
-    Consumer,
+from streaming_kafka_consumer.backends.abstract import Consumer, Producer
+from streaming_kafka_consumer.concurrent import execute
+from streaming_kafka_consumer.errors import (
     ConsumerError,
     EndOfPartition,
     OffsetOutOfRange,
-    Producer,
+    TransportError,
 )
-from streaming_kafka_consumer.concurrent import execute
 from streaming_kafka_consumer.retries import NoRetryPolicy, RetryPolicy
 from streaming_kafka_consumer.types import Message, Partition, Topic
 
 logger = logging.getLogger(__name__)
-
-
-class TransportError(ConsumerError):
-    pass
 
 
 KafkaConsumerState = Enum(
