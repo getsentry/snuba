@@ -10,6 +10,12 @@ class ConsumerError(Exception):
     """
 
 
+class RecoverableError(ConsumerError):
+    """
+    Recoverable consumer error
+    """
+
+
 class EndOfPartition(ConsumerError):
     """
     Raised when there are no more messages to consume from the partition.
@@ -30,9 +36,7 @@ class OffsetOutOfRange(ConsumerError):
     """
 
 
-class TransportError(ConsumerError):
+class TransportError(RecoverableError):
     """
     Transport/connection failure. May be intermittent.
     """
-
-    pass
