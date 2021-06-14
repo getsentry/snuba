@@ -771,12 +771,34 @@ def process_unmerge_hierarchical(
         # Concretely:
         #
         # * Every time the grouping level is increased and one group is split
-        #   up into multiple, skip_needs_final can be used.
+        #   up into multiple, EXCLUDE_GROUPS is used (skip_needs_final=True)
         #
         # * Every time this process needs to be reverted (merging parts of many
-        #   groups into one group), it cannot be used. Since this is "undo"
-        #   like regular unmerge is "undo" of merge, it is expected to happen
-        #   way less often.
+        #   groups into one group, aka unsplit), FINAL is used
+        #   (skip_needs_final=False).  Since this is "undo" like regular
+        #   unmerge is "undo" of merge, it is expected to happen way less
+        #   often.
+        #
+        # We think FINAL needs to be used in the second case, as it could be
+        # that the subhashes we need to move into one issue are part of many
+        # different groups that in turn may be merged together with unrelated
+        # events.
+        #
+        # For example, given four events (shown as tuples) with primary hashes
+        # A, B and hierarchical hashes h1..n4, they may be arranged like
+        # this after splitting up the two A-events into separate groups and
+        # merging one of them with B:
+        #
+        # Group 1:
+        # (A, h1, h2, h3)
+        # (B, )
+        #
+        # Group 2:
+        # (A, h1, h4)
+        #
+        # Performing an unsplit/reducing the grouping level should move all
+        # A-events back into one group. For Group 1 we cannot change the group
+        # ID for a subsection of events without using FINAL.
         query_time_flags: LegacyQueryTimeFlags = (None, message["project_id"])
     else:
         query_time_flags = (NEEDS_FINAL, message["project_id"])
