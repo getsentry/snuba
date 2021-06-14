@@ -18,20 +18,19 @@ from typing import (
 
 import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
-from streaming_kafka_consumer import Message, Topic
+from streaming_kafka_consumer import Message, Partition, Topic
 from streaming_kafka_consumer.backends.kafka import KafkaPayload
 from streaming_kafka_consumer.processing.strategies import ProcessingStrategy
 from streaming_kafka_consumer.processing.strategies import (
     ProcessingStrategy as ProcessingStep,
 )
 from streaming_kafka_consumer.processing.strategies import ProcessingStrategyFactory
-from streaming_kafka_consumer.processing.strategies.streaming.collect import CollectStep
-from streaming_kafka_consumer.processing.strategies.streaming.filter import FilterStep
-from streaming_kafka_consumer.processing.strategies.streaming.transform import (
+from streaming_kafka_consumer.processing.strategies.streaming import (
+    CollectStep,
+    FilterStep,
     ParallelTransformStep,
     TransformStep,
 )
-from streaming_kafka_consumer.types import Partition
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
@@ -42,7 +41,6 @@ from snuba.processor import InsertBatch, MessageProcessor, ReplacementBatch
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
-from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.writer import BatchWriter
 
 logger = logging.getLogger("snuba.consumer")
@@ -546,10 +544,9 @@ class MultistorageConsumerProcessingStrategyFactory(
                 self.__max_batch_time,
                 self.__input_block_size,
                 self.__output_block_size,
-                StreamMetricsAdapter(self.__metrics),
             )
 
         return TransformStep(
             self.__find_destination_storages,
-            FilterStep(self.__has_destination_storages, strategy,),
+            FilterStep(self.__has_destination_storages, strategy),
         )

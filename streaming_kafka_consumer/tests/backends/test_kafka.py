@@ -10,16 +10,16 @@ from unittest import TestCase
 
 import pytest
 from confluent_kafka.admin import AdminClient, NewTopic
-from streaming_kafka_consumer.backends.abstract import ConsumerError, EndOfPartition
 from streaming_kafka_consumer.backends.kafka import (
     KafkaConsumer,
     KafkaPayload,
     KafkaProducer,
-    as_kafka_configuration_bool,
 )
 from streaming_kafka_consumer.backends.kafka.configuration import (
-    build_kafka_configuration_with_overrides,
+    build_kafka_configuration,
 )
+from streaming_kafka_consumer.backends.kafka.consumer import as_kafka_configuration_bool
+from streaming_kafka_consumer.errors import ConsumerError, EndOfPartition
 from streaming_kafka_consumer.synchronized import Commit, commit_codec
 from streaming_kafka_consumer.tests.backends.mixins import StreamsTestMixin
 from streaming_kafka_consumer.types import Message, Partition, Topic
@@ -52,7 +52,7 @@ def test_payload_pickle_out_of_band() -> None:
 
 class KafkaStreamsTestCase(StreamsTestMixin[KafkaPayload], TestCase):
 
-    configuration = build_kafka_configuration_with_overrides(
+    configuration = build_kafka_configuration(
         {"bootstrap.servers": os.environ.get("DEFAULT_BROKERS", "localhost:9092")}
     )
 

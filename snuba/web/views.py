@@ -559,12 +559,11 @@ if application.debug or application.testing:
         assert storage is not None
 
         if type_ == "insert":
-            from streaming_kafka_consumer.strategy_factory import (
+            from streaming_kafka_consumer.processing.strategies.streaming import (
                 KafkaConsumerStrategyFactory,
             )
 
             from snuba.consumers.consumer import build_batch_writer, process_message
-            from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
             table_writer = storage.get_table_writer()
             stream_loader = table_writer.get_stream_loader()
@@ -577,7 +576,6 @@ if application.debug or application.testing:
                 processes=None,
                 input_block_size=None,
                 output_block_size=None,
-                metrics=StreamMetricsAdapter(metrics),
             ).create(lambda offsets: None)
             strategy.submit(message)
             strategy.close()

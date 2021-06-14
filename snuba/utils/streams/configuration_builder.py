@@ -1,17 +1,13 @@
-import logging
-from typing import Any, Dict, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
-from streaming_kafka_consumer.backends.kafka.configuration import (
-    build_kafka_configuration_with_overrides,
-    build_kafka_consumer_configuration_with_overrides,
+from streaming_kafka_consumer.backends.kafka import build_kafka_configuration
+from streaming_kafka_consumer.backends.kafka import (
+    build_kafka_consumer_configuration as _build_kafka_consumer_configuration,
 )
 
 from snuba import settings
 from snuba.utils.streams.topics import Topic
-
-logger = logging.getLogger(__name__)
-
-KafkaBrokerConfig = Dict[str, Any]
+from snuba.utils.streams.types import KafkaBrokerConfig
 
 
 def _get_default_topic_configuration(topic: Optional[Topic]) -> Mapping[str, Any]:
@@ -28,7 +24,7 @@ def get_default_kafka_configuration(
 ) -> KafkaBrokerConfig:
     default_topic_config = _get_default_topic_configuration(topic)
 
-    return build_kafka_configuration_with_overrides(
+    return build_kafka_configuration(
         default_topic_config, bootstrap_servers, override_params
     )
 
@@ -44,7 +40,7 @@ def build_kafka_consumer_configuration(
 ) -> KafkaBrokerConfig:
     default_topic_config = _get_default_topic_configuration(topic)
 
-    return build_kafka_consumer_configuration_with_overrides(
+    return _build_kafka_consumer_configuration(
         default_topic_config,
         group_id,
         auto_offset_reset,

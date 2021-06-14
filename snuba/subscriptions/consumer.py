@@ -12,7 +12,9 @@ from typing import (
     Sequence,
 )
 
-from streaming_kafka_consumer import Consumer, ConsumerError, Message, Partition, Topic
+from streaming_kafka_consumer import Message, Partition, Topic
+from streaming_kafka_consumer.backends.abstract import Consumer
+from streaming_kafka_consumer.errors import ConsumerError
 
 from snuba.utils.types import Interval, InvalidRangeError
 

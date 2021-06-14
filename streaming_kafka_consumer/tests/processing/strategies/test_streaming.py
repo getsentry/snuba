@@ -236,7 +236,7 @@ def test_parallel_transform_step() -> None:
     starting_processes = get_subprocess_count()
     worker_processes = 2
     manager_processes = 1
-    metrics = TestingMetricsBackend()
+    metrics = TestingMetricsBackend
 
     with assert_changes(
         get_subprocess_count,
@@ -263,7 +263,6 @@ def test_parallel_transform_step() -> None:
             max_batch_time=60,
             input_block_size=4096,
             output_block_size=4096,
-            metrics=metrics,
         )
 
         for message in messages:
@@ -308,7 +307,6 @@ def test_parallel_transform_step_terminate_workers() -> None:
             max_batch_time=60,
             input_block_size=4096,
             output_block_size=4096,
-            metrics=TestingMetricsBackend(),
         )
 
     with assert_changes(

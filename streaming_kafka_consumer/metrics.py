@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from typing import Any, Mapping, Optional, Protocol, Union, runtime_checkable
 
-Tags = Optional[Mapping[str, str]]
+Tags = Mapping[str, str]
 
 
 @runtime_checkable
@@ -29,34 +29,7 @@ class Metrics(Protocol):
         raise NotImplementedError
 
 
-class MetricsWrapper:
-    def __init__(self, backend: Metrics, name: Optional[str] = None) -> None:
-        self.__backend = backend
-        self.__name = name
-
-    def __merge_name(self, name: str) -> str:
-        if self.__name is None:
-            return name
-        else:
-            return f"{self.__name}.{name}"
-
-    def increment(
-        self, name: str, value: Union[int, float] = 1, tags: Optional[Tags] = None
-    ) -> None:
-        self.__backend.increment(self.__merge_name(name), value, tags)
-
-    def gauge(
-        self, name: str, value: Union[int, float], tags: Optional[Tags] = None
-    ) -> None:
-        self.__backend.gauge(self.__merge_name(name), value, tags)
-
-    def timing(
-        self, name: str, value: Union[int, float], tags: Optional[Tags] = None
-    ) -> None:
-        self.__backend.timing(self.__merge_name(name), value, tags)
-
-
-class _DummyMetricsBackend(Metrics):
+class DummyMetricsBackend(Metrics):
     """
     Default metrics backend that does not record anything.
     """
@@ -75,9 +48,6 @@ class _DummyMetricsBackend(Metrics):
         self, name: str, value: Union[int, float], tags: Optional[Tags] = None
     ) -> None:
         pass
-
-
-DummyMetricsBackend = _DummyMetricsBackend()
 
 
 class Gauge:
@@ -113,3 +83,27 @@ class Gauge:
     def decrement(self, value: float = 1.0) -> None:
         self.__value -= value
         self.__report()
+
+
+_metrics_backend: Optional[Metrics] = None
+_dummy_metrics_backend = DummyMetricsBackend()
+
+
+def configure_metrics(metrics: Metrics) -> None:
+    """
+    Metrics can only be configured once
+    """
+    global _metrics_backend
+
+    assert _metrics_backend is None, "Metrics is already set"
+
+    # Perform a runtime check of metrics instance upon initialization of
+    # this class to avoid errors down the line when it is used.
+    assert isinstance(metrics, Metrics)
+    _metrics_backend = metrics
+
+
+def get_metrics() -> Metrics:
+    if _metrics_backend is None:
+        return _dummy_metrics_backend
+    return _metrics_backend

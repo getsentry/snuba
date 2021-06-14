@@ -2,18 +2,13 @@ from abc import abstractmethod
 from typing import Callable, Mapping, Optional, Protocol, TypeVar
 
 from streaming_kafka_consumer.backends.kafka import KafkaPayload
-from streaming_kafka_consumer.metrics import (
-    DummyMetricsBackend,
-    Metrics,
-    MetricsWrapper,
-)
 from streaming_kafka_consumer.processing.strategies import (
     ProcessingStrategy,
     ProcessingStrategyFactory,
 )
-from streaming_kafka_consumer.processing.strategies.streaming import (
-    CollectStep,
-    FilterStep,
+from streaming_kafka_consumer.processing.strategies.streaming.collect import CollectStep
+from streaming_kafka_consumer.processing.strategies.streaming.filter import FilterStep
+from streaming_kafka_consumer.processing.strategies.streaming.transform import (
     ParallelTransformStep,
     TransformStep,
 )
@@ -62,7 +57,6 @@ class ConsumerStrategyFactory(ProcessingStrategyFactory[TPayload]):
         processes: Optional[int],
         input_block_size: Optional[int],
         output_block_size: Optional[int],
-        metrics: Metrics = DummyMetricsBackend,
     ) -> None:
         self.__prefilter = prefilter
         self.__process_message = process_message
@@ -85,7 +79,6 @@ class ConsumerStrategyFactory(ProcessingStrategyFactory[TPayload]):
         self.__processes = processes
         self.__input_block_size = input_block_size
         self.__output_block_size = output_block_size
-        self.__metrics = metrics
 
     def __should_accept(self, message: Message[TPayload]) -> bool:
         assert self.__prefilter is not None
@@ -114,7 +107,6 @@ class ConsumerStrategyFactory(ProcessingStrategyFactory[TPayload]):
                 max_batch_time=self.__max_batch_time,
                 input_block_size=self.__input_block_size,
                 output_block_size=self.__output_block_size,
-                metrics=MetricsWrapper(self.__metrics, "process"),
             )
 
         if self.__prefilter is not None:
