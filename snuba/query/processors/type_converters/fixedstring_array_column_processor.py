@@ -1,9 +1,6 @@
 from typing import Set
-from snuba.query.expressions import (
-    Expression,
-    FunctionCall,
-    Literal,
-)
+
+from snuba.query.expressions import Expression, FunctionCall, Literal
 from snuba.query.processors.type_converters import BaseTypeConverter, ColumnTypeError
 
 
@@ -21,7 +18,7 @@ class FixedStringArrayColumnProcessor(BaseTypeConverter):
                 (Literal(None, value=exp.value), Literal(None, self.fixed_length)),
             )
         except (AssertionError, ValueError):
-            raise ColumnTypeError("Not a valid UUID string")
+            raise ColumnTypeError("Not a valid UUID string", report=False)
 
     def _process_expressions(self, exp: Expression) -> Expression:
         # FixedString is converted to regular string just fine in query return
