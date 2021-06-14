@@ -1,7 +1,7 @@
 from datetime import datetime
 
-from streaming_kafka_consumer import Message, Partition, Topic
-from streaming_kafka_consumer.backends.kafka import KafkaPayload
+from arroyo import Message, Partition, Topic
+from arroyo.backends.kafka import KafkaPayload
 
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
 

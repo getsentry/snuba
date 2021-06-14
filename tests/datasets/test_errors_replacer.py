@@ -8,8 +8,8 @@ from typing import Any, Tuple
 import pytest
 import pytz
 import simplejson as json
-from streaming_kafka_consumer import Message, Partition, Topic
-from streaming_kafka_consumer.backends.kafka import KafkaPayload
+from arroyo import Message, Partition, Topic
+from arroyo.backends.kafka import KafkaPayload
 
 from snuba import replacer, settings
 from snuba.clickhouse import DATETIME_FORMAT

@@ -7,7 +7,7 @@ from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
 from snuba.clickhouse.columns import Array, ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
-from snuba.query.conditions import ConditionFunctions, FUNCTION_TO_OPERATOR
+from snuba.query.conditions import FUNCTION_TO_OPERATOR, ConditionFunctions
 from snuba.query.expressions import Argument, Expression, FunctionCall, Lambda, Literal
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.strings import parse_string_to_expr
@@ -127,8 +127,8 @@ def parse_function(
     function_tuple = is_function(expr, depth)
     if function_tuple is None:
         raise ParsingException(
-            "complex_column_expr was given an expr %s that is not a function at depth %d."
-            % (expr, depth)
+            f"complex_column_expr was given an expr {expr} that is not a function at depth {depth}.",
+            report=False,
         )
 
     name, args, alias = function_tuple
@@ -224,7 +224,8 @@ def parse_function_to_expr(
                     (
                         f"Invalid function {func} for literal {literal}. Literal is a sequence. "
                         "Function must be in()/notIn()"
-                    )
+                    ),
+                    report=False,
                 )
             literals = tuple([parse_string_to_expr(lit) for lit in literal])
             return FunctionCall(None, "tuple", literals)
@@ -234,7 +235,8 @@ def parse_function_to_expr(
                     (
                         f"Invalid function {func} for literal {literal}. Literal is not a sequence. "
                         "Function cannot be in()/notIn()"
-                    )
+                    ),
+                    report=False,
                 )
             if isinstance(literal, str):
                 return parse_string_to_expr(literal)

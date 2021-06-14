@@ -4,9 +4,9 @@ from datetime import datetime
 from typing import Optional, Sequence
 
 import simplejson as json
-from streaming_kafka_consumer import Message
-from streaming_kafka_consumer.backends.kafka import KafkaPayload
-from streaming_kafka_consumer.processing.strategies.batching import AbstractBatchWorker
+from arroyo import Message
+from arroyo.backends.kafka import KafkaPayload
+from arroyo.processing.strategies.batching import AbstractBatchWorker
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storage import WritableTableStorage

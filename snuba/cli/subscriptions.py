@@ -7,13 +7,11 @@ from datetime import timedelta
 from typing import Any, Optional, Sequence
 
 import click
-from streaming_kafka_consumer import Topic
-from streaming_kafka_consumer.backends.kafka import KafkaConsumer, KafkaProducer
-from streaming_kafka_consumer.processing import StreamProcessor
-from streaming_kafka_consumer.processing.strategies.batching import (
-    BatchProcessingStrategyFactory,
-)
-from streaming_kafka_consumer.synchronized import SynchronizedConsumer
+from arroyo import Topic
+from arroyo.backends.kafka import KafkaConsumer, KafkaProducer
+from arroyo.processing import StreamProcessor
+from arroyo.processing.strategies.batching import BatchProcessingStrategyFactory
+from arroyo.synchronized import SynchronizedConsumer
 
 from snuba import environment, settings
 from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
@@ -185,7 +183,7 @@ def subscriptions(
     metrics.gauge("executor.workers", getattr(executor, "_max_workers", 0))
 
     with closing(consumer), executor, closing(producer):
-        from streaming_kafka_consumer import configure_metrics
+        from arroyo import configure_metrics
 
         configure_metrics(StreamMetricsAdapter(metrics))
         batching_consumer = StreamProcessor(

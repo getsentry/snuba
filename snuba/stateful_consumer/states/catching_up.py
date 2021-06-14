@@ -1,8 +1,8 @@
 import logging
 from typing import Optional, Tuple
 
-from streaming_kafka_consumer.backends.kafka import KafkaPayload
-from streaming_kafka_consumer.processing import StreamProcessor
+from arroyo.backends.kafka import KafkaPayload
+from arroyo.processing import StreamProcessor
 
 from snuba.consumers.consumer_builder import ConsumerBuilder
 from snuba.stateful_consumer import ConsumerStateCompletionEvent, ConsumerStateData
