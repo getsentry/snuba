@@ -3,8 +3,8 @@ from __future__ import annotations
 from concurrent.futures import Future
 from typing import Union
 
-from streaming_kafka_consumer import Message, Partition, Topic
-from streaming_kafka_consumer.backends.abstract import Producer
+from arroyo import Message, Partition, Topic
+from arroyo.backends.abstract import Producer
 
 from snuba.utils.codecs import Encoder, TDecoded, TEncoded
 

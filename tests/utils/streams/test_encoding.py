@@ -1,5 +1,5 @@
-from streaming_kafka_consumer.backends.local.backend import LocalBroker as Broker
-from streaming_kafka_consumer.types import Message, Topic
+from arroyo.backends.local.backend import LocalBroker as Broker
+from arroyo.types import Message, Topic
 
 from snuba.utils.codecs import Encoder
 from snuba.utils.streams.encoding import ProducerEncodingWrapper

@@ -1,5 +1,5 @@
-from streaming_kafka_consumer import Message
-from streaming_kafka_consumer.backends.kafka import KafkaPayload
+from arroyo import Message
+from arroyo.backends.kafka import KafkaPayload
 
 from snuba.datasets.message_filters import StreamMessageFilter
 

@@ -1,16 +1,14 @@
 import functools
 from typing import Callable, Optional, Sequence
 
+from arroyo import Topic
+from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
+from arroyo.processing import StreamProcessor
+from arroyo.processing.strategies import ProcessingStrategyFactory
+from arroyo.processing.strategies.streaming import KafkaConsumerStrategyFactory
+from arroyo.profiler import ProcessingStrategyProfilerWrapperFactory
+from arroyo.retries import BasicRetryPolicy, RetryPolicy
 from confluent_kafka import KafkaError, KafkaException, Producer
-from streaming_kafka_consumer import Topic
-from streaming_kafka_consumer.backends.kafka import KafkaConsumer, KafkaPayload
-from streaming_kafka_consumer.processing import StreamProcessor
-from streaming_kafka_consumer.processing.strategies import ProcessingStrategyFactory
-from streaming_kafka_consumer.processing.strategies.streaming import (
-    KafkaConsumerStrategyFactory,
-)
-from streaming_kafka_consumer.profiler import ProcessingStrategyProfilerWrapperFactory
-from streaming_kafka_consumer.retries import BasicRetryPolicy, RetryPolicy
 
 from snuba.consumers.consumer import build_batch_writer, process_message
 from snuba.consumers.snapshot_worker import SnapshotProcessor

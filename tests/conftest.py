@@ -2,11 +2,11 @@ import json
 from typing import Any, Callable, Generator, Iterator, Tuple, Union
 
 import pytest
+from arroyo.backends.local.backend import LocalBroker
+from arroyo.backends.local.storages.memory import MemoryMessageStorage
+from arroyo.clock import Clock, TestingClock
+from arroyo.types import TPayload
 from snuba_sdk.legacy import json_to_snql
-from streaming_kafka_consumer.backends.local.backend import LocalBroker
-from streaming_kafka_consumer.backends.local.storages.memory import MemoryMessageStorage
-from streaming_kafka_consumer.clock import Clock, TestingClock
-from streaming_kafka_consumer.types import TPayload
 
 from snuba import settings, state
 from snuba.clickhouse.native import ClickhousePool

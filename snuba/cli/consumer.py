@@ -2,7 +2,7 @@ import signal
 from typing import Any, Optional, Sequence
 
 import click
-from streaming_kafka_consumer import configure_metrics
+from arroyo import configure_metrics
 
 from snuba import environment, settings
 from snuba.consumers.consumer_builder import ConsumerBuilder

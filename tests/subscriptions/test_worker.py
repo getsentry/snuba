@@ -5,8 +5,8 @@ from typing import Any, Generator, Iterable, MutableMapping, Optional, Tuple
 from uuid import UUID, uuid1
 
 import pytest
-from streaming_kafka_consumer import Message, Partition, Topic
-from streaming_kafka_consumer.backends.local.backend import LocalBroker as Broker
+from arroyo import Message, Partition, Topic
+from arroyo.backends.local.backend import LocalBroker as Broker
 
 from snuba import state
 from snuba.datasets.factory import get_dataset
