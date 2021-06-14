@@ -2,13 +2,16 @@ import signal
 from typing import Any, Optional, Sequence
 
 import click
+from streaming_kafka_consumer import configure_metrics
 
-from snuba import settings
+from snuba import environment, settings
 from snuba.consumers.consumer_builder import ConsumerBuilder
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_cdc_storage, WRITABLE_STORAGES
+from snuba.datasets.storages.factory import WRITABLE_STORAGES, get_cdc_storage
 from snuba.environment import setup_logging, setup_sentry
 from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
+from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
 
 @click.command()
@@ -112,6 +115,13 @@ def consumer(
 
     storage_key = StorageKey(storage_name)
 
+    metrics = MetricsWrapper(
+        environment.metrics,
+        "consumer",
+        tags={"group": consumer_group, "storage": storage_key.value},
+    )
+    configure_metrics(StreamMetricsAdapter(metrics))
+
     consumer_builder = ConsumerBuilder(
         storage_key=storage_key,
         raw_topic=raw_events_topic,
@@ -124,6 +134,7 @@ def consumer(
         auto_offset_reset=auto_offset_reset,
         queued_max_messages_kbytes=queued_max_messages_kbytes,
         queued_min_messages=queued_min_messages,
+        metrics=metrics,
         processes=processes,
         input_block_size=input_block_size,
         output_block_size=output_block_size,

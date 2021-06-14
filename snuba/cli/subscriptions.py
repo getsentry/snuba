@@ -185,6 +185,9 @@ def subscriptions(
     metrics.gauge("executor.workers", getattr(executor, "_max_workers", 0))
 
     with closing(consumer), executor, closing(producer):
+        from streaming_kafka_consumer import configure_metrics
+
+        configure_metrics(StreamMetricsAdapter(metrics))
         batching_consumer = StreamProcessor(
             consumer,
             (
@@ -219,9 +222,7 @@ def subscriptions(
                 ),
                 max_batch_size,
                 max_batch_time_ms,
-                StreamMetricsAdapter(metrics),
             ),
-            metrics=StreamMetricsAdapter(metrics),
         )
 
         def handler(signum: int, frame: Optional[Any]) -> None:

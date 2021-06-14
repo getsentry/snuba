@@ -21,14 +21,12 @@ class Timing(NamedTuple):
     tags: Optional[Tags]
 
 
-class TestingMetricsBackend(Metrics):
+class _TestingMetricsBackend(Metrics):
     """
     A metrics backend that logs all metrics recorded. Intended for testing
     the behavior of the metrics implementations themselves. Not for general
     use (it will cause unbounded memory consumption.)
     """
-
-    # TODO: This might make sense to extend the dummy metrics backend.
 
     def __init__(self) -> None:
         self.calls: MutableSequence[Union[Increment, Gauge, Timing]] = []
@@ -47,3 +45,6 @@ class TestingMetricsBackend(Metrics):
         self, name: str, value: Union[int, float], tags: Optional[Tags] = None
     ) -> None:
         self.calls.append(Timing(name, value, tags))
+
+
+TestingMetricsBackend = _TestingMetricsBackend()

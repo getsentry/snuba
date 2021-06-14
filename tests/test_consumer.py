@@ -23,6 +23,7 @@ from snuba.consumers.consumer import (
     ReplacementBatchWriter,
     process_message,
 )
+from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
 from snuba.processor import InsertBatch, ReplacementBatch
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -36,7 +37,7 @@ def test_streaming_consumer_strategy() -> None:
         Message(
             Partition(Topic("events"), 0),
             i,
-            KafkaPayload(None, b"{}", None),
+            KafkaPayload(None, b"{}", []),
             datetime.now(),
         )
         for i in itertools.count()
@@ -74,7 +75,6 @@ def test_streaming_consumer_strategy() -> None:
         processes=None,
         input_block_size=None,
         output_block_size=None,
-        metrics=metrics,
     )
 
     commit_function = Mock()
@@ -126,12 +126,13 @@ def test_json_row_batch_pickle_out_of_band() -> None:
 
 
 def get_row_count(storage: Storage) -> int:
-    return (
+    schema = storage.get_schema()
+    assert isinstance(schema, TableSchema)
+
+    return int(
         storage.get_cluster()
         .get_query_connection(ClickhouseClientSettings.INSERT)
-        .execute(f"SELECT count() FROM {storage.get_schema().get_local_table_name()}")[
-            0
-        ][0]
+        .execute(f"SELECT count() FROM {schema.get_local_table_name()}")[0][0]
     )
 
 

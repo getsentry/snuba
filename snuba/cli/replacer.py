@@ -75,8 +75,8 @@ def replacer(
     log_level: Optional[str] = None,
 ) -> None:
 
-    from streaming_kafka_consumer import Topic
-    from streaming_kafka_consumer.backends.kafka import KafkaConsumer, TransportError
+    from streaming_kafka_consumer import Topic, configure_metrics
+    from streaming_kafka_consumer.backends.kafka import KafkaConsumer
     from streaming_kafka_consumer.processing import StreamProcessor
     from streaming_kafka_consumer.processing.strategies.batching import (
         BatchProcessingStrategyFactory,
@@ -101,9 +101,9 @@ def replacer(
     ), f"Storage {storage.get_storage_key().value} does not have a replacement topic."
     replacements_topic = replacements_topic or default_replacement_topic_spec.topic_name
 
-    metrics = MetricsWrapper(environment.metrics, "replacer", tags=metrics_tags,)
+    metrics = MetricsWrapper(environment.metrics, "replacer", tags=metrics_tags)
 
-    stream_metrics = StreamMetricsAdapter(metrics)
+    configure_metrics(StreamMetricsAdapter(metrics))
 
     replacer = StreamProcessor(
         KafkaConsumer(
@@ -121,10 +121,7 @@ def replacer(
             worker=ReplacerWorker(storage, metrics=metrics),
             max_batch_size=max_batch_size,
             max_batch_time=max_batch_time_ms,
-            metrics=stream_metrics,
         ),
-        metrics=stream_metrics,
-        recoverable_errors=[TransportError],
     )
 
     def handler(signum: int, frame: Any) -> None:

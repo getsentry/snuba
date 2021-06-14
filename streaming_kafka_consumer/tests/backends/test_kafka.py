@@ -10,7 +10,6 @@ from unittest import TestCase
 
 import pytest
 from confluent_kafka.admin import AdminClient, NewTopic
-from streaming_kafka_consumer.backends.abstract import ConsumerError, EndOfPartition
 from streaming_kafka_consumer.backends.kafka import (
     KafkaConsumer,
     KafkaPayload,
@@ -20,6 +19,7 @@ from streaming_kafka_consumer.backends.kafka import (
 from streaming_kafka_consumer.backends.kafka.configuration import (
     build_kafka_configuration_with_overrides,
 )
+from streaming_kafka_consumer.errors import ConsumerError, EndOfPartition
 from streaming_kafka_consumer.synchronized import Commit, commit_codec
 from streaming_kafka_consumer.tests.backends.mixins import StreamsTestMixin
 from streaming_kafka_consumer.types import Message, Partition, Topic

@@ -15,7 +15,7 @@ from typing import (
     TypeVar,
 )
 
-from streaming_kafka_consumer.metrics import DummyMetricsBackend, Metrics
+from streaming_kafka_consumer.metrics import get_metrics
 from streaming_kafka_consumer.processing.strategies.abstract import (
     ProcessingStrategy,
     ProcessingStrategyFactory,
@@ -104,13 +104,12 @@ class BatchProcessingStrategy(ProcessingStrategy[TPayload]):
         worker: AbstractBatchWorker[TPayload, TResult],
         max_batch_size: int,
         max_batch_time: int,
-        metrics: Metrics,
     ) -> None:
         self.__commit = commit
         self.__worker = worker
         self.__max_batch_size = max_batch_size
         self.__max_batch_time = max_batch_time
-        self.__metrics = metrics
+        self.__metrics = get_metrics()
 
         self.__batch: Optional[Batch[TResult]] = None
         self.__closed = False
@@ -228,20 +227,14 @@ class BatchProcessingStrategyFactory(ProcessingStrategyFactory[TPayload]):
         worker: AbstractBatchWorker[TPayload, TResult],
         max_batch_size: int,
         max_batch_time: int,
-        metrics: Metrics = DummyMetricsBackend,
     ) -> None:
         self.__worker = worker
         self.__max_batch_size = max_batch_size
         self.__max_batch_time = max_batch_time
-        self.__metrics = metrics
 
     def create(
         self, commit: Callable[[Mapping[Partition, int]], None]
     ) -> ProcessingStrategy[TPayload]:
         return BatchProcessingStrategy(
-            commit,
-            self.__worker,
-            self.__max_batch_size,
-            self.__max_batch_time,
-            self.__metrics,
+            commit, self.__worker, self.__max_batch_size, self.__max_batch_time,
         )
