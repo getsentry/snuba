@@ -98,6 +98,7 @@ class CustomFunction(QueryProcessor):
                     raise InvalidCustomFunctionCall(
                         expression,
                         f"Illegal call to function {expression.function_name}: {str(exception)}",
+                        report=False,
                     ) from exception
 
                 resolved_params = {
