@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import random
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
-from typing import Iterator
+from threading import Thread
+from typing import Any, Callable, Iterator
 from unittest import mock
 
 import pytest
@@ -11,8 +14,23 @@ from snuba.redis import redis_client
 from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RedisCache
 from snuba.utils.codecs import PassthroughCodec
-from snuba.utils.concurrent import execute
 from tests.assertions import assert_changes, assert_does_not_change
+
+
+def execute(function: Callable[[], Any]) -> Future[Any]:
+    future: Future[Any] = Future()
+
+    def run() -> None:
+        try:
+            result = function()
+        except Exception as e:
+            future.set_exception(e)
+        else:
+            future.set_result(result)
+
+    Thread(target=run).start()
+
+    return future
 
 
 @pytest.fixture

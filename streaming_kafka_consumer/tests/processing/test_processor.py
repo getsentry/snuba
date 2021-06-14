@@ -7,11 +7,12 @@ from streaming_kafka_consumer.processing.processor import (
     StreamProcessor,
 )
 from streaming_kafka_consumer.processing.strategies.abstract import MessageRejected
+from streaming_kafka_consumer.tests.assertions import (
+    assert_changes,
+    assert_does_not_change,
+)
+from streaming_kafka_consumer.tests.metrics import TestingMetricsBackend, Timing
 from streaming_kafka_consumer.types import Message, Partition, Topic
-
-from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
-from tests.assertions import assert_changes, assert_does_not_change
-from tests.backends.metrics import TestingMetricsBackend, Timing
 
 
 def test_stream_processor_lifecycle() -> None:
@@ -22,12 +23,10 @@ def test_stream_processor_lifecycle() -> None:
     factory = mock.Mock()
     factory.create.return_value = strategy
 
-    metrics = TestingMetricsBackend()
+    metrics = TestingMetricsBackend
 
     with assert_changes(lambda: int(consumer.subscribe.call_count), 0, 1):
-        processor: StreamProcessor[int] = StreamProcessor(
-            consumer, topic, factory, StreamMetricsAdapter(metrics)
-        )
+        processor: StreamProcessor[int] = StreamProcessor(consumer, topic, factory)
 
     # The processor should accept heartbeat messages without an assignment or
     # active processor.
@@ -128,7 +127,7 @@ def test_stream_processor_termination_on_error() -> None:
     factory.create.return_value = strategy
 
     processor: StreamProcessor[int] = StreamProcessor(
-        consumer, topic, factory, StreamMetricsAdapter(TestingMetricsBackend())
+        consumer, topic, factory,
     )
 
     assignment_callback = consumer.subscribe.call_args.kwargs["on_assign"]

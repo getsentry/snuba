@@ -6,16 +6,17 @@ from typing import ContextManager, Generic, Iterator, Mapping, Optional, Sequenc
 from unittest import mock
 
 import pytest
-from streaming_kafka_consumer.backends.abstract import (
-    Consumer,
+from streaming_kafka_consumer.backends.abstract import Consumer, Producer
+from streaming_kafka_consumer.errors import (
     ConsumerError,
     EndOfPartition,
     OffsetOutOfRange,
-    Producer,
+)
+from streaming_kafka_consumer.tests.assertions import (
+    assert_changes,
+    assert_does_not_change,
 )
 from streaming_kafka_consumer.types import Message, Partition, Topic, TPayload
-
-from tests.assertions import assert_changes, assert_does_not_change
 
 
 class StreamsTestMixin(ABC, Generic[TPayload]):

@@ -1,15 +1,27 @@
-from concurrent.futures import wait
-from threading import Barrier
-from typing import Callable
+from __future__ import annotations
+
+from concurrent.futures import Future, wait
+from threading import Barrier, Thread
+from typing import Any, Callable
 
 import pytest
 
-from snuba.utils.concurrent import execute
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.types import Tags
 from tests.backends.metrics import Gauge as GaugeCall
 from tests.backends.metrics import TestingMetricsBackend
+
+
+def execute(function: Callable[[], Any]) -> Future[Any]:
+    future: Future[Any] = Future()
+
+    def run() -> None:
+        future.set_result(function())
+
+    Thread(target=run).start()
+
+    return future
 
 
 @pytest.mark.parametrize("factory", [Gauge, ThreadSafeGauge])

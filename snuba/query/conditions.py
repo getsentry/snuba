@@ -299,20 +299,23 @@ def build_match(
     # The IN condition has to be checked separately since each parameter
     # has to be checked individually.
     alias_match = AnyOptionalString() if alias is None else String(alias)
-    column_match = ColumnPattern(alias_match, String(col))
+    column_match = Param("column", ColumnPattern(alias_match, String(col)))
     return Or(
         [
             FunctionCallPattern(
                 Or([String(op) for op in ops]),
-                (column_match, LiteralPattern(AnyPattern(param_type))),
+                (column_match, Param("rhs", LiteralPattern(AnyPattern(param_type)))),
             ),
             FunctionCallPattern(
                 String(ConditionFunctions.IN),
                 (
                     column_match,
-                    FunctionCallPattern(
-                        Or([String("array"), String("tuple")]),
-                        all_parameters=LiteralPattern(AnyPattern(param_type)),
+                    Param(
+                        "rhs",
+                        FunctionCallPattern(
+                            Or([String("array"), String("tuple")]),
+                            all_parameters=LiteralPattern(AnyPattern(param_type)),
+                        ),
                     ),
                 ),
             ),

@@ -20,16 +20,11 @@ from typing import (
     Union,
 )
 
-from streaming_kafka_consumer.backends.abstract import (
-    Consumer,
-    ConsumerError,
-    EndOfPartition,
-    Producer,
-)
+from streaming_kafka_consumer.backends.abstract import Consumer, Producer
 from streaming_kafka_consumer.backends.local.storages.abstract import MessageStorage
+from streaming_kafka_consumer.clock import Clock, SystemClock
+from streaming_kafka_consumer.errors import ConsumerError, EndOfPartition
 from streaming_kafka_consumer.types import Message, Partition, Topic, TPayload
-
-from snuba.utils.clock import Clock, SystemClock
 
 
 class LocalBroker(Generic[TPayload]):

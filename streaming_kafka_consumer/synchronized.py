@@ -3,16 +3,12 @@ from dataclasses import dataclass
 from threading import Event
 from typing import Callable, Mapping, MutableMapping, Optional, Sequence, Set
 
-from streaming_kafka_consumer.backends.abstract import (
-    Consumer,
-    ConsumerError,
-    EndOfPartition,
-)
+from streaming_kafka_consumer.backends.abstract import Consumer
 from streaming_kafka_consumer.backends.kafka import KafkaPayload
+from streaming_kafka_consumer.codecs import Codec
+from streaming_kafka_consumer.concurrent import Synchronized, execute
+from streaming_kafka_consumer.errors import ConsumerError, EndOfPartition
 from streaming_kafka_consumer.types import Message, Partition, Topic, TPayload
-
-from snuba.utils.codecs import Codec
-from snuba.utils.concurrent import Synchronized, execute
 
 logger = logging.getLogger(__name__)
 

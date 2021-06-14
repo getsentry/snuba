@@ -1,6 +1,7 @@
 import datetime
-import pytest
 from typing import Optional
+
+import pytest
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity

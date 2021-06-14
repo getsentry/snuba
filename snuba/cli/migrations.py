@@ -1,9 +1,9 @@
-import click
 import os
-
 from typing import Sequence
 
-from snuba.clusters.cluster import ClickhouseNodeType, CLUSTERS
+import click
+
+from snuba.clusters.cluster import CLUSTERS, ClickhouseNodeType
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.connect import check_clickhouse_connections
 from snuba.migrations.errors import MigrationError

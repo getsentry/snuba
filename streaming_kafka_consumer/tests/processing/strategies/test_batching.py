@@ -12,9 +12,6 @@ from streaming_kafka_consumer.processing.strategies.batching import (
 )
 from streaming_kafka_consumer.types import Message, Topic
 
-from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
-
 
 class FakeWorker(AbstractBatchWorker[int, int]):
     def __init__(self) -> None:
@@ -41,14 +38,12 @@ class TestConsumer(object):
         assert isinstance(consumer, LocalConsumer)
 
         worker = FakeWorker()
-        metrics = DummyMetricsBackend(strict=True)
         batching_consumer = StreamProcessor(
             consumer,
             topic,
             BatchProcessingStrategyFactory(
-                worker=worker, max_batch_size=2, max_batch_time=100, metrics=metrics,
+                worker=worker, max_batch_size=2, max_batch_time=100,
             ),
-            metrics=StreamMetricsAdapter(metrics),
         )
 
         for _ in range(3):
@@ -70,14 +65,12 @@ class TestConsumer(object):
         assert isinstance(consumer, LocalConsumer)
 
         worker = FakeWorker()
-        metrics = DummyMetricsBackend(strict=True)
         batching_consumer = StreamProcessor(
             consumer,
             topic,
             BatchProcessingStrategyFactory(
-                worker=worker, max_batch_size=100, max_batch_time=2000, metrics=metrics,
+                worker=worker, max_batch_size=100, max_batch_time=2000
             ),
-            metrics=StreamMetricsAdapter(metrics),
         )
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())

@@ -16,16 +16,15 @@ from typing import (
     Tuple,
 )
 
-from streaming_kafka_consumer.backends.abstract import OffsetOutOfRange
 from streaming_kafka_consumer.backends.local.storages.abstract import (
     MessageStorage,
     PartitionDoesNotExist,
     TopicDoesNotExist,
     TopicExists,
 )
+from streaming_kafka_consumer.codecs import Codec
+from streaming_kafka_consumer.errors import OffsetOutOfRange
 from streaming_kafka_consumer.types import Message, Partition, Topic, TPayload
-
-from snuba.utils.codecs import Codec
 
 
 class PickleCodec(Codec[bytes, Tuple[TPayload, datetime]]):

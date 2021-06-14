@@ -1,4 +1,3 @@
-import functools
 import itertools
 import logging
 import time
@@ -19,30 +18,30 @@ from typing import (
 
 import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
-from streaming_kafka_consumer import Message, Partition, Topic
+from streaming_kafka_consumer import Message, Topic
 from streaming_kafka_consumer.backends.kafka import KafkaPayload
 from streaming_kafka_consumer.processing.strategies import ProcessingStrategy
 from streaming_kafka_consumer.processing.strategies import (
     ProcessingStrategy as ProcessingStep,
 )
 from streaming_kafka_consumer.processing.strategies import ProcessingStrategyFactory
-from streaming_kafka_consumer.processing.strategies.streaming import (
-    CollectStep,
-    FilterStep,
+from streaming_kafka_consumer.processing.strategies.streaming.collect import CollectStep
+from streaming_kafka_consumer.processing.strategies.streaming.filter import FilterStep
+from streaming_kafka_consumer.processing.strategies.streaming.transform import (
     ParallelTransformStep,
     TransformStep,
 )
+from streaming_kafka_consumer.types import Partition
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
+from snuba.datasets.table_storage import TableWriter
 from snuba.processor import InsertBatch, MessageProcessor, ReplacementBatch
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
-from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.writer import BatchWriter
 
 logger = logging.getLogger("snuba.consumer")
@@ -249,83 +248,31 @@ class ProcessedMessageBatchWriter(
 json_row_encoder = JSONRowEncoder()
 
 
-def process_message(
-    processor: MessageProcessor, message: Message[KafkaPayload]
-) -> Union[None, JSONRowInsertBatch, ReplacementBatch]:
-    result = processor.process_message(
-        rapidjson.loads(message.payload.value),
-        KafkaMessageMetadata(
-            message.offset, message.partition.index, message.timestamp
-        ),
+def build_batch_writer(
+    table_writer: TableWriter,
+    metrics: MetricsBackend,
+    replacements_producer: Optional[ConfluentKafkaProducer] = None,
+    replacements_topic: Optional[Topic] = None,
+) -> Callable[[], ProcessedMessageBatchWriter]:
+
+    assert not (replacements_producer is None) ^ (replacements_topic is None)
+    supports_replacements = replacements_producer is not None
+
+    writer = table_writer.get_batch_writer(
+        metrics, {"load_balancing": "in_order", "insert_distributed_sync": 1},
     )
 
-    if isinstance(result, InsertBatch):
-        return JSONRowInsertBatch(
-            [json_row_encoder.encode(row) for row in result.rows],
-            result.origin_timestamp,
-        )
-    else:
-        return result
-
-
-class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
-    def __init__(
-        self,
-        prefilter: Optional[StreamMessageFilter[KafkaPayload]],
-        processor: MessageProcessor,
-        writer: BatchWriter[JSONRow],
-        metrics: MetricsBackend,
-        max_batch_size: int,
-        max_batch_time: float,
-        processes: Optional[int],
-        input_block_size: Optional[int],
-        output_block_size: Optional[int],
-        replacements_producer: Optional[ConfluentKafkaProducer] = None,
-        replacements_topic: Optional[Topic] = None,
-    ) -> None:
-        self.__prefilter = prefilter
-        self.__processor = processor
-        self.__writer = writer
-        self.__metrics = metrics
-
-        self.__max_batch_size = max_batch_size
-        self.__max_batch_time = max_batch_time
-
-        if processes is not None:
-            assert input_block_size is not None, "input block size required"
-            assert output_block_size is not None, "output block size required"
-        else:
-            assert (
-                input_block_size is None
-            ), "input block size cannot be used without processes"
-            assert (
-                output_block_size is None
-            ), "output block size cannot be used without processes"
-
-        self.__processes = processes
-        self.__input_block_size = input_block_size
-        self.__output_block_size = output_block_size
-
-        assert not (replacements_producer is None) ^ (replacements_topic is None)
-        self.__supports_replacements = replacements_producer is not None
-        self.__replacements_producer = replacements_producer
-        self.__replacements_topic = replacements_topic
-
-    def __should_accept(self, message: Message[KafkaPayload]) -> bool:
-        assert self.__prefilter is not None
-        return not self.__prefilter.should_drop(message)
-
-    def __build_write_step(self) -> ProcessedMessageBatchWriter:
+    def build_writer() -> ProcessedMessageBatchWriter:
         insert_batch_writer = InsertBatchWriter(
-            self.__writer, MetricsWrapper(self.__metrics, "insertions")
+            writer, MetricsWrapper(metrics, "insertions")
         )
 
         replacement_batch_writer: Optional[ReplacementBatchWriter]
-        if self.__supports_replacements:
-            assert self.__replacements_producer is not None
-            assert self.__replacements_topic is not None
+        if supports_replacements:
+            assert replacements_producer is not None
+            assert replacements_topic is not None
             replacement_batch_writer = ReplacementBatchWriter(
-                self.__replacements_producer, self.__replacements_topic
+                replacements_producer, replacements_topic
             )
         else:
             replacement_batch_writer = None
@@ -334,39 +281,7 @@ class StreamingConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             insert_batch_writer, replacement_batch_writer
         )
 
-    def create(
-        self, commit: Callable[[Mapping[Partition, int]], None]
-    ) -> ProcessingStrategy[KafkaPayload]:
-        collect = CollectStep(
-            self.__build_write_step,
-            commit,
-            self.__max_batch_size,
-            self.__max_batch_time,
-        )
-
-        transform_function = functools.partial(process_message, self.__processor)
-
-        strategy: ProcessingStrategy[KafkaPayload]
-        if self.__processes is None:
-            strategy = TransformStep(transform_function, collect)
-        else:
-            assert self.__input_block_size is not None
-            assert self.__output_block_size is not None
-            strategy = ParallelTransformStep(
-                transform_function,
-                collect,
-                self.__processes,
-                max_batch_size=self.__max_batch_size,
-                max_batch_time=self.__max_batch_time,
-                input_block_size=self.__input_block_size,
-                output_block_size=self.__output_block_size,
-                metrics=StreamMetricsAdapter(MetricsWrapper(self.__metrics, "process")),
-            )
-
-        if self.__prefilter is not None:
-            strategy = FilterStep(self.__should_accept, strategy)
-
-        return strategy
+    return build_writer
 
 
 class MultistorageCollector(
@@ -439,6 +354,25 @@ class MultistorageCollector(
 class MultistorageKafkaPayload(NamedTuple):
     storage_keys: Sequence[StorageKey]
     payload: KafkaPayload
+
+
+def process_message(
+    processor: MessageProcessor, message: Message[KafkaPayload]
+) -> Union[None, JSONRowInsertBatch, ReplacementBatch]:
+    result = processor.process_message(
+        rapidjson.loads(message.payload.value),
+        KafkaMessageMetadata(
+            message.offset, message.partition.index, message.timestamp
+        ),
+    )
+
+    if isinstance(result, InsertBatch):
+        return JSONRowInsertBatch(
+            [json_row_encoder.encode(row) for row in result.rows],
+            result.origin_timestamp,
+        )
+    else:
+        return result
 
 
 def process_message_multistorage(
@@ -611,10 +545,9 @@ class MultistorageConsumerProcessingStrategyFactory(
                 self.__max_batch_time,
                 self.__input_block_size,
                 self.__output_block_size,
-                StreamMetricsAdapter(self.__metrics),
             )
 
         return TransformStep(
             self.__find_destination_storages,
-            FilterStep(self.__has_destination_storages, strategy,),
+            FilterStep(self.__has_destination_storages, strategy),
         )

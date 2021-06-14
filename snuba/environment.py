@@ -2,7 +2,7 @@ from __future__ import absolute_import
 
 import logging
 import os
-from typing import Optional
+from typing import Any, Mapping, Optional
 
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
@@ -22,6 +22,10 @@ def setup_logging(level: Optional[str] = None) -> None:
     )
 
 
+def traces_sampler(sampling_context: Mapping[str, Any]) -> Any:
+    return sampling_context["parent_sampled"] or False
+
+
 def setup_sentry() -> None:
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
@@ -31,6 +35,7 @@ def setup_sentry() -> None:
             LoggingIntegration(event_level=logging.WARNING),
         ],
         release=os.getenv("SNUBA_RELEASE"),
+        traces_sampler=traces_sampler,
     )
 
 
