@@ -18,20 +18,19 @@ from typing import (
 
 import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
-from streaming_kafka_consumer import Message, Topic
+from streaming_kafka_consumer import Message, Partition, Topic
 from streaming_kafka_consumer.backends.kafka import KafkaPayload
 from streaming_kafka_consumer.processing.strategies import ProcessingStrategy
 from streaming_kafka_consumer.processing.strategies import (
     ProcessingStrategy as ProcessingStep,
 )
 from streaming_kafka_consumer.processing.strategies import ProcessingStrategyFactory
-from streaming_kafka_consumer.processing.strategies.streaming.collect import CollectStep
-from streaming_kafka_consumer.processing.strategies.streaming.filter import FilterStep
-from streaming_kafka_consumer.processing.strategies.streaming.transform import (
+from streaming_kafka_consumer.processing.strategies.streaming import (
+    CollectStep,
+    FilterStep,
     ParallelTransformStep,
     TransformStep,
 )
-from streaming_kafka_consumer.types import Partition
 
 from snuba.clickhouse.http import JSONRow, JSONRowEncoder
 from snuba.consumers.types import KafkaMessageMetadata
