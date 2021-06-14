@@ -461,15 +461,18 @@ def dataset_query(
                 "snql.query.failed", tags={"referrer": referrer, "status": f"{status}"},
             )
 
+        timing = timer.for_json()
+        sentry_sdk.set_tag("duration_group", timing["duration_group"])
+
         return Response(
-            json.dumps(
-                {"error": details, "timing": timer.for_json(), **exception.extra}
-            ),
+            json.dumps({"error": details, "timing": timing, **exception.extra}),
             status,
             {"Content-Type": "application/json"},
         )
 
-    payload: MutableMapping[str, Any] = {**result.result, "timing": timer.for_json()}
+    timing = timer.for_json()
+    sentry_sdk.set_tag("duration_group", timing["duration_group"])
+    payload: MutableMapping[str, Any] = {**result.result, "timing": timing}
 
     if settings.STATS_IN_RESPONSE or request.settings.get_debug():
         payload.update(result.extra)
