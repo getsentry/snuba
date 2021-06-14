@@ -1,7 +1,7 @@
 from typing import Any, Mapping, Optional, Sequence
 
-from streaming_kafka_consumer.backends.kafka import build_kafka_configuration
-from streaming_kafka_consumer.backends.kafka import (
+from arroyo.backends.kafka import build_kafka_configuration
+from arroyo.backends.kafka import (
     build_kafka_consumer_configuration as _build_kafka_consumer_configuration,
 )
 

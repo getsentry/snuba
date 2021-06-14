@@ -21,11 +21,11 @@ from uuid import UUID
 import jsonschema
 import sentry_sdk
 import simplejson as json
+from arroyo import Message, Partition, Topic
+from arroyo.backends.kafka import KafkaPayload
 from flask import Flask, Request, Response, redirect, render_template
 from flask import request as http_request
 from markdown import markdown
-from streaming_kafka_consumer import Message, Partition, Topic
-from streaming_kafka_consumer.backends.kafka import KafkaPayload
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
@@ -559,7 +559,7 @@ if application.debug or application.testing:
         assert storage is not None
 
         if type_ == "insert":
-            from streaming_kafka_consumer.processing.strategies.streaming import (
+            from arroyo.processing.strategies.streaming import (
                 KafkaConsumerStrategyFactory,
             )
 

@@ -5,8 +5,10 @@ from typing import Any, Generator, Iterable, MutableMapping, Optional, Tuple
 from uuid import UUID, uuid1
 
 import pytest
-from streaming_kafka_consumer import Message, Partition, Topic
-from streaming_kafka_consumer.backends.local.backend import LocalBroker as Broker
+from arroyo import Message, Partition, Topic
+from arroyo.backends.local.backend import LocalBroker as Broker
+from arroyo.backends.local.storages.memory import MemoryMessageStorage
+from arroyo.clock import TestingClock
 
 from snuba import state
 from snuba.datasets.factory import get_dataset
@@ -105,11 +107,11 @@ def subscription_rollout() -> Generator[None, None, None]:
     state.set_config("snql_subscription_rollout_projects", "")
 
 
-def test_subscription_worker(
-    broker: Broker[SubscriptionTaskResult],
-    subscription_data: SubscriptionData,
-    subscription_rollout: Any,
-) -> None:
+def test_subscription_worker(subscription_data: SubscriptionData) -> None:
+    broker: Broker[SubscriptionTaskResult] = Broker(
+        MemoryMessageStorage(), TestingClock()
+    )
+
     result_topic = Topic("subscription-results")
 
     broker.create_topic(result_topic, partitions=1)
