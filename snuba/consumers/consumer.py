@@ -42,7 +42,6 @@ from snuba.processor import InsertBatch, MessageProcessor, ReplacementBatch
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
-from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.writer import BatchWriter
 
 logger = logging.getLogger("snuba.consumer")
@@ -546,10 +545,9 @@ class MultistorageConsumerProcessingStrategyFactory(
                 self.__max_batch_time,
                 self.__input_block_size,
                 self.__output_block_size,
-                StreamMetricsAdapter(self.__metrics),
             )
 
         return TransformStep(
             self.__find_destination_storages,
-            FilterStep(self.__has_destination_storages, strategy,),
+            FilterStep(self.__has_destination_storages, strategy),
         )
