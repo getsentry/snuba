@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Generic
+from typing import Generic, TypeVar
 
+from streaming_kafka_consumer import Message
 from streaming_kafka_consumer.backends.kafka import KafkaPayload
-from streaming_kafka_consumer.types import Message, TPayload
+
+TPayload = TypeVar("TPayload")
 
 
 class StreamMessageFilter(ABC, Generic[TPayload]):

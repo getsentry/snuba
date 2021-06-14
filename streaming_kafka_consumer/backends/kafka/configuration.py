@@ -38,7 +38,7 @@ SUPPORTED_KAFKA_CONFIGURATION = (
 )
 
 
-def build_kafka_configuration_with_overrides(
+def build_kafka_configuration(
     default_config: Mapping[str, Any],
     bootstrap_servers: Optional[Sequence[str]] = None,
     override_params: Optional[Mapping[str, Any]] = None,
@@ -66,7 +66,7 @@ def build_kafka_configuration_with_overrides(
     return broker_config
 
 
-def build_kafka_consumer_configuration_with_overrides(
+def build_kafka_consumer_configuration(
     default_config: Mapping[str, Any],
     group_id: str,
     auto_offset_reset: Optional[str] = None,
@@ -85,7 +85,7 @@ def build_kafka_consumer_configuration_with_overrides(
     if queued_min_messages is None:
         queued_min_messages = DEFAULT_QUEUED_MIN_MESSAGES
 
-    broker_config = build_kafka_configuration_with_overrides(
+    broker_config = build_kafka_configuration(
         default_config, bootstrap_servers, override_params
     )
 

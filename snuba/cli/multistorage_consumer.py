@@ -4,10 +4,9 @@ from typing import Any, Optional, Sequence
 
 import click
 from confluent_kafka import Producer as ConfluentKafkaProducer
-from streaming_kafka_consumer import configure_metrics
+from streaming_kafka_consumer import Topic, configure_metrics
 from streaming_kafka_consumer.backends.kafka import KafkaConsumer
 from streaming_kafka_consumer.processing import StreamProcessor
-from streaming_kafka_consumer.types import Topic
 
 from snuba import environment, settings
 from snuba.consumers.consumer import MultistorageConsumerProcessingStrategyFactory
