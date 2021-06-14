@@ -307,17 +307,7 @@ class TestReplacer:
             self.project_id,
         )
 
-    @pytest.mark.parametrize(
-        "skip_needs_final,query_time_flag",
-        [
-            (True, None),
-            (None, errors_replacer.NEEDS_FINAL),
-            (False, errors_replacer.NEEDS_FINAL),
-        ],
-    )
-    def test_unmerge_hierarchical_process(
-        self, skip_needs_final, query_time_flag
-    ) -> None:
+    def test_unmerge_hierarchical_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)
 
         message = (
@@ -332,9 +322,6 @@ class TestReplacer:
                 "datetime": timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             },
         )
-
-        if skip_needs_final is not None:
-            message[2]["skip_needs_final"] = skip_needs_final
 
         replacement = self.replacer.process_message(self._wrap(message))
 
@@ -356,7 +343,7 @@ class TestReplacer:
             "timestamp": timestamp.strftime(DATETIME_FORMAT),
         }
 
-        assert replacement.query_time_flags == (query_time_flag, self.project_id,)
+        assert replacement.query_time_flags == (None, self.project_id,)
 
     def test_delete_promoted_tag_process(self) -> None:
         timestamp = datetime.now(tz=pytz.utc)

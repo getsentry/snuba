@@ -809,25 +809,9 @@ def process_unmerge_hierarchical(
         ),
     }
 
-    if message.get("skip_needs_final", False):
-        # In some cases Sentry can ensure that no events remain in
-        # `previous_group_id`. In that case FINAL is not applied to future
-        # queries, Sentry is instead expected to send an `exclude_groups`
-        # message after unsplit is done, and we can live with data
-        # inconsistencies while this is ongoing.
-        #
-        # Concretely:
-        #
-        # * Every time the grouping level is increased and one group is split
-        #   up into multiple, skip_needs_final can be used.
-        #
-        # * Every time this process needs to be reverted (merging parts of many
-        #   groups into one group), it cannot be used. Since this is "undo"
-        #   like regular unmerge is "undo" of merge, it is expected to happen
-        #   way less often.
-        query_time_flags: LegacyQueryTimeFlags = (None, message["project_id"])
-    else:
-        query_time_flags = (NEEDS_FINAL, message["project_id"])
+    # Sentry is expected to send an `exclude_groups` message after unsplit is
+    # done, and we can live with data inconsistencies while this is ongoing.
+    query_time_flags = (None, message["project_id"])
 
     return LegacyReplacement(
         count_query_template, insert_query_template, query_args, query_time_flags
