@@ -3,8 +3,9 @@ from typing import Mapping, Optional
 from unittest import mock
 
 import pytest
-from streaming_kafka_consumer import ConsumerError, Message, Partition, Topic
+from streaming_kafka_consumer import Message, Partition, Topic
 from streaming_kafka_consumer.backends.local.backend import LocalBroker as Broker
+from streaming_kafka_consumer.errors import ConsumerError
 
 from snuba.subscriptions.consumer import Tick, TickConsumer
 from snuba.utils.clock import Clock

@@ -1,118 +1,4 @@
-<img src="/snuba/web/static/img/snuba.svg" width="150" height="71"/>
-
-A service providing fast event searching, filtering and aggregation on arbitrary fields.
-
-## Sentry + Snuba
-
-Add/change the following lines in `~/.sentry/sentry.conf.py`:
-
-    SENTRY_SEARCH = 'sentry.search.snuba.EventsDatasetSnubaSearchBackend'
-    SENTRY_TSDB = 'sentry.tsdb.redissnuba.RedisSnubaTSDB'
-    SENTRY_EVENTSTREAM = 'sentry.eventstream.snuba.SnubaEventStream'
-
-Run:
-
-    sentry devservices up
-
-Access raw clickhouse client (similar to psql):
-
-    docker exec -it sentry_clickhouse clickhouse-client
-
-Data is written into the table `sentry_local`: `select count() from sentry_local;`
-
-## Requirements (Only required if you are developing against Snuba)
-
-Snuba assumes:
-
-1. A Clickhouse server endpoint at `CLICKHOUSE_HOST` (default `localhost`).
-2. A redis instance running at `REDIS_HOST` (default `localhost`). On port
-   `6379`
-
-A quick way to get these services running is to set up sentry, then use:
-
-    sentry devservices up --exclude=snuba
-
-Note that Snuba assumes that everything is running on UTC time. Otherwise you may experience issues with timezone mismatches.
-
-## Install / Run (Only required if you are developing against Snuba)
-
-    mkvirtualenv snuba --python=python3.8
-    workon snuba
-    make install-python-dependencies
-    make setup-git
-
-    # Run API server
-    snuba api
-
-## API
-
-Snuba exposes an HTTP API (default port: `1218`) with the following endpoints.
-
-- [/](/): Shows this page.
-- [/dashboard](/dashboard): Query dashboard
-- [/query](/query): Endpoint for querying clickhouse.
-- [/config](/config): Console for runtime config options
-
-## Settings
-
-Settings are found in `settings.py`
-
-- `CLUSTERS` : Provides the list of clusters and the hostname, port, and storage sets that should run on each cluster. Local vs distributed is also set per cluster.
-- `REDIS_HOST` : The host redis is running on.
-
-## Tests
-
-    pip install -e .
-    make test
-
-## Testing Against Sentry
-
-```
-workon snuba
-git checkout your-snuba-branch
-snuba api
-```
-And then in another terminal
-```
-workon sentry
-git checkout master
-git pull
-sentry devservices up --exclude=snuba
-```
-This will get the most recent version of Sentry on master, and bring up all snuba's dependencies.
-
-You will want to run the following Sentry tests:
-```
-USE_SNUBA=1 make test-acceptance
-USE_SNUBA=1 make test-snuba
-make test-python
-```
-Note that python tests do not currently pass with the `USE_SNUBA` flag, but should be fixed in the future. For now, simply run it without `USE_SNUBA` flag (which determines the version of TagStore). Note also that we check for the existance of `USE_SNUBA` rather than take into account the value. `USE_SNUBA=0` does not currently work as intended.
-
-## Querying
-
-Try out queries on the [query console](/query). Queries are submitted as a JSON
-body to the [/query](/query) endpoint.
-
-### The Query Payload
-
-An example query body might look like:
-
-    {
-        "project":[1,2],
-        "selected_columns": ["tags[environment]"],
-        "aggregations": [
-            ["max", "received", "last_seen"]
-        ],
-        "conditions": [
-            ["tags[environment]", "=", "prod"]
-        ],
-        "from_date": "2011-07-01T19:54:15",
-        "to_date": "2018-07-06T19:54:15",
-        "granularity": 3600,
-        "groupby": ["group_id", "time"],
-        "having": []
-    }
+Querying Snuba
 
 #### selected_columns, groupby
 
@@ -196,7 +82,6 @@ Multiple arguments can be provided:
     [
         [['fn2', ['arg', 'arg']], '=', '2'],
     ]
-
     fn2(arg, arg) = '2'
 
 Function calls can be nested:
@@ -204,6 +89,7 @@ Function calls can be nested:
     [
         [['fn3', ['fn4', ['arg']]], '=', '3'],
     ]
+
 
     fn3(fn4(arg)) = '3'
 
