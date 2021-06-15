@@ -229,7 +229,7 @@ def handle_internal_server_error(exception: InternalServerError) -> Response:
 
 @application.route("/")
 def root() -> str:
-    with open("README.md") as f:
+    with open("README.rst") as f:
         return render_template("index.html", body=markdown(f.read()))
 
 
