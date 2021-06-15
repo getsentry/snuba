@@ -125,4 +125,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.DropTable(
                 storage_set=StorageSetKey.OUTCOMES, table_name="outcomes_raw_dist",
             ),
+            operations.DropTable(
+                storage_set=StorageSetKey.OUTCOMES, table_name="outcomes_hourly_dist",
+            ),
         ]
