@@ -46,8 +46,7 @@ class TestOrgSessionsApi(BaseApiTest):
         )
         template = {
             "session_id": "00000000-0000-0000-0000-000000000001",
-            # "distinct_id": "bmeow211-58a4-4b36-a9a1-5a55df0d9aaf",
-            "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf",
+            "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aac",
             "duration": None,
             "environment": "production",
             "org_id": 1,
@@ -79,7 +78,7 @@ class TestOrgSessionsApi(BaseApiTest):
             processor.process_message(
                 {
                     **template,
-                    "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf",
+                    "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aac",
                     "status": "errored",
                     "errors": 1,
                     "quantity": 2,
@@ -112,8 +111,6 @@ class TestOrgSessionsApi(BaseApiTest):
                 Condition(Column("started"), Op.LT, datetime.utcnow()),
             ],
             granularity=Granularity(3600),
-            # offset=Offset(0),
-            # limit=Limit(10),
         )
 
         response = self.app.post("/org_sessions/snql", data=query.snuba(),)
