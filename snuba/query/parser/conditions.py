@@ -72,9 +72,7 @@ def parse_conditions(
         try:
             lhs, op, lit = conditions
         except Exception as cause:
-            raise ParsingException(
-                f"Cannot process condition {conditions}", cause
-            ) from cause
+            raise ParsingException(f"Cannot process condition {conditions}") from cause
 
         # facilitate deduping IN conditions by sorting them.
         if op in ("IN", "NOT IN") and isinstance(lit, tuple):
@@ -153,7 +151,8 @@ def parse_conditions_to_expr(
                     (
                         f"Invalid operator {op} for literal {literal}. Literal is a sequence. "
                         "Operator must be IN/NOT IN"
-                    )
+                    ),
+                    report=False,
                 )
             literals = tuple([Literal(None, lit) for lit in literal])
             return FunctionCall(None, "tuple", literals)
@@ -163,7 +162,8 @@ def parse_conditions_to_expr(
                     (
                         f"Invalid operator {op} for literal {literal}. Literal is not a sequence. "
                         "Operator cannot be IN/NOT IN"
-                    )
+                    ),
+                    report=False,
                 )
             return Literal(None, literal)
 
@@ -201,14 +201,16 @@ def parse_conditions_to_expr(
         if op in UNARY_OPERATORS:
             if literal is not None:
                 raise ParsingException(
-                    f"Right hand side operand {literal} provided to unary operator {op}"
+                    f"Right hand side operand {literal} provided to unary operator {op}",
+                    report=False,
                 )
             return unary_condition(OPERATOR_TO_FUNCTION[op], lhs)
 
         else:
             if literal is None:
                 raise ParsingException(
-                    f"Missing right hand side operand for binary operator {op}"
+                    f"Missing right hand side operand for binary operator {op}",
+                    report=False,
                 )
             return binary_condition(
                 OPERATOR_TO_FUNCTION[op], lhs, preprocess_literal(op, literal)

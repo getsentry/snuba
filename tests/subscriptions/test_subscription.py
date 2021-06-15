@@ -1,12 +1,14 @@
 from datetime import timedelta
-from typing import List, Tuple, cast
+from typing import Generator, List, Tuple, cast
 from uuid import UUID
 
 import pytest
 from pytest import raises
 
+from snuba import state
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
+    DelegateSubscriptionData,
     InvalidSubscriptionError,
     LegacySubscriptionData,
     SnQLSubscriptionData,
@@ -43,6 +45,22 @@ TESTS_CREATE = [
         ),
         id="SnQL subscription",
     ),
+    pytest.param(
+        DelegateSubscriptionData(
+            project_id=123,
+            conditions=[["platform", "IN", ["a"]]],
+            aggregations=[["count()", "", "count"]],
+            query=(
+                "MATCH (events) "
+                "SELECT count() AS count "
+                "WHERE "
+                "platform IN tuple('a')"
+            ),
+            time_window=timedelta(minutes=10),
+            resolution=timedelta(minutes=1),
+        ),
+        id="Delegate subscription",
+    ),
 ]
 
 TESTS_INVALID = [
@@ -70,12 +88,36 @@ TESTS_INVALID = [
         ),
         id="SnQL subscription",
     ),
+    pytest.param(
+        DelegateSubscriptionData(
+            project_id=123,
+            conditions=[["platform", "IN", ["a"]]],
+            aggregations=[["count()", "", "count"]],
+            query=(
+                "MATCH (events) "
+                "SELECT count() AS count "
+                "WHERE "
+                "platfo IN tuple('a')"
+            ),
+            time_window=timedelta(minutes=10),
+            resolution=timedelta(minutes=1),
+        ),
+        id="Delegate subscription",
+    ),
 ]
 
 
 class TestSubscriptionCreator(BaseSubscriptionTest):
 
     timer = Timer("test")
+
+    @pytest.fixture(autouse=True)
+    def subscription_rollout(self) -> Generator[None, None, None]:
+        state.set_config("snql_subscription_rollout_pct", 1.0)
+        state.set_config("snql_subscription_rollout_projects", "123")
+        yield
+        state.set_config("snql_subscription_rollout", 0.0)
+        state.set_config("snql_subscription_rollout_projects", "")
 
     @pytest.mark.parametrize("subscription", TESTS_CREATE)
     def test(self, subscription: SubscriptionData) -> None:

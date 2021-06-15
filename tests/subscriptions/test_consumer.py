@@ -3,11 +3,13 @@ from typing import Mapping, Optional
 from unittest import mock
 
 import pytest
-from streaming_kafka_consumer import ConsumerError, Message, Partition, Topic
-from streaming_kafka_consumer.backends.local.backend import LocalBroker as Broker
+from arroyo import Message, Partition, Topic
+from arroyo.backends.local.backend import LocalBroker as Broker
+from arroyo.backends.local.storages.memory import MemoryMessageStorage
+from arroyo.clock import TestingClock
+from arroyo.errors import ConsumerError
 
 from snuba.subscriptions.consumer import Tick, TickConsumer
-from snuba.utils.clock import Clock
 from snuba.utils.types import Interval
 from tests.assertions import assert_changes, assert_does_not_change
 
@@ -27,9 +29,10 @@ def test_tick_time_shift() -> None:
         pytest.param(timedelta(minutes=-5), id="with time shift"),
     ],
 )
-def test_tick_consumer(
-    clock: Clock, broker: Broker[int], time_shift: Optional[timedelta]
-) -> None:
+def test_tick_consumer(time_shift: Optional[timedelta]) -> None:
+    clock = TestingClock()
+    broker: Broker[int] = Broker(MemoryMessageStorage(), clock)
+
     epoch = datetime.fromtimestamp(clock.time())
 
     topic = Topic("messages")
@@ -192,7 +195,10 @@ def test_tick_consumer(
         consumer.seek({Partition(topic, -1): 0})
 
 
-def test_tick_consumer_non_monotonic(clock: Clock, broker: Broker[int]) -> None:
+def test_tick_consumer_non_monotonic() -> None:
+    clock = TestingClock()
+    broker: Broker[int] = Broker(MemoryMessageStorage(), clock)
+
     epoch = datetime.fromtimestamp(clock.time())
 
     topic = Topic("messages")

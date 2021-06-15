@@ -7,7 +7,6 @@ from snuba.processor import MessageProcessor, ProcessedMessage
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 
-
 logger = logging.getLogger("snuba.snapshot-consumer")
 
 

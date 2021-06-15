@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import time
 import uuid
@@ -54,6 +56,18 @@ class ExcludeGroups:
 
 
 QueryTimeFlags = Union[NeedsFinal, ExcludeGroups]
+
+
+@dataclass(frozen=True)
+class ReplacementContext:
+    all_columns: Sequence[FlattenedColumn]
+    required_columns: Sequence[str]
+    state_name: ReplacerState
+
+    tag_column_map: Mapping[str, Mapping[str, str]]
+    promoted_tags: Mapping[str, Sequence[str]]
+    use_promoted_prewhere: bool
+    schema: WritableTableSchema
 
 
 class Replacement(ReplacementBase):
@@ -219,6 +233,15 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         self.__state_name = state_name
         self.__use_promoted_prewhere = use_promoted_prewhere
         self.__schema = schema
+        self.__replacement_context = ReplacementContext(
+            all_columns=self.__all_columns,
+            state_name=self.__state_name,
+            required_columns=self.__required_columns,
+            use_promoted_prewhere=self.__use_promoted_prewhere,
+            schema=self.__schema,
+            tag_column_map=self.__tag_column_map,
+            promoted_tags=self.__promoted_tags,
+        )
 
     def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
         type_ = message.action_type
@@ -228,6 +251,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             "start_delete_groups",
             "start_merge",
             "start_unmerge",
+            "start_unmerge_hierarchical",
             "start_delete_tag",
         ):
             return None
@@ -237,6 +261,10 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             processed = process_merge(event, self.__all_columns)
         elif type_ == "end_unmerge":
             processed = process_unmerge(event, self.__all_columns, self.__state_name)
+        elif type_ == "end_unmerge_hierarchical":
+            processed = process_unmerge_hierarchical(
+                event, self.__all_columns, self.__state_name
+            )
         elif type_ == "end_delete_tag":
             processed = process_delete_tag(
                 event,
@@ -255,7 +283,9 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 event, self.__all_columns, self.__state_name
             )
         elif type_ == "exclude_groups":
-            processed = process_exclude_groups(event)
+            processed = ExcludeGroupsReplacement.parse_message(
+                event, self.__replacement_context
+            )
         else:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
 
@@ -541,7 +571,8 @@ def process_tombstone_events(
     )
 
 
-def process_exclude_groups(message: Mapping[str, Any]) -> Optional[Replacement]:
+@dataclass
+class ExcludeGroupsReplacement(Replacement):
     """
     Exclude a group ID from being searched.
 
@@ -558,12 +589,29 @@ def process_exclude_groups(message: Mapping[str, Any]) -> Optional[Replacement]:
     See docstring in `sentry.reprocessing2` for more information.
     """
 
-    group_ids = message["group_ids"]
-    if not group_ids:
+    project_id: int
+    group_ids: Sequence[int]
+
+    @classmethod
+    def parse_message(
+        cls, message: Mapping[str, Any], context: ReplacementContext
+    ) -> Optional[ExcludeGroupsReplacement]:
+        if not message["group_ids"]:
+            return None
+
+        return cls(project_id=message["project_id"], group_ids=message["group_ids"])
+
+    def get_project_id(self) -> int:
+        return self.project_id
+
+    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
+        return ExcludeGroups(group_ids=self.group_ids)
+
+    def get_insert_query(self, table_name: str) -> Optional[str]:
         return None
 
-    query_time_flags = (EXCLUDE_GROUPS, message["project_id"], group_ids)
-    return LegacyReplacement(None, None, {}, query_time_flags)
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        return None
 
 
 SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
@@ -637,9 +685,9 @@ def process_unmerge(
     )
 
     where = """\
-        PREWHERE group_id = %(previous_group_id)s
-        WHERE project_id = %(project_id)s
-        AND primary_hash IN (%(hashes)s)
+        PREWHERE primary_hash IN (%(hashes)s)
+        WHERE group_id = %(previous_group_id)s
+        AND project_id = %(project_id)s
         AND received <= CAST('%(timestamp)s' AS DateTime)
         AND NOT deleted
     """
@@ -667,16 +715,103 @@ def process_unmerge(
         "previous_group_id": message["previous_group_id"],
         "project_id": message["project_id"],
         "timestamp": timestamp.strftime(DATETIME_FORMAT),
+        "hashes": ", ".join(_convert_hash(h, state_name) for h in hashes),
     }
 
-    if state_name == ReplacerState.ERRORS:
-        query_args["hashes"] = ", ".join(
-            ["'%s'" % str(uuid.UUID(_hashify(h))) for h in hashes]
-        )
-    else:
-        query_args["hashes"] = ", ".join("'%s'" % _hashify(h) for h in hashes)
-
     query_time_flags = (NEEDS_FINAL, message["project_id"])
+
+    return LegacyReplacement(
+        count_query_template, insert_query_template, query_args, query_time_flags
+    )
+
+
+def _convert_hash(
+    hash: str, state_name: ReplacerState, convert_types: bool = False
+) -> str:
+    if state_name == ReplacerState.ERRORS:
+        if convert_types:
+            return "toUUID('%s')" % str(uuid.UUID(_hashify(hash)))
+        else:
+            return "'%s'" % str(uuid.UUID(_hashify(hash)))
+    else:
+        if convert_types:
+            return "toFixedString('%s', 32)" % _hashify(hash)
+        else:
+            return "'%s'" % _hashify(hash)
+
+
+def process_unmerge_hierarchical(
+    message: Mapping[str, Any],
+    all_columns: Sequence[FlattenedColumn],
+    state_name: ReplacerState,
+) -> Optional[Replacement]:
+    all_column_names = [c.escaped for c in all_columns]
+    select_columns = map(
+        lambda i: i if i != "group_id" else str(message["new_group_id"]),
+        all_column_names,
+    )
+
+    try:
+        timestamp = datetime.strptime(
+            message["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+        )
+
+        primary_hash = message["primary_hash"]
+        assert isinstance(primary_hash, str)
+
+        hierarchical_hash = message["hierarchical_hash"]
+        assert isinstance(hierarchical_hash, str)
+
+        uuid.UUID(primary_hash)
+        uuid.UUID(hierarchical_hash)
+    except Exception as exc:
+        # TODO(markus): We're sacrificing consistency over uptime as long as
+        # this is in development. At some point this piece of code should be
+        # stable enough to remove this.
+        logger.error("process_unmerge_hierarchical.failed", exc_info=exc)
+        return None
+
+    where = """\
+        PREWHERE primary_hash = %(primary_hash)s
+        WHERE group_id = %(previous_group_id)s
+        AND has(hierarchical_hashes, %(hierarchical_hash)s)
+        AND project_id = %(project_id)s
+        AND received <= CAST('%(timestamp)s' AS DateTime)
+        AND NOT deleted
+    """
+
+    count_query_template = (
+        """\
+        SELECT count()
+        FROM %(table_name)s FINAL
+    """
+        + where
+    )
+
+    insert_query_template = (
+        """\
+        INSERT INTO %(table_name)s (%(all_columns)s)
+        SELECT %(select_columns)s
+        FROM %(table_name)s FINAL
+    """
+        + where
+    )
+
+    query_args = {
+        "all_columns": ", ".join(all_column_names),
+        "select_columns": ", ".join(select_columns),
+        "previous_group_id": message["previous_group_id"],
+        "project_id": message["project_id"],
+        "timestamp": timestamp.strftime(DATETIME_FORMAT),
+        "primary_hash": _convert_hash(primary_hash, state_name),
+        "hierarchical_hash": _convert_hash(
+            hierarchical_hash, state_name, convert_types=True
+        ),
+    }
+
+    # Sentry is expected to send an `exclude_groups` message after unsplit is
+    # done, and we can live with data inconsistencies while this is ongoing.
+    query_time_flags = (None, message["project_id"])
 
     return LegacyReplacement(
         count_query_template, insert_query_template, query_args, query_time_flags

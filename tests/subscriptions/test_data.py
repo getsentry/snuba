@@ -1,10 +1,12 @@
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Generator, Optional
 
 import pytest
 
+from snuba import state
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.data import (
+    DelegateSubscriptionData,
     LegacySubscriptionData,
     SnQLSubscriptionData,
     SubscriptionData,
@@ -41,6 +43,23 @@ TESTS = [
         id="SnQL subscription",
     ),
     pytest.param(
+        DelegateSubscriptionData(
+            project_id=1,
+            query=(
+                "MATCH (events) "
+                "SELECT count() AS count "
+                "WHERE "
+                "platform IN tuple('a') "
+            ),
+            conditions=[["platform", "IN", ["a"]]],
+            aggregations=[["count()", "", "count"]],
+            time_window=timedelta(minutes=500),
+            resolution=timedelta(minutes=1),
+        ),
+        None,
+        id="Delegate subscription",
+    ),
+    pytest.param(
         SnQLSubscriptionData(
             project_id=1,
             query=(
@@ -74,6 +93,14 @@ TESTS = [
 
 
 class TestBuildRequest(BaseSubscriptionTest):
+    @pytest.fixture(autouse=True)
+    def subscription_rollout(self) -> Generator[None, None, None]:
+        state.set_config("snql_subscription_rollout_pct", 1.0)
+        state.set_config("snql_subscription_rollout_projects", "1")
+        yield
+        state.set_config("snql_subscription_rollout", 0.0)
+        state.set_config("snql_subscription_rollout_projects", "")
+
     @pytest.mark.parametrize("subscription, exception", TESTS)  # type: ignore
     def test_conditions(
         self, subscription: SubscriptionData, exception: Optional[Exception]

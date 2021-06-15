@@ -1,3 +1,4 @@
+import functools
 import logging
 import os
 import time
@@ -20,11 +21,11 @@ from uuid import UUID
 import jsonschema
 import sentry_sdk
 import simplejson as json
+from arroyo import Message, Partition, Topic
+from arroyo.backends.kafka import KafkaPayload
 from flask import Flask, Request, Response, redirect, render_template
 from flask import request as http_request
 from markdown import markdown
-from streaming_kafka_consumer import Message, Partition, Topic
-from streaming_kafka_consumer.backends.kafka import KafkaPayload
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
@@ -186,7 +187,10 @@ def handle_invalid_dataset(exception: InvalidDatasetError) -> Response:
 def handle_invalid_query(exception: InvalidQueryException) -> Response:
     # TODO: Remove this logging as soon as the query validation code is
     # mature enough that we can trust it.
-    logger.warning("Invalid query", exc_info=True)
+    if exception.report:
+        logger.warning("Invalid query", exc_info=exception)
+    else:
+        logger.info("Invalid query", exc_info=exception)
 
     # TODO: Add special cases with more structure for specific exceptions
     # if needed.
@@ -225,7 +229,7 @@ def handle_internal_server_error(exception: InternalServerError) -> Response:
 
 @application.route("/")
 def root() -> str:
-    with open("README.md") as f:
+    with open("README.rst") as f:
         return render_template("index.html", body=markdown(f.read()))
 
 
@@ -555,15 +559,18 @@ if application.debug or application.testing:
         assert storage is not None
 
         if type_ == "insert":
-            from snuba.consumers.consumer import StreamingConsumerStrategyFactory
+            from arroyo.processing.strategies.streaming import (
+                KafkaConsumerStrategyFactory,
+            )
+
+            from snuba.consumers.consumer import build_batch_writer, process_message
 
             table_writer = storage.get_table_writer()
             stream_loader = table_writer.get_stream_loader()
-            strategy = StreamingConsumerStrategyFactory(
+            strategy = KafkaConsumerStrategyFactory(
                 stream_loader.get_pre_filter(),
-                stream_loader.get_processor(),
-                table_writer.get_batch_writer(metrics),
-                metrics,
+                functools.partial(process_message, stream_loader.get_processor()),
+                build_batch_writer(table_writer, metrics=metrics),
                 max_batch_size=1,
                 max_batch_time=1.0,
                 processes=None,

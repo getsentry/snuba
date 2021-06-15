@@ -178,7 +178,7 @@ def parse_expression(
     if isinstance(val, str):
         return parse_string_to_expr(val)
     raise ParsingException(
-        f"Expression to parse can only be a function or a string: {val}"
+        f"Expression to parse can only be a function or a string: {val}", report=False
     )
 
 
@@ -186,7 +186,9 @@ def parse_clickhouse_function(function: str) -> Expression:
     try:
         expression_tree = minimal_clickhouse_grammar.parse(function)
     except Exception as cause:
-        raise ParsingException(f"Cannot parse aggregation {function}", cause) from cause
+        raise ParsingException(
+            f"Cannot parse aggregation {function}", report=False
+        ) from cause
 
     return ClickhouseVisitor().visit(expression_tree)  # type: ignore
 
@@ -239,5 +241,5 @@ def parse_aggregation(
 
     else:
         raise ParsingException(
-            f"Invalid aggregation format {aggregation_function} {column}"
+            f"Invalid aggregation format {aggregation_function} {column}", report=False
         )

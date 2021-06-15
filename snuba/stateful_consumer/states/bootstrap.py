@@ -3,7 +3,6 @@ import logging
 from typing import Optional, Set, Tuple
 
 from confluent_kafka import Message
-from streaming_kafka_consumer.backends.kafka.configuration import KafkaBrokerConfig
 
 from snuba import settings
 from snuba.consumers.strict_consumer import CommitDecision, StrictConsumer
@@ -18,6 +17,7 @@ from snuba.stateful_consumer.control_protocol import (
     parse_control_message,
 )
 from snuba.utils.state_machine import State
+from snuba.utils.streams.types import KafkaBrokerConfig
 
 logger = logging.getLogger("snuba.snapshot-load")
 
