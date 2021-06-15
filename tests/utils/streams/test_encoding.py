@@ -1,11 +1,15 @@
-from streaming_kafka_consumer.backends.local.backend import LocalBroker as Broker
-from streaming_kafka_consumer.types import Message, Topic
+from arroyo import Message, Topic
+from arroyo.backends.local.backend import LocalBroker as Broker
+from arroyo.backends.local.storages.memory import MemoryMessageStorage
+from arroyo.clock import TestingClock
 
 from snuba.utils.codecs import Encoder
 from snuba.utils.streams.encoding import ProducerEncodingWrapper
 
 
-def test_encoding_producer(broker: Broker[str]) -> None:
+def test_encoding_producer() -> None:
+    broker: Broker[str] = Broker(MemoryMessageStorage(), TestingClock())
+
     topic = Topic("test")
     broker.create_topic(topic, 1)
 

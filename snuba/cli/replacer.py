@@ -75,12 +75,10 @@ def replacer(
     log_level: Optional[str] = None,
 ) -> None:
 
-    from streaming_kafka_consumer import Topic, configure_metrics
-    from streaming_kafka_consumer.backends.kafka import KafkaConsumer
-    from streaming_kafka_consumer.processing import StreamProcessor
-    from streaming_kafka_consumer.processing.strategies.batching import (
-        BatchProcessingStrategyFactory,
-    )
+    from arroyo import Topic, configure_metrics
+    from arroyo.backends.kafka import KafkaConsumer
+    from arroyo.processing import StreamProcessor
+    from arroyo.processing.strategies.batching import BatchProcessingStrategyFactory
 
     from snuba.replacer import ReplacerWorker
     from snuba.utils.streams.configuration_builder import (

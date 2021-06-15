@@ -3,10 +3,6 @@ from typing import Any, Callable, Generator, Iterator, Tuple, Union
 
 import pytest
 from snuba_sdk.legacy import json_to_snql
-from streaming_kafka_consumer.backends.local.backend import LocalBroker
-from streaming_kafka_consumer.backends.local.storages.memory import MemoryMessageStorage
-from streaming_kafka_consumer.clock import Clock, TestingClock
-from streaming_kafka_consumer.types import TPayload
 
 from snuba import settings, state
 from snuba.clickhouse.native import ClickhousePool
@@ -35,16 +31,6 @@ def pytest_configure() -> None:
         database_name = cluster["database"]
         connection.execute(f"DROP DATABASE IF EXISTS {database_name};")
         connection.execute(f"CREATE DATABASE {database_name};")
-
-
-@pytest.fixture
-def clock() -> Iterator[Clock]:
-    yield TestingClock()
-
-
-@pytest.fixture
-def broker(clock: TestingClock) -> Iterator[LocalBroker[TPayload]]:
-    yield LocalBroker(MemoryMessageStorage(), clock)
 
 
 @pytest.fixture(autouse=True)
