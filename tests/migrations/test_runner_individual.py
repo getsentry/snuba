@@ -253,11 +253,6 @@ def test_backfill_errors() -> None:
     )
     errors_table_name = errors_storage.get_table_writer().get_schema().get_table_name()
 
-    # def get_errors_count() -> int:
-    #     return perform_select_query(
-    #         ["count()"], errors_table_name, None, None, clickhouse
-    #     )[0][0]
-
     raw_events = []
     for i in range(10):
         event = get_raw_event()
