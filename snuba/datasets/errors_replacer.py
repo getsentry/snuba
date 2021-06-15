@@ -251,6 +251,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             "start_delete_groups",
             "start_merge",
             "start_unmerge",
+            "start_unmerge_hierarchical",
             "start_delete_tag",
         ):
             return None
@@ -260,6 +261,10 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             processed = process_merge(event, self.__all_columns)
         elif type_ == "end_unmerge":
             processed = process_unmerge(event, self.__all_columns, self.__state_name)
+        elif type_ == "end_unmerge_hierarchical":
+            processed = process_unmerge_hierarchical(
+                event, self.__all_columns, self.__state_name
+            )
         elif type_ == "end_delete_tag":
             processed = process_delete_tag(
                 event,
@@ -680,9 +685,9 @@ def process_unmerge(
     )
 
     where = """\
-        PREWHERE group_id = %(previous_group_id)s
-        WHERE project_id = %(project_id)s
-        AND primary_hash IN (%(hashes)s)
+        PREWHERE primary_hash IN (%(hashes)s)
+        WHERE group_id = %(previous_group_id)s
+        AND project_id = %(project_id)s
         AND received <= CAST('%(timestamp)s' AS DateTime)
         AND NOT deleted
     """
@@ -710,16 +715,103 @@ def process_unmerge(
         "previous_group_id": message["previous_group_id"],
         "project_id": message["project_id"],
         "timestamp": timestamp.strftime(DATETIME_FORMAT),
+        "hashes": ", ".join(_convert_hash(h, state_name) for h in hashes),
     }
 
-    if state_name == ReplacerState.ERRORS:
-        query_args["hashes"] = ", ".join(
-            ["'%s'" % str(uuid.UUID(_hashify(h))) for h in hashes]
-        )
-    else:
-        query_args["hashes"] = ", ".join("'%s'" % _hashify(h) for h in hashes)
-
     query_time_flags = (NEEDS_FINAL, message["project_id"])
+
+    return LegacyReplacement(
+        count_query_template, insert_query_template, query_args, query_time_flags
+    )
+
+
+def _convert_hash(
+    hash: str, state_name: ReplacerState, convert_types: bool = False
+) -> str:
+    if state_name == ReplacerState.ERRORS:
+        if convert_types:
+            return "toUUID('%s')" % str(uuid.UUID(_hashify(hash)))
+        else:
+            return "'%s'" % str(uuid.UUID(_hashify(hash)))
+    else:
+        if convert_types:
+            return "toFixedString('%s', 32)" % _hashify(hash)
+        else:
+            return "'%s'" % _hashify(hash)
+
+
+def process_unmerge_hierarchical(
+    message: Mapping[str, Any],
+    all_columns: Sequence[FlattenedColumn],
+    state_name: ReplacerState,
+) -> Optional[Replacement]:
+    all_column_names = [c.escaped for c in all_columns]
+    select_columns = map(
+        lambda i: i if i != "group_id" else str(message["new_group_id"]),
+        all_column_names,
+    )
+
+    try:
+        timestamp = datetime.strptime(
+            message["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+        )
+
+        primary_hash = message["primary_hash"]
+        assert isinstance(primary_hash, str)
+
+        hierarchical_hash = message["hierarchical_hash"]
+        assert isinstance(hierarchical_hash, str)
+
+        uuid.UUID(primary_hash)
+        uuid.UUID(hierarchical_hash)
+    except Exception as exc:
+        # TODO(markus): We're sacrificing consistency over uptime as long as
+        # this is in development. At some point this piece of code should be
+        # stable enough to remove this.
+        logger.error("process_unmerge_hierarchical.failed", exc_info=exc)
+        return None
+
+    where = """\
+        PREWHERE primary_hash = %(primary_hash)s
+        WHERE group_id = %(previous_group_id)s
+        AND has(hierarchical_hashes, %(hierarchical_hash)s)
+        AND project_id = %(project_id)s
+        AND received <= CAST('%(timestamp)s' AS DateTime)
+        AND NOT deleted
+    """
+
+    count_query_template = (
+        """\
+        SELECT count()
+        FROM %(table_name)s FINAL
+    """
+        + where
+    )
+
+    insert_query_template = (
+        """\
+        INSERT INTO %(table_name)s (%(all_columns)s)
+        SELECT %(select_columns)s
+        FROM %(table_name)s FINAL
+    """
+        + where
+    )
+
+    query_args = {
+        "all_columns": ", ".join(all_column_names),
+        "select_columns": ", ".join(select_columns),
+        "previous_group_id": message["previous_group_id"],
+        "project_id": message["project_id"],
+        "timestamp": timestamp.strftime(DATETIME_FORMAT),
+        "primary_hash": _convert_hash(primary_hash, state_name),
+        "hierarchical_hash": _convert_hash(
+            hierarchical_hash, state_name, convert_types=True
+        ),
+    }
+
+    # Sentry is expected to send an `exclude_groups` message after unsplit is
+    # done, and we can live with data inconsistencies while this is ongoing.
+    query_time_flags = (None, message["project_id"])
 
     return LegacyReplacement(
         count_query_template, insert_query_template, query_args, query_time_flags

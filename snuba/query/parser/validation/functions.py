@@ -6,8 +6,8 @@ from snuba.clickhouse.columns import Array, ColumnSet, String
 from snuba.datasets.entities.factory import get_entity
 from snuba.query import Query
 from snuba.query.data_source import DataSource
-from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.data_source.join import JoinClause
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.parser.validation import ExpressionValidator
@@ -70,5 +70,7 @@ class FunctionCallsValidator(ExpressionValidator):
                 validator.validate(exp.parameters, data_model)
         except InvalidFunctionCall as exception:
             raise InvalidExpressionException(
-                exp, f"Illegal call to function {exp.function_name}: {str(exception)}",
+                exp,
+                f"Illegal call to function {exp.function_name}: {str(exception)}",
+                report=False,
             ) from exception

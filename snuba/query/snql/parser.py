@@ -43,6 +43,7 @@ from snuba.query.conditions import (
 )
 from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -799,7 +800,9 @@ def parse_snql_query_initial(
     if limit is None:
         parsed.set_limit(1000)
     elif limit > 10000:
-        raise ParsingException("queries cannot have a limit higher than 10000")
+        raise ParsingException(
+            "queries cannot have a limit higher than 10000", report=False
+        )
 
     if parsed.get_offset() is None:
         parsed.set_offset(0)
@@ -1146,9 +1149,15 @@ def validate_entities_with_query(
         try:
             for v in entity.get_validators():
                 v.validate(query)
-        except Exception as e:
+        except InvalidQueryException as e:
             raise ParsingException(
-                f"validation failed for entity {query.get_from_clause().key.value}: {e}"
+                f"validation failed for entity {query.get_from_clause().key.value}: {e}",
+                report=e.report,
+            )
+        except InvalidExpressionException as e:
+            raise ParsingException(
+                f"validation failed for entity {query.get_from_clause().key.value}: {e}",
+                report=e.report,
             )
     else:
         from_clause = query.get_from_clause()
@@ -1160,9 +1169,15 @@ def validate_entities_with_query(
                 try:
                     for v in entity.get_validators():
                         v.validate(query)
-                except Exception as e:
+                except InvalidQueryException as e:
                     raise ParsingException(
-                        f"validation failed for entity {node.data_source.key.value}: {e}"
+                        f"validation failed for entity {node.data_source.key.value}: {e}",
+                        report=e.report,
+                    )
+                except InvalidExpressionException as e:
+                    raise ParsingException(
+                        f"validation failed for entity {node.data_source.key.value}: {e}",
+                        report=e.report,
                     )
 
 
