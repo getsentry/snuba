@@ -291,13 +291,22 @@ class OrgSessionsEntity(Entity):
             join_relationships={},
             writable_storage=None,
             validators=None,
-            required_time_column=None,
+            required_time_column="started",
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
-        return {}
+        return {
+            "timeseries": TimeSeriesExtension(
+                default_granularity=3600,
+                default_window=timedelta(days=7),
+                timestamp_column="started",
+            ),
+        }
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
+            TimeSeriesProcessor(
+                {"bucketed_started": "started"}, ("started", "received")
+            ),
         ]

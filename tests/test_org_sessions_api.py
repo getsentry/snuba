@@ -1,10 +1,13 @@
 import itertools
 from datetime import datetime, timedelta
-from typing import Any, Callable, Tuple, Union
+from typing import Any, Callable
 
 import pytest
 import pytz
 import simplejson as json
+from snuba_sdk.conditions import Condition, Op
+from snuba_sdk.expressions import Granularity
+from snuba_sdk.query import Column, Entity, Function, Query
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
@@ -15,17 +18,8 @@ from tests.helpers import write_processed_messages
 
 
 class TestOrgSessionsApi(BaseApiTest):
-    @pytest.fixture
-    def test_entity(self) -> Union[str, Tuple[str, str]]:
-        return "org_sessions"
-
-    @pytest.fixture
-    def test_app(self) -> Any:
-        return self.app
-
-    @pytest.fixture(autouse=True)
-    def setup_post(self, _build_snql_post_methods: Callable[[str], Any]) -> None:
-        self.post = _build_snql_post_methods
+    def post(self, url: str, data: str) -> Any:
+        return self.app.post(url, data=data, headers={"referer": "test"})
 
     @pytest.fixture(scope="class")
     def get_project_id(self, request: object) -> Callable[[], int]:
@@ -51,13 +45,14 @@ class TestOrgSessionsApi(BaseApiTest):
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)
         )
         template = {
-            "session_id": "00000000-0000-0000-0000-000000000000",
+            "session_id": "00000000-0000-0000-0000-000000000001",
+            # "distinct_id": "bmeow211-58a4-4b36-a9a1-5a55df0d9aaf",
             "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf",
             "duration": None,
             "environment": "production",
             "org_id": 1,
             "project_id": project_id,
-            "release": "sentry-test@1.0.0",
+            "release": "sentry-test@1.0.1",
             "retention_days": settings.DEFAULT_RETENTION_DAYS,
             "seq": 0,
             "errors": 0,
@@ -99,22 +94,31 @@ class TestOrgSessionsApi(BaseApiTest):
     def test_simple(self, get_project_id: Callable[[], int]) -> None:
         project_id = get_project_id()
         self.generate_session_events(project_id)
-        response = self.app.post(
-            "/query",
-            data=json.dumps(
-                {
-                    "dataset": "org_sessions",
-                    "selected_columns": ["org_id", "project_id"],
-                    "groupby": ["org_id"],
-                    "granularity": 3600,
-                    # `skew` is 3h
-                    "from_date": (self.started - self.skew - self.skew).isoformat(),
-                    "to_date": (self.started + self.skew + self.skew).isoformat(),
-                }
-            ),
+        project_id2 = get_project_id()
+        self.generate_session_events(project_id2)
+
+        query = Query(
+            dataset="org_sessions",
+            match=Entity("org_sessions"),
+            select=[
+                Column("org_id"),
+                Function("groupUniqArray", [Column("project_id")], "project_ids"),
+            ],
+            groupby=[Column("org_id")],
+            where=[
+                Condition(
+                    Column("started"), Op.GTE, datetime.utcnow() - timedelta(hours=6)
+                ),
+                Condition(Column("started"), Op.LT, datetime.utcnow()),
+            ],
+            granularity=Granularity(3600),
+            # offset=Offset(0),
+            # limit=Limit(10),
         )
+
+        response = self.app.post("/org_sessions/snql", data=query.snuba(),)
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 1
-        assert data["data"][0]["org_id"] == [1]
-        assert data["data"][0]["project_id"] == [project_id]
+        assert data["data"][0]["org_id"] == 1
+        assert data["data"][0]["project_ids"] == [project_id2, project_id]
