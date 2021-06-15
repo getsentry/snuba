@@ -4,7 +4,11 @@ import pytest
 
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.storages.sessions import raw_schema, read_schema
+from snuba.datasets.storages.sessions import (
+    materialized_storage,
+    raw_schema,
+    read_schema,
+)
 from snuba.query import SelectedExpression
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
 from snuba.query.parser import parse_query
@@ -98,7 +102,7 @@ selector_tests = [
                 ["started", ">", "2020-01-01 12:00:00"],
             ],
         },
-        "sessions_hourly_local",
+        materialized_storage.get_schema().get_table_name(),
         id="Select hourly if not grouped by started time",
     ),
     pytest.param(
