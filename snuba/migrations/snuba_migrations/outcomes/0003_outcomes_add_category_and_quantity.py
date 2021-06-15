@@ -85,12 +85,11 @@ class Migration(migration.ClickhouseNodeMigration):
                 column=Column("quantity", UInt(64)),
                 after=None,
             ),
-            operations.RunSql(
+            operations.AddColumn(
                 storage_set=StorageSetKey.OUTCOMES,
-                statement="""
-                    ALTER TABLE outcomes_hourly_local ADD COLUMN IF NOT EXISTS category UInt8,
-                    MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp, category);
-                """,
+                table_name="outcomes_hourly_dist",
+                column=Column("category", UInt(8)),
+                after=None,
             ),
         ]
 
@@ -105,14 +104,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.DropColumn(
                 StorageSetKey.OUTCOMES, "outcomes_hourly_dist", "quantity"
             ),
-            operations.RunSql(
-                storage_set=StorageSetKey.OUTCOMES,
-                statement="""
-                    ALTER TABLE outcomes_hourly_local
-                    MODIFY ORDER BY (org_id, project_id, key_id, outcome, reason, timestamp);
-                """,
-            ),
             operations.DropColumn(
-                StorageSetKey.OUTCOMES, "outcomes_hourly_local", "category"
+                StorageSetKey.OUTCOMES, "outcomes_hourly_dist", "category"
             ),
         ]
