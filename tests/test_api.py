@@ -1930,10 +1930,13 @@ class TestApi(SimpleAPITest):
         assert response.status_code == 200
         result = json.loads(response.data)
 
+        errors_table_name = (
+            errors_storage.get_table_writer().get_schema().get_table_name()
+        )
+
         val = (
             "SELECT arrayMap((x -> replaceAll(toString(x), '-', '')), "
-            "arraySlice(hierarchical_hashes, 0, 2)) FROM %s PREWHERE"
-            % (errors_storage.get_table_writer().get_schema().get_table_name())
+            f"arraySlice(hierarchical_hashes, 0, 2)) FROM {errors_table_name} PREWHERE"
         )
 
         assert result["sql"].startswith(val)
@@ -1956,10 +1959,13 @@ class TestApi(SimpleAPITest):
         assert response.status_code == 200
         result = json.loads(response.data)
 
+        errors_table_name = (
+            errors_storage.get_table_writer().get_schema().get_table_name()
+        )
+
         val = (
             "SELECT arrayJoin((arrayMap((x -> replaceAll(toString(x), '-', '')), "
-            "hierarchical_hashes) AS _snuba_hierarchical_hashes)) FROM %s PREWHERE"
-            % (errors_storage.get_table_writer().get_schema().get_table_name())
+            f"hierarchical_hashes) AS _snuba_hierarchical_hashes)) FROM {errors_table_name} PREWHERE"
         )
 
         assert result["sql"].startswith(val)
