@@ -369,10 +369,8 @@ class DelegateSubscriptionData(SubscriptionData):
                 raise ValueError(
                     f"invalid project setting: '{snql_rollout_projects_raw}'"
                 )
-            use_snql = (
-                snql_rollout_pct > 0.0
-                and self.project_id in snql_rollout_projects
-                and random.random() <= snql_rollout_pct
+            use_snql = self.project_id in snql_rollout_projects or (
+                snql_rollout_pct > 0.0 and random.random() <= snql_rollout_pct
             )
             if use_snql:
                 if metrics is not None:
