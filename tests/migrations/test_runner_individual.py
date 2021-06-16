@@ -1,4 +1,4 @@
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, Optional, Sequence
 
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clickhouse.native import ClickhousePool
@@ -138,45 +138,47 @@ def generate_transactions() -> None:
 def test_groupedmessages_compatibility() -> None:
 
     cluster = get_cluster(StorageSetKey.EVENTS)
-    database = cluster.get_database()
-    connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
-    # Create old style table witihout project ID
-    connection.execute(
-        """
-        CREATE TABLE groupedmessage_local (`offset` UInt64, `record_deleted` UInt8,
-        `id` UInt64, `status` Nullable(UInt8), `last_seen` Nullable(DateTime),
-        `first_seen` Nullable(DateTime), `active_at` Nullable(DateTime),
-        `first_release_id` Nullable(UInt64)) ENGINE = ReplacingMergeTree(offset)
-        ORDER BY id SAMPLE BY id SETTINGS index_granularity = 8192
-        """
-    )
+    if cluster.is_single_node():
+        database = cluster.get_database()
+        connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
-    migration_id = "0010_groupedmessages_onpremise_compatibility"
-
-    runner = Runner()
-    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
-    events_migrations = get_group_loader(MigrationGroup.EVENTS).get_migrations()
-
-    # Mark prior migrations complete
-    for migration in events_migrations[: (events_migrations.index(migration_id))]:
-        runner._update_migration_status(
-            MigrationKey(MigrationGroup.EVENTS, migration), Status.COMPLETED
+        # Create old style table witihout project ID
+        connection.execute(
+            """
+            CREATE TABLE groupedmessage_local (`offset` UInt64, `record_deleted` UInt8,
+            `id` UInt64, `status` Nullable(UInt8), `last_seen` Nullable(DateTime),
+            `first_seen` Nullable(DateTime), `active_at` Nullable(DateTime),
+            `first_release_id` Nullable(UInt64)) ENGINE = ReplacingMergeTree(offset)
+            ORDER BY id SAMPLE BY id SETTINGS index_granularity = 8192
+            """
         )
 
-    runner.run_migration(
-        MigrationKey(MigrationGroup.EVENTS, migration_id), force=True,
-    )
+        migration_id = "0010_groupedmessages_onpremise_compatibility"
 
-    outcome = perform_select_query(
-        ["primary_key"],
-        "system.tables",
-        {"name": "groupedmessage_local", "database": str(database)},
-        None,
-        connection,
-    )
+        runner = Runner()
+        runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+        events_migrations = get_group_loader(MigrationGroup.EVENTS).get_migrations()
 
-    assert outcome == [("project_id, id",)]
+        # Mark prior migrations complete
+        for migration in events_migrations[: (events_migrations.index(migration_id))]:
+            runner._update_migration_status(
+                MigrationKey(MigrationGroup.EVENTS, migration), Status.COMPLETED
+            )
+
+        runner.run_migration(
+            MigrationKey(MigrationGroup.EVENTS, migration_id), force=True,
+        )
+
+        outcome = perform_select_query(
+            ["primary_key"],
+            "system.tables",
+            {"name": "groupedmessage_local", "database": str(database)},
+            None,
+            connection,
+        )
+
+        assert outcome == [("project_id, id",)]
 
 
 def run_prior_migrations(
@@ -210,8 +212,8 @@ def run_prior_migrations(
 def perform_select_query(
     columns: Sequence[str],
     table: str,
-    where: Dict[str, str],
-    limit: str,
+    where: Optional[Dict[str, str]],
+    limit: Optional[str],
     connection: ClickhousePool,
 ) -> Sequence[Any]:
 
@@ -239,6 +241,12 @@ def perform_select_query(
     return connection.execute(full_query)
 
 
+def get_count_from_storage(table_name: str, connection: ClickhousePool) -> int:
+    return int(
+        perform_select_query(["count()"], table_name, None, None, connection)[0][0]
+    )
+
+
 def test_backfill_errors() -> None:
 
     backfill_migration_id = "0014_backfill_errors"
@@ -253,11 +261,6 @@ def test_backfill_errors() -> None:
     )
     errors_table_name = errors_storage.get_table_writer().get_schema().get_table_name()
 
-    def get_errors_count() -> int:
-        return perform_select_query(
-            ["count()"], errors_table_name, None, None, clickhouse
-        )[0][0]
-
     raw_events = []
     for i in range(10):
         event = get_raw_event()
@@ -267,14 +270,14 @@ def test_backfill_errors() -> None:
 
     write_unprocessed_events(events_storage, raw_events)
 
-    assert get_errors_count() == 0
+    assert get_count_from_storage(errors_table_name, clickhouse) == 0
 
     # Run 0014_backfill_errors
     runner.run_migration(
         MigrationKey(MigrationGroup.EVENTS, backfill_migration_id), force=True
     )
 
-    assert get_errors_count() == 10
+    assert get_count_from_storage(errors_table_name, clickhouse) == 10
 
     outcome = perform_select_query(
         ["contexts.key", "contexts.value"], errors_table_name, None, str(1), clickhouse
