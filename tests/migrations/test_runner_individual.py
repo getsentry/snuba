@@ -39,67 +39,71 @@ def teardown_function() -> None:
 
 def test_transactions_compatibility() -> None:
     cluster = get_cluster(StorageSetKey.TRANSACTIONS)
-    connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
-    def get_sampling_key() -> str:
-        database = cluster.get_database()
-        ((sampling_key,),) = perform_select_query(
-            ["sampling_key"],
-            "system.tables",
-            {"name": "transactions_local", "database": str(database)},
-            None,
-            connection,
+    if cluster.is_single_node():
+        connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
+
+        def get_sampling_key() -> str:
+            database = cluster.get_database()
+            ((sampling_key,),) = perform_select_query(
+                ["sampling_key"],
+                "system.tables",
+                {"name": "transactions_local", "database": str(database)},
+                None,
+                connection,
+            )
+
+            return sampling_key
+
+        # Create old style table without sampling expression and insert data
+        connection.execute(
+            """
+            CREATE TABLE transactions_local (`project_id` UInt64, `event_id` UUID,
+            `trace_id` UUID, `span_id` UInt64, `transaction_name` LowCardinality(String),
+            `transaction_hash` UInt64 MATERIALIZED CAST(cityHash64(transaction_name), 'UInt64'),
+            `transaction_op` LowCardinality(String), `transaction_status` UInt8 DEFAULT 2,
+            `start_ts` DateTime, `start_ms` UInt16, `finish_ts` DateTime, `finish_ms` UInt16,
+            `duration` UInt32, `platform` LowCardinality(String), `environment` LowCardinality(Nullable(String)),
+            `release` LowCardinality(Nullable(String)), `dist` LowCardinality(Nullable(String)),
+            `ip_address_v4` Nullable(IPv4), `ip_address_v6` Nullable(IPv6), `user` String DEFAULT '',
+            `user_hash` UInt64 MATERIALIZED cityHash64(user), `user_id` Nullable(String),
+            `user_name` Nullable(String), `user_email` Nullable(String),
+            `sdk_name` LowCardinality(String) DEFAULT CAST('', 'LowCardinality(String)'),
+            `sdk_version` LowCardinality(String) DEFAULT CAST('', 'LowCardinality(String)'),
+            `http_method` LowCardinality(Nullable(String)) DEFAULT CAST('', 'LowCardinality(Nullable(String))'),
+            `http_referer` Nullable(String),
+            `tags.key` Array(String), `tags.value` Array(String), `_tags_flattened` String,
+            `contexts.key` Array(String), `contexts.value` Array(String), `_contexts_flattened` String,
+            `partition` UInt16, `offset` UInt64, `message_timestamp` DateTime, `retention_days` UInt16,
+            `deleted` UInt8) ENGINE = ReplacingMergeTree(deleted) PARTITION BY (retention_days, toMonday(finish_ts))
+            ORDER BY (project_id, toStartOfDay(finish_ts), transaction_name, cityHash64(span_id))
+            TTL finish_ts + toIntervalDay(retention_days);
+            """
         )
 
-        return sampling_key
+        assert get_sampling_key() == ""
+        generate_transactions()
 
-    # Create old style table without sampling expression and insert data
-    connection.execute(
-        """
-        CREATE TABLE transactions_local (`project_id` UInt64, `event_id` UUID,
-        `trace_id` UUID, `span_id` UInt64, `transaction_name` LowCardinality(String),
-        `transaction_hash` UInt64 MATERIALIZED CAST(cityHash64(transaction_name), 'UInt64'),
-        `transaction_op` LowCardinality(String), `transaction_status` UInt8 DEFAULT 2,
-        `start_ts` DateTime, `start_ms` UInt16, `finish_ts` DateTime, `finish_ms` UInt16,
-        `duration` UInt32, `platform` LowCardinality(String), `environment` LowCardinality(Nullable(String)),
-        `release` LowCardinality(Nullable(String)), `dist` LowCardinality(Nullable(String)),
-        `ip_address_v4` Nullable(IPv4), `ip_address_v6` Nullable(IPv6), `user` String DEFAULT '',
-        `user_hash` UInt64 MATERIALIZED cityHash64(user), `user_id` Nullable(String),
-        `user_name` Nullable(String), `user_email` Nullable(String),
-        `sdk_name` LowCardinality(String) DEFAULT CAST('', 'LowCardinality(String)'),
-        `sdk_version` LowCardinality(String) DEFAULT CAST('', 'LowCardinality(String)'),
-        `http_method` LowCardinality(Nullable(String)) DEFAULT CAST('', 'LowCardinality(Nullable(String))'),
-        `http_referer` Nullable(String),
-        `tags.key` Array(String), `tags.value` Array(String), `_tags_flattened` String,
-        `contexts.key` Array(String), `contexts.value` Array(String), `_contexts_flattened` String,
-        `partition` UInt16, `offset` UInt64, `message_timestamp` DateTime, `retention_days` UInt16,
-        `deleted` UInt8) ENGINE = ReplacingMergeTree(deleted) PARTITION BY (retention_days, toMonday(finish_ts))
-        ORDER BY (project_id, toStartOfDay(finish_ts), transaction_name, cityHash64(span_id))
-        TTL finish_ts + toIntervalDay(retention_days);
-        """
-    )
+        runner = Runner()
+        runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
 
-    assert get_sampling_key() == ""
-    generate_transactions()
+        runner._update_migration_status(
+            MigrationKey(MigrationGroup.TRANSACTIONS, "0001_transactions"),
+            Status.COMPLETED,
+        )
+        runner.run_migration(
+            MigrationKey(
+                MigrationGroup.TRANSACTIONS,
+                "0002_transactions_onpremise_fix_orderby_and_partitionby",
+            ),
+            force=True,
+        )
 
-    runner = Runner()
-    runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
-    runner._update_migration_status(
-        MigrationKey(MigrationGroup.TRANSACTIONS, "0001_transactions"), Status.COMPLETED
-    )
-    runner.run_migration(
-        MigrationKey(
-            MigrationGroup.TRANSACTIONS,
-            "0002_transactions_onpremise_fix_orderby_and_partitionby",
-        ),
-        force=True,
-    )
+        assert get_sampling_key() == "cityHash64(span_id)"
 
-    assert get_sampling_key() == "cityHash64(span_id)"
-
-    assert perform_select_query(
-        ["count(*)"], "transactions_local", None, None, connection
-    ) == [(5,)]
+        assert perform_select_query(
+            ["count(*)"], "transactions_local", None, None, connection
+        ) == [(5,)]
 
 
 def generate_transactions() -> None:
