@@ -39,9 +39,15 @@ def teardown_function() -> None:
 
 def test_transactions_compatibility() -> None:
     cluster = get_cluster(StorageSetKey.TRANSACTIONS)
+
+    # Ignore the multi node mode because this tests a migration
+    # for an older table state that only applied to single node
+    if not cluster.is_single_node():
+        return
+
     connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
-    def get_sampling_key() -> Any:
+    def get_sampling_key() -> str:
         database = cluster.get_database()
         ((sampling_key,),) = perform_select_query(
             ["sampling_key"],
@@ -84,8 +90,10 @@ def test_transactions_compatibility() -> None:
 
     runner = Runner()
     runner.run_migration(MigrationKey(MigrationGroup.SYSTEM, "0001_migrations"))
+
     runner._update_migration_status(
-        MigrationKey(MigrationGroup.TRANSACTIONS, "0001_transactions"), Status.COMPLETED
+        MigrationKey(MigrationGroup.TRANSACTIONS, "0001_transactions"),
+        Status.COMPLETED,
     )
     runner.run_migration(
         MigrationKey(
@@ -132,8 +140,13 @@ def generate_transactions() -> None:
 
 
 def test_groupedmessages_compatibility() -> None:
-
     cluster = get_cluster(StorageSetKey.EVENTS)
+
+    # Ignore the multi node mode because this tests a migration
+    # for an older table state that only applied to single node
+    if not cluster.is_single_node():
+        return
+
     database = cluster.get_database()
     connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
