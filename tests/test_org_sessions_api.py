@@ -1,6 +1,7 @@
 import itertools
 from datetime import datetime, timedelta
 from typing import Any
+from uuid import uuid4
 
 import pytz
 import simplejson as json
@@ -47,9 +48,10 @@ class TestOrgSessionsApi(BaseApiTest):
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)
         )
+        distinct_id = uuid4().hex
         template = {
-            "session_id": "00000000-0000-0000-0000-000000000001",
-            "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aac",
+            "session_id": uuid4().hex,
+            "distinct_id": distinct_id,
             "duration": None,
             "environment": "production",
             "org_id": org_id,
@@ -67,7 +69,7 @@ class TestOrgSessionsApi(BaseApiTest):
                     **template,
                     "status": "exited",
                     "duration": 1947.49,
-                    "session_id": "8333339f-5675-4f89-a9a0-1c935255ab58",
+                    "session_id": uuid4().hex,  # "8333339f-5675-4f89-a9a0-1c935255ab58",
                     "started": (self.started + timedelta(minutes=13)).timestamp(),
                 },
                 meta,
@@ -81,7 +83,7 @@ class TestOrgSessionsApi(BaseApiTest):
             processor.process_message(
                 {
                     **template,
-                    "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aac",
+                    "distinct_id": distinct_id,
                     "status": "errored",
                     "errors": 1,
                     "quantity": 2,
