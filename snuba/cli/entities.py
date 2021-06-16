@@ -1,10 +1,10 @@
-from typing import Optional, Tuple
+from typing import Optional
 
 import click
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import InvalidEntityError, get_entity
-from snuba.utils.describer import Description, DescriptionVisitor
+from snuba.utils.describer import Description, DescriptionVisitor, Property
 
 
 class CLIDescriber(DescriptionVisitor):
@@ -28,8 +28,8 @@ class CLIDescriber(DescriptionVisitor):
     def visit_string(self, string: str) -> None:
         click.echo(f"{self.__indent()}{string}")
 
-    def visit_tuple(self, tuple: Tuple[str, str]) -> None:
-        click.echo(f"{self.__indent()}{tuple[0]}: {tuple[1]}")
+    def visit_property(self, property: Property) -> None:
+        click.echo(f"{self.__indent()}{property.name}: {property.value}")
 
 
 @click.group()
@@ -49,7 +49,9 @@ def list() -> None:
 
 
 @entities.command()
-@click.argument("entity_name")
+@click.argument(
+    "entity_name", type=click.Choice([entity.value for entity in EntityKey]),
+)
 def describe(entity_name: str) -> None:
     try:
         entity = get_entity(EntityKey(entity_name))

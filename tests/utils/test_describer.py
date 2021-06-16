@@ -1,6 +1,6 @@
-from typing import List, Optional, Sequence, Tuple
+from typing import List, Optional, Sequence
 
-from snuba.utils.describer import Description, DescriptionVisitor
+from snuba.utils.describer import Description, DescriptionVisitor, Property
 
 
 class TestDescriber(DescriptionVisitor):
@@ -19,8 +19,8 @@ class TestDescriber(DescriptionVisitor):
     def visit_string(self, string: str) -> None:
         self.__content.append(string)
 
-    def visit_tuple(self, tuple: Tuple[str, str]) -> None:
-        self.__content.append(f"{tuple[0]} {tuple[1]}")
+    def visit_property(self, property: Property) -> None:
+        self.__content.append(f"{property.name} {property.value}")
 
 
 def test_describer() -> None:
@@ -28,7 +28,7 @@ def test_describer() -> None:
         header="my_header",
         content=[
             "string1",
-            ("key", "value"),
+            Property("key", "value"),
             Description(header="my_second_header", content=["string2"]),
         ],
     )

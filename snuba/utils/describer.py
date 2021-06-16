@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass
-from typing import Optional, Sequence, Tuple, Union
+from typing import NamedTuple, Optional, Sequence, Union
+
+
+class Property(NamedTuple):
+    name: str
+    value: str
 
 
 class DescriptionVisitor(ABC):
@@ -15,7 +20,7 @@ class DescriptionVisitor(ABC):
     def visit_string(self, string: str) -> None:
         raise NotImplementedError
 
-    def visit_tuple(self, tuple: Tuple[str, str]) -> None:
+    def visit_property(self, property: Property) -> None:
         raise NotImplementedError
 
 
@@ -30,15 +35,15 @@ class Description:
     """
 
     header: Optional[str]
-    content: Sequence[Union[Description, str, Tuple[str, str]]]
+    content: Sequence[Union[Description, str, Property]]
 
     def accept(self, visitor: DescriptionVisitor) -> None:
         visitor.visit_header(self.header)
         for c in self.content:
             if isinstance(c, str):
                 visitor.visit_string(c)
-            elif isinstance(c, tuple):
-                visitor.visit_tuple(c)
+            elif isinstance(c, Property):
+                visitor.visit_property(c)
             else:
                 visitor.visit_description(c)
 

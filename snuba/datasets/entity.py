@@ -10,7 +10,7 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.validation import FunctionCallValidator
 from snuba.query.validation.validators import QueryValidator
-from snuba.utils.describer import Describable, Description
+from snuba.utils.describer import Describable, Description, Property
 
 
 class Entity(Describable, ABC):
@@ -125,8 +125,8 @@ class Entity(Describable, ABC):
                 Description(
                     header=name,
                     content=[
-                        ("Destination", destination.rhs_entity.value),
-                        ("Type", destination.join_type.value),
+                        Property("Destination", destination.rhs_entity.value),
+                        Property("Type", destination.join_type.value),
                         Description(
                             header="Join keys",
                             content=[
