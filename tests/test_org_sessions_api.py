@@ -120,7 +120,7 @@ class TestOrgSessionsApi(BaseApiTest):
         assert data["data"][0]["org_id"] == self.org_id
         assert data["data"][0]["project_ids"] == [self.project_id, self.project_id2]
 
-    def test_order_by(self) -> None:
+    def test_orderby(self) -> None:
         self.project_id3 = next(self.id_iter)
         self.org_id2 = next(self.id_iter)
         self.generate_session_events(self.org_id2, self.project_id3)
