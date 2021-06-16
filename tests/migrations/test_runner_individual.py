@@ -235,8 +235,10 @@ def perform_select_query(
     return connection.execute(full_query)
 
 
-def get_count_from_storage(storage: str, connection: ClickhousePool) -> Any:
-    return perform_select_query(["count()"], storage, None, None, connection)[0][0]
+def get_count_from_storage(table_name: str, connection: ClickhousePool) -> int:
+    return int(
+        perform_select_query(["count()"], table_name, None, None, connection)[0][0]
+    )
 
 
 def test_backfill_errors() -> None:
