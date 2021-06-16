@@ -14,9 +14,9 @@ def test_timer() -> None:
     assert t.finish() == {
         "timestamp": 0.0,
         "duration_ms": (10.0 + 10.0) * 1000,
-        "duration_group": ">20s",
         "marks_ms": {"thing1": 10.0 * 1000, "thing2": 10.0 * 1000},
     }
+    assert t.get_duration_group() == ">20s"
 
     # Test that we can add more time under the same marks and the time will
     # be cumulatively added under those keys.
@@ -27,9 +27,9 @@ def test_timer() -> None:
     assert t.finish() == {
         "timestamp": 0.0,
         "duration_ms": (10.0 + 10.0) * 2 * 1000,
-        "duration_group": ">30s",
         "marks_ms": {"thing1": 10.0 * 2 * 1000, "thing2": 10.0 * 2 * 1000},
     }
+    assert t.get_duration_group() == ">30s"
 
 
 def test_timer_send_metrics() -> None:
