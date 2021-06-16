@@ -7,8 +7,9 @@ import time
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import Mapping, NamedTuple, Optional, Sequence, Tuple
 
-from streaming_kafka_consumer import Message, Producer, Topic
-from streaming_kafka_consumer.processing.strategies.batching import AbstractBatchWorker
+from arroyo import Message, Topic
+from arroyo.backends.abstract import Producer
+from arroyo.processing.strategies.batching import AbstractBatchWorker
 
 from snuba.datasets.dataset import Dataset
 from snuba.reader import Result

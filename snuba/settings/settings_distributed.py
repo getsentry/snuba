@@ -12,6 +12,7 @@ CLUSTERS = [
             "discover",
             "events",
             "events_ro",
+            "metrics",
             "migrations",
             "outcomes",
             "querylog",

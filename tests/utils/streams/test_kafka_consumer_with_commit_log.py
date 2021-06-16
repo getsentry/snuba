@@ -2,13 +2,9 @@ import itertools
 from contextlib import closing
 from typing import Iterator
 
-from streaming_kafka_consumer.backends.kafka import (
-    KafkaConsumer,
-    KafkaPayload,
-    KafkaProducer,
-)
-from streaming_kafka_consumer.synchronized import Commit, commit_codec
-from streaming_kafka_consumer.types import Message, Partition, Topic
+from arroyo import Message, Partition, Topic
+from arroyo.backends.kafka import KafkaConsumer, KafkaPayload, KafkaProducer
+from arroyo.synchronized import Commit, commit_codec
 
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.kafka_consumer_with_commit_log import (
