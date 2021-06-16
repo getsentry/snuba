@@ -1,4 +1,4 @@
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, Optional, Sequence
 
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clickhouse.native import ClickhousePool
@@ -41,7 +41,7 @@ def test_transactions_compatibility() -> None:
     cluster = get_cluster(StorageSetKey.TRANSACTIONS)
     connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
-    def get_sampling_key() -> str:
+    def get_sampling_key() -> Any:
         database = cluster.get_database()
         ((sampling_key,),) = perform_select_query(
             ["sampling_key"],
@@ -206,8 +206,8 @@ def run_prior_migrations(
 def perform_select_query(
     columns: Sequence[str],
     table: str,
-    where: Dict[str, str],
-    limit: str,
+    where: Optional[Dict[str, str]],
+    limit: Optional[str],
     connection: ClickhousePool,
 ) -> Sequence[Any]:
 
@@ -235,6 +235,12 @@ def perform_select_query(
     return connection.execute(full_query)
 
 
+def get_count_from_storage(table_name: str, connection: ClickhousePool) -> int:
+    return int(
+        perform_select_query(["count()"], table_name, None, None, connection)[0][0]
+    )
+
+
 def test_backfill_errors() -> None:
 
     backfill_migration_id = "0014_backfill_errors"
@@ -249,11 +255,6 @@ def test_backfill_errors() -> None:
     )
     errors_table_name = errors_storage.get_table_writer().get_schema().get_table_name()
 
-    def get_errors_count() -> int:
-        return perform_select_query(
-            ["count()"], errors_table_name, None, None, clickhouse
-        )[0][0]
-
     raw_events = []
     for i in range(10):
         event = get_raw_event()
@@ -263,14 +264,14 @@ def test_backfill_errors() -> None:
 
     write_unprocessed_events(events_storage, raw_events)
 
-    assert get_errors_count() == 0
+    assert get_count_from_storage(errors_table_name, clickhouse) == 0
 
     # Run 0014_backfill_errors
     runner.run_migration(
         MigrationKey(MigrationGroup.EVENTS, backfill_migration_id), force=True
     )
 
-    assert get_errors_count() == 10
+    assert get_count_from_storage(errors_table_name, clickhouse) == 10
 
     outcome = perform_select_query(
         ["contexts.key", "contexts.value"], errors_table_name, None, str(1), clickhouse
