@@ -19,6 +19,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.errors import storage as errors_storage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.processor import InsertBatch
 from snuba.redis import redis_client
@@ -1929,10 +1930,16 @@ class TestApi(SimpleAPITest):
         assert response.status_code == 200
         result = json.loads(response.data)
 
-        assert result["sql"].startswith(
-            "SELECT arrayMap((x -> replaceAll(toString(x), '-', '')), "
-            "arraySlice(hierarchical_hashes, 0, 2)) FROM errors_local PREWHERE"
+        errors_table_name = (
+            errors_storage.get_table_writer().get_schema().get_table_name()
         )
+
+        val = (
+            "SELECT arrayMap((x -> replaceAll(toString(x), '-', '')), "
+            f"arraySlice(hierarchical_hashes, 0, 2)) FROM {errors_table_name} PREWHERE"
+        )
+
+        assert result["sql"].startswith(val)
 
     def test_hierarchical_hashes_array_join(self) -> None:
         response = self.post(
@@ -1952,10 +1959,16 @@ class TestApi(SimpleAPITest):
         assert response.status_code == 200
         result = json.loads(response.data)
 
-        assert result["sql"].startswith(
-            "SELECT arrayJoin((arrayMap((x -> replaceAll(toString(x), '-', '')), "
-            "hierarchical_hashes) AS _snuba_hierarchical_hashes)) FROM errors_local PREWHERE"
+        errors_table_name = (
+            errors_storage.get_table_writer().get_schema().get_table_name()
         )
+
+        val = (
+            "SELECT arrayJoin((arrayMap((x -> replaceAll(toString(x), '-', '')), "
+            f"hierarchical_hashes) AS _snuba_hierarchical_hashes)) FROM {errors_table_name} PREWHERE"
+        )
+
+        assert result["sql"].startswith(val)
 
 
 class TestCreateSubscriptionApi(BaseApiTest):

@@ -28,6 +28,7 @@ def run_cleanup(
 def get_active_partitions(
     clickhouse: ClickhousePool, storage: WritableTableStorage, database: str, table: str
 ) -> Sequence[util.Part]:
+
     response = clickhouse.execute(
         """
         SELECT DISTINCT partition
