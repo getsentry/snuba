@@ -295,13 +295,7 @@ class OrgSessionsEntity(Entity):
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
-        return {
-            "timeseries": TimeSeriesExtension(
-                default_granularity=3600,
-                default_window=timedelta(days=7),
-                timestamp_column="started",
-            ),
-        }
+        return {}
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [

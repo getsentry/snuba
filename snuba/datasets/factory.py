@@ -18,7 +18,6 @@ DATASET_NAMES: Set[str] = {
     "outcomes",
     "outcomes_raw",
     "sessions",
-    "org_sessions",
     "transactions",
     *(DEV_DATASET_NAMES if settings.ENABLE_DEV_FEATURES else set()),
 }
@@ -46,7 +45,7 @@ def get_dataset(name: str) -> Dataset:
     from snuba.datasets.metrics import MetricsDataset
     from snuba.datasets.outcomes import OutcomesDataset
     from snuba.datasets.outcomes_raw import OutcomesRawDataset
-    from snuba.datasets.sessions import OrgSessionsDataset, SessionsDataset
+    from snuba.datasets.sessions import SessionsDataset
     from snuba.datasets.transactions import TransactionsDataset
 
     dataset_factories: MutableMapping[str, Callable[[], Dataset]] = {
@@ -58,7 +57,6 @@ def get_dataset(name: str) -> Dataset:
         "outcomes": OutcomesDataset,
         "outcomes_raw": OutcomesRawDataset,
         "sessions": SessionsDataset,
-        "org_sessions": OrgSessionsDataset,
         "transactions": TransactionsDataset,
     }
 

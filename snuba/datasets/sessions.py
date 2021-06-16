@@ -5,8 +5,3 @@ from snuba.datasets.entities import EntityKey
 class SessionsDataset(Dataset):
     def __init__(self) -> None:
         super().__init__(default_entity=EntityKey.SESSIONS)
-
-
-class OrgSessionsDataset(Dataset):
-    def __init__(self) -> None:
-        super().__init__(default_entity=EntityKey.ORG_SESSIONS)

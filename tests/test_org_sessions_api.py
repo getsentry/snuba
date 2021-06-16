@@ -1,12 +1,12 @@
 import itertools
 from datetime import datetime, timedelta
-from typing import Any, Callable
+from typing import Any
 
-import pytest
 import pytz
 import simplejson as json
 from snuba_sdk.conditions import Condition, Op
 from snuba_sdk.expressions import Granularity
+from snuba_sdk.orderby import Direction, OrderBy
 from snuba_sdk.query import Column, Entity, Function, Query
 
 from snuba import settings
@@ -21,12 +21,6 @@ class TestOrgSessionsApi(BaseApiTest):
     def post(self, url: str, data: str) -> Any:
         return self.app.post(url, data=data, headers={"referer": "test"})
 
-    @pytest.fixture(scope="class")
-    def get_project_id(self, request: object) -> Callable[[], int]:
-        id_iter = itertools.count()
-        next(id_iter)  # skip 0
-        return lambda: next(id_iter)
-
     def setup_method(self, test_method: Any) -> None:
         super().setup_method(test_method)
 
@@ -39,7 +33,16 @@ class TestOrgSessionsApi(BaseApiTest):
 
         self.storage = get_writable_storage(StorageKey.SESSIONS_RAW)
 
-    def generate_session_events(self, project_id: int) -> None:
+        self.id_iter = itertools.count()
+        next(self.id_iter)  # skip 0
+        self.project_id = next(self.id_iter)
+        self.org_id = next(self.id_iter)
+        self.project_id2 = next(self.id_iter)
+
+        self.generate_session_events(self.org_id, self.project_id)
+        self.generate_session_events(self.org_id, self.project_id2)
+
+    def generate_session_events(self, org_id, project_id: int) -> None:
         processor = self.storage.get_table_writer().get_stream_loader().get_processor()
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)
@@ -49,7 +52,7 @@ class TestOrgSessionsApi(BaseApiTest):
             "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aac",
             "duration": None,
             "environment": "production",
-            "org_id": 1,
+            "org_id": org_id,
             "project_id": project_id,
             "release": "sentry-test@1.0.1",
             "retention_days": settings.DEFAULT_RETENTION_DAYS,
@@ -90,14 +93,9 @@ class TestOrgSessionsApi(BaseApiTest):
         filtered = [e for e in events if e]
         write_processed_messages(self.storage, filtered)
 
-    def test_simple(self, get_project_id: Callable[[], int]) -> None:
-        project_id = get_project_id()
-        self.generate_session_events(project_id)
-        project_id2 = get_project_id()
-        self.generate_session_events(project_id2)
-
+    def test_simple(self) -> None:
         query = Query(
-            dataset="org_sessions",
+            dataset="sessions",
             match=Entity("org_sessions"),
             select=[
                 Column("org_id"),
@@ -113,9 +111,53 @@ class TestOrgSessionsApi(BaseApiTest):
             granularity=Granularity(3600),
         )
 
-        response = self.app.post("/org_sessions/snql", data=query.snuba(),)
+        response = self.app.post("/sessions/snql", data=query.snuba(),)
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
         assert len(data["data"]) == 1
-        assert data["data"][0]["org_id"] == 1
-        assert data["data"][0]["project_ids"] == [project_id2, project_id]
+        assert data["data"][0]["org_id"] == self.org_id
+        assert data["data"][0]["project_ids"] == [self.project_id, self.project_id2]
+
+    def test_order_by(self) -> None:
+        self.project_id3 = next(self.id_iter)
+        self.org_id2 = next(self.id_iter)
+        self.generate_session_events(self.org_id2, self.project_id3)
+
+        query = Query(
+            dataset="sessions",
+            match=Entity("org_sessions"),
+            select=[
+                Column("org_id"),
+                Function("groupUniqArray", [Column("project_id")], "project_ids"),
+            ],
+            groupby=[Column("org_id")],
+            where=[
+                Condition(
+                    Column("started"), Op.GTE, datetime.utcnow() - timedelta(hours=6)
+                ),
+                Condition(Column("started"), Op.LT, datetime.utcnow()),
+            ],
+            granularity=Granularity(3600),
+            orderby=[OrderBy(Column("org_id"), Direction.ASC)],
+        )
+
+        response = self.app.post("/sessions/snql", data=query.snuba(),)
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+
+        assert len(data["data"]) == 2
+        assert data["data"][0]["org_id"] == self.org_id
+        assert data["data"][0]["project_ids"] == [self.project_id, self.project_id2]
+        assert data["data"][1]["org_id"] == self.org_id2
+        assert data["data"][1]["project_ids"] == [self.project_id3]
+
+        query = query.set_orderby([OrderBy(Column("org_id"), Direction.DESC)],)
+        response = self.app.post("/sessions/snql", data=query.snuba(),)
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+
+        assert len(data["data"]) == 2
+        assert data["data"][0]["org_id"] == self.org_id2
+        assert data["data"][0]["project_ids"] == [self.project_id3]
+        assert data["data"][1]["org_id"] == self.org_id
+        assert data["data"][1]["project_ids"] == [self.project_id, self.project_id2]
