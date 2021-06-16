@@ -3,10 +3,10 @@ import signal
 from typing import Any, Optional, Sequence
 
 import click
+from arroyo import Topic, configure_metrics
+from arroyo.backends.kafka import KafkaConsumer
+from arroyo.processing import StreamProcessor
 from confluent_kafka import Producer as ConfluentKafkaProducer
-from streaming_kafka_consumer.backends.kafka import KafkaConsumer
-from streaming_kafka_consumer.processing import StreamProcessor
-from streaming_kafka_consumer.types import Topic
 
 from snuba import environment, settings
 from snuba.consumers.consumer import MultistorageConsumerProcessingStrategyFactory
@@ -206,6 +206,8 @@ def multistorage_consumer(
         )
 
     metrics = MetricsWrapper(environment.metrics, "consumer")
+
+    configure_metrics(StreamMetricsAdapter(metrics))
     processor = StreamProcessor(
         consumer,
         topic,
@@ -218,7 +220,6 @@ def multistorage_consumer(
             output_block_size=output_block_size,
             metrics=metrics,
         ),
-        metrics=StreamMetricsAdapter(metrics),
     )
 
     def handler(signum: int, frame: Any) -> None:

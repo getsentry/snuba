@@ -85,6 +85,7 @@ class NoTimeBasedConditionValidator(QueryValidator):
                 raise InvalidExpressionException(
                     cond,
                     f"Cannot have existing conditions on time field {self.required_time_column}",
+                    report=False,
                 )
 
 

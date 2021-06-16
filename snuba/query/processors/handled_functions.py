@@ -1,6 +1,9 @@
 from snuba.clickhouse.columns import ColumnSet
-from snuba.query.validation import InvalidFunctionCall
-from snuba.query.validation.signature import SignatureValidator
+from snuba.query.conditions import (
+    BooleanFunctions,
+    ConditionFunctions,
+    binary_condition,
+)
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import (
     Argument,
@@ -12,11 +15,8 @@ from snuba.query.expressions import (
 )
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
-from snuba.query.conditions import (
-    BooleanFunctions,
-    ConditionFunctions,
-    binary_condition,
-)
+from snuba.query.validation import InvalidFunctionCall
+from snuba.query.validation.signature import SignatureValidator
 from snuba.request.request_settings import RequestSettings
 
 
@@ -44,7 +44,9 @@ class HandledFunctionsProcessor(QueryProcessor):
             validator.validate(exp.parameters, self.__columnset)
         except InvalidFunctionCall as err:
             raise InvalidExpressionException(
-                exp, f"Illegal function call to {exp.function_name}: {str(err)}"
+                exp,
+                f"Illegal function call to {exp.function_name}: {str(err)}",
+                report=False,
             ) from err
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:

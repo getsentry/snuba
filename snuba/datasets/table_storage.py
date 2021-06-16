@@ -1,6 +1,6 @@
 from typing import Any, Mapping, Optional, Sequence
 
-from streaming_kafka_consumer.backends.kafka import KafkaPayload
+from arroyo.backends.kafka import KafkaPayload
 
 from snuba import settings
 from snuba.clickhouse.http import InsertStatement, JSONRow

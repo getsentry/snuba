@@ -21,11 +21,11 @@ from uuid import UUID
 import jsonschema
 import sentry_sdk
 import simplejson as json
+from arroyo import Message, Partition, Topic
+from arroyo.backends.kafka import KafkaPayload
 from flask import Flask, Request, Response, redirect, render_template
 from flask import request as http_request
 from markdown import markdown
-from streaming_kafka_consumer import Message, Partition, Topic
-from streaming_kafka_consumer.backends.kafka import KafkaPayload
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
@@ -229,7 +229,7 @@ def handle_internal_server_error(exception: InternalServerError) -> Response:
 
 @application.route("/")
 def root() -> str:
-    with open("README.md") as f:
+    with open("README.rst") as f:
         return render_template("index.html", body=markdown(f.read()))
 
 
@@ -562,12 +562,11 @@ if application.debug or application.testing:
         assert storage is not None
 
         if type_ == "insert":
-            from streaming_kafka_consumer.processing.strategies.streaming import (
+            from arroyo.processing.strategies.streaming import (
                 KafkaConsumerStrategyFactory,
             )
 
             from snuba.consumers.consumer import build_batch_writer, process_message
-            from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 
             table_writer = storage.get_table_writer()
             stream_loader = table_writer.get_stream_loader()
@@ -580,7 +579,6 @@ if application.debug or application.testing:
                 processes=None,
                 input_block_size=None,
                 output_block_size=None,
-                metrics=StreamMetricsAdapter(metrics),
             ).create(lambda offsets: None)
             strategy.submit(message)
             strategy.close()

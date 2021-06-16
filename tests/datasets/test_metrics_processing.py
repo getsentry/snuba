@@ -4,6 +4,7 @@ import pytest
 
 from snuba import settings
 from snuba.clickhouse.query import Expression, Query
+from snuba.clusters import cluster
 from snuba.datasets import factory
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -94,6 +95,7 @@ def test_metrics_processing(
 
     importlib.reload(factory)
     importlib.reload(storage_factory)
+    importlib.reload(cluster)
 
     query_body = {
         "query": (

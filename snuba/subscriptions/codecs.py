@@ -1,6 +1,6 @@
 import json
 
-from streaming_kafka_consumer.backends.kafka import KafkaPayload
+from arroyo.backends.kafka import KafkaPayload
 
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.data import (
