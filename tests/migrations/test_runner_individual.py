@@ -40,6 +40,8 @@ def teardown_function() -> None:
 def test_transactions_compatibility() -> None:
     cluster = get_cluster(StorageSetKey.TRANSACTIONS)
 
+    # Ignore the multi node mode because this tests a migration
+    # for an older table state that only applied to single node
     if not cluster.is_single_node():
         return
 
@@ -140,6 +142,8 @@ def generate_transactions() -> None:
 def test_groupedmessages_compatibility() -> None:
     cluster = get_cluster(StorageSetKey.EVENTS)
 
+    # Ignore the multi node mode because this tests a migration
+    # for an older table state that only applied to single node
     if not cluster.is_single_node():
         return
 
