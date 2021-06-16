@@ -15,21 +15,60 @@ and what the schema of each Entity is.
 For an introduction about Datasets and Entities, see the :doc:`/architecture/datamodel`
 section.
 
-Unfortunately at present there isn't an easy to browse description of
-the data model, so this will be annoying. (a tool to explore the data
-model will eventually be built).
-
 Datasets can be found `in this module <https://github.com/getsentry/snuba/blob/master/snuba/datasets/factory.py>`_.
 Each Dataset is a class that references the Entities.
 
-Entity classes are `here <https://github.com/getsentry/snuba/tree/master/snuba/datasets/entities>`_.
-Once you found the Entity (or Entities) you want to query, you will need
-to know the schema of each of them.
+The list of entities in the system can be found via the ``snuba entities``
+command::
 
-Entity schemas are defined as a `ColumnSet <https://github.com/getsentry/snuba/blob/master/snuba/clickhouse/columns.py#L472>`_.
-Each Entity declares one ColumnSet which can be found in the Entity class as
-`abstract_column_set`. An example is in the `Transaction <https://github.com/getsentry/snuba/blob/master/snuba/datasets/entities/transactions.py>`_ for transactions. The transactions Entity relies on the schema of its main storage, which is `in the transaction schema <https://github.com/getsentry/snuba/blob/master/snuba/datasets/storages/transactions.py#L29>`_
-entity.
+    snuba entities list
+
+would return something like::
+
+    Declared Entities:
+    discover
+    errors
+    events
+    groups
+    groupassignee
+    groupedmessage
+    .....
+
+Once we have found the entity we are interested into, we need to understand
+the schema and the relationship declared on that entity.
+The same command describes an Entity::
+
+    snuba entities describe groupedmessage
+
+Would return::
+
+    Entity groupedmessage
+        Entity schema
+        --------------------------------
+        offset UInt64
+        record_deleted UInt8
+        project_id UInt64
+        id UInt64
+        status Nullable(UInt8)
+        last_seen Nullable(DateTime)
+        first_seen Nullable(DateTime)
+        active_at Nullable(DateTime)
+        first_release_id Nullable(UInt64)
+
+        Relationships
+        --------------------------------
+            groups
+            --------------------------------
+            Destination: events
+            Type: LEFT
+                Join keys
+                --------------------------------
+                project_id = LEFT.project_id
+                id = LEFT.group_id
+
+
+Which provides the list of columns with their type and the relationships to
+other entities defined in the data model.
 
 Preparing a query for Snuba
 ===========================
