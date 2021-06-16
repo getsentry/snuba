@@ -300,7 +300,4 @@ class OrgSessionsEntity(Entity):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
-            TimeSeriesProcessor(
-                {"bucketed_started": "started"}, ("started", "received")
-            ),
         ]

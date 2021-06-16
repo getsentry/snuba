@@ -8,7 +8,7 @@ import simplejson as json
 from snuba_sdk.conditions import Condition, Op
 from snuba_sdk.expressions import Granularity
 from snuba_sdk.orderby import Direction, OrderBy
-from snuba_sdk.query import Column, Entity, Function, Query
+from snuba_sdk.query import Column, Entity, Query
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
@@ -26,8 +26,6 @@ class TestOrgSessionsApi(BaseApiTest):
         super().setup_method(test_method)
 
         # values for test data
-        self.minutes = 180
-        self.skew = timedelta(minutes=self.minutes)
         self.started = datetime.utcnow().replace(
             minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         )
@@ -69,7 +67,7 @@ class TestOrgSessionsApi(BaseApiTest):
                     **template,
                     "status": "exited",
                     "duration": 1947.49,
-                    "session_id": uuid4().hex,  # "8333339f-5675-4f89-a9a0-1c935255ab58",
+                    "session_id": uuid4().hex,
                     "started": (self.started + timedelta(minutes=13)).timestamp(),
                 },
                 meta,
@@ -99,11 +97,8 @@ class TestOrgSessionsApi(BaseApiTest):
         query = Query(
             dataset="sessions",
             match=Entity("org_sessions"),
-            select=[
-                Column("org_id"),
-                Function("groupUniqArray", [Column("project_id")], "project_ids"),
-            ],
-            groupby=[Column("org_id")],
+            select=[Column("org_id"), Column("project_id")],
+            groupby=[Column("org_id"), Column("project_id")],
             where=[
                 Condition(
                     Column("started"), Op.GTE, datetime.utcnow() - timedelta(hours=6)
@@ -116,9 +111,11 @@ class TestOrgSessionsApi(BaseApiTest):
         response = self.app.post("/sessions/snql", data=query.snuba(),)
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
-        assert len(data["data"]) == 1
+        assert len(data["data"]) == 2
         assert data["data"][0]["org_id"] == self.org_id
-        assert data["data"][0]["project_ids"] == [self.project_id, self.project_id2]
+        assert data["data"][0]["project_id"] == self.project_id
+        assert data["data"][1]["org_id"] == self.org_id
+        assert data["data"][1]["project_id"] == self.project_id2
 
     def test_orderby(self) -> None:
         self.project_id3 = next(self.id_iter)
@@ -128,11 +125,8 @@ class TestOrgSessionsApi(BaseApiTest):
         query = Query(
             dataset="sessions",
             match=Entity("org_sessions"),
-            select=[
-                Column("org_id"),
-                Function("groupUniqArray", [Column("project_id")], "project_ids"),
-            ],
-            groupby=[Column("org_id")],
+            select=[Column("org_id"), Column("project_id")],
+            groupby=[Column("org_id"), Column("project_id")],
             where=[
                 Condition(
                     Column("started"), Op.GTE, datetime.utcnow() - timedelta(hours=6)
@@ -146,20 +140,22 @@ class TestOrgSessionsApi(BaseApiTest):
         response = self.app.post("/sessions/snql", data=query.snuba(),)
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
-
-        assert len(data["data"]) == 2
+        assert len(data["data"]) == 3
         assert data["data"][0]["org_id"] == self.org_id
-        assert data["data"][0]["project_ids"] == [self.project_id, self.project_id2]
-        assert data["data"][1]["org_id"] == self.org_id2
-        assert data["data"][1]["project_ids"] == [self.project_id3]
+        assert data["data"][0]["project_id"] == self.project_id
+        assert data["data"][1]["org_id"] == self.org_id
+        assert data["data"][1]["project_id"] == self.project_id2
+        assert data["data"][2]["org_id"] == self.org_id2
+        assert data["data"][2]["project_id"] == self.project_id3
 
         query = query.set_orderby([OrderBy(Column("org_id"), Direction.DESC)],)
         response = self.app.post("/sessions/snql", data=query.snuba(),)
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
-
-        assert len(data["data"]) == 2
+        assert len(data["data"]) == 3
         assert data["data"][0]["org_id"] == self.org_id2
-        assert data["data"][0]["project_ids"] == [self.project_id3]
+        assert data["data"][0]["project_id"] == self.project_id3
         assert data["data"][1]["org_id"] == self.org_id
-        assert data["data"][1]["project_ids"] == [self.project_id, self.project_id2]
+        assert data["data"][1]["project_id"] == self.project_id
+        assert data["data"][2]["org_id"] == self.org_id
+        assert data["data"][2]["project_id"] == self.project_id2
