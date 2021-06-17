@@ -120,7 +120,7 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.OUTCOMES, table_name="outcomes_hourly_local"
+                storage_set=StorageSetKey.OUTCOMES, table_name="outcomes_hourly_dist"
             ),
             operations.DropTable(
                 storage_set=StorageSetKey.OUTCOMES, table_name="outcomes_raw_dist",
