@@ -9,6 +9,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entities.transactions import transaction_translator
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.storages.transactions import storage as transactions_storage
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -412,10 +413,13 @@ def test_aliasing() -> None:
         }
     )
     sql = format_query(processed, HTTPRequestSettings()).get_sql()
+    transactions_table_name = (
+        transactions_storage.get_table_writer().get_schema().get_table_name()
+    )
 
     assert sql == (
         "SELECT (tupleElement((arrayJoin(arrayMap((x, y -> tuple(x, y)), "
         "tags.key, tags.value)) AS snuba_all_tags), 2) AS _snuba_tags_value) "
-        "FROM transactions_local "
+        f"FROM {transactions_table_name} "
         "WHERE in((tupleElement(snuba_all_tags, 1) AS _snuba_tags_key), tuple('t1', 't2'))"
     )

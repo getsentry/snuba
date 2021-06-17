@@ -98,7 +98,7 @@ selector_tests = [
                 ["started", ">", "2020-01-01 12:00:00"],
             ],
         },
-        "sessions_hourly_local",
+        read_schema.get_table_name(),
         id="Select hourly if not grouped by started time",
     ),
     pytest.param(

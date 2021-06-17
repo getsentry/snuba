@@ -25,20 +25,20 @@ def test_create_table() -> None:
         Column("version", UInt(64)),
     ]
 
-    assert (
-        CreateTable(
-            StorageSetKey.EVENTS,
-            "test_table",
-            columns,
-            ReplacingMergeTree(
-                storage_set=StorageSetKey.EVENTS,
-                version_column="version",
-                order_by="version",
-                settings={"index_granularity": "256"},
-            ),
-        ).format_sql()
-        == "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64) ENGINE ReplacingMergeTree(version) ORDER BY version SETTINGS index_granularity=256;"
-    )
+    assert CreateTable(
+        StorageSetKey.EVENTS,
+        "test_table",
+        columns,
+        ReplacingMergeTree(
+            storage_set=StorageSetKey.EVENTS,
+            version_column="version",
+            order_by="version",
+            settings={"index_granularity": "256"},
+        ),
+    ).format_sql() in [
+        "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64) ENGINE ReplacingMergeTree(version) ORDER BY version SETTINGS index_granularity=256;",
+        "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64) ENGINE ReplicatedReplacingMergeTree('/clickhouse/tables/events/{shard}/snuba_test/test_table', '{replica}', version) ORDER BY version SETTINGS index_granularity=256;",
+    ]
 
 
 def test_create_materialized_view() -> None:
