@@ -34,7 +34,7 @@ def get_entity(name: EntityKey) -> Entity:
     )
     from snuba.datasets.entities.outcomes import OutcomesEntity
     from snuba.datasets.entities.outcomes_raw import OutcomesRawEntity
-    from snuba.datasets.entities.sessions import SessionsEntity
+    from snuba.datasets.entities.sessions import OrgSessionsEntity, SessionsEntity
     from snuba.datasets.entities.spans import SpansEntity
     from snuba.datasets.entities.transactions import TransactionsEntity
 
@@ -52,6 +52,7 @@ def get_entity(name: EntityKey) -> Entity:
         EntityKey.OUTCOMES: OutcomesEntity,
         EntityKey.OUTCOMES_RAW: OutcomesRawEntity,
         EntityKey.SESSIONS: SessionsEntity,
+        EntityKey.ORG_SESSIONS: OrgSessionsEntity,
         EntityKey.TRANSACTIONS: TransactionsEntity,
         EntityKey.SPANS: SpansEntity,
         EntityKey.DISCOVER_TRANSACTIONS: DiscoverTransactionsEntity,
