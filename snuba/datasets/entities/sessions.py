@@ -2,28 +2,32 @@ from datetime import timedelta
 from typing import Mapping, Sequence
 
 from snuba import environment
+from snuba.clickhouse.columns import ColumnSet, DateTime, UInt
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToCurriedFunction,
     ColumnToFunction,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entity import Entity
-from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
+from snuba.datasets.plans.single_storage import (
+    SelectedStorageQueryPlanBuilder,
+    SingleStorageQueryPlanBuilder,
+)
 from snuba.datasets.storage import QueryStorageSelector, StorageAndMappers
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
+from snuba.processor import MAX_UINT32, NIL_UUID
 from snuba.query.conditions import (
-    in_condition,
+    BooleanFunctions,
     ConditionFunctions,
     binary_condition,
-    BooleanFunctions,
+    in_condition,
 )
-from snuba.query.expressions import Column, FunctionCall, Literal, Expression
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
-from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.logical import Query
-from snuba.processor import MAX_UINT32, NIL_UUID
+from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.project_rate_limiter import ProjectRateLimiterProcessor
@@ -265,4 +269,38 @@ class SessionsEntity(Entity):
                 {"bucketed_started": "started"}, ("started", "received")
             ),
             ProjectRateLimiterProcessor(project_column="project_id"),
+        ]
+
+
+class OrgSessionsEntity(Entity):
+    def __init__(self) -> None:
+        storage = get_storage(StorageKey.SESSIONS_HOURLY)
+
+        super().__init__(
+            storages=[storage],
+            query_pipeline_builder=SimplePipelineBuilder(
+                query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage)
+            ),
+            abstract_column_set=ColumnSet(
+                [
+                    ("org_id", UInt(64)),
+                    ("project_id", UInt(64)),
+                    ("started", DateTime()),
+                ]
+            ),
+            join_relationships={},
+            writable_storage=None,
+            validators=None,
+            required_time_column="started",
+        )
+
+    def get_extensions(self) -> Mapping[str, QueryExtension]:
+        return {}
+
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
+        return [
+            BasicFunctionsProcessor(),
+            TimeSeriesProcessor(
+                {"bucketed_started": "started"}, ("started", "received")
+            ),
         ]
