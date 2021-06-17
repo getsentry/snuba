@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, MutableMapping, Optional
 
 import sentry_sdk
 
@@ -37,6 +37,9 @@ def record_query(
             mark_tags={"final": final},
         )
         sentry_sdk.set_tag("duration_group", timer.get_duration_group())
+        experiments: MutableMapping[str, Any] = request.query.get_experiments()
+        for name, value in experiments.items():
+            sentry_sdk.set_tag(f"exp-{name}", str(value))
 
 
 def record_invalid_request(timer: Timer, referrer: Optional[str]) -> None:
