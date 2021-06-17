@@ -12,16 +12,4 @@
         </cluster_one_sh>
     </remote_servers>
 
-    <zookeeper>
-        <node>
-            <host>sentry_zookeeper</host>
-            <port>2181</port>
-        </node>
-    </zookeeper>
-
-    <macros>
-        <shard>1</shard>
-        <replica>1</replica>
-    </macros>
-
 </yandex>
