@@ -21,7 +21,7 @@ from snuba.migrations.table_engines import ReplacingMergeTree
 
 
 def test_create_table() -> None:
-    database = os.environ.get("CLICKHOUSE_DATABASE")
+    database = os.environ.get("CLICKHOUSE_DATABASE", "default")
     columns = [
         Column("id", String()),
         Column("name", String(Modifiers(nullable=True))),
