@@ -1,5 +1,7 @@
 from typing import Optional
 
+import sentry_sdk
+
 from snuba import environment, settings, state
 from snuba.querylog.query_metadata import QueryStatus, SnubaQueryMetadata
 from snuba.request import Request
@@ -34,6 +36,7 @@ def record_query(
             },
             mark_tags={"final": final},
         )
+        sentry_sdk.set_tag("duration_group", timer.get_duration_group())
 
 
 def record_invalid_request(timer: Timer, referrer: Optional[str]) -> None:
@@ -63,3 +66,4 @@ def _record_failure_building_request(
         timer.send_metrics_to(
             metrics, tags={"status": status.value, "referrer": referrer or "none"},
         )
+        sentry_sdk.set_tag("duration_group", timer.get_duration_group())
