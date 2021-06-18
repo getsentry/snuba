@@ -8,6 +8,7 @@ from typing import Any, Mapping, MutableMapping, Optional, Set, Union, cast
 
 import rapidjson
 import sentry_sdk
+from clickhouse_driver import errors
 from sentry_sdk import Hub
 from sentry_sdk.api import configure_scope
 
@@ -445,6 +446,9 @@ def raw_query(
             with configure_scope() as scope:
                 if isinstance(cause, ClickhouseError):
                     scope.fingerprint = ["{{default}}", str(cause.code)]
+                    if cause.code == errors.ErrorCodes.TOO_SLOW:
+                        if scope.span:
+                            sentry_sdk.set_tag("timeout", "true")
                 logger.exception("Error running query: %s\n%s", sql, cause)
             stats = update_with_status(QueryStatus.ERROR)
         raise QueryException({"stats": stats, "sql": sql}) from cause

@@ -38,8 +38,15 @@ def record_query(
             mark_tags={"final": final},
         )
 
-        if Hub.current.scope.span:
-            sentry_sdk.set_tag("duration_group", timer.get_duration_group())
+        _add_tags(timer)
+
+
+def _add_tags(timer: Timer) -> None:
+    if Hub.current.scope.span:
+        duration_group = timer.get_duration_group()
+        sentry_sdk.set_tag("duration_group", duration_group)
+        if duration_group != "<10s":
+            sentry_sdk.set_tag("timeout", "true")
 
 
 def record_invalid_request(timer: Timer, referrer: Optional[str]) -> None:
@@ -69,5 +76,4 @@ def _record_failure_building_request(
         timer.send_metrics_to(
             metrics, tags={"status": status.value, "referrer": referrer or "none"},
         )
-        if Hub.current.scope.span:
-            sentry_sdk.set_tag("duration_group", timer.get_duration_group())
+        _add_tags(timer)
