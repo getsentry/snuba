@@ -1,6 +1,7 @@
 from typing import Any, MutableMapping, Optional
 
 import sentry_sdk
+from sentry_sdk import Hub
 
 from snuba import environment, settings, state
 from snuba.querylog.query_metadata import QueryStatus, SnubaQueryMetadata
@@ -36,10 +37,12 @@ def record_query(
             },
             mark_tags={"final": final},
         )
-        sentry_sdk.set_tag("duration_group", timer.get_duration_group())
-        experiments: MutableMapping[str, Any] = request.query.get_experiments()
-        for name, value in experiments.items():
-            sentry_sdk.set_tag(f"exp-{name}", str(value))
+
+        if Hub.current.scope.span:
+            sentry_sdk.set_tag("duration_group", timer.get_duration_group())
+            experiments: MutableMapping[str, Any] = request.query.get_experiments()
+            for name, value in experiments.items():
+                sentry_sdk.set_tag(f"exp-{name}", str(value))
 
 
 def record_invalid_request(timer: Timer, referrer: Optional[str]) -> None:
@@ -69,4 +72,5 @@ def _record_failure_building_request(
         timer.send_metrics_to(
             metrics, tags={"status": status.value, "referrer": referrer or "none"},
         )
-        sentry_sdk.set_tag("duration_group", timer.get_duration_group())
+        if Hub.current.scope.span:
+            sentry_sdk.set_tag("duration_group", timer.get_duration_group())
