@@ -1,5 +1,4 @@
 <yandex>
-    <max_server_memory_usage_to_ram_ratio from_env="MAX_MEMORY_USAGE_RATIO" />
 
     <remote_servers>
         <cluster_one_sh>

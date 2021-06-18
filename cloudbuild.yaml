@@ -36,7 +36,7 @@ steps:
       - "--rm"
       - snuba-test
     env:
-      - 'SNUBA_MODE=ci_distributed'
+      - 'SNUBA_MODE=ci'
   # Clean up after tests
   - name: "gcr.io/$PROJECT_ID/docker-compose"
     id: unit-tests-cleanup
