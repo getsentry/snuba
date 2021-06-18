@@ -124,6 +124,7 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
         return backend.get_readthrough(key, function, noop, 10)
 
     setter = execute(worker)
+    time.sleep(0.5)
     waiter = execute(worker)
 
     with pytest.raises(CustomException):
