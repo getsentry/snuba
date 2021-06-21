@@ -45,8 +45,8 @@ def _add_tags(timer: Timer) -> None:
     if Hub.current.scope.span:
         duration_group = timer.get_duration_group()
         sentry_sdk.set_tag("duration_group", duration_group)
-        if duration_group != "<10s":
-            sentry_sdk.set_tag("timeout", "true")
+        if duration_group == ">30s":
+            sentry_sdk.set_tag("timeout", "too_long")
 
 
 def record_invalid_request(timer: Timer, referrer: Optional[str]) -> None:
