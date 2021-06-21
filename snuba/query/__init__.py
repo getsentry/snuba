@@ -4,10 +4,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from enum import Enum
 from itertools import chain
+from typing import Any as AnyType
 from typing import (
     Callable,
     Generic,
     Iterable,
+    MutableMapping,
     Optional,
     Sequence,
     Set,
@@ -98,6 +100,7 @@ class Query(DataSource, ABC):
         offset: int = 0,
         totals: bool = False,
         granularity: Optional[int] = None,
+        experiments: Optional[MutableMapping[str, AnyType]] = None,
     ):
         self.__selected_columns = selected_columns or []
         self.__array_join = array_join
@@ -110,6 +113,7 @@ class Query(DataSource, ABC):
         self.__offset = offset
         self.__totals = totals
         self.__granularity = granularity
+        self.__experiments = experiments or {}
 
     def get_columns(self) -> ColumnSet:
         """
@@ -212,6 +216,18 @@ class Query(DataSource, ABC):
 
     def get_granularity(self) -> Optional[int]:
         return self.__granularity
+
+    def add_experiment(self, name: str, value: AnyType) -> None:
+        self.__experiments[name] = value
+
+    def set_experiments(self, experiments: MutableMapping[str, AnyType]) -> None:
+        self.__experiments = experiments
+
+    def get_experiments(self) -> MutableMapping[str, AnyType]:
+        return self.__experiments
+
+    def get_experiment_value(self, name: str) -> AnyType:
+        return self.__experiments.get(name)
 
     @abstractmethod
     def _get_expressions_impl(self) -> Iterable[Expression]:
