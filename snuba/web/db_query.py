@@ -348,7 +348,6 @@ def execute_query_with_readthrough_caching(
     query_settings["query_id"] = query_id
 
     span = Hub.current.scope.span
-    sentry_sdk.set_tag("query_id", query_id)
     if span:
         span.set_data("query_id", query_id)
 
