@@ -23,6 +23,18 @@ from snuba.query.matchers import (
 
 test_cases = [
     (
+        "Literal match without none value check",
+        Literal(None),
+        LiteralExpr("random_alias", 1),
+        MatchResult(),
+    ),
+    (
+        "Literal match with none value check",
+        Literal(None, check_none_value=True),
+        LiteralExpr("alias", 1),
+        None,
+    ),
+    (
         "Single node match",
         Column(OptionalString("table"), String("test_col")),
         ColumnExpr("alias_we_don't_care_of", "table", "test_col"),

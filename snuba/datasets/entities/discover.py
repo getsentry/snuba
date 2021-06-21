@@ -119,19 +119,15 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
     called on NULL, change the entire function to be NULL.
     """
 
-    function_match = FunctionCallMatch(StringMatch("identity"), (LiteralMatch(),))
+    function_match = FunctionCallMatch(
+        StringMatch("identity"), (LiteralMatch(value=None, check_none_value=True),)
+    )
 
     def attempt_map(
         self,
         expression: FunctionCall,
         children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[FunctionCall]:
-
-        # HACK: Quick fix to avoid this function dropping important conditions from the query
-        logical_functions = {"and", "or", "not", "xor"}
-
-        if expression.function_name in logical_functions:
-            return None
 
         parameters = tuple(p.accept(children_translator) for p in expression.parameters)
         for param in parameters:

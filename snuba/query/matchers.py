@@ -276,6 +276,12 @@ class Column(Pattern[ColumnExpr]):
 @dataclass(frozen=True)
 class Literal(Pattern[LiteralExpr]):
     value: Optional[Pattern[OptionalScalarType]] = None
+    # Flag to indicate whether we want to do an explicit check on None values.
+    # When this is set to True it will verify that when the value in the literal
+    # is None, then the match only happens when the value in the node is also None.
+    # This is helpful in example like matching identity(NULL) function where we
+    # want to match that the parameter to identity function is None only.
+    check_none_value: Optional[bool] = False
 
     def match(self, node: AnyType) -> Optional[MatchResult]:
         if not isinstance(node, LiteralExpr):
@@ -284,7 +290,13 @@ class Literal(Pattern[LiteralExpr]):
         if self.value is not None:
             return self.value.match(node.value)
         else:
-            return MatchResult()
+            if self.check_none_value:
+                if node.value is None:
+                    return MatchResult()
+                else:
+                    return None
+            else:
+                return MatchResult()
 
 
 @dataclass(frozen=True)
