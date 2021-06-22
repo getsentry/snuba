@@ -25,6 +25,7 @@ services:
       CLICKHOUSE_HOST: clickhouse
       REDIS_HOST: 'redis1'
       REDIS_PORT: 6379
+      REDIS_DB: 0
       DEFAULT_BROKERS: 'kafka:9092'
     entrypoint: python
   zookeeper:

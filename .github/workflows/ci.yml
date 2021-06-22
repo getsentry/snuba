@@ -51,7 +51,7 @@ jobs:
     timeout-minutes: 20
     strategy:
       matrix:
-        snuba_settings: ['ci', 'ci_distributed']
+        snuba_settings: ['ci', 'test_distributed']
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
