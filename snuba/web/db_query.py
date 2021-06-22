@@ -349,6 +349,8 @@ def execute_query_with_readthrough_caching(
     query_settings["query_id"] = query_id
 
     span = Hub.current.scope.span
+    if span:
+        span.set_data("query_id", query_id)
 
     def record_cache_hit_type(hit_type: int) -> None:
         span_tag = "cache_miss"
