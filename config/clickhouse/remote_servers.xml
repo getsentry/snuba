@@ -1,5 +1,4 @@
 <yandex>
-
     <remote_servers>
         <cluster_one_sh>
             <shard>
@@ -10,5 +9,4 @@
             </shard>
         </cluster_one_sh>
     </remote_servers>
-
 </yandex>

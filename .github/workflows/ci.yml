@@ -62,7 +62,7 @@ jobs:
           docker network create --attachable cloudbuild
       - name: Docker Snuba tests
         run: |
-          SNUBA_IMAGE=getsentry/snuba SNUBA_MODE=${{ matrix.ci_settings }} docker-compose -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=getsentry/snuba SNUBA_SETTINGS=${{ matrix.ci_settings }} docker-compose -f docker-compose.gcb.yml run --rm snuba-test
       - name: Upload to codecov
         run: |
           bash <(curl -s https://codecov.io/bash)
