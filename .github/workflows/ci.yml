@@ -51,7 +51,7 @@ jobs:
     timeout-minutes: 20
     strategy:
       matrix:
-          ci_settings: ['ci', 'ci_distributed']
+        snuba_settings: ['ci', 'ci_distributed']
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
@@ -62,7 +62,7 @@ jobs:
           docker network create --attachable cloudbuild
       - name: Docker Snuba tests
         run: |
-          SNUBA_IMAGE=getsentry/snuba SNUBA_SETTINGS=${{ matrix.ci_settings }} docker-compose -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=getsentry/snuba SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker-compose -f docker-compose.gcb.yml run --rm snuba-test
       - name: Upload to codecov
         run: |
           bash <(curl -s https://codecov.io/bash)
