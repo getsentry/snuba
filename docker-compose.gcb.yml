@@ -23,7 +23,7 @@ services:
     environment:
       SNUBA_SETTINGS: '$SNUBA_SETTINGS'
       CLICKHOUSE_HOST: clickhouse
-      USE_REDIS_CLUSTER: False
+      USE_REDIS_CLUSTER: '1'
       REDIS_HOST: 'redis1'
       REDIS_PORT: 6379
       REDIS_DB: 0
