@@ -1,14 +1,6 @@
 from __future__ import annotations
 
-from typing import (
-    Any,
-    Callable,
-    Iterable,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-)
+from typing import Any, Callable, Iterable, Optional, Sequence, Tuple, Union
 
 from snuba.query import LimitBy, OrderBy
 from snuba.query import ProcessableQuery as AbstractQuery

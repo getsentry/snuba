@@ -54,3 +54,26 @@ def test_query_data_source() -> None:
     assert query.get_columns() == ColumnSet(
         [("col1", Any()), ("some_func", Any()), ("_invalid_alias_2", Any())]
     )
+
+
+def test_query_experiments() -> None:
+    query = Query(
+        Table("my_table", ColumnSet([])),
+        limitby=LimitBy(
+            100, Column(alias=None, table_name="my_table", column_name="environment")
+        ),
+        limit=100,
+        offset=50,
+        granularity=60,
+    )
+
+    query.set_experiments({"optimization1": True})
+    assert query.get_experiments() == {"optimization1": True}
+    assert query.get_experiment_value("optimization1") == True
+
+    assert query.get_experiment_value("optimization2") is None
+    query.add_experiment("optimization2", "group1")
+    assert query.get_experiment_value("optimization2") == "group1"
+
+    query.set_experiments({"optimization3": 0.5})
+    assert query.get_experiments() == {"optimization3": 0.5}
