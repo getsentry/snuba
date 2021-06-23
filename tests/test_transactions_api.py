@@ -514,7 +514,45 @@ class TestTransactionsApi(BaseApiTest):
                     "dataset": "transactions",
                     "project": 1,
                     "selected_columns": ["event_id"],
-                    "conditions": [["transaction", "LIKE", "stuff \\\" ' \\' stuff"]],
+                    "conditions": [["transaction", "LIKE", "stuff \\\" ' \\' stuff\\"]],
+                    "limit": 4,
+                    "orderby": ["event_id"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 0, data
+
+    def test_escaping_newlines(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["event_id"],
+                    "conditions": [["transaction", "LIKE", "stuff \n stuff"]],
+                    "limit": 4,
+                    "orderby": ["event_id"],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 0, data
+
+    def test_escaping_not_newlines(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["event_id"],
+                    "conditions": [["transaction", "LIKE", "stuff \\n stuff"]],
                     "limit": 4,
                     "orderby": ["event_id"],
                     "from_date": (self.base_time - self.skew).isoformat(),

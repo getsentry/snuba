@@ -1,3 +1,4 @@
+import re
 from enum import Enum
 from typing import (
     Any,
@@ -12,6 +13,7 @@ from typing import (
 )
 
 from parsimonious.nodes import Node
+
 from snuba.query.dsl import divide, minus, multiply, plus
 from snuba.query.expressions import (
     Column,
@@ -136,10 +138,13 @@ def visit_numeric_literal(node: Node, visited_children: Iterable[Any]) -> Litera
         return Literal(None, float(node.text))
 
 
+newline_re = re.compile("(?:\\{2})*(\\n)")
+
+
 def visit_quoted_literal(node: Node, visited_children: Tuple[Any]) -> Literal:
-    # In order to match any character except for \' there is a crazy regex that needs to be
-    # stripped and de-escaped.
-    match = node.text[1:-1].replace("\\'", "'")
+    text = node.text[1:-1]
+    text = newline_re.sub(text, "\n")
+    match = text.replace("\\'", "'").replace("\\\\", "\\")
     return Literal(None, match)
 
 
