@@ -124,6 +124,7 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
         return backend.get_readthrough(key, function, noop, 10)
 
     setter = execute(worker)
+    time.sleep(0.5)
     waiter = execute(worker)
 
     with pytest.raises(CustomException):
@@ -137,15 +138,17 @@ def test_get_readthrough_set_wait_timeout(backend: Cache[bytes]) -> None:
     key = "key"
     value = b"value"
 
-    def function() -> bytes:
+    def function(id: int) -> bytes:
         time.sleep(2.5)
-        return value
+        return value + f"{id}".encode()
 
     def worker(timeout: int) -> bytes:
-        return backend.get_readthrough(key, function, noop, timeout)
+        return backend.get_readthrough(key, partial(function, timeout), noop, timeout)
 
     setter = execute(partial(worker, 2))
+    time.sleep(0.1)
     waiter_fast = execute(partial(worker, 1))
+    time.sleep(0.1)
     waiter_slow = execute(partial(worker, 3))
 
     with pytest.raises(TimeoutError):
