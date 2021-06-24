@@ -1,4 +1,3 @@
-import re
 from datetime import datetime, timedelta
 from typing import Any, Callable, Tuple, Union
 
@@ -806,11 +805,6 @@ class TestDiscoverApi(BaseApiTest):
 
         assert response.status_code == 200
         assert data["data"] == []
-        # The countIf() clause should be converted to identity(NULL)
-        assert (
-            re.search("\(identity\(NULL\) AS _snuba_failure_count\)", data["sql"])
-            is not None
-        )
 
     def test_count_null_user_consistency(self) -> None:
         response = self.post(

@@ -47,6 +47,7 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.extensions import QueryExtension
+from snuba.query.matchers import Any
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or
@@ -120,7 +121,7 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
     """
 
     function_match = FunctionCallMatch(
-        StringMatch("identity"), (LiteralMatch(value=None, check_none_value=True),)
+        StringMatch("identity"), (LiteralMatch(value=Any(type(None))),)
     )
 
     def attempt_map(
@@ -128,6 +129,12 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
         expression: FunctionCall,
         children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[FunctionCall]:
+
+        # HACK: Quick fix to avoid this function dropping important conditions from the query
+        logical_functions = {"and", "or", "xor"}
+
+        if expression.function_name in logical_functions:
+            return None
 
         parameters = tuple(p.accept(children_translator) for p in expression.parameters)
         for param in parameters:

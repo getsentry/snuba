@@ -22,15 +22,10 @@ from snuba.query.matchers import (
 )
 
 test_cases = [
+    ("Literal match", Literal(None), LiteralExpr("random_alias", 1), MatchResult(),),
     (
-        "Literal match without none value check",
-        Literal(None),
-        LiteralExpr("random_alias", 1),
-        MatchResult(),
-    ),
-    (
-        "Literal match with none value check",
-        Literal(None, check_none_value=True),
+        "Literal match with none type",
+        Literal(Any(type(None))),
         LiteralExpr("alias", 1),
         None,
     ),
