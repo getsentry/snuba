@@ -30,9 +30,9 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--storage",
     "storage_names",
-    default=["events"],
     type=click.Choice([storage_key.value for storage_key in WRITABLE_STORAGES.keys()]),
     multiple=True,
+    required=True,
 )
 @click.option(
     "--consumer-group", default="snuba-consumers",
