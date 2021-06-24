@@ -8,6 +8,7 @@ from typing import Any, Mapping, MutableMapping, Optional, Set, Union, cast
 
 import rapidjson
 import sentry_sdk
+from clickhouse_driver import errors
 from sentry_sdk import Hub
 from sentry_sdk.api import configure_scope
 
@@ -29,7 +30,7 @@ from snuba.querylog.query_metadata import (
 from snuba.reader import Reader, Result
 from snuba.redis import redis_client
 from snuba.request.request_settings import RequestSettings
-from snuba.state.cache.abstract import Cache
+from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RESULT_VALUE, RESULT_WAIT, RedisCache
 from snuba.state.rate_limit import (
     GLOBAL_RATE_LIMIT_NAME,
@@ -447,6 +448,20 @@ def raw_query(
             with configure_scope() as scope:
                 if isinstance(cause, ClickhouseError):
                     scope.fingerprint = ["{{default}}", str(cause.code)]
+                    if scope.span:
+                        if cause.code == errors.ErrorCodes.TOO_SLOW:
+                            sentry_sdk.set_tag("timeout", "predicted")
+                        elif cause.code == errors.ErrorCodes.TIMEOUT_EXCEEDED:
+                            sentry_sdk.set_tag("timeout", "query_timeout")
+                        elif cause.code in (
+                            errors.ErrorCodes.SOCKET_TIMEOUT,
+                            errors.ErrorCodes.NETWORK_ERROR,
+                        ):
+                            sentry_sdk.set_tag("timeout", "network")
+                elif isinstance(cause, (TimeoutError, ExecutionTimeoutError)):
+                    if scope.span:
+                        sentry_sdk.set_tag("timeout", "cache_timeout")
+
                 logger.exception("Error running query: %s\n%s", sql, cause)
             stats = update_with_status(QueryStatus.ERROR)
         raise QueryException({"stats": stats, "sql": sql}) from cause
