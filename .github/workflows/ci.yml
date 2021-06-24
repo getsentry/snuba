@@ -66,24 +66,3 @@ jobs:
       - name: Upload to codecov
         run: |
           bash <(curl -s https://codecov.io/bash)
-
-  # TODO: Remove once Freight stops referencing this old context
-  old-tests:
-    needs: linting
-    name: Tests and code coverage
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v2
-        name: Checkout code
-      - name: Docker set up
-        run: |
-          docker pull getsentry/snuba:latest || true
-          docker build --build-arg PYTHON_VERSION=3.8 -t getsentry/snuba . --cache-from getsentry/snuba:latest --target testing
-          docker network create --attachable cloudbuild
-      - name: Docker Snuba tests
-        run: |
-          SNUBA_IMAGE=getsentry/snuba SNUBA_SETTINGS=test docker-compose -f docker-compose.gcb.yml run --rm snuba-test
-      - name: Upload to codecov
-        run: |
-          bash <(curl -s https://codecov.io/bash)
