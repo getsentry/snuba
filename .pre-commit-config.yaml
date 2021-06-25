@@ -27,6 +27,8 @@ repos:
     -   id: mypy
         files: snuba
         args: [--config-file, mypy.ini, --ignore-missing-imports, --strict, --warn-unreachable]
+        additional_dependencies:
+          - arroyo @ git+https://github.com/getsentry/arroyo.git
   - repo: https://github.com/pycqa/isort
     rev: 5.8.0
     hooks:

@@ -8,7 +8,7 @@ import pytest
 from arroyo import Message, Partition, Topic
 from arroyo.backends.local.backend import LocalBroker as Broker
 from arroyo.backends.local.storages.memory import MemoryMessageStorage
-from arroyo.clock import TestingClock
+from arroyo.utils.clock import TestingClock
 
 from snuba import state
 from snuba.datasets.factory import get_dataset

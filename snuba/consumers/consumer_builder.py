@@ -6,8 +6,8 @@ from arroyo.backends.kafka import KafkaConsumer, KafkaPayload
 from arroyo.processing import StreamProcessor
 from arroyo.processing.strategies import ProcessingStrategyFactory
 from arroyo.processing.strategies.streaming import KafkaConsumerStrategyFactory
-from arroyo.profiler import ProcessingStrategyProfilerWrapperFactory
-from arroyo.retries import BasicRetryPolicy, RetryPolicy
+from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
+from arroyo.utils.retries import BasicRetryPolicy, RetryPolicy
 from confluent_kafka import KafkaError, KafkaException, Producer
 
 from snuba.consumers.consumer import build_batch_writer, process_message
