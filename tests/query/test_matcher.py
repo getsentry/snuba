@@ -22,6 +22,13 @@ from snuba.query.matchers import (
 )
 
 test_cases = [
+    ("Literal match", Literal(None), LiteralExpr("random_alias", 1), MatchResult(),),
+    (
+        "Literal match with none type",
+        Literal(Any(type(None))),
+        LiteralExpr("alias", 1),
+        None,
+    ),
     (
         "Single node match",
         Column(OptionalString("table"), String("test_col")),
