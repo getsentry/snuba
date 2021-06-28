@@ -35,9 +35,9 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 @click.option(
     "--storage",
     "storage_name",
-    default="events",
     type=click.Choice([storage_key.value for storage_key in WRITABLE_STORAGES.keys()]),
     help="The storage to target",
+    required=True,
 )
 @click.option(
     "--max-batch-size",

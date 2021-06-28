@@ -9,6 +9,7 @@ from typing import (
     Any,
     Callable,
     List,
+    Mapping,
     MutableMapping,
     NamedTuple,
     Optional,
@@ -215,7 +216,11 @@ def force_bytes(s: Union[bytes, str]) -> bytes:
         raise TypeError(f"cannot convert {type(s).__name__} to bytes")
 
 
-def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
+def create_metrics(
+    prefix: str,
+    tags: Optional[Tags] = None,
+    sample_rates: Optional[Mapping[str, float]] = None,
+) -> MetricsBackend:
     """Create a DogStatsd object if DOGSTATSD_HOST and DOGSTATSD_PORT are defined,
     with the specified prefix and tags. Return a DummyMetricsBackend otherwise.
     Prefixes must start with `snuba.<category>`, for example: `snuba.processor`.
@@ -246,6 +251,7 @@ def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
             if tags is not None
             else None,
         ),
+        sample_rates,
     )
 
 

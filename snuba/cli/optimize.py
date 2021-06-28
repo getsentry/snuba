@@ -19,9 +19,9 @@ from snuba.environment import setup_logging
 @click.option(
     "--storage",
     "storage_name",
-    default="events",
     type=click.Choice(["events", "errors", "transactions"]),
     help="The storage to target",
+    required=True,
 )
 @click.option("--log-level", help="Logging level to use.")
 def optimize(
@@ -32,8 +32,9 @@ def optimize(
     log_level: Optional[str] = None,
 ) -> None:
     from datetime import datetime
+
     from snuba.clickhouse.native import ClickhousePool
-    from snuba.optimize import run_optimize, logger
+    from snuba.optimize import logger, run_optimize
 
     setup_logging(log_level)
 

@@ -1,0 +1,12 @@
+<yandex>
+    <remote_servers>
+        <cluster_one_sh>
+            <shard>
+                <replica>
+                    <host>clickhouse</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </cluster_one_sh>
+    </remote_servers>
+</yandex>

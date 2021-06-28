@@ -3,8 +3,8 @@ import pytest
 from snuba.clickhouse.query import Expression as ClickhouseExpression
 from snuba.clickhouse.translators.snuba.mapping import SnubaClickhouseMappingTranslator
 from snuba.datasets.entities.discover import (
-    transaction_translation_mappers,
     null_function_translation_mappers,
+    transaction_translation_mappers,
 )
 from snuba.query.dsl import identity
 from snuba.query.expressions import (
@@ -14,7 +14,6 @@ from snuba.query.expressions import (
     FunctionCall,
     Literal,
 )
-
 
 test_data = [
     pytest.param(
@@ -43,6 +42,46 @@ test_data = [
         ),
         identity(Literal(None, None), "alias"),
         id="if null wrapped function mapper",
+    ),
+    pytest.param(
+        FunctionCall(
+            None,
+            "countIf",
+            (
+                FunctionCall(
+                    None,
+                    "not",
+                    (FunctionCall(None, "identity", (Literal(None, None),),),),
+                ),
+            ),
+        ),
+        FunctionCall(None, "identity", (Literal(None, None),),),
+        id="countIf not identity none mapper",
+    ),
+    pytest.param(
+        FunctionCall(
+            None,
+            "countIf",
+            (
+                FunctionCall(
+                    None,
+                    "not",
+                    (FunctionCall(None, "identity", (Literal(None, 42),),),),
+                ),
+            ),
+        ),
+        FunctionCall(
+            None,
+            "countIf",
+            (
+                FunctionCall(
+                    None,
+                    "not",
+                    (FunctionCall(None, "identity", (Literal(None, 42),),),),
+                ),
+            ),
+        ),
+        id="negative countIf not identity mapper",
     ),
     pytest.param(
         FunctionCall(
