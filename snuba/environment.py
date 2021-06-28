@@ -9,6 +9,7 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.redis import RedisIntegration
+from sentry_sdk.integrations.stdlib import StdlibIntegration
 
 from snuba import settings
 from snuba.util import create_metrics
@@ -35,6 +36,7 @@ def setup_sentry() -> None:
             GnuBacktraceIntegration(),
             LoggingIntegration(event_level=logging.WARNING),
             RedisIntegration(),
+            StdlibIntegration(),
         ],
         release=os.getenv("SNUBA_RELEASE"),
         traces_sampler=traces_sampler,
