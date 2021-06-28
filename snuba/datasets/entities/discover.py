@@ -47,6 +47,7 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.extensions import QueryExtension
+from snuba.query.matchers import Any
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or
@@ -119,7 +120,9 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
     called on NULL, change the entire function to be NULL.
     """
 
-    function_match = FunctionCallMatch(StringMatch("identity"), (LiteralMatch(),))
+    function_match = FunctionCallMatch(
+        StringMatch("identity"), (LiteralMatch(value=Any(type(None))),)
+    )
 
     def attempt_map(
         self,
@@ -128,7 +131,7 @@ class DefaultIfNullFunctionMapper(FunctionCallMapper):
     ) -> Optional[FunctionCall]:
 
         # HACK: Quick fix to avoid this function dropping important conditions from the query
-        logical_functions = {"and", "or", "not", "xor"}
+        logical_functions = {"and", "or", "xor"}
 
         if expression.function_name in logical_functions:
             return None

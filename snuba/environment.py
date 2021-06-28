@@ -41,4 +41,6 @@ def setup_sentry() -> None:
     )
 
 
-metrics = create_metrics("snuba")
+metrics = create_metrics(
+    "snuba", tags=None, sample_rates=settings.DOGSTATSD_SAMPLING_RATES,
+)

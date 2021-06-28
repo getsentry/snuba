@@ -46,14 +46,19 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
 # Dogstatsd Options
 DOGSTATSD_HOST = "localhost"
 DOGSTATSD_PORT = 8125
+DOGSTATSD_SAMPLING_RATES = {
+    "subscriptions.receive_latency": 0.1,
+    "subscriptions.process_message": 0.1,
+}
 
 # Redis Options
-USE_REDIS_CLUSTER = False
+USE_REDIS_CLUSTER = os.environ.get("USE_REDIS_CLUSTER", "0") != "0"
+
 REDIS_CLUSTER_STARTUP_NODES = None
 REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
-REDIS_PORT = 6379
-REDIS_PASSWORD = None
-REDIS_DB = 1
+REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
+REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
+REDIS_DB = int(os.environ.get("REDIS_DB", 1))
 
 USE_RESULT_CACHE = True
 

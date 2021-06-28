@@ -1,3 +1,5 @@
+import os
+
 from snuba.clickhouse.columns import Column
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
@@ -19,6 +21,7 @@ from snuba.migrations.table_engines import ReplacingMergeTree
 
 
 def test_create_table() -> None:
+    database = os.environ.get("CLICKHOUSE_DATABASE", "default")
     columns = [
         Column("id", String()),
         Column("name", String(Modifiers(nullable=True))),
@@ -37,7 +40,9 @@ def test_create_table() -> None:
         ),
     ).format_sql() in [
         "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64) ENGINE ReplacingMergeTree(version) ORDER BY version SETTINGS index_granularity=256;",
-        "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64) ENGINE ReplicatedReplacingMergeTree('/clickhouse/tables/events/{shard}/snuba_test/test_table', '{replica}', version) ORDER BY version SETTINGS index_granularity=256;",
+        "CREATE TABLE IF NOT EXISTS test_table (id String, name Nullable(String), version UInt64) ENGINE ReplicatedReplacingMergeTree('/clickhouse/tables/events/{shard}/"
+        + f"{database}/test_table'"
+        + ", '{replica}', version) ORDER BY version SETTINGS index_granularity=256;",
     ]
 
 

@@ -38,8 +38,17 @@ def record_query(
             mark_tags={"final": final},
         )
 
-        if Hub.current.scope.span:
-            sentry_sdk.set_tag("duration_group", timer.get_duration_group())
+        _add_tags(timer, request)
+
+
+def _add_tags(timer: Timer, request: Optional[Request] = None) -> None:
+    if Hub.current.scope.span:
+        duration_group = timer.get_duration_group()
+        sentry_sdk.set_tag("duration_group", duration_group)
+        if duration_group == ">30s":
+            sentry_sdk.set_tag("timeout", "too_long")
+
+        if request is not None:
             experiments: MutableMapping[str, Any] = request.query.get_experiments()
             for name, value in experiments.items():
                 sentry_sdk.set_tag(f"exp-{name}", str(value))
@@ -72,5 +81,4 @@ def _record_failure_building_request(
         timer.send_metrics_to(
             metrics, tags={"status": status.value, "referrer": referrer or "none"},
         )
-        if Hub.current.scope.span:
-            sentry_sdk.set_tag("duration_group", timer.get_duration_group())
+        _add_tags(timer)

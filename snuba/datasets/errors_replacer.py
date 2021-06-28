@@ -8,10 +8,10 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from functools import cached_property
 from typing import (
     Any,
     Deque,
-    Dict,
     List,
     Mapping,
     MutableMapping,
@@ -110,20 +110,14 @@ class LegacyReplacement(Replacement):
         if self.insert_query_template is None:
             return None
 
-        args = {
-            **self.query_args,
-            "table_name": table_name
-        }
+        args = {**self.query_args, "table_name": table_name}
         return self.insert_query_template % args
 
     def get_count_query(self, table_name: str) -> Optional[str]:
         if self.count_query_template is None:
             return None
 
-        args = {
-            **self.query_args,
-            "table_name": table_name
-        }
+        args = {**self.query_args, "table_name": table_name}
         return self.count_query_template % args
 
 
@@ -260,7 +254,9 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         elif type_ == "end_merge":
             processed = process_merge(event, self.__all_columns)
         elif type_ == "end_unmerge":
-            processed = process_unmerge(event, self.__all_columns, self.__state_name)
+            processed = UnmergeGroupsReplacement.parse_message(
+                event, self.__replacement_context
+            )
         elif type_ == "end_unmerge_hierarchical":
             processed = process_unmerge_hierarchical(
                 event, self.__all_columns, self.__state_name
@@ -666,63 +662,89 @@ def process_merge(
     )
 
 
-def process_unmerge(
-    message: Mapping[str, Any],
-    all_columns: Sequence[FlattenedColumn],
-    state_name: ReplacerState,
-) -> Optional[Replacement]:
-    hashes = message["hashes"]
-    if not hashes:
-        return None
+@dataclass(frozen=True)
+class UnmergeGroupsReplacement(Replacement):
+    state_name: ReplacerState
+    timestamp: datetime
+    hashes: Sequence[str]
+    all_columns: Sequence[FlattenedColumn]
+    project_id: int
+    previous_group_id: int
+    new_group_id: int
 
-    assert all(isinstance(h, str) for h in hashes)
+    @classmethod
+    def parse_message(
+        cls, message: Mapping[str, Any], context: ReplacementContext
+    ) -> Optional["Replacement"]:
+        hashes = message["hashes"]
+        if not hashes:
+            return None
 
-    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
-    all_column_names = [c.escaped for c in all_columns]
-    select_columns = map(
-        lambda i: i if i != "group_id" else str(message["new_group_id"]),
-        all_column_names,
-    )
+        assert all(isinstance(h, str) for h in hashes)
 
-    where = """\
-        PREWHERE primary_hash IN (%(hashes)s)
-        WHERE group_id = %(previous_group_id)s
-        AND project_id = %(project_id)s
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
+        timestamp = datetime.strptime(
+            message["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+        )
 
-    count_query_template = (
-        """\
-        SELECT count()
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
+        return UnmergeGroupsReplacement(
+            state_name=context.state_name,
+            timestamp=timestamp,
+            hashes=hashes,
+            project_id=message["project_id"],
+            previous_group_id=message["previous_group_id"],
+            new_group_id=message["new_group_id"],
+            all_columns=context.all_columns,
+        )
 
-    insert_query_template = (
-        """\
-        INSERT INTO %(table_name)s (%(all_columns)s)
-        SELECT %(select_columns)s
-        FROM %(table_name)s FINAL
-    """
-        + where
-    )
+    def get_project_id(self) -> int:
+        return self.project_id
 
-    query_args = {
-        "all_columns": ", ".join(all_column_names),
-        "select_columns": ", ".join(select_columns),
-        "previous_group_id": message["previous_group_id"],
-        "project_id": message["project_id"],
-        "timestamp": timestamp.strftime(DATETIME_FORMAT),
-        "hashes": ", ".join(_convert_hash(h, state_name) for h in hashes),
-    }
+    def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
+        return NeedsFinal()
 
-    query_time_flags = (NEEDS_FINAL, message["project_id"])
+    @cached_property
+    def _where_clause(self) -> str:
+        if self.state_name == ReplacerState.ERRORS:
+            hashes = ", ".join(
+                ["'%s'" % str(uuid.UUID(_hashify(h))) for h in self.hashes]
+            )
+        else:
+            hashes = ", ".join("'%s'" % _hashify(h) for h in self.hashes)
 
-    return LegacyReplacement(
-        count_query_template, insert_query_template, query_args, query_time_flags
-    )
+        timestamp = self.timestamp.strftime(DATETIME_FORMAT)
+
+        return f"""\
+            PREWHERE primary_hash IN ({hashes})
+            WHERE group_id = {self.previous_group_id}
+            AND project_id = {self.project_id}
+            AND received <= CAST('{timestamp}' AS DateTime)
+            AND NOT deleted
+        """
+
+    def get_count_query(self, table_name: str) -> Optional[str]:
+        return f"""\
+            SELECT count()
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
+
+    def get_insert_query(self, table_name: str) -> Optional[str]:
+        all_column_names = [c.escaped for c in self.all_columns]
+        select_columns = ", ".join(
+            map(
+                lambda i: i if i != "group_id" else str(self.new_group_id),
+                all_column_names,
+            )
+        )
+
+        all_columns = ", ".join(all_column_names)
+
+        return f"""\
+            INSERT INTO {table_name} ({all_columns})
+            SELECT {select_columns}
+            FROM {table_name} FINAL
+            {self._where_clause}
+        """
 
 
 def _convert_hash(
