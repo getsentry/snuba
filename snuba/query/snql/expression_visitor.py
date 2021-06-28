@@ -138,13 +138,13 @@ def visit_numeric_literal(node: Node, visited_children: Iterable[Any]) -> Litera
         return Literal(None, float(node.text))
 
 
-newline_re = re.compile("(?:\\{2})*(\\n)")
+newline_re = re.compile("((?:\\{2})*)(\\n)")
 
 
 def visit_quoted_literal(node: Node, visited_children: Tuple[Any]) -> Literal:
     text = node.text[1:-1]
     text = newline_re.sub(text, "\n")
-    match = text.replace("\\'", "'").replace("\\\\", "\\")
+    match = text.replace("\\'", "'")
     return Literal(None, match)
 
 
