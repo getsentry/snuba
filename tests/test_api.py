@@ -1941,6 +1941,30 @@ class TestApi(SimpleAPITest):
 
         assert result["sql"].startswith(val)
 
+    def test_backslashes_in_query(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "project": [1],
+                    "dataset": "events",
+                    "from_date": self.base_time.isoformat(),
+                    "to_date": (
+                        self.base_time + timedelta(minutes=self.minutes)
+                    ).isoformat(),
+                    "conditions": [
+                        [["positionCaseInsensitive", ["message", "'Api\\'"]], "!=", 0],
+                        ["environment", "IN", ["production"]],
+                    ],
+                    "aggregations": [["count()", "", "times_seen"]],
+                    "consistent": False,
+                    "debug": False,
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [{"times_seen": 0}]
+
     def test_hierarchical_hashes_array_join(self) -> None:
         response = self.post(
             json.dumps(

@@ -272,3 +272,21 @@ class TestSDKSnQLApi(BaseApiTest):
 
         assert response.status_code == 200
         assert data["data"] == []
+
+    def test_escape_edge_cases(self) -> None:
+        query = (
+            Query("events", Entity("events"))
+            .set_select([Function("count", [], "times_seen")])
+            .set_where(
+                [
+                    Condition(Column("project_id"), Op.EQ, self.project_id),
+                    Condition(Column("timestamp"), Op.GTE, self.base_time),
+                    Condition(Column("timestamp"), Op.LT, self.next_time),
+                    Condition(Column("environment"), Op.EQ, "\\' \n \\n \\"),
+                ]
+            )
+        )
+
+        response = self.post("/events/snql", data=query.snuba())
+        data = json.loads(response.data)
+        assert response.status_code == 200, data

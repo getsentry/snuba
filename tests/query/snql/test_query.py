@@ -1466,6 +1466,96 @@ test_cases = [
         ),
         id="Query with nested boolean conditions with multiple empty quoted literals",
     ),
+    pytest.param(
+        f"""MATCH (discover_events )
+        SELECT count() AS times_seen
+        WHERE environment = '\\\\\\' \\n \\\\n \\\\\\\\n \\\\\\\\\\n \\\\'
+        AND {added_condition}
+        """,
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.DISCOVER_EVENTS,
+                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "times_seen", FunctionCall("_snuba_times_seen", "count", tuple()),
+                ),
+            ],
+            limit=1000,
+            condition=binary_condition(
+                "and",
+                binary_condition(
+                    "equals",
+                    Column("_snuba_environment", None, "environment"),
+                    Literal(None, "\\' \n \\n \\\\n \\\\\n \\"),
+                ),
+                required_condition,
+            ),
+            offset=0,
+        ),
+        id="Escaping newline cases",
+    ),
+    pytest.param(
+        f"""MATCH (discover_events )
+        SELECT count() AS times_seen
+        WHERE environment = '\\\\\\\\\\n'
+        AND {added_condition}
+        """,
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.DISCOVER_EVENTS,
+                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "times_seen", FunctionCall("_snuba_times_seen", "count", tuple()),
+                ),
+            ],
+            limit=1000,
+            condition=binary_condition(
+                "and",
+                binary_condition(
+                    "equals",
+                    Column("_snuba_environment", None, "environment"),
+                    Literal(None, "\\\\\n"),
+                ),
+                required_condition,
+            ),
+            offset=0,
+        ),
+        id="Escaping newline cases2",
+    ),
+    pytest.param(
+        f"""MATCH (discover_events )
+        SELECT count() AS times_seen
+        WHERE environment = 'stuff \\\\\" \\' \\\\\\' stuff\\\\'
+        AND {added_condition}
+        """,
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.DISCOVER_EVENTS,
+                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "times_seen", FunctionCall("_snuba_times_seen", "count", tuple()),
+                ),
+            ],
+            limit=1000,
+            condition=binary_condition(
+                "and",
+                binary_condition(
+                    "equals",
+                    Column("_snuba_environment", None, "environment"),
+                    Literal(None, """stuff \\" ' \\' stuff\\"""),
+                ),
+                required_condition,
+            ),
+            offset=0,
+        ),
+        id="Escaping not newlines cases",
+    ),
 ]
 
 
