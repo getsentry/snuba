@@ -398,3 +398,20 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
         assert response.status_code == 200
+
+    def test_escape_edge_cases(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT count() AS times_seen
+                    WHERE timestamp >= toDateTime('2021-04-06T20:42:40')
+                    AND timestamp < toDateTime('2021-04-20T20:42:40')
+                    AND project_id IN tuple({self.project_id})
+                    AND environment = '\\\\\\' \\n \\\\n \\\\'
+                    """,
+                }
+            ),
+        )
+        assert response.status_code == 200
