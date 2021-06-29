@@ -42,7 +42,6 @@ RUN set -ex; \
         liblz4-dev \
         libpcre3-dev \
         wget \
-        git \
     '; \
     apt-get update; \
     apt-get install -y $buildDeps --no-install-recommends; \
