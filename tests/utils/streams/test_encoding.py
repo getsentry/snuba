@@ -1,7 +1,7 @@
 from arroyo import Message, Topic
 from arroyo.backends.local.backend import LocalBroker as Broker
 from arroyo.backends.local.storages.memory import MemoryMessageStorage
-from arroyo.clock import TestingClock
+from arroyo.utils.clock import TestingClock
 
 from snuba.utils.codecs import Encoder
 from snuba.utils.streams.encoding import ProducerEncodingWrapper

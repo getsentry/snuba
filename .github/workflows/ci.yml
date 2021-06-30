@@ -38,11 +38,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install mypy==0.812
-          pip install pytest==6.1.2
+          make install-python-dependencies
       - name: Run mypy
         run: |
-          mypy --config-file mypy.ini --ignore-missing-imports --strict --warn-unreachable snuba arroyo
+          mypy --config-file mypy.ini --ignore-missing-imports --strict --warn-unreachable snuba
 
   tests:
     needs: linting
