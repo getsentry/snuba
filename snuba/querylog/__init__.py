@@ -35,7 +35,7 @@ def record_query(
                 "referrer": referrer,
                 "final": final,
             },
-            mark_tags={"final": final},
+            mark_tags={"final": final, "referrer": referrer},
         )
 
         _add_tags(timer, request)
