@@ -117,6 +117,7 @@ class Reader(ABC):
         query: FormattedQuery,
         settings: Optional[Mapping[str, str]] = None,
         with_totals: bool = False,
+        robust: bool = False,
     ) -> Result:
         """Execute a query."""
         raise NotImplementedError

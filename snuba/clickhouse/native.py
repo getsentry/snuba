@@ -8,6 +8,7 @@ from uuid import UUID
 
 from clickhouse_driver import Client, errors
 from dateutil.tz import tz
+
 from snuba import settings
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
@@ -270,6 +271,7 @@ class NativeDriverReader(Reader):
         # TODO: move Clickhouse specific arguments into clickhouse.query.Query
         settings: Optional[Mapping[str, str]] = None,
         with_totals: bool = False,
+        robust: bool = False,
     ) -> Result:
         settings = {**settings} if settings is not None else {}
 
@@ -277,8 +279,12 @@ class NativeDriverReader(Reader):
         if "query_id" in settings:
             query_id = settings.pop("query_id")
 
+        execute_func = (
+            self.__client.execute_robust if robust is True else self.__client.execute
+        )
+
         return self.__transform_result(
-            self.__client.execute(
+            execute_func(
                 query.get_sql(),
                 with_column_types=True,
                 query_id=query_id,
