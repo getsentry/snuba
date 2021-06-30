@@ -58,6 +58,8 @@ FULL_CONFIG = [
         "password": "",
         "database": "default",
         "http_port": 8123,
+        "secure": False,
+        "ca_certs": None,
         "storage_sets": ALL_STORAGE_SETS,
         "single_node": True,
     },
@@ -68,6 +70,8 @@ FULL_CONFIG = [
         "password": "",
         "database": "default",
         "http_port": 8123,
+        "secure": False,
+        "ca_certs": None,
         "storage_sets": {"transactions"},
         "single_node": False,
         "cluster_name": "clickhouse_hosts",
@@ -138,7 +142,7 @@ def test_get_local_nodes() -> None:
 
 def test_cache_connections() -> None:
     cluster_1 = cluster.ClickhouseCluster(
-        "localhost", 8000, "default", "", "default", 8001, {"events"}, True
+        "localhost", 8000, "default", "", "default", 8001, False, None, {"events"}, True
     )
 
     assert cluster_1.get_query_connection(
