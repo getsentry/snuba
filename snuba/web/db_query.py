@@ -192,6 +192,7 @@ def execute_query(
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
+    robust: bool,
 ) -> Result:
     """
     Execute a query and return a result.
@@ -215,7 +216,10 @@ def execute_query(
         query_settings["max_threads"] = 1
 
     result = reader.execute(
-        formatted_query, query_settings, with_totals=clickhouse_query.has_totals(),
+        formatted_query,
+        query_settings,
+        with_totals=clickhouse_query.has_totals(),
+        robust=robust,
     )
 
     timer.mark("execute")
@@ -235,6 +239,7 @@ def execute_query_with_rate_limits(
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
+    robust: bool,
 ) -> Result:
     # XXX: We should consider moving this that it applies to the logical query,
     # not the physical query.
@@ -276,6 +281,7 @@ def execute_query_with_rate_limits(
             timer,
             stats,
             query_settings,
+            robust=robust,
         )
 
 
@@ -292,6 +298,7 @@ def execute_query_with_caching(
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
+    robust: bool,
 ) -> Result:
     # XXX: ``uncompressed_cache_max_cols`` is used to control both the result
     # cache, as well as the uncompressed cache. These should be independent.
@@ -314,6 +321,7 @@ def execute_query_with_caching(
         timer,
         stats,
         query_settings,
+        robust=robust,
     )
 
     with sentry_sdk.start_span(description="execute", op="db") as span:
@@ -344,6 +352,7 @@ def execute_query_with_readthrough_caching(
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
+    robust: bool,
 ) -> Result:
     query_id = get_query_cache_key(formatted_query)
     query_settings["query_id"] = query_id
@@ -376,6 +385,7 @@ def execute_query_with_readthrough_caching(
             timer,
             stats,
             query_settings,
+            robust,
         ),
         record_cache_hit_type=record_cache_hit_type,
         timeout=query_settings.get("max_execution_time", 30),
@@ -396,6 +406,7 @@ def raw_query(
     query_metadata: SnubaQueryMetadata,
     stats: MutableMapping[str, Any],
     trace_id: Optional[str] = None,
+    robust: bool = False,
 ) -> QueryResult:
     """
     Submits a raw SQL query to the DB and does some post-processing on it to
@@ -440,6 +451,7 @@ def raw_query(
             timer,
             stats,
             query_settings,
+            robust=robust,
         )
     except Exception as cause:
         if isinstance(cause, RateLimitExceeded):

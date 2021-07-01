@@ -1,8 +1,10 @@
+import random
 import uuid
 from typing import Any, Callable, ChainMap, MutableMapping, Sequence, Type, Union
 
 import sentry_sdk
 
+from snuba import state
 from snuba.datasets.dataset import Dataset
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity
@@ -43,10 +45,23 @@ def parse_legacy_query(
     return query
 
 
+def _consistent_override(original_setting: bool, referrer: str) -> bool:
+    consistent_config = state.get_config("consistent_override", None)
+    if isinstance(consistent_config, str):
+        referrers_override = consistent_config.split(";")
+        for config in referrers_override:
+            referrer_config, percentage = config.split("=")
+            if referrer_config == referrer:
+                if random.random() > float(percentage):
+                    return False
+
+    return original_setting
+
+
 def build_request(
     body: MutableMapping[str, Any],
     parser: Parser,
-    settings_class: Type[RequestSettings],
+    settings_class: Union[Type[HTTPRequestSettings], Type[SubscriptionRequestSettings]],
     schema: RequestSchema,
     dataset: Dataset,
     timer: Timer,
@@ -55,12 +70,20 @@ def build_request(
     with sentry_sdk.start_span(description="build_request", op="validate") as span:
         try:
             request_parts = schema.validate(body)
-            if isinstance(settings_class, type(HTTPRequestSettings)):
+            if settings_class == HTTPRequestSettings:
+                settings = {
+                    **request_parts.settings,
+                    "consistent": _consistent_override(
+                        request_parts.settings.get("consistent", False), referrer
+                    ),
+                }
                 settings_obj: Union[
                     HTTPRequestSettings, SubscriptionRequestSettings
-                ] = settings_class(**request_parts.settings)
-            elif isinstance(settings_class, type(SubscriptionRequestSettings)):
-                settings_obj = settings_class()
+                ] = settings_class(**settings)
+            elif settings_class == SubscriptionRequestSettings:
+                settings_obj = settings_class(
+                    consistent=_consistent_override(True, referrer)
+                )
 
             query = parser(request_parts, settings_obj, dataset)
 
