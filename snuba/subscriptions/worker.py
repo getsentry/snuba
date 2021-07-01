@@ -114,7 +114,7 @@ class SubscriptionWorker(
             return (
                 request,
                 parse_and_run_query(
-                    self.__dataset, copy.deepcopy(request), timer
+                    self.__dataset, copy.deepcopy(request), timer, robust=True
                 ).result,
             )
 

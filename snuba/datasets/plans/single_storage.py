@@ -1,7 +1,7 @@
-from snuba.query.processors.conditions_enforcer import MandatoryConditionEnforcer
 from typing import Optional, Sequence
 
 import sentry_sdk
+
 from snuba import state
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
@@ -20,6 +20,7 @@ from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.processors.conditions_enforcer import MandatoryConditionEnforcer
 from snuba.query.processors.mandatory_condition_applier import MandatoryConditionApplier
 from snuba.request.request_settings import RequestSettings
 
@@ -44,7 +45,7 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
 
     @with_span()
     def execute(
-        self, query: Query, request_settings: RequestSettings, runner: QueryRunner
+        self, query: Query, request_settings: RequestSettings, runner: QueryRunner,
     ) -> QueryResult:
         def process_and_run_query(
             query: Query, request_settings: RequestSettings

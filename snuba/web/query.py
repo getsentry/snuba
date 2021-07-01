@@ -3,6 +3,7 @@ from functools import partial
 from typing import MutableMapping, Union
 
 import sentry_sdk
+
 from snuba import environment
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
@@ -57,7 +58,7 @@ class SampleClauseFinder(DataSourceVisitor[bool, Entity], JoinVisitor[bool, Enti
 
 @with_span()
 def parse_and_run_query(
-    dataset: Dataset, request: Request, timer: Timer
+    dataset: Dataset, request: Request, timer: Timer, robust: bool = False
 ) -> QueryResult:
     """
     Runs a Snuba Query, then records the metadata about each split query that was run.
@@ -68,7 +69,11 @@ def parse_and_run_query(
 
     try:
         result = _run_query_pipeline(
-            dataset=dataset, request=request, timer=timer, query_metadata=query_metadata
+            dataset=dataset,
+            request=request,
+            timer=timer,
+            query_metadata=query_metadata,
+            robust=robust,
         )
         if not request.settings.get_dry_run():
             record_query(request, timer, query_metadata)
@@ -84,6 +89,7 @@ def _run_query_pipeline(
     request: Request,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
+    robust: bool,
 ) -> QueryResult:
     """
     Runs the query processing and execution pipeline for a Snuba Query. This means it takes a Dataset
@@ -108,7 +114,11 @@ def _run_query_pipeline(
         query_runner = _dry_run_query_runner
     else:
         query_runner = partial(
-            _run_and_apply_column_names, timer, query_metadata, request.referrer,
+            _run_and_apply_column_names,
+            timer,
+            query_metadata,
+            request.referrer,
+            robust,
         )
 
     return (
@@ -136,6 +146,7 @@ def _run_and_apply_column_names(
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     referrer: str,
+    robust: bool,
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     reader: Reader,
@@ -150,7 +161,13 @@ def _run_and_apply_column_names(
     """
 
     result = _format_storage_query_and_run(
-        timer, query_metadata, referrer, clickhouse_query, request_settings, reader,
+        timer,
+        query_metadata,
+        referrer,
+        clickhouse_query,
+        request_settings,
+        reader,
+        robust,
     )
 
     alias_name_mapping: MutableMapping[str, str] = {}
@@ -191,6 +208,7 @@ def _format_storage_query_and_run(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     reader: Reader,
+    robust: bool,
 ) -> QueryResult:
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
@@ -225,4 +243,5 @@ def _format_storage_query_and_run(
             query_metadata,
             stats,
             span.trace_id,
+            robust=robust,
         )
