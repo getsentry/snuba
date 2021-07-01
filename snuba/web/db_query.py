@@ -29,7 +29,7 @@ from snuba.querylog.query_metadata import (
 )
 from snuba.reader import Reader, Result
 from snuba.redis import redis_client
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_settings import CacheMode, RequestSettings
 from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RESULT_VALUE, RESULT_WAIT, RedisCache
 from snuba.state.rate_limit import (
@@ -425,11 +425,13 @@ def raw_query(
         trace_id,
     )
 
-    execute_query_strategy = (
-        execute_query_with_readthrough_caching
-        if state.get_config("use_readthrough_query_cache", 1)
-        else execute_query_with_caching
-    )
+    cache_mode = request_settings.get_cache_mode()
+    if cache_mode == CacheMode.READTHROUGH:
+        execute_query_strategy = execute_query_with_readthrough_caching
+    elif cache_mode == CacheMode.LOOKASIDE:
+        execute_query_strategy = execute_query_with_caching
+    else:
+        execute_query_strategy = execute_query_with_rate_limits
 
     try:
         result = execute_query_strategy(

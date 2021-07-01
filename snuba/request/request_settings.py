@@ -1,7 +1,15 @@
 from abc import ABC, abstractmethod
+from enum import Enum
 from typing import Sequence
 
+from snuba import state
 from snuba.state.rate_limit import RateLimitParameters, get_global_rate_limit_params
+
+
+class CacheMode(Enum):
+    DISABLED = 0
+    LOOKASIDE = 1
+    READTHROUGH = 2
 
 
 class RequestSettings(ABC):
@@ -34,6 +42,12 @@ class RequestSettings(ABC):
     @abstractmethod
     def get_legacy(self) -> bool:
         pass
+
+    def get_cache_mode(self) -> CacheMode:
+        if state.get_config("use_readthrough_query_cache", 1):
+            return CacheMode.READTHROUGH
+        else:
+            return CacheMode.LOOKASIDE
 
     @abstractmethod
     def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
@@ -108,6 +122,12 @@ class SubscriptionRequestSettings(RequestSettings):
 
     def get_legacy(self) -> bool:
         return False
+
+    def get_cache_mode(self) -> CacheMode:
+        if state.get_config("subscriptions_disable_cache", False):
+            return CacheMode.DISABLED
+        else:
+            return super().get_cache_mode()
 
     def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
         return []
