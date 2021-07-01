@@ -94,11 +94,14 @@ class SubscriptionRequestSettings(RequestSettings):
     parameters and skips all rate limiting.
     """
 
+    def __init__(self, consistent: bool = True) -> None:
+        self.__consistent = consistent
+
     def get_turbo(self) -> bool:
         return False
 
     def get_consistent(self) -> bool:
-        return True
+        return self.__consistent
 
     def get_debug(self) -> bool:
         return False
