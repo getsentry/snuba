@@ -9,7 +9,7 @@ from uuid import UUID
 from clickhouse_driver import Client, errors
 from dateutil.tz import tz
 
-from snuba import settings
+from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
 from snuba.reader import Reader, Result, build_result_transformer
@@ -158,7 +158,11 @@ class ClickhousePool(object):
                 logger.warning("Write to ClickHouse failed: %s (retrying)", str(e))
                 if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
                     # Try forever if the server is overloaded.
-                    time.sleep(1)
+                    sleep_seconds = state.get_config(
+                        "simultaneous_queries_sleep_seconds", 1
+                    )
+                    assert sleep_seconds is not None
+                    time.sleep(float(sleep_seconds))
                     continue
                 else:
                     # Quit immediately for other types of server errors.
