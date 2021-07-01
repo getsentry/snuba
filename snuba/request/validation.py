@@ -1,6 +1,6 @@
 import random
 import uuid
-from typing import Any, Callable, ChainMap, MutableMapping, Sequence, Type, Union, cast
+from typing import Any, Callable, ChainMap, MutableMapping, Sequence, Type, Union
 
 import sentry_sdk
 
@@ -61,7 +61,7 @@ def _consistent_override(original_setting: bool, referrer: str) -> bool:
 def build_request(
     body: MutableMapping[str, Any],
     parser: Parser,
-    settings_class: Type[RequestSettings],
+    settings_class: Union[Type[HTTPRequestSettings], Type[SubscriptionRequestSettings]],
     schema: RequestSchema,
     dataset: Dataset,
     timer: Timer,
@@ -79,9 +79,9 @@ def build_request(
                 }
                 settings_obj: Union[
                     HTTPRequestSettings, SubscriptionRequestSettings
-                ] = cast(Type[HTTPRequestSettings], settings_class)(**settings)
+                ] = settings_class(**settings)
             elif settings_class == SubscriptionRequestSettings:
-                settings_obj = cast(Type[SubscriptionRequestSettings], settings_class)(
+                settings_obj = settings_class(
                     consistent=_consistent_override(True, referrer)
                 )
 
