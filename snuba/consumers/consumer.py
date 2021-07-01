@@ -35,6 +35,7 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import TableWriter
+from snuba.environment import setup_sentry
 from snuba.processor import InsertBatch, MessageProcessor, ReplacementBatch
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -542,6 +543,7 @@ class MultistorageConsumerProcessingStrategyFactory(
                 self.__max_batch_time,
                 self.__input_block_size,
                 self.__output_block_size,
+                initializer=setup_sentry,
             )
 
         return TransformStep(
