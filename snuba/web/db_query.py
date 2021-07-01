@@ -216,7 +216,10 @@ def execute_query(
         query_settings["max_threads"] = 1
 
     result = reader.execute(
-        formatted_query, query_settings, with_totals=clickhouse_query.has_totals(),
+        formatted_query,
+        query_settings,
+        with_totals=clickhouse_query.has_totals(),
+        robust=robust,
     )
 
     timer.mark("execute")
