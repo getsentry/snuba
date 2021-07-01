@@ -14,6 +14,7 @@ from snuba.consumers.consumer import build_batch_writer, process_message
 from snuba.consumers.snapshot_worker import SnapshotProcessor
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.environment import setup_sentry
 from snuba.processor import MessageProcessor
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
@@ -196,6 +197,7 @@ class ConsumerBuilder:
             processes=self.processes,
             input_block_size=self.input_block_size,
             output_block_size=self.output_block_size,
+            initialize_parallel_transform=setup_sentry,
         )
 
         if self.__profile_path is not None:
