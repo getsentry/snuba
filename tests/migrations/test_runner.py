@@ -1,5 +1,5 @@
 import importlib
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest.mock import patch
 
 import pytest
@@ -52,7 +52,6 @@ def test_get_status() -> None:
     )
     assert status[0] == Status.COMPLETED
     assert isinstance(status[1], datetime)
-    assert status[1] > datetime.now() - timedelta(seconds=1)
 
 
 def test_show_all() -> None:
