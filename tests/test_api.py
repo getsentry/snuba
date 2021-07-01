@@ -1854,23 +1854,31 @@ class TestApi(SimpleAPITest):
             state.set_config("use_split", 0)
 
     def test_consistent(self, disable_query_cache: Callable[..., Any]) -> None:
+        state.set_config("consistent_override", "test_override=0;another=0.5")
+        query = json.dumps(
+            {
+                "project": 2,
+                "aggregations": [["count()", "", "aggregate"]],
+                "consistent": True,
+                "debug": True,
+                "from_date": self.base_time.isoformat(),
+                "to_date": (
+                    self.base_time + timedelta(minutes=self.minutes)
+                ).isoformat(),
+            }
+        )
+
         response = json.loads(
-            self.post(
-                json.dumps(
-                    {
-                        "project": 2,
-                        "aggregations": [["count()", "", "aggregate"]],
-                        "consistent": True,
-                        "debug": True,
-                        "from_date": self.base_time.isoformat(),
-                        "to_date": (
-                            self.base_time + timedelta(minutes=self.minutes)
-                        ).isoformat(),
-                    }
-                ),
-            ).data
+            self.app.post("/query", data=query, headers={"referer": "test_query"},).data
         )
         assert response["stats"]["consistent"]
+
+        response = json.loads(
+            self.app.post(
+                "/query", data=query, headers={"referer": "test_override"},
+            ).data
+        )
+        assert response["stats"]["consistent"] == False
 
     def test_gracefully_handle_multiple_conditions_on_same_column(self) -> None:
         response = self.post(
