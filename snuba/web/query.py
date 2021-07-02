@@ -1,6 +1,6 @@
 import logging
 from functools import partial
-from typing import MutableMapping, Union
+from typing import MutableMapping, Optional, Union
 
 import sentry_sdk
 
@@ -21,6 +21,7 @@ from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 from snuba.util import with_span
+from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException, QueryResult, transform_column_names
@@ -58,7 +59,11 @@ class SampleClauseFinder(DataSourceVisitor[bool, Entity], JoinVisitor[bool, Enti
 
 @with_span()
 def parse_and_run_query(
-    dataset: Dataset, request: Request, timer: Timer, robust: bool = False
+    dataset: Dataset,
+    request: Request,
+    timer: Timer,
+    robust: bool = False,
+    concurrent_queries_gauge: Optional[Gauge] = None,
 ) -> QueryResult:
     """
     Runs a Snuba Query, then records the metadata about each split query that was run.
@@ -74,6 +79,7 @@ def parse_and_run_query(
             timer=timer,
             query_metadata=query_metadata,
             robust=robust,
+            concurrent_queries_gauge=concurrent_queries_gauge,
         )
         if not request.settings.get_dry_run():
             record_query(request, timer, query_metadata)
@@ -90,6 +96,7 @@ def _run_query_pipeline(
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     robust: bool,
+    concurrent_queries_gauge: Optional[Gauge],
 ) -> QueryResult:
     """
     Runs the query processing and execution pipeline for a Snuba Query. This means it takes a Dataset
@@ -119,6 +126,7 @@ def _run_query_pipeline(
             query_metadata,
             request.referrer,
             robust,
+            concurrent_queries_gauge,
         )
 
     return (
@@ -147,6 +155,7 @@ def _run_and_apply_column_names(
     query_metadata: SnubaQueryMetadata,
     referrer: str,
     robust: bool,
+    concurrent_queries_gauge: Optional[Gauge],
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     reader: Reader,
@@ -168,6 +177,7 @@ def _run_and_apply_column_names(
         request_settings,
         reader,
         robust,
+        concurrent_queries_gauge,
     )
 
     alias_name_mapping: MutableMapping[str, str] = {}
@@ -209,6 +219,7 @@ def _format_storage_query_and_run(
     request_settings: RequestSettings,
     reader: Reader,
     robust: bool,
+    concurrent_queries_gauge: Optional[Gauge] = None,
 ) -> QueryResult:
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
@@ -234,14 +245,21 @@ def _format_storage_query_and_run(
     with sentry_sdk.start_span(description=formatted_query.get_sql(), op="db") as span:
         span.set_tag("table", table_names)
 
-        return raw_query(
-            clickhouse_query,
-            request_settings,
-            formatted_query,
-            reader,
-            timer,
-            query_metadata,
-            stats,
-            span.trace_id,
-            robust=robust,
-        )
+        def execute() -> QueryResult:
+            return raw_query(
+                clickhouse_query,
+                request_settings,
+                formatted_query,
+                reader,
+                timer,
+                query_metadata,
+                stats,
+                span.trace_id,
+                robust=robust,
+            )
+
+        if concurrent_queries_gauge is not None:
+            with concurrent_queries_gauge:
+                return execute()
+        else:
+            return execute()

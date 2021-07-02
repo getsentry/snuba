@@ -58,6 +58,10 @@ class SubscriptionWorker(
             self.__metrics, "executor.concurrent"
         )
 
+        self.__concurrent_clickhouse_gauge: Gauge = ThreadSafeGauge(
+            self.__metrics, "executor.concurrent.clickhouse"
+        )
+
     def __execute(
         self, task: ScheduledTask[Subscription], tick: Tick
     ) -> Tuple[Request, Result]:
@@ -114,7 +118,11 @@ class SubscriptionWorker(
             return (
                 request,
                 parse_and_run_query(
-                    self.__dataset, copy.deepcopy(request), timer, robust=True
+                    self.__dataset,
+                    copy.deepcopy(request),
+                    timer,
+                    robust=True,
+                    concurrent_queries_gauge=self.__concurrent_clickhouse_gauge,
                 ).result,
             )
 
