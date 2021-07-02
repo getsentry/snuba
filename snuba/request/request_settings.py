@@ -24,6 +24,10 @@ class RequestSettings(ABC):
         pass
 
     @abstractmethod
+    def set_consistent(self, consistent: bool) -> None:
+        pass
+
+    @abstractmethod
     def get_debug(self) -> bool:
         pass
 
@@ -72,6 +76,9 @@ class HTTPRequestSettings(RequestSettings):
     def get_consistent(self) -> bool:
         return self.__consistent
 
+    def set_consistent(self, consistent: bool) -> None:
+        self.__consistent = consistent
+
     def get_debug(self) -> bool:
         return self.__debug
 
@@ -102,6 +109,9 @@ class SubscriptionRequestSettings(RequestSettings):
 
     def get_consistent(self) -> bool:
         return self.__consistent
+
+    def set_consistent(self, consistent: bool) -> None:
+        self.__consistent = consistent
 
     def get_debug(self) -> bool:
         return False
