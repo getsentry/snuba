@@ -3,6 +3,7 @@ from abc import ABC
 from datetime import datetime, timedelta
 from typing import Iterator, List, Optional
 
+from snuba import settings
 from snuba.subscriptions.data import PartitionId, Subscription, SubscriptionIdentifier
 from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.utils.metrics import MetricsBackend
@@ -27,6 +28,35 @@ class ImmediateSubscriptionFilter(SubscriptionFilter):
     def filter(self, subscription: Subscription, timestamp: int) -> bool:
         resolution = int(subscription.data.resolution.total_seconds())
         return timestamp % resolution == 0
+
+
+class JitteredSubscriptionFilter(SubscriptionFilter):
+    """
+    Schedules subscriptions applying a jitter to distribute subscriptions
+    evenly in the resolution period.
+
+    Each subscription is assigned a stable jitter which correspond to a
+    timestamp in the resolution interval.
+    For example if a subscription has a 60 seconds resolution, the jitter
+    is calculated from the subscription id (to stay constant) and it is
+    a number between 0 and 59.
+
+    That subscription is then scheduled when the timestamp % 60 is equal
+    to the jitter instead of being equal to 0.
+    This would spread the subscription evenly.
+
+    There is a setting to define the maximum resolution the jitter applies.
+    """
+
+    def filter(self, subscription: Subscription, timestamp: int) -> bool:
+        max_resolution = settings.MAX_RESOLUTION_FOR_JITTER
+        resolution = int(subscription.data.resolution.total_seconds())
+
+        if resolution > max_resolution:
+            return timestamp % resolution == 0
+
+        jitter = subscription.identifier.uuid.int % resolution
+        return timestamp % resolution == jitter
 
 
 class SubscriptionScheduler(Scheduler[Subscription]):
