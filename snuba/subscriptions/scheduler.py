@@ -1,7 +1,7 @@
 import math
-from abc import ABC
+from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from typing import Iterator, List, Optional
+from typing import Generic, Iterator, List, Mapping, Optional, TypeVar
 
 from snuba import settings
 from snuba.subscriptions.data import PartitionId, Subscription, SubscriptionIdentifier
@@ -10,27 +10,51 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.scheduler import ScheduledTask, Scheduler
 from snuba.utils.types import Interval
 
+TTask = TypeVar("TTask")
 
-class SubscriptionFilter(ABC):
+
+class TaskBuilder(ABC, Generic[TTask]):
     """
-    Decides when to run a subscription or when to defer it.
+    Takes a Subscription and a timestamp, decides whether we should
+    schedule that task at the current timestamp and provides the
+    task instance.
     """
 
-    def filter(self, subscription: Subscription, timestamp: int) -> bool:
+    @abstractmethod
+    def get_task(
+        self, subscription: Subscription, timestamp: int
+    ) -> Optional[ScheduledTask[TTask]]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def reset_metrics(self) -> Mapping[str, int]:
         raise NotImplementedError
 
 
-class ImmediateSubscriptionFilter(SubscriptionFilter):
+class ImmediateTaskBuilder(TaskBuilder[Subscription]):
     """
     Schedules a subscription as soon as possible
     """
 
-    def filter(self, subscription: Subscription, timestamp: int) -> bool:
+    def __init__(self) -> None:
+        self.__count = 0
+
+    def get_task(
+        self, subscription: Subscription, timestamp: int
+    ) -> Optional[ScheduledTask[Subscription]]:
         resolution = int(subscription.data.resolution.total_seconds())
-        return timestamp % resolution == 0
+        if timestamp % resolution == 0:
+            return ScheduledTask(datetime.fromtimestamp(timestamp), subscription)
+        else:
+            return None
+
+    def reset_metrics(self) -> Mapping[str, int]:
+        metrics = {"tasks.built": self.__count}
+        self.__count = 0
+        return metrics
 
 
-class JitteredSubscriptionFilter(SubscriptionFilter):
+class JitteredTaskBuilder(TaskBuilder[Subscription]):
     """
     Schedules subscriptions applying a jitter to distribute subscriptions
     evenly in the resolution period.
@@ -48,15 +72,33 @@ class JitteredSubscriptionFilter(SubscriptionFilter):
     There is a setting to define the maximum resolution the jitter applies.
     """
 
-    def filter(self, subscription: Subscription, timestamp: int) -> bool:
+    def __init__(self) -> None:
+        self.__count = 0
+
+    def filter(
+        self, subscription: Subscription, timestamp: int
+    ) -> Optional[ScheduledTask[Subscription]]:
         max_resolution = settings.MAX_RESOLUTION_FOR_JITTER
         resolution = int(subscription.data.resolution.total_seconds())
 
         if resolution > max_resolution:
-            return timestamp % resolution == 0
+            if timestamp % resolution == 0:
+                return ScheduledTask(datetime.fromtimestamp(timestamp), subscription)
+            else:
+                return None
 
         jitter = subscription.identifier.uuid.int % resolution
-        return timestamp % resolution == jitter
+        if timestamp % resolution == jitter:
+            return ScheduledTask(
+                datetime.fromtimestamp(timestamp - jitter), subscription
+            )
+        else:
+            return None
+
+    def reset_metrics(self) -> Mapping[str, int]:
+        metrics = {"tasks.built": self.__count}
+        self.__count = 0
+        return metrics
 
 
 class SubscriptionScheduler(Scheduler[Subscription]):
@@ -74,7 +116,7 @@ class SubscriptionScheduler(Scheduler[Subscription]):
 
         self.__subscriptions: List[Subscription] = []
         self.__last_refresh: Optional[datetime] = None
-        self.__filter = ImmediateSubscriptionFilter()
+        self.__builder = ImmediateTaskBuilder()
 
     def __get_subscriptions(self) -> List[Subscription]:
         current_time = datetime.now()
@@ -107,15 +149,16 @@ class SubscriptionScheduler(Scheduler[Subscription]):
     ) -> Iterator[ScheduledTask[Subscription]]:
         subscriptions = self.__get_subscriptions()
 
-        count = 0
         for timestamp in range(
             math.ceil(interval.lower.timestamp()),
             math.ceil(interval.upper.timestamp()),
         ):
             for subscription in subscriptions:
-                if self.__filter.filter(subscription, timestamp):
-                    count += 1
-                    yield ScheduledTask(datetime.fromtimestamp(timestamp), subscription)
+                task = self.__builder.get_task(subscription, timestamp)
+                if task is not None:
+                    yield task
 
-        if count:
-            self.__metrics.increment("metrics_scheduled", count)
+        metrics = self.__builder.reset_metrics()
+        if any(c for m, c in metrics.items() if c > 0):
+            for metric, count in metrics.items():
+                self.__metrics.increment("metrics.scheduled", count)
