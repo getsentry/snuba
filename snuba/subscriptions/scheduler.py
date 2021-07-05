@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from typing import Generic, Iterator, List, Mapping, Optional, TypeVar
 
-from snuba import settings
+from snuba import settings, state
 from snuba.subscriptions.data import PartitionId, Subscription, SubscriptionIdentifier
 from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.utils.metrics import MetricsBackend
@@ -44,6 +44,7 @@ class ImmediateTaskBuilder(TaskBuilder[Subscription]):
     ) -> Optional[ScheduledTask[Subscription]]:
         resolution = int(subscription.data.resolution.total_seconds())
         if timestamp % resolution == 0:
+            self.__count += 1
             return ScheduledTask(datetime.fromtimestamp(timestamp), subscription)
         else:
             return None
@@ -79,6 +80,7 @@ class JitteredTaskBuilder(TaskBuilder[Subscription]):
 
     def __init__(self) -> None:
         self.__count = 0
+        self.__count_max_resolution = 0
 
     def get_task(
         self, subscription: Subscription, timestamp: int
@@ -88,12 +90,15 @@ class JitteredTaskBuilder(TaskBuilder[Subscription]):
 
         if resolution > max_resolution:
             if timestamp % resolution == 0:
+                self.__count += 1
+                self.__count_max_resolution += 1
                 return ScheduledTask(datetime.fromtimestamp(timestamp), subscription)
             else:
                 return None
 
         jitter = subscription.identifier.uuid.int % resolution
         if timestamp % resolution == jitter:
+            self.__count += 1
             return ScheduledTask(
                 datetime.fromtimestamp(timestamp - jitter), subscription
             )
@@ -101,9 +106,50 @@ class JitteredTaskBuilder(TaskBuilder[Subscription]):
             return None
 
     def reset_metrics(self) -> Mapping[str, int]:
-        metrics = {"tasks.built": self.__count}
+        metrics = {
+            "tasks.built": self.__count,
+            "tasks.above.resolution": self.__count_max_resolution,
+        }
         self.__count = 0
+        self.__count_max_resolution = 0
         return metrics
+
+
+class DelegateTaskBuilder(TaskBuilder[Subscription]):
+    """
+    A delegate capable of switching back and forth between the
+    immediate and jittered task builders according to runtime
+    settings.
+    """
+
+    def __init__(self) -> None:
+        self.__immediate_builder = ImmediateTaskBuilder()
+        self.__jittered_builder = JitteredTaskBuilder()
+
+    def get_task(
+        self, subscription: Subscription, timestamp: int
+    ) -> Optional[ScheduledTask[Subscription]]:
+        immediate_task = self.__immediate_builder.get_task(subscription, timestamp)
+        jittered_task = self.__jittered_builder.get_task(subscription, timestamp)
+        primary_builder = state.get_config(
+            "subscription_primary_task_builder", "immediate"
+        )
+        if primary_builder == "jittered":
+            return jittered_task
+        else:
+            return immediate_task
+
+    def reset_metrics(self) -> Mapping[str, int]:
+        return {
+            **{
+                f"{key}.immediate": value
+                for key, value in self.__immediate_builder.reset_metrics().items()
+            },
+            **{
+                f"{key}.jittered": value
+                for key, value in self.__jittered_builder.reset_metrics().items()
+            },
+        }
 
 
 class SubscriptionScheduler(Scheduler[Subscription]):

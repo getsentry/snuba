@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta
-from typing import Sequence, Tuple
+from typing import Mapping, Sequence, Tuple
 from uuid import UUID
 
 import pytest
 
+from snuba import state
 from snuba.subscriptions.data import (
     PartitionId,
     SnQLSubscriptionData,
@@ -11,6 +12,7 @@ from snuba.subscriptions.data import (
     SubscriptionIdentifier,
 )
 from snuba.subscriptions.scheduler import (
+    DelegateTaskBuilder,
     ImmediateTaskBuilder,
     JitteredTaskBuilder,
     TaskBuilder,
@@ -50,12 +52,14 @@ TEST_CASES = [
                 ),
             )
         ],
+        {"tasks.built": 1},
         id="One subscription immediately scheduled",
     ),
     pytest.param(
         ImmediateTaskBuilder(),
         [(ALIGNED_TIMESTAMP + 1, build_subscription(timedelta(minutes=1), 0))],
         [],
+        {"tasks.built": 0},
         id="One subscription not aligned with resolution",
     ),
     pytest.param(
@@ -83,6 +87,7 @@ TEST_CASES = [
                 ),
             )
         ],
+        {"tasks.built": 1, "tasks.above.resolution": 0},
         id="One subscription scheduled with jitter. Happens at 43rd second",
     ),
     pytest.param(
@@ -116,6 +121,7 @@ TEST_CASES = [
                 ),
             )
         ],
+        {"tasks.built": 1, "tasks.above.resolution": 0},
         id="Ensures different ids generate different jitters",
     ),
     pytest.param(
@@ -130,22 +136,50 @@ TEST_CASES = [
                 ),
             )
         ],
+        {"tasks.built": 1, "tasks.above.resolution": 1},
         id="Do not apply jitter if resolution is above threshold",
+    ),
+    pytest.param(
+        DelegateTaskBuilder(),
+        [
+            (ALIGNED_TIMESTAMP, build_subscription(timedelta(minutes=1), 0)),
+            (
+                ALIGNED_TIMESTAMP + UUIDS[0].int % 60,
+                build_subscription(timedelta(minutes=1), 0),
+            ),
+        ],
+        [
+            (
+                ALIGNED_TIMESTAMP + UUIDS[0].int % 60,
+                ScheduledTask(
+                    datetime.fromtimestamp(ALIGNED_TIMESTAMP),
+                    build_subscription(timedelta(minutes=1), 0),
+                ),
+            )
+        ],
+        {
+            "tasks.built.immediate": 1,
+            "tasks.built.jittered": 1,
+            "tasks.above.resolution.jittered": 0,
+        },
+        id="Delegate returns the jittered one.",
     ),
 ]
 
 
-@pytest.mark.parametrize("builder, sequence_in, task_sequence", TEST_CASES)
+@pytest.mark.parametrize("builder, sequence_in, task_sequence, metrics", TEST_CASES)
 def test_sequences(
     builder: TaskBuilder[Subscription],
     sequence_in: Sequence[Tuple[int, Subscription]],
     task_sequence: Sequence[Tuple[int, ScheduledTask[Subscription]]],
+    metrics: Mapping[str, int],
 ) -> None:
     """
     Tries to execute the task builder on several sequences of
     subscriptions and validate the proper jitter is applied.
+    state.
     """
-
+    state.set_config("subscription_primary_task_builder", "jittered")
     output = []
     for timestamp, subscription in sequence_in:
         ret = builder.get_task(subscription, timestamp)
@@ -153,3 +187,4 @@ def test_sequences(
             output.append((timestamp, ret))
 
     assert output == task_sequence
+    assert builder.reset_metrics() == metrics
