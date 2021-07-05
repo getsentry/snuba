@@ -70,6 +70,11 @@ class JitteredTaskBuilder(TaskBuilder[Subscription]):
     This would spread the subscription evenly.
 
     There is a setting to define the maximum resolution the jitter applies.
+
+    The time range of the query does not include the jitter. So if the
+    jitter for a 60 seconds resolution query is 4 seconds. The query is
+    scheduled 4 seconds after the beginning of the minute, but the time
+    range of the query is still aligned with the minute.
     """
 
     def __init__(self) -> None:
