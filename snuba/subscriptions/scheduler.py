@@ -10,10 +10,10 @@ from snuba.utils.metrics import MetricsBackend
 from snuba.utils.scheduler import ScheduledTask, Scheduler
 from snuba.utils.types import Interval
 
-TTask = TypeVar("TTask")
+TSubscription = TypeVar("TSubscription")
 
 
-class TaskBuilder(ABC, Generic[TTask]):
+class TaskBuilder(ABC, Generic[TSubscription]):
     """
     Takes a Subscription and a timestamp, decides whether we should
     schedule that task at the current timestamp and provides the
@@ -23,7 +23,7 @@ class TaskBuilder(ABC, Generic[TTask]):
     @abstractmethod
     def get_task(
         self, subscription: Subscription, timestamp: int
-    ) -> Optional[ScheduledTask[TTask]]:
+    ) -> Optional[ScheduledTask[TSubscription]]:
         raise NotImplementedError
 
     @abstractmethod
@@ -75,7 +75,7 @@ class JitteredTaskBuilder(TaskBuilder[Subscription]):
     def __init__(self) -> None:
         self.__count = 0
 
-    def filter(
+    def get_task(
         self, subscription: Subscription, timestamp: int
     ) -> Optional[ScheduledTask[Subscription]]:
         max_resolution = settings.MAX_RESOLUTION_FOR_JITTER
