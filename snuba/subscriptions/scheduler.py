@@ -1,7 +1,7 @@
 import math
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from typing import Generic, Iterator, List, Mapping, Optional, TypeVar
+from typing import Generic, Iterator, List, Mapping, Optional, Sequence, Tuple, TypeVar
 
 from snuba import settings, state
 from snuba.subscriptions.data import PartitionId, Subscription, SubscriptionIdentifier
@@ -11,6 +11,8 @@ from snuba.utils.scheduler import ScheduledTask, Scheduler
 from snuba.utils.types import Interval
 
 TSubscription = TypeVar("TSubscription")
+
+Tags = Mapping[str, str]
 
 
 class TaskBuilder(ABC, Generic[TSubscription]):
@@ -27,7 +29,7 @@ class TaskBuilder(ABC, Generic[TSubscription]):
         raise NotImplementedError
 
     @abstractmethod
-    def reset_metrics(self) -> Mapping[str, int]:
+    def reset_metrics(self) -> Sequence[Tuple[str, int, Tags]]:
         raise NotImplementedError
 
 
@@ -49,8 +51,8 @@ class ImmediateTaskBuilder(TaskBuilder[Subscription]):
         else:
             return None
 
-    def reset_metrics(self) -> Mapping[str, int]:
-        metrics = {"tasks.built": self.__count}
+    def reset_metrics(self) -> Sequence[Tuple[str, int, Tags]]:
+        metrics: Sequence[Tuple[str, int, Tags]] = [("tasks.built", self.__count, {})]
         self.__count = 0
         return metrics
 
@@ -105,11 +107,11 @@ class JitteredTaskBuilder(TaskBuilder[Subscription]):
         else:
             return None
 
-    def reset_metrics(self) -> Mapping[str, int]:
-        metrics = {
-            "tasks.built": self.__count,
-            "tasks.above.resolution": self.__count_max_resolution,
-        }
+    def reset_metrics(self) -> Sequence[Tuple[str, int, Tags]]:
+        metrics: Sequence[Tuple[str, int, Tags]] = [
+            ("tasks.built", self.__count, {}),
+            ("tasks.above.resolution", self.__count_max_resolution, {}),
+        ]
         self.__count = 0
         self.__count_max_resolution = 0
         return metrics
@@ -139,17 +141,28 @@ class DelegateTaskBuilder(TaskBuilder[Subscription]):
         else:
             return immediate_task
 
-    def reset_metrics(self) -> Mapping[str, int]:
-        return {
-            **{
-                f"{key}.immediate": value
-                for key, value in self.__immediate_builder.reset_metrics().items()
-            },
-            **{
-                f"{key}.jittered": value
-                for key, value in self.__jittered_builder.reset_metrics().items()
-            },
-        }
+    def reset_metrics(self) -> Sequence[Tuple[str, int, Tags]]:
+        def add_tag(tags: Tags, builder_type: str) -> Tags:
+            return {
+                **tags,
+                "type": builder_type,
+            }
+
+        immediate_metrics = self.__immediate_builder.reset_metrics()
+        immediate_tagged = [
+            (metric[0], metric[1], add_tag(metric[2], "immediate"))
+            for metric in immediate_metrics
+        ]
+        jittered_metrics = self.__jittered_builder.reset_metrics()
+        jittered_tagged = [
+            (metric[0], metric[1], add_tag(metric[2], "jittered"))
+            for metric in jittered_metrics
+        ]
+
+        return [
+            *immediate_tagged,
+            *jittered_tagged,
+        ]
 
 
 class SubscriptionScheduler(Scheduler[Subscription]):
@@ -167,7 +180,7 @@ class SubscriptionScheduler(Scheduler[Subscription]):
 
         self.__subscriptions: List[Subscription] = []
         self.__last_refresh: Optional[datetime] = None
-        self.__builder = ImmediateTaskBuilder()
+        self.__builder = DelegateTaskBuilder()
 
     def __get_subscriptions(self) -> List[Subscription]:
         current_time = datetime.now()
@@ -210,6 +223,6 @@ class SubscriptionScheduler(Scheduler[Subscription]):
                     yield task
 
         metrics = self.__builder.reset_metrics()
-        if any(c for m, c in metrics.items() if c > 0):
-            for metric, count in metrics.items():
-                self.__metrics.increment("metrics.scheduled", count)
+        if any(metric for metric in metrics if metric[1] > 0):
+            for metric in metrics:
+                self.__metrics.increment(metric[0], metric[1], tags=metric[2])

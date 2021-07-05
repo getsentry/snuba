@@ -52,14 +52,14 @@ TEST_CASES = [
                 ),
             )
         ],
-        {"tasks.built": 1},
+        [("tasks.built", 1, {})],
         id="One subscription immediately scheduled",
     ),
     pytest.param(
         ImmediateTaskBuilder(),
         [(ALIGNED_TIMESTAMP + 1, build_subscription(timedelta(minutes=1), 0))],
         [],
-        {"tasks.built": 0},
+        [("tasks.built", 0, {})],
         id="One subscription not aligned with resolution",
     ),
     pytest.param(
@@ -87,7 +87,7 @@ TEST_CASES = [
                 ),
             )
         ],
-        {"tasks.built": 1, "tasks.above.resolution": 0},
+        [("tasks.built", 1, {}), ("tasks.above.resolution", 0, {})],
         id="One subscription scheduled with jitter. Happens at 43rd second",
     ),
     pytest.param(
@@ -121,7 +121,7 @@ TEST_CASES = [
                 ),
             )
         ],
-        {"tasks.built": 1, "tasks.above.resolution": 0},
+        [("tasks.built", 1, {}), ("tasks.above.resolution", 0, {})],
         id="Ensures different ids generate different jitters",
     ),
     pytest.param(
@@ -136,7 +136,7 @@ TEST_CASES = [
                 ),
             )
         ],
-        {"tasks.built": 1, "tasks.above.resolution": 1},
+        [("tasks.built", 1, {}), ("tasks.above.resolution", 1, {})],
         id="Do not apply jitter if resolution is above threshold",
     ),
     pytest.param(
@@ -157,11 +157,11 @@ TEST_CASES = [
                 ),
             )
         ],
-        {
-            "tasks.built.immediate": 1,
-            "tasks.built.jittered": 1,
-            "tasks.above.resolution.jittered": 0,
-        },
+        [
+            ("tasks.built", 1, {"type": "immediate"}),
+            ("tasks.built", 1, {"type": "jittered"}),
+            ("tasks.above.resolution", 0, {"type": "jittered"}),
+        ],
         id="Delegate returns the jittered one.",
     ),
 ]
