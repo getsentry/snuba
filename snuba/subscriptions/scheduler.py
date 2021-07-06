@@ -201,6 +201,18 @@ class DelegateTaskBuilder(TaskBuilder[Subscription]):
     A delegate capable of switching back and forth between the
     immediate and jittered task builders according to runtime
     settings.
+
+    It relies on TaskBuilderModeState to decide which task builder
+    to use. The reason for this is that we cannot simply switch
+    from one mode to another at any point in time. We need to wait
+    for the end of the resolution time interval, or we risk to
+    skip some queries.
+
+    Example: if we transitioned from jittered to immediate at the
+    second 30 of a minute. A query scheduled with a jitter = 40
+    would not be scheduled at all during that minute because,
+    with the immediate task builder, that would be scheduled at
+    second 0.
     """
 
     def __init__(self) -> None:

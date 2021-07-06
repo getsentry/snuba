@@ -96,6 +96,7 @@ def test_state_changes(
     subscriptions: Sequence[Tuple[Subscription, int]],
     expected_modes: Sequence[TaskBuilderMode],
 ) -> None:
+    prev_threshold = settings.MAX_RESOLUTION_FOR_JITTER
     settings.MAX_RESOLUTION_FOR_JITTER = 300
     state.set_config("subscription_primary_task_builder", general_mode)
     mode_state = TaskBuilderModeState()
@@ -104,3 +105,4 @@ def test_state_changes(
         for subscription, timestamp in subscriptions
     ]
     assert modes == expected_modes
+    settings.MAX_RESOLUTION_FOR_JITTER = prev_threshold
