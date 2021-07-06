@@ -6,6 +6,7 @@ from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
+from snuba.query.expressions import SubscriptableReference as SubscriptableReferenceExpr
 from snuba.query.matchers import (
     Any,
     AnyExpression,
@@ -19,6 +20,7 @@ from snuba.query.matchers import (
     Param,
     Pattern,
     String,
+    SubscriptableReference,
 )
 
 test_cases = [
@@ -289,6 +291,46 @@ test_cases = [
                 "second_function": FunctionCallExpr(None, "second_name", tuple()),
             },
         ),
+    ),
+    (
+        "simple subscriptable match",
+        SubscriptableReference(),
+        SubscriptableReferenceExpr(
+            None, ColumnExpr(None, None, "stuff"), LiteralExpr(None, "things")
+        ),
+        MatchResult(),
+    ),
+    (
+        "subscriptable match with column",
+        SubscriptableReference(String("stuff")),
+        SubscriptableReferenceExpr(
+            None, ColumnExpr(None, None, "stuff"), LiteralExpr(None, "things")
+        ),
+        MatchResult(),
+    ),
+    (
+        "subscriptable match with key",
+        SubscriptableReference(key=String("things")),
+        SubscriptableReferenceExpr(
+            None, ColumnExpr(None, None, "stuff"), LiteralExpr(None, "things")
+        ),
+        MatchResult(),
+    ),
+    (
+        "subscriptable match with column and key",
+        SubscriptableReference(String("stuff"), String("things")),
+        SubscriptableReferenceExpr(
+            None, ColumnExpr(None, None, "stuff"), LiteralExpr(None, "things")
+        ),
+        MatchResult(),
+    ),
+    (
+        "subscriptable match with wrong column and key",
+        SubscriptableReference(String("notstuff"), String("things")),
+        SubscriptableReferenceExpr(
+            None, ColumnExpr(None, None, "stuff"), LiteralExpr(None, "things")
+        ),
+        None,
     ),
 ]
 

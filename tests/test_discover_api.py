@@ -1604,6 +1604,53 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["data"] == [{"count": 1}]
 
+    def test_ifnull_empty_tag_condition_replacement(self) -> None:
+        response = self.post(
+            json.dumps(
+                {
+                    "aggregations": [],
+                    "conditions": [
+                        [["ifNull", ["tags[custom_tag]", "''"]], "!=", ""],
+                        ["project_id", "IN", [self.project_id]],
+                    ],
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                    "granularity": 3600,
+                    "groupby": [],
+                    "having": [],
+                    "orderby": [],
+                    "project": [self.project_id],
+                    "selected_columns": [
+                        "event_id",
+                        "project_id",
+                        [
+                            "transform",
+                            [
+                                ["toString", ["project_id"]],
+                                ["array", [f"'{self.project_id}'"]],
+                                ["array", ["'sentry'"]],
+                                "''",
+                            ],
+                            "`project.name`",
+                        ],
+                    ],
+                    "totals": False,
+                    "debug": True,
+                    "dataset": "discover",
+                }
+            ),
+            entity="discover",
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [
+            {
+                "event_id": self.event["event_id"],
+                "project.name": "sentry",
+                "project_id": self.project_id,
+            },
+        ]
+
 
 class TestDiscoverAPIEntitySelection(TestDiscoverApi):
     """

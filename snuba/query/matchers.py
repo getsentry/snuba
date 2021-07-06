@@ -12,6 +12,7 @@ from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.expressions import OptionalScalarType
+from snuba.query.expressions import SubscriptableReference as SubscriptableReferenceExpr
 
 MatchType = Union[Expression, OptionalScalarType]
 
@@ -345,6 +346,38 @@ class FunctionCall(Pattern[FunctionCallExpr]):
             for p in node.parameters:
                 if not self.all_parameters.match(p):
                     return None
+
+        return result
+
+
+@dataclass(frozen=True)
+class SubscriptableReference(Pattern[SubscriptableReferenceExpr]):
+    """
+    Matches a SubscriptableReference in the AST expression.
+    It works like the Column Pattern. if alias, column_name and key arguments
+    are provided, they have to match, otherwise they are ignored.
+    """
+
+    column_name: Optional[Pattern[str]] = None
+    key: Optional[Pattern[str]] = None
+
+    def match(self, node: AnyType) -> Optional[MatchResult]:
+        if not isinstance(node, SubscriptableReferenceExpr):
+            return None
+
+        result = MatchResult()
+
+        if self.column_name is not None:
+            partial_result = self.column_name.match(node.column.column_name)
+            if partial_result is None:
+                return None
+            result = result.merge(partial_result)
+
+        if self.key is not None:
+            partial_result = self.key.match(node.key.value)
+            if partial_result is None:
+                return None
+            result = result.merge(partial_result)
 
         return result
 

@@ -21,6 +21,9 @@ from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.empty_tag_condition_processor import (
+    EmptyTagConditionProcessor,
+)
 from snuba.query.processors.performance_expressions import (
     apdex_processor,
     failure_rate_processor,
@@ -142,6 +145,7 @@ class BaseTransactionsEntity(Entity, ABC):
             apdex_processor(self.get_data_model()),
             failure_rate_processor(self.get_data_model()),
             ProjectRateLimiterProcessor(project_column="project_id"),
+            EmptyTagConditionProcessor(),
         ]
 
 

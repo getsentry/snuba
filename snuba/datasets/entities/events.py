@@ -23,6 +23,9 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.empty_tag_condition_processor import (
+    EmptyTagConditionProcessor,
+)
 from snuba.query.processors.handled_functions import HandledFunctionsProcessor
 from snuba.query.processors.project_rate_limiter import ProjectRateLimiterProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
@@ -202,6 +205,7 @@ class BaseEventsEntity(Entity, ABC):
                 "exception_stacks.mechanism_handled", self.get_data_model()
             ),
             ProjectRateLimiterProcessor(project_column="project_id"),
+            EmptyTagConditionProcessor(),
         ]
 
 
