@@ -135,12 +135,44 @@ class TaskBuilderMode(Enum):
 
 
 class TaskBuilderModeState:
+    """
+    Manages task building mode transitions.
+
+    There are two final mode: immediate and jittered that correspond to
+    two different implementations of the TaskBuilder.
+
+    The current mode is defined as runtime configuration, though we do
+    not want to transition from one mode to the other at any timestamp.
+    We want for transitions to happen only at timestamps that are
+    multiple of the subscription resolution.
+
+    This class manages those transitions by adding two modes:
+    TRANSITION_JITTERED and TRANSITION_IMMEDIATE. When the system is in
+    a transition mode, this class will return the previous state
+    up until the timestamp reaches the end of the resolution time
+    and then it will start returning the new mode.
+    """
+
     def __init__(self) -> None:
         self.__state: MutableMapping[int, TaskBuilderMode] = {}
 
     def get_current_mode(
         self, subscription: Subscription, timestamp: int
     ) -> TaskBuilderMode:
+        def get_final_mode(transition_mode: TaskBuilderMode) -> TaskBuilderMode:
+            return (
+                TaskBuilderMode.IMMEDIATE
+                if transition_mode == TaskBuilderMode.TRANSITION_IMMEDIATE
+                else TaskBuilderMode.JITTERED
+            )
+
+        def get_start_mode(transition_mode: TaskBuilderMode) -> TaskBuilderMode:
+            return (
+                TaskBuilderMode.IMMEDIATE
+                if transition_mode == TaskBuilderMode.TRANSITION_JITTER
+                else TaskBuilderMode.JITTERED
+            )
+
         general_mode = TaskBuilderMode(
             state.get_config("subscription_primary_task_builder", "immediate")
         )
@@ -153,29 +185,15 @@ class TaskBuilderModeState:
 
         resolution = int(subscription.data.resolution.total_seconds())
         if resolution > settings.MAX_RESOLUTION_FOR_JITTER:
-            return general_mode
+            return get_final_mode(general_mode)
 
-        if general_mode == TaskBuilderMode.TRANSITION_JITTER:
-            if timestamp % resolution == 0:
-                self.__state[resolution] = TaskBuilderMode.JITTERED
+        if timestamp % resolution == 0:
+            self.__state[resolution] = get_final_mode(general_mode)
 
-            current_state = self.__state.get(resolution)
-            return (
-                current_state
-                if current_state is not None
-                else TaskBuilderMode.IMMEDIATE
-            )
-
-        if general_mode == TaskBuilderMode.TRANSITION_IMMEDIATE:
-            if timestamp % resolution == 0:
-                self.__state[resolution] = TaskBuilderMode.IMMEDIATE
-
-            current_state = self.__state.get(resolution)
-            return (
-                current_state if current_state is not None else TaskBuilderMode.JITTERED
-            )
-
-        raise ValueError("Invalid general mode")
+        current_state = self.__state.get(resolution)
+        return (
+            current_state if current_state is not None else get_start_mode(general_mode)
+        )
 
 
 class DelegateTaskBuilder(TaskBuilder[Subscription]):

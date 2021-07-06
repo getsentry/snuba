@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Mapping, Sequence, Tuple
+from typing import Sequence, Tuple
 from uuid import UUID
 
 import pytest
@@ -15,6 +15,7 @@ from snuba.subscriptions.scheduler import (
     DelegateTaskBuilder,
     ImmediateTaskBuilder,
     JitteredTaskBuilder,
+    Tags,
     TaskBuilder,
 )
 from snuba.utils.scheduler import ScheduledTask
@@ -42,6 +43,7 @@ ALIGNED_TIMESTAMP = 1625518080  # Aligned to start of a minute
 TEST_CASES = [
     pytest.param(
         ImmediateTaskBuilder(),
+        "jittered",
         [(ALIGNED_TIMESTAMP, build_subscription(timedelta(minutes=1), 0))],
         [
             (
@@ -57,6 +59,7 @@ TEST_CASES = [
     ),
     pytest.param(
         ImmediateTaskBuilder(),
+        "jittered",
         [(ALIGNED_TIMESTAMP + 1, build_subscription(timedelta(minutes=1), 0))],
         [],
         [("tasks.built", 0, {})],
@@ -64,6 +67,7 @@ TEST_CASES = [
     ),
     pytest.param(
         JitteredTaskBuilder(),
+        "jittered",
         [
             (ALIGNED_TIMESTAMP, build_subscription(timedelta(minutes=1), 0)),
             (
@@ -92,6 +96,7 @@ TEST_CASES = [
     ),
     pytest.param(
         JitteredTaskBuilder(),
+        "jittered",
         [
             (ALIGNED_TIMESTAMP, build_subscription(timedelta(minutes=1), 0)),
             (ALIGNED_TIMESTAMP, build_subscription(timedelta(minutes=1), 1)),
@@ -126,6 +131,7 @@ TEST_CASES = [
     ),
     pytest.param(
         JitteredTaskBuilder(),
+        "jittered",
         [(ALIGNED_TIMESTAMP, build_subscription(timedelta(minutes=2), 0))],
         [
             (
@@ -141,6 +147,7 @@ TEST_CASES = [
     ),
     pytest.param(
         DelegateTaskBuilder(),
+        "jittered",
         [
             (ALIGNED_TIMESTAMP, build_subscription(timedelta(minutes=1), 0)),
             (
@@ -164,22 +171,57 @@ TEST_CASES = [
         ],
         id="Delegate returns the jittered one.",
     ),
+    pytest.param(
+        DelegateTaskBuilder(),
+        "transition_jitter",
+        [
+            (ALIGNED_TIMESTAMP + 30, build_subscription(timedelta(minutes=1), 0)),
+            (
+                ALIGNED_TIMESTAMP + UUIDS[0].int % 60,
+                build_subscription(timedelta(minutes=1), 0),
+            ),
+            (ALIGNED_TIMESTAMP + 60, build_subscription(timedelta(minutes=1), 0)),
+            (
+                ALIGNED_TIMESTAMP + UUIDS[0].int % 60 + 60,
+                build_subscription(timedelta(minutes=1), 0),
+            ),
+            (ALIGNED_TIMESTAMP + 120, build_subscription(timedelta(minutes=1), 0)),
+        ],
+        [
+            (
+                ALIGNED_TIMESTAMP + UUIDS[0].int % 60 + 60,
+                ScheduledTask(
+                    datetime.fromtimestamp(ALIGNED_TIMESTAMP + 60),
+                    build_subscription(timedelta(minutes=1), 0),
+                ),
+            )
+        ],
+        [
+            ("tasks.built", 2, {"type": "immediate"}),
+            ("tasks.built", 2, {"type": "jittered"}),
+            ("tasks.above.resolution", 0, {"type": "jittered"}),
+        ],
+        id="Delegate transitions to jittered mode.",
+    ),
 ]
 
 
-@pytest.mark.parametrize("builder, sequence_in, task_sequence, metrics", TEST_CASES)
+@pytest.mark.parametrize(
+    "builder, primary_builder_config, sequence_in, task_sequence, metrics", TEST_CASES
+)
 def test_sequences(
     builder: TaskBuilder[Subscription],
+    primary_builder_config: str,
     sequence_in: Sequence[Tuple[int, Subscription]],
     task_sequence: Sequence[Tuple[int, ScheduledTask[Subscription]]],
-    metrics: Mapping[str, int],
+    metrics: Sequence[Tuple[str, int, Tags]],
 ) -> None:
     """
     Tries to execute the task builder on several sequences of
     subscriptions and validate the proper jitter is applied.
     state.
     """
-    state.set_config("subscription_primary_task_builder", "jittered")
+    state.set_config("subscription_primary_task_builder", primary_builder_config)
     output = []
     for timestamp, subscription in sequence_in:
         ret = builder.get_task(subscription, timestamp)
