@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Callable, Collection, Optional, Tuple
 
+from snuba import state
 from snuba.datasets.factory import get_dataset
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
@@ -71,6 +72,19 @@ class TestSubscriptionScheduler:
         assert result == expected
 
     def test_simple(self) -> None:
+        subscription = self.build_subscription(timedelta(minutes=1))
+        self.run_test(
+            [subscription],
+            start=timedelta(minutes=-10),
+            end=timedelta(minutes=0),
+            expected=[
+                ScheduledTask(self.now + timedelta(minutes=-10 + i), subscription)
+                for i in range(10)
+            ],
+        )
+
+    def test_simple_jittered(self) -> None:
+        state.set_config("subscription_primary_task_builder", "jittered")
         subscription = self.build_subscription(timedelta(minutes=1))
         self.run_test(
             [subscription],
