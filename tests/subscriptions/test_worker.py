@@ -259,5 +259,3 @@ def test_subscription_worker_consistent(subscription_data: SubscriptionData) -> 
         )
         == 1
     )
-
-    state.delete_config("event_subscription_non_consistent_sample_rate")
