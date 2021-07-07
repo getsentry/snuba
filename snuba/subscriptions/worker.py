@@ -17,6 +17,7 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.reader import Result
 from snuba.request import Request
+from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import DelegateSubscriptionData, Subscription
 from snuba.utils.metrics import MetricsBackend
@@ -120,8 +121,13 @@ class SubscriptionWorker(
             is_consistent_query = request.settings.get_consistent()
 
             def run_consistent() -> Result:
-                request_copy = copy.deepcopy(request)
-                request_copy.settings.set_consistent(True)
+                request_copy = Request(
+                    id=request.id,
+                    body=copy.deepcopy(request.body),
+                    query=copy.deepcopy(request.query),
+                    settings=SubscriptionRequestSettings(consistent=True),
+                    referrer=request.referrer,
+                )
 
                 return parse_and_run_query(
                     self.__dataset,
@@ -134,8 +140,13 @@ class SubscriptionWorker(
                 ).result
 
             def run_non_consistent() -> Result:
-                request_copy = copy.deepcopy(request)
-                request_copy.settings.set_consistent(False)
+                request_copy = Request(
+                    id=request.id,
+                    body=copy.deepcopy(request.body),
+                    query=copy.deepcopy(request.query),
+                    settings=SubscriptionRequestSettings(consistent=False),
+                    referrer=request.referrer,
+                )
 
                 return parse_and_run_query(
                     self.__dataset,
