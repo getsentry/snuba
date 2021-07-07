@@ -128,7 +128,9 @@ class SubscriptionWorker(
                     request_copy,
                     timer,
                     robust=True,
-                    concurrent_queries_gauge=self.__concurrent_clickhouse_gauge,
+                    concurrent_queries_gauge=self.__concurrent_clickhouse_gauge
+                    if is_consistent_query
+                    else None,
                 ).result
 
             def run_non_consistent() -> Result:
@@ -137,10 +139,12 @@ class SubscriptionWorker(
 
                 return parse_and_run_query(
                     self.__dataset,
-                    copy.deepcopy(request),
+                    request_copy,
                     timer,
                     robust=True,
-                    concurrent_queries_gauge=self.__concurrent_clickhouse_gauge,
+                    concurrent_queries_gauge=self.__concurrent_clickhouse_gauge
+                    if not is_consistent_query
+                    else None,
                 ).result
 
             def selector_func(run_snuplicator: bool) -> Tuple[str, List[str]]:
