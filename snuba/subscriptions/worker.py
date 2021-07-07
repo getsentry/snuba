@@ -3,23 +3,31 @@ from __future__ import annotations
 import copy
 import itertools
 import logging
+import random
 import time
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
-from typing import Mapping, NamedTuple, Optional, Sequence, Tuple
+from typing import List, Mapping, NamedTuple, Optional, Sequence, Tuple
 
 from arroyo import Message, Topic
 from arroyo.backends.abstract import Producer
 from arroyo.processing.strategies.batching import AbstractBatchWorker
 
+from snuba import state
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.factory import get_dataset_name
 from snuba.reader import Result
 from snuba.request import Request
+from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import DelegateSubscriptionData, Subscription
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.scheduler import ScheduledTask, Scheduler
+from snuba.utils.threaded_function_delegator import (
+    Result as ThreadedFunctionDelegatorResult,
+)
+from snuba.utils.threaded_function_delegator import ThreadedFunctionDelegator
 from snuba.web.query import parse_and_run_query
 
 logger = logging.getLogger("snuba.subscriptions")
@@ -48,6 +56,7 @@ class SubscriptionWorker(
         metrics: MetricsBackend,
     ) -> None:
         self.__dataset = dataset
+        self.__dataset_name = get_dataset_name(self.__dataset)
         self.__executor = executor
         self.__schedulers = schedulers
         self.__producer = producer
@@ -109,22 +118,93 @@ class SubscriptionWorker(
 
     def __execute_query(self, request: Request, timer: Timer) -> Tuple[Request, Result]:
         with self.__concurrent_gauge:
-            # XXX: The ``extra`` is discarded from ``QueryResult`` since it is
-            # not particularly useful in this context and duplicates data that
-            # is already being published to the query log.
-            # XXX: The ``request`` instance is copied when passed to
-            # ``parse_and_run_query`` since it can/will be mutated during
-            # processing.
-            return (
-                request,
-                parse_and_run_query(
+            is_consistent_query = request.settings.get_consistent()
+
+            def run_consistent() -> Result:
+                request_copy = Request(
+                    id=request.id,
+                    body=copy.deepcopy(request.body),
+                    query=copy.deepcopy(request.query),
+                    settings=SubscriptionRequestSettings(consistent=True),
+                    referrer=request.referrer,
+                )
+
+                return parse_and_run_query(
                     self.__dataset,
-                    copy.deepcopy(request),
+                    request_copy,
                     timer,
                     robust=True,
-                    concurrent_queries_gauge=self.__concurrent_clickhouse_gauge,
-                ).result,
+                    concurrent_queries_gauge=self.__concurrent_clickhouse_gauge
+                    if is_consistent_query
+                    else None,
+                ).result
+
+            def run_non_consistent() -> Result:
+                request_copy = Request(
+                    id=request.id,
+                    body=copy.deepcopy(request.body),
+                    query=copy.deepcopy(request.query),
+                    settings=SubscriptionRequestSettings(consistent=False),
+                    referrer=request.referrer,
+                )
+
+                return parse_and_run_query(
+                    self.__dataset,
+                    request_copy,
+                    timer,
+                    robust=True,
+                    concurrent_queries_gauge=self.__concurrent_clickhouse_gauge
+                    if not is_consistent_query
+                    else None,
+                ).result
+
+            def selector_func(run_snuplicator: bool) -> Tuple[str, List[str]]:
+                primary = "consistent" if is_consistent_query else "non_consistent"
+                other = "non_consistent" if is_consistent_query else "consistent"
+
+                return (primary, [other] if run_snuplicator else [])
+
+            def callback_func(
+                data: List[ThreadedFunctionDelegatorResult[Result]],
+            ) -> None:
+                primary_result = data.pop(0).result
+
+                for result in data:
+                    match = result.result == primary_result
+                    self.__metrics.increment(
+                        "consistent",
+                        tags={
+                            "dataset": self.__dataset_name,
+                            "consistent": str(is_consistent_query),
+                            "match": str(match),
+                        },
+                    )
+
+            if self.__dataset_name == "events":
+                sample_rate = state.get_config(
+                    "event_subscription_non_consistent_sample_rate", 0
+                )
+            elif self.__dataset_name == "transactions":
+                sample_rate = state.get_config(
+                    "transaction_subscription_non_consistent_sample_rate", 0
+                )
+            else:
+                sample_rate = 0
+
+            assert sample_rate is not None
+
+            run_snuplicator = random.random() < float(sample_rate)
+
+            executor = ThreadedFunctionDelegator[bool, Result](
+                callables={
+                    "consistent": run_consistent,
+                    "non_consistent": run_non_consistent,
+                },
+                selector_func=selector_func,
+                callback_func=callback_func,
             )
+
+            return (request, executor.execute(run_snuplicator))
 
     def process_message(
         self, message: Message[Tick]

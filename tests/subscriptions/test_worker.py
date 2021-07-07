@@ -1,3 +1,4 @@
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -36,6 +37,7 @@ from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.subscriptions.worker import SubscriptionTaskResult, SubscriptionWorker
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.types import Interval
+from tests.backends.metrics import Increment, TestingMetricsBackend
 
 
 class DummySubscriptionDataStore(SubscriptionDataStore):
@@ -198,3 +200,62 @@ def test_subscription_worker(subscription_data: SubscriptionData) -> None:
             "meta": [{"name": "count", "type": "UInt64"}],
             "data": [{"count": 0}],
         }
+
+
+def test_subscription_worker_consistent(subscription_data: SubscriptionData) -> None:
+    state.set_config("event_subscription_non_consistent_sample_rate", 1)
+    broker: Broker[SubscriptionTaskResult] = Broker(
+        MemoryMessageStorage(), TestingClock()
+    )
+
+    result_topic = Topic("subscription-results")
+
+    broker.create_topic(result_topic, partitions=1)
+
+    frequency = timedelta(minutes=1)
+    evaluations = 1
+
+    subscription = Subscription(
+        SubscriptionIdentifier(PartitionId(0), uuid1()), subscription_data,
+    )
+
+    store = DummySubscriptionDataStore()
+    store.create(subscription.identifier.uuid, subscription.data)
+
+    metrics = TestingMetricsBackend()
+
+    dataset = get_dataset("events")
+    worker = SubscriptionWorker(
+        dataset,
+        ThreadPoolExecutor(),
+        {
+            0: SubscriptionScheduler(
+                store, PartitionId(0), timedelta(), DummyMetricsBackend(strict=True)
+            )
+        },
+        broker.get_producer(),
+        result_topic,
+        metrics,
+    )
+
+    now = datetime(2000, 1, 1)
+
+    tick = Tick(
+        offsets=Interval(0, 1),
+        timestamps=Interval(now - (frequency * evaluations), now),
+    )
+
+    worker.process_message(Message(Partition(Topic("events"), 0), 0, tick, now))
+
+    time.sleep(0.1)
+
+    assert (
+        len(
+            [
+                m
+                for m in metrics.calls
+                if isinstance(m, Increment) and m.name == "consistent"
+            ]
+        )
+        == 1
+    )
