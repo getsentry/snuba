@@ -180,6 +180,18 @@ class SubscriptionWorker(
                         },
                     )
 
+                    # Only log 1 in 1000 mistmatches to sentry
+                    if random.random() < 0.001:
+                        logger.warning(
+                            "Non matching result with consistent and non-consistent subscription query",
+                            extra={
+                                "dataset": self.__dataset_name,
+                                "consistent": str(is_consistent_query),
+                                "primary": primary_result,
+                                "other": result.result,
+                            },
+                        )
+
             if self.__dataset_name == "events":
                 sample_rate = state.get_config(
                     "event_subscription_non_consistent_sample_rate", 0
