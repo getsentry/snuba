@@ -21,23 +21,26 @@ from typing import (
     Union,
 )
 
-from snuba import settings
+from snuba import environment, settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.columns import FlattenedColumn, Nullable, ReadOnly
 from snuba.clickhouse.escaping import escape_identifier, escape_string
+from snuba.datasets.events_processor_base import REPLACEMENT_EVENT_TYPES
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import InvalidMessageType, _hashify
 from snuba.redis import redis_client
 from snuba.replacers.replacer_processor import Replacement as ReplacementBase
 from snuba.replacers.replacer_processor import ReplacementMessage, ReplacerProcessor
-
-logger = logging.getLogger(__name__)
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 """
 Disambiguate the dataset/storage when there are multiple tables representing errors
 that perform event replacements.
 In theory this will be needed only during the events to errors migration.
 """
+
+logger = logging.getLogger(__name__)
+metrics = MetricsWrapper(environment.metrics, "errors.replacer")
 
 
 class ReplacerState(Enum):
@@ -240,6 +243,9 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
     def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
         type_ = message.action_type
         event = message.data
+
+        if type_ in REPLACEMENT_EVENT_TYPES:
+            metrics.increment(type_, 1)
 
         if type_ in (
             "start_delete_groups",
