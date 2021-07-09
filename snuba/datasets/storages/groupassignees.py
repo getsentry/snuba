@@ -10,6 +10,9 @@ from snuba.datasets.cdc.groupassignee_processor import (
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.processors.consistency_enforcer import (
+    ConsistencyEnforcerProcessor,
+)
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.utils.streams.topics import Topic
@@ -42,7 +45,10 @@ storage = CdcStorage(
     storage_key=StorageKey.GROUPASSIGNEES,
     storage_set_key=StorageSetKey.EVENTS,
     schema=schema,
-    query_processors=[PrewhereProcessor(["project_id"])],
+    query_processors=[
+        PrewhereProcessor(["project_id"]),
+        ConsistencyEnforcerProcessor(),
+    ],
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=GroupAssigneeProcessor(POSTGRES_TABLE),
         default_topic=Topic.CDC,
