@@ -245,7 +245,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         event = message.data
 
         if type_ in REPLACEMENT_EVENT_TYPES:
-            metrics.increment(type_, 1)
+            metrics.increment("process", 1, tags={"type": type_})
 
         if type_ in (
             "start_delete_groups",
