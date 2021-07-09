@@ -180,8 +180,8 @@ class SubscriptionWorker(
                         },
                     )
 
-                    # Only log 1 in 1000 mistmatches to sentry
-                    if random.random() < 0.001:
+                    # Only log 1 in 100 mistmatches to sentry
+                    if match is False and random.random() < 0.01:
                         logger.warning(
                             "Non matching result with consistent and non-consistent subscription query",
                             extra={
@@ -189,6 +189,7 @@ class SubscriptionWorker(
                                 "consistent": str(is_consistent_query),
                                 "primary": primary_result,
                                 "other": result.result,
+                                "query": request.query,
                             },
                         )
 
