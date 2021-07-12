@@ -94,7 +94,7 @@ class SubscriptionWorker(
                     timer,
                     self.__metrics,
                 )
-                return self.__execute_query(request, timer)
+                return self.__execute_query(request, timer, task)
             except Exception as e:
                 self.__metrics.increment("snql.subscription.delegate.error.execution")
                 logger.warning(
@@ -109,14 +109,16 @@ class SubscriptionWorker(
                     timer,
                     self.__metrics,
                 )
-                return self.__execute_query(request, timer)
+                return self.__execute_query(request, timer, task)
 
         request = task.task.data.build_request(
             self.__dataset, task.timestamp, tick.offsets.upper, timer, self.__metrics
         )
-        return self.__execute_query(request, timer)
+        return self.__execute_query(request, timer, task)
 
-    def __execute_query(self, request: Request, timer: Timer) -> Tuple[Request, Result]:
+    def __execute_query(
+        self, request: Request, timer: Timer, task: ScheduledTask[Subscription]
+    ) -> Tuple[Request, Result]:
         with self.__concurrent_gauge:
             is_consistent_query = request.settings.get_consistent()
 
@@ -189,7 +191,9 @@ class SubscriptionWorker(
                                 "consistent": str(is_consistent_query),
                                 "primary": primary_result,
                                 "other": result.result,
-                                "query": request.query,
+                                "query": request.query.get_all_expressions(),
+                                "subscription_id": task.task.identifier,
+                                "project": task.task.data.project_id,
                             },
                         )
 
