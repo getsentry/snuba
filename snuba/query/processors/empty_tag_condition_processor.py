@@ -1,29 +1,25 @@
 import random
 
 from snuba import settings
-from snuba.query.conditions import ConditionFunctions, condition_pattern
-from snuba.query.expressions import (
-    Column,
-    Expression,
-    FunctionCall,
-    SubscriptableReference,
+from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.query import Query
+from snuba.clickhouse.translators.snuba.mappers import (
+    KEY_COL_MAPPING_PARAM,
+    KEY_MAPPING_PARAM,
+    TABLE_MAPPING_PARAM,
+    mapping_pattern,
 )
-from snuba.query.logical import Query
+from snuba.query.conditions import ConditionFunctions, condition_pattern
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.matchers import FunctionCall as FunctionCallPattern
 from snuba.query.matchers import Literal as LiteralPattern
-from snuba.query.matchers import Param, String
-from snuba.query.matchers import SubscriptableReference as SubscriptableReferencePattern
-from snuba.query.processors import QueryProcessor
+from snuba.query.matchers import String
 from snuba.request.request_settings import RequestSettings
 
 CONDITION_PATTERN = condition_pattern(
     {ConditionFunctions.EQ, ConditionFunctions.NEQ},
     FunctionCallPattern(
-        String("ifNull"),
-        (
-            Param("lhs", SubscriptableReferencePattern(String("tags"))),
-            LiteralPattern(String("")),
-        ),
+        String("ifNull"), (mapping_pattern, LiteralPattern(String(""))),
     ),
     LiteralPattern(String("")),
     commutative=False,
@@ -40,26 +36,29 @@ class EmptyTagConditionProcessor(QueryProcessor):
         def process_condition(exp: Expression) -> Expression:
             result = CONDITION_PATTERN.match(exp)
             if result is not None:
-                assert isinstance(exp, FunctionCall)
-                lhs = result.expression("lhs")
-                assert isinstance(lhs, SubscriptableReference)
-                replacement = FunctionCall(
-                    exp.alias,
-                    "has",
-                    (Column(None, lhs.column.table_name, "tags.key"), lhs.key),
-                )
+                key_column = result.optional_string(KEY_COL_MAPPING_PARAM)
+                if key_column == "tags.key":
+                    rhs = result.optional_string(KEY_MAPPING_PARAM)
+                    table_name = result.optional_string(TABLE_MAPPING_PARAM)
+                    replacement = FunctionCall(
+                        exp.alias,
+                        "has",
+                        (Column(None, table_name, "tags.key"), Literal(None, rhs)),
+                    )
 
-                if exp.function_name == ConditionFunctions.EQ:
-                    replacement = FunctionCall(exp.alias, "not", (replacement,))
+                    assert isinstance(exp, FunctionCall)
+                    if exp.function_name == ConditionFunctions.EQ:
+                        replacement = FunctionCall(exp.alias, "not", (replacement,))
 
-                if settings.TESTING or random.random() < 0.5:
-                    query.add_experiment("empty-string-tag-condition", "true")
-                    return replacement
-                else:
-                    query.add_experiment("empty-string-tag-condition", "false")
+                    if settings.TESTING or random.random() < 0.5:
+                        query.add_experiment("empty-string-tag-condition", "true")
+                        return replacement
+                    else:
+                        query.add_experiment("empty-string-tag-condition", "false")
 
             return exp
 
         condition = query.get_condition()
+        print("COND", condition)
         if condition is not None:
             query.set_ast_condition(condition.transform(process_condition))

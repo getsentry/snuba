@@ -1,34 +1,38 @@
 import pytest
 
+from snuba.clickhouse.query import Query
 from snuba.query.conditions import binary_condition
-from snuba.query.expressions import (
-    Column,
-    Expression,
-    FunctionCall,
-    Literal,
-    SubscriptableReference,
-)
-from snuba.query.logical import Query
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.processors.empty_tag_condition_processor import (
     EmptyTagConditionProcessor,
 )
 from snuba.request.request_settings import HTTPRequestSettings
+from tests.query.processors.query_builders import build_query
 
 test_data = [
     pytest.param(
-        Query(
-            None,
-            selected_columns=[],
-            condition=binary_condition(
+        build_query(
+            [],
+            binary_condition(
                 "notEquals",
                 FunctionCall(
                     None,
                     "ifNull",
                     (
-                        SubscriptableReference(
-                            "_snuba_tags[query.error_reason]",
-                            Column("_snuba_tags", None, "tags"),
-                            Literal(None, "query.error_reason"),
+                        FunctionCall(
+                            None,
+                            "arrayElement",
+                            (
+                                Column(None, None, "tags.value"),
+                                FunctionCall(
+                                    None,
+                                    "indexOf",
+                                    (
+                                        Column(None, None, "tags.key"),
+                                        Literal(None, "query.error_reason"),
+                                    ),
+                                ),
+                            ),
                         ),
                         Literal(None, ""),
                     ),
@@ -44,19 +48,28 @@ test_data = [
         id="not equals on empty string converted to has on tags key",
     ),
     pytest.param(
-        Query(
-            None,
-            selected_columns=[],
-            condition=binary_condition(
+        build_query(
+            [],
+            binary_condition(
                 "equals",
                 FunctionCall(
                     None,
                     "ifNull",
                     (
-                        SubscriptableReference(
-                            "_snuba_tags[query.error_reason]",
-                            Column("_snuba_tags", None, "tags"),
-                            Literal(None, "query.error_reason"),
+                        FunctionCall(
+                            None,
+                            "arrayElement",
+                            (
+                                Column(None, None, "tags.value"),
+                                FunctionCall(
+                                    None,
+                                    "indexOf",
+                                    (
+                                        Column(None, None, "tags.key"),
+                                        Literal(None, "query.error_reason"),
+                                    ),
+                                ),
+                            ),
                         ),
                         Literal(None, ""),
                     ),
@@ -81,19 +94,28 @@ test_data = [
         id="equals on empty string converted to not has on tags key",
     ),
     pytest.param(
-        Query(
-            None,
-            selected_columns=[],
-            condition=binary_condition(
+        build_query(
+            [],
+            binary_condition(
                 "equals",
                 FunctionCall(
                     None,
                     "ifNull",
                     (
-                        SubscriptableReference(
-                            "_snuba_tags[query.error_reason]",
-                            Column("_snuba_tags", None, "tags"),
-                            Literal(None, "query.error_reason"),
+                        FunctionCall(
+                            None,
+                            "arrayElement",
+                            (
+                                Column(None, None, "tags.value"),
+                                FunctionCall(
+                                    None,
+                                    "indexOf",
+                                    (
+                                        Column(None, None, "tags.key"),
+                                        Literal(None, "query.error_reason"),
+                                    ),
+                                ),
+                            ),
                         ),
                         Literal(None, ""),
                     ),
@@ -107,10 +129,20 @@ test_data = [
                 None,
                 "ifNull",
                 (
-                    SubscriptableReference(
-                        "_snuba_tags[query.error_reason]",
-                        Column("_snuba_tags", None, "tags"),
-                        Literal(None, "query.error_reason"),
+                    FunctionCall(
+                        None,
+                        "arrayElement",
+                        (
+                            Column(None, None, "tags.value"),
+                            FunctionCall(
+                                None,
+                                "indexOf",
+                                (
+                                    Column(None, None, "tags.key"),
+                                    Literal(None, "query.error_reason"),
+                                ),
+                            ),
+                        ),
                     ),
                     Literal(None, ""),
                 ),
@@ -122,7 +154,7 @@ test_data = [
 ]
 
 
-@pytest.mark.parametrize("query, expected", test_data)
+@pytest.mark.parametrize("query, expected", test_data)  # type: ignore
 def test_empty_tag_condition(query: Query, expected: Expression) -> None:
     request_settings = HTTPRequestSettings()
     processor = EmptyTagConditionProcessor()

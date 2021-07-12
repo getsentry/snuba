@@ -54,9 +54,6 @@ from snuba.query.matchers import Or
 from snuba.query.matchers import String as StringMatch
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.empty_tag_condition_processor import (
-    EmptyTagConditionProcessor,
-)
 from snuba.query.processors.project_rate_limiter import ProjectRateLimiterProcessor
 from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
@@ -463,7 +460,6 @@ class DiscoverEntity(Entity):
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             ProjectRateLimiterProcessor(project_column="project_id"),
-            EmptyTagConditionProcessor(),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

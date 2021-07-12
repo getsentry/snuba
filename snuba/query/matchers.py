@@ -354,8 +354,7 @@ class FunctionCall(Pattern[FunctionCallExpr]):
 class SubscriptableReference(Pattern[SubscriptableReferenceExpr]):
     """
     Matches a SubscriptableReference in the AST expression.
-    It works like the Column Pattern. if alias, column_name and key arguments
-    are provided, they have to match, otherwise they are ignored.
+    If column_name and key arguments are provided, they have to match, otherwise they are ignored.
     """
 
     column_name: Optional[Pattern[str]] = None
