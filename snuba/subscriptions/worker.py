@@ -267,8 +267,9 @@ class SubscriptionWorker(
 
 
 def handle_nan(result: Result) -> Result:
-    for row in result["data"]:
+    result_copy = copy.deepcopy(result)
+    for row in result_copy["data"]:
         for key in row:
             if math.isnan(row[key]):
                 row[key] = "nan"
-    return result
+    return result_copy
