@@ -271,6 +271,10 @@ def handle_nan(result: Result) -> Result:
     result_copy = copy.deepcopy(result)
     for row in result_copy["data"]:
         for key in row:
-            if math.isnan(row[key]):
-                row[key] = "nan"
+            try:
+                if math.isnan(row[key]):
+                    row[key] = "nan"
+            except TypeError:
+                pass
+
     return result_copy
