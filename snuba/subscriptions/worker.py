@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import itertools
 import logging
+import math
 import random
 import time
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
@@ -106,7 +107,7 @@ class SubscriptionWorker(
                     timer,
                     self.__metrics,
                 )
-                return self.__execute_query(request, timer)
+                return self.__execute_query(request, timer, task)
             except Exception as e:
                 self.__metrics.increment("snql.subscription.delegate.error.execution")
                 logger.warning(
@@ -121,14 +122,16 @@ class SubscriptionWorker(
                     timer,
                     self.__metrics,
                 )
-                return self.__execute_query(request, timer)
+                return self.__execute_query(request, timer, task)
 
         request = task.task.data.build_request(
             self.__dataset, task.timestamp, tick.offsets.upper, timer, self.__metrics
         )
-        return self.__execute_query(request, timer)
+        return self.__execute_query(request, timer, task)
 
-    def __execute_query(self, request: Request, timer: Timer) -> Tuple[Request, Result]:
+    def __execute_query(
+        self, request: Request, timer: Timer, task: ScheduledTask[Subscription]
+    ) -> Tuple[Request, Result]:
         with self.__concurrent_gauge:
             is_consistent_query = request.settings.get_consistent()
 
@@ -182,7 +185,7 @@ class SubscriptionWorker(
                 primary_result = data.pop(0).result
 
                 for result in data:
-                    match = result.result == primary_result
+                    match = handle_nan(result.result) == handle_nan(primary_result)
                     self.__metrics.increment(
                         "consistent",
                         tags={
@@ -191,6 +194,22 @@ class SubscriptionWorker(
                             "match": str(match),
                         },
                     )
+
+                    # Only log 1 in 100 mistmatches to sentry
+                    if match is False and random.random() < 0.01:
+                        logger.warning(
+                            "Non matching result with consistent and non-consistent subscription query",
+                            extra={
+                                "dataset": self.__dataset_name,
+                                "consistent": str(is_consistent_query),
+                                "primary": primary_result,
+                                "other": result.result,
+                                "query_columns": request.query.get_selected_columns(),
+                                "query_condition": request.query.get_condition(),
+                                "subscription_id": task.task.identifier,
+                                "project": task.task.data.project_id,
+                            },
+                        )
 
             if self.__dataset_name == "events":
                 sample_rate = state.get_config(
@@ -258,3 +277,12 @@ class SubscriptionWorker(
             [self.__producer.produce(self.__topic, result) for result in results]
         ):
             future.result()
+
+
+def handle_nan(result: Result) -> Result:
+    result_copy = copy.deepcopy(result)
+    for row in result_copy["data"]:
+        for key in row:
+            if math.isnan(row[key]):
+                row[key] = "nan"
+    return result_copy
