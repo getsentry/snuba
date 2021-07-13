@@ -7,17 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from functools import partial
-from typing import (
-    Any,
-    List,
-    Mapping,
-    NamedTuple,
-    NewType,
-    Optional,
-    Sequence,
-    Set,
-    Union,
-)
+from typing import Any, List, Mapping, NamedTuple, NewType, Optional, Sequence, Union
 from uuid import UUID
 
 from snuba import state
@@ -351,27 +341,10 @@ class DelegateSubscriptionData(SubscriptionData):
         try:
             if metrics is not None:
                 metrics.increment("snql.subscription.delegate.incoming")
-            snql_rollout_pct = state.get_config("snql_subscription_rollout_pct", 0.0)
+            snql_rollout_pct = state.get_config("snql_subscription_rollout_pct", 1.0)
             assert isinstance(snql_rollout_pct, float)
-            snql_rollout_projects_raw = state.get_config(
-                "snql_subscription_rollout_projects", ""
-            )
-            snql_rollout_projects: Set[int]
-            if isinstance(snql_rollout_projects_raw, int):
-                snql_rollout_projects = {snql_rollout_projects_raw}
-            elif isinstance(snql_rollout_projects_raw, str):
-                snql_rollout_projects = (
-                    set([int(s.strip()) for s in snql_rollout_projects_raw.split(",")])
-                    if snql_rollout_projects_raw
-                    else set()
-                )
-            else:
-                raise ValueError(
-                    f"invalid project setting: '{snql_rollout_projects_raw}'"
-                )
-            use_snql = self.project_id in snql_rollout_projects or (
-                snql_rollout_pct > 0.0 and random.random() <= snql_rollout_pct
-            )
+
+            use_snql = snql_rollout_pct > 0.0 and random.random() <= snql_rollout_pct
             if use_snql:
                 if metrics is not None:
                     metrics.increment("snql.subscription.delegate.use_snql")

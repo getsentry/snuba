@@ -34,7 +34,11 @@ from snuba.subscriptions.data import (
 )
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import SubscriptionDataStore
-from snuba.subscriptions.worker import SubscriptionTaskResult, SubscriptionWorker
+from snuba.subscriptions.worker import (
+    SubscriptionTaskResult,
+    SubscriptionWorker,
+    handle_nan,
+)
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.types import Interval
 from tests.backends.metrics import Increment, TestingMetricsBackend
@@ -103,10 +107,8 @@ def subscription_data(request: Any) -> SubscriptionData:
 @pytest.fixture
 def subscription_rollout() -> Generator[None, None, None]:
     state.set_config("snql_subscription_rollout_pct", 1.0)
-    state.set_config("snql_subscription_rollout_projects", "1")
     yield
     state.set_config("snql_subscription_rollout", 0.0)
-    state.set_config("snql_subscription_rollout_projects", "")
 
 
 def test_subscription_worker(subscription_data: SubscriptionData) -> None:
@@ -259,3 +261,9 @@ def test_subscription_worker_consistent(subscription_data: SubscriptionData) -> 
         )
         == 1
     )
+
+
+def test_handle_nan() -> None:
+    assert handle_nan({"data": [{"a": float("nan"), "b": None}]}) == {
+        "data": [{"a": "nan", "b": None}]
+    }

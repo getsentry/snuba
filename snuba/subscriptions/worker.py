@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import itertools
 import logging
+import math
 import random
 import time
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
@@ -19,7 +20,11 @@ from snuba.reader import Result
 from snuba.request import Request
 from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.subscriptions.consumer import Tick
-from snuba.subscriptions.data import DelegateSubscriptionData, Subscription
+from snuba.subscriptions.data import (
+    DelegateSubscriptionData,
+    SnQLSubscriptionData,
+    Subscription,
+)
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
@@ -85,6 +90,14 @@ class SubscriptionWorker(
         # execution environment.
         timer = Timer("query")
 
+        data_type = "legacy"
+        if isinstance(task.task.data, DelegateSubscriptionData):
+            data_type = "delegate"
+        elif isinstance(task.task.data, SnQLSubscriptionData):
+            data_type = "snql"
+
+        self.__metrics.increment("incoming.task", tags={"type": data_type})
+
         if isinstance(task.task.data, DelegateSubscriptionData):
             try:
                 request = task.task.data.build_request(
@@ -94,7 +107,7 @@ class SubscriptionWorker(
                     timer,
                     self.__metrics,
                 )
-                return self.__execute_query(request, timer)
+                return self.__execute_query(request, timer, task)
             except Exception as e:
                 self.__metrics.increment("snql.subscription.delegate.error.execution")
                 logger.warning(
@@ -109,14 +122,16 @@ class SubscriptionWorker(
                     timer,
                     self.__metrics,
                 )
-                return self.__execute_query(request, timer)
+                return self.__execute_query(request, timer, task)
 
         request = task.task.data.build_request(
             self.__dataset, task.timestamp, tick.offsets.upper, timer, self.__metrics
         )
-        return self.__execute_query(request, timer)
+        return self.__execute_query(request, timer, task)
 
-    def __execute_query(self, request: Request, timer: Timer) -> Tuple[Request, Result]:
+    def __execute_query(
+        self, request: Request, timer: Timer, task: ScheduledTask[Subscription]
+    ) -> Tuple[Request, Result]:
         with self.__concurrent_gauge:
             is_consistent_query = request.settings.get_consistent()
 
@@ -170,7 +185,7 @@ class SubscriptionWorker(
                 primary_result = data.pop(0).result
 
                 for result in data:
-                    match = result.result == primary_result
+                    match = handle_nan(result.result) == handle_nan(primary_result)
                     self.__metrics.increment(
                         "consistent",
                         tags={
@@ -189,7 +204,10 @@ class SubscriptionWorker(
                                 "consistent": str(is_consistent_query),
                                 "primary": primary_result,
                                 "other": result.result,
-                                "query": request.query,
+                                "query_columns": request.query.get_selected_columns(),
+                                "query_condition": request.query.get_condition(),
+                                "subscription_id": task.task.identifier,
+                                "project": task.task.data.project_id,
                             },
                         )
 
@@ -259,3 +277,16 @@ class SubscriptionWorker(
             [self.__producer.produce(self.__topic, result) for result in results]
         ):
             future.result()
+
+
+def handle_nan(result: Result) -> Result:
+    result_copy = copy.deepcopy(result)
+    for row in result_copy["data"]:
+        for key in row:
+            try:
+                if math.isnan(row[key]):
+                    row[key] = "nan"
+            except TypeError:
+                pass
+
+    return result_copy

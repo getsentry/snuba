@@ -12,6 +12,7 @@ def get_requirements() -> Sequence[str]:
 
 setup(
     name="snuba",
+    version=VERSION,
     packages=find_packages(exclude=["tests"]),
     zip_safe=False,
     include_package_data=True,

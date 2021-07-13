@@ -96,10 +96,8 @@ class TestBuildRequest(BaseSubscriptionTest):
     @pytest.fixture(autouse=True)
     def subscription_rollout(self) -> Generator[None, None, None]:
         state.set_config("snql_subscription_rollout_pct", 1.0)
-        state.set_config("snql_subscription_rollout_projects", "1")
         yield
         state.set_config("snql_subscription_rollout", 0.0)
-        state.set_config("snql_subscription_rollout_projects", "")
 
     @pytest.mark.parametrize("subscription, exception", TESTS)  # type: ignore
     def test_conditions(
