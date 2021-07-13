@@ -20,7 +20,11 @@ from snuba.reader import Result
 from snuba.request import Request
 from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.subscriptions.consumer import Tick
-from snuba.subscriptions.data import DelegateSubscriptionData, Subscription
+from snuba.subscriptions.data import (
+    DelegateSubscriptionData,
+    SnQLSubscriptionData,
+    Subscription,
+)
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge, ThreadSafeGauge
 from snuba.utils.metrics.timer import Timer
@@ -85,6 +89,14 @@ class SubscriptionWorker(
         # performance metrics are reported to the same spot, regardless of
         # execution environment.
         timer = Timer("query")
+
+        data_type = "legacy"
+        if isinstance(task.task.data, DelegateSubscriptionData):
+            data_type = "delegate"
+        elif isinstance(task.task.data, SnQLSubscriptionData):
+            data_type = "snql"
+
+        self.__metrics.increment("incoming.task", tags={"type": data_type})
 
         if isinstance(task.task.data, DelegateSubscriptionData):
             try:
