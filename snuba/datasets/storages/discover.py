@@ -18,6 +18,9 @@ from snuba.datasets.storages.events_bool_contexts import EventsBooleanContextsPr
 from snuba.query.processors.arrayjoin_keyvalue_optimizer import (
     ArrayJoinKeyValueOptimizer,
 )
+from snuba.query.processors.empty_tag_condition_processor import (
+    EmptyTagConditionProcessor,
+)
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
@@ -83,6 +86,7 @@ storage = ReadableTableStorage(
             }
         ),
         MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
+        EmptyTagConditionProcessor(),
         ArrayJoinKeyValueOptimizer("tags"),
         UUIDColumnProcessor(set(["event_id", "trace_id"])),
         EventsBooleanContextsProcessor(),
