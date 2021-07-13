@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import itertools
 import logging
+import math
 import random
 import time
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
@@ -172,7 +173,7 @@ class SubscriptionWorker(
                 primary_result = data.pop(0).result
 
                 for result in data:
-                    match = result.result == primary_result
+                    match = handle_nan(result.result) == handle_nan(primary_result)
                     self.__metrics.increment(
                         "consistent",
                         tags={
@@ -264,3 +265,12 @@ class SubscriptionWorker(
             [self.__producer.produce(self.__topic, result) for result in results]
         ):
             future.result()
+
+
+def handle_nan(result: Result) -> Result:
+    result_copy = copy.deepcopy(result)
+    for row in result_copy["data"]:
+        for key in row:
+            if math.isnan(row[key]):
+                row[key] = "nan"
+    return result_copy
