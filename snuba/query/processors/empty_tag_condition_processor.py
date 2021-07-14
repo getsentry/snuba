@@ -59,6 +59,5 @@ class EmptyTagConditionProcessor(QueryProcessor):
             return exp
 
         condition = query.get_condition()
-        print("COND", condition)
         if condition is not None:
             query.set_ast_condition(condition.transform(process_condition))
