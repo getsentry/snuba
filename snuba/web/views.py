@@ -372,7 +372,7 @@ def dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response, str
 
 
 @application.route("/<dataset:dataset>/snql", methods=["GET", "POST"])
-@util.time_request("snql")
+@util.time_request("query")
 def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response, str]:
     if http_request.method == "GET":
         schema = RequestSchema.build_with_extensions(
