@@ -20,6 +20,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.simple_pipeline import EntityQueryPlanner, SimplePipelineBuilder
+from snuba.query.conditions import get_literals_for_column_condition
 from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
@@ -131,15 +132,27 @@ class BaseTransactionsEntity(Entity, ABC):
 
         def selector_func(query: LogicalQuery, referrer: str) -> Tuple[str, List[str]]:
             if referrer == "tagstore.__get_tag_keys":
-                sample_query_rate = state.get_config("snuplicator_sampled_query", 0.0)
-                assert isinstance(sample_query_rate, float)
-                if random.random() < sample_query_rate:
-                    return "transactions", ["sampler"]
+                condition = query.get_condition()
+                assert condition is not None
+                project_literals = get_literals_for_column_condition(
+                    "project_id", int, condition
+                )
+                values = set(lit.value for lit in project_literals)
+                if 1 in values:
+                    sample_query_rate = state.get_config(
+                        "snuplicator_sampled_query", 0.0
+                    )
+                    assert isinstance(sample_query_rate, float)
+                    if random.random() < sample_query_rate:
+                        return "transactions", ["sampler"]
 
             return "transactions", []
 
         def callback_func(
-            query: LogicalQuery, referrer: str, results: List[Result[QueryResult]],
+            query: LogicalQuery,
+            settings: RequestSettings,
+            referrer: str,
+            results: List[Result[QueryResult]],
         ) -> None:
             if not results:
                 metrics.increment(
@@ -150,14 +163,20 @@ class BaseTransactionsEntity(Entity, ABC):
 
             primary_result = results.pop(0)
             primary_function_id = primary_result.function_id
-            secondary_result = results.pop(0) if len(results) > 1 else None
+            secondary_result = results.pop(0) if len(results) > 0 else None
 
             # compare results
             comparison = "one_result"
             if secondary_result:
                 primary_result_data = primary_result.result.result["data"]
                 secondary_result_data = secondary_result.result.result["data"]
-                if secondary_result_data == primary_result_data:
+
+                primary_found_keys = set(row["tags_key"] for row in primary_result_data)
+                secondary_found_keys = set(
+                    row["tags_key"] for row in secondary_result_data
+                )
+
+                if primary_found_keys == secondary_found_keys:
                     comparison = "match"
                 else:
                     comparison = "no_match"

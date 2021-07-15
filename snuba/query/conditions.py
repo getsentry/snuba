@@ -321,3 +321,23 @@ def build_match(
             ),
         ]
     )
+
+
+def get_literals_for_column_condition(
+    col: str, exp_type: Any, conditions: Expression
+) -> Sequence[Literal]:
+    match = build_match(col, (ConditionFunctions.EQ,), exp_type)
+    for exp in conditions:
+        result = match.match(exp)
+        if result is not None:
+            rhs = result.expression("rhs")
+            if isinstance(rhs, Literal):
+                return [rhs]
+            elif isinstance(rhs, FunctionCall):
+                params = []
+                for param in rhs.parameters:
+                    assert isinstance(param, Literal)
+                    params.append(param)
+                return params
+
+    return []

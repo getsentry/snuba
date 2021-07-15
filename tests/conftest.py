@@ -81,20 +81,20 @@ def _build_snql_post_methods(
     if request.param == "legacy" or request.param == "snql":
         endpoint = "/query" if request.param == "legacy" else f"/{dataset}/snql"
 
-        def simple_post(data: str, entity: str = entity) -> Any:
+        def simple_post(data: str, entity: str = entity, referrer: str = "test") -> Any:
             if request.param == "snql":
                 data = convert_legacy_to_snql(data, entity)
-            return test_app.post(endpoint, data=data, headers={"referer": "test"})
+            return test_app.post(endpoint, data=data, headers={"referer": referrer})
 
         return simple_post
 
-    def compare_post(data: str, entity: str = entity) -> Any:
+    def compare_post(data: str, entity: str = entity, referrer: str = "test") -> Any:
         # Run legacy and snql and compare the outputs
-        legacy_resp = test_app.post("/query", data=data, headers={"referer": "test"})
+        legacy_resp = test_app.post("/query", data=data, headers={"referer": referrer})
         snql_resp = test_app.post(
             f"/{dataset}/snql",
             data=convert_legacy_to_snql(data, entity),
-            headers={"referer": "test"},
+            headers={"referer": referrer},
         )
 
         legacy_data = json.loads(legacy_resp.data)
@@ -121,3 +121,20 @@ def disable_query_cache() -> Generator[None, None, None]:
     state.set_configs({"use_cache": 0, "use_readthrough_query_cache": 0})
     yield
     state.set_configs({"use_cache": cache, "use_readthrough_query_cache": readthrough})
+
+
+@pytest.fixture
+def set_state() -> Generator[Callable[[str, Any], None], None, None]:
+    modified_keys = {}
+
+    def _change_state(key: str, value: Any) -> None:
+        old_value = state.get_config(key)
+        if old_value not in modified_keys:
+            modified_keys[key] = old_value
+
+        state.set_config(key, value)
+
+    yield _change_state
+
+    for key, old in modified_keys.items():
+        state.set_config(key, old)
