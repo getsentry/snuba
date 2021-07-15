@@ -18,6 +18,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
+from snuba.query.parser import ALIAS_PREFIX
 from snuba.query.parsing import ParsingContext
 
 
@@ -88,7 +89,16 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             ret_unescaped.append(exp.table_name or "")
             ret.append(".")
             ret_unescaped.append(".")
-        ret.append(escape_identifier(exp.column_name) or "")
+            # If there is a table name and the column name itself is an alias,
+            # then we should apply alias escaping rules to the
+            # column name since the alias column names could have "." in them
+            # in cases like selected columns of JOINS
+            if ALIAS_PREFIX in exp.column_name:
+                ret.append(escape_alias(exp.column_name) or "")
+            else:
+                ret.append(escape_identifier(exp.column_name) or "")
+        else:
+            ret.append(escape_identifier(exp.column_name) or "")
         ret_unescaped.append(exp.column_name)
         # De-clutter the output query by not applying an alias to a
         # column if the column name is the same as the alias to make

@@ -393,15 +393,14 @@ def _expand_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
 
 
 ARRAYJOIN_FUNCTION_MATCH = FunctionCallMatch(StringMatch("arrayJoin"), None)
+ALIAS_PREFIX = "_snuba_"
 
 
 def _mangle_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
-    alias_prefix = "_snuba_"
-
     def transform_alias(expression: Expression) -> Expression:
         alias = expression.alias
         if alias is not None:
-            return replace(expression, alias=f"{alias_prefix}{alias}")
+            return replace(expression, alias=f"{ALIAS_PREFIX}{alias}")
         return expression
 
     query.transform_expressions(transform_alias)

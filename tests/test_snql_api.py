@@ -415,3 +415,26 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
         assert response.status_code == 200
+
+    def test_multi_table_join(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""
+                    MATCH (e: events) -[grouped]-> (g: groupedmessage),
+                    (e: events) -[assigned]-> (a: groupassignee)
+                    SELECT e.message, e.tags[b], a.user_id, g.last_seen
+                    WHERE e.project_id = {self.project_id}
+                    AND g.project_id = {self.project_id}
+                    AND e.timestamp >= toDateTime('2021-06-04T00:00:00')
+                    AND e.timestamp < toDateTime('2021-07-12T00:00:00')
+                    """,
+                    "turbo": False,
+                    "consistent": False,
+                    "debug": True,
+                }
+            ),
+        )
+
+        assert response.status_code == 200
