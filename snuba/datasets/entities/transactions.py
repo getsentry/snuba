@@ -188,14 +188,6 @@ class BaseTransactionsEntity(Entity, ABC):
                 else:
                     comparison = "no_match"
 
-            # If we're returning the sampled query we need to multiply the results to ensure they're roughly accurate
-            if primary_function_id == "sampler":
-                multiplier = 1 / SAMPLE_RATE
-                for row in primary_result_data:
-                    row["count"] *= multiplier
-                    if "values_seen" in row:
-                        row["values_seen"] *= multiplier
-
             metrics.increment(
                 "query_result",
                 tags={
