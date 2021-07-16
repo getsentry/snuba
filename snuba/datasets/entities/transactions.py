@@ -98,13 +98,15 @@ transaction_translator = TranslationMappers(
     ],
 )
 
+SAMPLE_RATE = 0.1
+
 
 class SampledSimplePipelineBuilder(SimplePipelineBuilder):
     def build_planner(
         self, query: LogicalQuery, settings: RequestSettings,
     ) -> EntityQueryPlanner:
         new_query = deepcopy(query)
-        new_query.set_sample(0.1)
+        new_query.set_sample(SAMPLE_RATE)
         return super().build_planner(new_query, settings)
 
 
@@ -163,12 +165,12 @@ class BaseTransactionsEntity(Entity, ABC):
 
             primary_result = results.pop(0)
             primary_function_id = primary_result.function_id
+            primary_result_data = primary_result.result.result["data"]
             secondary_result = results.pop(0) if len(results) > 0 else None
 
             # compare results
             comparison = "one_result"
             if secondary_result:
-                primary_result_data = primary_result.result.result["data"]
                 secondary_result_data = secondary_result.result.result["data"]
 
                 primary_found_keys = set(row["tags_key"] for row in primary_result_data)
@@ -180,6 +182,13 @@ class BaseTransactionsEntity(Entity, ABC):
                     comparison = "match"
                 else:
                     comparison = "no_match"
+
+            # If we're returning the sampled query we need to multiply the results to ensure they're roughly accurate
+            if primary_function_id == "sampler":
+                multiplier = 1 / SAMPLE_RATE
+                for row in primary_result_data:
+                    row["count"] *= multiplier
+                    row["values_seen"] *= multiplier
 
             # Track which query(s) succeeded and the execution time
             metrics.increment(
