@@ -627,7 +627,7 @@ class TestTransactionsApi(BaseApiTest):
 
         assert data["data"][0]["span_id"] == "8841662216cc598b"
 
-    def test_tagstore_sampling(self, set_state: Any) -> None:
+    def test_tagstore_sampling(self) -> None:
         state.set_config("snuplicator_sampled_query", 1.0)
         response = self.post(
             json.dumps(

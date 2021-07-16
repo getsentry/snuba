@@ -121,20 +121,3 @@ def disable_query_cache() -> Generator[None, None, None]:
     state.set_configs({"use_cache": 0, "use_readthrough_query_cache": 0})
     yield
     state.set_configs({"use_cache": cache, "use_readthrough_query_cache": readthrough})
-
-
-@pytest.fixture
-def set_state() -> Generator[Callable[[str, Any], None], None, None]:
-    modified_keys = {}
-
-    def _change_state(key: str, value: Any) -> None:
-        old_value = state.get_config(key)
-        if old_value not in modified_keys:
-            modified_keys[key] = old_value
-
-        state.set_config(key, value)
-
-    yield _change_state
-
-    for key, old in modified_keys.items():
-        state.set_config(key, old)
