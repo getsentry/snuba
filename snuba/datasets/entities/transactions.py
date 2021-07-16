@@ -171,6 +171,11 @@ class BaseTransactionsEntity(Entity, ABC):
             # compare results
             comparison = "one_result"
             if secondary_result:
+                metrics.timing(
+                    "query_result_timing",
+                    secondary_result.execution_time,
+                    tags={"function": secondary_result.function_id},
+                )
                 secondary_result_data = secondary_result.result.result["data"]
 
                 primary_found_keys = set(row["tags_key"] for row in primary_result_data)
@@ -188,9 +193,9 @@ class BaseTransactionsEntity(Entity, ABC):
                 multiplier = 1 / SAMPLE_RATE
                 for row in primary_result_data:
                     row["count"] *= multiplier
-                    row["values_seen"] *= multiplier
+                    if "values_seen" in row:
+                        row["values_seen"] *= multiplier
 
-            # Track which query(s) succeeded and the execution time
             metrics.increment(
                 "query_result",
                 tags={
@@ -198,6 +203,11 @@ class BaseTransactionsEntity(Entity, ABC):
                     "primary": primary_function_id,
                     "referrer": referrer,
                 },
+            )
+            metrics.timing(
+                "query_result_timing",
+                primary_result.execution_time,
+                tags={"function": primary_function_id},
             )
 
         super().__init__(
