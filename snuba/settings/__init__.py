@@ -136,6 +136,8 @@ SKIPPED_MIGRATION_GROUPS: Set[str] = {"metrics", "querylog", "spans_experimental
 MAX_RESOLUTION_FOR_JITTER = 60
 
 # These contexts will not be stored in the transactions table
+# Example: {123: {"context1", "context2"}}
+# where 123 is the project id.
 TRANSACT_SKIP_CONTEXT_STORE: Mapping[int, Set[str]] = {}
 
 
