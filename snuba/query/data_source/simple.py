@@ -45,7 +45,7 @@ class Table(SimpleDataSource):
 
     table_name: str
     schema: ColumnSet
-    final: bool = field(default=False, compare=False)
+    final: bool = False
     sampling_rate: Optional[float] = None
     # TODO: Move mandatory connditions out of
     # here as they are structural property of a storage. This requires
