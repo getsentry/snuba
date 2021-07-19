@@ -1,4 +1,4 @@
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, Mapping, Optional
 
 import sentry_sdk
 from sentry_sdk import Hub
@@ -55,9 +55,7 @@ def _add_tags(
         if duration_group == ">30s":
             sentry_sdk.set_tag("timeout", "too_long")
         if request is not None:
-            query_experiments: MutableMapping[
-                str, Any
-            ] = request.query.get_experiments()
+            query_experiments = request.query.get_experiments()
             for name, value in query_experiments.items():
                 sentry_sdk.set_tag(name, str(value))
         if experiments is not None:
