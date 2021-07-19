@@ -36,8 +36,6 @@ data from Kafka::
 
     snuba devserver
 
-To verify that
-
 Running tests
 -------------
 
