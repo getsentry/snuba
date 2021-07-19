@@ -1,5 +1,9 @@
 .PHONY: develop setup-git test install-python-dependencies
 
+pyenv-setup:
+	@./scripts/pyenv_setup.sh
+	pip install --upgrage pip==21.1.3
+
 develop: install-python-dependencies setup-git
 
 setup-git:
