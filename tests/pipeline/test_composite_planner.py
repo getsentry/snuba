@@ -1,4 +1,5 @@
 from copy import deepcopy
+from dataclasses import replace
 from datetime import datetime
 from typing import Union
 
@@ -425,7 +426,7 @@ TEST_CASES = [
                 right_node=IndividualNode(
                     alias="groups",
                     data_source=ClickhouseQuery(
-                        from_clause=groups_table,
+                        from_clause=replace(groups_table, final=True),
                         selected_columns=[
                             SelectedExpression(
                                 "_snuba_id", Column("_snuba_id", None, "id")
