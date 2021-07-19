@@ -44,7 +44,6 @@ from snuba.datasets.factory import (
 )
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.join import JoinClause
 from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.logical import Query
@@ -397,8 +396,10 @@ def dataset_query(
     assert http_request.method == "POST"
     referrer = http_request.referrer or "<unknown>"  # mypy
 
+    metrics.increment(
+        "snql.query.incoming", tags={"referrer": referrer, "language": str(language)}
+    )
     if language == Language.SNQL:
-        metrics.increment("snql.query.incoming", tags={"referrer": referrer})
         parser: Callable[
             [RequestParts, RequestSettings, Dataset],
             Union[Query, CompositeQuery[Entity]],
@@ -417,20 +418,6 @@ def dataset_query(
 
     try:
         result = parse_and_run_query(dataset, request, timer)
-
-        # Some metrics to track the adoption of SnQL
-        query_type = "simple"
-        if language == Language.SNQL:
-            if isinstance(request.query, CompositeQuery):
-                if isinstance(request.query.get_from_clause(), JoinClause):
-                    query_type = "join"
-                else:
-                    query_type = "subquery"
-
-            metrics.increment(
-                "snql.query.success", tags={"referrer": referrer, "type": query_type}
-            )
-
     except QueryException as exception:
         status = 500
         details: Mapping[str, Any]
@@ -455,11 +442,6 @@ def dataset_query(
             }
         else:
             raise  # exception should have been chained
-
-        if language == Language.SNQL:
-            metrics.increment(
-                "snql.query.failed", tags={"referrer": referrer, "status": f"{status}"},
-            )
 
         return Response(
             json.dumps(
