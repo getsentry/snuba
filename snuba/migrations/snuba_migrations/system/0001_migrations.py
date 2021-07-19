@@ -57,7 +57,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="migrations_dist",
                 columns=columns,
                 engine=Distributed(
-                    local_table_name="migrations_local", sharding_key=None
+                    local_table_name="migrations_local",
+                    sharding_key="cityHash64(group)",
                 ),
             )
         ]
