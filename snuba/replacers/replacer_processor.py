@@ -24,6 +24,10 @@ class Replacement(ABC):
     def get_count_query(self, table_name: str) -> Optional[str]:
         raise NotImplementedError()
 
+    @abstractmethod
+    def write_every_node(self) -> bool:
+        raise NotImplementedError()
+
 
 R = TypeVar("R", bound=Replacement)
 

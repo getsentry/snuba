@@ -31,6 +31,7 @@ from snuba.processor import InvalidMessageType, _hashify
 from snuba.redis import redis_client
 from snuba.replacers.replacer_processor import Replacement as ReplacementBase
 from snuba.replacers.replacer_processor import ReplacementMessage, ReplacerProcessor
+from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 """
@@ -81,6 +82,17 @@ class Replacement(ReplacementBase):
     @abstractmethod
     def get_project_id(self) -> int:
         raise NotImplementedError()
+
+    def write_every_node(self) -> bool:
+        rollout_setting = get_config("write_node_replacements_projects", "")
+        if not rollout_setting:
+            return False
+
+        rolled_out_projects = [int(p) for p in rollout_setting.split(",")]
+        if self.get_project_id() not in rolled_out_projects:
+            return False
+
+        return True
 
 
 EXCLUDE_GROUPS = object()
