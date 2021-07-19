@@ -2,12 +2,13 @@ from typing import Any, Mapping, NamedTuple
 
 from mypy_extensions import TypedDict
 
-from snuba.reader import Result, transform_rows, Column
+from snuba.reader import Column, Result, transform_rows
 
 
 class QueryExtraData(TypedDict):
     stats: Mapping[str, Any]
     sql: str
+    experiments: Mapping[str, Any]
 
 
 class QueryException(Exception):
