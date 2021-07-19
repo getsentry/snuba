@@ -2,7 +2,6 @@
 
 pyenv-setup:
 	@./scripts/pyenv_setup.sh
-	pip install --upgrade pip==21.1.3
 
 develop: install-python-dependencies setup-git
 

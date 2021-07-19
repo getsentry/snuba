@@ -25,6 +25,7 @@ These commands set up the Python virtual environment::
     make pyenv-setup
     python -m venv .venv
     source .venv/bin/activate
+	pip install --upgrage pip==21.1.3
     make develop
 
 These commands start the Snuba api, which is capable of processing queries::
