@@ -16,6 +16,10 @@ jobs:
             repository: getsentry/sentry
             path: sentry
 
+        - name: Get branch name (merge)
+          id: branch
+          run: echo "::set-output name=branch::$(echo ${GITHUB_REF#refs/heads/} | tr / -)"
+
         # setup python
         - uses: actions/setup-python@v1
           with:
@@ -51,13 +55,22 @@ jobs:
           env:
             DOCKER_BUILDKIT: 1
           run: |
-            docker pull getsentry/snuba:latest || true
+            docker pull getsentry/snuba:${{ github.sha }} || \
+              docker pull getsentry/snuba:${{ steps.branch.outputs.branch }} || \
+              docker pull getsentry/snuba:latest || true
             docker build . \
               --build-arg PYTHON_VERSION=3.8 \
               --build-arg BUILDKIT_INLINE_CACHE=1 \
               -t getsentry/snuba \
               --cache-from getsentry/snuba:latest \
+              --cache-from getsentry/snuba:${{ steps.branch.outputs.branch }} \
+              --cache-from getsentry/snuba:${{ github.sha }} \
               --target testing
+
+        - name: Publish images for cache
+          run: |
+              docker push getsentry/snuba:${{ steps.branch.outputs.branch }}
+              docker push getsentry/snuba:${{ github.sha }}
 
         - name: Start snuba
           run: |
@@ -83,6 +96,7 @@ jobs:
             cd sentry && make test-snuba
 
     acceptance:
+      if: false == true
       runs-on: ubuntu-16.04
       continue-on-error: true
       strategy:
