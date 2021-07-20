@@ -46,7 +46,7 @@ jobs:
           id: setup-sentry
           uses: ./.github/actions/setup-sentry
           with:
-            working-dir: sentry
+            workdir: sentry
             snuba: false
             kafka: true
 
@@ -130,7 +130,7 @@ jobs:
           uses: ./.github/actions/setup-sentry
           id: setup-sentry
           with:
-            working-dir: sentry
+            workdir: sentry
             snuba: false
             kafka: true
 
