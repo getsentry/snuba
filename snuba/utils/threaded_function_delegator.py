@@ -37,7 +37,7 @@ class ThreadedFunctionDelegator(Generic[TInput, TResult]):
         callables: Mapping[str, Callable[[], TResult]],
         selector_func: Callable[[TInput], Tuple[str, List[str]]],
         callback_func: Optional[
-            Callable[[Result[TResult], List[Result[TResult]]], None]
+            Callable[[Optional[Result[TResult]], List[Result[TResult]]], None]
         ],
     ) -> None:
         self.__callables = callables
@@ -67,12 +67,12 @@ class ThreadedFunctionDelegator(Generic[TInput, TResult]):
     def execute(self, input: TInput) -> TResult:
         generator = self.__execute_callables(input)
 
-        result: Optional[Result[TResult]] = None
+        primary_result: Optional[Result[TResult]] = None
         other_results: List[Result[TResult]] = []
 
         try:
-            result = next(generator)
-            return result.result
+            primary_result = next(generator)
+            return primary_result.result
 
         finally:
 
@@ -82,7 +82,7 @@ class ThreadedFunctionDelegator(Generic[TInput, TResult]):
                         other_results.append(result)
 
                     if self.__callback_func is not None:
-                        self.__callback_func(result, other_results)
+                        self.__callback_func(primary_result, other_results)
                 except Exception as error:
                     logger.exception(error)
 
