@@ -26,7 +26,6 @@ jobs:
           pre-commit run --files $(git diff --diff-filter=d --name-only master)
 
   typing:
-    if: false == true
     name: 'mypy typing'
     runs-on: ubuntu-latest
     timeout-minutes: 2
