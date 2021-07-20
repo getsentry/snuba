@@ -54,7 +54,7 @@ jobs:
               --build-arg PYTHON_VERSION=3.8 \
               --build-arg BUILDKIT_INLINE_CACHE=1 \
               -t getsentry/snuba \
-              --cache-from getsentry/snuba:latest
+              --cache-from getsentry/snuba:latest \
               --target testing
 
         - name: Start snuba
@@ -136,9 +136,8 @@ jobs:
             docker pull getsentry/snuba:latest || true
             docker build . \
               --build-arg PYTHON_VERSION=3.8 \
-              --build-arg BUILDKIT_INLINE_CACHE=1 \
               -t getsentry/snuba \
-              --cache-from getsentry/snuba:latest
+              --cache-from getsentry/snuba:latest \
               --target testing
 
         - uses: volta-cli/action@v1
