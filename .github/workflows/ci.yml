@@ -130,6 +130,11 @@ jobs:
     needs: [snuba-image]
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    strategy:
+      matrix:
+        instance: [0, 1]
+
     steps:
       # Checkout codebase
       - name: Checkout snuba
