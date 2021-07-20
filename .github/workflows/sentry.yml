@@ -105,14 +105,6 @@ jobs:
             path: sentry
             # ref: test/snuba/testing-snuba-integration
 
-        - name: Copy frontend assets from sentry image
-          run: |
-            ls sentry/src/sentry/static/sentry
-            mkdir -p sentry/src/sentry/static/sentry/dist
-            id=$(docker run -it -d getsentry/sentry:latest bash)
-            docker cp ${id}:/usr/local/lib/python3.6/site-packages/sentry/static/sentry/dist sentry/src/sentry/static/sentry
-            ls sentry/src/sentry/static/sentry/dist
-
         # setup python
         - uses: actions/setup-python@v1
           with:
@@ -173,21 +165,9 @@ jobs:
 
         - name: Copy frontend assets from sentry image
           run: |
-            ls sentry/src/sentry/static/sentry
             mkdir -p sentry/src/sentry/static/sentry/dist
             id=$(docker run -it -d getsentry/sentry:latest bash)
             docker cp ${id}:/usr/local/lib/python3.6/site-packages/sentry/static/sentry/dist sentry/src/sentry/static/sentry
-
-
-        # - uses: volta-cli/action@v1
-
-        # - name: Install Javascript Dependencies
-          # run: |
-            # cd sentry && yarn install --frozen-lockfile
-
-        # - name: webpack
-          # run: |
-            # cd sentry && yarn build-acceptance
 
         - name: Run acceptance tests (#${{ steps.setup-sentry.outputs.matrix-instance-number }} of ${{ strategy.job-total }})
           env:
