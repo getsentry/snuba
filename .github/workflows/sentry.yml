@@ -105,6 +105,14 @@ jobs:
             path: sentry
             # ref: test/snuba/testing-snuba-integration
 
+        - name: Copy frontend assets from sentry image
+          run: |
+            ls sentry/src/sentry/static/sentry
+            mkdir -p sentry/src/sentry/static/sentry/dist
+            id=$(docker run -it -d getsentry/sentry:latest bash)
+            docker cp ${id}:/usr/local/lib/python3.6/site-packages/sentry/static/sentry/dist sentry/src/sentry/static/sentry/dist
+            ls sentry/src/sentry/static/sentry/dist
+
         # setup python
         - uses: actions/setup-python@v1
           with:
