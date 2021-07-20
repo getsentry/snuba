@@ -84,14 +84,20 @@ jobs:
             cd sentry && make test-snuba
 
     acceptance:
-      if: false == true
+      # if: false == true
       runs-on: ubuntu-16.04
-      continue-on-error: true
+      # continue-on-error: true
       strategy:
         matrix:
           instance: [0, 1]
 
       steps:
+        - name: Copy frontend assets from sentry image
+          run: |
+            ls sentry/src/sentry/static/dist
+            id=docker run getsentry/sentry:latest -it -d bash
+            docker cp ${id}:/usr/local/lib/python3.6/site-packages/sentry/static/sentry/dist sentry/src/sentry/static/dist
+
         # Checkout codebase
         - name: Checkout snuba
           uses: actions/checkout@v2
@@ -144,12 +150,6 @@ jobs:
               --cache-from getsentry/snuba:latest \
               --target testing
 
-        - uses: volta-cli/action@v1
-
-        - name: Install Javascript Dependencies
-          run: |
-            cd sentry && yarn install --frozen-lockfile
-
         - name: Start snuba
           run: |
             docker run -d --rm \
@@ -168,9 +168,15 @@ jobs:
               getsentry/snuba:latest
             docker exec sentry_snuba snuba migrations migrate --force
 
-        - name: webpack
-          run: |
-            cd sentry && yarn build-acceptance
+        # - uses: volta-cli/action@v1
+
+        # - name: Install Javascript Dependencies
+          # run: |
+            # cd sentry && yarn install --frozen-lockfile
+
+        # - name: webpack
+          # run: |
+            # cd sentry && yarn build-acceptance
 
         - name: Run acceptance tests (#${{ steps.setup-sentry.outputs.matrix-instance-number }} of ${{ strategy.job-total }})
           env:
