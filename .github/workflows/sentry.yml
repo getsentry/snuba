@@ -110,7 +110,7 @@ jobs:
             ls sentry/src/sentry/static/sentry
             mkdir -p sentry/src/sentry/static/sentry/dist
             id=$(docker run -it -d getsentry/sentry:latest bash)
-            docker cp ${id}:/usr/local/lib/python3.6/site-packages/sentry/static/sentry/dist sentry/src/sentry/static/sentry/dist
+            docker cp ${id}:/usr/local/lib/python3.6/site-packages/sentry/static/sentry/dist sentry/src/sentry/static/sentry
             ls sentry/src/sentry/static/sentry/dist
 
         # setup python
@@ -176,7 +176,7 @@ jobs:
             ls sentry/src/sentry/static/sentry
             mkdir -p sentry/src/sentry/static/sentry/dist
             id=$(docker run -it -d getsentry/sentry:latest bash)
-            docker cp ${id}:/usr/local/lib/python3.6/site-packages/sentry/static/sentry/dist sentry/src/sentry/static/sentry/dist
+            docker cp ${id}:/usr/local/lib/python3.6/site-packages/sentry/static/sentry/dist sentry/src/sentry/static/sentry
 
 
         # - uses: volta-cli/action@v1
