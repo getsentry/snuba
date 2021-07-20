@@ -61,8 +61,6 @@ jobs:
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
       - name: Build snuba docker image
-        env:
-          DOCKER_BUILDKIT: 1
         run: |
           docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
             docker pull ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} || \
@@ -70,7 +68,6 @@ jobs:
 
           docker build . \
             --build-arg PYTHON_VERSION=3.8 \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
             -t ghcr.io/getsentry/snuba-ci:latest \
             -t ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
             -t ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
