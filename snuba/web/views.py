@@ -417,6 +417,8 @@ def dataset_query(
     )
 
     try:
+        if referrer == "tagstore.__get_tag_key_and_top_values":
+            raise Exception("cause a failure")
         result = parse_and_run_query(dataset, request, timer)
     except QueryException as exception:
         status = 500
