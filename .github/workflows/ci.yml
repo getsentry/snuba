@@ -83,7 +83,7 @@ jobs:
         run: |
           docker push ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
           docker push ghcr.io/getsentry/snuba-ci:${{ github.sha }}
-          docker push ghcr.io/getsentry/snuba-ci:${{ latest }}
+          docker push ghcr.io/getsentry/snuba-ci:latest
 
       - name: Start snuba
         run: |
