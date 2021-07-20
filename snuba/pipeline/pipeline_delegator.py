@@ -18,7 +18,9 @@ Timing = float
 QueryPipelineBuilders = Mapping[BuilderId, QueryPipelineBuilder[ClickhouseQueryPlan]]
 QueryResults = List[Result[QueryResult]]
 SelectorFunc = Callable[[LogicalQuery, str], Tuple[BuilderId, List[BuilderId]]]
-CallbackFunc = Callable[[LogicalQuery, str, QueryResults], None]
+CallbackFunc = Callable[
+    [LogicalQuery, str, Optional[Result[QueryResult]], QueryResults], None
+]
 
 
 class MultipleConcurrentPipeline(QueryExecutionPipeline):
