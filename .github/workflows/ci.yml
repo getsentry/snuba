@@ -46,6 +46,7 @@ jobs:
           mypy --config-file mypy.ini --ignore-missing-imports --strict --warn-unreachable snuba
 
   snuba-image:
+    name: Build snuba CI image
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -60,12 +61,14 @@ jobs:
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
-      - name: Build snuba docker image
+      - name: Pull snuba CI images
         run: |
           docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
             docker pull ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} || \
             docker pull ghcr.io/getsentry/snuba-ci:latest || true
 
+      - name: Build snuba docker image for CI
+        run: |
           docker build . \
             --build-arg PYTHON_VERSION=3.8 \
             -t ghcr.io/getsentry/snuba-ci:latest \
@@ -83,8 +86,7 @@ jobs:
           docker push ghcr.io/getsentry/snuba-ci:latest
 
   tests:
-    if: false == true
-    needs: linting
+    needs: [linting, snuba-image]
     name: Tests and code coverage
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -94,20 +96,36 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         name: Checkout code
+
+      - name: Pull snuba CI images
+        run: |
+          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
+            docker pull ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} || \
+            docker pull ghcr.io/getsentry/snuba-ci:latest || true
+
+      - name: Build snuba docker image for CI
+        run: |
+          docker build . \
+            --build-arg PYTHON_VERSION=3.8 \
+            --cache-from ghcr.io/getsentry/snuba-ci:latest \
+            --cache-from ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
+            --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
+            --target testing
+
       - name: Docker set up
         run: |
-          docker pull getsentry/snuba:latest || true
-          docker build --build-arg PYTHON_VERSION=3.8 -t getsentry/snuba . --cache-from getsentry/snuba:latest --target testing
           docker network create --attachable cloudbuild
+
       - name: Docker Snuba tests
         run: |
           SNUBA_IMAGE=getsentry/snuba SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker-compose -f docker-compose.gcb.yml run --rm snuba-test
+
       - name: Upload to codecov
         run: |
           bash <(curl -s https://codecov.io/bash)
 
   sentry:
-    if: false == true
+    needs: [snuba-image]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -122,13 +140,19 @@ jobs:
           repository: getsentry/sentry
           path: sentry
 
-      - name: Build snuba docker image
+      - name: Pull snuba CI images
         run: |
-          docker pull getsentry/snuba:latest || true
+          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
+            docker pull ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} || \
+            docker pull ghcr.io/getsentry/snuba-ci:latest || true
+
+      - name: Build snuba docker image for CI
+        run: |
           docker build . \
             --build-arg PYTHON_VERSION=3.8 \
-            -t getsentry/snuba \
-            --cache-from getsentry/snuba:latest \
+            --cache-from ghcr.io/getsentry/snuba-ci:latest \
+            --cache-from ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
+            --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
             --target testing
 
       # setup python
