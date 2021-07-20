@@ -62,6 +62,8 @@ jobs:
               --build-arg PYTHON_VERSION=3.8 \
               --build-arg BUILDKIT_INLINE_CACHE=1 \
               -t getsentry/snuba \
+              -t getsentry/snuba:${{ github.sha }} \
+              -t getsentry/snuba:${{ steps.branch.outputs.branch }} \
               --cache-from getsentry/snuba:latest \
               --cache-from getsentry/snuba:${{ steps.branch.outputs.branch }} \
               --cache-from getsentry/snuba:${{ github.sha }} \
