@@ -106,17 +106,9 @@ jobs:
 
         - name: Copy frontend assets from sentry image
           run: |
-            ls sentry
-            echo "ok"
-            ls sentry/src
-            echo "ok"
-            ls sentry/src/sentry
-            echo "ok"
-            ls sentry/src/sentry/static
-            echo "ok"
-            ls sentry/src/sentry/static/dist
+            ls sentry/src/sentry/static/sentry/dist
             id=docker run getsentry/sentry:latest -it -d bash
-            docker cp ${id}:/usr/local/lib/python3.6/site-packages/sentry/static/sentry/dist sentry/src/sentry/static/dist
+            docker cp ${id}:/usr/local/lib/python3.6/site-packages/sentry/static/sentry/dist sentry/src/sentry/static/sentry/dist
 
         # setup python
         - uses: actions/setup-python@v1
