@@ -52,27 +52,13 @@ jobs:
         - run: sentry devservices up clickhouse
 
         - name: Build snuba docker image
-          env:
-            DOCKER_BUILDKIT: 1
           run: |
-            docker pull getsentry/snuba:${{ github.sha }} || \
-              docker pull getsentry/snuba:${{ steps.branch.outputs.branch }} || \
-              docker pull getsentry/snuba:latest || true
+            docker pull getsentry/snuba:latest || true
             docker build . \
               --build-arg PYTHON_VERSION=3.8 \
-              --build-arg BUILDKIT_INLINE_CACHE=1 \
               -t getsentry/snuba \
-              -t getsentry/snuba:${{ github.sha }} \
-              -t getsentry/snuba:${{ steps.branch.outputs.branch }} \
               --cache-from getsentry/snuba:latest \
-              --cache-from getsentry/snuba:${{ steps.branch.outputs.branch }} \
-              --cache-from getsentry/snuba:${{ github.sha }} \
               --target testing
-
-        - name: Publish images for cache
-          run: |
-              docker push getsentry/snuba:${{ steps.branch.outputs.branch }}
-              docker push getsentry/snuba:${{ github.sha }}
 
         - name: Start snuba
           run: |
@@ -150,13 +136,10 @@ jobs:
         - run: sentry devservices up clickhouse
 
         - name: Build snuba docker image
-          env:
-            DOCKER_BUILDKIT: 1
           run: |
             docker pull getsentry/snuba:latest || true
             docker build . \
               --build-arg PYTHON_VERSION=3.8 \
-              --build-arg BUILDKIT_INLINE_CACHE=1 \
               -t getsentry/snuba \
               --cache-from getsentry/snuba:latest \
               --target testing
