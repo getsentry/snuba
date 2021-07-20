@@ -65,9 +65,10 @@ jobs:
       - name: Upload to codecov
         run: |
           bash <(curl -s https://codecov.io/bash)
+
   sentry:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       # Checkout codebase
       - name: Checkout snuba
@@ -79,6 +80,34 @@ jobs:
         with:
           repository: getsentry/sentry
           path: sentry
+
+      - name: Build snuba docker image
+        run: |
+          docker pull getsentry/snuba:latest || true
+          docker build . \
+            --build-arg PYTHON_VERSION=3.8 \
+            -t getsentry/snuba \
+            --cache-from getsentry/snuba:latest \
+            --target testing
+
+      - name: Start snuba
+        run: |
+          docker run -d --rm \
+            -p 127.0.0.1:1218:1218 \
+            -e PYTHONUNBUFFERED=1 \
+            -e SNUBA_SETTINGS=docker \
+            -e DEBUG=1 \
+            -e DEFAULT_BROKERS=sentry_kafka:9092 \
+            -e CLICKHOUSE_HOST=sentry_clickhouse \
+            -e CLICKHOUSE_PORT=9000 \
+            -e CLICKHOUSE_HTTP_PORT=8123 \
+            -e REDIS_HOST=sentry_redis \
+            -e REDIS_PORT=6379 \
+            -e REDIS_DB=1 \
+            --name sentry_snuba \
+            --network sentry \
+            getsentry/snuba:latest
+          docker exec sentry_snuba snuba migrations migrate --force
 
       # setup python
       - uses: actions/setup-python@v1
@@ -109,36 +138,6 @@ jobs:
           snuba: false
           kafka: true
           clickhouse: true
-
-      - run: sentry devservices up clickhouse
-
-      - name: Build snuba docker image
-        run: |
-          docker pull getsentry/snuba:latest || true
-          docker build . \
-            --build-arg PYTHON_VERSION=3.8 \
-            -t getsentry/snuba \
-            --cache-from getsentry/snuba:latest \
-            --target testing
-
-      - name: Start snuba
-        run: |
-          docker run -d --rm \
-            -p 127.0.0.1:1218:1218 \
-            -e PYTHONUNBUFFERED=1 \
-            -e SNUBA_SETTINGS=docker \
-            -e DEBUG=1 \
-            -e DEFAULT_BROKERS=sentry_kafka:9092 \
-            -e CLICKHOUSE_HOST=sentry_clickhouse \
-            -e CLICKHOUSE_PORT=9000 \
-            -e CLICKHOUSE_HTTP_PORT=8123 \
-            -e REDIS_HOST=sentry_redis \
-            -e REDIS_PORT=6379 \
-            -e REDIS_DB=1 \
-            --name sentry_snuba \
-            --network sentry \
-            getsentry/snuba:latest
-          docker exec sentry_snuba snuba migrations migrate --force
 
       - name: Run snuba tests
         working-directory: sentry
