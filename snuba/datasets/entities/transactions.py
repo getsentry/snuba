@@ -5,6 +5,7 @@ from datetime import timedelta
 from typing import List, Mapping, Optional, Sequence, Tuple
 
 from snuba import environment, state
+from snuba.clickhouse.query_dsl.accessors import get_project_ids_in_query_ast
 from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToColumn,
     ColumnToFunction,
@@ -20,7 +21,6 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.simple_pipeline import EntityQueryPlanner, SimplePipelineBuilder
-from snuba.query.conditions import get_literals_for_column_condition
 from snuba.query.data_source.join import ColumnEquivalence, JoinRelationship, JoinType
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
@@ -98,16 +98,93 @@ transaction_translator = TranslationMappers(
     ],
 )
 
-SAMPLE_RATE = 0.1
-
 
 class SampledSimplePipelineBuilder(SimplePipelineBuilder):
     def build_planner(
         self, query: LogicalQuery, settings: RequestSettings,
     ) -> EntityQueryPlanner:
         new_query = deepcopy(query)
-        new_query.set_sample(SAMPLE_RATE)
+        sampling_rate = state.get_config("snuplicator-sampling-rate", 1.0)
+        assert isinstance(sampling_rate, float)
+        new_query.set_sample(sampling_rate)
         return super().build_planner(new_query, settings)
+
+
+def sampling_selector_func(query: LogicalQuery, referrer: str) -> Tuple[str, List[str]]:
+    if referrer == "tagstore.__get_tag_keys":
+        condition = query.get_condition()
+        assert condition is not None
+        project_ids = get_project_ids_in_query_ast(query, "project_id")
+        if not project_ids:
+            return "transactions", []
+
+        test_projects_raw = state.get_config("snuplicator-sampling-projects", "")
+        test_projects = set()
+        if isinstance(test_projects_raw, str):
+            test_projects = set(int(p) for p in test_projects_raw.split(",") if p)
+        elif isinstance(test_projects_raw, (int, float)):
+            test_projects = set([int(test_projects_raw)])
+
+        if project_ids.issubset(test_projects):
+            sample_query_rate = state.get_config(
+                "snuplicator-sampling-experiment-rate", 0.0
+            )
+            assert isinstance(sample_query_rate, float)
+            if random.random() < sample_query_rate:
+                return "transactions", ["sampler"]
+
+    return "transactions", []
+
+
+def sampling_callback_func(
+    query: LogicalQuery,
+    settings: RequestSettings,
+    referrer: str,
+    results: List[Result[QueryResult]],
+) -> None:
+    if not results:
+        metrics.increment(
+            "query_result",
+            tags={"match": "empty", "primary": "none", "referrer": referrer},
+        )
+        return
+
+    primary_result = results.pop(0)
+    primary_function_id = primary_result.function_id
+    primary_result_data = primary_result.result.result["data"]
+    secondary_result = results.pop(0) if len(results) > 0 else None
+
+    # compare results
+    comparison = "one_result"
+    if secondary_result:
+        metrics.timing(
+            "query_result_timing",
+            secondary_result.execution_time,
+            tags={"function": secondary_result.function_id},
+        )
+        secondary_result_data = secondary_result.result.result["data"]
+
+        primary_found_keys = set(row["tags_key"] for row in primary_result_data)
+        secondary_found_keys = set(row["tags_key"] for row in secondary_result_data)
+
+        if primary_found_keys == secondary_found_keys:
+            comparison = "match"
+        else:
+            comparison = "no_match"
+
+    metrics.increment(
+        "query_result",
+        tags={
+            "match": comparison,
+            "primary": primary_function_id,
+            "referrer": referrer,
+        },
+    )
+    metrics.timing(
+        "query_result_timing",
+        primary_result.execution_time,
+        tags={"function": primary_function_id},
+    )
 
 
 class BaseTransactionsEntity(Entity, ABC):
@@ -132,76 +209,6 @@ class BaseTransactionsEntity(Entity, ABC):
             ),
         )
 
-        def selector_func(query: LogicalQuery, referrer: str) -> Tuple[str, List[str]]:
-            if referrer == "tagstore.__get_tag_keys":
-                condition = query.get_condition()
-                assert condition is not None
-                project_literals = get_literals_for_column_condition(
-                    "project_id", int, condition
-                )
-                values = set(lit.value for lit in project_literals)
-                if 1 in values:
-                    sample_query_rate = state.get_config(
-                        "snuplicator_sampled_query", 0.0
-                    )
-                    assert isinstance(sample_query_rate, float)
-                    if random.random() < sample_query_rate:
-                        return "transactions", ["sampler"]
-
-            return "transactions", []
-
-        def callback_func(
-            query: LogicalQuery,
-            settings: RequestSettings,
-            referrer: str,
-            results: List[Result[QueryResult]],
-        ) -> None:
-            if not results:
-                metrics.increment(
-                    "query_result",
-                    tags={"match": "empty", "primary": "none", "referrer": referrer},
-                )
-                return
-
-            primary_result = results.pop(0)
-            primary_function_id = primary_result.function_id
-            primary_result_data = primary_result.result.result["data"]
-            secondary_result = results.pop(0) if len(results) > 0 else None
-
-            # compare results
-            comparison = "one_result"
-            if secondary_result:
-                metrics.timing(
-                    "query_result_timing",
-                    secondary_result.execution_time,
-                    tags={"function": secondary_result.function_id},
-                )
-                secondary_result_data = secondary_result.result.result["data"]
-
-                primary_found_keys = set(row["tags_key"] for row in primary_result_data)
-                secondary_found_keys = set(
-                    row["tags_key"] for row in secondary_result_data
-                )
-
-                if primary_found_keys == secondary_found_keys:
-                    comparison = "match"
-                else:
-                    comparison = "no_match"
-
-            metrics.increment(
-                "query_result",
-                tags={
-                    "match": comparison,
-                    "primary": primary_function_id,
-                    "referrer": referrer,
-                },
-            )
-            metrics.timing(
-                "query_result_timing",
-                primary_result.execution_time,
-                tags={"function": primary_function_id},
-            )
-
         super().__init__(
             storages=[storage],
             query_pipeline_builder=PipelineDelegator(
@@ -209,8 +216,8 @@ class BaseTransactionsEntity(Entity, ABC):
                     "transactions": pipeline_builder,
                     "sampler": sampled_pipeline_builder,
                 },
-                selector_func=selector_func,
-                callback_func=callback_func,
+                selector_func=sampling_selector_func,
+                callback_func=sampling_callback_func,
             ),
             abstract_column_set=schema.get_columns(),
             join_relationships={
