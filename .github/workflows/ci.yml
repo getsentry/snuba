@@ -136,13 +136,6 @@ jobs:
       - name: Checkout snuba
         uses: actions/checkout@v2
 
-      # Checkout Sentry and run integration tests against latest snuba
-      - name: Checkout sentry
-        uses: actions/checkout@v2
-        with:
-          repository: getsentry/sentry
-          path: sentry
-
       - name: Pull snuba CI images
         run: |
           docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
@@ -157,6 +150,14 @@ jobs:
             --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
             --target testing
+
+      # Checkout Sentry and run integration tests against latest snuba
+      # Make sure this is after `docker build`, otherwise we'll break docker cache
+      - name: Checkout sentry
+        uses: actions/checkout@v2
+        with:
+          repository: getsentry/sentry
+          path: sentry
 
       # setup python
       - uses: actions/setup-python@v1
