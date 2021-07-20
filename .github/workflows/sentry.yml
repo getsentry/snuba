@@ -48,6 +48,8 @@ jobs:
         - run: sentry devservices up clickhouse
 
         - name: Build snuba docker image
+          env:
+            DOCKER_BUILDKIT: 1
           run: |
             docker pull getsentry/snuba:latest || true
             docker build . \
@@ -132,10 +134,13 @@ jobs:
         - run: sentry devservices up clickhouse
 
         - name: Build snuba docker image
+          env:
+            DOCKER_BUILDKIT: 1
           run: |
             docker pull getsentry/snuba:latest || true
             docker build . \
               --build-arg PYTHON_VERSION=3.8 \
+              --build-arg BUILDKIT_INLINE_CACHE=1 \
               -t getsentry/snuba \
               --cache-from getsentry/snuba:latest \
               --target testing
