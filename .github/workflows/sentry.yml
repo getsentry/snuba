@@ -38,6 +38,7 @@ jobs:
             restore-keys: sentry-deps-
 
         - name: Setup Sentry
+          id: setup-sentry
           uses: ./.github/actions/setup-sentry
           with:
             workdir: sentry
@@ -63,6 +64,7 @@ jobs:
               -e PYTHONUNBUFFERED=1 \
               -e SNUBA_SETTINGS=docker \
               -e DEBUG=1 \
+              -e DEFAULT_BROKERS=sentry_kafka:9092 \
               -e CLICKHOUSE_HOST=sentry_clickhouse \
               -e CLICKHOUSE_PORT=9000 \
               -e CLICKHOUSE_HTTP_PORT=8123 \
@@ -121,7 +123,7 @@ jobs:
 
         - name: Setup Sentry
           uses: ./.github/actions/setup-sentry
-          id: setup
+          id: setup-sentry
           with:
             workdir: sentry
             snuba: false
@@ -167,7 +169,7 @@ jobs:
           run: |
             cd sentry && yarn build-acceptance
 
-        - name: Run acceptance tests (#${{ steps.setup.outputs.matrix-instance-number }} of ${{ strategy.job-total }})
+        - name: Run acceptance tests (#${{ steps.setup-sentry.outputs.matrix-instance-number }} of ${{ strategy.job-total }})
           env:
             RUN_SNUBA_TESTS_ONLY: 1
             USE_SNUBA: 1
