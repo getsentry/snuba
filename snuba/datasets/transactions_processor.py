@@ -6,7 +6,7 @@ from typing import Any, Mapping, MutableMapping, Optional, Tuple
 
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
-from snuba import environment
+from snuba import environment, settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import (
     EventTooOld,
@@ -187,6 +187,13 @@ class TransactionsMessageProcessor(MessageProcessor):
         extract_http(http_data, request)
         processed["http_method"] = http_data["http_method"]
         processed["http_referer"] = http_data["http_referer"]
+
+        skipped_contexts = settings.TRANSACT_SKIP_CONTEXT_STORE.get(
+            processed["project_id"], set()
+        )
+        for context in skipped_contexts:
+            if context in contexts:
+                del contexts[context]
 
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             contexts

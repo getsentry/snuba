@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Optional, Tuple
 
+from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.processor import InsertBatch
@@ -123,6 +124,7 @@ class TransactionEvent:
                             "span_id": self.span_id,
                             "status": self.status,
                         },
+                        "experiments": {"test1": 1, "test2": 2},
                     },
                     "tags": [
                         ["sentry:release", self.release],
@@ -304,6 +306,9 @@ class TestTransactionsProcessor:
         assert processor.process_message(payload, meta) is None
 
     def test_base_process(self) -> None:
+        old_skip_context = settings.TRANSACT_SKIP_CONTEXT_STORE
+        settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
+
         start, finish = self.__get_timestamps()
         message = TransactionEvent(
             event_id="e5e062bf2e1d4afd96fd2f90b6770431",
@@ -335,3 +340,4 @@ class TestTransactionsProcessor:
         assert TransactionsMessageProcessor().process_message(
             message.serialize(), meta
         ) == InsertBatch([message.build_result(meta)], None)
+        settings.TRANSACT_SKIP_CONTEXT_STORE = old_skip_context
