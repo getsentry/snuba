@@ -29,6 +29,9 @@ from snuba.datasets.storages.querylog import storage as querylog_storage
 from snuba.datasets.storages.sessions import (
     materialized_storage as sessions_hourly_storage,
 )
+from snuba.datasets.storages.sessions import (
+    org_materialized_storage as org_sessions_hourly_storage,
+)
 from snuba.datasets.storages.sessions import raw_storage as sessions_raw_storage
 from snuba.datasets.storages.spans import storage as spans_storage
 from snuba.datasets.storages.transactions import storage as transactions_storage
@@ -81,6 +84,7 @@ NON_WRITABLE_STORAGES: Mapping[StorageKey, ReadableTableStorage] = {
             events_ro_storage,
             outcomes_hourly_storage,
             sessions_hourly_storage,
+            org_sessions_hourly_storage,
         ]
     },
     **(DEV_NON_WRITABLE_STORAGES if settings.ENABLE_DEV_FEATURES else {}),
