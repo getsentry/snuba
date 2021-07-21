@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import pprint
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import date, datetime
 from typing import (
+    Any,
     Callable,
+    Dict,
     Generic,
     Iterator,
+    List,
     Optional,
-    TypeVar,
     Tuple,
+    TypeVar,
     Union,
 )
 
@@ -17,7 +21,7 @@ TVisited = TypeVar("TVisited")
 
 
 # This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class _Expression:
     # TODO: Make it impossible to assign empty string as an alias.
     alias: Optional[str]
@@ -67,6 +71,13 @@ class Expression(_Expression, ABC):
         """
         raise NotImplementedError
 
+    def as_dict(self) -> DictifiedExpr:
+        visitor = DictifyVisitor()
+        return self.accept(visitor)
+
+    def __repr__(self) -> str:
+        return f"Expression(\n{pprint.pformat(self.as_dict())})"
+
 
 class ExpressionVisitor(ABC, Generic[TVisited]):
     """
@@ -110,10 +121,67 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
         raise NotImplementedError
 
 
+# DictifiedExpr = Dict[str, Union[None, str, int, Dict[str, Any]]]
+
+# NOTE (Vlad): recursive type definitions are not yet supported in mypy
+# https://github.com/python/mypy/issues/731 hence sub dictionaries
+# are expressed as Dict[str, Any]
+DictifiedExpr = Dict[
+    str, Union[None, str, Dict[str, Any], List[Union[str, Dict[str, Any]]]]
+]
+
+
+class DictifyVisitor(ExpressionVisitor[DictifiedExpr]):
+    """Visitor implementation to turn an expression into a dictionary format"""
+
+    def visit_literal(self, exp: Literal) -> DictifiedExpr:
+        d = asdict(exp)
+        d["__name__"] = exp.__class__.__name__
+        return d
+
+    def visit_column(self, exp: Column) -> DictifiedExpr:
+        d = asdict(exp)
+        d["__name__"] = exp.__class__.__name__
+        return d
+
+    def visit_subscriptable_reference(
+        self, exp: SubscriptableReference
+    ) -> DictifiedExpr:
+        return {
+            "__name__": exp.__class__.__name__,
+            "column": exp.column.accept(self),
+            "key": exp.key.accept(self),
+        }
+
+    def visit_function_call(self, exp: FunctionCall) -> DictifiedExpr:
+        return {
+            "__name__": exp.__class__.__name__,
+            "function_name": exp.function_name,
+            "parameters": [param.accept(self) for param in exp.parameters],
+        }
+
+    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> DictifiedExpr:
+        return {
+            "__name__": exp.__class__.__name__,
+            "internal_function": exp.internal_function.accept(self),
+            "parameters": [param.accept(self) for param in exp.parameters],
+        }
+
+    def visit_argument(self, exp: Argument) -> DictifiedExpr:
+        return {"__name__": exp.__class__.__name__, "name": exp.name}
+
+    def visit_lambda(self, exp: Lambda) -> DictifiedExpr:
+        return {
+            "__name__": exp.__class__.__name__,
+            "transformation": exp.transformation.accept(self),
+            "parameters": [param for param in exp.parameters],
+        }
+
+
 OptionalScalarType = Union[None, bool, str, float, int, date, datetime]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class Literal(Expression):
     """
     A literal in the SQL expression
@@ -131,7 +199,7 @@ class Literal(Expression):
         return visitor.visit_literal(self)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class Column(Expression):
     """
     Represent a column in the schema of the dataset.
@@ -150,7 +218,7 @@ class Column(Expression):
         return visitor.visit_column(self)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class SubscriptableReference(Expression):
     """
     Accesses one entry of a subscriptable column (for example key based access on
@@ -187,7 +255,7 @@ class SubscriptableReference(Expression):
         yield self
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class FunctionCall(Expression):
     """
     Represents an expression that resolves to a function call on Clickhouse.
@@ -236,7 +304,7 @@ class FunctionCall(Expression):
         return visitor.visit_function_call(self)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class CurriedFunctionCall(Expression):
     """
     This function call represent a function with currying: f(x)(y).
@@ -283,7 +351,7 @@ class CurriedFunctionCall(Expression):
         return visitor.visit_curried_function_call(self)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class Argument(Expression):
     """
     A bound variable in a lambda expression. This is used to refer to variables
@@ -302,7 +370,7 @@ class Argument(Expression):
         return visitor.visit_argument(self)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class Lambda(Expression):
     """
     A lambda expression in the form (x,y,z -> transform(x,y,z))

@@ -38,6 +38,7 @@ def test_iterate() -> None:
         function_2,
     ]
     assert list(function_2) == expected
+    print(function_2)
 
 
 def test_aliased_cols() -> None:
@@ -194,3 +195,10 @@ def test_hash() -> None:
     s.add(lm)
 
     assert len(s) == 6
+
+
+def test_format() -> None:
+    column1 = Column(None, "t1", "c1")
+    column2 = Column(None, "t1", "c2")
+    function_1 = FunctionCall(None, "f1", (column1, column2))
+    print(function_1)
