@@ -15,3 +15,4 @@ conftest.py
 .venv
 htmlcov/
 snuba.egg-info/
+.github/
