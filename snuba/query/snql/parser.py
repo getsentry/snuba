@@ -62,6 +62,7 @@ from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or, Param
 from snuba.query.matchers import String as StringMatch
 from snuba.query.parser import (
+    ALIAS_PREFIX,
     _apply_column_aliases,
     _expand_aliases,
     _parse_subscriptables,
@@ -1023,12 +1024,10 @@ def _mangle_query_aliases(
     the outer queries in Clickhouse, so we only receive one set of results.
     """
 
-    alias_prefix = "_snuba_"
-
     def mangle_aliases(exp: Expression) -> Expression:
         alias = exp.alias
         if alias is not None:
-            return replace(exp, alias=f"{alias_prefix}{alias}")
+            return replace(exp, alias=f"{ALIAS_PREFIX}{alias}")
 
         return exp
 
@@ -1036,7 +1035,7 @@ def _mangle_query_aliases(
         if not isinstance(exp, Column):
             return exp
 
-        return replace(exp, column_name=f"{alias_prefix}{exp.column_name}")
+        return replace(exp, column_name=f"{ALIAS_PREFIX}{exp.column_name}")
 
     query.transform_expressions(mangle_aliases, skip_array_join=True)
 
@@ -1207,14 +1206,14 @@ def _select_entity_for_dataset(
                         isinstance(exp, FunctionCall)
                         and len(exp.parameters) == 2
                         and isinstance(exp.parameters[0], Column)
-                        and exp.parameters[0].alias == "_snuba_timestamp"
+                        and exp.parameters[0].alias == f"{ALIAS_PREFIX}timestamp"
                     ):
                         return FunctionCall(
                             exp.alias,
                             exp.function_name,
                             (
                                 Column(
-                                    f"_snuba_{selected_entity.required_time_column}",
+                                    f"{ALIAS_PREFIX}{selected_entity.required_time_column}",
                                     exp.parameters[0].table_name,
                                     exp.parameters[0].column_name,
                                 ),

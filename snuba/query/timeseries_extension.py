@@ -10,12 +10,12 @@ from snuba.query.conditions import (
 from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
+from snuba.query.parser import ALIAS_PREFIX
 from snuba.query.processors import ExtensionData, ExtensionQueryProcessor
 from snuba.request.request_settings import RequestSettings
 from snuba.util import parse_datetime
 from snuba.utils.metrics.decorators import track_calls
 from snuba.utils.metrics.wrapper import MetricsWrapper
-
 
 timeseries_metrics = MetricsWrapper(environment.metrics, "extensions.timeseries")
 
@@ -91,7 +91,7 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
                 binary_condition(
                     ConditionFunctions.GTE,
                     Column(
-                        f"_snuba_{self.__timestamp_column}",
+                        f"{ALIAS_PREFIX}{self.__timestamp_column}",
                         None,
                         self.__timestamp_column,
                     ),
@@ -100,7 +100,7 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
                 binary_condition(
                     ConditionFunctions.LT,
                     Column(
-                        f"_snuba_{self.__timestamp_column}",
+                        f"{ALIAS_PREFIX}{self.__timestamp_column}",
                         None,
                         self.__timestamp_column,
                     ),

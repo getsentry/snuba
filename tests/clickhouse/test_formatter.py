@@ -1,7 +1,6 @@
 import pytest
 
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
-from snuba.query.formatters.tracing import TracingExpressionFormatter, TExpression
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
@@ -16,6 +15,7 @@ from snuba.query.expressions import (
     Lambda,
     Literal,
 )
+from snuba.query.formatters.tracing import TExpression, TracingExpressionFormatter
 from snuba.query.parsing import ParsingContext
 
 test_expressions = [
@@ -250,6 +250,14 @@ test_escaped = [
         FunctionCall(None, "f*&^%$#unction", (Column(None, "table", "column"),)),
         "`f*&^%$#unction`(table.column)",
     ),  # Function names can be escaped. Hopefully it will never happen
+    (
+        Column(
+            alias="_snuba_group_id",
+            table_name="groups",
+            column_name="_snuba_groups.group_id",
+        ),
+        "(groups.`_snuba_groups.group_id` AS _snuba_group_id)",
+    ),  # Aliased column names with dot are escaped if there's an exising table name
 ]
 
 
