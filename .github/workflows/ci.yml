@@ -110,7 +110,7 @@ jobs:
         run: |
           docker build . \
             --build-arg PYTHON_VERSION=3.8 \
-            -t snuba-test
+            -t snuba-test \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
             --cache-from ghcr.io/getsentry/snuba-ci:latest \
@@ -152,7 +152,7 @@ jobs:
         run: |
           docker build . \
             --build-arg PYTHON_VERSION=3.8 \
-            -t snuba-test
+            -t snuba-test \
             --cache-from ghcr.io/getsentry/snuba-ci:latest \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
