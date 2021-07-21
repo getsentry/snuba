@@ -274,7 +274,7 @@ class SessionsEntity(Entity):
 
 class OrgSessionsEntity(Entity):
     def __init__(self) -> None:
-        storage = get_storage(StorageKey.SESSIONS_HOURLY)
+        storage = get_storage(StorageKey.ORG_SESSIONS)
 
         super().__init__(
             storages=[storage],
