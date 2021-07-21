@@ -1,5 +1,5 @@
 import threading
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 from unittest.mock import ANY, Mock, call
 
 from snuba.datasets.factory import get_dataset
@@ -20,7 +20,9 @@ def test() -> None:
     query_result = QueryResult({}, {"stats": {}, "sql": ""})
     mock_query_runner = Mock(return_value=query_result)
 
-    def callback_func(args: List[Tuple[str, QueryResult]]) -> None:
+    def callback_func(
+        primary: Optional[Tuple[str, QueryResult]], other: List[Tuple[str, QueryResult]]
+    ) -> None:
         with cv:
             cv.notify()
 
@@ -71,5 +73,6 @@ def test() -> None:
         query,
         request_settings,
         "ref",
-        [Result("errors", query_result, ANY), Result("errors_ro", query_result, ANY)],
+        Result("errors", query_result, ANY),
+        [Result("errors_ro", query_result, ANY)],
     )

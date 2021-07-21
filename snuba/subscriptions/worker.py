@@ -180,12 +180,18 @@ class SubscriptionWorker(
                 return (primary, [other] if run_snuplicator else [])
 
             def callback_func(
-                data: List[ThreadedFunctionDelegatorResult[Result]],
+                primary_result: Optional[ThreadedFunctionDelegatorResult[Result]],
+                other_results: List[ThreadedFunctionDelegatorResult[Result]],
             ) -> None:
-                primary_result = data.pop(0).result
-
-                for result in data:
-                    match = handle_nan(result.result) == handle_nan(primary_result)
+                primary_result_data: Optional[Result] = (
+                    primary_result.result
+                    if primary_result is not None
+                    else primary_result
+                )
+                for result in other_results:
+                    match = primary_result_data is not None and handle_nan(
+                        result.result
+                    ) == handle_nan(primary_result_data)
                     self.__metrics.increment(
                         "consistent",
                         tags={
@@ -201,7 +207,7 @@ class SubscriptionWorker(
                             extra={
                                 "dataset": self.__dataset_name,
                                 "consistent": str(is_consistent_query),
-                                "primary": primary_result,
+                                "primary": primary_result_data,
                                 "other": result.result,
                                 "query_columns": request.query.get_selected_columns(),
                                 "query_condition": request.query.get_condition(),
