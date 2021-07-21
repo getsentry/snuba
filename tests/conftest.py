@@ -65,7 +65,7 @@ def convert_legacy_to_snql() -> Callable[[str, str], str]:
     return convert
 
 
-@pytest.fixture(params=["legacy", "snql", "compare"])
+@pytest.fixture(params=["legacy", "snql"])
 def _build_snql_post_methods(
     request: Any,
     test_entity: Union[str, Tuple[str, str]],
@@ -78,39 +78,14 @@ def _build_snql_post_methods(
     else:
         dataset = entity = test_entity
 
-    if request.param == "legacy" or request.param == "snql":
-        endpoint = "/query" if request.param == "legacy" else f"/{dataset}/snql"
+    endpoint = "/query" if request.param == "legacy" else f"/{dataset}/snql"
 
-        def simple_post(data: str, entity: str = entity) -> Any:
-            if request.param == "snql":
-                data = convert_legacy_to_snql(data, entity)
-            return test_app.post(endpoint, data=data, headers={"referer": "test"})
+    def simple_post(data: str, entity: str = entity, referrer: str = "test") -> Any:
+        if request.param == "snql":
+            data = convert_legacy_to_snql(data, entity)
+        return test_app.post(endpoint, data=data, headers={"referer": referrer})
 
-        return simple_post
-
-    def compare_post(data: str, entity: str = entity) -> Any:
-        # Run legacy and snql and compare the outputs
-        legacy_resp = test_app.post("/query", data=data, headers={"referer": "test"})
-        snql_resp = test_app.post(
-            f"/{dataset}/snql",
-            data=convert_legacy_to_snql(data, entity),
-            headers={"referer": "test"},
-        )
-
-        legacy_data = json.loads(legacy_resp.data)
-        snql_data = json.loads(snql_resp.data)
-
-        if legacy_data.get("sql"):
-            assert (
-                legacy_data["sql"] == snql_data["sql"]
-            ), f"LEGACY:\n{legacy_data['sql']}\n\nSNQL:\n{snql_data['sql']}\n"
-        else:
-            # There was a validation error, the response should be identical
-            assert legacy_data == snql_data
-
-        return snql_resp
-
-    return compare_post
+    return simple_post
 
 
 @pytest.fixture
