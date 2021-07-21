@@ -31,7 +31,7 @@ jobs:
           docker build . \
             --build-arg PYTHON_VERSION=3.8 \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
-            -t ghcr.io/getsentry/snuba-ci:bk-np-${{ github.sha }} \
+            -t ghcr.io/getsentry/snuba-ci:bk-pull-${{ github.sha }} \
             --cache-from ghcr.io/getsentry/snuba-ci:bk-pull-${{ github.sha }} \
             --target testing
 
@@ -69,7 +69,7 @@ jobs:
           docker push ghcr.io/getsentry/snuba-ci:bk-np-${{ github.sha }}
 
   no-cache-from:
-    name: Build kit without pulling
+    name: Non-buildkit without cache-from
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
