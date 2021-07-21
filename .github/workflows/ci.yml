@@ -53,8 +53,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Get branch name (merge)
+      - name: Get branch name
         id: branch
+        # strip `refs/heads/` from $GITHUB_REF and replace `/` with `-` so that
+        # it can be used as a docker tag
         run: echo "::set-output name=branch::$(echo ${GITHUB_REF#refs/heads/} | tr / -)"
 
       # We are only using ghcr here for CI as `setup-gcloud` is a bit slow
