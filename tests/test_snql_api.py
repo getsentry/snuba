@@ -440,3 +440,23 @@ class TestSnQLApi(BaseApiTest):
 
         data = json.loads(response.data)
         assert "empty-string-tag-condition" in data["experiments"]
+
+    def test_alias_allowances(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT count() AS equation[0]
+                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN tuple({self.project_id})
+                    """,
+                }
+            ),
+        )
+        assert response.status_code == 200
+
+        data = json.loads(response.data)
+        assert len(data["data"]) == 1
+        assert "equation[0]" in data["data"][0]
