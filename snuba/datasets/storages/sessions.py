@@ -132,3 +132,11 @@ materialized_storage = ReadableTableStorage(
     query_processors=[PrewhereProcessor(["project_id", "org_id"])],
     mandatory_condition_checkers=[OrgIdEnforcer(), ProjectIdEnforcer()],
 )
+
+org_materialized_storage = ReadableTableStorage(
+    storage_key=StorageKey.ORG_SESSIONS,
+    storage_set_key=StorageSetKey.SESSIONS,
+    schema=read_schema,
+    query_processors=[PrewhereProcessor(["project_id", "org_id"])],
+    mandatory_condition_checkers=[],
+)
