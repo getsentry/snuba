@@ -140,16 +140,19 @@ def sampling_callback_func(
     query: LogicalQuery,
     settings: RequestSettings,
     referrer: str,
+    primary_result: Optional[Result[QueryResult]],
     results: List[Result[QueryResult]],
 ) -> None:
-    if not results:
+    if primary_result is None and not results:
         metrics.increment(
             "query_result",
             tags={"match": "empty", "primary": "none", "referrer": referrer},
         )
         return
 
-    primary_result = results.pop(0)
+    if primary_result is None:
+        primary_result = results.pop(0)
+
     primary_function_id = primary_result.function_id
     primary_result_data = primary_result.result.result["data"]
     secondary_result = results.pop(0) if len(results) > 0 else None
