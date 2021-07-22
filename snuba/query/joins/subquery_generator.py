@@ -58,7 +58,9 @@ class SubqueryDraft:
 
 
 def aliasify_column(col_name: str) -> str:
-    return f"_snuba_{col_name}"
+    from snuba.query.parser import ALIAS_PREFIX
+
+    return f"{ALIAS_PREFIX}{col_name}"
 
 
 class SubqueriesInitializer(JoinVisitor[Mapping[str, SubqueryDraft], Entity]):
@@ -183,10 +185,12 @@ def _push_down_branches(
 
 
 def _alias_generator() -> Generator[str, None, None]:
+    from snuba.query.parser import ALIAS_PREFIX
+
     i = 0
     while True:
         i += 1
-        yield f"_snuba_gen_{i}"
+        yield f"{ALIAS_PREFIX}gen_{i}"
 
 
 def generate_subqueries(query: CompositeQuery[Entity]) -> None:
