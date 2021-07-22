@@ -1,3 +1,4 @@
+import logging
 import math
 import time
 from typing import Sequence
@@ -11,7 +12,7 @@ TABLE_NAME_NEW = "transactions_local_new"
 TABLE_NAME_OLD = "transactions_local_old"
 
 
-def forwards() -> None:
+def forwards(logger: logging.Logger) -> None:
     """
     The sample by clause for the transactions table was added in April 2020. Partition
     by has been changed twice. If the user has a table without the sample by clause,
@@ -122,7 +123,7 @@ def forwards() -> None:
     clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
 
 
-def backwards() -> None:
+def backwards(logger: logging.Logger) -> None:
     """
     This method cleans up the temporary tables used by the forwards methodsa and
     returns us to the original state if the forwards method has failed somewhere
@@ -142,12 +143,12 @@ def backwards() -> None:
         raise Exception(f"Table {TABLE_NAME} is missing")
 
     if table_exists(TABLE_NAME_NEW):
-        print(f"Dropping table {TABLE_NAME_NEW}")
+        logger.info(f"Dropping table {TABLE_NAME_NEW}")
         time.sleep(1)
         clickhouse.execute(f"DROP TABLE {TABLE_NAME_NEW};")
 
     if table_exists(TABLE_NAME_OLD):
-        print(f"Dropping table {TABLE_NAME_OLD}")
+        logger.info(f"Dropping table {TABLE_NAME_OLD}")
         time.sleep(1)
         clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
 

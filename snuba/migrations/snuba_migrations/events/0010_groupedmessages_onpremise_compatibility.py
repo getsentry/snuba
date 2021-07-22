@@ -1,3 +1,4 @@
+import logging
 from typing import Sequence
 
 from snuba.clickhouse.columns import Column, UInt
@@ -5,13 +6,12 @@ from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 
-
 TABLE_NAME = "groupedmessage_local"
 TABLE_NAME_NEW = "groupedmessage_local_new"
 TABLE_NAME_OLD = "groupedmessage_local_old"
 
 
-def fix_order_by() -> None:
+def fix_order_by(_logger: logging.Logger) -> None:
     cluster = get_cluster(StorageSetKey.EVENTS)
 
     if not cluster.is_single_node():
@@ -70,7 +70,7 @@ def fix_order_by() -> None:
     clickhouse.execute(f"DROP TABLE {TABLE_NAME_OLD};")
 
 
-def ensure_drop_temporary_tables() -> None:
+def ensure_drop_temporary_tables(_logger: logging.Logger) -> None:
     cluster = get_cluster(StorageSetKey.EVENTS)
 
     if not cluster.is_single_node():
