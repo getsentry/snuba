@@ -188,8 +188,11 @@ class TransactionsMessageProcessor(MessageProcessor):
         processed["http_method"] = http_data["http_method"]
         processed["http_referer"] = http_data["http_referer"]
 
-        skipped_contexts = settings.TRANSACT_SKIP_CONTEXT_STORE.get(
+        project_skipped_contexts = settings.TRANSACT_SKIP_CONTEXT_STORE.get(
             processed["project_id"], set()
+        )
+        skipped_contexts = (
+            settings.TRANSACT_GLOBAL_SKIP_CONTEXT_STORE | project_skipped_contexts
         )
         for context in skipped_contexts:
             if context in contexts:

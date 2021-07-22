@@ -125,6 +125,7 @@ class TransactionEvent:
                             "status": self.status,
                         },
                         "experiments": {"test1": 1, "test2": 2},
+                        "organization": {"slug": "test"},
                     },
                     "tags": [
                         ["sentry:release", self.release],
@@ -308,6 +309,7 @@ class TestTransactionsProcessor:
     def test_base_process(self) -> None:
         old_skip_context = settings.TRANSACT_SKIP_CONTEXT_STORE
         settings.TRANSACT_SKIP_CONTEXT_STORE = {1: {"experiments"}}
+        settings.TRANSACT_GLOBAL_SKIP_CONTEXT_STORE = {"organization"}
 
         start, finish = self.__get_timestamps()
         message = TransactionEvent(

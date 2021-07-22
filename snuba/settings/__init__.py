@@ -139,6 +139,9 @@ MAX_RESOLUTION_FOR_JITTER = 60
 # Example: {123: {"context1", "context2"}}
 # where 123 is the project id.
 TRANSACT_SKIP_CONTEXT_STORE: Mapping[int, Set[str]] = {}
+# This prevents contexts to be stored across projects
+# it is just a list of contexts
+TRANSACT_GLOBAL_SKIP_CONTEXT_STORE: Set[str] = set()
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
