@@ -86,5 +86,5 @@ def test_join_query() -> None:
     )
 
     data_source = join_query.get_from_clause()
-    assert "e.string_evt_id" not in data_source.get_columns()
+    assert "e.string_evt_id" in data_source.get_columns()
     assert "g.group_id" in data_source.get_columns()

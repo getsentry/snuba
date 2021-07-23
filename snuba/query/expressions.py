@@ -149,9 +149,8 @@ class StringifyVisitor(ExpressionVisitor[str]):
         return res
 
     def visit_column(self, exp: Column) -> str:
-        dot = "." if exp.table_name else ""
         column_str = (
-            f"{exp.table_name}{dot}{exp.column_name}"
+            f"{exp.table_name}.{exp.column_name}"
             if exp.table_name
             else f"{exp.column_name}"
         )
