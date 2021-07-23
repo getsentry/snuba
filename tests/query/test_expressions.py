@@ -20,17 +20,15 @@ def test_iterate() -> None:
     Test iteration over a subtree. The subtree is a function call in the form
     f2(c3, f1(c1, c2))
     """
-    column1 = Column("did you know", "t1", "c1")
-    column2 = Column("that", "t1", "c2")
+    column1 = Column(None, "t1", "c1")
+    column2 = Column(None, "t1", "c2")
     function_1 = FunctionCall(None, "f1", (column1, column2))
 
     column3 = Column(None, "t1", "c2")
     column4 = Column(None, "t1", "c3")
     literal = Literal(None, "blablabla")
-    function_2i = FunctionCall("this is an alias", "f2", (column3, function_1, literal))
-    function_2 = CurriedFunctionCall(
-        "this is a different alias", function_2i, (column4,)
-    )
+    function_2i = FunctionCall(None, "f2", (column3, function_1, literal))
+    function_2 = CurriedFunctionCall(None, function_2i, (column4,))
 
     expected = [
         column3,
