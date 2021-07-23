@@ -174,7 +174,9 @@ class TaskBuilderModeState:
             )
 
         general_mode = TaskBuilderMode(
-            state.get_config("subscription_primary_task_builder", "immediate")
+            state.get_config(
+                "subscription_primary_task_builder", TaskBuilderMode.JITTERED
+            )
         )
 
         if (
