@@ -34,7 +34,6 @@ def test_nested_query() -> None:
             SelectedExpression("output", Column("output", None, "string_evt_id"))
         ],
     )
-    assert False, nested
     print(nested)
 
     # The iterator methods on the composite query do not descend into
