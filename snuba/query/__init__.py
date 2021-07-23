@@ -115,6 +115,9 @@ class Query(DataSource, ABC):
         self.__granularity = granularity
         self.__experiments = experiments or {}
 
+    def __repr__(self) -> str:
+        return repr(self)
+
     def get_columns(self) -> ColumnSet:
         """
         From the DataSource class. It returns the schema exposed by this
