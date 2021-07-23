@@ -88,8 +88,10 @@ class Replacement(ReplacementBase):
         if not rollout_setting:
             return False
 
-        if isinstance(rollout_setting, int):
-            rollout_setting = f"{rollout_setting}"
+        # The expected for mat is [project, project, ...]
+        rollout_setting = rollout_setting[1:-1]
+        if not rollout_setting:
+            return False
         rolled_out_projects = [int(p) for p in rollout_setting.split(",")]
         if self.get_project_id() not in rolled_out_projects:
             return False

@@ -15,12 +15,42 @@ from tests.clusters.fake_cluster import FakeClickhouseCluster
 
 TEST_CASES = [
     pytest.param(
-        False,
+        "[100,1]",
         {
-            (
-                ClickhouseNode("query_node", 9000, None, None),
-                ClickhouseClientSettings.REPLACE,
-            ): [
+            "query_node": [
+                "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
+            ],
+            "storage-0-0": [
+                """\
+INSERT INTO errors_local (project_id, timestamp, event_id)
+SELECT project_id, timestamp, event_id, group_id, primary_hash
+FROM errors_local FINAL
+WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
+""",
+            ],
+            "storage-1-0": [
+                """\
+INSERT INTO errors_local (project_id, timestamp, event_id)
+SELECT project_id, timestamp, event_id, group_id, primary_hash
+FROM errors_local FINAL
+WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
+""",
+            ],
+            "storage-2-0": [
+                """\
+INSERT INTO errors_local (project_id, timestamp, event_id)
+SELECT project_id, timestamp, event_id, group_id, primary_hash
+FROM errors_local FINAL
+WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
+""",
+            ],
+        },
+        id="Replacements through storage nodes",
+    ),
+    pytest.param(
+        "",
+        {
+            "query_node": [
                 "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
                 """\
 INSERT INTO errors_dist (project_id, timestamp, event_id)
@@ -33,56 +63,28 @@ WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
         id="Replacements through query node",
     ),
     pytest.param(
-        True,
+        "[10]",
         {
-            (
-                ClickhouseNode("query_node", 9000, None, None),
-                ClickhouseClientSettings.REPLACE,
-            ): [
+            "query_node": [
                 "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
-            ],
-            (
-                ClickhouseNode("storage-0-0", 9000, 1, 1),
-                ClickhouseClientSettings.REPLACE,
-            ): [
                 """\
-INSERT INTO errors_local (project_id, timestamp, event_id)
+INSERT INTO errors_dist (project_id, timestamp, event_id)
 SELECT project_id, timestamp, event_id, group_id, primary_hash
-FROM errors_local FINAL
+FROM errors_dist FINAL
 WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
 """,
-            ],
-            (
-                ClickhouseNode("storage-1-0", 9000, 2, 1),
-                ClickhouseClientSettings.REPLACE,
-            ): [
-                """\
-INSERT INTO errors_local (project_id, timestamp, event_id)
-SELECT project_id, timestamp, event_id, group_id, primary_hash
-FROM errors_local FINAL
-WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
-""",
-            ],
-            (
-                ClickhouseNode("storage-2-0", 9000, 3, 1),
-                ClickhouseClientSettings.REPLACE,
-            ): [
-                """\
-INSERT INTO errors_local (project_id, timestamp, event_id)
-SELECT project_id, timestamp, event_id, group_id, primary_hash
-FROM errors_local FINAL
-WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
-""",
-            ],
+            ]
         },
-        id="Replacements through storage nodes",
+        id="Replacements through query node. Wrong project",
     ),
 ]
 
 
-@pytest.mark.parametrize("single_node_config, expected_queries", TEST_CASES)
+@pytest.mark.parametrize(
+    "write_node_replacements_projects, expected_queries", TEST_CASES
+)
 def test_write_single_node(
-    single_node_config: bool,
+    write_node_replacements_projects: str,
     expected_queries: Mapping[
         Tuple[ClickhouseNode, ClickhouseClientSettings], Sequence[str]
     ],
@@ -91,7 +93,7 @@ def test_write_single_node(
     Test the execution of replacement queries on both storage nodes and
     query nodes.
     """
-
+    set_config("write_node_replacements_projects", write_node_replacements_projects)
     test_cluster = FakeClickhouseCluster(
         host="query_node",
         port=9000,
@@ -119,7 +121,6 @@ def test_write_single_node(
     cluster.CLUSTERS = [test_cluster]
     cluster._STORAGE_SET_CLUSTER_MAP = {StorageSetKey.EVENTS: cluster.CLUSTERS[0]}
 
-    set_config("write_node_replacements_projects", str(int(single_node_config)))
     replacer = ReplacerWorker(
         get_writable_storage(StorageKey.ERRORS), DummyMetricsBackend()
     )
@@ -137,19 +138,20 @@ WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
         "select_columns": "project_id, timestamp, event_id, group_id, primary_hash",
     }
 
-    replacer.flush_batch(
-        [
-            LegacyReplacement(
-                count_query_template,
-                insert_query_template,
-                final_query_args,
-                (NEEDS_FINAL, 1),
-            )
-        ]
-    )
+    try:
+        replacer.flush_batch(
+            [
+                LegacyReplacement(
+                    count_query_template,
+                    insert_query_template,
+                    final_query_args,
+                    (NEEDS_FINAL, 1),
+                )
+            ]
+        )
 
-    queries = test_cluster.get_queries()
-    assert queries == expected_queries
-
-    cluster.CLUSTERS = current_clusters
-    cluster._STORAGE_SET_CLUSTER_MAP = current_mapping
+        queries = test_cluster.get_queries()
+        assert queries == expected_queries
+    finally:
+        cluster.CLUSTERS = current_clusters
+        cluster._STORAGE_SET_CLUSTER_MAP = current_mapping

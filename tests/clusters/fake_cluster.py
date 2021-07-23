@@ -64,11 +64,10 @@ class FakeClickhouseCluster(ClickhouseCluster):
             Tuple[ClickhouseNode, ClickhouseClientSettings], FakeClickhousePool
         ] = {}
 
-    def get_queries(
-        self,
-    ) -> Mapping[Tuple[ClickhouseNode, ClickhouseClientSettings], Sequence[str]]:
+    def get_queries(self,) -> Mapping[str, Sequence[str]]:
         return {
-            key: self.__connections[key].get_queries() for key in self.__connections
+            key[0].host_name: self.__connections[key].get_queries()
+            for key in self.__connections
         }
 
     def clean_connections(self) -> None:
