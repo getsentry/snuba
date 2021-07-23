@@ -9,8 +9,12 @@ from snuba.clusters.cluster import (
 
 
 class FakeClickhousePool(ClickhousePool):
-    def __init__(self) -> None:
+    def __init__(self, host_name: str) -> None:
         self.__queries: List[str] = []
+        self.host = host_name
+
+    def get_host(self) -> str:
+        return self.host
 
     def execute(
         self,
@@ -94,5 +98,5 @@ class FakeClickhouseCluster(ClickhouseCluster):
         settings, timeout = client_settings.value
         cache_key = (node, client_settings)
         if cache_key not in self.__connections:
-            self.__connections[cache_key] = FakeClickhousePool()
+            self.__connections[cache_key] = FakeClickhousePool(node.host_name)
         return self.__connections[cache_key]

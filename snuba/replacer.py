@@ -1,7 +1,7 @@
 import logging
 import time
 from datetime import datetime
-from typing import Optional, Sequence, Tuple
+from typing import NamedTuple, Optional, Sequence, Tuple
 
 import simplejson as json
 from arroyo import Message
@@ -18,6 +18,12 @@ from snuba.utils.metrics import MetricsBackend
 logger = logging.getLogger("snuba.replacer")
 
 
+class WriteConnections(NamedTuple):
+    table_name: str
+    main_connections: Sequence[Tuple[str, ClickhousePool]]
+    backup_connection: Optional[Tuple[str, ClickhousePool]] = None
+
+
 class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
     def __init__(self, storage: WritableTableStorage, metrics: MetricsBackend) -> None:
         self.__storage = storage
@@ -30,9 +36,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         self.__replacer_processor = processor
         self.__database_name = storage.get_cluster().get_database()
 
-    def __get_write_connections(
-        self, replacement: Replacement
-    ) -> Tuple[str, Sequence[ClickhousePool]]:
+    def __get_write_connections(self, replacement: Replacement) -> WriteConnections:
         """
         Some replacements need to be executed on each storage node of the
         cluster instead that through a query node on distributed tables.
@@ -50,20 +54,24 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         local_table_name = self.__replacer_processor.get_schema().get_local_table_name()
         cluster = self.__storage.get_cluster()
 
+        query_connection = cluster.get_query_connection(
+            ClickhouseClientSettings.REPLACE
+        )
         write_every_node = replacement.write_every_node()
         if not write_every_node or cluster.is_single_node():
-            return (
-                query_table_name,
-                [cluster.get_query_connection(ClickhouseClientSettings.REPLACE)],
+            return WriteConnections(
+                query_table_name, [(query_connection.get_host(), query_connection)]
             )
 
-        return (
+        pools = [
+            cluster.get_node_connection(ClickhouseClientSettings.REPLACE, node)
+            for node in self.__storage.get_cluster().get_local_nodes()
+            if node.replica == 1
+        ]
+        return WriteConnections(
             local_table_name,
-            [
-                cluster.get_node_connection(ClickhouseClientSettings.REPLACE, node)
-                for node in self.__storage.get_cluster().get_local_nodes()
-                if node.replica == 1
-            ],
+            [(pool.host, pool) for pool in pools],
+            (query_connection.get_host(), query_connection),
         )
 
     def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
@@ -82,6 +90,23 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         clickhouse_read = self.__storage.get_cluster().get_query_connection(
             ClickhouseClientSettings.REPLACE
         )
+
+        def execute_query(
+            insert_query: str, records_count: int, connection: ClickhousePool, host: str
+        ) -> None:
+            t = time.time()
+            logger.debug("Executing replace query: %s" % insert_query)
+            connection.execute_robust(insert_query)
+            duration = int((time.time() - t) * 1000)
+
+            logger.info("Replacing %s rows took %sms" % (records_count, duration))
+            self.metrics.timing(
+                "replacements.count", records_count, tags={"host": host}
+            )
+            self.metrics.timing(
+                "replacements.duration", duration, tags={"host": host},
+            )
+
         for replacement in batch:
             table_name = self.__replacer_processor.get_schema().get_table_name()
             count_query = replacement.get_count_query(table_name)
@@ -98,25 +123,34 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
                 or need_optimize
             )
 
-            write_table_name, clickhouse_write = self.__get_write_connections(
-                replacement
-            )
-            insert_query = replacement.get_insert_query(write_table_name)
+            connections = self.__get_write_connections(replacement)
+            insert_query = replacement.get_insert_query(connections.table_name)
 
             if insert_query is not None:
-                for connection in clickhouse_write:
-                    t = time.time()
-                    logger.debug("Executing replace query: %s" % insert_query)
-                    connection.execute_robust(insert_query)
-                    duration = int((time.time() - t) * 1000)
+                try:
+                    for host, connection in connections.main_connections:
+                        execute_query(
+                            insert_query=insert_query,
+                            records_count=count,
+                            connection=connection,
+                            host=host,
+                        )
 
-                    logger.info("Replacing %s rows took %sms" % (count, duration))
-                    self.metrics.timing("replacements.count", count)
-                    self.metrics.timing("replacements.duration", duration)
+                except Exception:
+                    backup = connections.backup_connection
+                    if backup is None:
+                        raise
+                    execute_query(
+                        insert_query=insert_query,
+                        records_count=count,
+                        connection=connection,
+                        host=host,
+                    )
+
             else:
-                count = duration = 0
+                count = 0
 
-            self.__replacer_processor.post_replacement(replacement, duration, count)
+            self.__replacer_processor.post_replacement(replacement, count)
 
         if need_optimize:
             from snuba.optimize import run_optimize

@@ -60,9 +60,7 @@ class ReplacerProcessor(ABC, Generic[R]):
         """
         return False
 
-    def post_replacement(
-        self, replacement: R, duration: int, matching_records: int
-    ) -> None:
+    def post_replacement(self, replacement: R, matching_records: int) -> None:
         """
         Custom actions to run after the replacement was executed.
         """
