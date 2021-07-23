@@ -71,6 +71,9 @@ class FakeClickhouseCluster(ClickhouseCluster):
             key: self.__connections[key].get_queries() for key in self.__connections
         }
 
+    def clean_connections(self) -> None:
+        self.__connections = {}
+
     def get_local_nodes(self) -> Sequence[ClickhouseNode]:
         if self.is_single_node():
             return [self.__query_node]
