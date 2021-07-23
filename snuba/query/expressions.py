@@ -121,9 +121,11 @@ class StringifyVisitor(ExpressionVisitor[str]):
     """
 
     def __init__(self) -> None:
-        # keeps track of the level of the AST we are currently in, this is necessary for nice indentation
-        # before recursively going into subnodes increment this counter, decrement it after the recursion
-        # is done
+        # keeps track of the level of the AST we are currently in,
+        # this is necessary for nice indentation
+
+        # before recursively going into subnodes increment this counter,
+        # decrement it after the recursion is done
         self.__level = 0
 
     def _get_line_prefix(self) -> str:
@@ -157,14 +159,22 @@ class StringifyVisitor(ExpressionVisitor[str]):
         return f"{self._get_line_prefix()}{column_str}{self._get_alias_str(exp)}"
 
     def visit_subscriptable_reference(self, exp: SubscriptableReference) -> str:
+        # we want to visit the literal node to format it properly
+        # but for the subscritable reference we don't need it to
+        # be indented or newlined. Hence we remove the prefix
+        # from the string
+        literal_str = exp.key.accept(self)[len(self._get_line_prefix()) :]
+
         # this line will already have the necessary prefix due to the visit_column
         # function
-        subscripted_column_str = f"{exp.column.accept(self)}['{exp.key.value}']"
+        subscripted_column_str = f"{exp.column.accept(self)}[{literal_str}]"
         # after we know that, all we need to do as add the alias
         return f"{subscripted_column_str}{self._get_alias_str(exp)}"
 
     def visit_function_call(self, exp: FunctionCall) -> str:
         self.__level += 1
+        # every param will have a newline in front of it so no need to put any space
+        # after the comma
         param_str = ",".join([param.accept(self) for param in exp.parameters])
         self.__level -= 1
         return f"{self._get_line_prefix()}{exp.function_name}({param_str}{self._get_line_prefix()}){self._get_alias_str(exp)}"
@@ -173,8 +183,9 @@ class StringifyVisitor(ExpressionVisitor[str]):
         self.__level += 1
         param_str = ",".join([param.accept(self) for param in exp.parameters])
         self.__level -= 1
-        # The internal function repr will already have the prefix appropriate for the level,
-        # we don't need to insert it here
+        # The internal function repr will already have the
+        # prefix appropriate for the level, we don't need to
+        # insert it here
         return f"{exp.internal_function.accept(self)}({param_str}{self._get_line_prefix()}){self._get_alias_str(exp)}"
 
     def visit_argument(self, exp: Argument) -> str:
