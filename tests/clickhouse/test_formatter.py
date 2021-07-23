@@ -236,7 +236,7 @@ def test_aliases() -> None:
 test_escaped = [
     (
         Column(None, "table.something", "tags.values"),
-        "table.something.tags.values",
+        "table.something.`tags.values`",
     ),  # Columns with dot are not escaped
     (
         Column(None, "weird_!@#$%^^&*_table", "tags[something]"),
@@ -244,7 +244,7 @@ test_escaped = [
     ),  # Somebody thought that table name was a good idea.
     (
         Column("alias.cannot.have.dot", "table", "columns.can"),
-        "(table.columns.can AS `alias.cannot.have.dot`)",
+        "(table.`columns.can` AS `alias.cannot.have.dot`)",
     ),  # Escaping is different between columns and aliases
     (
         FunctionCall(None, "f*&^%$#unction", (Column(None, "table", "column"),)),
