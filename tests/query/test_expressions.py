@@ -1,4 +1,7 @@
+from datetime import datetime
 from typing import Set
+
+import pytest
 
 from snuba.query.expressions import (
     Argument,
@@ -17,15 +20,17 @@ def test_iterate() -> None:
     Test iteration over a subtree. The subtree is a function call in the form
     f2(c3, f1(c1, c2))
     """
-    column1 = Column(None, "t1", "c1")
-    column2 = Column(None, "t1", "c2")
+    column1 = Column("did you know", "t1", "c1")
+    column2 = Column("that", "t1", "c2")
     function_1 = FunctionCall(None, "f1", (column1, column2))
 
     column3 = Column(None, "t1", "c2")
     column4 = Column(None, "t1", "c3")
     literal = Literal(None, "blablabla")
-    function_2i = FunctionCall(None, "f2", (column3, function_1, literal))
-    function_2 = CurriedFunctionCall(None, function_2i, (column4,))
+    function_2i = FunctionCall("this is an alias", "f2", (column3, function_1, literal))
+    function_2 = CurriedFunctionCall(
+        "this is a different alias", function_2i, (column4,)
+    )
 
     expected = [
         column3,
@@ -38,7 +43,6 @@ def test_iterate() -> None:
         function_2,
     ]
     assert list(function_2) == expected
-    print(function_2)
 
 
 def test_aliased_cols() -> None:
@@ -197,8 +201,76 @@ def test_hash() -> None:
     assert len(s) == 6
 
 
-def test_format() -> None:
-    column1 = Column(None, "t1", "c1")
-    column2 = Column(None, "t1", "c2")
-    function_1 = FunctionCall(None, "f1", (column1, column2))
-    print(function_1)
+@pytest.mark.parametrize(
+    "test_expr,expected_str",
+    [
+        (Column(None, "t1", "c1"), "\nt1.c1"),
+        (Column(None, None, "c1"), "\nc1"),
+        (Literal(None, "meowmeow"), "\n'meowmeow'"),
+        (Literal(None, 123), "\n123"),
+        (Literal(None, False), "\nFalse"),
+        (
+            Literal(None, datetime(2020, 4, 20, 16, 20)),
+            "\ndatetime(2020-04-20T16:20:00)",
+        ),
+        (Literal(None, datetime(2020, 4, 20, 16, 20).date()), "\ndate(2020-04-20)"),
+        (Literal(None, None), "\nNone"),
+        (
+            SubscriptableReference(
+                "catsound",
+                column=Column(None, "cats", "sounds"),
+                key=Literal(None, "meow"),
+            ),
+            "\ncats.sounds['meow'] AS `catsound`",
+        ),
+        (Column("alias", None, "c1"), "\nc1 AS `alias`"),
+        (
+            FunctionCall(
+                None, "f1", (Column(None, "t1", "c1"), Column(None, "t1", "c2"))
+            ),
+            """
+f1(
+  t1.c1,
+  t1.c2
+)""",
+        ),
+        (
+            CurriedFunctionCall(
+                None,
+                FunctionCall(
+                    None, "f1", (Column(None, "t1", "c1"), Column(None, "t1", "c2"))
+                ),
+                (Literal(None, "hello"), Literal(None, "kitty")),
+            ),
+            """
+f1(
+  t1.c1,
+  t1.c2
+)(
+  'hello',
+  'kitty'
+)""",
+        ),
+        (
+            Lambda(
+                None,
+                ("a", "b", "c"),
+                FunctionCall(
+                    None,
+                    "some_func",
+                    (Argument(None, "a"), Argument(None, "b"), Argument(None, "c")),
+                ),
+            ),
+            """
+(a,b,c ->
+  some_func(
+    a,
+    b,
+    c
+  )
+)""",
+        ),
+    ],
+)
+def test_format(test_expr, expected_str) -> None:
+    assert repr(test_expr) == expected_str

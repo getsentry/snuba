@@ -1,21 +1,9 @@
 from __future__ import annotations
 
-import pprint
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, replace
+from dataclasses import dataclass, replace
 from datetime import date, datetime
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Generic,
-    Iterator,
-    List,
-    Optional,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from typing import Callable, Generic, Iterator, Optional, Tuple, TypeVar, Union
 
 TVisited = TypeVar("TVisited")
 
@@ -71,12 +59,13 @@ class Expression(_Expression, ABC):
         """
         raise NotImplementedError
 
-    def as_dict(self) -> DictifiedExpr:
-        visitor = DictifyVisitor()
-        return self.accept(visitor)
-
     def __repr__(self) -> str:
-        return f"Expression(\n{pprint.pformat(self.as_dict())})"
+        """returns a stringified version of the expression AST that is concise and easy to parse visually.
+        Not expected to be used for anything except debugging
+        (it does a lot of string copies to construct the string)
+        """
+        visitor = StringifyVisitor()
+        return self.accept(visitor)
 
 
 class ExpressionVisitor(ABC, Generic[TVisited]):
@@ -121,61 +110,83 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
         raise NotImplementedError
 
 
-# DictifiedExpr = Dict[str, Union[None, str, int, Dict[str, Any]]]
+class StringifyVisitor(ExpressionVisitor[str]):
+    """Visitor implementation to turn an expression into a string format
 
-# NOTE (Vlad): recursive type definitions are not yet supported in mypy
-# https://github.com/python/mypy/issues/731 hence sub dictionaries
-# are expressed as Dict[str, Any]
-DictifiedExpr = Dict[
-    str, Union[None, str, Dict[str, Any], List[Union[str, Dict[str, Any]]]]
-]
+    Usage:
+        # Any expression class supported by the visitor will do
+        >>> exp: Expression = Expression()
+        >>> visitor = StringifyVisitor()
+        >>> exp_str = exp.accept(visitor)
+    """
 
+    def __init__(self) -> None:
+        # keeps track of the level of the AST we are currently in, this is necessary for nice indentation
+        # before recursively going into subnodes increment this counter, decrement it after the recursion
+        # is done
+        self.__level = 0
 
-class DictifyVisitor(ExpressionVisitor[DictifiedExpr]):
-    """Visitor implementation to turn an expression into a dictionary format"""
+    def _get_line_prefix(self) -> str:
+        # every line in the tree needs to be indented based on the tree level
+        # to make things look pretty
+        return "\n" + "  " * self.__level
 
-    def visit_literal(self, exp: Literal) -> DictifiedExpr:
-        d = asdict(exp)
-        d["__name__"] = exp.__class__.__name__
-        return d
+    def _get_alias_str(self, exp: Expression) -> str:
+        # Every expression has an optional alias so we handle that here
+        return f" AS `{exp.alias}`" if exp.alias else ""
 
-    def visit_column(self, exp: Column) -> DictifiedExpr:
-        d = asdict(exp)
-        d["__name__"] = exp.__class__.__name__
-        return d
+    def visit_literal(self, exp: Literal) -> str:
+        literal_str = None
+        if isinstance(exp.value, str):
+            literal_str = f"'{exp.value}'"
+        elif isinstance(exp.value, datetime):
+            literal_str = f"datetime({exp.value.isoformat()})"
+        elif isinstance(exp.value, date):
+            literal_str = f"date({exp.value.isoformat()})"
+        else:
+            literal_str = f"{exp.value}"
+        res = f"{self._get_line_prefix()}{literal_str}{self._get_alias_str(exp)}"
+        return res
 
-    def visit_subscriptable_reference(
-        self, exp: SubscriptableReference
-    ) -> DictifiedExpr:
-        return {
-            "__name__": exp.__class__.__name__,
-            "column": exp.column.accept(self),
-            "key": exp.key.accept(self),
-        }
+    def visit_column(self, exp: Column) -> str:
+        dot = "." if exp.table_name else ""
+        column_str = (
+            f"{exp.table_name}{dot}{exp.column_name}"
+            if exp.table_name
+            else f"{exp.column_name}"
+        )
+        return f"{self._get_line_prefix()}{column_str}{self._get_alias_str(exp)}"
 
-    def visit_function_call(self, exp: FunctionCall) -> DictifiedExpr:
-        return {
-            "__name__": exp.__class__.__name__,
-            "function_name": exp.function_name,
-            "parameters": [param.accept(self) for param in exp.parameters],
-        }
+    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> str:
+        # this line will already have the necessary prefix due to the visit_column
+        # function
+        subscripted_column_str = f"{exp.column.accept(self)}['{exp.key.value}']"
+        # after we know that, all we need to do as add the alias
+        return f"{subscripted_column_str}{self._get_alias_str(exp)}"
 
-    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> DictifiedExpr:
-        return {
-            "__name__": exp.__class__.__name__,
-            "internal_function": exp.internal_function.accept(self),
-            "parameters": [param.accept(self) for param in exp.parameters],
-        }
+    def visit_function_call(self, exp: FunctionCall) -> str:
+        self.__level += 1
+        param_str = ",".join([param.accept(self) for param in exp.parameters])
+        self.__level -= 1
+        return f"{self._get_line_prefix()}{exp.function_name}({param_str}{self._get_line_prefix()}){self._get_alias_str(exp)}"
 
-    def visit_argument(self, exp: Argument) -> DictifiedExpr:
-        return {"__name__": exp.__class__.__name__, "name": exp.name}
+    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:
+        self.__level += 1
+        param_str = ",".join([param.accept(self) for param in exp.parameters])
+        self.__level -= 1
+        # The internal function repr will already have the prefix appropriate for the level,
+        # we don't need to insert it here
+        return f"{exp.internal_function.accept(self)}({param_str}{self._get_line_prefix()}){self._get_alias_str(exp)}"
 
-    def visit_lambda(self, exp: Lambda) -> DictifiedExpr:
-        return {
-            "__name__": exp.__class__.__name__,
-            "transformation": exp.transformation.accept(self),
-            "parameters": [param for param in exp.parameters],
-        }
+    def visit_argument(self, exp: Argument) -> str:
+        return f"{self._get_line_prefix()}{exp.name}{self._get_alias_str(exp)}"
+
+    def visit_lambda(self, exp: Lambda) -> str:
+        params_str = ",".join(exp.parameters)
+        self.__level += 1
+        transformation_str = exp.transformation.accept(self)
+        self.__level -= 1
+        return f"{self._get_line_prefix()}({params_str} ->{transformation_str}{self._get_line_prefix()}){self._get_alias_str(exp)}"
 
 
 OptionalScalarType = Union[None, bool, str, float, int, date, datetime]
