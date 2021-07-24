@@ -1,6 +1,8 @@
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from functools import partial
 from typing import NamedTuple, Optional, Sequence, Tuple
 
 import simplejson as json
@@ -16,6 +18,8 @@ from snuba.replacers.replacer_processor import Replacement, ReplacementMessage
 from snuba.utils.metrics import MetricsBackend
 
 logger = logging.getLogger("snuba.replacer")
+
+executor = ThreadPoolExecutor()
 
 
 class WriteConnections(NamedTuple):
@@ -128,15 +132,33 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
             if insert_query is not None:
                 try:
-                    for host, connection in connections.main_connections:
+                    if len(connections.main_connections) > 1:
+                        result_futures = []
+                        for host, connection in connections.main_connections:
+                            result_futures.append(
+                                executor.submit(
+                                    partial(
+                                        execute_query,
+                                        insert_query=insert_query,
+                                        records_count=count,
+                                        connection=connection,
+                                        host=host,
+                                    )
+                                )
+                            )
+                        for result in as_completed(result_futures):
+                            # Will wait and raise if the call failed.
+                            result.result()
+
+                    else:
                         execute_query(
                             insert_query=insert_query,
                             records_count=count,
-                            connection=connection,
-                            host=host,
+                            connection=connections.main_connections[0][1],
+                            host=connections.main_connections[0][0],
                         )
 
-                except Exception:
+                except Exception as e:
                     backup = connections.backup_connection
                     if backup is None:
                         raise
@@ -145,6 +167,10 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
                         records_count=count,
                         connection=connection,
                         host=host,
+                    )
+                    logger.warning(
+                        "Replacement processing failed on the main connection",
+                        exc_info=e,
                     )
 
             else:
