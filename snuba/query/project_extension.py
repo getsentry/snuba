@@ -1,11 +1,11 @@
 from typing import Sequence
 
 from snuba import util
+from snuba.query.alias import ALIAS_PREFIX
 from snuba.query.conditions import in_condition
 from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
-from snuba.query.parser import ALIAS_PREFIX
 from snuba.query.processors import ExtensionData, ExtensionQueryProcessor
 from snuba.request.request_settings import RequestSettings
 from snuba.state import get_configs

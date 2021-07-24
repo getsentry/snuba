@@ -28,6 +28,7 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.alias import ALIAS_PREFIX
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     FUNCTION_TO_OPERATOR,
@@ -62,7 +63,6 @@ from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Or, Param
 from snuba.query.matchers import String as StringMatch
 from snuba.query.parser import (
-    ALIAS_PREFIX,
     _apply_column_aliases,
     _expand_aliases,
     _parse_subscriptables,

@@ -2,6 +2,7 @@ from dataclasses import replace
 from typing import Generator, List, Mapping, Set
 
 from snuba.query import ProcessableQuery, SelectedExpression
+from snuba.query.alias import ALIAS_PREFIX, aliasify_column
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     combine_and_conditions,
@@ -55,12 +56,6 @@ class SubqueryDraft:
             if self.__conditions
             else None,
         )
-
-
-def aliasify_column(col_name: str) -> str:
-    from snuba.query.parser import ALIAS_PREFIX
-
-    return f"{ALIAS_PREFIX}{col_name}"
 
 
 class SubqueriesInitializer(JoinVisitor[Mapping[str, SubqueryDraft], Entity]):
@@ -185,8 +180,6 @@ def _push_down_branches(
 
 
 def _alias_generator() -> Generator[str, None, None]:
-    from snuba.query.parser import ALIAS_PREFIX
-
     i = 0
     while True:
         i += 1

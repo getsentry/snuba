@@ -9,6 +9,7 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity import Entity
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.alias import ALIAS_PREFIX
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
@@ -393,7 +394,6 @@ def _expand_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
 
 
 ARRAYJOIN_FUNCTION_MATCH = FunctionCallMatch(StringMatch("arrayJoin"), None)
-ALIAS_PREFIX = "_snuba_"
 
 
 def _mangle_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:

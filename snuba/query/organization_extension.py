@@ -1,8 +1,8 @@
+from snuba.query.alias import ALIAS_PREFIX
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
-from snuba.query.parser import ALIAS_PREFIX
 from snuba.query.processors import ExtensionData, ExtensionQueryProcessor
 from snuba.request.request_settings import RequestSettings
 

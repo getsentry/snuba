@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from typing import Any, Mapping, Tuple
 
 from snuba import environment, state
+from snuba.query.alias import ALIAS_PREFIX
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
@@ -10,7 +11,6 @@ from snuba.query.conditions import (
 from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
-from snuba.query.parser import ALIAS_PREFIX
 from snuba.query.processors import ExtensionData, ExtensionQueryProcessor
 from snuba.request.request_settings import RequestSettings
 from snuba.util import parse_datetime
