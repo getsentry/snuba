@@ -132,31 +132,22 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
             if insert_query is not None:
                 try:
-                    if len(connections.main_connections) > 1:
-                        result_futures = []
-                        for host, connection in connections.main_connections:
-                            result_futures.append(
-                                executor.submit(
-                                    partial(
-                                        execute_query,
-                                        insert_query=insert_query,
-                                        records_count=count,
-                                        connection=connection,
-                                        host=host,
-                                    )
+                    result_futures = []
+                    for host, connection in connections.main_connections:
+                        result_futures.append(
+                            executor.submit(
+                                partial(
+                                    execute_query,
+                                    insert_query=insert_query,
+                                    records_count=count,
+                                    connection=connection,
+                                    host=host,
                                 )
                             )
-                        for result in as_completed(result_futures):
-                            # Will wait and raise if the call failed.
-                            result.result()
-
-                    else:
-                        execute_query(
-                            insert_query=insert_query,
-                            records_count=count,
-                            connection=connections.main_connections[0][1],
-                            host=connections.main_connections[0][0],
                         )
+                    for result in as_completed(result_futures):
+                        # Will wait and raise if the call failed.
+                        result.result()
 
                 except Exception as e:
                     backup = connections.backup_connection
