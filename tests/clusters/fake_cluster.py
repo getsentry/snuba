@@ -8,6 +8,10 @@ from snuba.clusters.cluster import (
 )
 
 
+class ServerExplodedException(Exception):
+    pass
+
+
 class FakeClickhousePool(ClickhousePool):
     def __init__(self, host_name: str) -> None:
         self.__queries: List[str] = []
@@ -33,6 +37,30 @@ class FakeClickhousePool(ClickhousePool):
         return self.__queries
 
 
+class FakeFailingClickhousePool(FakeClickhousePool):
+    def __init__(self, host_name: str) -> None:
+        self.__queries: List[str] = []
+        self.host = host_name
+
+    def get_host(self) -> str:
+        return self.host
+
+    def execute(
+        self,
+        query: str,
+        params: Params = None,
+        with_column_types: bool = False,
+        query_id: Optional[str] = None,
+        settings: Optional[Mapping[str, Any]] = None,
+        types_check: bool = False,
+        columnar: bool = False,
+    ) -> Sequence[Any]:
+        raise ServerExplodedException("The server exploded")
+
+    def get_queries(self) -> Sequence[str]:
+        return self.__queries
+
+
 class FakeClickhouseCluster(ClickhouseCluster):
     def __init__(
         self,
@@ -48,6 +76,7 @@ class FakeClickhouseCluster(ClickhouseCluster):
         cluster_name: Optional[str] = None,
         distributed_cluster_name: Optional[str] = None,
         nodes: Optional[Sequence[ClickhouseNode]] = None,
+        healthy: bool = True,
     ):
         super().__init__(
             host=host,
@@ -64,6 +93,7 @@ class FakeClickhouseCluster(ClickhouseCluster):
         self.__distributed_cluster_name = distributed_cluster_name
         self.__cluster_name = cluster_name
         self.__nodes = nodes or []
+        self.__healthy = healthy
         self.__connections: MutableMapping[
             Tuple[ClickhouseNode, ClickhouseClientSettings], FakeClickhousePool
         ] = {}
@@ -98,5 +128,9 @@ class FakeClickhouseCluster(ClickhouseCluster):
         settings, timeout = client_settings.value
         cache_key = (node, client_settings)
         if cache_key not in self.__connections:
-            self.__connections[cache_key] = FakeClickhousePool(node.host_name)
+            self.__connections[cache_key] = (
+                FakeClickhousePool(node.host_name)
+                if self.__healthy
+                else FakeFailingClickhousePool(node.host_name)
+            )
         return self.__connections[cache_key]

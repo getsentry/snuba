@@ -11,7 +11,7 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.replacer import ReplacerWorker
 from snuba.state import set_config
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from tests.clusters.fake_cluster import FakeClickhouseCluster
+from tests.clusters.fake_cluster import FakeClickhouseCluster, ServerExplodedException
 
 TEST_CASES = [
     pytest.param(
@@ -79,22 +79,22 @@ WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
     ),
 ]
 
+COUNT_QUERY_TEAMPLATE = "SELECT count() FROM %(table_name)s FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'"
+INSERT_QUERY_TEMPLATE = """\
+INSERT INTO %(table_name)s (%(required_columns)s)
+SELECT %(select_columns)s
+FROM %(table_name)s FINAL
+WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
+"""
 
-@pytest.mark.parametrize(
-    "write_node_replacements_projects, expected_queries", TEST_CASES
-)
-def test_write_single_node(
-    write_node_replacements_projects: str,
-    expected_queries: Mapping[
-        Tuple[ClickhouseNode, ClickhouseClientSettings], Sequence[str]
-    ],
-) -> None:
-    """
-    Test the execution of replacement queries on both storage nodes and
-    query nodes.
-    """
-    set_config("write_node_replacements_projects", write_node_replacements_projects)
-    test_cluster = FakeClickhouseCluster(
+FINAL_QUERY_TEMPLATE = {
+    "required_columns": "project_id, timestamp, event_id",
+    "select_columns": "project_id, timestamp, event_id, group_id, primary_hash",
+}
+
+
+def _build_cluster(healthy: bool = True) -> FakeClickhouseCluster:
+    return FakeClickhouseCluster(
         host="query_node",
         port=9000,
         user="default",
@@ -113,7 +113,25 @@ def test_write_single_node(
             ClickhouseNode("storage-2-0", 9000, 3, 1),
             ClickhouseNode("storage-2-1", 9000, 3, 2),
         ],
+        healthy=healthy,
     )
+
+
+@pytest.mark.parametrize(
+    "write_node_replacements_projects, expected_queries", TEST_CASES
+)
+def test_write_single_node(
+    write_node_replacements_projects: str,
+    expected_queries: Mapping[
+        Tuple[ClickhouseNode, ClickhouseClientSettings], Sequence[str]
+    ],
+) -> None:
+    """
+    Test the execution of replacement queries on both storage nodes and
+    query nodes.
+    """
+    set_config("write_node_replacements_projects", write_node_replacements_projects)
+    test_cluster = _build_cluster()
     # Cannot use patch properly for this as I cannot patch the use case
     # with a new instance for each parameter in the parametrized test.
     current_clusters = cluster.CLUSTERS
@@ -124,27 +142,14 @@ def test_write_single_node(
     replacer = ReplacerWorker(
         get_writable_storage(StorageKey.ERRORS), DummyMetricsBackend()
     )
-    count_query_template = "SELECT count() FROM %(table_name)s FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'"
-
-    insert_query_template = """\
-INSERT INTO %(table_name)s (%(required_columns)s)
-SELECT %(select_columns)s
-FROM %(table_name)s FINAL
-WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
-"""
-
-    final_query_args = {
-        "required_columns": "project_id, timestamp, event_id",
-        "select_columns": "project_id, timestamp, event_id, group_id, primary_hash",
-    }
 
     try:
         replacer.flush_batch(
             [
                 LegacyReplacement(
-                    count_query_template,
-                    insert_query_template,
-                    final_query_args,
+                    COUNT_QUERY_TEAMPLATE,
+                    INSERT_QUERY_TEMPLATE,
+                    FINAL_QUERY_TEMPLATE,
                     (NEEDS_FINAL, 1),
                 )
             ]
@@ -155,3 +160,36 @@ WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
     finally:
         cluster.CLUSTERS = current_clusters
         cluster._STORAGE_SET_CLUSTER_MAP = current_mapping
+
+
+def test_failing_query() -> None:
+    """
+    Test the execution of replacement queries on single node
+    when the query fails.
+    """
+    set_config("write_node_replacements_projects", "[1]")
+    test_cluster = _build_cluster(healthy=False)
+
+    current_clusters = cluster.CLUSTERS
+    current_mapping = cluster._STORAGE_SET_CLUSTER_MAP
+    cluster.CLUSTERS = [test_cluster]
+    cluster._STORAGE_SET_CLUSTER_MAP = {StorageSetKey.EVENTS: cluster.CLUSTERS[0]}
+
+    replacer = ReplacerWorker(
+        get_writable_storage(StorageKey.ERRORS), DummyMetricsBackend()
+    )
+
+    with pytest.raises(ServerExplodedException):
+        replacer.flush_batch(
+            [
+                LegacyReplacement(
+                    COUNT_QUERY_TEAMPLATE,
+                    INSERT_QUERY_TEMPLATE,
+                    FINAL_QUERY_TEMPLATE,
+                    (NEEDS_FINAL, 1),
+                )
+            ]
+        )
+
+    cluster.CLUSTERS = current_clusters
+    cluster._STORAGE_SET_CLUSTER_MAP = current_mapping
