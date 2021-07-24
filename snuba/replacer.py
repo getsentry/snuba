@@ -146,8 +146,9 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
                             )
                         )
                     for result in as_completed(result_futures):
-                        # Will wait and raise if the call failed.
-                        result.result()
+                        e = result.exception()
+                        if e is not None:
+                            raise e
 
                 except Exception as e:
                     backup = connections.backup_connection
