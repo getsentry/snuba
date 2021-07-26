@@ -1,11 +1,9 @@
+import logging
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Sequence
 
 from snuba.clickhouse.columns import Column
-from snuba.clusters.cluster import (
-    ClickhouseClientSettings,
-    get_cluster,
-)
+from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations.columns import MigrationModifiers
 from snuba.migrations.table_engines import TableEngine
@@ -297,7 +295,7 @@ class RunPython:
 
     def __init__(
         self,
-        func: Callable[[], None],
+        func: Callable[[logging.Logger], None],
         new_node_func: Optional[Callable[[Sequence[StorageSetKey]], None]] = None,
         description: Optional[str] = None,
     ) -> None:
@@ -305,8 +303,8 @@ class RunPython:
         self.__new_node_func = new_node_func
         self.__description = description
 
-    def execute(self) -> None:
-        self.__func()
+    def execute(self, logger: logging.Logger) -> None:
+        self.__func(logger)
 
     def execute_new_node(self, storage_sets: Sequence[StorageSetKey]) -> None:
         if self.__new_node_func is not None:
