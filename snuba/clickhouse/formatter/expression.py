@@ -1,13 +1,7 @@
 from datetime import date, datetime
 from typing import Optional, Sequence
 
-from snuba.clickhouse.escaping import (
-    SAFE_ALIAS_RE,
-    escape_alias,
-    escape_expression,
-    escape_identifier,
-    escape_string,
-)
+from snuba.clickhouse.escaping import escape_alias, escape_identifier, escape_string
 from snuba.query.conditions import (
     BooleanFunctions,
     get_first_level_and_conditions,
@@ -98,7 +92,7 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             # then we need to escape the column name using alias regex rules
             # to clearly demarcate the table and columns
             if "." in exp.column_name:
-                ret.append(escape_expression(exp.column_name, SAFE_ALIAS_RE) or "")
+                ret.append(escape_alias(exp.column_name) or "")
             else:
                 ret.append(escape_identifier(exp.column_name) or "")
         else:
