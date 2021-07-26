@@ -1,4 +1,3 @@
-from snuba.query.alias import ALIAS_PREFIX
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
@@ -29,7 +28,7 @@ class OrganizationExtensionProcessor(ExtensionQueryProcessor):
         query.add_condition_to_ast(
             binary_condition(
                 ConditionFunctions.EQ,
-                Column(f"{ALIAS_PREFIX}org_id", None, "org_id"),
+                Column("_snuba_org_id", None, "org_id"),
                 Literal(None, organization_id),
             )
         )

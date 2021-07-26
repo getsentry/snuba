@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 from typing import Any, Mapping, Tuple
 
 from snuba import environment, state
-from snuba.query.alias import ALIAS_PREFIX
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
@@ -91,7 +90,7 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
                 binary_condition(
                     ConditionFunctions.GTE,
                     Column(
-                        f"{ALIAS_PREFIX}{self.__timestamp_column}",
+                        f"_snuba_{self.__timestamp_column}",
                         None,
                         self.__timestamp_column,
                     ),
@@ -100,7 +99,7 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
                 binary_condition(
                     ConditionFunctions.LT,
                     Column(
-                        f"{ALIAS_PREFIX}{self.__timestamp_column}",
+                        f"_snuba_{self.__timestamp_column}",
                         None,
                         self.__timestamp_column,
                     ),

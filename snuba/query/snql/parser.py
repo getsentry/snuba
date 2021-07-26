@@ -28,7 +28,6 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.alias import ALIAS_PREFIX
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     FUNCTION_TO_OPERATOR,
@@ -1025,10 +1024,12 @@ def _mangle_query_aliases(
     the outer queries in Clickhouse, so we only receive one set of results.
     """
 
+    alias_prefix = "_snuba_"
+
     def mangle_aliases(exp: Expression) -> Expression:
         alias = exp.alias
         if alias is not None:
-            return replace(exp, alias=f"{ALIAS_PREFIX}{alias}")
+            return replace(exp, alias=f"{alias_prefix}{alias}")
 
         return exp
 
@@ -1036,7 +1037,7 @@ def _mangle_query_aliases(
         if not isinstance(exp, Column):
             return exp
 
-        return replace(exp, column_name=f"{ALIAS_PREFIX}{exp.column_name}")
+        return replace(exp, column_name=f"{alias_prefix}{exp.column_name}")
 
     query.transform_expressions(mangle_aliases, skip_array_join=True)
 
@@ -1207,14 +1208,14 @@ def _select_entity_for_dataset(
                         isinstance(exp, FunctionCall)
                         and len(exp.parameters) == 2
                         and isinstance(exp.parameters[0], Column)
-                        and exp.parameters[0].alias == f"{ALIAS_PREFIX}timestamp"
+                        and exp.parameters[0].alias == "_snuba_timestamp"
                     ):
                         return FunctionCall(
                             exp.alias,
                             exp.function_name,
                             (
                                 Column(
-                                    f"{ALIAS_PREFIX}{selected_entity.required_time_column}",
+                                    f"_snuba_{selected_entity.required_time_column}",
                                     exp.parameters[0].table_name,
                                     exp.parameters[0].column_name,
                                 ),

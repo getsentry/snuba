@@ -1,7 +1,6 @@
 from typing import Sequence
 
 from snuba import util
-from snuba.query.alias import ALIAS_PREFIX
 from snuba.query.conditions import in_condition
 from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
@@ -77,9 +76,7 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
             query.add_condition_to_ast(
                 in_condition(
                     Column(
-                        f"{ALIAS_PREFIX}{self.__project_column}",
-                        None,
-                        self.__project_column,
+                        f"_snuba_{self.__project_column}", None, self.__project_column
                     ),
                     [Literal(None, p) for p in project_ids],
                 )
