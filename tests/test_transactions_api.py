@@ -33,7 +33,7 @@ class TestTransactionsApi(BaseApiTest):
 
         # values for test data
         self.project_ids = [1, 2]  # 2 projects
-        self.environments = [u"prød", "test"]  # 2 environments
+        self.environments = ["prød", "test"]  # 2 environments
         self.platforms = ["a", "b"]  # 2 platforms
         self.hashes = [x * 32 for x in "0123456789ab"]  # 12 hashes
         self.group_ids = [int(hsh[:16], 16) for hsh in self.hashes]
@@ -626,3 +626,39 @@ class TestTransactionsApi(BaseApiTest):
         assert response.status_code == 200, response.data
 
         assert data["data"][0]["span_id"] == "8841662216cc598b"
+
+    def test_tagstore_sampling(self) -> None:
+        state.set_config("snuplicator-sampling-experiment-rate", 1.0)
+        state.set_config("snuplicator-sampling-projects", "1")
+        state.set_config("snuplicator-sampling-rate", 0.1)
+
+        response = self.post(
+            json.dumps(
+                {
+                    "selected_columns": [],
+                    "limit": 1000,
+                    "orderby": "-count",
+                    "project": [1],
+                    "dataset": "transactions",
+                    "from_date": self.base_time.isoformat(),
+                    "to_date": (
+                        self.base_time + timedelta(minutes=self.minutes)
+                    ).isoformat(),
+                    "groupby": ["tags_key"],
+                    "conditions": [
+                        ["project_id", "IN", [1]],
+                        ["environment", "IN", ["test", "prød"]],
+                    ],
+                    "aggregations": [
+                        ["count()", "", "count"],
+                        ["uniq", "tags_value", "values_seen"],
+                    ],
+                    "consistent": False,
+                }
+            ),
+            referrer="tagstore.__get_tag_keys",
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)["data"]
+        assert len(data) == 6
