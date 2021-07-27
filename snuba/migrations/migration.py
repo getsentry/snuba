@@ -71,7 +71,7 @@ class CodeMigration(Migration, ABC):
         update_status(Status.IN_PROGRESS)
 
         for op in self.forwards_global():
-            op.execute()
+            op.execute(logger)
 
         logger.info(f"Finished: {migration_id}")
         update_status(Status.COMPLETED)
@@ -87,7 +87,7 @@ class CodeMigration(Migration, ABC):
         logger.info(f"Reversing migration: {migration_id}")
         update_status(Status.IN_PROGRESS)
         for op in self.backwards_global():
-            op.execute()
+            op.execute(logger)
         logger.info(f"Finished reversing: {migration_id}")
 
         update_status(Status.NOT_STARTED)

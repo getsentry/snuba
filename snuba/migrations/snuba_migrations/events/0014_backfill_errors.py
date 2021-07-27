@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime, timedelta
 from typing import Sequence
 
@@ -126,7 +127,7 @@ COLUMNS = [
 ]
 
 
-def backfill_errors() -> None:
+def backfill_errors(logger: logging.Logger) -> None:
     events_storage = get_writable_storage(StorageKey.EVENTS)
     errors_storage = get_writable_storage(StorageKey.ERRORS)
 
@@ -148,7 +149,7 @@ def backfill_errors() -> None:
             """
         )[0]
 
-        print("Error data was found")
+        logger.info("Error data was found")
     except IndexError:
         ts = datetime.utcnow()
 
@@ -157,7 +158,7 @@ def backfill_errors() -> None:
     total_partitions = int((timestamp - BEGINNING_OF_TIME).days / 7)
     migrated_partitions = 0
 
-    print(f"Starting migration from {format_date(timestamp)}")
+    logger.info(f"Starting migration from {format_date(timestamp)}")
 
     while True:
         where = f"toMonday(timestamp) = toDate('{format_date(timestamp)}') AND (deleted = 0)"
@@ -175,14 +176,14 @@ def backfill_errors() -> None:
 
         migrated_partitions += 1
 
-        print(
+        logger.info(
             f"Migrated {format_date(timestamp)}. ({migrated_partitions} of {total_partitions} partitions done)"
         )
 
         timestamp -= WINDOW
 
         if timestamp <= BEGINNING_OF_TIME:
-            print("Done. Optimizing.")
+            logger.info("Done. Optimizing.")
             break
 
     if cluster.is_single_node():
