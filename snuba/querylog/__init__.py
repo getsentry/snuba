@@ -54,10 +54,6 @@ def _add_tags(
         sentry_sdk.set_tag("duration_group", duration_group)
         if duration_group == ">30s":
             sentry_sdk.set_tag("timeout", "too_long")
-        if request is not None:
-            query_experiments = request.query.get_experiments()
-            for name, value in query_experiments.items():
-                sentry_sdk.set_tag(name, str(value))
         if experiments is not None:
             for name, value in experiments.items():
                 sentry_sdk.set_tag(name, str(value))
