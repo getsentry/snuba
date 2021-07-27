@@ -44,7 +44,7 @@ def record_query(
         _add_tags(timer, extra_data.get("experiments"))
 
 
-def _add_tags(timer: Timer, experiments: Optional[Mapping[str, Any]] = None,) -> None:
+def _add_tags(timer: Timer, experiments: Optional[Mapping[str, Any]] = None) -> None:
     if Hub.current.scope.span:
         duration_group = timer.get_duration_group()
         sentry_sdk.set_tag("duration_group", duration_group)
