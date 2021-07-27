@@ -3,7 +3,6 @@ from typing import Callable, MutableMapping
 from snuba import settings
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entity import Entity
-from snuba.util import with_span
 
 
 class InvalidEntityError(Exception):
@@ -14,7 +13,6 @@ ENTITY_IMPL: MutableMapping[EntityKey, Entity] = {}
 ENTITY_NAME_LOOKUP: MutableMapping[Entity, EntityKey] = {}
 
 
-@with_span()
 def get_entity(name: EntityKey) -> Entity:
     if name in ENTITY_IMPL:
         return ENTITY_IMPL[name]

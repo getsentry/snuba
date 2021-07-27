@@ -19,7 +19,8 @@ QueryPipelineBuilders = Mapping[BuilderId, QueryPipelineBuilder[ClickhouseQueryP
 QueryResults = List[Result[QueryResult]]
 SelectorFunc = Callable[[LogicalQuery, str], Tuple[BuilderId, List[BuilderId]]]
 CallbackFunc = Callable[
-    [LogicalQuery, str, Optional[Result[QueryResult]], QueryResults], None
+    [LogicalQuery, RequestSettings, str, Optional[Result[QueryResult]], QueryResults],
+    None,
 ]
 
 
