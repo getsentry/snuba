@@ -72,8 +72,8 @@ class Query(AbstractQuery[Entity]):
     def get_sample(self) -> Optional[float]:
         return self.__sample
 
-    def set_sample(self, final: bool) -> None:
-        self.__final = final
+    def set_sample(self, sample: float) -> None:
+        self.__sample = sample
 
     def _eq_functions(self) -> Sequence[str]:
         return tuple(super()._eq_functions()) + ("get_final", "get_sample")
