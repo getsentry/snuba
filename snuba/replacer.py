@@ -5,16 +5,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from functools import partial
-from typing import (
-    Callable,
-    List,
-    Mapping,
-    MutableMapping,
-    NamedTuple,
-    Optional,
-    Sequence,
-    Tuple,
-)
+from typing import Callable, List, Mapping, MutableMapping, Optional, Sequence
 
 import simplejson as json
 from arroyo import Message
@@ -33,22 +24,33 @@ logger = logging.getLogger("snuba.replacer")
 executor = ThreadPoolExecutor()
 
 
-class WriteConnections(NamedTuple):
-    table_name: str
-    main_connection: Sequence[Tuple[str, ClickhousePool]]
-    backup_connection: Optional[Tuple[str, ClickhousePool]] = None
-
-
-RunQuery = Callable[[ClickhousePool, str, int, MetricsBackend], None]
-
-
 class InsertExecutor(ABC):
+    """
+    Executes the Replacement insert query.
+
+    Each implementation provides a different execution policy.
+    """
+
     @abstractmethod
     def execute(self, replacement: Replacement, record_counts: int) -> int:
+        """
+        Executes the query according to the policy implemented by this
+        class.
+        """
         raise NotImplementedError
 
 
+# Used by InsertExecutors to run the query
+RunQuery = Callable[[ClickhousePool, str, int, MetricsBackend], None]
+
+
 class DistributedTableExecutor(InsertExecutor):
+    """
+    InsertExecutor that runs one query only on a distributed table.
+    This relies on Clickhouse to forward the replacement query to
+    each storage node.
+    """
+
     def __init__(
         self,
         runner: RunQuery,
@@ -75,6 +77,7 @@ class LocalTableExecutor(InsertExecutor):
 
     It implements some basic retry logic by trying a different replica
     if the first attempt fails.
+    It also falls back on a DistributedExecutor if everything fails.
     """
 
     def __init__(
@@ -100,6 +103,10 @@ class LocalTableExecutor(InsertExecutor):
         records_count: int,
         metrics: MetricsBackend,
     ) -> None:
+        """
+        Makes multiple attempts to run the query.
+        One per connection provided.
+        """
         for attempt in range(len(connections)):
             try:
                 self.__runner(connections[attempt], query, records_count, metrics)
@@ -155,7 +162,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         self.__replacer_processor = processor
         self.__database_name = storage.get_cluster().get_database()
 
-    def __get_write_connections(self, replacement: Replacement) -> InsertExecutor:
+    def __get_insert_executor(self, replacement: Replacement) -> InsertExecutor:
         """
         Some replacements need to be executed on each storage node of the
         cluster instead that through a query node on distributed tables.
@@ -166,8 +173,10 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         shards number the tombstone may end up on a different shard than
         the original row.
 
-        This returns connections to one replica for each shard so that,
-        in these cases, we can run the INSERT on each node.
+        This returns the InsertExecutor that implements the appropriate
+        policy for the replacement provided. So it can return either a basic
+        DistributedExecutor or a LocalTableExecutor to write on each storage
+        node.
         """
 
         def run_query(
@@ -214,6 +223,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         # We pick up to three replicas per shard. The order will be the
         # one provided by the get_local_nodes. For the correctness the order
         # in which these nodes are tried does not matter.
+        # TODO: Consider reshuffling the nodes before building the executor.
         for n in nodes:
             if n.replica is not None and n.shard is not None:
                 if len(connection_pools[n.shard]) < 3:
@@ -268,8 +278,8 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
                 or need_optimize
             )
 
-            query_executor = self.__get_write_connections(replacement)
-            query_executor.execute(replacement, count)
+            query_executor = self.__get_insert_executor(replacement)
+            count = query_executor.execute(replacement, count)
 
             self.__replacer_processor.post_replacement(replacement, count)
 
