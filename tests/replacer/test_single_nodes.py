@@ -28,6 +28,7 @@ FROM errors_local FINAL
 WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
 """,
             ],
+            "storage-0-1": [],
             "storage-1-0": [
                 """\
 INSERT INTO errors_local (project_id, timestamp, event_id)
@@ -36,6 +37,7 @@ FROM errors_local FINAL
 WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
 """,
             ],
+            "storage-1-1": [],
             "storage-2-0": [
                 """\
 INSERT INTO errors_local (project_id, timestamp, event_id)
@@ -44,6 +46,7 @@ FROM errors_local FINAL
 WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
 """,
             ],
+            "storage-2-1": [],
         },
         id="Replacements through storage nodes",
     ),

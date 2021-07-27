@@ -1,9 +1,11 @@
 import logging
 import time
+from abc import ABC, abstractmethod
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from functools import partial
-from typing import NamedTuple, Optional, Sequence, Tuple
+from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Sequence, Tuple
 
 import simplejson as json
 from arroyo import Message
@@ -24,8 +26,123 @@ executor = ThreadPoolExecutor()
 
 class WriteConnections(NamedTuple):
     table_name: str
-    main_connections: Sequence[Tuple[str, ClickhousePool]]
+    main_connection: Sequence[Tuple[str, ClickhousePool]]
     backup_connection: Optional[Tuple[str, ClickhousePool]] = None
+
+
+class InsertExecutor(ABC):
+    @abstractmethod
+    def execute(self, replacement: Replacement, record_counts: int) -> int:
+        raise NotImplementedError
+
+    def _run_query(
+        self,
+        connection: ClickhousePool,
+        query: str,
+        records_count: int,
+        metrics: MetricsBackend,
+    ) -> None:
+        t = time.time()
+
+        logger.debug("Executing replace query: %s" % query)
+        connection.execute_robust(query)
+        duration = int((time.time() - t) * 1000)
+
+        logger.info("Replacing %s rows took %sms" % (records_count, duration))
+        metrics.timing(
+            "replacements.count", records_count, tags={"host": connection.get_host()},
+        )
+        metrics.timing(
+            "replacements.duration", duration, tags={"host": connection.get_host()},
+        )
+
+
+class DistributedTableExecutor(InsertExecutor):
+    def __init__(
+        self, connection: ClickhousePool, table: str, metrics: MetricsBackend
+    ) -> None:
+        self.__connection = connection
+        self.__table = table
+        self.__metrics = metrics
+
+    def execute(self, replacement: Replacement, records_count: int) -> int:
+        query = replacement.get_insert_query(self.__table)
+        if query is None:
+            return 0
+        self._run_query(self.__connection, query, records_count, self.__metrics)
+        return records_count
+
+
+class LocalTableExecutor(InsertExecutor):
+    """
+    Executes a replacement query on each individual shard in parallel.
+
+    It implements some basic retry logic by trying a different replica
+    if the first attempt fails.
+    """
+
+    def __init__(
+        self,
+        thread_pool: ThreadPoolExecutor,
+        main_connections: Mapping[int, Sequence[ClickhousePool]],
+        main_table: str,
+        backup_executor: InsertExecutor,
+        metrics: MetricsBackend,
+    ) -> None:
+        self.__thread_pool = thread_pool
+        self.__main_connections = main_connections
+        self.__main_table = main_table
+        self.__backup_executor = backup_executor
+        self.__metrics = metrics
+
+    def __run_multiple_replicas(
+        self,
+        connections: Sequence[ClickhousePool],
+        query: str,
+        records_count: int,
+        metrics: MetricsBackend,
+    ) -> None:
+        for attempt in range(len(connections)):
+            try:
+                self._run_query(connections[attempt], query, records_count, metrics)
+                return
+            except Exception as e:
+                if attempt == len(connections) - 1:
+                    raise
+                logger.warning(
+                    "Replacement processing failed on the main connection", exc_info=e,
+                )
+
+    def execute(self, replacement: Replacement, records_count: int) -> int:
+        try:
+            query = replacement.get_insert_query(self.__main_table)
+            if query is None:
+                return 0
+            result_futures = []
+            for connections in self.__main_connections.values():
+                result_futures.append(
+                    self.__thread_pool.submit(
+                        partial(
+                            self.__run_multiple_replicas,
+                            connections=connections,
+                            query=query,
+                            records_count=records_count,
+                            metrics=self.__metrics,
+                        )
+                    )
+                )
+            for result in as_completed(result_futures):
+                e = result.exception()
+                if e is not None:
+                    raise e
+            return records_count
+
+        except Exception as e:
+            count = self.__backup_executor.execute(replacement, records_count)
+            logger.warning(
+                "Replacement processing failed on the main connection", exc_info=e,
+            )
+            return count
 
 
 class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
@@ -40,7 +157,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         self.__replacer_processor = processor
         self.__database_name = storage.get_cluster().get_database()
 
-    def __get_write_connections(self, replacement: Replacement) -> WriteConnections:
+    def __get_write_connections(self, replacement: Replacement) -> InsertExecutor:
         """
         Some replacements need to be executed on each storage node of the
         cluster instead that through a query node on distributed tables.
@@ -63,19 +180,35 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         )
         write_every_node = replacement.write_every_node()
         if not write_every_node or cluster.is_single_node():
-            return WriteConnections(
-                query_table_name, [(query_connection.get_host(), query_connection)]
+            return DistributedTableExecutor(
+                connection=query_connection,
+                table=query_table_name,
+                metrics=self.metrics,
             )
 
-        pools = [
-            cluster.get_node_connection(ClickhouseClientSettings.REPLACE, node)
-            for node in self.__storage.get_cluster().get_local_nodes()
-            if node.replica == 1
-        ]
-        return WriteConnections(
-            local_table_name,
-            [(pool.host, pool) for pool in pools],
-            (query_connection.get_host(), query_connection),
+        nodes = self.__storage.get_cluster().get_local_nodes()
+        connection_pools: MutableMapping[int, List[ClickhousePool]] = defaultdict(list)
+
+        # We pick up to three replicas per shard. The order will be the
+        # one provided by the get_local_nodes. For the correctness the order
+        # in which these nodes are tried does not matter.
+        for n in nodes:
+            if n.replica is not None and n.shard is not None:
+                if len(connection_pools[n.shard]) < 3:
+                    connection_pools[n.shard].append(
+                        cluster.get_node_connection(ClickhouseClientSettings.REPLACE, n)
+                    )
+
+        return LocalTableExecutor(
+            thread_pool=executor,
+            main_connections=connection_pools,
+            main_table=local_table_name,
+            backup_executor=DistributedTableExecutor(
+                connection=query_connection,
+                table=query_table_name,
+                metrics=self.metrics,
+            ),
+            metrics=self.metrics,
         )
 
     def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
@@ -95,22 +228,6 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             ClickhouseClientSettings.REPLACE
         )
 
-        def execute_query(
-            insert_query: str, records_count: int, connection: ClickhousePool, host: str
-        ) -> None:
-            t = time.time()
-            logger.debug("Executing replace query: %s" % insert_query)
-            connection.execute_robust(insert_query)
-            duration = int((time.time() - t) * 1000)
-
-            logger.info("Replacing %s rows took %sms" % (records_count, duration))
-            self.metrics.timing(
-                "replacements.count", records_count, tags={"host": host}
-            )
-            self.metrics.timing(
-                "replacements.duration", duration, tags={"host": host},
-            )
-
         for replacement in batch:
             table_name = self.__replacer_processor.get_schema().get_table_name()
             count_query = replacement.get_count_query(table_name)
@@ -127,46 +244,8 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
                 or need_optimize
             )
 
-            connections = self.__get_write_connections(replacement)
-            insert_query = replacement.get_insert_query(connections.table_name)
-
-            if insert_query is not None:
-                try:
-                    result_futures = []
-                    for host, connection in connections.main_connections:
-                        result_futures.append(
-                            executor.submit(
-                                partial(
-                                    execute_query,
-                                    insert_query=insert_query,
-                                    records_count=count,
-                                    connection=connection,
-                                    host=host,
-                                )
-                            )
-                        )
-                    for result in as_completed(result_futures):
-                        e = result.exception()
-                        if e is not None:
-                            raise e
-
-                except Exception as e:
-                    backup = connections.backup_connection
-                    if backup is None:
-                        raise
-                    execute_query(
-                        insert_query=insert_query,
-                        records_count=count,
-                        connection=connection,
-                        host=host,
-                    )
-                    logger.warning(
-                        "Replacement processing failed on the main connection",
-                        exc_info=e,
-                    )
-
-            else:
-                count = 0
+            query_executor = self.__get_write_connections(replacement)
+            query_executor.execute(replacement, count)
 
             self.__replacer_processor.post_replacement(replacement, count)
 
