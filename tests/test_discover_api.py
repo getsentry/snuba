@@ -5,6 +5,7 @@ import pytest
 import pytz
 import simplejson as json
 
+from snuba import state
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages import StorageKey
@@ -1651,6 +1652,38 @@ class TestDiscoverApi(BaseApiTest):
             },
         ]
 
+    def test_tagstore_sampling(self) -> None:
+        state.set_config("snuplicator-sampling-experiment-rate", 1.0)
+        state.set_config("snuplicator-sampling-projects", self.project_id)
+        state.set_config("snuplicator-sampling-rate", 0.1)
+
+        response = self.post(
+            json.dumps(
+                {
+                    "selected_columns": [],
+                    "limit": 1000,
+                    "orderby": "-count",
+                    "project": [self.project_id],
+                    "dataset": "discover",
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                    "groupby": ["tags_key"],
+                    "conditions": [["project_id", "IN", [self.project_id]]],
+                    "aggregations": [
+                        ["count()", "", "count"],
+                        ["uniq", "tags_value", "values_seen"],
+                    ],
+                    "consistent": False,
+                }
+            ),
+            entity="discover",
+            referrer="tagstore.__get_tag_keys",
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)["data"]
+        assert len(data) == 11
+
 
 class TestDiscoverAPIEntitySelection(TestDiscoverApi):
     """
@@ -1667,7 +1700,9 @@ class TestDiscoverAPIEntitySelection(TestDiscoverApi):
     def setup_post(self, _build_snql_post_methods: Callable[..., Any]) -> None:
         orig_post = _build_snql_post_methods
 
-        def fixed_entity_post(data: str, entity: str = "discover") -> Any:
-            return orig_post(data, "discover")
+        def fixed_entity_post(
+            data: str, entity: str = "discover", referrer: str = "test"
+        ) -> Any:
+            return orig_post(data, "discover", referrer)
 
         self.post = fixed_entity_post

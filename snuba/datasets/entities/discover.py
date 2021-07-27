@@ -1,8 +1,10 @@
+import random
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Mapping, Optional, Sequence, Set, Union
+from typing import List, Mapping, Optional, Sequence, Set, Tuple, Union
 
-from snuba import settings
+from snuba import environment, settings, state
 from snuba.clickhouse.columns import (
     Array,
     ColumnSet,
@@ -13,6 +15,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
+from snuba.clickhouse.query_dsl.accessors import get_project_ids_in_query_ast
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.clickhouse.translators.snuba.allowed import (
     ColumnMapper,
@@ -37,7 +40,8 @@ from snuba.datasets.plans.single_storage import (
 )
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
-from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
+from snuba.pipeline.pipeline_delegator import PipelineDelegator
+from snuba.pipeline.simple_pipeline import EntityQueryPlanner, SimplePipelineBuilder
 from snuba.query.dsl import identity
 from snuba.query.expressions import (
     Column,
@@ -47,6 +51,7 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.extensions import QueryExtension
+from snuba.query.logical import Query as LogicalQuery
 from snuba.query.matchers import Any
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
 from snuba.query.matchers import Literal as LiteralMatch
@@ -60,7 +65,13 @@ from snuba.query.processors.timeseries_processor import TimeSeriesProcessor
 from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.query.validation.validators import EntityRequiredColumnValidator
+from snuba.request.request_settings import RequestSettings
 from snuba.util import qualified_column
+from snuba.utils.metrics.wrapper import MetricsWrapper
+from snuba.utils.threaded_function_delegator import Result
+from snuba.web import QueryResult
+
+metrics = MetricsWrapper(environment.metrics, "snuplicator.sampling")
 
 
 @dataclass(frozen=True)
@@ -278,6 +289,100 @@ null_function_translation_mappers = TranslationMappers(
 )
 
 
+class SampledSimplePipelineBuilder(SimplePipelineBuilder):
+    def build_planner(
+        self, query: LogicalQuery, settings: RequestSettings,
+    ) -> EntityQueryPlanner:
+        new_query = deepcopy(query)
+        sampling_rate = state.get_config("snuplicator-sampling-rate", 1.0)
+        assert isinstance(sampling_rate, float)
+        new_query.set_sample(sampling_rate)
+        return super().build_planner(new_query, settings)
+
+
+def sampling_selector_func(query: LogicalQuery, referrer: str) -> Tuple[str, List[str]]:
+    if referrer == "tagstore.__get_tag_keys":
+        condition = query.get_condition()
+        assert condition is not None
+        project_ids = get_project_ids_in_query_ast(query, "project_id")
+        if not project_ids:
+            return "primary", []
+
+        test_projects_raw = state.get_config("snuplicator-sampling-projects", "")
+        test_projects = set()
+        if isinstance(test_projects_raw, str):
+            test_projects = set(int(p) for p in test_projects_raw.split(",") if p)
+        elif isinstance(test_projects_raw, (int, float)):
+            test_projects = set([int(test_projects_raw)])
+
+        if project_ids.issubset(test_projects):
+            sample_query_rate = state.get_config(
+                "snuplicator-sampling-experiment-rate", 0.0
+            )
+            assert isinstance(sample_query_rate, float)
+            if random.random() < sample_query_rate:
+                return "primary", ["sampler"]
+
+    return "primary", []
+
+
+def sampling_callback_func(
+    query: LogicalQuery,
+    settings: RequestSettings,
+    referrer: str,
+    primary_result: Optional[Result[QueryResult]],
+    results: List[Result[QueryResult]],
+) -> None:
+    if referrer != "tagstore.__get_tag_keys":
+        return
+
+    if primary_result is None and not results:
+        metrics.increment(
+            "query_result",
+            tags={"match": "empty", "primary": "none", "referrer": referrer},
+        )
+        return
+
+    if primary_result is None:
+        primary_result = results.pop(0)
+
+    primary_function_id = primary_result.function_id
+    primary_result_data = primary_result.result.result["data"]
+    secondary_result = results.pop(0) if len(results) > 0 else None
+
+    # compare results
+    comparison = "one_result"
+    if secondary_result:
+        metrics.timing(
+            "query_result_timing",
+            secondary_result.execution_time,
+            tags={"function": secondary_result.function_id},
+        )
+        secondary_result_data = secondary_result.result.result["data"]
+
+        primary_found_keys = set(row["tags_key"] for row in primary_result_data)
+        secondary_found_keys = set(row["tags_key"] for row in secondary_result_data)
+
+        if primary_found_keys == secondary_found_keys:
+            comparison = "match"
+        else:
+            comparison = "no_match"
+
+    metrics.increment(
+        "query_result",
+        tags={
+            "match": comparison,
+            "primary": primary_function_id,
+            "referrer": referrer,
+        },
+    )
+    metrics.timing(
+        "query_result_timing",
+        primary_result.execution_time,
+        tags={"function": primary_function_id},
+    )
+
+
 class DiscoverEntity(Entity):
     """
     Entity that represents both errors and transactions. This is currently backed
@@ -356,86 +461,94 @@ class DiscoverEntity(Entity):
         )
 
         discover_storage = get_storage(StorageKey.DISCOVER)
-
-        discover_pipeline_builder = SimplePipelineBuilder(
-            query_plan_builder=SingleStorageQueryPlanBuilder(
-                storage=discover_storage,
-                mappers=events_translation_mappers.concat(
-                    transaction_translation_mappers
-                )
-                .concat(null_function_translation_mappers)
-                .concat(
-                    TranslationMappers(
-                        columns=[
-                            ColumnToFunction(
-                                None,
-                                "ip_address",
-                                "coalesce",
-                                (
-                                    FunctionCall(
-                                        None,
-                                        "IPv4NumToString",
-                                        (Column(None, None, "ip_address_v4"),),
-                                    ),
-                                    FunctionCall(
-                                        None,
-                                        "IPv6NumToString",
-                                        (Column(None, None, "ip_address_v6"),),
-                                    ),
+        discover_storage_plan_builder = SingleStorageQueryPlanBuilder(
+            storage=discover_storage,
+            mappers=events_translation_mappers.concat(transaction_translation_mappers)
+            .concat(null_function_translation_mappers)
+            .concat(
+                TranslationMappers(
+                    columns=[
+                        ColumnToFunction(
+                            None,
+                            "ip_address",
+                            "coalesce",
+                            (
+                                FunctionCall(
+                                    None,
+                                    "IPv4NumToString",
+                                    (Column(None, None, "ip_address_v4"),),
+                                ),
+                                FunctionCall(
+                                    None,
+                                    "IPv6NumToString",
+                                    (Column(None, None, "ip_address_v6"),),
                                 ),
                             ),
-                            ColumnToColumn(
-                                None, "transaction", None, "transaction_name"
-                            ),
-                            ColumnToColumn(None, "username", None, "user_name"),
-                            ColumnToColumn(None, "email", None, "user_email"),
-                            ColumnToMapping(
-                                None,
-                                "geo_country_code",
-                                None,
-                                "contexts",
-                                "geo.country_code",
-                                nullable=True,
-                            ),
-                            ColumnToMapping(
-                                None,
-                                "geo_region",
-                                None,
-                                "contexts",
-                                "geo.region",
-                                nullable=True,
-                            ),
-                            ColumnToMapping(
-                                None,
-                                "geo_city",
-                                None,
-                                "contexts",
-                                "geo.city",
-                                nullable=True,
-                            ),
-                            ColumnToFunction(
-                                None,
-                                "user",
-                                "nullIf",
-                                (Column(None, None, "user"), Literal(None, "")),
-                            ),
-                        ]
-                    )
+                        ),
+                        ColumnToColumn(None, "transaction", None, "transaction_name"),
+                        ColumnToColumn(None, "username", None, "user_name"),
+                        ColumnToColumn(None, "email", None, "user_email"),
+                        ColumnToMapping(
+                            None,
+                            "geo_country_code",
+                            None,
+                            "contexts",
+                            "geo.country_code",
+                            nullable=True,
+                        ),
+                        ColumnToMapping(
+                            None,
+                            "geo_region",
+                            None,
+                            "contexts",
+                            "geo.region",
+                            nullable=True,
+                        ),
+                        ColumnToMapping(
+                            None,
+                            "geo_city",
+                            None,
+                            "contexts",
+                            "geo.city",
+                            nullable=True,
+                        ),
+                        ColumnToFunction(
+                            None,
+                            "user",
+                            "nullIf",
+                            (Column(None, None, "user"), Literal(None, "")),
+                        ),
+                    ]
                 )
-                .concat(
-                    TranslationMappers(
-                        subscriptables=[
-                            SubscriptableMapper(None, "tags", None, "tags"),
-                            SubscriptableMapper(None, "contexts", None, "contexts"),
-                        ],
-                    )
-                ),
             )
+            .concat(
+                TranslationMappers(
+                    subscriptables=[
+                        SubscriptableMapper(None, "tags", None, "tags"),
+                        SubscriptableMapper(None, "contexts", None, "contexts"),
+                    ],
+                )
+            ),
+        )
+        discover_pipeline_builder = SimplePipelineBuilder(
+            query_plan_builder=discover_storage_plan_builder
         )
 
+        pipeline_builder: Union[PipelineDelegator, SimplePipelineBuilder]
         if settings.ERRORS_ROLLOUT_ALL:
             storage = discover_storage
-            pipeline_builder = discover_pipeline_builder
+            sampled_pipeline_builder = SampledSimplePipelineBuilder(
+                query_plan_builder=discover_storage_plan_builder
+            )
+
+            pipeline_builder = PipelineDelegator(
+                query_pipeline_builders={
+                    "primary": discover_pipeline_builder,
+                    "sampler": sampled_pipeline_builder,
+                },
+                selector_func=sampling_selector_func,
+                callback_func=sampling_callback_func,
+            )
         else:
             storage = events_storage
             pipeline_builder = events_pipeline_builder
