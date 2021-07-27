@@ -5,7 +5,16 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from functools import partial
-from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Sequence, Tuple
+from typing import (
+    Callable,
+    List,
+    Mapping,
+    MutableMapping,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 import simplejson as json
 from arroyo import Message
@@ -30,46 +39,33 @@ class WriteConnections(NamedTuple):
     backup_connection: Optional[Tuple[str, ClickhousePool]] = None
 
 
+RunQuery = Callable[[ClickhousePool, str, int, MetricsBackend], None]
+
+
 class InsertExecutor(ABC):
     @abstractmethod
     def execute(self, replacement: Replacement, record_counts: int) -> int:
         raise NotImplementedError
 
-    def _run_query(
-        self,
-        connection: ClickhousePool,
-        query: str,
-        records_count: int,
-        metrics: MetricsBackend,
-    ) -> None:
-        t = time.time()
-
-        logger.debug("Executing replace query: %s" % query)
-        connection.execute_robust(query)
-        duration = int((time.time() - t) * 1000)
-
-        logger.info("Replacing %s rows took %sms" % (records_count, duration))
-        metrics.timing(
-            "replacements.count", records_count, tags={"host": connection.get_host()},
-        )
-        metrics.timing(
-            "replacements.duration", duration, tags={"host": connection.get_host()},
-        )
-
 
 class DistributedTableExecutor(InsertExecutor):
     def __init__(
-        self, connection: ClickhousePool, table: str, metrics: MetricsBackend
+        self,
+        runner: RunQuery,
+        connection: ClickhousePool,
+        table: str,
+        metrics: MetricsBackend,
     ) -> None:
         self.__connection = connection
         self.__table = table
         self.__metrics = metrics
+        self.__runner = runner
 
     def execute(self, replacement: Replacement, records_count: int) -> int:
         query = replacement.get_insert_query(self.__table)
         if query is None:
             return 0
-        self._run_query(self.__connection, query, records_count, self.__metrics)
+        self.__runner(self.__connection, query, records_count, self.__metrics)
         return records_count
 
 
@@ -83,6 +79,7 @@ class LocalTableExecutor(InsertExecutor):
 
     def __init__(
         self,
+        runner: RunQuery,
         thread_pool: ThreadPoolExecutor,
         main_connections: Mapping[int, Sequence[ClickhousePool]],
         main_table: str,
@@ -94,6 +91,7 @@ class LocalTableExecutor(InsertExecutor):
         self.__main_table = main_table
         self.__backup_executor = backup_executor
         self.__metrics = metrics
+        self.__runner = runner
 
     def __run_multiple_replicas(
         self,
@@ -104,7 +102,7 @@ class LocalTableExecutor(InsertExecutor):
     ) -> None:
         for attempt in range(len(connections)):
             try:
-                self._run_query(connections[attempt], query, records_count, metrics)
+                self.__runner(connections[attempt], query, records_count, metrics)
                 return
             except Exception as e:
                 if attempt == len(connections) - 1:
@@ -171,6 +169,29 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         This returns connections to one replica for each shard so that,
         in these cases, we can run the INSERT on each node.
         """
+
+        def run_query(
+            connection: ClickhousePool,
+            query: str,
+            records_count: int,
+            metrics: MetricsBackend,
+        ) -> None:
+            t = time.time()
+
+            logger.debug("Executing replace query: %s" % query)
+            connection.execute_robust(query)
+            duration = int((time.time() - t) * 1000)
+
+            logger.info("Replacing %s rows took %sms" % (records_count, duration))
+            metrics.timing(
+                "replacements.count",
+                records_count,
+                tags={"host": connection.get_host()},
+            )
+            metrics.timing(
+                "replacements.duration", duration, tags={"host": connection.get_host()},
+            )
+
         query_table_name = self.__replacer_processor.get_schema().get_table_name()
         local_table_name = self.__replacer_processor.get_schema().get_local_table_name()
         cluster = self.__storage.get_cluster()
@@ -181,6 +202,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         write_every_node = replacement.write_every_node()
         if not write_every_node or cluster.is_single_node():
             return DistributedTableExecutor(
+                runner=run_query,
                 connection=query_connection,
                 table=query_table_name,
                 metrics=self.metrics,
@@ -200,10 +222,12 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
                     )
 
         return LocalTableExecutor(
+            runner=run_query,
             thread_pool=executor,
             main_connections=connection_pools,
             main_table=local_table_name,
             backup_executor=DistributedTableExecutor(
+                runner=run_query,
                 connection=query_connection,
                 table=query_table_name,
                 metrics=self.metrics,
