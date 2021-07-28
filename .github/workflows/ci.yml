@@ -45,7 +45,6 @@ jobs:
 
   snuba-image:
     name: Build snuba CI image
-    if: github.repository_owner != 'getsentry'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
@@ -68,12 +67,14 @@ jobs:
 
       # These are pulled in order to be able to use docker layer caching
       - name: Pull snuba CI images
+        if: github.repository_owner != 'getsentry'
         run: |
           docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} || \
             docker pull ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} || \
             docker pull ghcr.io/getsentry/snuba-ci:latest || true
 
       - name: Build snuba docker image for CI
+        if: github.repository_owner != 'getsentry'
         run: |
           docker build . \
             --build-arg PYTHON_VERSION=3.8 \
@@ -86,6 +87,7 @@ jobs:
             --target testing
 
       - name: Publish images for cache
+        if: github.repository_owner != 'getsentry'
         run: |
           docker push ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
           docker push ghcr.io/getsentry/snuba-ci:${{ github.sha }}
