@@ -1,4 +1,5 @@
 import random
+import textwrap
 import uuid
 from typing import Any, Callable, ChainMap, MutableMapping, Sequence, Type, Union
 
@@ -105,7 +106,13 @@ def build_request(
             record_error_building_request(timer, referrer)
             raise exception
 
-        span.set_data("snuba_query", request.body)
+        # span.set_data("snuba_query", request.body)
+        span.set_data(
+            "snuba_query",
+            repr(query).split("\n")
+            if query
+            else textwrap.wrap(repr(request.body), 80, break_long_words=False),
+        )
 
         timer.mark("validate_schema")
         return request
