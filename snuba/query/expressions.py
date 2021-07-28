@@ -120,18 +120,25 @@ class StringifyVisitor(ExpressionVisitor[str]):
         >>> exp_str = exp.accept(visitor)
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self, level: int = 0, start_line: bool = False, initial_indent: int = 0
+    ) -> None:
         # keeps track of the level of the AST we are currently in,
         # this is necessary for nice indentation
 
         # before recursively going into subnodes increment this counter,
         # decrement it after the recursion is done
-        self.__level = 0
+        self.__initial_indent = initial_indent
+        self.__level = level
+        # should the repr start with a newline?
+        self.__start_line = start_line
 
     def _get_line_prefix(self) -> str:
         # every line in the tree needs to be indented based on the tree level
         # to make things look pretty
-        return "\n" + "  " * self.__level
+        newline = "\n" if self.__level else ""
+        tab = "  " * (self.__initial_indent + self.__level)
+        return f"{newline}{tab}"
 
     def _get_alias_str(self, exp: Expression) -> str:
         # Every expression has an optional alias so we handle that here
@@ -177,7 +184,7 @@ class StringifyVisitor(ExpressionVisitor[str]):
         # after the comma
         param_str = ",".join([param.accept(self) for param in exp.parameters])
         self.__level -= 1
-        return f"{self._get_line_prefix()}{exp.function_name}({param_str}{self._get_line_prefix()}){self._get_alias_str(exp)}"
+        return f"{self._get_line_prefix()}{exp.function_name}({param_str}\n{self._get_line_prefix()}){self._get_alias_str(exp)}"
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:
         self.__level += 1

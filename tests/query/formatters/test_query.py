@@ -117,6 +117,35 @@ TEST_JOIN = [
 ]
 
 
+def test_new_formatter():
+
+    """
+    SELECT
+      c1, ev.c AS `_snuba_c1`
+      f1, f(
+        ev.c2
+      ) AS `_snuba_f1`"""
+    q = CompositeQuery(
+        from_clause=BASIC_JOIN,
+        selected_columns=[
+            SelectedExpression("c1", Column("_snuba_c1", "ev", "c")),
+            SelectedExpression(
+                "f1", FunctionCall("_snuba_f1", "f", (Column(None, "ev", "c2"),))
+            ),
+        ],
+        groupby=[Column(None, "t", "c4")],
+        order_by=[
+            OrderBy(
+                direction=OrderByDirection.ASC,
+                expression=Column("some_alias", "t", "c4"),
+            )
+        ],
+    )
+    print("=" * 100)
+    print(format_query(q))
+    print("=" * 100)
+
+
 @pytest.mark.parametrize("query, formatted", TEST_JOIN)
 def test_query_formatter(
     query: Union[LogicalQuery, CompositeQuery[Entity]], formatted: TExpression

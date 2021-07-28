@@ -14,6 +14,7 @@ from snuba.query.expressions import (
     FunctionCall,
     Lambda,
     Literal,
+    StringifyVisitor,
     SubscriptableReference,
 )
 from snuba.query.logical import Query as LogicalQuery
@@ -21,9 +22,24 @@ from snuba.query.logical import Query as LogicalQuery
 TExpression = Union[str, Mapping[str, Any], Sequence[Any]]
 
 
-def format_query(
-    query: Union[LogicalQuery, CompositeQuery[Entity]]
-) -> Mapping[str, Any]:
+# def format_query(
+#     query: Union[LogicalQuery, CompositeQuery[Entity]]
+# ) -> Mapping[str, Any]:
+#     """
+#     Formats a query as a dictionary of clauses. Each expression is either
+#     represented as a string or as a sequence.
+#
+#     This representation is meant to be used for tracing/error tracking
+#     as the query would not be truncated when ingesting the event.
+#     """
+#
+#     return {
+#         **_format_query_body(query),
+#         "FROM": TracingQueryFormatter().visit(query.get_from_clause()),
+#     }
+
+
+def format_query(query: Union[LogicalQuery, CompositeQuery[Entity]]) -> List[str]:
     """
     Formats a query as a dictionary of clauses. Each expression is either
     represented as a string or as a sequence.
@@ -31,11 +47,11 @@ def format_query(
     This representation is meant to be used for tracing/error tracking
     as the query would not be truncated when ingesting the event.
     """
-
-    return {
-        **_format_query_body(query),
-        "FROM": TracingQueryFormatter().visit(query.get_from_clause()),
-    }
+    eformatter = StringifyVisitor()
+    return [
+        *_format_query_body(query),
+        # f"FROM {eformatter.visit(query.get_from_clause())}",
+    ]
 
 
 class TracingExpressionFormatter(ExpressionVisitor[TExpression]):
@@ -132,38 +148,54 @@ class TracingQueryFormatter(
         }
 
 
-def _format_query_body(query: Query) -> Mapping[str, Any]:
+def _format_query_body(query: Query) -> List[str]:
+    from snuba.query.expressions import StringifyVisitor
+
     expression_formatter = TracingExpressionFormatter()
-    formatted = {
-        "SELECT": [
-            [e.name, e.expression.accept(expression_formatter)]
+    eformatter = StringifyVisitor(level=0, initial_indent=1)
+
+    selects = "\n  ".join(
+        [
+            f"{e.name},{e.expression.accept(eformatter)}"
             for e in query.get_selected_columns()
-        ],
-        "GROUPBY": [e.accept(expression_formatter) for e in query.get_groupby()],
-        "ORDERBY": [
-            [e.expression.accept(expression_formatter), e.direction]
+        ]
+    )
+    select_str = f"SELECT\n  {selects}" if selects else ""
+
+    groupbys = "\n  ".join([e.accept(eformatter) for e in query.get_groupby()])
+    groupby_str = f"GROUPBY\n  {groupbys}" if groupbys else ""
+
+    orderbys = "\n".join(
+        [
+            f"{e.expression.accept(eformatter)} {e.direction.value}"
             for e in query.get_orderby()
-        ],
-    }
+        ]
+    )
+    orderby_str = f"ORDER_BY\n  {orderbys}" if orderbys else ""
+
+    str_list = [select_str, groupby_str, orderby_str]
+
     array_join = query.get_arrayjoin()
     if array_join:
-        formatted["ARRAYJOIN"] = array_join.accept(expression_formatter)
+        str_list.append(f"ARRAYJOIN\n  {array_join.accept(eformatter)}")
     condition = query.get_condition()
     if condition:
-        formatted["WHERE"] = condition.accept(expression_formatter)
+        str_list.append(f"WHERE\n  {condition.accept(expression_formatter)}")
     having = query.get_having()
     if having:
-        formatted["HAVING"] = having.accept(expression_formatter)
+        str_list.append(f"HAVING\n  {having.accept(expression_formatter)}")
     limitby = query.get_limitby()
     if limitby:
-        formatted["LIMITBY"] = {
-            "LIMIT": limitby.limit,
-            "BY": limitby.expression.accept(expression_formatter),
-        }
+        str_list.append(
+            f"LIMIT {limitby.limit}\n  BY {limitby.expression.accept(expression_formatter)}"
+        )
     limit = query.get_limit()
     if limit:
-        formatted["LIMIT"] = limit
+        str_list.append(f"LIMIT {limit}")
     offset = query.get_offset()
     if offset:
-        formatted["OFFSET"] = offset
-    return formatted
+        str_list.append(f"OFFSET {offset}")
+
+    final_str = "\n".join([select_str, groupby_str, orderby_str])
+    print(final_str)
+    return str_list
