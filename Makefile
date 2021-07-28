@@ -1,5 +1,8 @@
 .PHONY: develop setup-git test install-python-dependencies
 
+pyenv-setup:
+	@./scripts/pyenv_setup.sh
+
 develop: install-python-dependencies setup-git
 
 setup-git:

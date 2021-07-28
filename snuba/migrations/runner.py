@@ -415,7 +415,7 @@ class Runner:
                     if isinstance(sql_op, SqlOperation):
                         if sql_op._storage_set in storage_sets:
                             sql = sql_op.format_sql()
-                            print(f"Executing {sql}")
+                            logger.info(f"Executing {sql}")
                             clickhouse.execute(sql)
             elif isinstance(migration, CodeMigration):
                 for python_op in migration.forwards_global():

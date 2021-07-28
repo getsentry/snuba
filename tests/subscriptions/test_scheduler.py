@@ -72,6 +72,7 @@ class TestSubscriptionScheduler:
         assert result == expected
 
     def test_simple(self) -> None:
+        state.set_config("subscription_primary_task_builder", "immediate")
         subscription = self.build_subscription(timedelta(minutes=1))
         self.run_test(
             [subscription],
@@ -84,7 +85,6 @@ class TestSubscriptionScheduler:
         )
 
     def test_simple_jittered(self) -> None:
-        state.set_config("subscription_primary_task_builder", "jittered")
         subscription = self.build_subscription(timedelta(minutes=1))
         self.run_test(
             [subscription],
@@ -114,6 +114,7 @@ class TestSubscriptionScheduler:
         )
 
     def test_subscription_resolution_larger_than_tiny_interval(self) -> None:
+        state.set_config("subscription_primary_task_builder", "immediate")
         subscription = self.build_subscription(timedelta(minutes=1))
         self.run_test(
             [subscription],

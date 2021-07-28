@@ -5,11 +5,14 @@ import click
 
 from snuba.clusters.cluster import CLUSTERS, ClickhouseNodeType
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.environment import setup_logging
 from snuba.migrations.connect import check_clickhouse_connections
 from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
+
+LOG_LEVELS = ["critical", "error", "warning", "info", "debug", "notset"]
 
 
 @click.group()
@@ -46,10 +49,14 @@ def list() -> None:
 
 @migrations.command()
 @click.option("--force", is_flag=True)
-def migrate(force: bool) -> None:
+@click.option(
+    "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
+)
+def migrate(force: bool, log_level: Optional[str] = None) -> None:
     """
     Runs all migrations. Blocking migrations will not be run unless --force is passed.
     """
+    setup_logging(log_level)
     check_clickhouse_connections()
     runner = Runner()
 
@@ -67,7 +74,17 @@ def migrate(force: bool) -> None:
 @click.option("--force", is_flag=True)
 @click.option("--fake", is_flag=True)
 @click.option("--dry-run", is_flag=True)
-def run(group: str, migration_id: str, force: bool, fake: bool, dry_run: bool) -> None:
+@click.option(
+    "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
+)
+def run(
+    group: str,
+    migration_id: str,
+    force: bool,
+    fake: bool,
+    dry_run: bool,
+    log_level: Optional[str] = None,
+) -> None:
     """
     Runs a single migration.
     --force must be passed in order to run blocking migrations.
@@ -75,6 +92,7 @@ def run(group: str, migration_id: str, force: bool, fake: bool, dry_run: bool) -
 
     Migrations that are already in an in-progress or completed status will not be run.
     """
+    setup_logging(log_level)
     if not dry_run:
         check_clickhouse_connections()
 
@@ -105,8 +123,16 @@ def run(group: str, migration_id: str, force: bool, fake: bool, dry_run: bool) -
 @click.option("--force", is_flag=True)
 @click.option("--fake", is_flag=True)
 @click.option("--dry-run", is_flag=True)
+@click.option(
+    "--log-level", help="Logging level to use.", type=click.Choice(LOG_LEVELS)
+)
 def reverse(
-    group: str, migration_id: str, force: bool, fake: bool, dry_run: bool
+    group: str,
+    migration_id: str,
+    force: bool,
+    fake: bool,
+    dry_run: bool,
+    log_level: Optional[str] = None,
 ) -> None:
     """
     Reverses a single migration.
@@ -114,6 +140,7 @@ def reverse(
     --force is required to reverse an already completed migration.
     --fake marks a migration as reversed without doing anything.
     """
+    setup_logging(log_level)
     if not dry_run:
         check_clickhouse_connections()
     runner = Runner()
