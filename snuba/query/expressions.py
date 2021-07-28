@@ -3,21 +3,13 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from datetime import date, datetime
-from typing import (
-    Callable,
-    Generic,
-    Iterator,
-    Optional,
-    TypeVar,
-    Tuple,
-    Union,
-)
+from typing import Callable, Generic, Iterator, Optional, Tuple, TypeVar, Union
 
 TVisited = TypeVar("TVisited")
 
 
 # This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class _Expression:
     # TODO: Make it impossible to assign empty string as an alias.
     alias: Optional[str]
@@ -67,6 +59,14 @@ class Expression(_Expression, ABC):
         """
         raise NotImplementedError
 
+    def __repr__(self) -> str:
+        """returns a stringified version of the expression AST that is concise and easy to parse visually.
+        Not expected to be used for anything except debugging
+        (it does a lot of string copies to construct the string)
+        """
+        visitor = StringifyVisitor()
+        return self.accept(visitor)
+
 
 class ExpressionVisitor(ABC, Generic[TVisited]):
     """
@@ -110,10 +110,99 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
         raise NotImplementedError
 
 
+class StringifyVisitor(ExpressionVisitor[str]):
+    """Visitor implementation to turn an expression into a string format
+
+    Usage:
+        # Any expression class supported by the visitor will do
+        >>> exp: Expression = Expression()
+        >>> visitor = StringifyVisitor()
+        >>> exp_str = exp.accept(visitor)
+    """
+
+    def __init__(self) -> None:
+        # keeps track of the level of the AST we are currently in,
+        # this is necessary for nice indentation
+
+        # before recursively going into subnodes increment this counter,
+        # decrement it after the recursion is done
+        self.__level = 0
+
+    def _get_line_prefix(self) -> str:
+        # every line in the tree needs to be indented based on the tree level
+        # to make things look pretty
+        return "\n" + "  " * self.__level
+
+    def _get_alias_str(self, exp: Expression) -> str:
+        # Every expression has an optional alias so we handle that here
+        return f" AS `{exp.alias}`" if exp.alias else ""
+
+    def visit_literal(self, exp: Literal) -> str:
+        literal_str = None
+        if isinstance(exp.value, str):
+            literal_str = f"'{exp.value}'"
+        elif isinstance(exp.value, datetime):
+            literal_str = f"datetime({exp.value.isoformat()})"
+        elif isinstance(exp.value, date):
+            literal_str = f"date({exp.value.isoformat()})"
+        else:
+            literal_str = f"{exp.value}"
+        res = f"{self._get_line_prefix()}{literal_str}{self._get_alias_str(exp)}"
+        return res
+
+    def visit_column(self, exp: Column) -> str:
+        column_str = (
+            f"{exp.table_name}.{exp.column_name}"
+            if exp.table_name
+            else f"{exp.column_name}"
+        )
+        return f"{self._get_line_prefix()}{column_str}{self._get_alias_str(exp)}"
+
+    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> str:
+        # we want to visit the literal node to format it properly
+        # but for the subscritable reference we don't need it to
+        # be indented or newlined. Hence we remove the prefix
+        # from the string
+        literal_str = exp.key.accept(self)[len(self._get_line_prefix()) :]
+
+        # this line will already have the necessary prefix due to the visit_column
+        # function
+        subscripted_column_str = f"{exp.column.accept(self)}[{literal_str}]"
+        # after we know that, all we need to do as add the alias
+        return f"{subscripted_column_str}{self._get_alias_str(exp)}"
+
+    def visit_function_call(self, exp: FunctionCall) -> str:
+        self.__level += 1
+        # every param will have a newline in front of it so no need to put any space
+        # after the comma
+        param_str = ",".join([param.accept(self) for param in exp.parameters])
+        self.__level -= 1
+        return f"{self._get_line_prefix()}{exp.function_name}({param_str}{self._get_line_prefix()}){self._get_alias_str(exp)}"
+
+    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:
+        self.__level += 1
+        param_str = ",".join([param.accept(self) for param in exp.parameters])
+        self.__level -= 1
+        # The internal function repr will already have the
+        # prefix appropriate for the level, we don't need to
+        # insert it here
+        return f"{exp.internal_function.accept(self)}({param_str}{self._get_line_prefix()}){self._get_alias_str(exp)}"
+
+    def visit_argument(self, exp: Argument) -> str:
+        return f"{self._get_line_prefix()}{exp.name}{self._get_alias_str(exp)}"
+
+    def visit_lambda(self, exp: Lambda) -> str:
+        params_str = ",".join(exp.parameters)
+        self.__level += 1
+        transformation_str = exp.transformation.accept(self)
+        self.__level -= 1
+        return f"{self._get_line_prefix()}({params_str} ->{transformation_str}{self._get_line_prefix()}){self._get_alias_str(exp)}"
+
+
 OptionalScalarType = Union[None, bool, str, float, int, date, datetime]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class Literal(Expression):
     """
     A literal in the SQL expression
@@ -131,7 +220,7 @@ class Literal(Expression):
         return visitor.visit_literal(self)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class Column(Expression):
     """
     Represent a column in the schema of the dataset.
@@ -150,7 +239,7 @@ class Column(Expression):
         return visitor.visit_column(self)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class SubscriptableReference(Expression):
     """
     Accesses one entry of a subscriptable column (for example key based access on
@@ -187,7 +276,7 @@ class SubscriptableReference(Expression):
         yield self
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class FunctionCall(Expression):
     """
     Represents an expression that resolves to a function call on Clickhouse.
@@ -236,7 +325,7 @@ class FunctionCall(Expression):
         return visitor.visit_function_call(self)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class CurriedFunctionCall(Expression):
     """
     This function call represent a function with currying: f(x)(y).
@@ -283,7 +372,7 @@ class CurriedFunctionCall(Expression):
         return visitor.visit_curried_function_call(self)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class Argument(Expression):
     """
     A bound variable in a lambda expression. This is used to refer to variables
@@ -302,7 +391,7 @@ class Argument(Expression):
         return visitor.visit_argument(self)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class Lambda(Expression):
     """
     A lambda expression in the form (x,y,z -> transform(x,y,z))

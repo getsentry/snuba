@@ -1,4 +1,7 @@
+from datetime import datetime
 from typing import Set
+
+import pytest
 
 from snuba.query.expressions import (
     Argument,
@@ -194,3 +197,78 @@ def test_hash() -> None:
     s.add(lm)
 
     assert len(s) == 6
+
+
+@pytest.mark.parametrize(
+    "test_expr,expected_str",
+    [
+        (Column(None, "t1", "c1"), "\nt1.c1"),
+        (Column(None, None, "c1"), "\nc1"),
+        (Literal(None, "meowmeow"), "\n'meowmeow'"),
+        (Literal(None, 123), "\n123"),
+        (Literal(None, False), "\nFalse"),
+        (
+            Literal(None, datetime(2020, 4, 20, 16, 20)),
+            "\ndatetime(2020-04-20T16:20:00)",
+        ),
+        (Literal(None, datetime(2020, 4, 20, 16, 20).date()), "\ndate(2020-04-20)"),
+        (Literal(None, None), "\nNone"),
+        (
+            SubscriptableReference(
+                "catsound",
+                column=Column(None, "cats", "sounds"),
+                key=Literal(None, "meow"),
+            ),
+            "\ncats.sounds['meow'] AS `catsound`",
+        ),
+        (Column("alias", None, "c1"), "\nc1 AS `alias`"),
+        (
+            FunctionCall(
+                None, "f1", (Column(None, "t1", "c1"), Column(None, "t1", "c2"))
+            ),
+            """
+f1(
+  t1.c1,
+  t1.c2
+)""",
+        ),
+        (
+            CurriedFunctionCall(
+                None,
+                FunctionCall(
+                    None, "f1", (Column(None, "t1", "c1"), Column(None, "t1", "c2"))
+                ),
+                (Literal(None, "hello"), Literal(None, "kitty")),
+            ),
+            """
+f1(
+  t1.c1,
+  t1.c2
+)(
+  'hello',
+  'kitty'
+)""",
+        ),
+        (
+            Lambda(
+                None,
+                ("a", "b", "c"),
+                FunctionCall(
+                    None,
+                    "some_func",
+                    (Argument(None, "a"), Argument(None, "b"), Argument(None, "c")),
+                ),
+            ),
+            """
+(a,b,c ->
+  some_func(
+    a,
+    b,
+    c
+  )
+)""",
+        ),
+    ],
+)
+def test_format(test_expr, expected_str) -> None:
+    assert repr(test_expr) == expected_str
