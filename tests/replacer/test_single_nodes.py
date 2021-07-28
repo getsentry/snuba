@@ -300,7 +300,7 @@ def test_local_executor(
         metrics: MetricsBackend,
     ) -> None:
         connection.execute_robust(query)
-        queries[connection.get_host()].append(query)
+        queries[connection.host].append(query)
 
     insert_executor = LocalTableExecutor(
         runner=run_query,

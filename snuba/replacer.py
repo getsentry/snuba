@@ -193,12 +193,10 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
             logger.info("Replacing %s rows took %sms" % (records_count, duration))
             metrics.timing(
-                "replacements.count",
-                records_count,
-                tags={"host": connection.get_host()},
+                "replacements.count", records_count, tags={"host": connection.host},
             )
             metrics.timing(
-                "replacements.duration", duration, tags={"host": connection.get_host()},
+                "replacements.duration", duration, tags={"host": connection.host},
             )
 
         query_table_name = self.__replacer_processor.get_schema().get_table_name()

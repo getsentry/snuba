@@ -47,9 +47,6 @@ class ClickhousePool(object):
         for _ in range(max_pool_size):
             self.pool.put(None)
 
-    def get_host(self) -> str:
-        return self.host
-
     # This will actually return an int if an INSERT query is run, but we never capture the
     # output of INSERT queries so I left this as a Sequence.
     def execute(

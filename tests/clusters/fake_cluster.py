@@ -17,9 +17,6 @@ class FakeClickhousePool(ClickhousePool):
         self.__queries: List[str] = []
         self.host = host_name
 
-    def get_host(self) -> str:
-        return self.host
-
     def execute(
         self,
         query: str,
@@ -41,9 +38,6 @@ class FakeFailingClickhousePool(FakeClickhousePool):
     def __init__(self, host_name: str) -> None:
         self.__queries: List[str] = []
         self.host = host_name
-
-    def get_host(self) -> str:
-        return self.host
 
     def execute(
         self,
