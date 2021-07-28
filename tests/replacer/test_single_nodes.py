@@ -1,6 +1,6 @@
 from collections import defaultdict
 from concurrent.futures.thread import ThreadPoolExecutor
-from typing import List, Mapping, MutableMapping, Sequence
+from typing import Callable, Generator, List, Mapping, MutableMapping, Sequence
 
 import pytest
 
@@ -21,71 +21,6 @@ from tests.clusters.fake_cluster import (
     FakeFailingClickhousePool,
     ServerExplodedException,
 )
-
-LOCAL_QUERY = """\
-INSERT INTO errors_local (project_id, timestamp, event_id)
-SELECT project_id, timestamp, event_id, group_id, primary_hash
-FROM errors_local FINAL
-WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
-"""
-
-DIST_QUERY = """\
-INSERT INTO errors_dist (project_id, timestamp, event_id)
-SELECT project_id, timestamp, event_id, group_id, primary_hash
-FROM errors_dist FINAL
-WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
-"""
-
-TEST_CASES = [
-    pytest.param(
-        "[100,1]",
-        {
-            "query_node": [
-                "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
-            ],
-            "storage-0-0": [LOCAL_QUERY],
-            "storage-0-1": [],
-            "storage-1-0": [LOCAL_QUERY],
-            "storage-1-1": [],
-            "storage-2-0": [LOCAL_QUERY],
-            "storage-2-1": [],
-        },
-        id="Replacements through storage nodes",
-    ),
-    pytest.param(
-        "",
-        {
-            "query_node": [
-                "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
-                DIST_QUERY,
-            ]
-        },
-        id="Replacements through query node",
-    ),
-    pytest.param(
-        "[10]",
-        {
-            "query_node": [
-                "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
-                DIST_QUERY,
-            ]
-        },
-        id="Replacements through query node. Wrong project",
-    ),
-]
-
-COUNT_QUERY_TEAMPLATE = "SELECT count() FROM %(table_name)s FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'"
-INSERT_QUERY_TEMPLATE = """\
-INSERT INTO %(table_name)s (%(required_columns)s)
-SELECT %(select_columns)s
-FROM %(table_name)s FINAL
-WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
-"""
-
-FINAL_QUERY_TEMPLATE = {
-    "required_columns": "project_id, timestamp, event_id",
-    "select_columns": "project_id, timestamp, event_id, group_id, primary_hash",
-}
 
 
 def _build_cluster(healthy: bool = True) -> FakeClickhouseCluster:
@@ -112,61 +47,140 @@ def _build_cluster(healthy: bool = True) -> FakeClickhouseCluster:
     )
 
 
+@pytest.fixture
+def override_cluster() -> Generator[
+    Callable[[bool], FakeClickhouseCluster], None, None
+]:
+    current_clusters = cluster.CLUSTERS
+    current_mapping = cluster._STORAGE_SET_CLUSTER_MAP
+
+    def override(healthy: bool) -> FakeClickhouseCluster:
+        test_cluster = _build_cluster(healthy=healthy)
+        cluster.CLUSTERS = [test_cluster]
+        cluster._STORAGE_SET_CLUSTER_MAP = {StorageSetKey.EVENTS: cluster.CLUSTERS[0]}
+        return test_cluster
+
+    try:
+        yield override
+    finally:
+        cluster.CLUSTERS = current_clusters
+        cluster._STORAGE_SET_CLUSTER_MAP = current_mapping
+
+
+LOCAL_QUERY = """\
+INSERT INTO errors_local (project_id, timestamp, event_id)
+SELECT project_id, timestamp, event_id, group_id, primary_hash
+FROM errors_local FINAL
+WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
+"""
+
+DIST_QUERY = """\
+INSERT INTO errors_dist (project_id, timestamp, event_id)
+SELECT project_id, timestamp, event_id, group_id, primary_hash
+FROM errors_dist FINAL
+WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
+"""
+
+TEST_CASES = [
+    pytest.param(
+        "override_cluster",
+        "[100,1]",
+        {
+            "query_node": [
+                "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
+            ],
+            "storage-0-0": [LOCAL_QUERY],
+            "storage-0-1": [],
+            "storage-1-0": [LOCAL_QUERY],
+            "storage-1-1": [],
+            "storage-2-0": [LOCAL_QUERY],
+            "storage-2-1": [],
+        },
+        id="Replacements through storage nodes",
+    ),
+    pytest.param(
+        "override_cluster",
+        "",
+        {
+            "query_node": [
+                "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
+                DIST_QUERY,
+            ]
+        },
+        id="Replacements through query node",
+    ),
+    pytest.param(
+        "override_cluster",
+        "[10]",
+        {
+            "query_node": [
+                "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
+                DIST_QUERY,
+            ]
+        },
+        id="Replacements through query node. Wrong project",
+    ),
+]
+
+COUNT_QUERY_TEAMPLATE = "SELECT count() FROM %(table_name)s FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'"
+INSERT_QUERY_TEMPLATE = """\
+INSERT INTO %(table_name)s (%(required_columns)s)
+SELECT %(select_columns)s
+FROM %(table_name)s FINAL
+WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'
+"""
+
+FINAL_QUERY_TEMPLATE = {
+    "required_columns": "project_id, timestamp, event_id",
+    "select_columns": "project_id, timestamp, event_id, group_id, primary_hash",
+}
+
+
 @pytest.mark.parametrize(
-    "write_node_replacements_projects, expected_queries", TEST_CASES
+    "override_fixture, write_node_replacements_projects, expected_queries", TEST_CASES
 )
 def test_write_single_node(
+    override_fixture: Callable[[bool], FakeClickhouseCluster],
     write_node_replacements_projects: str,
     expected_queries: Mapping[str, Sequence[str]],
+    request,
 ) -> None:
     """
     Test the execution of replacement queries on both storage nodes and
     query nodes.
     """
     set_config("write_node_replacements_projects", write_node_replacements_projects)
-    test_cluster = _build_cluster()
-    # Cannot use patch properly for this as I cannot patch the use case
-    # with a new instance for each parameter in the parametrized test.
-    current_clusters = cluster.CLUSTERS
-    current_mapping = cluster._STORAGE_SET_CLUSTER_MAP
-    cluster.CLUSTERS = [test_cluster]
-    cluster._STORAGE_SET_CLUSTER_MAP = {StorageSetKey.EVENTS: cluster.CLUSTERS[0]}
+    override_func = request.getfixturevalue(override_fixture)
+    test_cluster = override_func(True)
 
     replacer = ReplacerWorker(
         get_writable_storage(StorageKey.ERRORS), DummyMetricsBackend()
     )
 
-    try:
-        replacer.flush_batch(
-            [
-                LegacyReplacement(
-                    COUNT_QUERY_TEAMPLATE,
-                    INSERT_QUERY_TEMPLATE,
-                    FINAL_QUERY_TEMPLATE,
-                    (NEEDS_FINAL, 1),
-                )
-            ]
-        )
+    replacer.flush_batch(
+        [
+            LegacyReplacement(
+                COUNT_QUERY_TEAMPLATE,
+                INSERT_QUERY_TEMPLATE,
+                FINAL_QUERY_TEMPLATE,
+                (NEEDS_FINAL, 1),
+            )
+        ]
+    )
 
-        queries = test_cluster.get_queries()
-        assert queries == expected_queries
-    finally:
-        cluster.CLUSTERS = current_clusters
-        cluster._STORAGE_SET_CLUSTER_MAP = current_mapping
+    queries = test_cluster.get_queries()
+    assert queries == expected_queries
 
 
-def test_failing_query() -> None:
+def test_failing_query(
+    override_cluster: Callable[[bool], FakeClickhouseCluster]
+) -> None:
     """
     Test the execution of replacement queries on single node
     when the query fails.
     """
     set_config("write_node_replacements_projects", "[1]")
-    test_cluster = _build_cluster(healthy=False)
-
-    current_clusters = cluster.CLUSTERS
-    current_mapping = cluster._STORAGE_SET_CLUSTER_MAP
-    cluster.CLUSTERS = [test_cluster]
-    cluster._STORAGE_SET_CLUSTER_MAP = {StorageSetKey.EVENTS: cluster.CLUSTERS[0]}
+    override_cluster(False)
 
     replacer = ReplacerWorker(
         get_writable_storage(StorageKey.ERRORS), DummyMetricsBackend()
@@ -183,9 +197,6 @@ def test_failing_query() -> None:
                 )
             ]
         )
-
-    cluster.CLUSTERS = current_clusters
-    cluster._STORAGE_SET_CLUSTER_MAP = current_mapping
 
 
 TEST_LOCAL_EXECUTOR = [
