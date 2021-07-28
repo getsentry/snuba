@@ -1,4 +1,4 @@
-from typing import Any, MutableMapping, Optional
+from typing import Any, Mapping, Optional
 
 import sentry_sdk
 from sentry_sdk import Hub
@@ -13,7 +13,10 @@ metrics = MetricsWrapper(environment.metrics, "api")
 
 
 def record_query(
-    request: Request, timer: Timer, query_metadata: SnubaQueryMetadata
+    request: Request,
+    timer: Timer,
+    query_metadata: SnubaQueryMetadata,
+    extra_data: Mapping[str, Any],
 ) -> None:
     """
     Records a request after it has been parsed and validated, whether
@@ -38,20 +41,18 @@ def record_query(
             mark_tags={"final": final, "referrer": referrer},
         )
 
-        _add_tags(timer, request)
+        _add_tags(timer, extra_data.get("experiments"))
 
 
-def _add_tags(timer: Timer, request: Optional[Request] = None) -> None:
+def _add_tags(timer: Timer, experiments: Optional[Mapping[str, Any]] = None) -> None:
     if Hub.current.scope.span:
         duration_group = timer.get_duration_group()
         sentry_sdk.set_tag("duration_group", duration_group)
         if duration_group == ">30s":
             sentry_sdk.set_tag("timeout", "too_long")
-
-        if request is not None:
-            experiments: MutableMapping[str, Any] = request.query.get_experiments()
+        if experiments is not None:
             for name, value in experiments.items():
-                sentry_sdk.set_tag(f"exp-{name}", str(value))
+                sentry_sdk.set_tag(name, str(value))
 
 
 def record_invalid_request(timer: Timer, referrer: Optional[str]) -> None:

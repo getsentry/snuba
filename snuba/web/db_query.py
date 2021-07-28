@@ -476,7 +476,20 @@ def raw_query(
 
                 logger.exception("Error running query: %s\n%s", sql, cause)
             stats = update_with_status(QueryStatus.ERROR)
-        raise QueryException({"stats": stats, "sql": sql}) from cause
+        raise QueryException(
+            {
+                "stats": stats,
+                "sql": sql,
+                "experiments": clickhouse_query.get_experiments(),
+            }
+        ) from cause
     else:
         stats = update_with_status(QueryStatus.SUCCESS)
-        return QueryResult(result, {"stats": stats, "sql": sql})
+        return QueryResult(
+            result,
+            {
+                "stats": stats,
+                "sql": sql,
+                "experiments": clickhouse_query.get_experiments(),
+            },
+        )
