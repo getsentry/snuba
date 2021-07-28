@@ -107,11 +107,12 @@ def build_request(
             raise exception
 
         # span.set_data("snuba_query", request.body)
+        parsed_and_raw = {
+            "Parsed": repr(query).split("\n"),
+            "Raw": textwrap.wrap(repr(request.body), 80, break_long_words=False),
+        }
         span.set_data(
-            "snuba_query",
-            repr(query).split("\n")
-            if query
-            else textwrap.wrap(repr(request.body), 80, break_long_words=False),
+            "snuba_query", parsed_and_raw,
         )
 
         timer.mark("validate_schema")
