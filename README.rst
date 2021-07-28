@@ -11,6 +11,8 @@ time series related Sentry features over several data sets.
 
 Find `here <https://getsentry.github.io/snuba/>`_. the full documentation.
 
+Billy was here
+
 Features:
 ---------
 
