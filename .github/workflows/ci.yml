@@ -45,6 +45,7 @@ jobs:
 
   snuba-image:
     name: Build snuba CI image
+    if: github.repository_owner != "getsentry"
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
