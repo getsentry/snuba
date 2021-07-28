@@ -310,10 +310,13 @@ def sampling_selector_func(query: LogicalQuery, referrer: str) -> Tuple[str, Lis
 
         test_projects_raw = state.get_config("snuplicator-sampling-projects", "")
         test_projects = set()
-        if isinstance(test_projects_raw, str):
+        if (
+            isinstance(test_projects_raw, str) and test_projects_raw != ""
+        ):  # should be in the form [1,2,3]
+            test_projects_raw = test_projects_raw[1:-1]
             test_projects = set(int(p) for p in test_projects_raw.split(",") if p)
         elif isinstance(test_projects_raw, (int, float)):
-            test_projects = set([int(test_projects_raw)])
+            test_projects = {int(test_projects_raw)}
 
         if project_ids.issubset(test_projects):
             sample_query_rate = state.get_config(
