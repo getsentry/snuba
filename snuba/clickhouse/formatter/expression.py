@@ -88,7 +88,12 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             ret_unescaped.append(exp.table_name or "")
             ret.append(".")
             ret_unescaped.append(".")
-        ret.append(escape_identifier(exp.column_name) or "")
+            # If there is a table name and the column name contains a ".",
+            # then we need to escape the column name using alias regex rules
+            # to clearly demarcate the table and columns
+            ret.append(escape_alias(exp.column_name) or "")
+        else:
+            ret.append(escape_identifier(exp.column_name) or "")
         ret_unescaped.append(exp.column_name)
         # De-clutter the output query by not applying an alias to a
         # column if the column name is the same as the alias to make
