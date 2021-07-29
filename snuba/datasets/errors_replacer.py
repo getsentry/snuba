@@ -83,16 +83,16 @@ class Replacement(ReplacementBase):
     def get_project_id(self) -> int:
         raise NotImplementedError()
 
-    def write_every_node(self) -> bool:
+    def should_write_every_node(self) -> bool:
         rollout_setting = get_config("write_node_replacements_projects", "")
         if not rollout_setting:
             return False
 
-        # The expected for mat is [project, project, ...]
+        # The expected for mat is [project,project,...]
         rollout_setting = rollout_setting[1:-1]
         if not rollout_setting:
             return False
-        rolled_out_projects = [int(p) for p in rollout_setting.split(",")]
+        rolled_out_projects = [int(p.strip()) for p in rollout_setting.split(",")]
         if self.get_project_id() not in rolled_out_projects:
             return False
 

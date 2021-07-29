@@ -11,7 +11,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.errors_replacer import NEEDS_FINAL, LegacyReplacement
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.replacer import DistributedTableExecutor, LocalTableExecutor, ReplacerWorker
+from snuba.replacer import QueryNodeExecutor, ReplacerWorker, ShardedExecutor
 from snuba.state import set_config
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
@@ -122,7 +122,7 @@ TEST_CASES = [
     ),
 ]
 
-COUNT_QUERY_TEAMPLATE = "SELECT count() FROM %(table_name)s FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'"
+COUNT_QUERY_TEMPLATE = "SELECT count() FROM %(table_name)s FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'"
 INSERT_QUERY_TEMPLATE = """\
 INSERT INTO %(table_name)s (%(required_columns)s)
 SELECT %(select_columns)s
@@ -160,7 +160,7 @@ def test_write_single_node(
     replacer.flush_batch(
         [
             LegacyReplacement(
-                COUNT_QUERY_TEAMPLATE,
+                COUNT_QUERY_TEMPLATE,
                 INSERT_QUERY_TEMPLATE,
                 FINAL_QUERY_TEMPLATE,
                 (NEEDS_FINAL, 1),
@@ -190,7 +190,7 @@ def test_failing_query(
         replacer.flush_batch(
             [
                 LegacyReplacement(
-                    COUNT_QUERY_TEAMPLATE,
+                    COUNT_QUERY_TEMPLATE,
                     INSERT_QUERY_TEMPLATE,
                     FINAL_QUERY_TEMPLATE,
                     (NEEDS_FINAL, 1),
@@ -302,12 +302,12 @@ def test_local_executor(
         connection.execute_robust(query)
         queries[connection.host].append(query)
 
-    insert_executor = LocalTableExecutor(
+    insert_executor = ShardedExecutor(
         runner=run_query,
         thread_pool=ThreadPoolExecutor(),
         main_connections=connection_pools,
-        main_table="errors_local",
-        backup_executor=DistributedTableExecutor(
+        local_table_name="errors_local",
+        backup_executor=QueryNodeExecutor(
             runner=run_query,
             connection=backup_connection,
             table="errors_dist",
@@ -318,7 +318,7 @@ def test_local_executor(
 
     insert_executor.execute(
         replacement=LegacyReplacement(
-            COUNT_QUERY_TEAMPLATE,
+            COUNT_QUERY_TEMPLATE,
             INSERT_QUERY_TEMPLATE,
             FINAL_QUERY_TEMPLATE,
             (NEEDS_FINAL, 1),

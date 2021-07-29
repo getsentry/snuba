@@ -25,7 +25,7 @@ class Replacement(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def write_every_node(self) -> bool:
+    def should_write_every_node(self) -> bool:
         raise NotImplementedError()
 
 

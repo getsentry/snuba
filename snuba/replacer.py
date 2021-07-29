@@ -44,9 +44,12 @@ class InsertExecutor(ABC):
 RunQuery = Callable[[ClickhousePool, str, int, MetricsBackend], None]
 
 
-class DistributedTableExecutor(InsertExecutor):
+class QueryNodeExecutor(InsertExecutor):
     """
-    InsertExecutor that runs one query only on a distributed table.
+    InsertExecutor that runs one query only on the main query node
+    in the cluster. The query can be on a distributed table if the
+    cluster has multiple nodes or on a local table if the cluster
+    has one node only.
     This relies on Clickhouse to forward the replacement query to
     each storage node.
     """
@@ -71,7 +74,7 @@ class DistributedTableExecutor(InsertExecutor):
         return records_count
 
 
-class LocalTableExecutor(InsertExecutor):
+class ShardedExecutor(InsertExecutor):
     """
     Executes a replacement query on each individual shard in parallel.
 
@@ -85,13 +88,13 @@ class LocalTableExecutor(InsertExecutor):
         runner: RunQuery,
         thread_pool: ThreadPoolExecutor,
         main_connections: Mapping[int, Sequence[ClickhousePool]],
-        main_table: str,
+        local_table_name: str,
         backup_executor: InsertExecutor,
         metrics: MetricsBackend,
     ) -> None:
         self.__thread_pool = thread_pool
         self.__main_connections = main_connections
-        self.__main_table = main_table
+        self.__local_table_name = local_table_name
         self.__backup_executor = backup_executor
         self.__metrics = metrics
         self.__runner = runner
@@ -107,12 +110,17 @@ class LocalTableExecutor(InsertExecutor):
         Makes multiple attempts to run the query.
         One per connection provided.
         """
-        for attempt in range(len(connections)):
+        for remaining_attempts in range(len(connections), 0, -1):
             try:
-                self.__runner(connections[attempt], query, records_count, metrics)
+                self.__runner(
+                    connections[len(connections) - remaining_attempts],
+                    query,
+                    records_count,
+                    metrics,
+                )
                 return
             except Exception as e:
-                if attempt == len(connections) - 1:
+                if remaining_attempts == 1:
                     raise
                 logger.warning(
                     "Replacement processing failed on the main connection", exc_info=e,
@@ -120,7 +128,7 @@ class LocalTableExecutor(InsertExecutor):
 
     def execute(self, replacement: Replacement, records_count: int) -> int:
         try:
-            query = replacement.get_insert_query(self.__main_table)
+            query = replacement.get_insert_query(self.__local_table_name)
             if query is None:
                 return 0
             result_futures = []
@@ -175,7 +183,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
         This returns the InsertExecutor that implements the appropriate
         policy for the replacement provided. So it can return either a basic
-        DistributedExecutor or a LocalTableExecutor to write on each storage
+        DistributedExecutor or a ShardedExecutor to write on each storage
         node.
         """
 
@@ -206,14 +214,15 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         query_connection = cluster.get_query_connection(
             ClickhouseClientSettings.REPLACE
         )
-        write_every_node = replacement.write_every_node()
+        write_every_node = replacement.should_write_every_node()
+        query_node_executor = QueryNodeExecutor(
+            runner=run_query,
+            connection=query_connection,
+            table=query_table_name,
+            metrics=self.metrics,
+        )
         if not write_every_node or cluster.is_single_node():
-            return DistributedTableExecutor(
-                runner=run_query,
-                connection=query_connection,
-                table=query_table_name,
-                metrics=self.metrics,
-            )
+            return query_node_executor
 
         nodes = self.__storage.get_cluster().get_local_nodes()
         connection_pools: MutableMapping[int, List[ClickhousePool]] = defaultdict(list)
@@ -229,17 +238,12 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
                         cluster.get_node_connection(ClickhouseClientSettings.REPLACE, n)
                     )
 
-        return LocalTableExecutor(
+        return ShardedExecutor(
             runner=run_query,
             thread_pool=executor,
             main_connections=connection_pools,
-            main_table=local_table_name,
-            backup_executor=DistributedTableExecutor(
-                runner=run_query,
-                connection=query_connection,
-                table=query_table_name,
-                metrics=self.metrics,
-            ),
+            local_table_name=local_table_name,
+            backup_executor=query_node_executor,
             metrics=self.metrics,
         )
 
