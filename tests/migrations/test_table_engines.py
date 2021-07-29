@@ -11,8 +11,6 @@ single_node_cluster = ClickhouseCluster(
     password="",
     database="default",
     http_port=8123,
-    secure=False,
-    ca_certs=None,
     storage_sets={"events"},
     single_node=True,
 )
@@ -24,8 +22,6 @@ multi_node_cluster = ClickhouseCluster(
     password="",
     database="default",
     http_port=8123,
-    secure=False,
-    ca_certs=None,
     storage_sets={"events"},
     single_node=False,
     cluster_name="cluster_1",

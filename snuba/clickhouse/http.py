@@ -9,7 +9,7 @@ from typing import Any, Sequence, cast, Iterable, Iterator, Mapping, Optional, U
 from urllib.parse import urlencode
 
 import rapidjson
-from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
+from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
 
 from snuba import settings
@@ -204,8 +204,6 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         port: int,
         user: str,
         password: str,
-        secure: bool,
-        ca_certs: Optional[str],
         metrics: MetricsBackend,  # deprecated
         statement: InsertStatement,
         encoding: Optional[str],
@@ -213,10 +211,7 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         chunk_size: Optional[int] = None,
         buffer_size: int = 0,
     ):
-        if secure:
-            self.__pool = HTTPSConnectionPool(host, port, ca_certs=ca_certs)
-        else:
-            self.__pool = HTTPConnectionPool(host, port)
+        self.__pool = HTTPConnectionPool(host, port)
         self.__executor = ThreadPoolExecutor()
 
         self.__options = options if options is not None else {}
