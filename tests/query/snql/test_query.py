@@ -1556,6 +1556,68 @@ test_cases = [
         ),
         id="Escaping not newlines cases",
     ),
+    pytest.param(
+        f"""MATCH (discover_events)
+        SELECT transaction_name AS tn, tags[release] AS tr, contexts[trace_id] AS cti
+        WHERE {added_condition}
+        """,
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.DISCOVER_EVENTS,
+                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "tn", Column("_snuba_transaction_name", None, "transaction_name")
+                ),
+                SelectedExpression(
+                    "tr",
+                    SubscriptableReference(
+                        "_snuba_tags[release]",
+                        Column("_snuba_tags", None, "tags"),
+                        Literal(None, "release"),
+                    ),
+                ),
+                SelectedExpression(
+                    "cti",
+                    SubscriptableReference(
+                        "_snuba_contexts[trace_id]",
+                        Column("_snuba_contexts", None, "contexts"),
+                        Literal(None, "trace_id"),
+                    ),
+                ),
+            ],
+            limit=1000,
+            condition=required_condition,
+            offset=0,
+        ),
+        id="aliased columns in select",
+    ),
+    pytest.param(
+        f"""MATCH (discover_events)
+        SELECT count() AS count BY transaction_name AS tn
+        WHERE {added_condition}
+        """,
+        LogicalQuery(
+            QueryEntity(
+                EntityKey.DISCOVER_EVENTS,
+                get_entity(EntityKey.DISCOVER_EVENTS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "tn", Column("_snuba_transaction_name", None, "transaction_name")
+                ),
+                SelectedExpression(
+                    "count", FunctionCall("_snuba_count", "count", tuple()),
+                ),
+            ],
+            groupby=[Column("_snuba_transaction_name", None, "transaction_name")],
+            limit=1000,
+            condition=required_condition,
+            offset=0,
+        ),
+        id="aliased columns in select and group by",
+    ),
 ]
 
 

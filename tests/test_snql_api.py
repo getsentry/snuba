@@ -460,3 +460,30 @@ class TestSnQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert len(data["data"]) == 1
         assert "equation[0]" in data["data"][0]
+
+    def test_alias_columns_in_output(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT transaction AS tn, count() AS equation[0]
+                    BY project_id AS pi, transaction AS tn
+                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN tuple({self.project_id})
+                    """,
+                }
+            ),
+        )
+        assert response.status_code == 200
+
+        data = json.loads(response.data)
+        assert len(data["data"]) == 1
+        assert "equation[0]" in data["data"][0]
+        assert "tn" in data["data"][0]
+        assert "pi" in data["data"][0]
+        assert len(data["meta"]) == 3
+        assert data["meta"][0] == {"name": "pi", "type": "UInt64"}
+        assert data["meta"][1] == {"name": "tn", "type": "LowCardinality(String)"}
+        assert data["meta"][2] == {"name": "equation[0]", "type": "UInt64"}
