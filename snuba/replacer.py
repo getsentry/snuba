@@ -23,7 +23,7 @@ logger = logging.getLogger("snuba.replacer")
 
 executor = ThreadPoolExecutor()
 
-NODES_REFRESH_PERIOD = 10000
+NODES_REFRESH_PERIOD = 10
 
 
 class InsertExecutor(ABC):
