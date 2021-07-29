@@ -141,13 +141,20 @@ def test_new_formatter():
             )
         ],
     )
-    print("=" * 100)
-    print(format_query(q))
-    print("=" * 100)
+    from pprint import pprint
+    print("=" * 10)
+    pprint(format_query(q))
+    # print("\n".join(format_query(q)))
+    print("=" * 10)
 
 
 @pytest.mark.parametrize("query, formatted", TEST_JOIN)
 def test_query_formatter(
     query: Union[LogicalQuery, CompositeQuery[Entity]], formatted: TExpression
 ) -> None:
-    assert format_query(query) == formatted
+    from pprint import pprint
+    print("=" * 10, "\n")
+    pprint(format_query(query))
+    # print("\n".join(format_query(query)))
+    print("=" * 10, "\n")
+    # assert format_query(query) == formatted

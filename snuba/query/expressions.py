@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from datetime import date, datetime
-from typing import Callable, Generic, Iterator, Optional, Tuple, TypeVar, Union
+from typing import Callable, Generic, Iterator, Optional, Tuple, TypeVar, Union, List
 
 TVisited = TypeVar("TVisited")
 
@@ -110,7 +110,7 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
         raise NotImplementedError
 
 
-class StringifyVisitor(ExpressionVisitor[str]):
+class StringifyVisitor(ExpressionVisitor[List[str]]):
     """Visitor implementation to turn an expression into a string format
 
     Usage:
@@ -121,7 +121,7 @@ class StringifyVisitor(ExpressionVisitor[str]):
     """
 
     def __init__(
-        self, level: int = 0, start_line: bool = False, initial_indent: int = 0
+        self, level: int = 0, initial_indent: int = 0
     ) -> None:
         # keeps track of the level of the AST we are currently in,
         # this is necessary for nice indentation
@@ -130,8 +130,6 @@ class StringifyVisitor(ExpressionVisitor[str]):
         # decrement it after the recursion is done
         self.__initial_indent = initial_indent
         self.__level = level
-        # should the repr start with a newline?
-        self.__start_line = start_line
 
     def _get_line_prefix(self) -> str:
         # every line in the tree needs to be indented based on the tree level
