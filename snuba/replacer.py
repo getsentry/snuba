@@ -13,7 +13,7 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies.batching import AbstractBatchWorker
 
 from snuba.clickhouse.native import ClickhousePool
-from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseNode
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
 from snuba.replacers.replacer_processor import Replacement, ReplacementMessage
@@ -22,6 +22,8 @@ from snuba.utils.metrics import MetricsBackend
 logger = logging.getLogger("snuba.replacer")
 
 executor = ThreadPoolExecutor()
+
+NODES_REFRESH_PERIOD = 10000
 
 
 class InsertExecutor(ABC):
@@ -170,6 +172,9 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         self.__replacer_processor = processor
         self.__database_name = storage.get_cluster().get_database()
 
+        self.__nodes: Sequence[ClickhouseNode] = []
+        self.__nodes_refreshed_at = time.time()
+
     def __get_insert_executor(self, replacement: Replacement) -> InsertExecutor:
         """
         Some replacements need to be executed on each storage node of the
@@ -224,14 +229,17 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         if not write_every_node or cluster.is_single_node():
             return query_node_executor
 
-        nodes = self.__storage.get_cluster().get_local_nodes()
+        now = time.time()
+        if not self.__nodes or now - self.__nodes_refreshed_at > NODES_REFRESH_PERIOD:
+            self.__nodes = self.__storage.get_cluster().get_local_nodes()
+            self.__nodes_refreshed_at = now
         connection_pools: MutableMapping[int, List[ClickhousePool]] = defaultdict(list)
 
         # We pick up to three replicas per shard. The order will be the
         # one provided by the get_local_nodes. For the correctness the order
         # in which these nodes are tried does not matter.
         # TODO: Consider reshuffling the nodes before building the executor.
-        for n in nodes:
+        for n in self.__nodes:
             if n.replica is not None and n.shard is not None:
                 if len(connection_pools[n.shard]) < 3:
                     connection_pools[n.shard].append(
