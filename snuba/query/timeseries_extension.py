@@ -16,7 +16,6 @@ from snuba.util import parse_datetime
 from snuba.utils.metrics.decorators import track_calls
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
-
 timeseries_metrics = MetricsWrapper(environment.metrics, "extensions.timeseries")
 
 

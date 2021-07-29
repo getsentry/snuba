@@ -1,7 +1,6 @@
 import pytest
 
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
-from snuba.query.formatters.tracing import TracingExpressionFormatter, TExpression
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
@@ -16,6 +15,7 @@ from snuba.query.expressions import (
     Lambda,
     Literal,
 )
+from snuba.query.formatters.tracing import TExpression, TracingExpressionFormatter
 from snuba.query.parsing import ParsingContext
 
 test_expressions = [
@@ -236,7 +236,7 @@ def test_aliases() -> None:
 test_escaped = [
     (
         Column(None, "table.something", "tags.values"),
-        "table.something.tags.values",
+        "table.something.`tags.values`",
     ),  # Columns with dot are not escaped
     (
         Column(None, "weird_!@#$%^^&*_table", "tags[something]"),
@@ -244,12 +244,20 @@ test_escaped = [
     ),  # Somebody thought that table name was a good idea.
     (
         Column("alias.cannot.have.dot", "table", "columns.can"),
-        "(table.columns.can AS `alias.cannot.have.dot`)",
+        "(table.`columns.can` AS `alias.cannot.have.dot`)",
     ),  # Escaping is different between columns and aliases
     (
         FunctionCall(None, "f*&^%$#unction", (Column(None, "table", "column"),)),
         "`f*&^%$#unction`(table.column)",
     ),  # Function names can be escaped. Hopefully it will never happen
+    (
+        Column(
+            alias="_snuba_group_id",
+            table_name="groups",
+            column_name="_snuba_groups.group_id",
+        ),
+        "(groups.`_snuba_groups.group_id` AS _snuba_group_id)",
+    ),  # Aliased column names with dot are escaped if there's an exising table name
 ]
 
 
