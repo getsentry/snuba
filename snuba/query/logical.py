@@ -63,6 +63,11 @@ class Query(AbstractQuery[Entity]):
             granularity=granularity,
         )
 
+    def __repr__(self) -> str:
+        from snuba.query.formatters.tracing import format_query
+
+        return "\n".join(format_query(self))
+
     def get_final(self) -> bool:
         return self.__final
 

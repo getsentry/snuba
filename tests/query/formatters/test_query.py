@@ -118,13 +118,6 @@ TEST_JOIN = [
 
 
 def test_new_formatter():
-
-    """
-    SELECT
-      c1, ev.c AS `_snuba_c1`
-      f1, f(
-        ev.c2
-      ) AS `_snuba_f1`"""
     q = CompositeQuery(
         from_clause=BASIC_JOIN,
         selected_columns=[
@@ -152,9 +145,9 @@ def test_new_formatter():
 def test_query_formatter(
     query: Union[LogicalQuery, CompositeQuery[Entity]], formatted: TExpression
 ) -> None:
-    from pprint import pprint
-    print("=" * 10, "\n")
-    pprint(format_query(query))
+    print(query)
+    # print("=" * 10, "\n")
     # print("\n".join(format_query(query)))
-    print("=" * 10, "\n")
+    # # print("\n".join(format_query(query)))
+    # print("=" * 10, "\n")
     # assert format_query(query) == formatted
