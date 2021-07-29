@@ -13,7 +13,11 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies.batching import AbstractBatchWorker
 
 from snuba.clickhouse.native import ClickhousePool
-from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseNode
+from snuba.clusters.cluster import (
+    ClickhouseClientSettings,
+    ClickhouseCluster,
+    ClickhouseNode,
+)
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
 from snuba.replacers.replacer_processor import Replacement, ReplacementMessage
@@ -89,13 +93,15 @@ class ShardedExecutor(InsertExecutor):
         self,
         runner: RunQuery,
         thread_pool: ThreadPoolExecutor,
-        main_connections: Mapping[int, Sequence[ClickhousePool]],
+        cluster: ClickhouseCluster,
+        main_nodes: Mapping[int, Sequence[ClickhouseNode]],
         local_table_name: str,
         backup_executor: InsertExecutor,
         metrics: MetricsBackend,
     ) -> None:
         self.__thread_pool = thread_pool
-        self.__main_connections = main_connections
+        self.__cluster = cluster
+        self.__main_nodes = main_nodes
         self.__local_table_name = local_table_name
         self.__backup_executor = backup_executor
         self.__metrics = metrics
@@ -103,7 +109,7 @@ class ShardedExecutor(InsertExecutor):
 
     def __run_multiple_replicas(
         self,
-        connections: Sequence[ClickhousePool],
+        nodes: Sequence[ClickhouseNode],
         query: str,
         records_count: int,
         metrics: MetricsBackend,
@@ -112,13 +118,14 @@ class ShardedExecutor(InsertExecutor):
         Makes multiple attempts to run the query.
         One per connection provided.
         """
-        for remaining_attempts in range(len(connections), 0, -1):
+        for remaining_attempts in range(len(nodes), 0, -1):
             try:
+                connection = self.__cluster.get_node_connection(
+                    ClickhouseClientSettings.REPLACE,
+                    nodes[len(nodes) - remaining_attempts],
+                )
                 self.__runner(
-                    connections[len(connections) - remaining_attempts],
-                    query,
-                    records_count,
-                    metrics,
+                    connection, query, records_count, metrics,
                 )
                 return
             except Exception as e:
@@ -134,12 +141,12 @@ class ShardedExecutor(InsertExecutor):
             if query is None:
                 return 0
             result_futures = []
-            for connections in self.__main_connections.values():
+            for nodes in self.__main_nodes.values():
                 result_futures.append(
                     self.__thread_pool.submit(
                         partial(
                             self.__run_multiple_replicas,
-                            connections=connections,
+                            nodes=nodes,
                             query=query,
                             records_count=records_count,
                             metrics=self.__metrics,
@@ -233,7 +240,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         if not self.__nodes or now - self.__nodes_refreshed_at > NODES_REFRESH_PERIOD:
             self.__nodes = self.__storage.get_cluster().get_local_nodes()
             self.__nodes_refreshed_at = now
-        connection_pools: MutableMapping[int, List[ClickhousePool]] = defaultdict(list)
+        nodes: MutableMapping[int, List[ClickhouseNode]] = defaultdict(list)
 
         # We pick up to three replicas per shard. The order will be the
         # one provided by the get_local_nodes. For the correctness the order
@@ -241,15 +248,14 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         # TODO: Consider reshuffling the nodes before building the executor.
         for n in self.__nodes:
             if n.replica is not None and n.shard is not None:
-                if len(connection_pools[n.shard]) < 3:
-                    connection_pools[n.shard].append(
-                        cluster.get_node_connection(ClickhouseClientSettings.REPLACE, n)
-                    )
+                if len(nodes[n.shard]) < 3:
+                    nodes[n.shard].append(n)
 
         return ShardedExecutor(
             runner=run_query,
+            cluster=cluster,
             thread_pool=executor,
-            main_connections=connection_pools,
+            main_nodes=nodes,
             local_table_name=local_table_name,
             backup_executor=query_node_executor,
             metrics=self.metrics,

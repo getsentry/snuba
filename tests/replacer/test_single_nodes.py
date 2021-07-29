@@ -1,6 +1,6 @@
 from collections import defaultdict
 from concurrent.futures.thread import ThreadPoolExecutor
-from typing import Callable, Generator, List, Mapping, MutableMapping, Sequence
+from typing import Callable, Generator, List, Mapping, MutableMapping, Sequence, Tuple
 
 import pytest
 
@@ -18,7 +18,6 @@ from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.clusters.fake_cluster import (
     FakeClickhouseCluster,
     FakeClickhousePool,
-    FakeFailingClickhousePool,
     ServerExplodedException,
 )
 
@@ -36,14 +35,14 @@ def _build_cluster(healthy: bool = True) -> FakeClickhouseCluster:
         cluster_name="my_cluster",
         distributed_cluster_name="my_distributed_cluster",
         nodes=[
-            ClickhouseNode("storage-0-0", 9000, 1, 1),
-            ClickhouseNode("storage-0-1", 9000, 1, 2),
-            ClickhouseNode("storage-1-0", 9000, 2, 1),
-            ClickhouseNode("storage-1-1", 9000, 2, 2),
-            ClickhouseNode("storage-2-0", 9000, 3, 1),
-            ClickhouseNode("storage-2-1", 9000, 3, 2),
+            (ClickhouseNode("query_node", 9000, None, None), healthy),
+            (ClickhouseNode("storage-0-0", 9000, 1, 1), healthy),
+            (ClickhouseNode("storage-0-1", 9000, 1, 2), healthy),
+            (ClickhouseNode("storage-1-0", 9000, 2, 1), healthy),
+            (ClickhouseNode("storage-1-1", 9000, 2, 2), healthy),
+            (ClickhouseNode("storage-2-0", 9000, 3, 1), healthy),
+            (ClickhouseNode("storage-2-1", 9000, 3, 2), healthy),
         ],
-        healthy=healthy,
     )
 
 
@@ -90,11 +89,8 @@ TEST_CASES = [
                 "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
             ],
             "storage-0-0": [LOCAL_QUERY],
-            "storage-0-1": [],
             "storage-1-0": [LOCAL_QUERY],
-            "storage-1-1": [],
             "storage-2-0": [LOCAL_QUERY],
-            "storage-2-1": [],
         },
         id="Replacements through storage nodes",
     ),
@@ -201,16 +197,16 @@ def test_failing_query(
 
 TEST_LOCAL_EXECUTOR = [
     pytest.param(
-        {1: [FakeClickhousePool("snuba-errors-0-0")]},
+        {1: [(ClickhouseNode("snuba-errors-0-0", 9000, 1, 1), True)]},
         FakeClickhousePool("snuba-query"),
         {"snuba-errors-0-0": [LOCAL_QUERY]},
         id="1 Node successful query",
     ),
     pytest.param(
         {
-            1: [FakeClickhousePool("snuba-errors-0-0")],
-            2: [FakeClickhousePool("snuba-errors-1-0")],
-            3: [FakeClickhousePool("snuba-errors-2-0")],
+            1: [(ClickhouseNode("snuba-errors-0-0", 9000, 1, 1), True)],
+            2: [(ClickhouseNode("snuba-errors-1-0", 9000, 2, 1), True)],
+            3: [(ClickhouseNode("snuba-errors-2-0", 9000, 3, 1), True)],
         },
         FakeClickhousePool("snuba-query"),
         {
@@ -223,8 +219,8 @@ TEST_LOCAL_EXECUTOR = [
     pytest.param(
         {
             1: [
-                FakeClickhousePool("snuba-errors-0-0"),
-                FakeClickhousePool("snuba-errors-0-1"),
+                (ClickhouseNode("snuba-errors-0-0", 9000, 1, 1), True),
+                (ClickhouseNode("snuba-errors-0-1", 9000, 1, 2), True),
             ]
         },
         FakeClickhousePool("snuba-query"),
@@ -234,8 +230,8 @@ TEST_LOCAL_EXECUTOR = [
     pytest.param(
         {
             1: [
-                FakeFailingClickhousePool("snuba-errors-0-0"),
-                FakeClickhousePool("snuba-errors-0-1"),
+                (ClickhouseNode("snuba-errors-0-0", 9000, 1, 1), False),
+                (ClickhouseNode("snuba-errors-0-1", 9000, 1, 2), True),
             ]
         },
         FakeClickhousePool("snuba-query"),
@@ -245,12 +241,12 @@ TEST_LOCAL_EXECUTOR = [
     pytest.param(
         {
             1: [
-                FakeFailingClickhousePool("snuba-errors-0-0"),
-                FakeClickhousePool("snuba-errors-0-1"),
+                (ClickhouseNode("snuba-errors-0-0", 9000, 1, 1), False),
+                (ClickhouseNode("snuba-errors-0-1", 9000, 1, 2), True),
             ],
             2: [
-                FakeClickhousePool("snuba-errors-1-0"),
-                FakeFailingClickhousePool("snuba-errors-1-1"),
+                (ClickhouseNode("snuba-errors-1-0", 9000, 2, 1), True),
+                (ClickhouseNode("snuba-errors-1-1", 9000, 2, 2), False),
             ],
         },
         FakeClickhousePool("snuba-query"),
@@ -260,8 +256,8 @@ TEST_LOCAL_EXECUTOR = [
     pytest.param(
         {
             1: [
-                FakeFailingClickhousePool("snuba-errors-0-0"),
-                FakeFailingClickhousePool("snuba-errors-0-1"),
+                (ClickhouseNode("snuba-errors-0-0", 9000, 1, 1), False),
+                (ClickhouseNode("snuba-errors-0-1", 9000, 1, 2), False),
             ]
         },
         FakeClickhousePool("snuba-query"),
@@ -271,10 +267,10 @@ TEST_LOCAL_EXECUTOR = [
     pytest.param(
         {
             1: [
-                FakeFailingClickhousePool("snuba-errors-0-0"),
-                FakeFailingClickhousePool("snuba-errors-0-1"),
+                (ClickhouseNode("snuba-errors-0-0", 9000, 1, 1), False),
+                (ClickhouseNode("snuba-errors-0-1", 9000, 1, 2), False),
             ],
-            2: [FakeClickhousePool("snuba-errors-1-0")],
+            2: [(ClickhouseNode("snuba-errors-1-0", 9000, 2, 1), True)],
         },
         FakeClickhousePool("snuba-query"),
         {"snuba-errors-1-0": [LOCAL_QUERY], "snuba-query": [DIST_QUERY]},
@@ -284,10 +280,10 @@ TEST_LOCAL_EXECUTOR = [
 
 
 @pytest.mark.parametrize(
-    "connection_pools, backup_connection, expected_queries", TEST_LOCAL_EXECUTOR
+    "nodes, backup_connection, expected_queries", TEST_LOCAL_EXECUTOR
 )
 def test_local_executor(
-    connection_pools: Mapping[int, Sequence[ClickhousePool]],
+    nodes: Mapping[int, Sequence[Tuple[ClickhouseNode, bool]]],
     backup_connection: ClickhousePool,
     expected_queries: Mapping[str, Sequence[str]],
 ) -> None:
@@ -302,10 +298,27 @@ def test_local_executor(
         connection.execute_robust(query)
         queries[connection.host].append(query)
 
+    all_nodes: List[Tuple[ClickhouseNode, bool]] = []
+    for shard_nodes in nodes.values():
+        all_nodes.extend(shard_nodes)
+
     insert_executor = ShardedExecutor(
+        cluster=FakeClickhouseCluster(
+            host="query_node",
+            port=9000,
+            user="default",
+            password="",
+            database="default",
+            http_port=8123,
+            storage_sets={"events"},
+            single_node=False,
+            cluster_name="my_cluster",
+            distributed_cluster_name="my_distributed_cluster",
+            nodes=all_nodes,
+        ),
         runner=run_query,
         thread_pool=ThreadPoolExecutor(),
-        main_connections=connection_pools,
+        main_nodes={shard: [n[0] for n in nodes] for shard, nodes in nodes.items()},
         local_table_name="errors_local",
         backup_executor=QueryNodeExecutor(
             runner=run_query,

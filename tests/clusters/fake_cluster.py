@@ -69,8 +69,7 @@ class FakeClickhouseCluster(ClickhouseCluster):
         # The cluster name and distributed cluster name only apply if single_node is set to False
         cluster_name: Optional[str] = None,
         distributed_cluster_name: Optional[str] = None,
-        nodes: Optional[Sequence[ClickhouseNode]] = None,
-        healthy: bool = True,
+        nodes: Optional[Sequence[Tuple[ClickhouseNode, bool]]] = None,
     ):
         super().__init__(
             host=host,
@@ -86,8 +85,7 @@ class FakeClickhouseCluster(ClickhouseCluster):
         )
         self.__distributed_cluster_name = distributed_cluster_name
         self.__cluster_name = cluster_name
-        self.__nodes = nodes or []
-        self.__healthy = healthy
+        self.__nodes = {node: healthy for node, healthy in nodes} if nodes else {}
         self.__connections: MutableMapping[
             Tuple[ClickhouseNode, ClickhouseClientSettings], FakeClickhousePool
         ] = {}
@@ -106,7 +104,7 @@ class FakeClickhouseCluster(ClickhouseCluster):
             return [self.__query_node]
 
         assert self.__cluster_name is not None, "cluster_name must be set"
-        return self.__nodes
+        return list(self.__nodes.keys())
 
     def get_distributed_nodes(self) -> Sequence[ClickhouseNode]:
         if self.is_single_node():
@@ -114,7 +112,7 @@ class FakeClickhouseCluster(ClickhouseCluster):
         assert (
             self.__distributed_cluster_name is not None
         ), "distributed_cluster_name must be set"
-        return self.__nodes
+        return list(self.__nodes.keys())
 
     def get_node_connection(
         self, client_settings: ClickhouseClientSettings, node: ClickhouseNode,
@@ -124,7 +122,7 @@ class FakeClickhouseCluster(ClickhouseCluster):
         if cache_key not in self.__connections:
             self.__connections[cache_key] = (
                 FakeClickhousePool(node.host_name)
-                if self.__healthy
+                if self.__nodes[node]
                 else FakeFailingClickhousePool(node.host_name)
             )
         return self.__connections[cache_key]
