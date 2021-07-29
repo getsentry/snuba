@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import random
 import time
 import uuid
 from abc import abstractmethod
@@ -84,19 +85,23 @@ class Replacement(ReplacementBase):
         raise NotImplementedError()
 
     def should_write_every_node(self) -> bool:
-        rollout_setting = get_config("write_node_replacements_projects", "")
-        if not rollout_setting:
-            return False
+        project_rollout_setting = get_config("write_node_replacements_projects", "")
+        if project_rollout_setting:
+            # The expected for mat is [project,project,...]
+            project_rollout_setting = project_rollout_setting[1:-1]
+            if project_rollout_setting:
+                rolled_out_projects = [
+                    int(p.strip()) for p in project_rollout_setting.split(",")
+                ]
+                if self.get_project_id() in rolled_out_projects:
+                    return True
 
-        # The expected for mat is [project,project,...]
-        rollout_setting = rollout_setting[1:-1]
-        if not rollout_setting:
-            return False
-        rolled_out_projects = [int(p.strip()) for p in rollout_setting.split(",")]
-        if self.get_project_id() not in rolled_out_projects:
-            return False
+        global_rollout_setting = get_config("write_node_replacements_global", 0.0)
+        assert isinstance(global_rollout_setting, float)
+        if random.random() < global_rollout_setting:
+            return True
 
-        return True
+        return False
 
 
 EXCLUDE_GROUPS = object()
