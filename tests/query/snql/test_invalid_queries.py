@@ -75,6 +75,11 @@ test_cases = [
         "missing >= condition on column timestamp for entity events",
         id="subquery missing required conditions",
     ),
+    pytest.param(
+        "MATCH (events) SELECT 3*g(c) AS gc, c AS d BY d WHERE project_id = 1 AND timestamp >= toDateTime('2021-01-01') AND timestamp < toDateTime('2021-01-02')  ORDER BY f AS g DESC",
+        "Parsing error on line 1 at '  ORDER BY f '",
+        id="aliases are only in the select",
+    ),
 ]
 
 
