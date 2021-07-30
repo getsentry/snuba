@@ -193,26 +193,12 @@ def reverse(
     required=True,
     default=os.environ.get("CLICKHOUSE_DATABASE", "default"),
 )
-@click.option(
-    "--secure",
-    type=bool,
-    default=False,
-    help="If true, an encrypted connection will be used",
-)
-@click.option(
-    "--ca-certs",
-    type=str,
-    default=None,
-    help="An optional path to certificates directory.",
-)
 def add_node(
     node_type: str,
     storage_set_names: Sequence[str],
     host_name: str,
     port: int,
     database: str,
-    secure: bool,
-    ca_certs: Optional[str],
 ) -> None:
     """
     Runs all migrations on a brand new ClickHouse node. This should be performed
@@ -253,6 +239,4 @@ def add_node(
         user=user,
         password=password,
         database=database,
-        secure=secure,
-        ca_certs=ca_certs,
     )

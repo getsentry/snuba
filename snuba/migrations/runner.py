@@ -378,8 +378,6 @@ class Runner:
         user: str,
         password: str,
         database: str,
-        secure: bool = False,
-        ca_certs: Optional[str] = None,
     ) -> None:
         client_settings = ClickhouseClientSettings.MIGRATE.value
         clickhouse = ClickhousePool(
@@ -388,8 +386,6 @@ class Runner:
             user,
             password,
             database,
-            secure,
-            ca_certs,
             client_settings=client_settings.settings,
             send_receive_timeout=client_settings.timeout,
         )
