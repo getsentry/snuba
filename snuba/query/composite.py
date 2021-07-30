@@ -62,12 +62,6 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
         )
         self.__from_clause = from_clause
 
-    def __repr__(self) -> str:
-        from snuba.query.formatters.tracing import format_query
-
-        return "\n".join(format_query(self))
-
-
     def get_from_clause(
         self,
     ) -> Union[
