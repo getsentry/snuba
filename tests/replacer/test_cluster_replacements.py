@@ -135,7 +135,7 @@ FINAL_QUERY_TEMPLATE = {
 @pytest.mark.parametrize(
     "override_fixture, write_node_replacements_projects, expected_queries", TEST_CASES
 )
-def test_write_single_node(
+def test_write_each_node(
     override_fixture: Callable[[bool], FakeClickhouseCluster],
     write_node_replacements_projects: str,
     expected_queries: Mapping[str, Sequence[str]],
