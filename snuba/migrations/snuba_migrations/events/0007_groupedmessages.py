@@ -30,11 +30,11 @@ class Migration(migration.ClickhouseNodeMigration):
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
-                storage_set=StorageSetKey.EVENTS,
+                storage_set=StorageSetKey.CDC,
                 table_name="groupedmessage_local",
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    storage_set=StorageSetKey.EVENTS,
+                    storage_set=StorageSetKey.CDC,
                     version_column="offset",
                     order_by="(project_id, id)",
                     sample_by="id",
@@ -46,14 +46,14 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.EVENTS, table_name="groupedmessage_local",
+                storage_set=StorageSetKey.CDC, table_name="groupedmessage_local",
             )
         ]
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
-                storage_set=StorageSetKey.EVENTS,
+                storage_set=StorageSetKey.CDC,
                 table_name="groupedmessage_dist",
                 columns=columns,
                 engine=table_engines.Distributed(
@@ -65,6 +65,6 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.EVENTS, table_name="groupedmessage_dist",
+                storage_set=StorageSetKey.CDC, table_name="groupedmessage_dist",
             )
         ]

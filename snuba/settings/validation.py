@@ -1,4 +1,4 @@
-from typing import Any, Mapping
+from typing import Any, Mapping, MutableMapping
 
 
 def _validate_settings(locals: Mapping[str, Any]) -> None:
@@ -39,3 +39,31 @@ def _validate_settings(locals: Mapping[str, Any]) -> None:
     for key in locals["KAFKA_BROKER_CONFIG"].keys():
         if key not in topic_names:
             raise ValueError(f"Invalid topic value {key}")
+
+    # Validate cluster configuration
+    from snuba.clusters.storage_sets import STORAGE_SET_GROUPS, StorageSetKey
+
+    storage_set_to_cluster: MutableMapping[StorageSetKey, Any] = {}
+
+    for cluster in locals["CLUSTERS"]:
+        for cluster_storage_set in cluster["storage_sets"]:
+            storage_set_to_cluster[StorageSetKey(cluster_storage_set)] = cluster
+
+    for group in STORAGE_SET_GROUPS:
+        first = storage_set_to_cluster[group[0]]
+        for storage_set in group[1:]:
+            current = storage_set_to_cluster[storage_set]
+            if first != current:
+                for property in [
+                    "host",
+                    "port",
+                    "user",
+                    "password",
+                    "database",
+                    "http_port",
+                    "single_node",
+                    "distributed_cluster_name",
+                ]:
+                    assert first.get(property) == current.get(
+                        property
+                    ), f"Invalid {property}"
