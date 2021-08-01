@@ -11,7 +11,12 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.errors_replacer import NEEDS_FINAL, LegacyReplacement
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.replacer import QueryNodeExecutor, ReplacerWorker, ShardedExecutor
+from snuba.replacer import (
+    QueryNodeExecutor,
+    ReplacerWorker,
+    RoundRobinConnectionPool,
+    ShardedExecutor,
+)
 from snuba.state import set_config
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
@@ -302,23 +307,24 @@ def test_local_executor(
     for shard_nodes in nodes.values():
         all_nodes.extend(shard_nodes)
 
+    cluster = FakeClickhouseCluster(
+        host="query_node",
+        port=9000,
+        user="default",
+        password="",
+        database="default",
+        http_port=8123,
+        storage_sets={"events"},
+        single_node=False,
+        cluster_name="my_cluster",
+        distributed_cluster_name="my_distributed_cluster",
+        nodes=all_nodes,
+    )
     insert_executor = ShardedExecutor(
-        cluster=FakeClickhouseCluster(
-            host="query_node",
-            port=9000,
-            user="default",
-            password="",
-            database="default",
-            http_port=8123,
-            storage_sets={"events"},
-            single_node=False,
-            cluster_name="my_cluster",
-            distributed_cluster_name="my_distributed_cluster",
-            nodes=all_nodes,
-        ),
+        cluster=cluster,
         runner=run_query,
         thread_pool=ThreadPoolExecutor(),
-        main_nodes={shard: [n[0] for n in nodes] for shard, nodes in nodes.items()},
+        main_connection_pool=RoundRobinConnectionPool(cluster),
         local_table_name="errors_local",
         backup_executor=QueryNodeExecutor(
             runner=run_query,
