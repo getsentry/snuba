@@ -5,11 +5,20 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime
 from typing import Callable, Generic, Iterator, Optional, Tuple, TypeVar, Union
 
-TVisited = TypeVar("TVisited")
+from snuba import settings
 
+TVisited = TypeVar("TVisited")
+# daaclasses have their own built in repr, we override it
+# under usual circumstances to get more readable expressions.
+
+# The dataclass repr is created by the @dataclass decorator at
+# class definition time, therefore we have to know up front whether we
+# will be using the dataclass repr or not
+# Sometimes however, we want the raw data,
+_AUTO_REPR = not settings.PRETTY_FORMAT_EXPRESSIONS
 
 # This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
-@dataclass(frozen=True, repr=False)
+@dataclass(frozen=True, repr=_AUTO_REPR)
 class _Expression:
     # TODO: Make it impossible to assign empty string as an alias.
     alias: Optional[str]
@@ -64,8 +73,11 @@ class Expression(_Expression, ABC):
         Not expected to be used for anything except debugging
         (it does a lot of string copies to construct the string)
         """
-        visitor = StringifyVisitor()
-        return self.accept(visitor)
+        if settings.PRETTY_FORMAT_EXPRESSIONS:
+            visitor = StringifyVisitor()
+            return self.accept(visitor)
+        else:
+            return super().__repr__()
 
 
 class ExpressionVisitor(ABC, Generic[TVisited]):
@@ -211,7 +223,7 @@ class StringifyVisitor(ExpressionVisitor[str]):
 OptionalScalarType = Union[None, bool, str, float, int, date, datetime]
 
 
-@dataclass(frozen=True, repr=False)
+@dataclass(frozen=True, repr=_AUTO_REPR)
 class Literal(Expression):
     """
     A literal in the SQL expression
@@ -229,7 +241,7 @@ class Literal(Expression):
         return visitor.visit_literal(self)
 
 
-@dataclass(frozen=True, repr=False)
+@dataclass(frozen=True, repr=_AUTO_REPR)
 class Column(Expression):
     """
     Represent a column in the schema of the dataset.
@@ -248,7 +260,7 @@ class Column(Expression):
         return visitor.visit_column(self)
 
 
-@dataclass(frozen=True, repr=False)
+@dataclass(frozen=True, repr=_AUTO_REPR)
 class SubscriptableReference(Expression):
     """
     Accesses one entry of a subscriptable column (for example key based access on
@@ -285,7 +297,7 @@ class SubscriptableReference(Expression):
         yield self
 
 
-@dataclass(frozen=True, repr=False)
+@dataclass(frozen=True, repr=_AUTO_REPR)
 class FunctionCall(Expression):
     """
     Represents an expression that resolves to a function call on Clickhouse.
@@ -334,7 +346,7 @@ class FunctionCall(Expression):
         return visitor.visit_function_call(self)
 
 
-@dataclass(frozen=True, repr=False)
+@dataclass(frozen=True, repr=_AUTO_REPR)
 class CurriedFunctionCall(Expression):
     """
     This function call represent a function with currying: f(x)(y).
@@ -381,7 +393,7 @@ class CurriedFunctionCall(Expression):
         return visitor.visit_curried_function_call(self)
 
 
-@dataclass(frozen=True, repr=False)
+@dataclass(frozen=True, repr=_AUTO_REPR)
 class Argument(Expression):
     """
     A bound variable in a lambda expression. This is used to refer to variables
@@ -400,7 +412,7 @@ class Argument(Expression):
         return visitor.visit_argument(self)
 
 
-@dataclass(frozen=True, repr=False)
+@dataclass(frozen=True, repr=_AUTO_REPR)
 class Lambda(Expression):
     """
     A lambda expression in the form (x,y,z -> transform(x,y,z))
