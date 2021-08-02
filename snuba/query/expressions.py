@@ -120,9 +120,7 @@ class StringifyVisitor(ExpressionVisitor[str]):
         >>> exp_str = exp.accept(visitor)
     """
 
-    def __init__(
-        self, level: int = 0, initial_indent: int = 0
-    ) -> None:
+    def __init__(self, level: int = 0, initial_indent: int = 0) -> None:
         # keeps track of the level of the AST we are currently in,
         # this is necessary for nice indentation
 
@@ -136,7 +134,6 @@ class StringifyVisitor(ExpressionVisitor[str]):
     def _get_line_prefix(self) -> str:
         # every line in the tree needs to be indented based on the tree level
         # to make things look pretty
-        # newline = "\n" if self.__level else ""
         return "  " * (self.__initial_indent + self.__level)
 
     def _get_alias_str(self, exp: Expression) -> str:
