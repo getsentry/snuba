@@ -168,11 +168,17 @@ class StringifyVisitor(ExpressionVisitor[str]):
         # from the string
         literal_str = exp.key.accept(self)[len(self._get_line_prefix()) :]
 
-        # TODO: Make aliases of subscriptions nicer (don't let me merge without resolving this)
+        # if the subscripted column is aliased, we wrap it with parens to make life
+        # easier for the viewer
+        column_str = (
+            f"({exp.column.accept(self)})"
+            if exp.column.alias is not None
+            else f"{exp.column.accept(self)}"
+        )
 
         # this line will already have the necessary prefix due to the visit_column
         # function
-        subscripted_column_str = f"{exp.column.accept(self)}[{literal_str}]"
+        subscripted_column_str = f"{column_str}[{literal_str}]"
         # after we know that, all we need to do as add the alias
         return f"{subscripted_column_str}{self._get_alias_str(exp)}"
 
