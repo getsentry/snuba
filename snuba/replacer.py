@@ -104,12 +104,14 @@ class RoundRobinConnectionPool(ShardedConnectionPool):
 
         all_nodes = self.__get_nodes()
 
-        return {
+        ret = {
             shard: wrapping_slice(
                 shard_nodes, self.__counter % len(shard_nodes), min(3, len(shard_nodes))
             )
             for shard, shard_nodes in all_nodes.items()
         }
+        self.__counter += 1
+        return ret
 
 
 class InsertExecutor(ABC):
