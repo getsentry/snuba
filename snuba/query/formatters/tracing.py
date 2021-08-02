@@ -1,13 +1,11 @@
-from typing import Any, List, Mapping, Sequence, Union, TYPE_CHECKING
+from typing import Any, List, Mapping, Sequence, Union
 
+from snuba.query import ProcessableQuery, Query
+from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import SimpleDataSource
 from snuba.query.data_source.visitor import DataSourceVisitor
-from snuba.query.expressions import (
-    StringifyVisitor,
-)
-from snuba.query import ProcessableQuery, Query
-from snuba.query.composite import CompositeQuery
+from snuba.query.expressions import StringifyVisitor
 from snuba.query.logical import Query as LogicalQuery
 
 TExpression = Union[str, Mapping[str, Any], Sequence[Any]]
@@ -18,47 +16,62 @@ def _indent_str_list(str_list: List[str], levels: int) -> List[str]:
     return [f"{indent}{s}" for s in str_list]
 
 
-def format_query(query: Union[LogicalQuery, CompositeQuery[SimpleDataSource]]) -> List[str]:
+def format_query(
+    query: Union[LogicalQuery, CompositeQuery[SimpleDataSource]]
+) -> List[str]:
     """
     Formats a query as a list of strings with each element being a new line
 
     This representation is meant to be used for tracing/error tracking
     as the query would not be truncated when ingesting the event.
     """
-    from_strs = ["FROM", *_indent_str_list(TracingQueryFormatter().visit(query.get_from_clause()), levels=1)]
+    from_strs = [
+        "FROM",
+        *_indent_str_list(
+            TracingQueryFormatter().visit(query.get_from_clause()), levels=1
+        ),
+    ]
 
     return _format_query_body(query, from_strs)
 
 
 class TracingQueryFormatter(
-    DataSourceVisitor[List[str], SimpleDataSource], JoinVisitor[List[str], SimpleDataSource]
+    DataSourceVisitor[List[str], SimpleDataSource],
+    JoinVisitor[List[str], SimpleDataSource],
 ):
-    def __init__(self, initial_indent: int = 0):
-        super().__init__()
-        self._initial_indent = initial_indent
-        self._indent_level = 0
-
     def _indent_str_list(self, str_list: List[str], levels: int) -> List[str]:
         indent = "  " * levels
         return [f"{indent}{s}" for s in str_list]
 
     def _visit_simple_source(self, data_source: SimpleDataSource) -> List[str]:
-        sample_str = f" SAMPLE {data_source.sample}" if data_source.sample else ""
+        # Entity and Table define their sampling rates with slightly different
+        # terms and renaming it would introduce a lot of code changes down the line
+        # so we use this dynamic workaround
+        sample_val = getattr(
+            data_source, "sample", getattr(data_source, "sampling_rate", None)
+        )
+        sample_str = f" SAMPLE {sample_val}" if sample_val is not None else ""
         return [f"{data_source.human_readable_id}{sample_str}"]
 
     def _visit_join(self, data_source: JoinClause[SimpleDataSource]) -> List[str]:
         return self.visit_join_clause(data_source)
 
-    def _visit_simple_query(self, data_source: ProcessableQuery[SimpleDataSource]) -> List[str]:
+    def _visit_simple_query(
+        self, data_source: ProcessableQuery[SimpleDataSource]
+    ) -> List[str]:
         if isinstance(data_source, LogicalQuery):
             return format_query(data_source)
         else:
             return []
 
-    def _visit_composite_query(self, data_source: CompositeQuery[SimpleDataSource]) -> List[str]:
+    def _visit_composite_query(
+        self, data_source: CompositeQuery[SimpleDataSource]
+    ) -> List[str]:
         return format_query(data_source)
 
-    def visit_individual_node(self, node: IndividualNode[SimpleDataSource]) -> List[str]:
+    def visit_individual_node(
+        self, node: IndividualNode[SimpleDataSource]
+    ) -> List[str]:
         return [f"{self.visit(node.data_source)} AS `{node.alias}`"]
 
     def visit_join_clause(self, node: JoinClause[SimpleDataSource]) -> List[str]:
@@ -146,4 +159,4 @@ def _format_query_body(query: Query, from_strs: List[str]) -> List[str]:
     #  'FROM',
     #  "  ENTITY(events) AS `ev`",
 
-    return "\n".join(str_list).split("\n")
+    return "\n".join(str_list).rstrip().split("\n")

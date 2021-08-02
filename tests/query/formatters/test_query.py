@@ -1,6 +1,7 @@
 from typing import Union
 
 import pytest
+
 from snuba.datasets.entities import EntityKey
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
@@ -16,10 +17,7 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.formatters.tracing import TExpression, format_query
 from snuba.query.logical import Query as LogicalQuery
-from tests.query.joins.equivalence_schema import (
-    EVENTS_SCHEMA,
-    GROUPS_SCHEMA,
-)
+from tests.query.joins.equivalence_schema import EVENTS_SCHEMA, GROUPS_SCHEMA
 
 BASIC_JOIN = JoinClause(
     left_node=IndividualNode(
@@ -35,6 +33,13 @@ BASIC_JOIN = JoinClause(
         )
     ],
     join_type=JoinType.INNER,
+)
+
+SIMPLE_SELECT_QUERY = LogicalQuery(
+    from_clause=Entity(EntityKey.EVENTS, EVENTS_SCHEMA, 0.5),
+    selected_columns=[
+        SelectedExpression("c1", Column("_snuba_simple", "simple_t", "simple_c")),
+    ],
 )
 
 LOGICAL_QUERY = LogicalQuery(
@@ -56,17 +61,34 @@ LOGICAL_QUERY = LogicalQuery(
     limit=150,
 )
 
-SIMPLE_FORMATTED = {
-    "FROM": {"ENTITY": EntityKey.EVENTS, "SAMPLE": "0.5"},
-    "SELECT": [["c1", "(t.c AS _snuba_c1)"], ["f1", ["_snuba_f1", "f", ["t.c2"]]]],
-    "ARRAYJOIN": "col",
-    "WHERE": ["equals", ["c4", "asd"]],
-    "GROUPBY": ["t.c4"],
-    "HAVING": ["equals", ["c6", "asd2"]],
-    "ORDERBY": [["t.c", OrderByDirection.ASC]],
-    "LIMITBY": {"LIMIT": 100, "BY": "c8"},
-    "LIMIT": 150,
-}
+
+SIMPLE_FORMATTED = [
+    "SELECT",
+    "  t.c AS `_snuba_c1` |> c1,",
+    "  f(",
+    "    t.c2",
+    "  ) AS `_snuba_f1` |> f1",
+    "FROM",
+    "  Entity(events) SAMPLE 0.5",
+    "GROUPBY",
+    "  t.c4",
+    "ORDER_BY",
+    "  t.c ASC",
+    "ARRAYJOIN",
+    "  col",
+    "WHERE",
+    "  equals(",
+    "    c4,",
+    "    'asd'",
+    "  )",
+    "HAVING",
+    "  equals(",
+    "    c6,",
+    "    'asd2'",
+    "  )",
+    "LIMIT 100 BY   c8",
+    "  LIMIT 150",
+]
 
 
 TEST_JOIN = [
@@ -80,12 +102,38 @@ TEST_JOIN = [
                 )
             ],
         ),
-        {
-            "FROM": SIMPLE_FORMATTED,
-            "SELECT": [["f", ["f", "avg", ["t.c"]]]],
-            "GROUPBY": [],
-            "ORDERBY": [],
-        },
+        [
+            "SELECT",
+            "  avg(",
+            "    t.c",
+            "  ) AS `f` |> f",
+            "FROM",
+            "  SELECT",
+            "    t.c AS `_snuba_c1` |> c1,",
+            "    f(",
+            "      t.c2",
+            "    ) AS `_snuba_f1` |> f1",
+            "  FROM",
+            "    Entity(events) SAMPLE 0.5",
+            "  GROUPBY",
+            "    t.c4",
+            "  ORDER_BY",
+            "    t.c ASC",
+            "  ARRAYJOIN",
+            "    col",
+            "  WHERE",
+            "    equals(",
+            "      c4,",
+            "      'asd'",
+            "    )",
+            "  HAVING",
+            "    equals(",
+            "      c6,",
+            "      'asd2'",
+            "    )",
+            "  LIMIT 100 BY   c8",
+            "    LIMIT 150",
+        ],
         id="Nested Query",
     ),
     pytest.param(
@@ -98,56 +146,63 @@ TEST_JOIN = [
                 ),
             ],
         ),
-        {
-            "FROM": {
-                "LEFT": ["ev", {"ENTITY": EntityKey.EVENTS}],
-                "TYPE": JoinType.INNER,
-                "RIGHT": ["gr", {"ENTITY": EntityKey.GROUPEDMESSAGES}],
-                "ON": [["ev.group_id", "gr.id"]],
-            },
-            "SELECT": [
-                ["c1", "(ev.c AS _snuba_c1)"],
-                ["f1", ["_snuba_f1", "f", ["ev.c2"]]],
-            ],
-            "GROUPBY": [],
-            "ORDERBY": [],
-        },
+        [
+            "SELECT",
+            "  ev.c AS `_snuba_c1` |> c1,",
+            "  f(",
+            "    ev.c2",
+            "  ) AS `_snuba_f1` |> f1",
+            "FROM",
+            "    ['Entity(events)'] AS `ev`",
+            "  INNER JOIN",
+            "    ['Entity(groupedmessage)'] AS `gr`",
+            "  ON",
+            "    ev.group_id",
+            "    gr.id",
+        ],
         id="Basic Join",
     ),
-]
-
-
-def test_new_formatter():
-    q = CompositeQuery(
-        from_clause=BASIC_JOIN,
-        selected_columns=[
-            SelectedExpression("c1", Column("_snuba_c1", "ev", "c")),
-            SelectedExpression(
-                "f1", FunctionCall("_snuba_f1", "f", (Column(None, "ev", "c2"),))
+    pytest.param(
+        CompositeQuery(
+            from_clause=CompositeQuery(
+                from_clause=CompositeQuery(
+                    from_clause=SIMPLE_SELECT_QUERY,
+                    selected_columns=[
+                        SelectedExpression(
+                            "f", FunctionCall("f", "avg", (Column(None, "t", "c"),))
+                        )
+                    ],
+                ),
+                selected_columns=[SelectedExpression("tc", Column(None, "t", "c"))],
             ),
+            selected_columns=[SelectedExpression("tctop", Column(None, "t", "c"))],
+        ),
+        [
+            "SELECT",
+            "  t.c |> tctop",
+            "FROM",
+            "  SELECT",
+            "    t.c |> tc",
+            "  FROM",
+            "    SELECT",
+            "      avg(",
+            "        t.c",
+            "      ) AS `f` |> f",
+            "    FROM",
+            "      SELECT",
+            "        simple_t.simple_c AS `_snuba_simple` |> c1",
+            "      FROM",
+            "        Entity(events) SAMPLE 0.5",
         ],
-        groupby=[Column(None, "t", "c4")],
-        order_by=[
-            OrderBy(
-                direction=OrderByDirection.ASC,
-                expression=Column("some_alias", "t", "c4"),
-            )
-        ],
-    )
-    from pprint import pprint
-    print("=" * 10)
-    pprint(format_query(q))
-    # print("\n".join(format_query(q)))
-    print("=" * 10)
+        id="Multiple nestings",
+    ),
+]
 
 
 @pytest.mark.parametrize("query, formatted", TEST_JOIN)
 def test_query_formatter(
     query: Union[LogicalQuery, CompositeQuery[Entity]], formatted: TExpression
 ) -> None:
-    print(query)
-    # print("=" * 10, "\n")
-    # print("\n".join(format_query(query)))
-    # # print("\n".join(format_query(query)))
-    # print("=" * 10, "\n")
-    # assert format_query(query) == formatted
+    # To understand why the type is ignored here, see the __repr__ function
+    # on CompositeQuery
+    assert format_query(query) == formatted  # type: ignore
