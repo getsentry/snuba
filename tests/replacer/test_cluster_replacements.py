@@ -200,6 +200,41 @@ def test_failing_query(
         )
 
 
+def test_load_balancing(
+    override_cluster: Callable[[bool], FakeClickhouseCluster]
+) -> None:
+    """
+    Test running two replacements in a row and verify the queries
+    are properly load balanced on different nodes.
+    """
+    set_config("write_node_replacements_projects", "[1]")
+    cluster = override_cluster(True)
+
+    replacer = ReplacerWorker(
+        get_writable_storage(StorageKey.ERRORS), DummyMetricsBackend()
+    )
+    replacement = LegacyReplacement(
+        COUNT_QUERY_TEMPLATE,
+        INSERT_QUERY_TEMPLATE,
+        FINAL_QUERY_TEMPLATE,
+        (NEEDS_FINAL, 1),
+    )
+    replacer.flush_batch([replacement, replacement])
+
+    assert cluster.get_queries() == {
+        "query_node": [
+            "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
+            "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
+        ],
+        "storage-0-0": [LOCAL_QUERY],
+        "storage-0-1": [LOCAL_QUERY],
+        "storage-1-0": [LOCAL_QUERY],
+        "storage-1-1": [LOCAL_QUERY],
+        "storage-2-0": [LOCAL_QUERY],
+        "storage-2-1": [LOCAL_QUERY],
+    }
+
+
 TEST_LOCAL_EXECUTOR = [
     pytest.param(
         {1: [(ClickhouseNode("snuba-errors-0-0", 9000, 1, 1), True)]},
