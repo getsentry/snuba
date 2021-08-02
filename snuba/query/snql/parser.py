@@ -136,7 +136,7 @@ snql_grammar = Grammar(
 
     select_list          = select_columns* (selected_expression)
     select_columns       = selected_expression space* comma
-    selected_expression  = space* low_pri_arithmetic
+    selected_expression  = space* (aliased_tag_column / aliased_subscriptable / aliased_column_name / low_pri_arithmetic)
 
     group_list            = group_columns* (selected_expression)
     group_columns         = selected_expression space* comma
@@ -157,6 +157,11 @@ snql_grammar = Grammar(
     parameters_list       = parameter* (param_expression)
     parameter             = param_expression space* comma space*
     function_call         = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)? (space+ "AS" space+ alias_literal)?
+
+    aliased_tag_column    = tag_column space+ "AS" space+ alias_literal
+    aliased_subscriptable = subscriptable space+ "AS" space+ alias_literal
+    aliased_column_name   = column_name space+ "AS" space+ alias_literal
+
     simple_term           = quoted_literal / numeric_literal / null_literal / boolean_literal / column_name
     quoted_literal        = ~r"(?<!\\)'(?:(?<!\\)(?:\\{2})*\\'|[^'])*(?<!\\)(?:\\{2})*'"
     string_literal        = ~r"[a-zA-Z0-9_\.\+\*\/:\-]*"
@@ -386,7 +391,8 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return visit_column_name(node, visited_children)
 
     def visit_tag_column(self, node: Node, visited_children: Iterable[Any]) -> Column:
-        return visit_column_name(node, visited_children)
+        x = visit_column_name(node, visited_children)
+        return x
 
     def visit_and_tuple(
         self, node: Node, visited_children: Tuple[Any, Node, Expression]
@@ -672,9 +678,14 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return selected_columns
 
     def visit_selected_expression(
-        self, node: Node, visited_children: Tuple[Any, Expression]
+        self,
+        node: Node,
+        visited_children: Tuple[Any, Union[SelectedExpression, Expression]],
     ) -> SelectedExpression:
         _, exp = visited_children
+        if isinstance(exp, SelectedExpression):
+            return exp
+
         alias = exp.alias or node.text.strip()
         return SelectedExpression(alias, exp)
 
@@ -755,6 +766,24 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             # it does not turn into an empty list.
             param_list2 = ()
         return CurriedFunctionCall(alias, internal_f, param_list2)
+
+    def visit_aliased_tag_column(
+        self, node: Node, visited_children: Tuple[Column, Any, Any, Any, Node],
+    ) -> SelectedExpression:
+        column, _, _, _, alias = visited_children
+        return SelectedExpression(alias.text, column)
+
+    def visit_aliased_subscriptable(
+        self, node: Node, visited_children: Tuple[Column, Any, Any, Any, Node],
+    ) -> SelectedExpression:
+        column, _, _, _, alias = visited_children
+        return SelectedExpression(alias.text, column)
+
+    def visit_aliased_column_name(
+        self, node: Node, visited_children: Tuple[Column, Any, Any, Any, Node],
+    ) -> SelectedExpression:
+        column, _, _, _, alias = visited_children
+        return SelectedExpression(alias.text, column)
 
     def generic_visit(self, node: Node, visited_children: Any) -> Any:
         return generic_visit(node, visited_children)
