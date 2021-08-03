@@ -40,15 +40,13 @@ JOINABLE_STORAGE_SETS: FrozenSet[FrozenSet[StorageSetKey]] = frozenset(
 
 
 def is_valid_storage_set_combination(*storage_sets: StorageSetKey) -> bool:
-    first = storage_sets[0]
+    all_storage_sets = set(storage_sets)
 
-    for storage_set in storage_sets[1:]:
-        if storage_set == first:
-            continue
+    if len(all_storage_sets) <= 1:
+        return True
 
-        for group in JOINABLE_STORAGE_SETS:
-            if first in group and storage_set in group:
-                continue
-            return False
+    for group in JOINABLE_STORAGE_SETS:
+        if all_storage_sets.issubset(group):
+            return True
 
-    return True
+    return False
