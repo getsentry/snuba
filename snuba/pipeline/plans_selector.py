@@ -20,10 +20,7 @@ class PlanCandidate:
         return is_valid_storage_set_combination(*plan_storage_sets)
 
     def get_rank_sum(self) -> int:
-        sum = 0
-        for pd in self.__plan_data:
-            sum += pd.rank
-        return sum
+        return sum(pd.rank for pd in self.__plan_data)
 
     def get_plans_mapping(self) -> Mapping[str, ClickhouseQueryPlan]:
         return {plan_data.alias: plan_data.plan for plan_data in self.__plan_data}
