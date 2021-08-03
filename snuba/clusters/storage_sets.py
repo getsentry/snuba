@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import FrozenSet, Tuple
+from typing import FrozenSet
 
 
 class StorageSetKey(Enum):
@@ -34,8 +34,8 @@ DEV_STORAGE_SETS: FrozenSet[StorageSetKey] = frozenset({StorageSetKey.METRICS})
 # Storage sets in a group share the same query and distributed nodes but
 # do not have the same local node cluster configuration.
 # Joins can be performed across storage sets in the same group.
-STORAGE_SET_GROUPS: FrozenSet[Tuple[StorageSetKey, ...]] = frozenset(
-    {(StorageSetKey.EVENTS, StorageSetKey.EVENTS_RO, StorageSetKey.CDC)}
+JOINABLE_STORAGE_SETS: FrozenSet[FrozenSet[StorageSetKey]] = frozenset(
+    {frozenset({StorageSetKey.EVENTS, StorageSetKey.EVENTS_RO, StorageSetKey.CDC})}
 )
 
 
@@ -46,7 +46,7 @@ def is_valid_storage_set_combination(*storage_sets: StorageSetKey) -> bool:
         if storage_set == first:
             continue
 
-        for group in STORAGE_SET_GROUPS:
+        for group in JOINABLE_STORAGE_SETS:
             if first in group and storage_set in group:
                 continue
             return False
