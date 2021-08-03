@@ -46,7 +46,8 @@ class EmptyTagConditionProcessor(QueryProcessor):
                     assert isinstance(exp, FunctionCall)
                     if exp.function_name == ConditionFunctions.EQ:
                         replacement = FunctionCall(exp.alias, "not", (replacement,))
-                        return replacement
+
+                    return replacement
 
             return exp
 
