@@ -11,7 +11,12 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.errors_replacer import NEEDS_FINAL, LegacyReplacement
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.replacer import QueryNodeExecutor, ReplacerWorker, ShardedExecutor
+from snuba.replacer import (
+    QueryNodeExecutor,
+    ReplacerWorker,
+    RoundRobinConnectionPool,
+    ShardedExecutor,
+)
 from snuba.state import set_config
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
@@ -195,6 +200,41 @@ def test_failing_query(
         )
 
 
+def test_load_balancing(
+    override_cluster: Callable[[bool], FakeClickhouseCluster]
+) -> None:
+    """
+    Test running two replacements in a row and verify the queries
+    are properly load balanced on different nodes.
+    """
+    set_config("write_node_replacements_projects", "[1]")
+    cluster = override_cluster(True)
+
+    replacer = ReplacerWorker(
+        get_writable_storage(StorageKey.ERRORS), DummyMetricsBackend()
+    )
+    replacement = LegacyReplacement(
+        COUNT_QUERY_TEMPLATE,
+        INSERT_QUERY_TEMPLATE,
+        FINAL_QUERY_TEMPLATE,
+        (NEEDS_FINAL, 1),
+    )
+    replacer.flush_batch([replacement, replacement])
+
+    assert cluster.get_queries() == {
+        "query_node": [
+            "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
+            "SELECT count() FROM errors_dist FINAL WHERE event_id = '6f0ccc03-6efb-4f7c-8005-d0c992106b31'",
+        ],
+        "storage-0-0": [LOCAL_QUERY],
+        "storage-0-1": [LOCAL_QUERY],
+        "storage-1-0": [LOCAL_QUERY],
+        "storage-1-1": [LOCAL_QUERY],
+        "storage-2-0": [LOCAL_QUERY],
+        "storage-2-1": [LOCAL_QUERY],
+    }
+
+
 TEST_LOCAL_EXECUTOR = [
     pytest.param(
         {1: [(ClickhouseNode("snuba-errors-0-0", 9000, 1, 1), True)]},
@@ -302,23 +342,24 @@ def test_local_executor(
     for shard_nodes in nodes.values():
         all_nodes.extend(shard_nodes)
 
+    cluster = FakeClickhouseCluster(
+        host="query_node",
+        port=9000,
+        user="default",
+        password="",
+        database="default",
+        http_port=8123,
+        storage_sets={"events"},
+        single_node=False,
+        cluster_name="my_cluster",
+        distributed_cluster_name="my_distributed_cluster",
+        nodes=all_nodes,
+    )
     insert_executor = ShardedExecutor(
-        cluster=FakeClickhouseCluster(
-            host="query_node",
-            port=9000,
-            user="default",
-            password="",
-            database="default",
-            http_port=8123,
-            storage_sets={"events"},
-            single_node=False,
-            cluster_name="my_cluster",
-            distributed_cluster_name="my_distributed_cluster",
-            nodes=all_nodes,
-        ),
+        cluster=cluster,
         runner=run_query,
         thread_pool=ThreadPoolExecutor(),
-        main_nodes={shard: [n[0] for n in nodes] for shard, nodes in nodes.items()},
+        main_connection_pool=RoundRobinConnectionPool(cluster),
         local_table_name="errors_local",
         backup_executor=QueryNodeExecutor(
             runner=run_query,
