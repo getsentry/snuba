@@ -1,5 +1,6 @@
 from typing import Any, List, Mapping, Sequence, Union
 
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
@@ -17,7 +18,7 @@ def _indent_str_list(str_list: List[str], levels: int) -> List[str]:
 
 
 def format_query(
-    query: Union[LogicalQuery, CompositeQuery[SimpleDataSource]]
+    query: Union[LogicalQuery, CompositeQuery[SimpleDataSource], ClickhouseQuery]
 ) -> List[str]:
     """
     Formats a query as a list of strings with each element being a new line

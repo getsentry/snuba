@@ -70,3 +70,8 @@ class Query(AbstractQuery[Table]):
 
     def _eq_functions(self) -> Sequence[str]:
         return tuple(super()._eq_functions()) + ("get_prewhere_ast",)
+
+    def __repr__(self) -> str:
+        from snuba.query.formatters.tracing import format_query
+
+        return "\n".join(format_query(self))
