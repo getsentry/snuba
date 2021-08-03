@@ -1,6 +1,3 @@
-import random
-
-from snuba import settings
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mappers import (
@@ -49,12 +46,7 @@ class EmptyTagConditionProcessor(QueryProcessor):
                     assert isinstance(exp, FunctionCall)
                     if exp.function_name == ConditionFunctions.EQ:
                         replacement = FunctionCall(exp.alias, "not", (replacement,))
-
-                    if settings.TESTING or random.random() < 0.5:
-                        query.add_experiment("empty-string-tag-condition", "true")
                         return replacement
-                    else:
-                        query.add_experiment("empty-string-tag-condition", "false")
 
             return exp
 
