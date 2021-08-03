@@ -121,6 +121,7 @@ REPLACER_IMMEDIATE_OPTIMIZE = False
 TURBO_SAMPLE_RATE = 0.1
 
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
+PRETTY_FORMAT_EXPRESSIONS = True
 
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 

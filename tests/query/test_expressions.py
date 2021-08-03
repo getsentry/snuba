@@ -202,32 +202,31 @@ def test_hash() -> None:
 @pytest.mark.parametrize(
     "test_expr,expected_str",
     [
-        (Column(None, "t1", "c1"), "\nt1.c1"),
-        (Column(None, None, "c1"), "\nc1"),
-        (Literal(None, "meowmeow"), "\n'meowmeow'"),
-        (Literal(None, 123), "\n123"),
-        (Literal(None, False), "\nFalse"),
+        (Column(None, "t1", "c1"), "t1.c1"),
+        (Column(None, None, "c1"), "c1"),
+        (Literal(None, "meowmeow"), "'meowmeow'"),
+        (Literal(None, 123), "123"),
+        (Literal(None, False), "False"),
         (
             Literal(None, datetime(2020, 4, 20, 16, 20)),
-            "\ndatetime(2020-04-20T16:20:00)",
+            "datetime(2020-04-20T16:20:00)",
         ),
-        (Literal(None, datetime(2020, 4, 20, 16, 20).date()), "\ndate(2020-04-20)"),
-        (Literal(None, None), "\nNone"),
+        (Literal(None, datetime(2020, 4, 20, 16, 20).date()), "date(2020-04-20)"),
+        (Literal(None, None), "None"),
         (
             SubscriptableReference(
                 "catsound",
                 column=Column(None, "cats", "sounds"),
                 key=Literal(None, "meow"),
             ),
-            "\ncats.sounds['meow'] AS `catsound`",
+            "cats.sounds['meow'] AS `catsound`",
         ),
-        (Column("alias", None, "c1"), "\nc1 AS `alias`"),
+        (Column("alias", None, "c1"), "c1 AS `alias`"),
         (
             FunctionCall(
                 None, "f1", (Column(None, "t1", "c1"), Column(None, "t1", "c2"))
             ),
-            """
-f1(
+            """f1(
   t1.c1,
   t1.c2
 )""",
@@ -240,8 +239,7 @@ f1(
                 ),
                 (Literal(None, "hello"), Literal(None, "kitty")),
             ),
-            """
-f1(
+            """f1(
   t1.c1,
   t1.c2
 )(
@@ -259,8 +257,7 @@ f1(
                     (Argument(None, "a"), Argument(None, "b"), Argument(None, "c")),
                 ),
             ),
-            """
-(a,b,c ->
+            """(a,b,c ->
   some_func(
     a,
     b,
