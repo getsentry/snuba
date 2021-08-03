@@ -416,6 +416,31 @@ class TestSnQLApi(BaseApiTest):
         )
         assert response.status_code == 200
 
+    def test_ifnull_condition_experiment(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "query": f"""MATCH (discover)
+                    SELECT count() AS count
+                    WHERE timestamp >= toDateTime('2021-04-06T20:42:40')
+                    AND timestamp < toDateTime('2021-04-20T20:42:40')
+                    AND project_id IN tuple({self.project_id})
+                    AND type = 'transaction'
+                    AND ifNull(tags[cache_status], '') = ''
+                    AND project_id = {self.project_id}
+                    AND project_id IN tuple({self.project_id})
+                    LIMIT 50""",
+                    "debug": True,
+                }
+            ),
+        )
+        assert response.status_code == 200
+
+        data = json.loads(response.data)
+        assert "empty-string-tag-condition" in data["experiments"]
+
     def test_alias_allowances(self) -> None:
         response = self.post(
             "/events/snql",
@@ -431,6 +456,57 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
         assert response.status_code == 200
+
         data = json.loads(response.data)
         assert len(data["data"]) == 1
         assert "equation[0]" in data["data"][0]
+
+    def test_alias_columns_in_output(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events)
+                    SELECT transaction AS tn, count() AS equation[0]
+                    BY project_id AS pi, transaction AS tn
+                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN tuple({self.project_id})
+                    """,
+                }
+            ),
+        )
+        assert response.status_code == 200
+
+        data = json.loads(response.data)
+        assert len(data["data"]) == 1
+        assert "equation[0]" in data["data"][0]
+        assert "tn" in data["data"][0]
+        assert "pi" in data["data"][0]
+        assert len(data["meta"]) == 3
+        assert data["meta"][0] == {"name": "pi", "type": "UInt64"}
+        assert data["meta"][1] == {"name": "tn", "type": "LowCardinality(String)"}
+        assert data["meta"][2] == {"name": "equation[0]", "type": "UInt64"}
+
+    def test_multi_table_join(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""
+                    MATCH (e: events) -[grouped]-> (g: groupedmessage),
+                    (e: events) -[assigned]-> (a: groupassignee)
+                    SELECT e.message, e.tags[b], a.user_id, g.last_seen
+                    WHERE e.project_id = {self.project_id}
+                    AND g.project_id = {self.project_id}
+                    AND e.timestamp >= toDateTime('2021-06-04T00:00:00')
+                    AND e.timestamp < toDateTime('2021-07-12T00:00:00')
+                    """,
+                    "turbo": False,
+                    "consistent": False,
+                    "debug": True,
+                }
+            ),
+        )
+
+        assert response.status_code == 200

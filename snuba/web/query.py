@@ -82,9 +82,9 @@ def parse_and_run_query(
             concurrent_queries_gauge=concurrent_queries_gauge,
         )
         if not request.settings.get_dry_run():
-            record_query(request, timer, query_metadata)
+            record_query(request, timer, query_metadata, result.extra)
     except QueryException as error:
-        record_query(request, timer, query_metadata)
+        record_query(request, timer, query_metadata, error.extra)
         raise error
 
     return result
@@ -146,7 +146,12 @@ def _dry_run_query_runner(
         span.set_data("query", formatted_query.structured())
 
     return QueryResult(
-        {"data": [], "meta": []}, {"stats": {}, "sql": formatted_query.get_sql()}
+        {"data": [], "meta": []},
+        {
+            "stats": {},
+            "sql": formatted_query.get_sql(),
+            "experiments": clickhouse_query.get_experiments(),
+        },
     )
 
 

@@ -50,6 +50,6 @@ class QueryTranslator:
 
     def translate(self, query: LogicalQuery) -> ClickhouseQuery:
         translated = identity_translate(query)
-
+        translated.set_experiments(query.get_experiments())
         translated.transform(self.__expression_translator)
         return translated

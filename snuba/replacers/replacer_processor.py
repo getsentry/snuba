@@ -24,6 +24,10 @@ class Replacement(ABC):
     def get_count_query(self, table_name: str) -> Optional[str]:
         raise NotImplementedError()
 
+    @abstractmethod
+    def should_write_every_node(self) -> bool:
+        raise NotImplementedError()
+
 
 R = TypeVar("R", bound=Replacement)
 
@@ -56,9 +60,7 @@ class ReplacerProcessor(ABC, Generic[R]):
         """
         return False
 
-    def post_replacement(
-        self, replacement: R, duration: int, matching_records: int
-    ) -> None:
+    def post_replacement(self, replacement: R, matching_records: int) -> None:
         """
         Custom actions to run after the replacement was executed.
         """
