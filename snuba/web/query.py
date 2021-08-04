@@ -237,8 +237,14 @@ def _format_storage_query_and_run(
     table_names = ",".join(sorted(visitor.get_tables()))
     with sentry_sdk.start_span(description="create_query", op="db") as span:
         formatted_query = format_query(clickhouse_query, request_settings)
-        span.set_data("query", formatted_query.structured())
-        span.set_data("query_size_group", get_query_size_group(str(formatted_query)))
+        span.set_data(
+            "query",
+            {
+                "Query": formatted_query.structured(),
+                "Size (Bytes)": _string_size_in_bytes(str(formatted_query)),
+            },
+        )
+        span.set_tag("query_size_group", get_query_size_group(str(formatted_query)))
         metrics.increment("execute")
 
     timer.mark("prepare_query")
@@ -274,7 +280,7 @@ def _format_storage_query_and_run(
 
 
 def get_query_size_group(formatted_query: str) -> str:
-    query_size_in_bytes = len(formatted_query.encode("utf-8"))
+    query_size_in_bytes = _string_size_in_bytes(formatted_query)
     query_size_group = 0
     if query_size_in_bytes > CLICKHOUSE_MAX_QUERY_SIZE_BYTES:
         query_size_group = 100
@@ -283,3 +289,7 @@ def get_query_size_group(formatted_query: str) -> str:
             int(floor(query_size_in_bytes / CLICKHOUSE_MAX_QUERY_SIZE_BYTES * 10)) * 10
         )
     return f">{query_size_group}%"
+
+
+def _string_size_in_bytes(s: str) -> int:
+    return len(s.encode("utf-8"))
