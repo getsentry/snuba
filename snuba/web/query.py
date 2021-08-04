@@ -1,5 +1,6 @@
 import logging
 from functools import partial
+from math import floor
 from typing import MutableMapping, Optional, Union
 
 import sentry_sdk
@@ -20,6 +21,7 @@ from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
+from snuba.settings import CLICKHOUSE_MAX_QUERY_SIZE_BYTES
 from snuba.util import with_span
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
@@ -236,6 +238,7 @@ def _format_storage_query_and_run(
     with sentry_sdk.start_span(description="create_query", op="db") as span:
         formatted_query = format_query(clickhouse_query, request_settings)
         span.set_data("query", formatted_query.structured())
+        span.set_data("query_size_group", get_query_size_group(str(formatted_query)))
         metrics.increment("execute")
 
     timer.mark("prepare_query")
@@ -268,3 +271,14 @@ def _format_storage_query_and_run(
                 return execute()
         else:
             return execute()
+
+
+def get_query_size_group(formatted_query: str) -> str:
+    query_size_in_bytes = len(formatted_query.encode("utf-8"))
+    query_size_limit = CLICKHOUSE_MAX_QUERY_SIZE_BYTES
+    query_size_group = 0
+    if query_size_in_bytes > query_size_limit:
+        query_size_group = 100
+    else:
+        query_size_group = int(floor(query_size_in_bytes / query_size_limit * 10)) * 10
+    return f">{query_size_group}%"
