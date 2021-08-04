@@ -280,6 +280,16 @@ def _format_storage_query_and_run(
 
 
 def get_query_size_group(formatted_query: str) -> str:
+    """
+    Given a formatted query string (or any string technically),
+    returns a string representing the size of the query in 10%
+    grouped increments of the Maximum Query Size as defined in Snuba settings.
+
+    Eg. If the query size is 40-49% of the max query size, this function
+    returns ">40%".
+
+    All sizes are computed in Bytes.
+    """
     query_size_in_bytes = _string_size_in_bytes(formatted_query)
     query_size_group = 0
     if query_size_in_bytes > CLICKHOUSE_MAX_QUERY_SIZE_BYTES:
