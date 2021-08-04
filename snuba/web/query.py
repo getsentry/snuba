@@ -291,7 +291,6 @@ def get_query_size_group(formatted_query: str) -> str:
     All sizes are computed in Bytes.
     """
     query_size_in_bytes = _string_size_in_bytes(formatted_query)
-    query_size_group = 0
     if query_size_in_bytes > CLICKHOUSE_MAX_QUERY_SIZE_BYTES:
         query_size_group = 100
     else:
