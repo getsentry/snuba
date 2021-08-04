@@ -275,10 +275,11 @@ def _format_storage_query_and_run(
 
 def get_query_size_group(formatted_query: str) -> str:
     query_size_in_bytes = len(formatted_query.encode("utf-8"))
-    query_size_limit = CLICKHOUSE_MAX_QUERY_SIZE_BYTES
     query_size_group = 0
-    if query_size_in_bytes > query_size_limit:
+    if query_size_in_bytes > CLICKHOUSE_MAX_QUERY_SIZE_BYTES:
         query_size_group = 100
     else:
-        query_size_group = int(floor(query_size_in_bytes / query_size_limit * 10)) * 10
+        query_size_group = (
+            int(floor(query_size_in_bytes / CLICKHOUSE_MAX_QUERY_SIZE_BYTES * 10)) * 10
+        )
     return f">{query_size_group}%"
