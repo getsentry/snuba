@@ -65,6 +65,8 @@ def match_subscriptable_reference(exp: Expression) -> Optional[SubscriptableMatc
 
 
 class MappingColumnPromoter(QueryProcessor):
+    # This SHOULD have transformed the ugly expression into the tags column
+    # even in the select
     """
     Promotes expressions that access the value of a mapping column by
     replacing them with the corresponding promoted column provided in
@@ -129,4 +131,5 @@ class MappingColumnPromoter(QueryProcessor):
 
             return exp
 
+        # apply this function everywhere
         query.transform_expressions(transform_nested_column)

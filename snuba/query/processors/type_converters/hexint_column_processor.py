@@ -11,6 +11,7 @@ class HexIntColumnProcessor(BaseTypeConverter):
             raise ColumnTypeError("Invalid hexint", report=False)
 
     def _process_expressions(self, exp: Expression) -> Expression:
+        # int -> hex str
         if isinstance(exp, Column) and exp.column_name in self.columns:
             return FunctionCall(
                 exp.alias,
