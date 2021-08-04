@@ -7,11 +7,11 @@ TENTH_PLUS_ONE = int(CLICKHOUSE_MAX_QUERY_SIZE_BYTES / 10) + 1
 A = "A"
 
 TEST_GROUPS = [
-    pytest.param(A, ">0%", id="Under 10%"),
-    pytest.param(A * TENTH_PLUS_ONE, ">10%", id="Greater than 10%"),
-    pytest.param(A * TENTH_PLUS_ONE * 5, ">50%", id="Greater than 50%"),
-    pytest.param(A * TENTH_PLUS_ONE * 8, ">80%", id="Greater than 80%"),
-    pytest.param(A * TENTH_PLUS_ONE * 10, ">100%", id="Greater than 100%"),
+    pytest.param(A, ">=0%", id="Under 10%"),
+    pytest.param(A * TENTH_PLUS_ONE, ">=10%", id="Greater than or equal to 10%"),
+    pytest.param(A * TENTH_PLUS_ONE * 5, ">=50%", id="Greater than or equal to 50%"),
+    pytest.param(A * TENTH_PLUS_ONE * 8, ">=80%", id="Greater than or equal to 80%"),
+    pytest.param(A * TENTH_PLUS_ONE * 10, ">=100%", id="Greater than or equal to 100%"),
 ]
 
 
