@@ -41,10 +41,14 @@ def record_query(
             mark_tags={"final": final, "referrer": referrer},
         )
 
-        _add_tags(timer, extra_data.get("experiments"))
+        _add_tags(timer, extra_data.get("experiments"), query_metadata)
 
 
-def _add_tags(timer: Timer, experiments: Optional[Mapping[str, Any]] = None) -> None:
+def _add_tags(
+    timer: Timer,
+    experiments: Optional[Mapping[str, Any]] = None,
+    metadata: Optional[SnubaQueryMetadata] = None,
+) -> None:
     if Hub.current.scope.span:
         duration_group = timer.get_duration_group()
         sentry_sdk.set_tag("duration_group", duration_group)
@@ -53,6 +57,12 @@ def _add_tags(timer: Timer, experiments: Optional[Mapping[str, Any]] = None) -> 
         if experiments is not None:
             for name, value in experiments.items():
                 sentry_sdk.set_tag(name, str(value))
+        if metadata is not None:
+            for query_data in metadata.query_list:
+                max_threads = query_data.stats.get("max_threads")
+                if max_threads is not None:
+                    sentry_sdk.set_tag("max_threads", max_threads)
+                    break
 
 
 def record_invalid_request(timer: Timer, referrer: Optional[str]) -> None:
