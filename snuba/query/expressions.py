@@ -9,13 +9,13 @@ from typing import Callable, Generic, Iterator, List, Optional, Tuple, TypeVar, 
 from snuba import settings
 
 TVisited = TypeVar("TVisited")
-# daaclasses have their own built in repr, we override it
+# dataclasses have their own built in repr, we override it
 # under usual circumstances to get more readable expressions.
 
 # The dataclass repr is created by the @dataclass decorator at
 # class definition time, therefore we have to know up front whether we
 # will be using the dataclass repr or not
-# Sometimes however, we want the raw data,
+# Sometimes however, we want the raw data, and this allows us to print that out
 _AUTO_REPR = not settings.PRETTY_FORMAT_EXPRESSIONS
 
 # This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
