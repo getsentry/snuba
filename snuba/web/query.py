@@ -237,14 +237,13 @@ def _format_storage_query_and_run(
     table_names = ",".join(sorted(visitor.get_tables()))
     with sentry_sdk.start_span(description="create_query", op="db") as span:
         formatted_query = format_query(clickhouse_query, request_settings)
+        span.set_data("query", formatted_query.structured())
         span.set_data(
-            "query",
-            {
-                "Query": formatted_query.structured(),
-                "Size (Bytes)": _string_size_in_bytes(str(formatted_query)),
-            },
+            "query_size_bytes", _string_size_in_bytes(formatted_query.get_sql())
         )
-        span.set_tag("query_size_group", get_query_size_group(str(formatted_query)))
+        span.set_tag(
+            "query_size_group", get_query_size_group(formatted_query.get_sql())
+        )
         metrics.increment("execute")
 
     timer.mark("prepare_query")
