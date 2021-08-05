@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Mapping, Optional, Sequence
+from typing import Mapping, Optional, Sequence, Set
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
@@ -7,6 +7,7 @@ from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.extensions import QueryExtension
+from snuba.query.functions import GLOBAL_VALID_FUNCTIONS
 from snuba.query.processors import QueryProcessor
 from snuba.query.validation import FunctionCallValidator
 from snuba.query.validation.validators import QueryValidator
@@ -91,6 +92,13 @@ class Entity(Describable, ABC):
         It is not supposed to be used during query processing.
         """
         return self.__storages
+
+    def get_valid_functions(self) -> Set[str]:
+        """
+        Returns valid functions names for an entity.
+        Defaults to set of functions that are valid for every entity.
+        """
+        return GLOBAL_VALID_FUNCTIONS
 
     def get_function_call_validators(self) -> Mapping[str, FunctionCallValidator]:
         """

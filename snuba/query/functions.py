@@ -102,3 +102,27 @@ AGGREGATION_FUNCTIONS = {
 
 def is_aggregation_function(func_name: str) -> bool:
     return func_name in AGGREGATION_FUNCTIONS
+
+
+# Categorized based on ClickHouse docs
+# https://clickhouse.tech/docs/en/sql-reference/functions/
+REGULAR_FUNCTIONS = {
+    # arithmetic
+    "plus",
+    "minus",
+    "multiply",
+    "divide",
+    # comparison
+    "equals",
+    "notEquals",
+    "less",
+    "greater",
+    "lessOrEquals",
+    "greaterOrEquals",
+    # logical
+    "and",
+    "or",
+    "not",
+}
+
+GLOBAL_VALID_FUNCTIONS = set() | REGULAR_FUNCTIONS | AGGREGATION_FUNCTIONS
