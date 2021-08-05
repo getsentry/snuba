@@ -24,11 +24,11 @@ class Migration(migration.ClickhouseNodeMigration):
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
-                storage_set=StorageSetKey.EVENTS,
+                storage_set=StorageSetKey.CDC,
                 table_name="groupassignee_local",
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    storage_set=StorageSetKey.EVENTS,
+                    storage_set=StorageSetKey.CDC,
                     version_column="offset",
                     order_by="(project_id, group_id)",
                     unsharded=True,
@@ -39,14 +39,14 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.EVENTS, table_name="groupassignee_local",
+                storage_set=StorageSetKey.CDC, table_name="groupassignee_local",
             )
         ]
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
-                storage_set=StorageSetKey.EVENTS,
+                storage_set=StorageSetKey.CDC,
                 table_name="groupassignee_dist",
                 columns=columns,
                 engine=table_engines.Distributed(
@@ -58,6 +58,6 @@ class Migration(migration.ClickhouseNodeMigration):
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.EVENTS, table_name="groupassignee_dist",
+                storage_set=StorageSetKey.CDC, table_name="groupassignee_dist",
             )
         ]
