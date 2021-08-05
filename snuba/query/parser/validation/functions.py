@@ -1,6 +1,6 @@
 import logging
 from collections import ChainMap
-from typing import List, Mapping, Optional
+from typing import Mapping, Optional
 
 from snuba.clickhouse.columns import Array, String
 from snuba.datasets.entities.factory import get_entity

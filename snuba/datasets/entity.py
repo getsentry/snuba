@@ -93,7 +93,7 @@ class Entity(Describable, ABC):
         """
         return self.__storages
 
-    def get_valid_functions(self) -> Set[str]:
+    def get_valid_function_names(self) -> Set[str]:
         """
         Returns valid functions names for an entity.
         Defaults to set of functions that are valid for every entity.
