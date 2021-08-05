@@ -248,6 +248,22 @@ def test_hash() -> None:
 )""",
         ),
         (
+            FunctionCall(
+                None,
+                "f1",
+                (
+                    FunctionCall(None, "fnested", (Column(None, "t1", "c1"),)),
+                    Column(None, "t1", "c2"),
+                ),
+            ),
+            """f1(
+  fnested(
+    t1.c1
+  ),
+  t2.c2
+)""",
+        ),
+        (
             Lambda(
                 None,
                 ("a", "b", "c"),
@@ -269,3 +285,23 @@ def test_hash() -> None:
 )
 def test_format(test_expr, expected_str) -> None:
     assert repr(test_expr) == expected_str
+
+
+def test_one():
+    expr = FunctionCall(
+        None,
+        "f1",
+        (
+            FunctionCall(None, "fnested", (Column(None, "t1", "c1"),)),
+            Column(None, "t1", "c2"),
+        ),
+    )
+    expected_str = """f1(
+  fnested(
+    t1.c1
+  ),
+  t2.c2
+)"""
+    recvd_str = repr(expr)
+    print(recvd_str)
+    assert recvd_str == expected_str
