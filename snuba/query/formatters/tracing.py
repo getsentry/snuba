@@ -94,8 +94,6 @@ def format_query(
     #  '  f1,  f(',
     #  '    ev.c2',
     #  '  ) AS `_snuba_f1`',
-    #  '',
-    #  '',
     #  'FROM',
     #  "  ENTITY(events) AS `ev`",
     return "\n".join(str_list).rstrip().split("\n")

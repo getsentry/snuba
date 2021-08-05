@@ -2,6 +2,10 @@ from typing import Union
 
 import pytest
 
+from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
+from snuba.clickhouse.columns import UInt
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.entities import EntityKey
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
@@ -13,11 +17,13 @@ from snuba.query.data_source.join import (
     JoinConditionExpression,
     JoinType,
 )
-from snuba.query.data_source.simple import Entity
+from snuba.query.data_source.simple import Entity, Table
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.formatters.tracing import TExpression, format_query
 from snuba.query.logical import Query as LogicalQuery
 from tests.query.joins.equivalence_schema import EVENTS_SCHEMA, GROUPS_SCHEMA
+
+columns = ColumnSet([("some_int", UInt(8, Modifiers(nullable=True)))])
 
 BASIC_JOIN = JoinClause(
     left_node=IndividualNode(
@@ -196,13 +202,53 @@ TEST_JOIN = [
         ],
         id="Multiple nestings",
     ),
+    pytest.param(
+        ClickhouseQuery(
+            Table("events", columns),
+            selected_columns=[
+                SelectedExpression(
+                    "tags[promoted_tag]",
+                    FunctionCall(
+                        "tags[promoted_tag]",
+                        "arrayElement",
+                        (
+                            Column(None, "table", "tags.value"),
+                            FunctionCall(
+                                None,
+                                "indexOf",
+                                (
+                                    Column(None, "table", "tags.key"),
+                                    Literal(None, "promoted_tag"),
+                                ),
+                            ),
+                        ),
+                    ),
+                )
+            ],
+        ),
+        [
+            "SELECT",
+            "  arrayElement(",
+            "    table.tags.value,",
+            "    indexOf(",
+            "      table.tags.key,",
+            "      'promoted_tag'",
+            "    )",
+            "  ) AS `tags[promoted_tag]` |> tags[promoted_tag]",
+            "FROM",
+            "  Table(events)",
+        ],
+        id="Clickhouse query",
+    ),
 ]
 
 
 @pytest.mark.parametrize("query, formatted", TEST_JOIN)
 def test_query_formatter(
-    query: Union[LogicalQuery, CompositeQuery[Entity]], formatted: TExpression
+    query: Union[LogicalQuery, CompositeQuery[Entity], ClickhouseQuery],
+    formatted: TExpression,
 ) -> None:
-    # To understand why the type is ignored here, see the __repr__ function
-    # on CompositeQuery
-    assert format_query(query) == formatted  # type: ignore
+    formatted_query = format_query(query)  # type: ignore
+    assert formatted_query == formatted
+    # make sure there are no empty lines
+    assert [line for line in formatted_query if not line] == []  # type: ignore
