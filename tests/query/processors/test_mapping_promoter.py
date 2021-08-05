@@ -1,4 +1,5 @@
 import pytest
+
 from snuba.clickhouse.columns import ColumnSet, Nested
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
@@ -107,3 +108,43 @@ def test_format_expressions(
     )
 
     assert query.get_selected_columns() == expected_query.get_selected_columns()
+
+
+def test_one_format():
+    # "replaced with promoted col",
+    in_q = ClickhouseQuery(
+        Table("events", columns),
+        selected_columns=[
+            SelectedExpression(
+                "tags[promoted_tag]",
+                FunctionCall(
+                    "tags[promoted_tag]",
+                    "arrayElement",
+                    (
+                        Column(None, "table", "tags.value"),
+                        FunctionCall(
+                            None,
+                            "indexOf",
+                            (
+                                Column(None, "table", "tags.key"),
+                                Literal(None, "promoted_tag"),
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        ],
+    )
+    out_q = ClickhouseQuery(
+        Table("events", columns),
+        selected_columns=[
+            SelectedExpression(
+                "tags[promoted_tag]", Column("tags[promoted_tag]", "table", "promoted"),
+            )
+        ],
+    )
+
+    MappingColumnPromoter({"tags": {"promoted_tag": "promoted"}}).process_query(
+        in_q, HTTPRequestSettings()
+    )
+    print(out_q)
