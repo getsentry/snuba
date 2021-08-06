@@ -44,7 +44,7 @@ schema = WritableTableSchema(
     columns=columns,
     local_table_name="groupedmessage_local",
     dist_table_name="groupedmessage_dist",
-    storage_set_key=StorageSetKey.EVENTS,
+    storage_set_key=StorageSetKey.CDC,
     mandatory_conditions=[
         binary_condition(
             ConditionFunctions.EQ,
@@ -58,7 +58,7 @@ POSTGRES_TABLE = "sentry_groupedmessage"
 
 storage = CdcStorage(
     storage_key=StorageKey.GROUPEDMESSAGES,
-    storage_set_key=StorageSetKey.EVENTS,
+    storage_set_key=StorageSetKey.CDC,
     schema=schema,
     query_processors=[
         PrewhereProcessor(["project_id", "id"]),
