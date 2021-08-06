@@ -1,6 +1,7 @@
 from typing import Mapping, Sequence
 
 import pytest
+
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import get_cluster
@@ -27,10 +28,18 @@ TEST_CASES = [
     pytest.param(
         {
             "events": [build_plan("events_table", StorageSetKey.EVENTS)],
-            "groups": [build_plan("groups_table", StorageSetKey.EVENTS)],
+            "something": [build_plan("some_table", StorageSetKey.EVENTS)],
+        },
+        {"events": "events_table", "something": "some_table"},
+        id="All tables on the same storage sets",
+    ),
+    pytest.param(
+        {
+            "events": [build_plan("events_table", StorageSetKey.EVENTS)],
+            "groups": [build_plan("groups_table", StorageSetKey.CDC)],
         },
         {"events": "events_table", "groups": "groups_table"},
-        id="All tables on the same storage sets",
+        id="Tables on joinable storage sets",
     ),
     pytest.param(
         {
@@ -51,7 +60,7 @@ TEST_CASES = [
             ],
             "groups": [build_plan("groups_table", StorageSetKey.EVENTS)],
         },
-        {"events": "events_table", "groups": "groups_table"},
+        {"events": "events_readonly_table", "groups": "groups_table"},
         id="Highest ranking plan for events in the wrong storage set. Skip",
     ),
     pytest.param(
@@ -66,7 +75,7 @@ TEST_CASES = [
                 build_plan("groups_readonly_table", StorageSetKey.EVENTS_RO),
             ],
         },
-        {"events": "events_table", "groups": "groups_table"},
+        {"events": "events_readonly_table", "groups": "groups_table"},
         id="Two valid storage sets, pick the highest ranking one",
     ),
 ]

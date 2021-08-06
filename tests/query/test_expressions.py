@@ -256,6 +256,22 @@ def test_hash() -> None:
 )""",
         ),
         (
+            FunctionCall(
+                None,
+                "f1",
+                (
+                    FunctionCall(None, "fnested", (Column(None, "t1", "c1"),)),
+                    Column(None, "t1", "c2"),
+                ),
+            ),
+            """f1(
+  fnested(
+    t1.c1
+  ),
+  t1.c2
+)""",
+        ),
+        (
             Lambda(
                 None,
                 ("a", "b", "c"),
