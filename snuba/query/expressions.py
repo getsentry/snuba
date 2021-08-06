@@ -3,8 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from datetime import date, datetime
-from itertools import chain
-from typing import Callable, Generic, Iterator, List, Optional, Tuple, TypeVar, Union
+from typing import Callable, Generic, Iterator, Optional, Tuple, TypeVar, Union
 
 from snuba import settings
 
@@ -76,8 +75,7 @@ class Expression(_Expression, ABC):
         """
         if settings.PRETTY_FORMAT_EXPRESSIONS:
             visitor = StringifyVisitor()
-            str_list = self.accept(visitor)
-            return "\n".join(str_list)
+            return self.accept(visitor)
         else:
             return super().__repr__()
 
@@ -124,15 +122,13 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
         raise NotImplementedError
 
 
-class StringifyVisitor(ExpressionVisitor[List[str]]):
-    """Visitor implementation to turn an expression into a list format where
-    every element in the list is a new line (properly indented)
-
+class StringifyVisitor(ExpressionVisitor[str]):
+    """Visitor implementation to turn an expression into a string format
     Usage:
         # Any expression class supported by the visitor will do
         >>> exp: Expression = Expression()
         >>> visitor = StringifyVisitor()
-        >>> exp_str = "\n".join(exp.accept(visitor))
+        >>> exp_str = exp.accept(visitor)
     """
 
     def __init__(self, level: int = 0, initial_indent: int = 0) -> None:
@@ -155,7 +151,7 @@ class StringifyVisitor(ExpressionVisitor[List[str]]):
         # Every expression has an optional alias so we handle that here
         return f" AS `{exp.alias}`" if exp.alias else ""
 
-    def visit_literal(self, exp: Literal) -> List[str]:
+    def visit_literal(self, exp: Literal) -> str:
         literal_str = None
         if isinstance(exp.value, str):
             literal_str = f"'{exp.value}'"
@@ -165,86 +161,62 @@ class StringifyVisitor(ExpressionVisitor[List[str]]):
             literal_str = f"date({exp.value.isoformat()})"
         else:
             literal_str = f"{exp.value}"
-        return [f"{self._get_line_prefix()}{literal_str}{self._get_alias_str(exp)}"]
+        res = f"{self._get_line_prefix()}{literal_str}{self._get_alias_str(exp)}"
+        return res
 
-    def visit_column(self, exp: Column) -> List[str]:
+    def visit_column(self, exp: Column) -> str:
         column_str = (
             f"{exp.table_name}.{exp.column_name}"
             if exp.table_name
             else f"{exp.column_name}"
         )
-        return [f"{self._get_line_prefix()}{column_str}{self._get_alias_str(exp)}"]
+        return f"{self._get_line_prefix()}{column_str}{self._get_alias_str(exp)}"
 
-    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> List[str]:
+    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> str:
         # we want to visit the literal node to format it properly
         # but for the subscritable reference we don't need it to
         # be indented or newlined. Hence we remove the prefix
         # from the string
-        literal_str = exp.key.accept(self)[0][len(self._get_line_prefix()) :]
+        literal_str = exp.key.accept(self)[len(self._get_line_prefix()) :]
 
         # if the subscripted column is aliased, we wrap it with parens to make life
         # easier for the viewer
         column_str = (
-            f"({exp.column.accept(self)[0]})"
+            f"({exp.column.accept(self)})"
             if exp.column.alias is not None
-            else f"{exp.column.accept(self)[0]}"
+            else f"{exp.column.accept(self)}"
         )
 
         # this line will already have the necessary prefix due to the visit_column
         # function
         subscripted_column_str = f"{column_str}[{literal_str}]"
         # after we know that, all we need to do as add the alias
-        return [f"{subscripted_column_str}{self._get_alias_str(exp)}"]
+        return f"{subscripted_column_str}{self._get_alias_str(exp)}"
 
-    def visit_function_call(self, exp: FunctionCall) -> List[str]:
+    def visit_function_call(self, exp: FunctionCall) -> str:
         self.__level += 1
-        param_strs = [
-            f"{param},"
-            for param in chain(*(param.accept(self) for param in exp.parameters))
-        ]
-        # the last parameter str does not need a comma so we strip it out
-        param_strs[-1] = param_strs[-1][:-1]
-
+        param_str = ",".join([f"\n{param.accept(self)}" for param in exp.parameters])
         self.__level -= 1
-        return [
-            f"{self._get_line_prefix()}{exp.function_name}(",
-            *param_strs,
-            f"{self._get_line_prefix()}){self._get_alias_str(exp)}",
-        ]
+        return f"{self._get_line_prefix()}{exp.function_name}({param_str}\n{self._get_line_prefix()}){self._get_alias_str(exp)}"
 
-    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> List[str]:
+    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:
         self.__level += 1
-        param_strs = [
-            f"{param},"
-            for param in chain(*(param.accept(self) for param in exp.parameters))
-        ]
-        # the last parameter str does not need a comma so we strip it out
-        param_strs[-1] = param_strs[-1][:-1]
+        param_str = ",".join([f"\n{param.accept(self)}" for param in exp.parameters])
         self.__level -= 1
         # The internal function repr will already have the
         # prefix appropriate for the level, we don't need to
         # insert it here
-        internal_func_strs = exp.internal_function.accept(self)
-        internal_func_strs[-1] += "("
-        return [
-            *internal_func_strs,
-            *param_strs,
-            f"{self._get_line_prefix()}){self._get_alias_str(exp)}",
-        ]
+        return f"{exp.internal_function.accept(self)}({param_str}\n{self._get_line_prefix()}){self._get_alias_str(exp)}"
 
-    def visit_argument(self, exp: Argument) -> List[str]:
-        return [f"{self._get_line_prefix()}{exp.name}{self._get_alias_str(exp)}"]
+    def visit_argument(self, exp: Argument) -> str:
+        return f"{self._get_line_prefix()}{exp.name}{self._get_alias_str(exp)}"
 
-    def visit_lambda(self, exp: Lambda) -> List[str]:
+    def visit_lambda(self, exp: Lambda) -> str:
         params_str = ",".join(exp.parameters)
         self.__level += 1
-        transformation_strs = exp.transformation.accept(self)
+        transformation_str = exp.transformation.accept(self)
         self.__level -= 1
-        return [
-            f"{self._get_line_prefix()}({params_str} ->",
-            *transformation_strs,
-            f"{self._get_line_prefix()}){self._get_alias_str(exp)}",
-        ]
+        return f"{self._get_line_prefix()}({params_str} ->\n{transformation_str}\n{self._get_line_prefix()}){self._get_alias_str(exp)}"
 
 
 OptionalScalarType = Union[None, bool, str, float, int, date, datetime]
