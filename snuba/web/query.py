@@ -1,5 +1,6 @@
 import logging
 from functools import partial
+from math import floor
 from typing import MutableMapping, Optional, Union
 
 import sentry_sdk
@@ -30,6 +31,8 @@ from snuba.web.db_query import raw_query
 logger = logging.getLogger("snuba.query")
 
 metrics = MetricsWrapper(environment.metrics, "api")
+
+MAX_QUERY_SIZE_BYTES = 256 * 1024  # 256 KiB by default
 
 
 class SampleClauseFinder(DataSourceVisitor[bool, Entity], JoinVisitor[bool, Entity]):
@@ -236,6 +239,12 @@ def _format_storage_query_and_run(
     with sentry_sdk.start_span(description="create_query", op="db") as span:
         formatted_query = format_query(clickhouse_query, request_settings)
         span.set_data("query", formatted_query.structured())
+        span.set_data(
+            "query_size_bytes", _string_size_in_bytes(formatted_query.get_sql())
+        )
+        sentry_sdk.set_tag(
+            "query_size_group", get_query_size_group(formatted_query.get_sql())
+        )
         metrics.increment("execute")
 
     timer.mark("prepare_query")
@@ -268,3 +277,28 @@ def _format_storage_query_and_run(
                 return execute()
         else:
             return execute()
+
+
+def get_query_size_group(formatted_query: str) -> str:
+    """
+    Given a formatted query string (or any string technically),
+    returns a string representing the size of the query in 10%
+    grouped increments of the Maximum Query Size as defined in Snuba settings.
+
+    Eg. If the query size is 40-49% of the max query size, this function
+    returns ">=40%".
+
+    All sizes are computed in Bytes.
+    """
+    query_size_in_bytes = _string_size_in_bytes(formatted_query)
+    if query_size_in_bytes >= MAX_QUERY_SIZE_BYTES:
+        query_size_group = 100
+    else:
+        query_size_group = (
+            int(floor(query_size_in_bytes / MAX_QUERY_SIZE_BYTES * 10)) * 10
+        )
+    return f">={query_size_group}%"
+
+
+def _string_size_in_bytes(s: str) -> int:
+    return len(s.encode("utf-8"))
