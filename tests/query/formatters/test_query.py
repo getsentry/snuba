@@ -7,7 +7,13 @@ from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import UInt
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.entities import EntityKey
-from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
+from snuba.query import (
+    LimitBy,
+    OrderBy,
+    OrderByDirection,
+    ProcessableQuery,
+    SelectedExpression,
+)
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.join import (
@@ -245,8 +251,7 @@ TEST_JOIN = [
 
 @pytest.mark.parametrize("query, formatted", TEST_JOIN)
 def test_query_formatter(
-    query: Union[LogicalQuery, CompositeQuery[Entity], ClickhouseQuery],
-    formatted: TExpression,
+    query: Union[ProcessableQuery, CompositeQuery[Entity]], formatted: TExpression,
 ) -> None:
     formatted_query = format_query(query)  # type: ignore
     assert formatted_query == formatted

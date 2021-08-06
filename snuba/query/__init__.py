@@ -16,6 +16,7 @@ from typing import (
     Tuple,
     Type,
     TypeVar,
+    cast,
 )
 
 from snuba.clickhouse.columns import Any, ColumnSet
@@ -518,3 +519,8 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
 
     def _eq_functions(self) -> Sequence[str]:
         return tuple(super()._eq_functions()) + ("get_from_clause",)
+
+    def __repr__(self) -> str:
+        from snuba.query.formatters.tracing import format_query
+
+        return "\n".join(format_query(cast(ProcessableQuery[SimpleDataSource], self)))
