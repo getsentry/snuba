@@ -3,10 +3,11 @@ from __future__ import annotations
 from typing import Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
 import sentry_sdk
+
 from snuba.clickhouse.processors import CompositeQueryProcessor, QueryProcessor
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clusters.cluster import ClickhouseCluster, get_cluster
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.storage_sets import StorageSetKey, is_valid_storage_set_combination
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
@@ -16,7 +17,6 @@ from snuba.datasets.plans.query_plan import (
     SubqueryProcessors,
 )
 from snuba.pipeline.plans_selector import select_best_plans
-from snuba.query.joins.semi_joins import SemiJoinOptimizer
 from snuba.pipeline.query_pipeline import QueryExecutionPipeline, QueryPlanner
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
@@ -24,6 +24,7 @@ from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Entity, Table
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.joins.equivalence_adder import add_equivalent_conditions
+from snuba.query.joins.semi_joins import SemiJoinOptimizer
 from snuba.query.joins.subquery_generator import generate_subqueries
 from snuba.query.logical import Query as LogicalQuery
 from snuba.request.request_settings import RequestSettings
@@ -207,10 +208,10 @@ class JoinDataSourcePlanner(JoinVisitor[JoinDataSourcePlan, Entity]):
 
         # TODO: Actually return multiple plans for each subquery (one per storage
         # set) and rank them picking a combination that fits in a single storage
-        # set.
-        assert (
-            left_node.storage_set_key == right_node.storage_set_key
-        ), f"Multiple storage set found in plan: {left_node.storage_set_key} {right_node.storage_set_key}"
+        # set or valid storage set combination.
+        assert is_valid_storage_set_combination(
+            left_node.storage_set_key, right_node.storage_set_key
+        ), f"Incompatible storage sets found in plan: {left_node.storage_set_key} {right_node.storage_set_key}"
 
         # mypy does not know that the method above only produces individual nodes.
         assert isinstance(right_node.translated_source, IndividualNode)

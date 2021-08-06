@@ -11,6 +11,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 
 ENABLED_STORAGE_SETS = {
+    "cdc",
     "discover",
     "events",
     "events_ro",
