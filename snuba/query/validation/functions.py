@@ -32,5 +32,4 @@ class AllowedFunctionValidator(FunctionCallValidator):
         self, func_name: str, parameters: Sequence[Expression], schema: Any
     ) -> None:
         if not is_valid_global_function(func_name):
-            print("func+name", func_name)
             raise InvalidFunctionCall(f"Invalid function name: {func_name}")
