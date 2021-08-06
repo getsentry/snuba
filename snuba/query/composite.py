@@ -66,6 +66,23 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
     def __repr__(self) -> str:
         from snuba.query.formatters.tracing import format_query
 
+        # NOTE (Vlad): Why the type is cast:
+        # If you remove the ignore type comment you will get the following error:
+        #
+        #   Argument 1 to "format_query" has incompatible type
+        #   "ProcessableQuery[TSimpleDataSource]"; expected
+        #   "Union[ProcessableQuery[SimpleDataSource], CompositeQuery[SimpleDataSource]]"
+        #
+        # This happens because self in this case is a generic type
+        # CompositeQuery[TSimpleDataSource] while the function format_query takes a
+        # SimpleDataSource (a concrete type). It is known by us (and mypy) that
+        # TSimpleDataSource is bound to SimpleDataSource, which means that all types
+        # parametrizing this class must be subtypes of SimpleDataSource, mypy is not smart
+        # enough to know that though and so in order to have a generic repr function
+        # I cast the type check in this case.
+        # Making TSimpleDataSource covariant would almost work except that covariant types
+        # canot be used as parameters: https://github.com/python/mypy/issues/7049
+
         return "\n".join(format_query(cast(CompositeQuery[SimpleDataSource], self)))
 
     def get_from_clause(
