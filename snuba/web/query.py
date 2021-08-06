@@ -242,7 +242,7 @@ def _format_storage_query_and_run(
         span.set_data(
             "query_size_bytes", _string_size_in_bytes(formatted_query.get_sql())
         )
-        span.set_tag(
+        sentry_sdk.set_tag(
             "query_size_group", get_query_size_group(formatted_query.get_sql())
         )
         metrics.increment("execute")
