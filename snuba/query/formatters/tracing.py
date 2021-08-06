@@ -6,7 +6,6 @@ from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import SimpleDataSource
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.expressions import StringifyVisitor
-from snuba.query.logical import Query as LogicalQuery
 
 TExpression = Union[str, Mapping[str, Any], Sequence[Any]]
 
@@ -122,10 +121,7 @@ class TracingQueryFormatter(
     def _visit_simple_query(
         self, data_source: ProcessableQuery[SimpleDataSource]
     ) -> List[str]:
-        if isinstance(data_source, LogicalQuery):
-            return format_query(data_source)
-        else:
-            return []
+        return format_query(data_source)
 
     def _visit_composite_query(
         self, data_source: CompositeQuery[SimpleDataSource]
