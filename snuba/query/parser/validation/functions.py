@@ -14,6 +14,7 @@ from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.parser.validation import ExpressionValidator
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
+from snuba.query.validation.functions import AllowedFunctionValidator
 from snuba.query.validation.signature import Any, Column, SignatureValidator
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ default_validators: Mapping[str, FunctionCallValidator] = {
     "like": SignatureValidator([Column({Array, String}), Any()]),
     "notLike": SignatureValidator([Column({Array, String}), Any()]),
 }
+global_validators: List[FunctionCallValidator] = [AllowedFunctionValidator()]
 
 
 class QueryEntityFinder(

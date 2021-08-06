@@ -112,6 +112,10 @@ REGULAR_FUNCTIONS = {
     "minus",
     "multiply",
     "divide",
+    # arrays,
+    "array",
+    "arrayElement",
+    "has",
     # comparison
     "equals",
     "notEquals",
@@ -123,6 +127,21 @@ REGULAR_FUNCTIONS = {
     "and",
     "or",
     "not",
+    # functions for IN operator
+    "in",
+    "notIn",
+    # functions for searching strings
+    "like",
+    "notLike",
+    # functions for nulls
+    "isNull",
+    "isNotNull",
+    # functions for tuples
+    "tuple",
 }
 
 GLOBAL_VALID_FUNCTIONS = set() | REGULAR_FUNCTIONS | AGGREGATION_FUNCTIONS
+
+
+def is_valid_global_function(func_name: str) -> bool:
+    return func_name in GLOBAL_VALID_FUNCTIONS
