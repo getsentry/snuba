@@ -18,7 +18,6 @@ DISABLED_DATASETS: Set[str] = {"metrics"}
 
 # Clickhouse Options
 CLICKHOUSE_MAX_POOL_SIZE = 25
-CLICKHOUSE_MAX_QUERY_SIZE_BYTES = 256 * 1024  # 256 KiB by default
 
 CLUSTERS: Sequence[Mapping[str, Any]] = [
     {

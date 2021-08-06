@@ -21,7 +21,6 @@ from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
-from snuba.settings import CLICKHOUSE_MAX_QUERY_SIZE_BYTES
 from snuba.util import with_span
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
@@ -32,6 +31,8 @@ from snuba.web.db_query import raw_query
 logger = logging.getLogger("snuba.query")
 
 metrics = MetricsWrapper(environment.metrics, "api")
+
+MAX_QUERY_SIZE_BYTES = 256 * 1024  # 256 KiB by default
 
 
 class SampleClauseFinder(DataSourceVisitor[bool, Entity], JoinVisitor[bool, Entity]):
@@ -290,11 +291,11 @@ def get_query_size_group(formatted_query: str) -> str:
     All sizes are computed in Bytes.
     """
     query_size_in_bytes = _string_size_in_bytes(formatted_query)
-    if query_size_in_bytes >= CLICKHOUSE_MAX_QUERY_SIZE_BYTES:
+    if query_size_in_bytes >= MAX_QUERY_SIZE_BYTES:
         query_size_group = 100
     else:
         query_size_group = (
-            int(floor(query_size_in_bytes / CLICKHOUSE_MAX_QUERY_SIZE_BYTES * 10)) * 10
+            int(floor(query_size_in_bytes / MAX_QUERY_SIZE_BYTES * 10)) * 10
         )
     return f">={query_size_group}%"
 

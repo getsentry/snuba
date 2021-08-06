@@ -1,9 +1,8 @@
 import pytest
 
-from snuba.settings import CLICKHOUSE_MAX_QUERY_SIZE_BYTES
-from snuba.web.query import get_query_size_group
+from snuba.web.query import MAX_QUERY_SIZE_BYTES, get_query_size_group
 
-TENTH_PLUS_ONE = int(CLICKHOUSE_MAX_QUERY_SIZE_BYTES / 10) + 1
+TENTH_PLUS_ONE = int(MAX_QUERY_SIZE_BYTES / 10) + 1
 A = "A"
 
 TEST_GROUPS = [
