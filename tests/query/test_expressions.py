@@ -221,6 +221,14 @@ def test_hash() -> None:
             ),
             "cats.sounds['meow'] AS `catsound`",
         ),
+        (
+            SubscriptableReference(
+                "catsound",
+                column=Column("kittysounds", "cats", "sounds"),
+                key=Literal(None, "meow"),
+            ),
+            "(cats.sounds AS `kittysounds`)['meow'] AS `catsound`",
+        ),
         (Column("alias", None, "c1"), "c1 AS `alias`"),
         (
             FunctionCall(

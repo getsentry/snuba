@@ -1,169 +1,152 @@
-from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Union
+from typing import Any, List, Mapping, Sequence, Union
 
-from snuba.query import ProcessableQuery, Query
+from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
-from snuba.query.data_source.simple import Entity
+from snuba.query.data_source.simple import SimpleDataSource
 from snuba.query.data_source.visitor import DataSourceVisitor
-from snuba.query.expressions import (
-    Argument,
-    Column,
-    CurriedFunctionCall,
-    Expression,
-    ExpressionVisitor,
-    FunctionCall,
-    Lambda,
-    Literal,
-    SubscriptableReference,
-)
-from snuba.query.logical import Query as LogicalQuery
+from snuba.query.expressions import StringifyVisitor
 
 TExpression = Union[str, Mapping[str, Any], Sequence[Any]]
 
 
+def _indent_str_list(str_list: List[str], levels: int) -> List[str]:
+    indent = "  " * levels
+    return [f"{indent}{s}" for s in str_list]
+
+
 def format_query(
-    query: Union[LogicalQuery, CompositeQuery[Entity]]
-) -> Mapping[str, Any]:
+    query: Union[ProcessableQuery[SimpleDataSource], CompositeQuery[SimpleDataSource]]
+) -> List[str]:
     """
-    Formats a query as a dictionary of clauses. Each expression is either
-    represented as a string or as a sequence.
+    Formats a query as a list of strings with each element being a new line
 
     This representation is meant to be used for tracing/error tracking
     as the query would not be truncated when ingesting the event.
     """
 
-    return {
-        **_format_query_body(query),
-        "FROM": TracingQueryFormatter().visit(query.get_from_clause()),
-    }
+    eformatter = StringifyVisitor(level=0, initial_indent=1)
 
+    selects = ",\n".join(
+        [
+            f"{e.expression.accept(eformatter)} |> {e.name}"
+            for e in query.get_selected_columns()
+        ]
+    )
+    select_str = f"SELECT\n{selects}" if selects else ""
 
-class TracingExpressionFormatter(ExpressionVisitor[TExpression]):
-    """
-    Generates a sequence based representation of an expression to be
-    used in tracing as it would not be truncated.
-    This looks not too different from the legacy Snuba language
-    syntax.
-    """
+    from_strs = [
+        "FROM",
+        *_indent_str_list(
+            TracingQueryFormatter().visit(query.get_from_clause()), levels=1
+        ),
+    ]
 
-    def __aliasify_str(self, formatted: str, alias: Optional[str]) -> str:
-        return formatted if alias is None else f"({formatted} AS {alias})"
+    groupbys = ",\n".join([e.accept(eformatter) for e in query.get_groupby()])
+    groupby_str = f"GROUPBY\n{groupbys}" if groupbys else ""
 
-    def visit_literal(self, exp: Literal) -> str:
-        return self.__aliasify_str(str(exp.value), exp.alias)
+    orderbys = ",\n".join(
+        [
+            f"{e.expression.accept(eformatter)} {e.direction.value}"
+            for e in query.get_orderby()
+        ]
+    )
+    orderby_str = f"ORDER_BY\n{orderbys}" if orderbys else ""
 
-    def visit_column(self, exp: Column) -> str:
-        return self.__aliasify_str(
-            f"{exp.table_name + '.' if exp.table_name else ''}{exp.column_name}",
-            exp.alias,
+    str_list = [select_str, *from_strs, groupby_str, orderby_str]
+
+    array_join = query.get_arrayjoin()
+    if array_join:
+        str_list.append(f"ARRAYJOIN\n{array_join.accept(eformatter)}")
+    condition = query.get_condition()
+    if condition:
+        str_list.append(f"WHERE\n{condition.accept(eformatter)}")
+    having = query.get_having()
+    if having:
+        str_list.append(f"HAVING\n{having.accept(eformatter)}")
+    limitby = query.get_limitby()
+    if limitby:
+        str_list.append(
+            f"LIMIT {limitby.limit} BY {limitby.expression.accept(eformatter)}"
         )
+    limit = query.get_limit()
+    if limit:
+        str_list.append(f"  LIMIT {limit}")
+    offset = query.get_offset()
+    if offset:
+        str_list.append(f"  OFFSET {offset}")
+    # The StringifyVisitor formats expression with newlines but we
+    # need them as a list of strings (to avoid truncation)
+    # therefore as a last step we join our list of strings into one string,
+    # and then split it again by newlines to go from this:
 
-    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> str:
-        return self.__aliasify_str(
-            f"{self.visit_column(exp.column)}[{self.visit_literal(exp.key)}]", exp.alias
-        )
+    # ['SELECT\n  c1,  ev.c AS `_snuba_c1`\n  f1,  f(\n    ev.c2\n  ) AS `_snuba_f1`',
+    #  'FROM',
+    #  "  ENTITY(events) AS `ev`",
+    # ]
 
-    def __visit_params(self, params: Sequence[Expression]) -> Sequence[TExpression]:
-        return [e.accept(self) for e in params]
+    # To this:
 
-    def visit_function_call(self, exp: FunctionCall) -> Sequence[TExpression]:
-        ret: List[TExpression] = [exp.alias] if exp.alias else []
-
-        ret.extend([exp.function_name, self.__visit_params(exp.parameters)])
-        return ret
-
-    def visit_curried_function_call(
-        self, exp: CurriedFunctionCall
-    ) -> Sequence[TExpression]:
-        ret: List[TExpression] = [exp.alias] if exp.alias else []
-
-        ret.extend(
-            [exp.internal_function.accept(self), self.__visit_params(exp.parameters)]
-        )
-        return ret
-
-    def visit_argument(self, exp: Argument) -> str:
-        return self.__aliasify_str(exp.name, exp.alias)
-
-    def visit_lambda(self, exp: Lambda) -> Sequence[TExpression]:
-        ret: List[TExpression] = [exp.alias] if exp.alias else []
-        ret.extend([list(exp.parameters), exp.transformation.accept(self)])
-        return ret
+    # ['SELECT',
+    #  '  c1,  ev.c AS `_snuba_c1`',
+    #  '  f1,  f(',
+    #  '    ev.c2',
+    #  '  ) AS `_snuba_f1`',
+    #  'FROM',
+    #  "  ENTITY(events) AS `ev`",
+    return "\n".join(str_list).rstrip().split("\n")
 
 
 class TracingQueryFormatter(
-    DataSourceVisitor[TExpression, Entity], JoinVisitor[TExpression, Entity]
+    DataSourceVisitor[List[str], SimpleDataSource],
+    JoinVisitor[List[str], SimpleDataSource],
 ):
-    def _visit_simple_source(self, data_source: Entity) -> TExpression:
-        ret: MutableMapping[str, Any] = {"ENTITY": data_source.key}
-        if data_source.sample is not None:
-            ret["SAMPLE"] = str(data_source.sample)
-        return ret
+    def _indent_str_list(self, str_list: List[str], levels: int) -> List[str]:
+        indent = "  " * levels
+        return [f"{indent}{s}" for s in str_list]
 
-    def _visit_join(self, data_source: JoinClause[Entity]) -> TExpression:
+    def _visit_simple_source(self, data_source: SimpleDataSource) -> List[str]:
+        # Entity and Table define their sampling rates with slightly different
+        # terms and renaming it would introduce a lot of code changes down the line
+        # so we use this dynamic workaround
+        sample_val = getattr(
+            data_source, "sample", getattr(data_source, "sampling_rate", None)
+        )
+        sample_str = f" SAMPLE {sample_val}" if sample_val is not None else ""
+        return [f"{data_source.human_readable_id}{sample_str}"]
+
+    def _visit_join(self, data_source: JoinClause[SimpleDataSource]) -> List[str]:
         return self.visit_join_clause(data_source)
 
-    def _visit_simple_query(self, data_source: ProcessableQuery[Entity]) -> TExpression:
-        if isinstance(data_source, LogicalQuery):
-            return format_query(data_source)
-        else:
-            return {}
-
-    def _visit_composite_query(
-        self, data_source: CompositeQuery[Entity]
-    ) -> TExpression:
+    def _visit_simple_query(
+        self, data_source: ProcessableQuery[SimpleDataSource]
+    ) -> List[str]:
         return format_query(data_source)
 
-    def visit_individual_node(self, node: IndividualNode[Entity]) -> TExpression:
-        return [node.alias, self.visit(node.data_source)]
+    def _visit_composite_query(
+        self, data_source: CompositeQuery[SimpleDataSource]
+    ) -> List[str]:
+        return format_query(data_source)
 
-    def visit_join_clause(self, node: JoinClause[Entity]) -> TExpression:
-        return {
-            "LEFT": node.left_node.accept(self),
-            "TYPE": node.join_type,
-            "RIGHT": node.right_node.accept(self),
-            "ON": [
-                [
-                    f"{c.left.table_alias}.{c.left.column}",
-                    f"{c.right.table_alias}.{c.right.column}",
-                ]
-                for c in node.keys
-            ],
-        }
+    def visit_individual_node(
+        self, node: IndividualNode[SimpleDataSource]
+    ) -> List[str]:
+        return [f"{self.visit(node.data_source)} AS `{node.alias}`"]
 
+    def visit_join_clause(self, node: JoinClause[SimpleDataSource]) -> List[str]:
+        # There is only one of these in the on clause (I think)
+        on_list = [
+            [
+                f"{c.left.table_alias}.{c.left.column}",
+                f"{c.right.table_alias}.{c.right.column}",
+            ]
+            for c in node.keys
+        ][0]
 
-def _format_query_body(query: Query) -> Mapping[str, Any]:
-    expression_formatter = TracingExpressionFormatter()
-    formatted = {
-        "SELECT": [
-            [e.name, e.expression.accept(expression_formatter)]
-            for e in query.get_selected_columns()
-        ],
-        "GROUPBY": [e.accept(expression_formatter) for e in query.get_groupby()],
-        "ORDERBY": [
-            [e.expression.accept(expression_formatter), e.direction]
-            for e in query.get_orderby()
-        ],
-    }
-    array_join = query.get_arrayjoin()
-    if array_join:
-        formatted["ARRAYJOIN"] = array_join.accept(expression_formatter)
-    condition = query.get_condition()
-    if condition:
-        formatted["WHERE"] = condition.accept(expression_formatter)
-    having = query.get_having()
-    if having:
-        formatted["HAVING"] = having.accept(expression_formatter)
-    limitby = query.get_limitby()
-    if limitby:
-        formatted["LIMITBY"] = {
-            "LIMIT": limitby.limit,
-            "BY": limitby.expression.accept(expression_formatter),
-        }
-    limit = query.get_limit()
-    if limit:
-        formatted["LIMIT"] = limit
-    offset = query.get_offset()
-    if offset:
-        formatted["OFFSET"] = offset
-    return formatted
+        return [
+            *_indent_str_list(node.left_node.accept(self), 1),
+            f"{node.join_type.name.upper()} JOIN",
+            *_indent_str_list(node.right_node.accept(self), 1),
+            "ON",
+            *_indent_str_list(on_list, 1,),
+        ]

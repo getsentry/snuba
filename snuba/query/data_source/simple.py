@@ -20,6 +20,11 @@ class SimpleDataSource(DataSource, ABC):
     data sources.
     """
 
+    @property
+    def human_readable_id(self) -> str:
+        """A property that identifies this datasource, for human consumption only"""
+        raise NotImplementedError
+
     pass
 
 
@@ -35,6 +40,10 @@ class Entity(SimpleDataSource):
 
     def get_columns(self) -> ColumnSet:
         return self.schema
+
+    @property
+    def human_readable_id(self) -> str:
+        return f"Entity({self.key.value})"
 
 
 @dataclass(frozen=True)
@@ -54,3 +63,7 @@ class Table(SimpleDataSource):
 
     def get_columns(self) -> ColumnSet:
         return self.schema
+
+    @property
+    def human_readable_id(self) -> str:
+        return f"Table({self.table_name})"
