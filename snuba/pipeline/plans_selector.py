@@ -1,33 +1,29 @@
-from dataclasses import dataclass, field
-from typing import Mapping, MutableMapping, Sequence, Tuple
+import itertools
+from typing import Mapping, NamedTuple, Sequence, Tuple
 
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.clusters.storage_sets import is_valid_storage_set_combination
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 
 
-@dataclass
-class StorageSetPlansCandidate:
-    """
-    Keeps track of the best plan encountered for a storage set and
-    keeps a total cost, which is the sum of the ranking order of
-    each plan.
-    """
+class PlanData(NamedTuple):
+    rank: int
+    alias: str
+    plan: ClickhouseQueryPlan
 
-    total_cost: int = 0
-    plans: MutableMapping[str, Tuple[ClickhouseQueryPlan, int]] = field(
-        default_factory=dict
-    )
 
-    def add_plan(self, alias: str, plan: ClickhouseQueryPlan, cost: int) -> None:
-        if alias not in self.plans or self.plans[alias][1] > cost:
-            self.plans[alias] = (plan, cost)
-            self.total_cost = sum([plan[1] for plan in self.plans.values()])
+class PlanCandidate:
+    def __init__(self, plan_data: Tuple[PlanData, ...]) -> None:
+        self.__plan_data = plan_data
 
-    def is_complete(self, expected_aliases: int) -> bool:
-        return len(self.plans) == expected_aliases
+    def is_valid(self) -> bool:
+        plan_storage_sets = [pd.plan.storage_set_key for pd in self.__plan_data]
+        return is_valid_storage_set_combination(*plan_storage_sets)
+
+    def get_rank_sum(self) -> int:
+        return sum(pd.rank for pd in self.__plan_data)
 
     def get_plans_mapping(self) -> Mapping[str, ClickhouseQueryPlan]:
-        return {alias: plan[0] for alias, plan in self.plans.items()}
+        return {plan_data.alias: plan_data.plan for plan_data in self.__plan_data}
 
 
 def select_best_plans(
@@ -42,17 +38,16 @@ def select_best_plans(
     all the selected plans are in the same storage set and that the sum
     of the ranking is minimal.
     """
+    plan_data = [
+        [PlanData(rank, alias, plan) for rank, plan in enumerate(_plans)]
+        for alias, _plans in plans.items()
+    ]
 
-    ranks: MutableMapping[StorageSetKey, StorageSetPlansCandidate] = {}
-    for alias, viable_plans in plans.items():
-        for rank, plan in enumerate(viable_plans):
-            if plan.storage_set_key not in ranks:
-                ranks[plan.storage_set_key] = StorageSetPlansCandidate()
-            ranks[plan.storage_set_key].add_plan(alias, plan, rank)
+    all = [PlanCandidate(data) for data in itertools.product(*plan_data)]
 
     candidates = sorted(
-        [r for r in ranks.values() if r.is_complete(len(plans))],
-        key=lambda candidate: candidate.total_cost,
+        [candidate for candidate in all if candidate.is_valid()],
+        key=lambda candidate: candidate.get_rank_sum(),
     )
 
     assert len(candidates) > 0, "Cannot build a valid query plan for this query."
