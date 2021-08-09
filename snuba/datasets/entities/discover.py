@@ -15,7 +15,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
-from snuba.clickhouse.query_dsl.accessors import get_project_ids_in_query_ast
+from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.clickhouse.translators.snuba.allowed import (
     ColumnMapper,
@@ -304,7 +304,7 @@ def is_in_experiment(query: LogicalQuery, referrer: str) -> bool:
     if referrer != "tagstore.__get_tag_keys":
         return False
 
-    project_ids = get_project_ids_in_query_ast(query, "project_id")
+    project_ids = get_object_ids_in_query_ast(query, "project_id")
     if not project_ids:
         return False
 
