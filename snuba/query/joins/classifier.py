@@ -184,7 +184,9 @@ def _merge_and_cut(
         cut = v.cut_branch(alias_generator)
         parameters.append(cut.main_expression)
         for entity, branches in cut.cut_branches.items():
-            cut_branches.setdefault(entity, branches).add(*branches)
+            branch_set = cut_branches.setdefault(entity, branches)
+            branch_set |= branches
+
     return MainQueryExpression(builder(parameters), cut_branches)
 
 
