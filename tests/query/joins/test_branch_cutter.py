@@ -1,5 +1,7 @@
-import pytest
 from typing import Generator
+
+import pytest
+
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -506,6 +508,223 @@ TEST_CASES = [
             },
         ),
         id="Aggregation function that contains a function that is mixed",
+    ),
+    pytest.param(
+        FunctionCall(
+            "_snuba_toUInt64",
+            "toUInt64",
+            (
+                FunctionCall(
+                    "_snuba_plus",
+                    "plus",
+                    (
+                        FunctionCall(
+                            "_snuba_multiply",
+                            "multiply",
+                            (
+                                FunctionCall(
+                                    "_snuba_log",
+                                    "log",
+                                    (
+                                        FunctionCall(
+                                            "_snuba_count",
+                                            "count",
+                                            (
+                                                Column(
+                                                    "_snuba_events.group_id",
+                                                    "events",
+                                                    "group_id",
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                                Literal(None, 600),
+                            ),
+                        ),
+                        FunctionCall(
+                            "_snuba_multiply",
+                            "multiply",
+                            (
+                                FunctionCall(
+                                    "_snuba_toUInt64",
+                                    "toUInt64",
+                                    (
+                                        FunctionCall(
+                                            "_snuba_toUInt64",
+                                            "toUInt64",
+                                            (
+                                                FunctionCall(
+                                                    "_snuba_max",
+                                                    "max",
+                                                    (
+                                                        Column(
+                                                            "_snuba_events.timestamp",
+                                                            "events",
+                                                            "timestamp",
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                                Literal(None, 1000),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        MainQueryExpression(
+            FunctionCall(
+                "_snuba_toUInt64",
+                "toUInt64",
+                (
+                    FunctionCall(
+                        "_snuba_plus",
+                        "plus",
+                        (
+                            FunctionCall(
+                                "_snuba_multiply",
+                                "multiply",
+                                (
+                                    FunctionCall(
+                                        "_snuba_log",
+                                        "log",
+                                        (
+                                            FunctionCall(
+                                                "_snuba_count",
+                                                "count",
+                                                (
+                                                    Column(
+                                                        "_snuba_events.group_id",
+                                                        "events",
+                                                        "_snuba_events.group_id",
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                    Literal(None, 600),
+                                ),
+                            ),
+                            FunctionCall(
+                                "_snuba_multiply",
+                                "multiply",
+                                (
+                                    FunctionCall(
+                                        "_snuba_toUInt64",
+                                        "toUInt64",
+                                        (
+                                            FunctionCall(
+                                                "_snuba_toUInt64",
+                                                "toUInt64",
+                                                (
+                                                    FunctionCall(
+                                                        "_snuba_max",
+                                                        "max",
+                                                        (
+                                                            Column(
+                                                                "_snuba_events.timestamp",
+                                                                "events",
+                                                                "_snuba_events.timestamp",
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                    Literal(None, 1000),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            {
+                "events": {
+                    Column("_snuba_events.timestamp", None, "timestamp"),
+                    Column("_snuba_events.group_id", None, "group_id"),
+                }
+            },
+        ),
+        MainQueryExpression(
+            FunctionCall(
+                "_snuba_toUInt64",
+                "toUInt64",
+                (
+                    FunctionCall(
+                        "_snuba_plus",
+                        "plus",
+                        (
+                            FunctionCall(
+                                "_snuba_multiply",
+                                "multiply",
+                                (
+                                    FunctionCall(
+                                        "_snuba_log",
+                                        "log",
+                                        (
+                                            FunctionCall(
+                                                "_snuba_count",
+                                                "count",
+                                                (
+                                                    Column(
+                                                        "_snuba_events.group_id",
+                                                        "events",
+                                                        "_snuba_events.group_id",
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                    Literal(None, 600),
+                                ),
+                            ),
+                            FunctionCall(
+                                "_snuba_multiply",
+                                "multiply",
+                                (
+                                    FunctionCall(
+                                        "_snuba_toUInt64",
+                                        "toUInt64",
+                                        (
+                                            FunctionCall(
+                                                "_snuba_toUInt64",
+                                                "toUInt64",
+                                                (
+                                                    FunctionCall(
+                                                        "_snuba_max",
+                                                        "max",
+                                                        (
+                                                            Column(
+                                                                "_snuba_events.timestamp",
+                                                                "events",
+                                                                "_snuba_events.timestamp",
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                    Literal(None, 1000),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            cut_branches={
+                "events": {
+                    Column("_snuba_events.group_id", None, "group_id",),
+                    Column("_snuba_events.timestamp", None, "timestamp",),
+                }
+            },
+        ),
+        id="Nested aggregation function that contains a function that is mixed",
     ),
 ]
 
