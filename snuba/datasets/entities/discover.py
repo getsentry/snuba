@@ -15,7 +15,6 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String, UInt
-from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.clickhouse.translators.snuba.allowed import (
     ColumnMapper,
@@ -43,6 +42,7 @@ from snuba.datasets.storages.factory import get_storage
 from snuba.pipeline.pipeline_delegator import PipelineDelegator
 from snuba.pipeline.simple_pipeline import EntityQueryPlanner, SimplePipelineBuilder
 from snuba.query.dsl import identity
+from snuba.query.experiments import is_in_experiment
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -300,29 +300,10 @@ class SampledSimplePipelineBuilder(SimplePipelineBuilder):
         return super().build_planner(new_query, settings)
 
 
-def is_in_experiment(query: LogicalQuery, referrer: str) -> bool:
-    if referrer != "tagstore.__get_tag_keys":
-        return False
-
-    project_ids = get_object_ids_in_query_ast(query, "project_id")
-    if not project_ids:
-        return False
-
-    test_projects_raw = state.get_config("snuplicator-sampling-projects", "")
-    test_projects = set()
-    if (
-        isinstance(test_projects_raw, str) and test_projects_raw != ""
-    ):  # should be in the form [1,2,3]
-        test_projects_raw = test_projects_raw[1:-1]
-        test_projects = set(int(p) for p in test_projects_raw.split(",") if p)
-    elif isinstance(test_projects_raw, (int, float)):
-        test_projects = {int(test_projects_raw)}
-
-    return project_ids.issubset(test_projects)
-
-
 def sampling_selector_func(query: LogicalQuery, referrer: str) -> Tuple[str, List[str]]:
-    if is_in_experiment(query, referrer):
+    if is_in_experiment(
+        query, referrer, "snuplicator-sampling-projects", {"tagstore.__get_tag_keys"}
+    ):
         sample_query_rate = state.get_config(
             "snuplicator-sampling-experiment-rate", 0.0
         )
@@ -340,7 +321,9 @@ def sampling_callback_func(
     primary_result: Optional[Result[QueryResult]],
     results: List[Result[QueryResult]],
 ) -> None:
-    if not is_in_experiment(query, referrer):
+    if not is_in_experiment(
+        query, referrer, "snuplicator-sampling-projects", {"tagstore.__get_tag_keys"}
+    ):
         return
 
     if primary_result is None and not results:

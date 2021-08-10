@@ -1,4 +1,5 @@
 import logging
+import random
 from dataclasses import replace
 from datetime import datetime, timedelta
 from functools import partial
@@ -16,11 +17,12 @@ from typing import (
     Union,
 )
 
+import sentry_sdk
 from parsimonious.exceptions import IncompleteParseError
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
-from snuba import state
+from snuba import environment, settings, state
 from snuba.clickhouse.columns import Array, ColumnSet
 from snuba.clickhouse.query_dsl.accessors import get_time_range_expressions
 from snuba.datasets.dataset import Dataset
@@ -32,18 +34,21 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     FUNCTION_TO_OPERATOR,
     OPERATOR_TO_FUNCTION,
+    BooleanFunctions,
     ConditionFunctions,
     binary_condition,
     build_match,
     combine_and_conditions,
     combine_or_conditions,
     get_first_level_and_conditions,
+    get_first_level_or_conditions,
     is_condition,
     unary_condition,
 )
 from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
+from snuba.query.experiments import is_in_experiment
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -52,7 +57,9 @@ from snuba.query.expressions import (
     FunctionCall,
     Lambda,
     Literal,
+    StringifyVisitor,
 )
+from snuba.query.formatters.tracing import format_query
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.matchers import Any as AnyMatch
 from snuba.query.matchers import AnyExpression, AnyOptionalString
@@ -94,6 +101,10 @@ from snuba.query.snql.expression_visitor import (
 )
 from snuba.query.snql.joins import RelationshipTuple, build_join_clause
 from snuba.util import parse_datetime
+from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.wrapper import MetricsWrapper
+
+metrics = MetricsWrapper(environment.metrics, "snql.parser.")
 
 logger = logging.getLogger("snuba.snql.parser")
 
@@ -1263,6 +1274,73 @@ def _select_entity_for_dataset(
     return selector
 
 
+SORTING_VISITOR = StringifyVisitor(indenter="", delimiter="")
+
+
+def sort_key(exp: Expression) -> str:
+    return exp.accept(SORTING_VISITOR)
+
+
+def _sort_sequences(exp: Expression) -> Expression:
+    if isinstance(exp, FunctionCall) and exp.function_name in ("array", "tuple"):
+        new_parameters = tuple(sorted(exp.parameters, key=sort_key))
+        return replace(exp, parameters=new_parameters)
+
+    return exp
+
+
+def _sort_conditions(
+    conditions: Sequence[Expression], cur_func: str = BooleanFunctions.AND
+) -> Sequence[Expression]:
+    # Recursively sort any subtrees
+    if cur_func == BooleanFunctions.AND:
+        recurse_func = BooleanFunctions.OR
+        splitter = get_first_level_or_conditions
+        combiner = combine_or_conditions
+    else:
+        recurse_func = BooleanFunctions.AND
+        splitter = get_first_level_and_conditions
+        combiner = combine_and_conditions
+
+    new_conditions = []
+    for cond in conditions:
+        split_conds = splitter(cond)
+        if len(split_conds) > 1:
+            split_conds = _sort_conditions(split_conds, recurse_func)
+            combined_conds = combiner(split_conds)
+        else:
+            combined_conds = cond
+
+        new_conditions.append(combined_conds)
+
+    return sorted(new_conditions, key=sort_key)
+
+
+def _sort_query(query: Union[CompositeQuery[QueryEntity], LogicalQuery]) -> None:
+    # Sort arrays and tuples first, so the strings we use in stringify visitor are consistent
+    query.transform_expressions(_sort_sequences)
+
+    sorted_select = sorted(
+        query.get_selected_columns(), key=lambda x: sort_key(x.expression)
+    )
+    query.set_ast_selected_columns(sorted_select)
+
+    sorted_groupby = sorted(query.get_groupby(), key=sort_key)
+    query.set_ast_groupby(sorted_groupby)
+
+    condition = query.get_condition()
+    if condition:
+        top_level_conditions = get_first_level_and_conditions(condition)
+        new_top_level = _sort_conditions(top_level_conditions)
+        query.set_ast_condition(combine_and_conditions(new_top_level))
+
+    having = query.get_having()
+    if having:
+        top_level_havings = get_first_level_and_conditions(having)
+        new_top_level = _sort_conditions(top_level_havings)
+        query.set_ast_having(combine_and_conditions(new_top_level))
+
+
 def _post_process(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
     funcs: Sequence[Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]],
@@ -1317,4 +1395,26 @@ def parse_snql_query(
 
     # Validating
     _post_process(query, VALIDATORS)
+
+    if isinstance(query, LogicalQuery):  # avoid composite for now
+        if is_in_experiment(query, "", "snql.sort.query.projects", None):
+            # Experiment with sorting the query to improve cache hit rate
+            sorting_rate = state.get_config("snql.sort.query.rate", 0.0)
+            sorting_rate = 0.0 if not isinstance(sorting_rate, float) else sorting_rate
+
+            timer = Timer("query.sorting")
+            if settings.TESTING or random.random() < sorting_rate:
+                assert isinstance(query, LogicalQuery)
+                before = format_query(query)
+                _post_process(query, [_sort_query])
+                query.add_experiment("query-sorting", "true")
+                after = format_query(query)
+                sentry_sdk.set_tag("query-sorting.query_changed", str(before == after))
+            else:
+                query.add_experiment("query-sorting", "false")
+
+            timer.send_metrics_to(
+                metrics, {"experiment": query.get_experiment_value("query-sorting")}
+            )
+
     return query

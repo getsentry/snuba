@@ -6,6 +6,7 @@ from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import SimpleDataSource
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.expressions import StringifyVisitor
+from snuba.query.logical import Query as LogicalQuery
 
 TExpression = Union[str, Mapping[str, Any], Sequence[Any]]
 
@@ -16,7 +17,11 @@ def _indent_str_list(str_list: List[str], levels: int) -> List[str]:
 
 
 def format_query(
-    query: Union[ProcessableQuery[SimpleDataSource], CompositeQuery[SimpleDataSource]]
+    query: Union[
+        LogicalQuery,
+        ProcessableQuery[SimpleDataSource],
+        CompositeQuery[SimpleDataSource],
+    ]
 ) -> List[str]:
     """
     Formats a query as a list of strings with each element being a new line

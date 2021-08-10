@@ -131,7 +131,13 @@ class StringifyVisitor(ExpressionVisitor[str]):
         >>> exp_str = exp.accept(visitor)
     """
 
-    def __init__(self, level: int = 0, initial_indent: int = 0) -> None:
+    def __init__(
+        self,
+        level: int = 0,
+        initial_indent: int = 0,
+        indenter: str = "  ",
+        delimiter: str = "\n",
+    ) -> None:
         # keeps track of the level of the AST we are currently in,
         # this is necessary for nice indentation
 
@@ -142,10 +148,16 @@ class StringifyVisitor(ExpressionVisitor[str]):
         # the initial indent that the repr string should have
         self.__initial_indent = initial_indent
 
+        # what to use to split lines
+        self.__delimiter = delimiter
+
+        # The indenter to use when getting the line prefix
+        self.__indenter = indenter
+
     def _get_line_prefix(self) -> str:
         # every line in the tree needs to be indented based on the tree level
         # to make things look pretty
-        return "  " * (self.__initial_indent + self.__level)
+        return self.__indenter * (self.__initial_indent + self.__level)
 
     def _get_alias_str(self, exp: Expression) -> str:
         # Every expression has an optional alias so we handle that here
@@ -195,18 +207,22 @@ class StringifyVisitor(ExpressionVisitor[str]):
 
     def visit_function_call(self, exp: FunctionCall) -> str:
         self.__level += 1
-        param_str = ",".join([f"\n{param.accept(self)}" for param in exp.parameters])
+        param_str = ",".join(
+            [f"{self.__delimiter}{param.accept(self)}" for param in exp.parameters]
+        )
         self.__level -= 1
-        return f"{self._get_line_prefix()}{exp.function_name}({param_str}\n{self._get_line_prefix()}){self._get_alias_str(exp)}"
+        return f"{self._get_line_prefix()}{exp.function_name}({param_str}{self.__delimiter}{self._get_line_prefix()}){self._get_alias_str(exp)}"
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:
         self.__level += 1
-        param_str = ",".join([f"\n{param.accept(self)}" for param in exp.parameters])
+        param_str = ",".join(
+            [f"{self.__delimiter}{param.accept(self)}" for param in exp.parameters]
+        )
         self.__level -= 1
         # The internal function repr will already have the
         # prefix appropriate for the level, we don't need to
         # insert it here
-        return f"{exp.internal_function.accept(self)}({param_str}\n{self._get_line_prefix()}){self._get_alias_str(exp)}"
+        return f"{exp.internal_function.accept(self)}({param_str}{self.__delimiter}{self._get_line_prefix()}){self._get_alias_str(exp)}"
 
     def visit_argument(self, exp: Argument) -> str:
         return f"{self._get_line_prefix()}{exp.name}{self._get_alias_str(exp)}"
@@ -216,7 +232,7 @@ class StringifyVisitor(ExpressionVisitor[str]):
         self.__level += 1
         transformation_str = exp.transformation.accept(self)
         self.__level -= 1
-        return f"{self._get_line_prefix()}({params_str} ->\n{transformation_str}\n{self._get_line_prefix()}){self._get_alias_str(exp)}"
+        return f"{self._get_line_prefix()}({params_str} ->{self.__delimiter}{transformation_str}{self.__delimiter}{self._get_line_prefix()}){self._get_alias_str(exp)}"
 
 
 OptionalScalarType = Union[None, bool, str, float, int, date, datetime]
