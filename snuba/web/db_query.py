@@ -153,7 +153,6 @@ class ReferencedColumnsCounter(
 def update_query_metadata_and_stats(
     query: Query,
     sql: str,
-    sql_anonymized: str,
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_metadata: SnubaQueryMetadata,
@@ -167,6 +166,7 @@ def update_query_metadata_and_stats(
     Also updates stats with any relevant information and returns the updated dict.
     """
     stats.update(query_settings)
+    sql_anonymized = format_query_anonymized(query).get_sql()
 
     query_metadata.query_list.append(
         ClickhouseQueryMetadata(
@@ -427,13 +427,11 @@ def raw_query(
     timer.mark("get_configs")
 
     sql = formatted_query.get_sql()
-    sql_anonymized = format_query_anonymized(clickhouse_query).get_sql()
 
     update_with_status = partial(
         update_query_metadata_and_stats,
         clickhouse_query,
         sql,
-        sql_anonymized,
         timer,
         stats,
         query_metadata,
