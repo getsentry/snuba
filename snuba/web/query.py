@@ -1,4 +1,5 @@
 import logging
+from dataclasses import replace
 from functools import partial
 from math import floor
 from typing import MutableMapping, Optional, Union
@@ -6,7 +7,8 @@ from typing import MutableMapping, Optional, Union
 import sentry_sdk
 
 from snuba import environment
-from snuba.clickhouse.formatter.query import format_query
+from snuba import settings as snuba_settings
+from snuba.clickhouse.formatter.query import format_query, format_query_anonymized
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_inspector import TablesCollector
 from snuba.datasets.dataset import Dataset
@@ -145,7 +147,7 @@ def _dry_run_query_runner(
     reader: Reader,
 ) -> QueryResult:
     with sentry_sdk.start_span(description="dryrun_create_query", op="db") as span:
-        formatted_query = format_query(clickhouse_query, request_settings)
+        formatted_query = format_query(clickhouse_query)
         span.set_data("query", formatted_query.structured())
 
     return QueryResult(
@@ -237,7 +239,10 @@ def _format_storage_query_and_run(
     visitor.visit(from_clause)
     table_names = ",".join(sorted(visitor.get_tables()))
     with sentry_sdk.start_span(description="create_query", op="db") as span:
-        formatted_query = format_query(clickhouse_query, request_settings)
+        _apply_turbo_sampling_if_needed(clickhouse_query, request_settings)
+
+        formatted_query = format_query(clickhouse_query)
+        formatted_query_anonymized = format_query_anonymized(clickhouse_query)
         span.set_data("query", formatted_query.structured())
         span.set_data(
             "query_size_bytes", _string_size_in_bytes(formatted_query.get_sql())
@@ -264,6 +269,7 @@ def _format_storage_query_and_run(
                 clickhouse_query,
                 request_settings,
                 formatted_query,
+                formatted_query_anonymized,
                 reader,
                 timer,
                 query_metadata,
@@ -302,3 +308,20 @@ def get_query_size_group(formatted_query: str) -> str:
 
 def _string_size_in_bytes(s: str) -> int:
     return len(s.encode("utf-8"))
+
+
+def _apply_turbo_sampling_if_needed(
+    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    request_settings: RequestSettings,
+) -> None:
+    if isinstance(clickhouse_query, Query):
+        if (
+            request_settings.get_turbo()
+            and not clickhouse_query.get_from_clause().sampling_rate
+        ):
+            clickhouse_query.set_from_clause(
+                replace(
+                    clickhouse_query.get_from_clause(),
+                    sampling_rate=snuba_settings.TURBO_SAMPLE_RATE,
+                )
+            )

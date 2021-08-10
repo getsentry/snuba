@@ -152,6 +152,7 @@ class ReferencedColumnsCounter(
 def update_query_metadata_and_stats(
     query: Query,
     sql: str,
+    sql_anonymized: str,
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_metadata: SnubaQueryMetadata,
@@ -169,6 +170,7 @@ def update_query_metadata_and_stats(
     query_metadata.query_list.append(
         ClickhouseQueryMetadata(
             sql=sql,
+            sql_anonymized=sql_anonymized,
             stats=stats,
             status=status,
             profile=generate_profile(query),
@@ -401,6 +403,7 @@ def raw_query(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     formatted_query: FormattedQuery,
+    formatted_query_anonymized: FormattedQuery,
     reader: Reader,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
@@ -424,11 +427,13 @@ def raw_query(
     timer.mark("get_configs")
 
     sql = formatted_query.get_sql()
+    sql_anonymized = formatted_query_anonymized.get_sql()
 
     update_with_status = partial(
         update_query_metadata_and_stats,
         clickhouse_query,
         sql,
+        sql_anonymized,
         timer,
         stats,
         query_metadata,

@@ -1,9 +1,15 @@
 from typing import Any, Sequence
 
 import pytest
+
 from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
+from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.formatter.nodes import PaddingNode, SequenceNode, StringNode
-from snuba.clickhouse.formatter.query import JoinFormatter, format_query
+from snuba.clickhouse.formatter.query import (
+    JoinFormatter,
+    format_query,
+    format_query_anonymized,
+)
 from snuba.clickhouse.query import Query
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
@@ -22,7 +28,6 @@ from snuba.query.data_source.join import (
 )
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
-from snuba.request.request_settings import HTTPRequestSettings
 
 ERRORS_SCHEMA = ColumnSet(
     [
@@ -484,10 +489,53 @@ test_cases = [
 def test_format_expressions(
     query: Query, formatted_seq: Sequence[Any], formatted_str: str
 ) -> None:
-    request_settings = HTTPRequestSettings()
-    clickhouse_query = format_query(query, request_settings)
+    clickhouse_query = format_query(query)
     assert clickhouse_query.get_sql() == formatted_str
     assert clickhouse_query.structured() == formatted_seq
+
+
+def test_format_expression_anonymized() -> None:
+    query = Query(
+        Table("my_table", ColumnSet([])),
+        selected_columns=[
+            SelectedExpression("column1", Column(None, None, "column1")),
+            SelectedExpression("column2", Column(None, "table1", "column2")),
+            SelectedExpression("column3", Column("al", None, "column3")),
+        ],
+        condition=binary_condition(
+            "eq", lhs=Column("al", None, "column3"), rhs=Literal(None, "blabla"),
+        ),
+        groupby=[
+            Column(None, None, "column1"),
+            Column(None, "table1", "column2"),
+            Column("al", None, "column3"),
+            Column(None, None, "column4"),
+        ],
+        having=binary_condition(
+            "eq", lhs=Column(None, None, "column1"), rhs=Literal(None, 123),
+        ),
+        order_by=[
+            OrderBy(OrderByDirection.ASC, Column(None, None, "column1")),
+            OrderBy(OrderByDirection.DESC, Column(None, "table1", "column2")),
+        ],
+    )
+    formatted_query = format_query_anonymized(query)
+    assert formatted_query.structured() == [
+        "SELECT column1, table1.column2, (column3 AS al)",
+        ["FROM", "my_table"],
+        "WHERE eq(al, $S)",
+        "GROUP BY column1, table1.column2, al, column4",
+        "HAVING eq(column1, $I)",
+        "ORDER BY column1 ASC, table1.column2 DESC",
+    ]
+    assert formatted_query.get_sql() == (
+        "SELECT column1, table1.column2, (column3 AS al) "
+        "FROM my_table "
+        "WHERE eq(al, $S) "
+        "GROUP BY column1, table1.column2, al, column4 "
+        "HAVING eq(column1, $I) "
+        "ORDER BY column1 ASC, table1.column2 DESC"
+    )
 
 
 def test_format_clickhouse_specific_query() -> None:
@@ -517,8 +565,7 @@ def test_format_clickhouse_specific_query() -> None:
     query.set_offset(50)
     query.set_limit(100)
 
-    request_settings = HTTPRequestSettings()
-    clickhouse_query = format_query(query, request_settings)
+    clickhouse_query = format_query(query)
 
     expected = (
         "SELECT column1, table1.column2 "
@@ -628,5 +675,8 @@ TEST_JOIN = [
 def test_join_format(
     clause: JoinClause[Table], formatted_seq: SequenceNode, formatted_str: str
 ) -> None:
-    assert str(clause.accept(JoinFormatter())) == formatted_str
-    assert clause.accept(JoinFormatter()) == formatted_seq
+    assert (
+        str(clause.accept(JoinFormatter(ClickhouseExpressionFormatter)))
+        == formatted_str
+    )
+    assert clause.accept(JoinFormatter(ClickhouseExpressionFormatter)) == formatted_seq

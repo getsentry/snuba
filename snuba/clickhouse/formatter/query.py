@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import replace
-from typing import Optional, Sequence, Union
+from typing import Optional, Sequence, Type, Union
 
-from snuba import settings as snuba_settings
-from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
+from snuba.clickhouse.formatter.expression import (
+    ClickhouseExpressionFormatter,
+    ClickHouseExpressionFormatterAnonymized,
+)
 from snuba.clickhouse.formatter.nodes import (
     FormattedNode,
     FormattedQuery,
@@ -22,12 +23,11 @@ from snuba.query.data_source.simple import Table
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.expressions import Expression
 from snuba.query.parsing import ParsingContext
-from snuba.request.request_settings import RequestSettings
 
 FormattableQuery = Union[Query, CompositeQuery[Table]]
 
 
-def format_query(query: FormattableQuery, settings: RequestSettings) -> FormattedQuery:
+def format_query(query: FormattableQuery) -> FormattedQuery:
     """
     Formats a Clickhouse Query from the AST representation into an
     intermediate structure that can either be serialized into a string
@@ -35,20 +35,14 @@ def format_query(query: FormattableQuery, settings: RequestSettings) -> Formatte
 
     This is the entry point for any type of query, whether simple or
     composite.
-
-    TODO: Remove this method entirely and move the sampling logic
-    into a query processor.
     """
+    return FormattedQuery(_format_query_content(query, ClickhouseExpressionFormatter))
 
-    if isinstance(query, Query):
-        if settings.get_turbo() and not query.get_from_clause().sampling_rate:
-            query.set_from_clause(
-                replace(
-                    query.get_from_clause(),
-                    sampling_rate=snuba_settings.TURBO_SAMPLE_RATE,
-                )
-            )
-    return FormattedQuery(_format_query_content(query))
+
+def format_query_anonymized(query: FormattableQuery) -> FormattedQuery:
+    return FormattedQuery(
+        _format_query_content(query, ClickHouseExpressionFormatterAnonymized)
+    )
 
 
 class DataSourceFormatter(DataSourceVisitor[FormattedNode, Table]):
@@ -57,6 +51,9 @@ class DataSourceFormatter(DataSourceVisitor[FormattedNode, Table]):
     is called when formatting the FROM clause of every nested query
     in a Composite query.
     """
+
+    def __init__(self, ExpressionFormatter: Type[ClickhouseExpressionFormatter]):
+        self.ExpressionFormatter = ExpressionFormatter
 
     def _visit_simple_source(self, data_source: Table) -> StringNode:
         """
@@ -70,21 +67,27 @@ class DataSourceFormatter(DataSourceVisitor[FormattedNode, Table]):
         return StringNode(f"{data_source.table_name}{final}{sample}")
 
     def _visit_join(self, data_source: JoinClause[Table]) -> FormattedNode:
-        return data_source.accept(JoinFormatter())
+        return data_source.accept(JoinFormatter(self.ExpressionFormatter))
 
     def _visit_simple_query(
         self, data_source: ProcessableQuery[Table]
     ) -> FormattedSubQuery:
         assert isinstance(data_source, Query)
-        return FormattedSubQuery(_format_query_content(data_source))
+        return FormattedSubQuery(
+            _format_query_content(data_source, self.ExpressionFormatter),
+        )
 
     def _visit_composite_query(
         self, data_source: CompositeQuery[Table]
     ) -> FormattedSubQuery:
-        return FormattedSubQuery(_format_query_content(data_source))
+        return FormattedSubQuery(
+            _format_query_content(data_source, self.ExpressionFormatter),
+        )
 
 
-def _format_query_content(query: FormattableQuery) -> Sequence[FormattedNode]:
+def _format_query_content(
+    query: FormattableQuery, ExpressionFormatter: Type[ClickhouseExpressionFormatter],
+) -> Sequence[FormattedNode]:
     """
     Produces the content of the formatted query.
     It works for both the composite query and the simple one as the
@@ -93,13 +96,16 @@ def _format_query_content(query: FormattableQuery) -> Sequence[FormattedNode]:
     method into smaller ones.
     """
     parsing_context = ParsingContext()
-    formatter = ClickhouseExpressionFormatter(parsing_context)
+    formatter = ExpressionFormatter(parsing_context)
 
     return [
         v
         for v in [
             _format_select(query, formatter),
-            PaddingNode("FROM", DataSourceFormatter().visit(query.get_from_clause())),
+            PaddingNode(
+                "FROM",
+                DataSourceFormatter(ExpressionFormatter).visit(query.get_from_clause()),
+            ),
             _build_optional_string_node("ARRAY JOIN", query.get_arrayjoin(), formatter),
             _build_optional_string_node("PREWHERE", query.get_prewhere_ast(), formatter)
             if isinstance(query, Query)
@@ -194,13 +200,18 @@ class JoinFormatter(JoinVisitor[FormattedNode, Table]):
     Formats a Join tree.
     """
 
+    def __init__(self, ExpressionFormatter: Type[ClickhouseExpressionFormatter]):
+        self.ExpressionFormatter = ExpressionFormatter
+
     def visit_individual_node(self, node: IndividualNode[Table]) -> FormattedNode:
         """
         An individual node is formatted as a table name with a table
         alias, thus the padding.
         """
         return PaddingNode(
-            None, DataSourceFormatter().visit(node.data_source), node.alias
+            None,
+            DataSourceFormatter(self.ExpressionFormatter).visit(node.data_source),
+            node.alias,
         )
 
     def visit_join_clause(self, node: JoinClause[Table]) -> FormattedNode:

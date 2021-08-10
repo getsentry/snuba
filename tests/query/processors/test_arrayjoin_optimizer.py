@@ -412,7 +412,7 @@ def test_aliasing() -> None:
             "conditions": [["tags_key", "IN", ["t1", "t2"]]],
         }
     )
-    sql = format_query(processed, HTTPRequestSettings()).get_sql()
+    sql = format_query(processed).get_sql()
     transactions_table_name = (
         transactions_storage.get_table_writer().get_schema().get_table_name()
     )
