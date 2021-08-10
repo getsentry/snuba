@@ -97,6 +97,14 @@ test_cases = [
             "HAVING eq(column1, 123) "
             "ORDER BY column1 ASC, table1.column2 DESC"
         ),
+        (
+            "SELECT column1, table1.column2, (column3 AS al) "
+            "FROM my_table "
+            "WHERE eq(al, $S) "
+            "GROUP BY column1, table1.column2, al, column4 "
+            "HAVING eq(column1, $N) "
+            "ORDER BY column1 ASC, table1.column2 DESC"
+        ),
         id="Simple query with aliases and multiple tables",
     ),
     pytest.param(
@@ -169,6 +177,13 @@ test_cases = [
             "GROUP BY my_complex_math "
             "ORDER BY f(column1) ASC"
         ),
+        (
+            "SELECT (doSomething(column1, table1.column2, (column3 AS al))(column1) AS my_complex_math) "
+            "FROM my_table "
+            "WHERE eq(al, $S) AND neq(al, $S) "
+            "GROUP BY my_complex_math "
+            "ORDER BY f(column1) ASC"
+        ),
         id="Query with complex functions",
     ),
     pytest.param(
@@ -190,6 +205,12 @@ test_cases = [
             "GROUP BY al1, al2",
             "ORDER BY column1 ASC",
         ],
+        (
+            "SELECT (`field_##$$%` AS al1), (`t&^%$`.`f@!@` AS al2) "
+            "FROM my_table "
+            "GROUP BY al1, al2 "
+            "ORDER BY column1 ASC"
+        ),
         (
             "SELECT (`field_##$$%` AS al1), (`t&^%$`.`f@!@` AS al2) "
             "FROM my_table "
@@ -249,6 +270,12 @@ test_cases = [
             "WHERE (equals(al, 'blabla') OR equals(al2, 'blabla2')) AND "
             "(equals(column5, 'blabla3') OR equals(column6, 'blabla4'))"
         ),
+        (
+            "SELECT (column3 AS al), (column4 AS al2) "
+            "FROM my_table "
+            "WHERE (equals(al, $S) OR equals(al2, $S)) AND "
+            "(equals(column5, $S) OR equals(column6, $S))"
+        ),
         id="query_complex_condition",
     ),
     pytest.param(
@@ -306,6 +333,16 @@ test_cases = [
             ") "
             "GROUP BY alias"
         ),
+        (
+            "SELECT (avg(sub_average) AS average), (column3 AS alias) "
+            "FROM ("
+            "SELECT column1, (avg(column2) AS sub_average), column3 "
+            "FROM my_table "
+            "WHERE eq((column3 AS al), $S) "
+            "GROUP BY column2"
+            ") "
+            "GROUP BY alias"
+        ),
         id="Composite query",
     ),
     pytest.param(
@@ -348,6 +385,12 @@ test_cases = [
             "FROM errors_local err INNER JOIN groupedmessage_local groups "
             "ON err.group_id=groups.id "
             "WHERE eq(groups.id, 1)"
+        ),
+        (
+            "SELECT (err.event_id AS error_id), (groups.message AS message) "
+            "FROM errors_local err INNER JOIN groupedmessage_local groups "
+            "ON err.group_id=groups.id "
+            "WHERE eq(groups.id, $N)"
         ),
         id="Simple join",
     ),
@@ -480,62 +523,37 @@ test_cases = [
             "ON err.group_id=assignee.group_id "
             "GROUP BY groups.id"
         ),
+        (
+            "SELECT (err.group_id AS group_id), (count() AS events) "
+            "FROM "
+            "(SELECT (event_id AS error_id), group_id FROM errors_local WHERE eq(project_id, $N)) err "
+            "INNER JOIN "
+            "(SELECT id, message FROM groupedmessage_local WHERE eq(project_id, $N)) groups "
+            "ON err.group_id=groups.id "
+            "INNER JOIN "
+            "(SELECT group_id FROM groupassignee_local WHERE eq(user, $S)) assignee "
+            "ON err.group_id=assignee.group_id "
+            "GROUP BY groups.id"
+        ),
         id="Join of multiple subqueries",
     ),
 ]
 
 
-@pytest.mark.parametrize("query, formatted_seq, formatted_str", test_cases)
+@pytest.mark.parametrize(
+    "query, formatted_seq, formatted_str, formatted_anonymized_str", test_cases
+)
 def test_format_expressions(
-    query: Query, formatted_seq: Sequence[Any], formatted_str: str
+    query: Query,
+    formatted_seq: Sequence[Any],
+    formatted_str: str,
+    formatted_anonymized_str: str,
 ) -> None:
     clickhouse_query = format_query(query)
+    clickhouse_query_anonymized = format_query_anonymized(query)
     assert clickhouse_query.get_sql() == formatted_str
     assert clickhouse_query.structured() == formatted_seq
-
-
-def test_format_expression_anonymized() -> None:
-    query = Query(
-        Table("my_table", ColumnSet([])),
-        selected_columns=[
-            SelectedExpression("column1", Column(None, None, "column1")),
-            SelectedExpression("column2", Column(None, "table1", "column2")),
-            SelectedExpression("column3", Column("al", None, "column3")),
-        ],
-        condition=binary_condition(
-            "eq", lhs=Column("al", None, "column3"), rhs=Literal(None, "blabla"),
-        ),
-        groupby=[
-            Column(None, None, "column1"),
-            Column(None, "table1", "column2"),
-            Column("al", None, "column3"),
-            Column(None, None, "column4"),
-        ],
-        having=binary_condition(
-            "eq", lhs=Column(None, None, "column1"), rhs=Literal(None, 123),
-        ),
-        order_by=[
-            OrderBy(OrderByDirection.ASC, Column(None, None, "column1")),
-            OrderBy(OrderByDirection.DESC, Column(None, "table1", "column2")),
-        ],
-    )
-    formatted_query = format_query_anonymized(query)
-    assert formatted_query.structured() == [
-        "SELECT column1, table1.column2, (column3 AS al)",
-        ["FROM", "my_table"],
-        "WHERE eq(al, $S)",
-        "GROUP BY column1, table1.column2, al, column4",
-        "HAVING eq(column1, $I)",
-        "ORDER BY column1 ASC, table1.column2 DESC",
-    ]
-    assert formatted_query.get_sql() == (
-        "SELECT column1, table1.column2, (column3 AS al) "
-        "FROM my_table "
-        "WHERE eq(al, $S) "
-        "GROUP BY column1, table1.column2, al, column4 "
-        "HAVING eq(column1, $I) "
-        "ORDER BY column1 ASC, table1.column2 DESC"
-    )
+    assert clickhouse_query_anonymized.get_sql() == formatted_anonymized_str
 
 
 def test_format_clickhouse_specific_query() -> None:

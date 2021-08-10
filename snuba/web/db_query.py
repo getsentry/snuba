@@ -15,6 +15,7 @@ from sentry_sdk.api import configure_scope
 from snuba import environment, settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
+from snuba.clickhouse.formatter.query import format_query_anonymized
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_profiler import generate_profile
 from snuba.query import ProcessableQuery
@@ -403,7 +404,6 @@ def raw_query(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     formatted_query: FormattedQuery,
-    formatted_query_anonymized: FormattedQuery,
     reader: Reader,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
@@ -427,7 +427,7 @@ def raw_query(
     timer.mark("get_configs")
 
     sql = formatted_query.get_sql()
-    sql_anonymized = formatted_query_anonymized.get_sql()
+    sql_anonymized = format_query_anonymized(clickhouse_query).get_sql()
 
     update_with_status = partial(
         update_query_metadata_and_stats,

@@ -5,6 +5,7 @@ from typing import Optional, Sequence, Type, Union
 from snuba.clickhouse.formatter.expression import (
     ClickhouseExpressionFormatter,
     ClickHouseExpressionFormatterAnonymized,
+    ClickhouseExpressionFormatterBase,
 )
 from snuba.clickhouse.formatter.nodes import (
     FormattedNode,
@@ -52,8 +53,10 @@ class DataSourceFormatter(DataSourceVisitor[FormattedNode, Table]):
     in a Composite query.
     """
 
-    def __init__(self, ExpressionFormatter: Type[ClickhouseExpressionFormatter]):
-        self.ExpressionFormatter = ExpressionFormatter
+    def __init__(
+        self, expression_formatter_type: Type[ClickhouseExpressionFormatterBase]
+    ):
+        self.__expression_formatter_type = expression_formatter_type
 
     def _visit_simple_source(self, data_source: Table) -> StringNode:
         """
@@ -67,26 +70,27 @@ class DataSourceFormatter(DataSourceVisitor[FormattedNode, Table]):
         return StringNode(f"{data_source.table_name}{final}{sample}")
 
     def _visit_join(self, data_source: JoinClause[Table]) -> FormattedNode:
-        return data_source.accept(JoinFormatter(self.ExpressionFormatter))
+        return data_source.accept(JoinFormatter(self.__expression_formatter_type))
 
     def _visit_simple_query(
         self, data_source: ProcessableQuery[Table]
     ) -> FormattedSubQuery:
         assert isinstance(data_source, Query)
         return FormattedSubQuery(
-            _format_query_content(data_source, self.ExpressionFormatter),
+            _format_query_content(data_source, self.__expression_formatter_type),
         )
 
     def _visit_composite_query(
         self, data_source: CompositeQuery[Table]
     ) -> FormattedSubQuery:
         return FormattedSubQuery(
-            _format_query_content(data_source, self.ExpressionFormatter),
+            _format_query_content(data_source, self.__expression_formatter_type),
         )
 
 
 def _format_query_content(
-    query: FormattableQuery, ExpressionFormatter: Type[ClickhouseExpressionFormatter],
+    query: FormattableQuery,
+    expression_formatter_type: Type[ClickhouseExpressionFormatterBase],
 ) -> Sequence[FormattedNode]:
     """
     Produces the content of the formatted query.
@@ -96,7 +100,7 @@ def _format_query_content(
     method into smaller ones.
     """
     parsing_context = ParsingContext()
-    formatter = ExpressionFormatter(parsing_context)
+    formatter = expression_formatter_type(parsing_context)
 
     return [
         v
@@ -104,7 +108,9 @@ def _format_query_content(
             _format_select(query, formatter),
             PaddingNode(
                 "FROM",
-                DataSourceFormatter(ExpressionFormatter).visit(query.get_from_clause()),
+                DataSourceFormatter(expression_formatter_type).visit(
+                    query.get_from_clause()
+                ),
             ),
             _build_optional_string_node("ARRAY JOIN", query.get_arrayjoin(), formatter),
             _build_optional_string_node("PREWHERE", query.get_prewhere_ast(), formatter)
@@ -122,7 +128,7 @@ def _format_query_content(
 
 
 def _format_select(
-    query: AbstractQuery, formatter: ClickhouseExpressionFormatter
+    query: AbstractQuery, formatter: ClickhouseExpressionFormatterBase
 ) -> StringNode:
     selected_cols = [
         e.expression.accept(formatter) for e in query.get_selected_columns()
@@ -133,7 +139,7 @@ def _format_select(
 def _build_optional_string_node(
     name: str,
     expression: Optional[Expression],
-    formatter: ClickhouseExpressionFormatter,
+    formatter: ClickhouseExpressionFormatterBase,
 ) -> Optional[StringNode]:
     return (
         StringNode(f"{name} {expression.accept(formatter)}")
@@ -143,7 +149,7 @@ def _build_optional_string_node(
 
 
 def _format_groupby(
-    query: AbstractQuery, formatter: ClickhouseExpressionFormatter
+    query: AbstractQuery, formatter: ClickhouseExpressionFormatterBase
 ) -> Optional[StringNode]:
     group_clause: Optional[StringNode] = None
     ast_groupby = query.get_groupby()
@@ -157,7 +163,7 @@ def _format_groupby(
 
 
 def _format_orderby(
-    query: AbstractQuery, formatter: ClickhouseExpressionFormatter
+    query: AbstractQuery, formatter: ClickhouseExpressionFormatterBase
 ) -> Optional[StringNode]:
     ast_orderby = query.get_orderby()
     if ast_orderby:
@@ -170,7 +176,7 @@ def _format_orderby(
 
 
 def _format_limitby(
-    query: AbstractQuery, formatter: ClickhouseExpressionFormatter
+    query: AbstractQuery, formatter: ClickhouseExpressionFormatterBase
 ) -> Optional[StringNode]:
     ast_limitby = query.get_limitby()
 
@@ -185,7 +191,7 @@ def _format_limitby(
 
 
 def _format_limit(
-    query: AbstractQuery, formatter: ClickhouseExpressionFormatter
+    query: AbstractQuery, formatter: ClickhouseExpressionFormatterBase
 ) -> Optional[StringNode]:
     ast_limit = query.get_limit()
     return (
@@ -200,7 +206,7 @@ class JoinFormatter(JoinVisitor[FormattedNode, Table]):
     Formats a Join tree.
     """
 
-    def __init__(self, ExpressionFormatter: Type[ClickhouseExpressionFormatter]):
+    def __init__(self, ExpressionFormatter: Type[ClickhouseExpressionFormatterBase]):
         self.ExpressionFormatter = ExpressionFormatter
 
     def visit_individual_node(self, node: IndividualNode[Table]) -> FormattedNode:
