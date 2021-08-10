@@ -39,14 +39,14 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
     """
 
     def __init__(self, parsing_context: Optional[ParsingContext] = None) -> None:
-        self._parsing_context = (
+        self.__parsing_context = (
             parsing_context if parsing_context is not None else ParsingContext()
         )
 
-    def _alias(self, formatted_exp: str, alias: Optional[str]) -> str:
+    def __alias(self, formatted_exp: str, alias: Optional[str]) -> str:
         if not alias:
             return formatted_exp
-        elif self._parsing_context.is_alias_present(alias):
+        elif self.__parsing_context.is_alias_present(alias):
             ret = escape_alias(alias)
             # This is for the type checker. escape_alias can return None if
             # we pass None. But here we do not pass None so a None return value
@@ -54,33 +54,33 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             assert ret is not None
             return ret
         else:
-            self._parsing_context.add_alias(alias)
+            self.__parsing_context.add_alias(alias)
             return f"({formatted_exp} AS {escape_alias(alias)})"
 
     def _format_string_literal(self, exp: Literal) -> str:
-        return self._alias(escape_string(cast(str, exp.value)), exp.alias)
+        return self.__alias(escape_string(cast(str, exp.value)), exp.alias)
 
     def _format_number_literal(self, exp: Literal) -> str:
-        return self._alias(str(exp.value), exp.alias)
+        return self.__alias(str(exp.value), exp.alias)
 
     def visit_literal(self, exp: Literal) -> str:
         if exp.value is None:
-            return self._alias("NULL", exp.alias)
+            return self.__alias("NULL", exp.alias)
         elif exp.value is True:
-            return self._alias("true", exp.alias)
+            return self.__alias("true", exp.alias)
         elif exp.value is False:
-            return self._alias("false", exp.alias)
+            return self.__alias("false", exp.alias)
         elif isinstance(exp.value, str):
             return self._format_string_literal(exp)
         elif isinstance(exp.value, (int, float)):
             return self._format_number_literal(exp)
         elif isinstance(exp.value, datetime):
             value = exp.value.replace(tzinfo=None, microsecond=0)
-            return self._alias(
+            return self.__alias(
                 "toDateTime('{}', 'Universal')".format(value.isoformat()), exp.alias
             )
         elif isinstance(exp.value, date):
-            return self._alias(
+            return self.__alias(
                 "toDate('{}', 'Universal')".format(exp.value.isoformat()), exp.alias
             )
         else:
@@ -107,7 +107,7 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
         # This happens often since we apply column aliases during
         # parsing so the names are preserved during query processing.
         if exp.alias != "".join(ret_unescaped):
-            return self._alias("".join(ret), exp.alias)
+            return self.__alias("".join(ret), exp.alias)
         else:
             return "".join(ret)
 
@@ -129,7 +129,7 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             # Workaround for https://github.com/ClickHouse/ClickHouse/issues/11622
             # Some distributed queries fail when arrays are passed as array(1,2,3)
             # and work when they are passed as [1, 2, 3]
-            return self._alias(f"[{self.__visit_params(exp.parameters)}]", exp.alias)
+            return self.__alias(f"[{self.__visit_params(exp.parameters)}]", exp.alias)
 
         elif exp.function_name == BooleanFunctions.AND:
             formatted = (c.accept(self) for c in get_first_level_and_conditions(exp))
@@ -140,12 +140,12 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             return f"({' OR '.join(formatted)})"
 
         ret = f"{escape_identifier(exp.function_name)}({self.__visit_params(exp.parameters)})"
-        return self._alias(ret, exp.alias)
+        return self.__alias(ret, exp.alias)
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:
         int_func = exp.internal_function.accept(self)
         ret = f"{int_func}({self.__visit_params(exp.parameters)})"
-        return self._alias(ret, exp.alias)
+        return self.__alias(ret, exp.alias)
 
     def __escape_identifier_enforce(self, expr: str) -> str:
         ret = escape_identifier(expr)
@@ -160,13 +160,13 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
     def visit_lambda(self, exp: Lambda) -> str:
         parameters = [self.__escape_identifier_enforce(v) for v in exp.parameters]
         ret = f"({', '.join(parameters)} -> {exp.transformation.accept(self)})"
-        return self._alias(ret, exp.alias)
+        return self.__alias(ret, exp.alias)
 
 
 class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatter):
     """
     This Formatter strips string and integer literals and replaces them with a
-    a token representing the type of literal. All other behavior is the same.
+    a token representing the type of literal.
     """
 
     def _format_string_literal(self, exp: Literal) -> str:
