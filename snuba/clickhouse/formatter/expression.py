@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Optional, Sequence
+from typing import Optional, Sequence, cast
 
 from snuba.clickhouse.escaping import escape_alias, escape_identifier, escape_string
 from snuba.query.conditions import (
@@ -57,6 +57,12 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             self._parsing_context.add_alias(alias)
             return f"({formatted_exp} AS {escape_alias(alias)})"
 
+    def _format_string_literal(self, exp: Literal) -> str:
+        return self._alias(escape_string(cast(str, exp.value)), exp.alias)
+
+    def _format_number_literal(self, exp: Literal) -> str:
+        return self._alias(str(exp.value), exp.alias)
+
     def visit_literal(self, exp: Literal) -> str:
         if exp.value is None:
             return self._alias("NULL", exp.alias)
@@ -65,9 +71,9 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
         elif exp.value is False:
             return self._alias("false", exp.alias)
         elif isinstance(exp.value, str):
-            return self._alias(escape_string(exp.value), exp.alias)
+            return self._format_string_literal(exp)
         elif isinstance(exp.value, (int, float)):
-            return self._alias(str(exp.value), exp.alias)
+            return self._format_number_literal(exp)
         elif isinstance(exp.value, datetime):
             value = exp.value.replace(tzinfo=None, microsecond=0)
             return self._alias(
@@ -163,25 +169,8 @@ class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatter):
     a token representing the type of literal. All other behavior is the same.
     """
 
-    def visit_literal(self, exp: Literal) -> str:
-        if exp.value is None:
-            return self._alias("NULL", exp.alias)
-        elif exp.value is True:
-            return self._alias("true", exp.alias)
-        elif exp.value is False:
-            return self._alias("false", exp.alias)
-        elif isinstance(exp.value, str):
-            return "$S"
-        elif isinstance(exp.value, (int, float)):
-            return "$I"
-        elif isinstance(exp.value, datetime):
-            value = exp.value.replace(tzinfo=None, microsecond=0)
-            return self._alias(
-                "toDateTime('{}', 'Universal')".format(value.isoformat()), exp.alias
-            )
-        elif isinstance(exp.value, date):
-            return self._alias(
-                "toDate('{}', 'Universal')".format(exp.value.isoformat()), exp.alias
-            )
-        else:
-            raise ValueError(f"Unexpected literal type {type(exp.value)}")
+    def _format_string_literal(self, exp: Literal) -> str:
+        return "$S"
+
+    def _format_number_literal(self, exp: Literal) -> str:
+        return "$I"
