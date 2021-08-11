@@ -218,4 +218,4 @@ class ClickHouseExpressionFormatterAnonymized(ClickhouseExpressionFormatterBase)
         return "$DT"
 
     def _format_date_literal(self, exp: Literal) -> str:
-        return "$DT"
+        return "$D"
