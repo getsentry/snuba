@@ -53,6 +53,7 @@ def test_simple() -> None:
         query_list=[
             ClickhouseQueryMetadata(
                 sql="select event_id from sentry_dist sample 0.1 prewhere project_id in (1) limit 50, 100",
+                sql_anonymized="select event_id from sentry_dist sample 0.1 prewhere project_id in ($I) limit 50, 100",
                 stats={"sample": 10},
                 status=QueryStatus.SUCCESS,
                 profile=ClickhouseQueryProfile(
@@ -150,6 +151,7 @@ def test_missing_fields() -> None:
         query_list=[
             ClickhouseQueryMetadata(
                 sql="select event_id from sentry_dist sample 0.1 prewhere project_id in (1) limit 50, 100",
+                sql_anonymized="select event_id from sentry_dist sample 0.1 prewhere project_id in ($I) limit 50, 100",
                 stats={"sample": 10},
                 status=QueryStatus.SUCCESS,
                 profile=ClickhouseQueryProfile(

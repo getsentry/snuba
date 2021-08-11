@@ -65,6 +65,7 @@ class ClickhouseQueryProfile:
 @dataclass(frozen=True)
 class ClickhouseQueryMetadata:
     sql: str
+    sql_anonymized: str
     stats: Mapping[str, Any]
     status: QueryStatus
     profile: ClickhouseQueryProfile
@@ -73,6 +74,7 @@ class ClickhouseQueryMetadata:
     def to_dict(self) -> Mapping[str, Any]:
         return {
             "sql": self.sql,
+            "sql_anonymized": self.sql_anonymized,
             "stats": self.stats,
             "status": self.status.value,
             "trace_id": self.trace_id,
