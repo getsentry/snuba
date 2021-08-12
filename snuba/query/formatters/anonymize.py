@@ -23,14 +23,7 @@ from snuba.query.logical import Query as LogicalQuery
 def format_query_anonymized(
     query: Union[LogicalQuery, CompositeQuery[Entity]]
 ) -> FormattedQuery:
-    """
-    Formats a Snuba Query from the AST representation into an
-    intermediate structure that can either be serialized into a string
-    (for clickhouse) or extracted as a sequence (for logging and tracing).
 
-    This is the entry point for any type of query, whether simple or
-    composite.
-    """
     return FormattedQuery(
         _format_query_content(query, ClickHouseExpressionFormatterAnonymized)
     )
