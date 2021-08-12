@@ -1,6 +1,8 @@
-from datetime import date, datetime
 from typing import Optional, Sequence, Type, Union
 
+from snuba.clickhouse.formatter.expression import (
+    ClickHouseExpressionFormatterAnonymized,
+)
 from snuba.clickhouse.formatter.nodes import (
     FormattedNode,
     FormattedQuery,
@@ -14,17 +16,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Entity, SimpleDataSource
 from snuba.query.data_source.visitor import DataSourceVisitor
-from snuba.query.expressions import (
-    Argument,
-    Column,
-    CurriedFunctionCall,
-    Expression,
-    ExpressionVisitor,
-    FunctionCall,
-    Lambda,
-    Literal,
-    SubscriptableReference,
-)
+from snuba.query.expressions import Expression, ExpressionVisitor
 from snuba.query.logical import Query as LogicalQuery
 
 
@@ -39,86 +31,9 @@ def format_query_anonymized(
     This is the entry point for any type of query, whether simple or
     composite.
     """
-    return FormattedQuery(_format_query_content(query, AnonymizedStringifyVisitor))
-
-
-class AnonymizedStringifyVisitor(ExpressionVisitor[str]):
-    """Visitor implementation to turn an expression
-    into a string format with anonymized literals
-    Usage:
-        # Any expression class supported by the visitor will do
-        >>> exp: Expression = Expression()
-        >>> visitor = StringifyVisitor()
-        >>> exp_str = exp.accept(visitor)
-    """
-
-    def _get_alias_str(self, exp: Expression) -> str:
-        # Every expression has an optional alias so we handle that here
-        return f" AS `{exp.alias}`" if exp.alias else ""
-
-    def visit_literal(self, exp: Literal) -> str:
-        if exp.value is None:
-            return "NULL"
-        if isinstance(exp.value, str):
-            return "$S"
-        elif isinstance(exp.value, datetime):
-            return "$DT"
-        elif isinstance(exp.value, date):
-            return "$D"
-        elif isinstance(exp.value, bool):
-            return "$B"
-        elif isinstance(exp.value, (int, float)):
-            return "$N"
-        else:
-            raise ValueError(f"Unexpected literal type {type(exp.value)}")
-
-    def visit_column(self, exp: Column) -> str:
-        column_str = (
-            f"{exp.table_name}.{exp.column_name}"
-            if exp.table_name
-            else f"{exp.column_name}"
-        )
-        return f"{column_str}{self._get_alias_str(exp)}"
-
-    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> str:
-        # we want to visit the literal node to format it properly
-        # but for the subscritable reference we don't need it to
-        # be indented or newlined. Hence we remove the prefix
-        # from the string
-        literal_str = exp.key.accept(self)
-
-        # if the subscripted column is aliased, we wrap it with parens to make life
-        # easier for the viewer
-        column_str = (
-            f"({exp.column.accept(self)})"
-            if exp.column.alias is not None
-            else f"{exp.column.accept(self)}"
-        )
-
-        # this line will already have the necessary prefix due to the visit_column
-        # function
-        subscripted_column_str = f"{column_str}[{literal_str}]"
-        # after we know that, all we need to do as add the alias
-        return f"{subscripted_column_str}{self._get_alias_str(exp)}"
-
-    def visit_function_call(self, exp: FunctionCall) -> str:
-        param_str = ",".join([f" {param.accept(self)}" for param in exp.parameters])
-        return f"{exp.function_name}({param_str} ){self._get_alias_str(exp)}"
-
-    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:
-        param_str = ",".join([f" {param.accept(self)}" for param in exp.parameters])
-        # The internal function repr will already have the
-        # prefix appropriate for the level, we don't need to
-        # insert it here
-        return f"{exp.internal_function.accept(self)}({param_str} ){self._get_alias_str(exp)}"
-
-    def visit_argument(self, exp: Argument) -> str:
-        return f"{exp.name}{self._get_alias_str(exp)}"
-
-    def visit_lambda(self, exp: Lambda) -> str:
-        params_str = ",".join(exp.parameters)
-        transformation_str = exp.transformation.accept(self)
-        return f"({params_str} -> {transformation_str} ){self._get_alias_str(exp)}"
+    return FormattedQuery(
+        _format_query_content(query, ClickHouseExpressionFormatterAnonymized)
+    )
 
 
 class StringQueryFormatter(
@@ -204,7 +119,6 @@ def _format_select(
     selected_cols = [
         e.expression.accept(formatter) for e in query.get_selected_columns()
     ]
-    print(type(selected_cols[0]))
     return StringNode(f"SELECT {', '.join(selected_cols)}")
 
 
