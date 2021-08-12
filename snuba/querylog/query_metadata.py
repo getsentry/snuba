@@ -92,6 +92,7 @@ class SnubaQueryMetadata:
     dataset: str
     timer: Timer
     query_list: MutableSequence[ClickhouseQueryMetadata]
+    anonymized_request_body: str
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -99,6 +100,7 @@ class SnubaQueryMetadata:
                 "id": self.request.id,
                 "body": self.request.body,
                 "referrer": self.request.referrer,
+                "anonymized_request_body": self.anonymized_request_body,
             },
             "dataset": self.dataset,
             "query_list": [q.to_dict() for q in self.query_list],

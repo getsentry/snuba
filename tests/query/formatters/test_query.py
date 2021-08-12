@@ -25,6 +25,7 @@ from snuba.query.data_source.join import (
 )
 from snuba.query.data_source.simple import Entity, Table
 from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.formatters.anonymize import format_query as format_query_anonymize
 from snuba.query.formatters.tracing import TExpression, format_query
 from snuba.query.logical import Query as LogicalQuery
 from tests.query.joins.equivalence_schema import EVENTS_SCHEMA, GROUPS_SCHEMA
@@ -102,9 +103,16 @@ SIMPLE_FORMATTED = [
     "  LIMIT 150",
 ]
 
+SIMPLE_ANONYMIZED = (
+    "SELECT t.c AS `_snuba_c1`, f( t.c2 ) AS `_snuba_f1`"
+    " GROUPBY t.c4 ORDER BY t.c ASC ARRAY JOIN col WHERE equals( c4, $S )"
+    " HAVING equals( c6, $S ) LIMIT 100 BY c8 LIMIT 150 OFFSET 0 FROM Entity(events) SAMPLE 0.5"
+)
 
 TEST_JOIN = [
-    pytest.param(LOGICAL_QUERY, SIMPLE_FORMATTED, id="Simple logical query",),
+    pytest.param(
+        LOGICAL_QUERY, SIMPLE_FORMATTED, SIMPLE_ANONYMIZED, id="Simple logical query",
+    ),
     pytest.param(
         CompositeQuery(
             from_clause=LOGICAL_QUERY,
@@ -146,6 +154,11 @@ TEST_JOIN = [
             "  LIMIT 100 BY   c8",
             "    LIMIT 150",
         ],
+        (
+            "SELECT avg( t.c ) AS `f` OFFSET 0 FROM (SELECT t.c AS `_snuba_c1`, f( t.c2 ) AS `_snuba_f1`"
+            " GROUPBY t.c4 ORDER BY t.c ASC ARRAY JOIN col WHERE equals( c4, $S )"
+            " HAVING equals( c6, $S ) LIMIT 100 BY c8 LIMIT 150 OFFSET 0 FROM Entity(events) SAMPLE 0.5)"
+        ),
         id="Nested Query",
     ),
     pytest.param(
@@ -172,6 +185,10 @@ TEST_JOIN = [
             "    ev.group_id",
             "    gr.id",
         ],
+        (
+            "SELECT ev.c AS `_snuba_c1`, f( ev.c2 ) AS `_snuba_f1` OFFSET 0 FROM"
+            " LEFT ev, Entity(events) TYPE JoinType.INNER RIGHT gr, Entity(groupedmessage) ON ev.group_id gr.id"
+        ),
         id="Basic Join",
     ),
     pytest.param(
@@ -206,6 +223,10 @@ TEST_JOIN = [
             "      FROM",
             "        Entity(events) SAMPLE 0.5",
         ],
+        (
+            "SELECT t.c OFFSET 0 FROM (SELECT t.c OFFSET 0 FROM (SELECT avg( t.c ) AS `f`"
+            " OFFSET 0 FROM (SELECT simple_t.simple_c AS `_snuba_simple` OFFSET 0 FROM Entity(events) SAMPLE 0.5)))"
+        ),
         id="Multiple nestings",
     ),
     pytest.param(
@@ -244,16 +265,21 @@ TEST_JOIN = [
             "FROM",
             "  Table(events)",
         ],
+        "SELECT arrayElement( table.tags.value, indexOf( table.tags.key, $S ) ) AS `tags[promoted_tag]` OFFSET 0 FROM Table(events)",
         id="Clickhouse query",
     ),
 ]
 
 
-@pytest.mark.parametrize("query, formatted", TEST_JOIN)
+@pytest.mark.parametrize("query, formatted, formatted_anonymized", TEST_JOIN)
 def test_query_formatter(
-    query: Union[ProcessableQuery, CompositeQuery[Entity]], formatted: TExpression,
+    query: Union[ProcessableQuery, CompositeQuery[Entity]],
+    formatted: TExpression,
+    formatted_anonymized: str,
 ) -> None:
     formatted_query = format_query(query)  # type: ignore
     assert formatted_query == formatted
+    formatted_query_anonymized = format_query_anonymize(query)
+    assert formatted_query_anonymized.get_sql() == formatted_anonymized
     # make sure there are no empty lines
     assert [line for line in formatted_query if not line] == []

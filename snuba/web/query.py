@@ -18,6 +18,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Entity, Table
 from snuba.query.data_source.visitor import DataSourceVisitor
+from snuba.query.formatters.anonymize import format_query_anonymized
 from snuba.querylog import record_query
 from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.reader import Reader
@@ -74,7 +75,11 @@ def parse_and_run_query(
     Runs a Snuba Query, then records the metadata about each split query that was run.
     """
     query_metadata = SnubaQueryMetadata(
-        request=request, dataset=get_dataset_name(dataset), timer=timer, query_list=[],
+        request=request,
+        dataset=get_dataset_name(dataset),
+        timer=timer,
+        query_list=[],
+        anonymized_request_body=format_query_anonymized(request.query).get_sql(),
     )
 
     try:
