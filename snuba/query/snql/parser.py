@@ -1397,14 +1397,13 @@ def parse_snql_query(
     _post_process(query, VALIDATORS)
 
     if isinstance(query, LogicalQuery):  # avoid composite for now
-        if is_in_experiment(query, "", "snql.sort.query.projects", None):
+        if is_in_experiment(query, None, "snql.sort.query.projects", None):
             # Experiment with sorting the query to improve cache hit rate
             sorting_rate = state.get_config("snql.sort.query.rate", 0.0)
             sorting_rate = 0.0 if not isinstance(sorting_rate, float) else sorting_rate
 
             timer = Timer("query.sorting")
             if settings.TESTING or random.random() < sorting_rate:
-                assert isinstance(query, LogicalQuery)
                 before = format_query(query)
                 _post_process(query, [_sort_query])
                 query.add_experiment("query-sorting", "true")

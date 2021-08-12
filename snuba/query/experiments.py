@@ -7,11 +7,11 @@ from snuba.query.logical import Query as LogicalQuery
 
 def is_in_experiment(
     query: LogicalQuery,
-    referrer: str,
+    referrer: Optional[str],
     project_key: str,
     allowed_referrers: Optional[Set[str]],
 ) -> bool:
-    if allowed_referrers is not None and referrer not in allowed_referrers:
+    if referrer and allowed_referrers is not None and referrer not in allowed_referrers:
         return False
 
     project_ids = get_object_ids_in_query_ast(query, "project_id")
