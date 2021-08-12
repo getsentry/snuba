@@ -15,6 +15,7 @@ logger = logging.getLogger("snuba.state.rate_limit")
 
 PROJECT_RATE_LIMIT_NAME = "project"
 GLOBAL_RATE_LIMIT_NAME = "global"
+TABLE_RATE_LIMIT_NAME = "table"
 
 
 @dataclass(frozen=True)
