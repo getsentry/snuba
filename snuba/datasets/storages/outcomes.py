@@ -9,6 +9,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.processors.conditions_enforcer import OrgIdEnforcer
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.table_rate_limit import TableRateLimit
 from snuba.utils.streams.topics import Topic
 
 WRITE_LOCAL_TABLE_NAME = "outcomes_raw_local"
@@ -84,7 +85,7 @@ raw_storage = WritableTableStorage(
     storage_key=StorageKey.OUTCOMES_RAW,
     storage_set_key=StorageSetKey.OUTCOMES,
     schema=raw_schema,
-    query_processors=[],
+    query_processors=[TableRateLimit()],
     mandatory_condition_checkers=[OrgIdEnforcer()],
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=OutcomesProcessor(), default_topic=Topic.OUTCOMES,
@@ -95,6 +96,6 @@ materialized_storage = ReadableTableStorage(
     storage_key=StorageKey.OUTCOMES_HOURLY,
     storage_set_key=StorageSetKey.OUTCOMES,
     schema=read_schema,
-    query_processors=[PrewhereProcessor(["project_id", "org_id"])],
+    query_processors=[PrewhereProcessor(["project_id", "org_id"]), TableRateLimit()],
     mandatory_condition_checkers=[OrgIdEnforcer()],
 )

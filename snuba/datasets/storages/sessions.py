@@ -20,6 +20,7 @@ from snuba.datasets.table_storage import build_kafka_stream_loader_from_settings
 from snuba.query.exceptions import ValidationException
 from snuba.query.processors.conditions_enforcer import OrgIdEnforcer, ProjectIdEnforcer
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.table_rate_limit import TableRateLimit
 from snuba.request.request_settings import RequestSettings
 from snuba.utils.streams.topics import Topic
 
@@ -118,7 +119,7 @@ raw_storage = WritableTableStorage(
     storage_key=StorageKey.SESSIONS_RAW,
     storage_set_key=StorageSetKey.SESSIONS,
     schema=raw_schema,
-    query_processors=[MinuteResolutionProcessor()],
+    query_processors=[MinuteResolutionProcessor(), TableRateLimit()],
     mandatory_condition_checkers=[OrgIdEnforcer(), ProjectIdEnforcer()],
     stream_loader=build_kafka_stream_loader_from_settings(
         processor=SessionsProcessor(), default_topic=Topic.SESSIONS,
@@ -129,7 +130,7 @@ materialized_storage = ReadableTableStorage(
     storage_key=StorageKey.SESSIONS_HOURLY,
     storage_set_key=StorageSetKey.SESSIONS,
     schema=read_schema,
-    query_processors=[PrewhereProcessor(["project_id", "org_id"])],
+    query_processors=[PrewhereProcessor(["project_id", "org_id"]), TableRateLimit()],
     mandatory_condition_checkers=[OrgIdEnforcer(), ProjectIdEnforcer()],
 )
 
@@ -137,6 +138,6 @@ org_materialized_storage = ReadableTableStorage(
     storage_key=StorageKey.ORG_SESSIONS,
     storage_set_key=StorageSetKey.SESSIONS,
     schema=read_schema,
-    query_processors=[PrewhereProcessor(["project_id", "org_id"])],
+    query_processors=[PrewhereProcessor(["project_id", "org_id"]), TableRateLimit()],
     mandatory_condition_checkers=[],
 )
