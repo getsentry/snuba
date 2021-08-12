@@ -427,8 +427,11 @@ def dataset_query(
             status = 429
             details = {
                 "type": "rate-limited",
-                "message": "rate limit exceeded",
+                "message": str(cause),
             }
+            logger.warning(
+                str(cause), exc_info=True,
+            )
         elif isinstance(cause, ClickhouseError):
             details = {
                 "type": "clickhouse",
