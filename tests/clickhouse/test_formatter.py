@@ -1,6 +1,9 @@
 import pytest
 
-from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
+from snuba.clickhouse.formatter.expression import (
+    ClickhouseExpressionFormatter,
+    ClickHouseExpressionFormatterAnonymized,
+)
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
@@ -18,22 +21,32 @@ from snuba.query.expressions import (
 from snuba.query.parsing import ParsingContext
 
 test_expressions = [
-    (Literal(None, "test"), "'test'"),  # String literal
-    (Literal(None, 123), "123"),  # INT literal
-    (Literal("something", 123), "(123 AS something)",),  # INT literal with alias
-    (Literal(None, 123.321), "123.321"),  # FLOAT literal
-    (Literal(None, None), "NULL"),  # NULL
-    (Literal("not_null", None), "(NULL AS not_null)",),  # NULL with alias
-    (Literal(None, True), "true"),  # True
-    (Literal(None, False), "false"),  # False
-    (Column(None, "table1", "column1"), "table1.column1",),  # Basic Column no alias
+    (Literal(None, "test"), "'test'", "$S"),  # String literal
+    (Literal(None, 123), "123", "$N"),  # INT literal
+    (Literal("something", 123), "(123 AS something)", "$N"),  # INT literal with alias
+    (Literal(None, 123.321), "123.321", "$N"),  # FLOAT literal
+    (Literal(None, None), "NULL", "NULL"),  # NULL
+    (
+        Literal("not_null", None),
+        "(NULL AS not_null)",
+        "(NULL AS not_null)",
+    ),  # NULL with alias
+    (Literal(None, True), "true", "$B"),  # True
+    (Literal(None, False), "false", "$B"),  # False
+    (
+        Column(None, "table1", "column1"),
+        "table1.column1",
+        "table1.column1",
+    ),  # Basic Column no alias
     (
         Column("table1.column1", "table1", "column1"),
         "table1.column1",
+        "table1.column1",
     ),  # Declutter aliases - column name is the same as the alias. Do not alias
-    (Column(None, None, "column1"), "column1"),  # Basic Column with no table
+    (Column(None, None, "column1"), "column1", "column1"),  # Basic Column with no table
     (
         Column("alias", "table1", "column1"),
+        "(table1.column1 AS alias)",
         "(table1.column1 AS alias)",
     ),  # Column with table and alias
     (
@@ -48,6 +61,7 @@ test_expressions = [
             ),
         ),
         "f1(table1.tags, table1.param2, NULL, 'test_string')",
+        "f1(table1.tags, table1.param2, NULL, $S)",
     ),  # Simple function call with columns and literals
     (
         FunctionCall(
@@ -55,6 +69,7 @@ test_expressions = [
             "f1",
             (Column(None, "table1", "param1"), Column("alias1", "table1", "param2")),
         ),
+        "(f1(table1.param1, (table1.param2 AS alias1)) AS alias)",
         "(f1(table1.param1, (table1.param2 AS alias1)) AS alias)",
     ),  # Function with alias
     (
@@ -67,6 +82,7 @@ test_expressions = [
             ),
         ),
         "f1(f2(table1.param1), f3(table1.param2))",
+        "f1(f2(table1.param1), f3(table1.param2))",
     ),  # Hierarchical function call
     (
         FunctionCall(
@@ -78,6 +94,7 @@ test_expressions = [
             ),
         ),
         "f1((f2(table1.param1) AS al1), (f3(table1.param2) AS al2))",
+        "f1((f2(table1.param1) AS al1), (f3(table1.param2) AS al2))",
     ),  # Hierarchical function call with aliases
     (
         CurriedFunctionCall(
@@ -88,6 +105,7 @@ test_expressions = [
                 Column(None, "table1", "param3"),
             ),
         ),
+        "f0(table1.param1)(f1(table1.param2), table1.param3)",
         "f0(table1.param1)(f1(table1.param2), table1.param3)",
     ),  # Curried function call with hierarchy
     (
@@ -106,10 +124,12 @@ test_expressions = [
             ),
         ),
         "arrayExists((x, y -> testFunc(x, y)), test)",
+        "arrayExists((x, y -> testFunc(x, y)), test)",
     ),  # Lambda expression
     (
         FunctionCall("alias", "array", (Literal(None, 1), Literal(None, 2))),
         "([1, 2] AS alias)",
+        "([$N, $N] AS alias)",
     ),  # Formatting an array as [...]
     (
         binary_condition(
@@ -146,14 +166,21 @@ test_expressions = [
             ),
         ),
         "(equals(c1, 1) AND equals(c2, 2) OR equals(c3, 3) OR equals(c4, 4)) AND equals(c5, 5)",
+        "(equals(c1, $N) AND equals(c2, $N) OR equals(c3, $N) OR equals(c4, $N)) AND equals(c5, $N)",
     ),  # Formatting infix expressions
 ]
 
 
-@pytest.mark.parametrize("expression, expected_clickhouse", test_expressions)
-def test_format_expressions(expression: Expression, expected_clickhouse: str) -> None:
+@pytest.mark.parametrize(
+    "expression, expected_clickhouse, expected_anonymized", test_expressions
+)
+def test_format_expressions(
+    expression: Expression, expected_clickhouse: str, expected_anonymized: str
+) -> None:
     visitor = ClickhouseExpressionFormatter()
+    anonymized_visitor = ClickHouseExpressionFormatterAnonymized()
     assert expression.accept(visitor) == expected_clickhouse
+    assert expression.accept(anonymized_visitor) == expected_anonymized
 
 
 def test_aliases() -> None:

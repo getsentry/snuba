@@ -15,6 +15,7 @@ from sentry_sdk.api import configure_scope
 from snuba import environment, settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
+from snuba.clickhouse.formatter.query import format_query_anonymized
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_profiler import generate_profile
 from snuba.query import ProcessableQuery
@@ -165,10 +166,12 @@ def update_query_metadata_and_stats(
     Also updates stats with any relevant information and returns the updated dict.
     """
     stats.update(query_settings)
+    sql_anonymized = format_query_anonymized(query).get_sql()
 
     query_metadata.query_list.append(
         ClickhouseQueryMetadata(
             sql=sql,
+            sql_anonymized=sql_anonymized,
             stats=stats,
             status=status,
             profile=generate_profile(query),

@@ -28,6 +28,7 @@ from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.slice_of_map_optimizer import SliceOfMapOptimizer
+from snuba.query.processors.table_rate_limit import TableRateLimit
 from snuba.query.processors.type_converters.uuid_array_column_processor import (
     UUIDArrayColumnProcessor,
 )
@@ -177,6 +178,7 @@ query_processors = [
         # merged together by the final.
         omit_if_final=["environment", "release", "group_id"],
     ),
+    TableRateLimit(),
 ]
 
 query_splitters = [
