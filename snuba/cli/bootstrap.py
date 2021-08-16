@@ -1,4 +1,5 @@
 import logging
+import json
 from syslog import LOG_CRIT
 from typing import Optional, Sequence
 
@@ -18,6 +19,11 @@ from snuba.utils.streams.topics import Topic
     "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
 )
 @click.option("--kafka/--no-kafka", default=True)
+@click.option(
+    "--kafka-override-config", default=None,
+    help="Path to the JSON-formatted configuration file used to \
+    override the connection to Kafka cluster"
+)
 @click.option("--migrate/--no-migrate", default=True)
 @click.option("--force", is_flag=True)
 @click.option("--log-level", help="Logging level to use.")
@@ -25,6 +31,7 @@ def bootstrap(
     *,
     bootstrap_server: Sequence[str],
     kafka: bool,
+    kafka_override_config: str,
     migrate: bool,
     force: bool,
     log_level: Optional[str] = None,
@@ -50,6 +57,11 @@ def bootstrap(
             # to not getting ready for a while
             "socket.timeout.ms": 1000,
         }
+        if kafka_override_config is not None:
+            with open(kafka_override_config) as kafka_config_fh:
+                logger.debug("Loading the Kafka configuration override from '%s'...")
+                override_params.update(json.load(kafka_config_fh))
+
         if logger.getEffectiveLevel() != logging.DEBUG:
             # Override rdkafka loglevel to be critical unless we are
             # debugging as we expect failures when trying to connect
