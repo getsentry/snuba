@@ -424,7 +424,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         processes: Optional[int],
         input_block_size: Optional[int],
         output_block_size: Optional[int],
-		kafka_override_config: Optional[str],
+		kafka_override_config: Optional[str] = None,
         metrics: MetricsBackend,
     ):
         if processes is not None:

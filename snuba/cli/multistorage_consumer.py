@@ -91,7 +91,7 @@ def multistorage_consumer(
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
-    kafka_override_config: str,
+    kafka_override_config: Optional[str] = None,
     log_level: Optional[str] = None,
 ) -> None:
 

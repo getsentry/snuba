@@ -39,9 +39,9 @@ def confirm_load(
     *,
     control_topic: Optional[str],
     bootstrap_server: Sequence[str],
-    kafka_override_config: str,
     storage_name: str,
     source: str,
+    kafka_override_config: Optional[str] = None,
     log_level: Optional[str] = None,
 ) -> None:
     """

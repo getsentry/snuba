@@ -109,9 +109,9 @@ def consumer(
     queued_min_messages: int,
     stateful_consumer: bool,
     processes: Optional[int],
-    kafka_override_config: Optional[str],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
+    kafka_override_config: Optional[str] = None,
     log_level: Optional[str] = None,
     profile_path: Optional[str] = None,
 ) -> None:

@@ -31,9 +31,9 @@ def bootstrap(
     *,
     bootstrap_server: Sequence[str],
     kafka: bool,
-    kafka_override_config: str,
     migrate: bool,
     force: bool,
+    kafka_override_config: Optional[str] = None,
     log_level: Optional[str] = None,
 ) -> None:
     """
