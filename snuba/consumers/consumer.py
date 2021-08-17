@@ -424,7 +424,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         processes: Optional[int],
         input_block_size: Optional[int],
         output_block_size: Optional[int],
-		kafka_override_config: Optional[str] = None,
+        kafka_override_config: Optional[str] = None,
         metrics: MetricsBackend,
     ):
         if processes is not None:
@@ -444,7 +444,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         self.__processes = processes
         self.__input_block_size = input_block_size
         self.__output_block_size = output_block_size
-		self.__kafka_override_config = kafka_override_config
+        self.__kafka_override_config = kafka_override_config
         self.__metrics = metrics
 
     def __find_destination_storages(

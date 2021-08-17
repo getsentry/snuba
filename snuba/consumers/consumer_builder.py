@@ -51,7 +51,7 @@ class ConsumerBuilder:
         queued_min_messages: int,
         metrics: MetricsBackend,
         processes: Optional[int],
-		kafka_override_config: Optional[str] = None,
+        kafka_override_config: Optional[str] = None,
         input_block_size: Optional[int],
         output_block_size: Optional[int],
         commit_retry_policy: Optional[RetryPolicy] = None,
