@@ -424,8 +424,8 @@ class MultistorageConsumerProcessingStrategyFactory(
         processes: Optional[int],
         input_block_size: Optional[int],
         output_block_size: Optional[int],
-        kafka_override_config: Optional[str] = None,
         metrics: MetricsBackend,
+        kafka_override_config: Optional[str] = None,
     ):
         if processes is not None:
             assert input_block_size is not None, "input block size required"
