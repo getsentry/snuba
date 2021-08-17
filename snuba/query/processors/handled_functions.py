@@ -1,4 +1,4 @@
-from snuba.clickhouse.columns import ColumnSet
+from snuba.datasets.entity import Entity
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
@@ -34,14 +34,14 @@ class HandledFunctionsProcessor(QueryProcessor):
     Both functions return 1 or 0 if a row matches.
     """
 
-    def __init__(self, column: str, columnset: ColumnSet):
+    def __init__(self, column: str, entity: Entity):
         self.__column = column
-        self.__columnset = columnset
+        self.__entity = entity
 
     def validate_parameters(self, exp: FunctionCall) -> None:
         validator = SignatureValidator([])
         try:
-            validator.validate(exp.parameters, self.__columnset)
+            validator.validate(exp.parameters, self.__entity)
         except InvalidFunctionCall as err:
             raise InvalidExpressionException(
                 exp,

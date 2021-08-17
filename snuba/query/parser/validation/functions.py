@@ -2,9 +2,10 @@ import logging
 from collections import ChainMap
 from typing import Mapping, Optional
 
-from snuba.clickhouse.columns import Array, ColumnSet, String
+from snuba.clickhouse.columns import Array, String
 from snuba.datasets.entities.factory import get_entity
-from snuba.query import Query
+from snuba.datasets.entity import Entity
+from snuba.query import ProcessableQuery
 from snuba.query.data_source import DataSource
 from snuba.query.data_source.join import JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
@@ -39,7 +40,7 @@ class FunctionCallsValidator(ExpressionValidator):
             return
 
         entity_validators: Mapping[str, FunctionCallValidator] = {}
-        data_model: Optional[ColumnSet] = None
+        entity: Optional[Entity] = None
         if isinstance(data_source, QueryEntity):
             entity = get_entity(data_source.key)
             entity_validators = entity.get_function_call_validators()
@@ -54,11 +55,15 @@ class FunctionCallsValidator(ExpressionValidator):
                     common_function_validators,
                     exc_info=True,
                 )
-            data_model = entity.get_data_model()
-        elif isinstance(data_source, (Query, JoinClause)):
-            # TODO: This is currently ignoring entity validators. We should be validating
-            # each entity.
-            data_model = data_source.get_columns()
+        elif isinstance(data_source, JoinClause):
+            alias_map = data_source.get_alias_node_map()
+            for _, node in alias_map.items():
+                # just taking the first entity for now, will validate all coming up
+                assert isinstance(node.data_source, QueryEntity)  # mypy
+                entity = get_entity(node.data_source.key)
+                break
+        elif isinstance(data_source, ProcessableQuery):
+            entity = get_entity(data_source.get_from_clause().key)
         else:
             return
 
@@ -66,8 +71,8 @@ class FunctionCallsValidator(ExpressionValidator):
         try:
             # TODO: Decide whether these validators should exist at the Dataset or Entity level
             validator = validators.get(exp.function_name)
-            if validator is not None:
-                validator.validate(exp.parameters, data_model)
+            if validator is not None and entity is not None:
+                validator.validate(exp.parameters, entity)
         except InvalidFunctionCall as exception:
             raise InvalidExpressionException(
                 exp,

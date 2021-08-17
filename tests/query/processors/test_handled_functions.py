@@ -1,4 +1,5 @@
 import pytest
+
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.datasets.entities import EntityKey
@@ -17,9 +18,9 @@ from snuba.request.request_settings import HTTPRequestSettings
 
 
 def test_handled_processor() -> None:
-    columnset = ColumnSet([])
+    entity = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
     unprocessed = Query(
-        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+        entity,
         selected_columns=[
             SelectedExpression(name=None, expression=Column(None, None, "id")),
             SelectedExpression(
@@ -29,7 +30,7 @@ def test_handled_processor() -> None:
     )
 
     expected = Query(
-        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+        entity,
         selected_columns=[
             SelectedExpression(name=None, expression=Column(None, None, "id")),
             SelectedExpression(
@@ -60,7 +61,7 @@ def test_handled_processor() -> None:
         ],
     )
     processor = handled_functions.HandledFunctionsProcessor(
-        "exception_stacks.mechanism_handled", columnset
+        "exception_stacks.mechanism_handled", entity
     )
     processor.process_query(unprocessed, HTTPRequestSettings())
 
@@ -75,7 +76,7 @@ def test_handled_processor() -> None:
 
 
 def test_handled_processor_invalid() -> None:
-    columnset = ColumnSet([])
+    entity = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
     unprocessed = Query(
         QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
@@ -86,16 +87,16 @@ def test_handled_processor_invalid() -> None:
         ],
     )
     processor = handled_functions.HandledFunctionsProcessor(
-        "exception_stacks.mechanism_handled", columnset
+        "exception_stacks.mechanism_handled", entity
     )
     with pytest.raises(InvalidExpressionException):
         processor.process_query(unprocessed, HTTPRequestSettings())
 
 
 def test_not_handled_processor() -> None:
-    columnset = ColumnSet([])
+    entity = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
     unprocessed = Query(
-        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+        entity,
         selected_columns=[
             SelectedExpression(name=None, expression=Column(None, None, "id")),
             SelectedExpression(
@@ -105,7 +106,7 @@ def test_not_handled_processor() -> None:
     )
 
     expected = Query(
-        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+        entity,
         selected_columns=[
             SelectedExpression(name=None, expression=Column(None, None, "id")),
             SelectedExpression(
@@ -136,7 +137,7 @@ def test_not_handled_processor() -> None:
         ],
     )
     processor = handled_functions.HandledFunctionsProcessor(
-        "exception_stacks.mechanism_handled", columnset
+        "exception_stacks.mechanism_handled", entity
     )
     processor.process_query(unprocessed, HTTPRequestSettings())
 
@@ -151,9 +152,9 @@ def test_not_handled_processor() -> None:
 
 
 def test_not_handled_processor_invalid() -> None:
-    columnset = ColumnSet([])
+    entity = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
     unprocessed = Query(
-        QueryEntity(EntityKey.EVENTS, ColumnSet([])),
+        entity,
         selected_columns=[
             SelectedExpression(
                 "result",
@@ -162,7 +163,7 @@ def test_not_handled_processor_invalid() -> None:
         ],
     )
     processor = handled_functions.HandledFunctionsProcessor(
-        "exception_stacks.mechanism_handled", columnset
+        "exception_stacks.mechanism_handled", entity
     )
     with pytest.raises(InvalidExpressionException):
         processor.process_query(unprocessed, HTTPRequestSettings())
