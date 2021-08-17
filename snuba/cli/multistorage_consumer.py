@@ -75,6 +75,11 @@ logger = logging.getLogger(__name__)
     "--output-block-size", type=int,
 )
 @click.option("--log-level")
+@click.option(
+    "--kafka-override-config", default=None,
+    help="Path to the JSON-formatted configuration file used to \
+    override the connection to Kafka cluster"
+)
 def multistorage_consumer(
     storage_names: Sequence[str],
     consumer_group: str,
@@ -86,6 +91,7 @@ def multistorage_consumer(
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
+    kafka_override_config: str,
     log_level: Optional[str] = None,
 ) -> None:
 
@@ -196,9 +202,13 @@ def multistorage_consumer(
         )
         assert commit_log_topic_spec is not None
 
-        producer = ConfluentKafkaProducer(
-            build_kafka_producer_configuration(commit_log_topic_spec.topic)
-        )
+        kafka_config = build_kafka_producer_configuration(commit_log_topic_spec.topic)
+        if kafka_override_config is not None:
+            with open(kafka_override_config) as kafka_config_fh:
+                logger.debug("Loading the Kafka configuration override from '%s'...")
+                kafka_config.update(json.load(kafka_config_fh))
+
+        producer = ConfluentKafkaProducer(kafka_config)
         consumer = KafkaConsumerWithCommitLog(
             consumer_configuration,
             producer=producer,
@@ -218,6 +228,7 @@ def multistorage_consumer(
             processes=processes,
             input_block_size=input_block_size,
             output_block_size=output_block_size,
+            kafka_override_config=kafka_override_config,
             metrics=metrics,
         ),
     )

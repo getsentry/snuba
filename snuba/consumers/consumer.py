@@ -424,6 +424,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         processes: Optional[int],
         input_block_size: Optional[int],
         output_block_size: Optional[int],
+		kafka_override_config: Optional[str],
         metrics: MetricsBackend,
     ):
         if processes is not None:
@@ -443,6 +444,7 @@ class MultistorageConsumerProcessingStrategyFactory(
         self.__processes = processes
         self.__input_block_size = input_block_size
         self.__output_block_size = output_block_size
+		self.__kafka_override_config = kafka_override_config
         self.__metrics = metrics
 
     def __find_destination_storages(
@@ -472,16 +474,21 @@ class MultistorageConsumerProcessingStrategyFactory(
             # after an assignment is revoked, but never explicitly closed.
             # XXX: This assumes that the Kafka cluster used for the input topic
             # to the storage is the same as the replacement topic.
+            kafka_config = build_kafka_producer_configuration(
+                default_topic_spec.topic,
+                override_params={
+                    "partitioner": "consistent",
+                    "message.max.bytes": 50000000,  # 50MB, default is 1MB
+                },
+            )
+
+            if self.__kafka_override_config is not None:
+                with open(self.__kafka_override_config) as kafka_config_fh:
+                    logger.debug("Loading the Kafka configuration override from '%s'...")
+                    override_params.update(json.load(kafka_config_fh))
+
             replacement_batch_writer = ReplacementBatchWriter(
-                ConfluentKafkaProducer(
-                    build_kafka_producer_configuration(
-                        default_topic_spec.topic,
-                        override_params={
-                            "partitioner": "consistent",
-                            "message.max.bytes": 50000000,  # 50MB, default is 1MB
-                        },
-                    )
-                ),
+                ConfluentKafkaProducer(kafka_config),
                 Topic(replacement_topic_spec.topic_name),
             )
         else:

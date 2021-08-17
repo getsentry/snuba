@@ -20,6 +20,11 @@ from snuba.utils.streams.configuration_builder import build_kafka_producer_confi
     "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
 )
 @click.option(
+    "--kafka-override-config", default=None,
+    help="Path to the JSON-formatted configuration file used to \
+    override the connection to Kafka cluster"
+)
+@click.option(
     "--storage",
     "storage_name",
     type=click.Choice([storage_key.value for storage_key in CDC_STORAGES.keys()]),
@@ -34,6 +39,7 @@ def confirm_load(
     *,
     control_topic: Optional[str],
     bootstrap_server: Sequence[str],
+    kafka_override_config: str,
     storage_name: str,
     source: str,
     log_level: Optional[str] = None,
@@ -65,6 +71,11 @@ def confirm_load(
     )
 
     descriptor = snapshot_source.get_descriptor()
+
+    if kafka_override_config is not None:
+        with open(kafka_override_config) as kafka_config_fh:
+            logger.debug("Loading the Kafka configuration override from '%s'...")
+            override_params.update(json.load(kafka_config_fh))
 
     producer = Producer(
         build_kafka_producer_configuration(

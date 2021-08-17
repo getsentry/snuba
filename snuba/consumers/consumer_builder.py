@@ -51,6 +51,7 @@ class ConsumerBuilder:
         queued_min_messages: int,
         metrics: MetricsBackend,
         processes: Optional[int],
+		kafka_override_config: Optional[str],
         input_block_size: Optional[int],
         output_block_size: Optional[int],
         commit_retry_policy: Optional[RetryPolicy] = None,
@@ -76,6 +77,11 @@ class ConsumerBuilder:
                 "message.max.bytes": 50000000,  # 50MB, default is 1MB
             },
         )
+
+        if kafka_override_config is not None:
+            with open(kafka_override_config) as kafka_config_fh:
+                logger.debug("Loading the Kafka configuration override from '%s'...")
+                self.producer_broker_config.update(json.load(kafka_config_fh))
 
         stream_loader = self.storage.get_table_writer().get_stream_loader()
 

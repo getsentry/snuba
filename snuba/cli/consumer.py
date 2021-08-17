@@ -88,6 +88,11 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 @click.option(
     "--profile-path", type=click.Path(dir_okay=True, file_okay=False, exists=True)
 )
+@click.option(
+    "--kafka-override-config", default=None,
+    help="Path to the JSON-formatted configuration file used to \
+    override the connection to Kafka cluster"
+)
 def consumer(
     *,
     raw_events_topic: Optional[str],
@@ -104,6 +109,7 @@ def consumer(
     queued_min_messages: int,
     stateful_consumer: bool,
     processes: Optional[int],
+    kafka_override_config: Optional[str],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
     log_level: Optional[str] = None,
@@ -139,6 +145,7 @@ def consumer(
         input_block_size=input_block_size,
         output_block_size=output_block_size,
         profile_path=profile_path,
+        kafka_override_config=kafka_override_config,
     )
 
     if stateful_consumer:
