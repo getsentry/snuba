@@ -5,7 +5,6 @@ from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Literal
-from snuba.request.request_settings import HTTPRequestSettings
 
 
 def test_format_clickhouse_specific_query() -> None:
@@ -35,8 +34,7 @@ def test_format_clickhouse_specific_query() -> None:
     query.set_offset(50)
     query.set_limit(100)
 
-    request_settings = HTTPRequestSettings()
-    clickhouse_query = format_query(query, request_settings)
+    clickhouse_query = format_query(query)
 
     expected = [
         "SELECT column1, table1.column2",

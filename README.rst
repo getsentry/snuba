@@ -9,7 +9,7 @@ Redis to search and provide aggregated data on Sentry errors.
 Since then it has evolved into the current form where it supports most
 time series related Sentry features over several data sets.
 
-Find `here <https://getsentry.github.io/snuba/>`_. the full documentation.
+Click `here <https://getsentry.github.io/snuba/>`_ for the full documentation.
 
 Features:
 ---------

@@ -28,6 +28,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
         "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
         "storage_sets": {
+            "cdc",
             "discover",
             "events",
             "events_ro",
@@ -121,6 +122,7 @@ REPLACER_IMMEDIATE_OPTIMIZE = False
 TURBO_SAMPLE_RATE = 0.1
 
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
+PRETTY_FORMAT_EXPRESSIONS = True
 
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 

@@ -510,3 +510,23 @@ class TestSnQLApi(BaseApiTest):
         )
 
         assert response.status_code == 200
+
+    def test_complex_table_join(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""
+                    MATCH (e: events) -[grouped]-> (g: groupedmessage)
+                    SELECT g.id, toUInt64(plus(multiply(log(count(e.group_id)), 600), multiply(toUInt64(toUInt64(max(e.timestamp))), 1000))) AS score BY g.id
+                    WHERE e.project_id IN array({self.project_id}) AND e.timestamp >= toDateTime('2021-07-04T01:09:08.188427') AND e.timestamp < toDateTime('2021-08-06T01:10:09.411889') AND g.status IN array(0)
+                    ORDER BY toUInt64(plus(multiply(log(count(e.group_id)), 600), multiply(toUInt64(toUInt64(max(e.timestamp))), 1000))) DESC LIMIT 101
+                    """,
+                    "turbo": False,
+                    "consistent": False,
+                    "debug": True,
+                }
+            ),
+        )
+
+        assert response.status_code == 200

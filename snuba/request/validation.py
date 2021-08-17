@@ -5,6 +5,7 @@ from typing import Any, Callable, ChainMap, MutableMapping, Sequence, Type, Unio
 import sentry_sdk
 
 from snuba import state
+from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.datasets.dataset import Dataset
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity
@@ -86,6 +87,14 @@ def build_request(
                 )
 
             query = parser(request_parts, settings_obj, dataset)
+
+            project_ids = get_object_ids_in_query_ast(query, "project_id")
+            if project_ids is not None and len(project_ids) == 1:
+                sentry_sdk.set_tag("snuba_project_id", project_ids.pop())
+
+            org_ids = get_object_ids_in_query_ast(query, "org_id")
+            if org_ids is not None and len(org_ids) == 1:
+                sentry_sdk.set_tag("snuba_org_id", org_ids.pop())
 
             request_id = uuid.uuid4().hex
             request = Request(

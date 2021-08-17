@@ -1,9 +1,15 @@
 from typing import Any, Sequence
 
 import pytest
+
 from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
+from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.formatter.nodes import PaddingNode, SequenceNode, StringNode
-from snuba.clickhouse.formatter.query import JoinFormatter, format_query
+from snuba.clickhouse.formatter.query import (
+    JoinFormatter,
+    format_query,
+    format_query_anonymized,
+)
 from snuba.clickhouse.query import Query
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
@@ -22,7 +28,6 @@ from snuba.query.data_source.join import (
 )
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
-from snuba.request.request_settings import HTTPRequestSettings
 
 ERRORS_SCHEMA = ColumnSet(
     [
@@ -90,6 +95,14 @@ test_cases = [
             "WHERE eq(al, 'blabla') "
             "GROUP BY column1, table1.column2, al, column4 "
             "HAVING eq(column1, 123) "
+            "ORDER BY column1 ASC, table1.column2 DESC"
+        ),
+        (
+            "SELECT column1, table1.column2, (column3 AS al) "
+            "FROM my_table "
+            "WHERE eq(al, $S) "
+            "GROUP BY column1, table1.column2, al, column4 "
+            "HAVING eq(column1, $N) "
             "ORDER BY column1 ASC, table1.column2 DESC"
         ),
         id="Simple query with aliases and multiple tables",
@@ -164,6 +177,13 @@ test_cases = [
             "GROUP BY my_complex_math "
             "ORDER BY f(column1) ASC"
         ),
+        (
+            "SELECT (doSomething(column1, table1.column2, (column3 AS al))(column1) AS my_complex_math) "
+            "FROM my_table "
+            "WHERE eq(al, $S) AND neq(al, $S) "
+            "GROUP BY my_complex_math "
+            "ORDER BY f(column1) ASC"
+        ),
         id="Query with complex functions",
     ),
     pytest.param(
@@ -185,6 +205,12 @@ test_cases = [
             "GROUP BY al1, al2",
             "ORDER BY column1 ASC",
         ],
+        (
+            "SELECT (`field_##$$%` AS al1), (`t&^%$`.`f@!@` AS al2) "
+            "FROM my_table "
+            "GROUP BY al1, al2 "
+            "ORDER BY column1 ASC"
+        ),
         (
             "SELECT (`field_##$$%` AS al1), (`t&^%$`.`f@!@` AS al2) "
             "FROM my_table "
@@ -244,6 +270,12 @@ test_cases = [
             "WHERE (equals(al, 'blabla') OR equals(al2, 'blabla2')) AND "
             "(equals(column5, 'blabla3') OR equals(column6, 'blabla4'))"
         ),
+        (
+            "SELECT (column3 AS al), (column4 AS al2) "
+            "FROM my_table "
+            "WHERE (equals(al, $S) OR equals(al2, $S)) AND "
+            "(equals(column5, $S) OR equals(column6, $S))"
+        ),
         id="query_complex_condition",
     ),
     pytest.param(
@@ -301,6 +333,16 @@ test_cases = [
             ") "
             "GROUP BY alias"
         ),
+        (
+            "SELECT (avg(sub_average) AS average), (column3 AS alias) "
+            "FROM ("
+            "SELECT column1, (avg(column2) AS sub_average), column3 "
+            "FROM my_table "
+            "WHERE eq((column3 AS al), $S) "
+            "GROUP BY column2"
+            ") "
+            "GROUP BY alias"
+        ),
         id="Composite query",
     ),
     pytest.param(
@@ -343,6 +385,12 @@ test_cases = [
             "FROM errors_local err INNER JOIN groupedmessage_local groups "
             "ON err.group_id=groups.id "
             "WHERE eq(groups.id, 1)"
+        ),
+        (
+            "SELECT (err.event_id AS error_id), (groups.message AS message) "
+            "FROM errors_local err INNER JOIN groupedmessage_local groups "
+            "ON err.group_id=groups.id "
+            "WHERE eq(groups.id, $N)"
         ),
         id="Simple join",
     ),
@@ -475,19 +523,37 @@ test_cases = [
             "ON err.group_id=assignee.group_id "
             "GROUP BY groups.id"
         ),
+        (
+            "SELECT (err.group_id AS group_id), (count() AS events) "
+            "FROM "
+            "(SELECT (event_id AS error_id), group_id FROM errors_local WHERE eq(project_id, $N)) err "
+            "INNER JOIN "
+            "(SELECT id, message FROM groupedmessage_local WHERE eq(project_id, $N)) groups "
+            "ON err.group_id=groups.id "
+            "INNER JOIN "
+            "(SELECT group_id FROM groupassignee_local WHERE eq(user, $S)) assignee "
+            "ON err.group_id=assignee.group_id "
+            "GROUP BY groups.id"
+        ),
         id="Join of multiple subqueries",
     ),
 ]
 
 
-@pytest.mark.parametrize("query, formatted_seq, formatted_str", test_cases)
+@pytest.mark.parametrize(
+    "query, formatted_seq, formatted_str, formatted_anonymized_str", test_cases
+)
 def test_format_expressions(
-    query: Query, formatted_seq: Sequence[Any], formatted_str: str
+    query: Query,
+    formatted_seq: Sequence[Any],
+    formatted_str: str,
+    formatted_anonymized_str: str,
 ) -> None:
-    request_settings = HTTPRequestSettings()
-    clickhouse_query = format_query(query, request_settings)
+    clickhouse_query = format_query(query)
+    clickhouse_query_anonymized = format_query_anonymized(query)
     assert clickhouse_query.get_sql() == formatted_str
     assert clickhouse_query.structured() == formatted_seq
+    assert clickhouse_query_anonymized.get_sql() == formatted_anonymized_str
 
 
 def test_format_clickhouse_specific_query() -> None:
@@ -517,8 +583,7 @@ def test_format_clickhouse_specific_query() -> None:
     query.set_offset(50)
     query.set_limit(100)
 
-    request_settings = HTTPRequestSettings()
-    clickhouse_query = format_query(query, request_settings)
+    clickhouse_query = format_query(query)
 
     expected = (
         "SELECT column1, table1.column2 "
@@ -628,5 +693,8 @@ TEST_JOIN = [
 def test_join_format(
     clause: JoinClause[Table], formatted_seq: SequenceNode, formatted_str: str
 ) -> None:
-    assert str(clause.accept(JoinFormatter())) == formatted_str
-    assert clause.accept(JoinFormatter()) == formatted_seq
+    assert (
+        str(clause.accept(JoinFormatter(ClickhouseExpressionFormatter)))
+        == formatted_str
+    )
+    assert clause.accept(JoinFormatter(ClickhouseExpressionFormatter)) == formatted_seq
