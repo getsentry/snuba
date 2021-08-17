@@ -2,7 +2,7 @@ import logging
 from dataclasses import replace
 from functools import partial
 from math import floor
-from typing import MutableMapping, Optional, Union
+from typing import MutableMapping, Optional, Set, Union
 
 import sentry_sdk
 
@@ -10,6 +10,7 @@ from snuba import environment
 from snuba import settings as snuba_settings
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.clickhouse.query_inspector import TablesCollector
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
@@ -62,6 +63,34 @@ class SampleClauseFinder(DataSourceVisitor[bool, Entity], JoinVisitor[bool, Enti
         return node.left_node.accept(self) or node.right_node.accept(self)
 
 
+class ProjectsFinder(
+    DataSourceVisitor[Set[int], Entity], JoinVisitor[Set[int], Entity]
+):
+    """
+    Traverses a query to find project_id conditions
+    """
+
+    def _visit_simple_source(self, data_source: Entity) -> Set[int]:
+        return set()
+
+    def _visit_join(self, data_source: JoinClause[Entity]) -> Set[int]:
+        return self.visit_join_clause(data_source)
+
+    def _visit_simple_query(self, data_source: ProcessableQuery[Entity]) -> Set[int]:
+        return get_object_ids_in_query_ast(data_source, "project_id") or set()
+
+    def _visit_composite_query(self, data_source: CompositeQuery[Entity]) -> Set[int]:
+        return self.visit(data_source.get_from_clause())
+
+    def visit_individual_node(self, node: IndividualNode[Entity]) -> Set[int]:
+        return self.visit(node.data_source)
+
+    def visit_join_clause(self, node: JoinClause[Entity]) -> Set[int]:
+        left = node.left_node.accept(self)
+        right = node.right_node.accept(self)
+        return left | right
+
+
 @with_span()
 def parse_and_run_query(
     dataset: Dataset,
@@ -74,7 +103,11 @@ def parse_and_run_query(
     Runs a Snuba Query, then records the metadata about each split query that was run.
     """
     query_metadata = SnubaQueryMetadata(
-        request=request, dataset=get_dataset_name(dataset), timer=timer, query_list=[],
+        request=request,
+        dataset=get_dataset_name(dataset),
+        timer=timer,
+        query_list=[],
+        projects=ProjectsFinder().visit(request.query),
     )
 
     try:
