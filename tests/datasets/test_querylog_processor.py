@@ -70,6 +70,7 @@ def test_simple() -> None:
                 trace_id="b" * 32,
             )
         ],
+        projects={2},
     ).to_dict()
 
     processor = (
@@ -88,7 +89,7 @@ def test_simple() -> None:
                 "request_body": '{"limit": 100, "offset": 50, "orderby": "event_id", "project": 1, "sample": 0.1, "selected_columns": ["event_id"]}',
                 "referrer": "search",
                 "dataset": "events",
-                "projects": [1],
+                "projects": [2],
                 "organization": None,
                 "timestamp": timer.for_json()["timestamp"],
                 "duration_ms": 10,
@@ -168,6 +169,7 @@ def test_missing_fields() -> None:
                 trace_id="b" * 32,
             )
         ],
+        projects={2},
     ).to_dict()
 
     messages = []
@@ -197,7 +199,7 @@ def test_missing_fields() -> None:
                     "request_body": '{"limit": 100, "offset": 50, "orderby": "event_id", "project": 1, "sample": 0.1, "selected_columns": ["event_id"]}',
                     "referrer": "search",
                     "dataset": "events",
-                    "projects": [1],
+                    "projects": [2],
                     "organization": None,
                     "clickhouse_queries.sql": [
                         "select event_id from sentry_dist sample 0.1 prewhere project_id in (1) limit 50, 100"
