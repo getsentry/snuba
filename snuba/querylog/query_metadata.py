@@ -92,7 +92,6 @@ class SnubaQueryMetadata:
     dataset: str
     timer: Timer
     query_list: MutableSequence[ClickhouseQueryMetadata]
-    projects: Set[int]
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -105,7 +104,6 @@ class SnubaQueryMetadata:
             "query_list": [q.to_dict() for q in self.query_list],
             "status": self.status.value,
             "timing": self.timer.for_json(),
-            "projects": self.projects,
         }
 
     @property
