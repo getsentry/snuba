@@ -77,7 +77,6 @@ jobs:
         if: github.repository_owner != 'getsentry'
         run: |
           docker build . \
-            --build-arg PYTHON_VERSION=3.8 \
             -t ghcr.io/getsentry/snuba-ci:latest \
             -t ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
             -t ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} \
@@ -114,7 +113,6 @@ jobs:
       - name: Build snuba docker image for CI
         run: |
           docker build . \
-            --build-arg PYTHON_VERSION=3.8 \
             -t snuba-test \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ github.sha }} \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
@@ -156,7 +154,6 @@ jobs:
       - name: Build snuba docker image for CI
         run: |
           docker build . \
-            --build-arg PYTHON_VERSION=3.8 \
             -t snuba-test \
             --cache-from ghcr.io/getsentry/snuba-ci:latest \
             --cache-from ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} \
