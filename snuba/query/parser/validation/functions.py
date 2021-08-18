@@ -6,6 +6,7 @@ from snuba.clickhouse.columns import Array, String
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity import Entity
 from snuba.query import ProcessableQuery
+from snuba.query.composite import CompositeQuery
 from snuba.query.data_source import DataSource
 from snuba.query.data_source.join import JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
@@ -28,6 +29,35 @@ default_validators: Mapping[str, FunctionCallValidator] = {
 }
 
 
+def _get_entity(data_source: DataSource) -> Optional[Entity]:
+    """
+        Handles getting the entity depending on the data source.
+    """
+    if isinstance(data_source, QueryEntity):
+        return get_entity(data_source.key)
+
+    elif isinstance(data_source, JoinClause):
+        alias_map = data_source.get_alias_node_map()
+        for _, node in alias_map.items():
+            # just taking the first entity for now, will validate all coming up
+            assert isinstance(node.data_source, QueryEntity)  # mypy
+            return get_entity(node.data_source.key)
+        return None
+
+    elif isinstance(data_source, ProcessableQuery):
+        return get_entity(data_source.get_from_clause().key)
+
+    elif isinstance(data_source, CompositeQuery):
+        # from clauses for composite queries are either a
+        # join clause, processable query, or another composite
+        # query, so recursively call until we get the join clause
+        # or processable query
+        return _get_entity(data_source.get_from_clause())
+
+    else:
+        return None
+
+
 class FunctionCallsValidator(ExpressionValidator):
     """
     Applies all function validators on the provided expression.
@@ -41,31 +71,22 @@ class FunctionCallsValidator(ExpressionValidator):
 
         entity_validators: Mapping[str, FunctionCallValidator] = {}
         entity: Optional[Entity] = None
-        if isinstance(data_source, QueryEntity):
-            entity = get_entity(data_source.key)
-            entity_validators = entity.get_function_call_validators()
 
-            common_function_validators = (
-                entity_validators.keys() & default_validators.keys()
-            )
-            if common_function_validators:
-                logger.warning(
-                    "Dataset validators are overlapping with default ones. Entity: %s. Overlap %r",
-                    entity,
-                    common_function_validators,
-                    exc_info=True,
-                )
-        elif isinstance(data_source, JoinClause):
-            alias_map = data_source.get_alias_node_map()
-            for _, node in alias_map.items():
-                # just taking the first entity for now, will validate all coming up
-                assert isinstance(node.data_source, QueryEntity)  # mypy
-                entity = get_entity(node.data_source.key)
-                break
-        elif isinstance(data_source, ProcessableQuery):
-            entity = get_entity(data_source.get_from_clause().key)
-        else:
+        entity = _get_entity(data_source)
+        if not entity:
             return
+        entity_validators = entity.get_function_call_validators()
+
+        common_function_validators = (
+            entity_validators.keys() & default_validators.keys()
+        )
+        if common_function_validators:
+            logger.warning(
+                "Dataset validators are overlapping with default ones. Entity: %s. Overlap %r",
+                entity,
+                common_function_validators,
+                exc_info=True,
+            )
 
         validators = ChainMap(default_validators, entity_validators)
         try:
