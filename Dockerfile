@@ -1,12 +1,12 @@
-ARG PYTHON_VERSION=3.8
-FROM python:${PYTHON_VERSION}-slim AS application
+ARG PYTHON_VERSION=3.8.11
+FROM python:${PYTHON_VERSION}-slim-bullseye AS application
 
 # these are required all the way through, and removing them will cause bad things
 RUN set -ex; \
     apt-get update; \
     apt-get install --no-install-recommends -y \
         libexpat1 \
-        libffi6 \
+        libffi7 \
         liblz4-1 \
         libpcre3 \
     ; \
