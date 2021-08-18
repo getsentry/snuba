@@ -6,7 +6,7 @@ RUN set -ex; \
     apt-get update; \
     apt-get install --no-install-recommends -y \
         libexpat1 \
-        libffi6 \
+        libffi7 \
         liblz4-1 \
         libpcre3 \
     ; \
