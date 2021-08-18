@@ -1,4 +1,4 @@
-ARG PYTHON_VERSION=3.8
+ARG PYTHON_VERSION=3.8.10
 FROM python:${PYTHON_VERSION}-slim AS application
 
 # these are required all the way through, and removing them will cause bad things
