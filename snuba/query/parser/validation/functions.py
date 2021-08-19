@@ -34,7 +34,27 @@ class QueryEntityFinder(
     DataSourceVisitor[QueryEntity, QueryEntity], JoinVisitor[QueryEntity, QueryEntity]
 ):
     """
-    Finds the QueryEntity from the data source.
+    Finds the QueryEntity from the data source. The QueryEntity is passed
+    through to each FunctionCallValidator (singular):
+
+    ```
+        validator.validate(exp.parameters, query_entity)
+    ```
+
+    within the validate function below for the FunctionCallsValidator (plural).
+
+    We don't want a FunctionCallValidator (singular) to depend on the
+    dataset Entity, because of circular dependencies. However, we _need_
+    the Entity in the FunctionCallsValidator (plural) in order to get
+    the entity specific validator instances.
+
+    ```
+        entity.get_function_call_validators()
+    ```
+
+    Hences the reason for having both the QueryEntity and the Entity. :)
+
+
     TODO(meredith): Have this return a list of the QueryEntities instead of
     a single QueryEntity.
     """
