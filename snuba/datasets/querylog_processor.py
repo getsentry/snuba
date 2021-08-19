@@ -111,16 +111,12 @@ class QuerylogProcessor(MessageProcessor):
     def process_message(
         self, message: Mapping[str, Any], metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
-        projects = message["request"]["body"].get("project", [])
-        if not isinstance(projects, (list, tuple)):
-            projects = [projects]
-
         processed = {
             "request_id": str(uuid.UUID(message["request"]["id"])),
             "request_body": self.__to_json_string(message["request"]["body"]),
             "referrer": message["request"]["referrer"] or "",
             "dataset": message["dataset"],
-            "projects": projects,
+            "projects": message.get("projects") or [],
             # TODO: This column is empty for now, we plan to use it soon as we
             # will start to write org IDs into events and allow querying by org.
             "organization": None,
