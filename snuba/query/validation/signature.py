@@ -172,9 +172,9 @@ class SignatureValidator(FunctionCallValidator):
         # exceptions.
         self.__enforce = enforce
 
-    def validate(self, parameters: Sequence[Expression], schema: QueryEntity) -> None:
+    def validate(self, parameters: Sequence[Expression], entity: QueryEntity) -> None:
         try:
-            self.__validate_impl(parameters, schema)
+            self.__validate_impl(parameters, entity)
         except InvalidFunctionCall as exception:
             if self.__enforce:
                 raise exception
@@ -184,7 +184,7 @@ class SignatureValidator(FunctionCallValidator):
                 )
 
     def __validate_impl(
-        self, parameters: Sequence[Expression], schema: QueryEntity
+        self, parameters: Sequence[Expression], entity: QueryEntity
     ) -> None:
         if len(parameters) < len(self.__param_types):
             raise InvalidFunctionCall(
@@ -197,4 +197,4 @@ class SignatureValidator(FunctionCallValidator):
             )
 
         for validator, param in zip(self.__param_types, parameters):
-            validator.validate(param, schema.schema)
+            validator.validate(param, entity.schema)

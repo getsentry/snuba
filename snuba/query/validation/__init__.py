@@ -17,5 +17,5 @@ class FunctionCallValidator(ABC):
     """
 
     @abstractmethod
-    def validate(self, parameters: Sequence[Expression], schema: QueryEntity) -> None:
+    def validate(self, parameters: Sequence[Expression], entity: QueryEntity) -> None:
         raise NotImplementedError
