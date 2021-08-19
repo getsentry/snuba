@@ -1,10 +1,9 @@
 import logging
 from collections import ChainMap
-from typing import Mapping, Optional
+from typing import Mapping
 
 from snuba.clickhouse.columns import Array, String
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.entity import Entity
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source import DataSource
@@ -100,7 +99,7 @@ class FunctionCallsValidator(ExpressionValidator):
             return
 
         entity_validators: Mapping[str, FunctionCallValidator] = {}
-        entity: Optional[Entity] = None
+        entity = None
 
         query_entity = QueryEntityFinder().visit(data_source)
 
@@ -128,7 +127,7 @@ class FunctionCallsValidator(ExpressionValidator):
         try:
             # TODO: Decide whether these validators should exist at the Dataset or Entity level
             validator = validators.get(exp.function_name)
-            if validator is not None and entity is not None:
+            if validator is not None:
                 validator.validate(exp.parameters, query_entity)
         except InvalidFunctionCall as exception:
             raise InvalidExpressionException(
