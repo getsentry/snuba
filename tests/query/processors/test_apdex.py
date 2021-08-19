@@ -79,7 +79,7 @@ def test_apdex_format_expressions() -> None:
         ],
     )
 
-    apdex_processor(ColumnSet([])).process_query(unprocessed, HTTPRequestSettings())
+    apdex_processor().process_query(unprocessed, HTTPRequestSettings())
     assert expected.get_selected_columns() == unprocessed.get_selected_columns()
 
     ret = unprocessed.get_selected_columns()[1].expression.accept(

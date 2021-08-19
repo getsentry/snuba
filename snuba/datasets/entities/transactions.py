@@ -141,8 +141,8 @@ class BaseTransactionsEntity(Entity, ABC):
             ),
             TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
-            apdex_processor(self),
-            failure_rate_processor(self),
+            apdex_processor(),
+            failure_rate_processor(),
             ProjectRateLimiterProcessor(project_column="project_id"),
         ]
 

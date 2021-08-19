@@ -1,4 +1,4 @@
-from snuba.datasets.entity import Entity
+from snuba.clickhouse.columns import ColumnSet
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
@@ -34,14 +34,13 @@ class HandledFunctionsProcessor(QueryProcessor):
     Both functions return 1 or 0 if a row matches.
     """
 
-    def __init__(self, column: str, entity: Entity):
+    def __init__(self, column: str):
         self.__column = column
-        self.__entity = entity
 
-    def validate_parameters(self, exp: FunctionCall) -> None:
+    def validate_parameters(self, exp: FunctionCall, schema: ColumnSet) -> None:
         validator = SignatureValidator([])
         try:
-            validator.validate(exp.parameters, self.__entity)
+            validator.validate(exp.parameters, schema)
         except InvalidFunctionCall as err:
             raise InvalidExpressionException(
                 exp,
@@ -53,7 +52,7 @@ class HandledFunctionsProcessor(QueryProcessor):
         def process_functions(exp: Expression) -> Expression:
             if isinstance(exp, FunctionCall):
                 if exp.function_name == "isHandled":
-                    self.validate_parameters(exp)
+                    self.validate_parameters(exp, query.get_from_clause().schema)
                     return FunctionCall(
                         exp.alias,
                         "arrayExists",
@@ -81,7 +80,7 @@ class HandledFunctionsProcessor(QueryProcessor):
                         ),
                     )
                 if exp.function_name == "notHandled":
-                    self.validate_parameters(exp)
+                    self.validate_parameters(exp, query.get_from_clause().schema)
                     return FunctionCall(
                         exp.alias,
                         "arrayExists",

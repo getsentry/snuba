@@ -1,7 +1,6 @@
 from dataclasses import replace
 from typing import Any, Mapping, Sequence, Tuple
 
-from snuba.datasets.entity import Entity
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
@@ -69,13 +68,8 @@ class CustomFunction(QueryProcessor):
     """
 
     def __init__(
-        self,
-        entity: Entity,
-        name: str,
-        signature: Sequence[Tuple[str, ParamType]],
-        body: Expression,
+        self, name: str, signature: Sequence[Tuple[str, ParamType]], body: Expression,
     ) -> None:
-        self.__entity = entity
         self.__function_name = name
         self.__param_names: Sequence[str] = []
         param_types: Sequence[ParamType] = []
@@ -91,7 +85,9 @@ class CustomFunction(QueryProcessor):
                 and expression.function_name == self.__function_name
             ):
                 try:
-                    self.__validator.validate(expression.parameters, self.__entity)
+                    self.__validator.validate(
+                        expression.parameters, query.get_from_clause().schema
+                    )
                 except InvalidFunctionCall as exception:
                     raise InvalidCustomFunctionCall(
                         expression,

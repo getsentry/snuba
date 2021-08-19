@@ -61,7 +61,7 @@ def test_handled_processor() -> None:
         ],
     )
     processor = handled_functions.HandledFunctionsProcessor(
-        "exception_stacks.mechanism_handled", entity
+        "exception_stacks.mechanism_handled"
     )
     processor.process_query(unprocessed, HTTPRequestSettings())
 
@@ -76,7 +76,6 @@ def test_handled_processor() -> None:
 
 
 def test_handled_processor_invalid() -> None:
-    entity = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
     unprocessed = Query(
         QueryEntity(EntityKey.EVENTS, ColumnSet([])),
         selected_columns=[
@@ -87,7 +86,7 @@ def test_handled_processor_invalid() -> None:
         ],
     )
     processor = handled_functions.HandledFunctionsProcessor(
-        "exception_stacks.mechanism_handled", entity
+        "exception_stacks.mechanism_handled",
     )
     with pytest.raises(InvalidExpressionException):
         processor.process_query(unprocessed, HTTPRequestSettings())
@@ -137,7 +136,7 @@ def test_not_handled_processor() -> None:
         ],
     )
     processor = handled_functions.HandledFunctionsProcessor(
-        "exception_stacks.mechanism_handled", entity
+        "exception_stacks.mechanism_handled",
     )
     processor.process_query(unprocessed, HTTPRequestSettings())
 
@@ -163,7 +162,7 @@ def test_not_handled_processor_invalid() -> None:
         ],
     )
     processor = handled_functions.HandledFunctionsProcessor(
-        "exception_stacks.mechanism_handled", entity
+        "exception_stacks.mechanism_handled",
     )
     with pytest.raises(InvalidExpressionException):
         processor.process_query(unprocessed, HTTPRequestSettings())

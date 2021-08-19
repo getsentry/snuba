@@ -93,7 +93,7 @@ class FunctionCallsValidator(ExpressionValidator):
             # TODO: Decide whether these validators should exist at the Dataset or Entity level
             validator = validators.get(exp.function_name)
             if validator is not None and entity is not None:
-                validator.validate(exp.parameters, entity)
+                validator.validate(exp.parameters, entity.get_data_model())
         except InvalidFunctionCall as exception:
             raise InvalidExpressionException(
                 exp,
