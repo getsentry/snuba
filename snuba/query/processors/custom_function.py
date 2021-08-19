@@ -86,7 +86,7 @@ class CustomFunction(QueryProcessor):
             ):
                 try:
                     self.__validator.validate(
-                        expression.parameters, query.get_from_clause().schema
+                        expression.parameters, query.get_from_clause()
                     )
                 except InvalidFunctionCall as exception:
                     raise InvalidCustomFunctionCall(

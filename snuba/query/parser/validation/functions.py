@@ -29,23 +29,25 @@ default_validators: Mapping[str, FunctionCallValidator] = {
 }
 
 
-def _get_entity(data_source: DataSource) -> Optional[Entity]:
+def _get_entity(data_source: DataSource) -> Optional[QueryEntity]:
     """
-        Handles getting the entity depending on the data source.
+        Handles getting the query entity depending on the data source.
     """
     if isinstance(data_source, QueryEntity):
-        return get_entity(data_source.key)
+        return data_source
 
     elif isinstance(data_source, JoinClause):
         alias_map = data_source.get_alias_node_map()
         for _, node in alias_map.items():
             # just taking the first entity for now, will validate all coming up
             assert isinstance(node.data_source, QueryEntity)  # mypy
-            return get_entity(node.data_source.key)
+            return node.data_source
         return None
 
     elif isinstance(data_source, ProcessableQuery):
-        return get_entity(data_source.get_from_clause().key)
+        q_entity = data_source.get_from_clause()
+        assert isinstance(q_entity, QueryEntity)  # mypy
+        return q_entity
 
     elif isinstance(data_source, CompositeQuery):
         # from clauses for composite queries are either a
@@ -72,9 +74,15 @@ class FunctionCallsValidator(ExpressionValidator):
         entity_validators: Mapping[str, FunctionCallValidator] = {}
         entity: Optional[Entity] = None
 
-        entity = _get_entity(data_source)
+        query_entity = _get_entity(data_source)
+
+        if not query_entity:
+            return
+
+        entity = get_entity(query_entity.key)
         if not entity:
             return
+
         entity_validators = entity.get_function_call_validators()
 
         common_function_validators = (
@@ -93,7 +101,7 @@ class FunctionCallsValidator(ExpressionValidator):
             # TODO: Decide whether these validators should exist at the Dataset or Entity level
             validator = validators.get(exp.function_name)
             if validator is not None and entity is not None:
-                validator.validate(exp.parameters, entity.get_data_model())
+                validator.validate(exp.parameters, query_entity)
         except InvalidFunctionCall as exception:
             raise InvalidExpressionException(
                 exp,
