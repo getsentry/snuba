@@ -8,8 +8,9 @@ from snuba.datasets.entity import Entity
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source import DataSource
-from snuba.query.data_source.join import JoinClause
+from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.parser.validation import ExpressionValidator
@@ -29,35 +30,37 @@ default_validators: Mapping[str, FunctionCallValidator] = {
 }
 
 
-def _get_entity(data_source: DataSource) -> Optional[QueryEntity]:
+class QueryEntityFinder(
+    DataSourceVisitor[QueryEntity, QueryEntity], JoinVisitor[QueryEntity, QueryEntity]
+):
     """
-        Handles getting the query entity depending on the data source.
+    Finds the QueryEntity from the data source.
+    TODO(meredith): Have this return a list of the QueryEntities instead of
+    a single QueryEntity.
     """
-    if isinstance(data_source, QueryEntity):
+
+    def _visit_simple_source(self, data_source: QueryEntity) -> QueryEntity:
         return data_source
 
-    elif isinstance(data_source, JoinClause):
-        alias_map = data_source.get_alias_node_map()
-        for _, node in alias_map.items():
-            # just taking the first entity for now, will validate all coming up
-            assert isinstance(node.data_source, QueryEntity)  # mypy
-            return node.data_source
-        return None
+    def _visit_join(self, data_source: JoinClause[QueryEntity]) -> QueryEntity:
+        return self.visit_join_clause(data_source)
 
-    elif isinstance(data_source, ProcessableQuery):
-        q_entity = data_source.get_from_clause()
-        assert isinstance(q_entity, QueryEntity)  # mypy
-        return q_entity
+    def _visit_simple_query(
+        self, data_source: ProcessableQuery[QueryEntity]
+    ) -> QueryEntity:
+        return self.visit(data_source.get_from_clause())
 
-    elif isinstance(data_source, CompositeQuery):
-        # from clauses for composite queries are either a
-        # join clause, processable query, or another composite
-        # query, so recursively call until we get the join clause
-        # or processable query
-        return _get_entity(data_source.get_from_clause())
+    def _visit_composite_query(
+        self, data_source: CompositeQuery[QueryEntity]
+    ) -> QueryEntity:
+        return self.visit(data_source.get_from_clause())
 
-    else:
-        return None
+    def visit_individual_node(self, node: IndividualNode[QueryEntity]) -> QueryEntity:
+        return self.visit(node.data_source)
+
+    def visit_join_clause(self, node: JoinClause[QueryEntity]) -> QueryEntity:
+        # Just returns one entity for now, later return both entities
+        return node.left_node.accept(self)
 
 
 class FunctionCallsValidator(ExpressionValidator):
@@ -71,10 +74,15 @@ class FunctionCallsValidator(ExpressionValidator):
         if not isinstance(exp, FunctionCall):
             return
 
+        if not isinstance(
+            data_source, (QueryEntity, JoinClause, CompositeQuery, ProcessableQuery)
+        ):
+            return
+
         entity_validators: Mapping[str, FunctionCallValidator] = {}
         entity: Optional[Entity] = None
 
-        query_entity = _get_entity(data_source)
+        query_entity = QueryEntityFinder().visit(data_source)
 
         if not query_entity:
             return

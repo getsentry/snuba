@@ -2,9 +2,11 @@ from typing import Sequence
 
 import pytest
 
+from snuba.clickhouse.columns import ColumnSet, DateTime
+from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import String
 from snuba.datasets.entities import EntityKey
-from snuba.datasets.entities.factory import get_entity
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
 from snuba.query.expressions import Literal as LiteralExpr
@@ -120,7 +122,18 @@ def test_like_validator(
     extra_param: bool,
     should_raise: bool,
 ) -> None:
-    entity = get_entity(EntityKey.EVENTS)
+    entity = QueryEntity(
+        EntityKey.EVENTS,
+        ColumnSet(
+            [
+                ("event_id", String()),
+                ("level", String(Modifiers(nullable=True))),
+                ("str_col", String()),
+                ("timestamp", DateTime()),
+                ("received", DateTime(Modifiers(nullable=True))),
+            ]
+        ),
+    )
     validator = SignatureValidator(expected_types, extra_param)
 
     if should_raise:
