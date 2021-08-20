@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Sequence
 
-from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.data_source import DataSource
 from snuba.query.expressions import Expression
 
 
@@ -17,5 +17,7 @@ class FunctionCallValidator(ABC):
     """
 
     @abstractmethod
-    def validate(self, parameters: Sequence[Expression], entity: QueryEntity) -> None:
+    def validate(
+        self, parameters: Sequence[Expression], data_source: DataSource
+    ) -> None:
         raise NotImplementedError

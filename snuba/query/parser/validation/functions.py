@@ -1,6 +1,6 @@
 import logging
 from collections import ChainMap
-from typing import Mapping
+from typing import Mapping, Optional
 
 from snuba.clickhouse.columns import Array, String
 from snuba.datasets.entities.factory import get_entity
@@ -30,7 +30,8 @@ default_validators: Mapping[str, FunctionCallValidator] = {
 
 
 class QueryEntityFinder(
-    DataSourceVisitor[QueryEntity, QueryEntity], JoinVisitor[QueryEntity, QueryEntity]
+    DataSourceVisitor[Optional[QueryEntity], QueryEntity],
+    JoinVisitor[QueryEntity, QueryEntity],
 ):
     """
     Finds the QueryEntity from the data source. The QueryEntity is passed
@@ -69,10 +70,8 @@ class QueryEntityFinder(
     ) -> QueryEntity:
         return self.visit(data_source.get_from_clause())
 
-    def _visit_composite_query(
-        self, data_source: CompositeQuery[QueryEntity]
-    ) -> QueryEntity:
-        return self.visit(data_source.get_from_clause())
+    def _visit_composite_query(self, data_source: CompositeQuery[QueryEntity]) -> None:
+        return None
 
     def visit_individual_node(self, node: IndividualNode[QueryEntity]) -> QueryEntity:
         return self.visit(node.data_source)
@@ -102,10 +101,9 @@ class FunctionCallsValidator(ExpressionValidator):
         entity = None
 
         query_entity = QueryEntityFinder().visit(data_source)
-
-        entity = get_entity(query_entity.key)
-
-        entity_validators = entity.get_function_call_validators()
+        if query_entity:
+            entity = get_entity(query_entity.key)
+            entity_validators = entity.get_function_call_validators()
 
         common_function_validators = (
             entity_validators.keys() & default_validators.keys()
@@ -123,7 +121,7 @@ class FunctionCallsValidator(ExpressionValidator):
             # TODO: Decide whether these validators should exist at the Dataset or Entity level
             validator = validators.get(exp.function_name)
             if validator is not None:
-                validator.validate(exp.parameters, query_entity)
+                validator.validate(exp.parameters, data_source)
         except InvalidFunctionCall as exception:
             raise InvalidExpressionException(
                 exp,

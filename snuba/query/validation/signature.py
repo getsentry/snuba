@@ -17,7 +17,7 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.data_source import DataSource
 from snuba.query.expressions import Expression
 from snuba.query.expressions import Literal as LiteralType
 from snuba.query.matchers import Any as AnyMatcher
@@ -172,9 +172,11 @@ class SignatureValidator(FunctionCallValidator):
         # exceptions.
         self.__enforce = enforce
 
-    def validate(self, parameters: Sequence[Expression], entity: QueryEntity) -> None:
+    def validate(
+        self, parameters: Sequence[Expression], data_source: DataSource
+    ) -> None:
         try:
-            self.__validate_impl(parameters, entity)
+            self.__validate_impl(parameters, data_source)
         except InvalidFunctionCall as exception:
             if self.__enforce:
                 raise exception
@@ -184,7 +186,7 @@ class SignatureValidator(FunctionCallValidator):
                 )
 
     def __validate_impl(
-        self, parameters: Sequence[Expression], entity: QueryEntity
+        self, parameters: Sequence[Expression], data_source: DataSource
     ) -> None:
         if len(parameters) < len(self.__param_types):
             raise InvalidFunctionCall(
@@ -197,4 +199,4 @@ class SignatureValidator(FunctionCallValidator):
             )
 
         for validator, param in zip(self.__param_types, parameters):
-            validator.validate(param, entity.schema)
+            validator.validate(param, data_source.get_columns())
