@@ -103,12 +103,7 @@ class FunctionCallsValidator(ExpressionValidator):
 
         query_entity = QueryEntityFinder().visit(data_source)
 
-        if not query_entity:
-            return
-
         entity = get_entity(query_entity.key)
-        if not entity:
-            return
 
         entity_validators = entity.get_function_call_validators()
 
