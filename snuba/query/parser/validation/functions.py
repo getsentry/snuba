@@ -31,7 +31,7 @@ default_validators: Mapping[str, FunctionCallValidator] = {
 
 class QueryEntityFinder(
     DataSourceVisitor[Optional[QueryEntity], QueryEntity],
-    JoinVisitor[QueryEntity, QueryEntity],
+    JoinVisitor[Optional[QueryEntity], QueryEntity],
 ):
     """
     Finds the QueryEntity from the data source. The QueryEntity is passed
@@ -62,23 +62,29 @@ class QueryEntityFinder(
     def _visit_simple_source(self, data_source: QueryEntity) -> QueryEntity:
         return data_source
 
-    def _visit_join(self, data_source: JoinClause[QueryEntity]) -> QueryEntity:
+    def _visit_join(
+        self, data_source: JoinClause[QueryEntity]
+    ) -> Optional[QueryEntity]:
         return self.visit_join_clause(data_source)
 
     def _visit_simple_query(
         self, data_source: ProcessableQuery[QueryEntity]
-    ) -> QueryEntity:
+    ) -> Optional[QueryEntity]:
         return self.visit(data_source.get_from_clause())
 
-    def _visit_composite_query(self, data_source: CompositeQuery[QueryEntity]) -> None:
+    def _visit_composite_query(
+        self, data_source: CompositeQuery[QueryEntity]
+    ) -> Optional[QueryEntity]:
         return None
 
-    def visit_individual_node(self, node: IndividualNode[QueryEntity]) -> QueryEntity:
+    def visit_individual_node(
+        self, node: IndividualNode[QueryEntity]
+    ) -> Optional[QueryEntity]:
         return self.visit(node.data_source)
 
-    def visit_join_clause(self, node: JoinClause[QueryEntity]) -> QueryEntity:
+    def visit_join_clause(self, node: JoinClause[QueryEntity]) -> Optional[QueryEntity]:
         # Just returns one entity for now, later return both entities
-        return node.left_node.accept(self)
+        return node.right_node.accept(self)
 
 
 class FunctionCallsValidator(ExpressionValidator):
