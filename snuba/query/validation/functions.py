@@ -20,16 +20,11 @@ class AllowedFunctionValidator(FunctionCallValidator):
     def validate(
         self, func_name: str, parameters: Sequence[Expression], schema: Any
     ) -> None:
-        try:
-            self.__validate_impl(func_name, parameters, schema)
-        except InvalidFunctionCall as exception:
-            if self.__enforce:
-                raise exception
-            else:
-                logger.warning(f"Invalid function name: {func_name}", exc_info=True)
 
-    def __validate_impl(
-        self, func_name: str, parameters: Sequence[Expression], schema: Any
-    ) -> None:
-        if not is_valid_global_function(func_name):
+        if is_valid_global_function(func_name):
+            return
+
+        if self.__enforce:
             raise InvalidFunctionCall(f"Invalid function name: {func_name}")
+        else:
+            logger.warning(f"Invalid function name: {func_name}", exc_info=True)

@@ -40,11 +40,7 @@ class HandledFunctionsProcessor(QueryProcessor):
     def validate_parameters(self, exp: FunctionCall, entity: QueryEntity) -> None:
         validator = SignatureValidator([])
         try:
-<<<<<<< HEAD
-            validator.validate(exp.parameters, entity)
-=======
-            validator.validate(exp.function_name, exp.parameters, self.__columnset)
->>>>>>> 22c383ab (new AllowedFunctionValidator)
+            validator.validate(exp.function_name, exp.parameters, entity)
         except InvalidFunctionCall as err:
             raise InvalidExpressionException(
                 exp,

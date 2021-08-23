@@ -1,10 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Any, Sequence
+from typing import Sequence
 
-<<<<<<< HEAD
 from snuba.query.data_source import DataSource
-=======
->>>>>>> 22c383ab (new AllowedFunctionValidator)
 from snuba.query.expressions import Expression
 
 
@@ -21,10 +18,6 @@ class FunctionCallValidator(ABC):
 
     @abstractmethod
     def validate(
-<<<<<<< HEAD
-        self, parameters: Sequence[Expression], data_source: DataSource
-=======
-        self, func_name: str, parameters: Sequence[Expression], schema: Any
->>>>>>> 22c383ab (new AllowedFunctionValidator)
+        self, func_name: str, parameters: Sequence[Expression], ata_source: DataSource
     ) -> None:
         raise NotImplementedError
