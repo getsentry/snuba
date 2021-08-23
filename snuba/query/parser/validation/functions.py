@@ -104,7 +104,7 @@ class FunctionCallsValidator(ExpressionValidator):
 
         # First do global validation, independent of entities
         try:
-            for validator in global_validators.copy():
+            for validator in global_validators:
                 validator.validate(exp.function_name, exp.parameters, data_source)
         except InvalidFunctionCall as exception:
             raise InvalidExpressionException(
