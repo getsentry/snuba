@@ -1,7 +1,10 @@
 import pytest
+
 from snuba.clickhouse.columns import ColumnSet, String, UInt
+from snuba.datasets.entities import EntityKey
 from snuba.query import SelectedExpression
 from snuba.query.conditions import binary_condition
+from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.custom_function import (
@@ -13,10 +16,15 @@ from snuba.query.processors.custom_function import (
 from snuba.query.validation.signature import Column as ColType
 from snuba.request.request_settings import HTTPRequestSettings
 
+QUERY_ENTITY = QueryEntity(
+    EntityKey.EVENTS,
+    ColumnSet([("param1", String()), ("param2", UInt(8)), ("other_col", String())]),
+)
+
 TEST_CASES = [
     pytest.param(
         Query(
-            None,
+            QUERY_ENTITY,
             selected_columns=[
                 SelectedExpression("column1", Column("column1", None, "column1")),
             ],
@@ -30,7 +38,7 @@ TEST_CASES = [
             ),
         ),
         Query(
-            None,
+            QUERY_ENTITY,
             selected_columns=[
                 SelectedExpression("column1", Column("column1", None, "column1")),
             ],
@@ -47,7 +55,7 @@ TEST_CASES = [
     ),
     pytest.param(
         Query(
-            None,
+            QUERY_ENTITY,
             selected_columns=[
                 SelectedExpression(
                     "my_func",
@@ -60,7 +68,7 @@ TEST_CASES = [
             ],
         ),
         Query(
-            None,
+            QUERY_ENTITY,
             selected_columns=[
                 SelectedExpression(
                     "my_func",
@@ -82,7 +90,7 @@ TEST_CASES = [
     ),
     pytest.param(
         Query(
-            None,
+            QUERY_ENTITY,
             selected_columns=[
                 SelectedExpression(
                     "my_func",
@@ -102,7 +110,7 @@ TEST_CASES = [
             ],
         ),
         Query(
-            None,
+            QUERY_ENTITY,
             selected_columns=[
                 SelectedExpression(
                     "my_func",
@@ -136,7 +144,6 @@ TEST_CASES = [
 @pytest.mark.parametrize("query, expected_query", TEST_CASES)
 def test_format_expressions(query: Query, expected_query: Query) -> None:
     processor = CustomFunction(
-        ColumnSet([("param1", String()), ("param2", UInt(8)), ("other_col", String())]),
         "f_call",
         [("param1", ColType({String})), ("param2", ColType({UInt}))],
         partial_function(
@@ -157,7 +164,7 @@ def test_format_expressions(query: Query, expected_query: Query) -> None:
 INVALID_QUERIES = [
     pytest.param(
         Query(
-            None,
+            QUERY_ENTITY,
             selected_columns=[
                 SelectedExpression(
                     "my_func",
@@ -171,7 +178,7 @@ INVALID_QUERIES = [
     ),
     pytest.param(
         Query(
-            None,
+            QUERY_ENTITY,
             selected_columns=[
                 SelectedExpression(
                     "my_func",
@@ -194,7 +201,6 @@ INVALID_QUERIES = [
 @pytest.mark.parametrize("query", INVALID_QUERIES)
 def test_invalid_call(query: Query) -> None:
     processor = CustomFunction(
-        ColumnSet([("param1", String()), ("param2", UInt(8)), ("other_col", String())]),
         "f_call",
         [("param1", ColType({String})), ("param2", ColType({UInt}))],
         simple_function("f_call_impl(param1, inner_call(param2))"),

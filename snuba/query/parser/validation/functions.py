@@ -2,12 +2,14 @@ import logging
 from collections import ChainMap
 from typing import Mapping, Optional
 
-from snuba.clickhouse.columns import Array, ColumnSet, String
+from snuba.clickhouse.columns import Array, String
 from snuba.datasets.entities.factory import get_entity
-from snuba.query import Query
+from snuba.query import ProcessableQuery
+from snuba.query.composite import CompositeQuery
 from snuba.query.data_source import DataSource
-from snuba.query.data_source.join import JoinClause
+from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.parser.validation import ExpressionValidator
@@ -27,6 +29,64 @@ default_validators: Mapping[str, FunctionCallValidator] = {
 }
 
 
+class QueryEntityFinder(
+    DataSourceVisitor[Optional[QueryEntity], QueryEntity],
+    JoinVisitor[Optional[QueryEntity], QueryEntity],
+):
+    """
+    Finds the QueryEntity from the data source. The QueryEntity is passed
+    through to each FunctionCallValidator (singular):
+
+    ```
+        validator.validate(exp.parameters, query_entity)
+    ```
+
+    within the validate function below for the FunctionCallsValidator (plural).
+
+    We don't want a FunctionCallValidator (singular) to depend on the
+    dataset Entity, because of circular dependencies. However, we _need_
+    the Entity in the FunctionCallsValidator (plural) in order to get
+    the entity specific validator instances.
+
+    ```
+        entity.get_function_call_validators()
+    ```
+
+    Hences the reason for having both the QueryEntity and the Entity. :)
+
+
+    TODO(meredith): Have this return a list of the QueryEntities instead of
+    a single QueryEntity.
+    """
+
+    def _visit_simple_source(self, data_source: QueryEntity) -> QueryEntity:
+        return data_source
+
+    def _visit_join(
+        self, data_source: JoinClause[QueryEntity]
+    ) -> Optional[QueryEntity]:
+        return self.visit_join_clause(data_source)
+
+    def _visit_simple_query(
+        self, data_source: ProcessableQuery[QueryEntity]
+    ) -> Optional[QueryEntity]:
+        return self.visit(data_source.get_from_clause())
+
+    def _visit_composite_query(
+        self, data_source: CompositeQuery[QueryEntity]
+    ) -> Optional[QueryEntity]:
+        return None
+
+    def visit_individual_node(
+        self, node: IndividualNode[QueryEntity]
+    ) -> Optional[QueryEntity]:
+        return self.visit(node.data_source)
+
+    def visit_join_clause(self, node: JoinClause[QueryEntity]) -> Optional[QueryEntity]:
+        # Just returns one entity for now, later return both entities
+        return node.right_node.accept(self)
+
+
 class FunctionCallsValidator(ExpressionValidator):
     """
     Applies all function validators on the provided expression.
@@ -38,36 +98,36 @@ class FunctionCallsValidator(ExpressionValidator):
         if not isinstance(exp, FunctionCall):
             return
 
+        if not isinstance(
+            data_source, (QueryEntity, JoinClause, CompositeQuery, ProcessableQuery)
+        ):
+            return
+
         entity_validators: Mapping[str, FunctionCallValidator] = {}
-        data_model: Optional[ColumnSet] = None
-        if isinstance(data_source, QueryEntity):
-            entity = get_entity(data_source.key)
+        entity = None
+
+        query_entity = QueryEntityFinder().visit(data_source)
+        if query_entity:
+            entity = get_entity(query_entity.key)
             entity_validators = entity.get_function_call_validators()
 
-            common_function_validators = (
-                entity_validators.keys() & default_validators.keys()
+        common_function_validators = (
+            entity_validators.keys() & default_validators.keys()
+        )
+        if common_function_validators:
+            logger.warning(
+                "Dataset validators are overlapping with default ones. Entity: %s. Overlap %r",
+                entity,
+                common_function_validators,
+                exc_info=True,
             )
-            if common_function_validators:
-                logger.warning(
-                    "Dataset validators are overlapping with default ones. Entity: %s. Overlap %r",
-                    entity,
-                    common_function_validators,
-                    exc_info=True,
-                )
-            data_model = entity.get_data_model()
-        elif isinstance(data_source, (Query, JoinClause)):
-            # TODO: This is currently ignoring entity validators. We should be validating
-            # each entity.
-            data_model = data_source.get_columns()
-        else:
-            return
 
         validators = ChainMap(default_validators, entity_validators)
         try:
             # TODO: Decide whether these validators should exist at the Dataset or Entity level
             validator = validators.get(exp.function_name)
             if validator is not None:
-                validator.validate(exp.parameters, data_model)
+                validator.validate(exp.parameters, data_source)
         except InvalidFunctionCall as exception:
             raise InvalidExpressionException(
                 exp,
