@@ -140,7 +140,12 @@ REGULAR_FUNCTIONS = {
     "tuple",
 }
 
-GLOBAL_VALID_FUNCTIONS = set() | REGULAR_FUNCTIONS | AGGREGATION_FUNCTIONS
+# Custom function names that are not in ClickHouse but need to be validated
+CUSTOM_FUNCTIONS = {"apdex", "failure_rate"}
+
+GLOBAL_VALID_FUNCTIONS = (
+    set() | REGULAR_FUNCTIONS | AGGREGATION_FUNCTIONS | CUSTOM_FUNCTIONS
+)
 
 
 def is_valid_global_function(func_name: str) -> bool:

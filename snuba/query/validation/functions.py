@@ -1,6 +1,7 @@
 import logging
-from typing import Any, Sequence
+from typing import Sequence
 
+from snuba.query.data_source import DataSource
 from snuba.query.expressions import Expression
 from snuba.query.functions import is_valid_global_function
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
@@ -18,7 +19,7 @@ class AllowedFunctionValidator(FunctionCallValidator):
         self.__enforce = enforce
 
     def validate(
-        self, func_name: str, parameters: Sequence[Expression], schema: Any
+        self, func_name: str, parameters: Sequence[Expression], data_source: DataSource
     ) -> None:
 
         if is_valid_global_function(func_name):
