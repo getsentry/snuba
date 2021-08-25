@@ -1,5 +1,6 @@
 import pytest
 
+from snuba import settings
 from snuba.clusters.cluster import ClickhouseCluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import table_engines
@@ -93,3 +94,23 @@ def test_distributed(engine: table_engines.TableEngine, sql: str) -> None:
     with pytest.raises(AssertionError):
         engine.get_sql(single_node_cluster, "test_table")
     assert engine.get_sql(multi_node_cluster, "test_table") == sql
+
+
+def test_zookeeper_path_override() -> None:
+    orig_path = "/clickhouse/tables/events/all/default/test_table"
+    override_path = "/clickhouse/tables/test_table"
+
+    engine = table_engines.MergeTree(
+        storage_set=StorageSetKey.EVENTS, order_by="timestamp", unsharded=True
+    )
+    assert (
+        engine.get_sql(multi_node_cluster, "test_table")
+        == f"ReplicatedMergeTree('{orig_path}', '{{replica}}') ORDER BY timestamp"
+    )
+    settings.CLICKHOUSE_ZOOKEEPER_OVERRIDE = {orig_path: override_path}
+    assert (
+        engine.get_sql(multi_node_cluster, "test_table")
+        == f"ReplicatedMergeTree('{override_path}', '{{replica}}') ORDER BY timestamp"
+    )
+
+    settings.CLICKHOUSE_ZOOKEEPER_OVERRIDE = {}
