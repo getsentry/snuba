@@ -112,7 +112,7 @@ def test_metrics_processing(
     metrics_dataset = get_dataset("metrics")
     query = parse_snql_query(query_body["query"], [], metrics_dataset)
 
-    request = Request("", query_body, query, HTTPRequestSettings(), "")
+    request = Request("", query_body, query, HTTPRequestSettings(referrer=""))
 
     def query_runner(
         query: Query, settings: RequestSettings, reader: Reader

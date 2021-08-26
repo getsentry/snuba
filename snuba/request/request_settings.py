@@ -15,6 +15,9 @@ class RequestSettings(ABC):
     the formation of the query for projects, but it doesn't appear in the SQL statement.
     """
 
+    def __init__(self, referrer: str):
+        self.referrer = referrer
+
     @abstractmethod
     def get_turbo(self) -> bool:
         pass
@@ -53,12 +56,14 @@ class HTTPRequestSettings(RequestSettings):
 
     def __init__(
         self,
+        referrer: str = "<unknown>",
         turbo: bool = False,
         consistent: bool = False,
         debug: bool = False,
         dry_run: bool = False,
         legacy: bool = False,
     ) -> None:
+        super().__init__(referrer=referrer)
         self.__turbo = turbo
         self.__consistent = consistent
         self.__debug = debug
@@ -94,7 +99,8 @@ class SubscriptionRequestSettings(RequestSettings):
     parameters and skips all rate limiting.
     """
 
-    def __init__(self, consistent: bool = True) -> None:
+    def __init__(self, referrer: str, consistent: bool = True) -> None:
+        super().__init__(referrer=referrer)
         self.__consistent = consistent
 
     def get_turbo(self) -> bool:

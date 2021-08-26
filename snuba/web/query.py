@@ -153,7 +153,9 @@ def _run_query_pipeline(
     if not request.settings.get_turbo() and SampleClauseFinder().visit(
         request.query.get_from_clause()
     ):
-        metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
+        metrics.increment(
+            "sample_without_turbo", tags={"referrer": request.settings.referrer}
+        )
 
     if request.settings.get_dry_run():
         query_runner = _dry_run_query_runner
@@ -162,7 +164,7 @@ def _run_query_pipeline(
             _run_and_apply_column_names,
             timer,
             query_metadata,
-            request.referrer,
+            request.settings.referrer,
             robust,
             concurrent_queries_gauge,
         )

@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Mapping, Union
 
-from snuba.query.logical import Query
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity
+from snuba.query.logical import Query
 from snuba.request.request_settings import RequestSettings
 
 
@@ -25,4 +25,3 @@ class Request:
     body: Mapping[str, Any]
     query: Union[Query, CompositeQuery[Entity]]
     settings: RequestSettings  # settings provided by the request
-    referrer: str

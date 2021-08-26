@@ -99,7 +99,7 @@ class SnubaQueryMetadata:
             "request": {
                 "id": self.request.id,
                 "body": self.request.body,
-                "referrer": self.request.referrer,
+                "referrer": self.request.settings.referrer,
             },
             "dataset": self.dataset,
             "query_list": [q.to_dict() for q in self.query_list],

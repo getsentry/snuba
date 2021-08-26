@@ -61,7 +61,7 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
         self.__query_pipeline_builders = query_pipeline_builders
 
         self.__selector_func = lambda query: selector_func(
-            query, self.__request.referrer
+            query, self.__request.settings.referrer
         )
 
         self.__callback_func = (
@@ -69,7 +69,7 @@ class MultipleConcurrentPipeline(QueryExecutionPipeline):
                 callback_func,
                 self.__request.query,
                 self.__request.settings,
-                self.__request.referrer,
+                self.__request.settings.referrer,
             )
             if callback_func
             else None
