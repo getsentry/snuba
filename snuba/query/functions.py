@@ -116,12 +116,15 @@ REGULAR_FUNCTIONS = {
     "divide",
     # arrays,
     "array",
+    "arrayConcat",
     "arrayElement",
     "arrayExists",
     "arrayAll",
     "indexOf",
     "has",
     "hasAny",
+    "notEmpty",  # can apply to strings as well
+    "length",  # can apply to strings as well
     # comparison
     "equals",
     "notEquals",
@@ -139,6 +142,7 @@ REGULAR_FUNCTIONS = {
     "toInt8",
     "toUInt8",
     "toUInt64",
+    "toFloat64",
     # dates and times
     "toStartOfDay",
     "toStartOfHour",
@@ -147,6 +151,9 @@ REGULAR_FUNCTIONS = {
     # conditionals
     "if",
     "multiIf",
+    # mathematical
+    "log",
+    "sqrt",
     # rounding functions
     "floor",
     # hash functions
@@ -159,6 +166,7 @@ REGULAR_FUNCTIONS = {
     "notLike",
     "match",
     "positionCaseInsensitive",
+    "multiSearchFirstPositionCaseInsensitive",
     # functions for nulls
     "isNull",
     "isNotNull",
