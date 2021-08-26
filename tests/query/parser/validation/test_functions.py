@@ -16,6 +16,7 @@ from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column, Expression, FunctionCall
 from snuba.query.parser.validation.functions import FunctionCallsValidator
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
+from snuba.query.validation.functions import AllowedFunctionValidator
 
 
 class FakeValidator(FunctionCallValidator):
@@ -53,6 +54,23 @@ test_cases = [
     ),
 ]
 
+test_expressions = [
+    pytest.param(
+        FunctionCall(
+            None, "f", (Column(alias=None, table_name=None, column_name="col"),),
+        ),
+        True,
+        id="Invalid function name",
+    ),
+    pytest.param(
+        FunctionCall(
+            None, "count", (Column(alias=None, table_name=None, column_name="col"),),
+        ),
+        False,
+        id="Valid function name",
+    ),
+]
+
 
 @pytest.mark.parametrize("default_validators, entity_validators, exception", test_cases)
 def test_functions(
@@ -84,14 +102,28 @@ def test_functions(
     functions.default_validators = fn_cached
 
 
-def test_invalid_function_name() -> None:
+@pytest.mark.parametrize("expression, should_raise", test_expressions[:1])
+def test_invalid_function_name(expression: FunctionCall, should_raise: bool) -> None:
     data_source = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
-
-    expression = FunctionCall(
-        None, "f", (Column(alias=None, table_name=None, column_name="col"),)
-    )
-
     state.set_config("function-validator.enabled", True)
 
     with pytest.raises(InvalidExpressionException):
         FunctionCallsValidator().validate(expression, data_source)
+
+
+@pytest.mark.parametrize("expression, should_raise", test_expressions)
+def test_allowed_functions_validator(
+    expression: FunctionCall, should_raise: bool
+) -> None:
+    data_source = QueryEntity(EntityKey.EVENTS, ColumnSet([]))
+    state.set_config("function-validator.enabled", True)
+
+    if should_raise:
+        with pytest.raises(InvalidFunctionCall):
+            AllowedFunctionValidator().validate(
+                expression.function_name, expression.parameters, data_source
+            )
+    else:
+        AllowedFunctionValidator().validate(
+            expression.function_name, expression.parameters, data_source
+        )
