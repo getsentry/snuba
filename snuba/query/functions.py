@@ -27,6 +27,7 @@ _AGGREGATION_FUNCTIONS_BASE = {
     "argMin",
     "argMax",
     "avgWeighted",
+    "corr",
     "topK",
     "topKWeighted",
     "groupArray",
@@ -102,3 +103,67 @@ AGGREGATION_FUNCTIONS = {
 
 def is_aggregation_function(func_name: str) -> bool:
     return func_name in AGGREGATION_FUNCTIONS
+
+
+# Categorized based on ClickHouse docs
+# https://clickhouse.tech/docs/en/sql-reference/functions/
+REGULAR_FUNCTIONS = {
+    # arithmetic
+    "abs",
+    "plus",
+    "minus",
+    "multiply",
+    "divide",
+    # arrays,
+    "array",
+    "arrayElement",
+    "has",
+    # comparison
+    "equals",
+    "notEquals",
+    "less",
+    "greater",
+    "lessOrEquals",
+    "greaterOrEquals",
+    # logical
+    "and",
+    "or",
+    "not",
+    # type comparison
+    "toDateTime",
+    "toString",
+    "toInt8",
+    "toUInt8",
+    "toUInt64",
+    # dates and times
+    "toStartOfDay",
+    "toStartOfHour",
+    "toStartOfYear",
+    "toUnixTimestamp",
+    # conditionals
+    "if",
+    "multiIf",
+    # functions for IN operator
+    "in",
+    "notIn",
+    # functions for searching strings
+    "like",
+    "notLike",
+    # functions for nulls
+    "isNull",
+    "isNotNull",
+    "ifNull",
+    # functions for tuples
+    "tuple",
+}
+
+# Custom function names that are not in ClickHouse but need to be validated
+CUSTOM_FUNCTIONS = {"apdex", "failure_rate"}
+
+GLOBAL_VALID_FUNCTIONS = (
+    set() | REGULAR_FUNCTIONS | AGGREGATION_FUNCTIONS | CUSTOM_FUNCTIONS
+)
+
+
+def is_valid_global_function(func_name: str) -> bool:
+    return func_name in GLOBAL_VALID_FUNCTIONS
