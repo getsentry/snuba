@@ -82,7 +82,6 @@ class QueryEntityFinder(
         return self.visit(node.data_source)
 
     def visit_join_clause(self, node: JoinClause[QueryEntity]) -> List[QueryEntity]:
-        # Just returns one entity for now, later return both entities
         return node.right_node.accept(self) + node.left_node.accept(self)
 
 
@@ -109,7 +108,7 @@ class FunctionCallsValidator(ExpressionValidator):
         except InvalidFunctionCall as exception:
             raise InvalidExpressionException(
                 exp,
-                f"Invalid function name {exp.function_name}: {str(exception)}",
+                f"Illegal call to function {exp.function_name}: {str(exception)}",
                 report=False,
             ) from exception
 

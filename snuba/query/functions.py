@@ -27,6 +27,7 @@ _AGGREGATION_FUNCTIONS_BASE = {
     "argMin",
     "argMax",
     "avgWeighted",
+    "corr",
     "topK",
     "topKWeighted",
     "groupArray",
@@ -108,6 +109,7 @@ def is_aggregation_function(func_name: str) -> bool:
 # https://clickhouse.tech/docs/en/sql-reference/functions/
 REGULAR_FUNCTIONS = {
     # arithmetic
+    "abs",
     "plus",
     "minus",
     "multiply",
@@ -127,6 +129,20 @@ REGULAR_FUNCTIONS = {
     "and",
     "or",
     "not",
+    # type comparison
+    "toDateTime",
+    "toString",
+    "toInt8",
+    "toUInt8",
+    "toUInt64",
+    # dates and times
+    "toStartOfDay",
+    "toStartOfHour",
+    "toStartOfYear",
+    "toUnixTimestamp",
+    # conditionals
+    "if",
+    "multiIf",
     # functions for IN operator
     "in",
     "notIn",
@@ -136,6 +152,7 @@ REGULAR_FUNCTIONS = {
     # functions for nulls
     "isNull",
     "isNotNull",
+    "ifNull",
     # functions for tuples
     "tuple",
 }

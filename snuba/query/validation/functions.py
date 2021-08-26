@@ -1,12 +1,15 @@
 import logging
 from typing import Sequence
 
+from snuba import environment, state
 from snuba.query.data_source import DataSource
 from snuba.query.expressions import Expression
 from snuba.query.functions import is_valid_global_function
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 logger = logging.getLogger(__name__)
+metrics = MetricsWrapper(environment.metrics, "validation.functions")
 
 
 class AllowedFunctionValidator(FunctionCallValidator):
@@ -15,9 +18,6 @@ class AllowedFunctionValidator(FunctionCallValidator):
     that the function is correctly formed.
     """
 
-    def __init__(self, enforce: bool = False):
-        self.__enforce = enforce
-
     def validate(
         self, func_name: str, parameters: Sequence[Expression], data_source: DataSource
     ) -> None:
@@ -25,7 +25,7 @@ class AllowedFunctionValidator(FunctionCallValidator):
         if is_valid_global_function(func_name):
             return
 
-        if self.__enforce:
+        if state.get_config("function-validator.enabled", False):
             raise InvalidFunctionCall(f"Invalid function name: {func_name}")
         else:
-            logger.warning(f"Invalid function name: {func_name}", exc_info=True)
+            metrics.increment("invalid_funcs", tags={"func_name": f"{func_name}"})
