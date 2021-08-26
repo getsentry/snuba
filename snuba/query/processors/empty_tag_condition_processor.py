@@ -50,17 +50,7 @@ class EmptyTagConditionProcessor(QueryProcessor):
                     if exp.function_name == ConditionFunctions.EQ:
                         replacement = FunctionCall(exp.alias, "not", (replacement,))
 
-                    prev_value = query.get_experiment_value(
-                        "empty-string-tag-condition"
-                    )
-                    if prev_value is not None:
-                        return replacement if prev_value == "true" else exp
-
-                    if settings.TESTING or random.random() < 0.5:
-                        query.add_experiment("empty-string-tag-condition", "true")
-                        return replacement
-                    else:
-                        query.add_experiment("empty-string-tag-condition", "false")
+                    return replacement
 
             return exp
 
