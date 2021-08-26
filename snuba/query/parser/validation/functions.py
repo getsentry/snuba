@@ -119,6 +119,9 @@ class FunctionCallsValidator(ExpressionValidator):
         for query_entity in query_entities:
             entity = get_entity(query_entity.key)
 
+            # TODO(meredith): If there are multiple entities but no
+            # entity validators, this will call the default validator
+            # multiple times.
             entity_validator = entity.get_function_call_validators().get(
                 exp.function_name
             ) or default_validators.get(exp.function_name)

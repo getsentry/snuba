@@ -28,4 +28,4 @@ class AllowedFunctionValidator(FunctionCallValidator):
         if state.get_config("function-validator.enabled", False):
             raise InvalidFunctionCall(f"Invalid function name: {func_name}")
         else:
-            metrics.increment("invalid_funcs", tags={"func_name": f"{func_name}"})
+            metrics.increment("invalid_funcs", tags={"func_name": func_name})
