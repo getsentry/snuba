@@ -507,6 +507,26 @@ class TestDiscoverApi(BaseApiTest):
             }
         ]
 
+    def test_some_bullshit(self) -> None:
+        self.post(
+            json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [["count()", "", "count"]],
+                    "conditions": [
+                        ["duration", ">=", 0],
+                        ["contexts[device.charging]", "=", "True"],
+                        ["contexts[device.model_id]", "=", "Galaxy"],
+                    ],
+                    "limit": 1000,
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
+                }
+            ),
+            entity="discover_transactions",
+        )
+
     def test_device_fields_condition(self) -> None:
         response = self.post(
             json.dumps(

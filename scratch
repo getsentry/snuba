@@ -1,0 +1,60 @@
+# Problem
+
+* We store the `trace_id` as a promoted column, a context, and a tag.
+* We store the "trace context" as a tag, which is just the `trace_id` and the `span_id` joined on a hyphen.
+
+
+```sql
+MATCH (discover)
+SELECT
+   title,
+   type,
+   contexts[trace.span_id],
+   timestamp,
+   project_id,
+   event_id, transform(toString(project_id), array('5492900'), array('stpanscras-audience-app'), '') AS project
+WHERE
+    timestamp >= toDateTime('2021-07-25T15:02:10') AND timestamp < toDateTime('2021-07-26T15:02:10') AND project_id IN tuple(5492900) AND contexts[trace.trace_id] = 'ec168ec4efec4df69fc220c5244b2a13' AND project_id IN tuple(5492900) 
+ORDER BY timestamp DESC LIMIT 51 OFFSET 0
+
+-- Which becomes
+SELECT
+    (title AS _snuba_title),
+    (type AS _snuba_type),
+    (arrayElement(contexts.value, indexOf(contexts.key, 'trace.span_id')) AS `_snuba_contexts[trace.span_id]`),
+    (timestamp AS _snuba_timestamp),
+    (project_id AS _snuba_project_id),
+    (replaceAll(toString(event_id), '-', '') AS _snuba_event_id),
+    (transform(toString(_snuba_project_id), ['5492900'], ['stpanscras-audience-app'], '') AS _snuba_project)
+FROM discover_dist
+PREWHERE
+    in(event_id, tuple('bc0d5d77-1fe6-46c3-b19d-6a3ee35c56a7'))
+WHERE (
+    equals(deleted, 0) AND
+    greaterOrEquals(_snuba_timestamp, toDateTime('2021-07-26T03:02:09', 'Universal')) AND
+    less(_snuba_timestamp, toDateTime('2021-07-26T03:02:10', 'Universal')) AND
+    in(_snuba_project_id, tuple(5492900)) AND
+    equals(trace_id, 'ec168ec4-efec-4df6-9fc2-20c5244b2a13') AND
+    in(_snuba_project_id, tuple(5492900))
+ORDER BY _snuba_timestamp DESC LIMIT 1 OFFSET 0 
+```
+
+
+# My framing of the problem:
+
+We store the `trace_id` as a promoted column, a context, and a tag, we want to store it only as one of these (promoted column?).
+Currently, there are many ways to query by `trace_id` or `span_id` (due to the three places they are stored). All three are currently in use?
+
+This task is a two step process:
+
+1. Make the logical -> physical query translator translate the tag and context queries to a promoted column query (e.g. `contexts[trace.span_id] -> trace_id`)
+2. Change the writer to clickhouse to not write these duplicate fields (after 1 is done)
+
+Am I understanding this so far?
+
+
+Technically the `trace_id` and `transaction_id` and `span_id` columns are not promoted contexts. Though you are right. They are stored both in the massive contexts column and in their own columns (which are much more efficient in storage and query)
+* The user does not see the difference, they only reason in terms of contexts
+* `trace_id` and `span_id` are encoded differently between the column and the context.
+ * `trace_id`: context: UUID str, column: 128bit int
+ * `span_id`: context: hex encoded integer column: 64 bit int

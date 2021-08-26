@@ -110,7 +110,7 @@ def test_format_expressions(
     assert query.get_selected_columns() == expected_query.get_selected_columns()
 
 
-def test_one_format():
+def test_one_format() -> None:
     # "replaced with promoted col",
     in_q = ClickhouseQuery(
         Table("events", columns),
@@ -147,4 +147,5 @@ def test_one_format():
     MappingColumnPromoter({"tags": {"promoted_tag": "promoted"}}).process_query(
         in_q, HTTPRequestSettings()
     )
-    print(out_q)
+    rq = repr(out_q)
+    print(rq)

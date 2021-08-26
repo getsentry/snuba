@@ -393,12 +393,12 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
 def dataset_query(
     dataset: Dataset, body: MutableMapping[str, Any], timer: Timer, language: Language
 ) -> Response:
-    assert http_request.method == "POST"
-    referrer = http_request.referrer or "<unknown>"  # mypy
-
-    metrics.increment(
-        "snql.query.incoming", tags={"referrer": referrer, "language": str(language)}
-    )
+    # assert http_request.method == "POST"
+    # referrer = http_request.referrer or "<unknown>"  # mypy
+    referrer = "thisisabadAPI"
+    # metrics.increment(
+    #     "snql.query.incoming", tags={"referrer": referrer, "language": str(language)}
+    # )
     if language == Language.SNQL:
         parser: Callable[
             [RequestParts, RequestSettings, Dataset],
