@@ -117,7 +117,11 @@ REGULAR_FUNCTIONS = {
     # arrays,
     "array",
     "arrayElement",
+    "arrayExists",
+    "arrayAll",
+    "indexOf",
     "has",
+    "hasAny",
     # comparison
     "equals",
     "notEquals",
@@ -143,22 +147,44 @@ REGULAR_FUNCTIONS = {
     # conditionals
     "if",
     "multiIf",
+    # rounding functions
+    "floor",
+    # hash functions
+    "cityHash64",
     # functions for IN operator
     "in",
     "notIn",
     # functions for searching strings
     "like",
     "notLike",
+    "match",
+    "positionCaseInsensitive",
     # functions for nulls
     "isNull",
     "isNotNull",
     "ifNull",
+    "assumeNotNull",
+    "coalesce",
     # functions for tuples
     "tuple",
+    "tupleElement",
+    # other,
+    "transform",
+    "least",
+    "greatest",
+    # table functions
+    "arrayJoin",
 }
 
 # Custom function names that are not in ClickHouse but need to be validated
-CUSTOM_FUNCTIONS = {"apdex", "failure_rate"}
+CUSTOM_FUNCTIONS = {
+    # transactions
+    "apdex",
+    "failure_rate",
+    # events
+    "isHandled",
+    "notHandled",
+}
 
 GLOBAL_VALID_FUNCTIONS = (
     set() | REGULAR_FUNCTIONS | AGGREGATION_FUNCTIONS | CUSTOM_FUNCTIONS
