@@ -116,7 +116,7 @@ class QuerylogProcessor(MessageProcessor):
             "request_body": self.__to_json_string(message["request"]["body"]),
             "referrer": message["request"]["referrer"] or "",
             "dataset": message["dataset"],
-            "projects": list(message.get("projects", set())),
+            "projects": message.get("projects") or [],
             # TODO: This column is empty for now, we plan to use it soon as we
             # will start to write org IDs into events and allow querying by org.
             "organization": None,

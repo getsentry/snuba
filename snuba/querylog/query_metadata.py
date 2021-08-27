@@ -105,7 +105,7 @@ class SnubaQueryMetadata:
             "query_list": [q.to_dict() for q in self.query_list],
             "status": self.status.value,
             "timing": self.timer.for_json(),
-            "projects": self.projects,
+            "projects": list(self.projects),
         }
 
     @property

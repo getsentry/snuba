@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Mapping, Optional
 
+from snuba import settings
 from snuba.clickhouse.escaping import escape_string
 from snuba.clusters.cluster import ClickhouseCluster
 from snuba.clusters.storage_sets import StorageSetKey
@@ -68,14 +69,24 @@ class MergeTree(TableEngine):
 
         return sql
 
-    def _get_engine_type(self, cluster: ClickhouseCluster, table_name: str) -> str:
+    def _get_zookeeper_path(self, cluster: ClickhouseCluster, table_name: str) -> str:
         database_name = cluster.get_database()
+
+        if self._unsharded is True:
+            path = f"/clickhouse/tables/{self._storage_set_value}/all/{database_name}/{table_name}"
+        else:
+            path = f"/clickhouse/tables/{self._storage_set_value}/{{shard}}/{database_name}/{table_name}"
+
+        path_with_override = settings.CLICKHOUSE_ZOOKEEPER_OVERRIDE.get(path, path)
+
+        return f"'{path_with_override}'"
+
+    def _get_engine_type(self, cluster: ClickhouseCluster, table_name: str) -> str:
         if cluster.is_single_node():
             return "MergeTree()"
-        elif self._unsharded is True:
-            return f"ReplicatedMergeTree('/clickhouse/tables/{self._storage_set_value}/all/{database_name}/{table_name}', '{{replica}}')"
         else:
-            return f"ReplicatedMergeTree('/clickhouse/tables/{self._storage_set_value}/{{shard}}/{database_name}/{table_name}', '{{replica}}')"
+            zoo_path = self._get_zookeeper_path(cluster, table_name)
+            return f"ReplicatedMergeTree({zoo_path}, '{{replica}}')"
 
 
 class ReplacingMergeTree(MergeTree):
@@ -96,35 +107,29 @@ class ReplacingMergeTree(MergeTree):
         self.__version_column = version_column
 
     def _get_engine_type(self, cluster: ClickhouseCluster, table_name: str) -> str:
-        database_name = cluster.get_database()
         if cluster.is_single_node():
             return f"ReplacingMergeTree({self.__version_column})"
-        elif self._unsharded is True:
-            return f"ReplicatedReplacingMergeTree('/clickhouse/tables/{self._storage_set_value}/all/{database_name}/{table_name}', '{{replica}}', {self.__version_column})"
         else:
-            return f"ReplicatedReplacingMergeTree('/clickhouse/tables/{self._storage_set_value}/{{shard}}/{database_name}/{table_name}', '{{replica}}', {self.__version_column})"
+            zoo_path = self._get_zookeeper_path(cluster, table_name)
+            return f"ReplicatedReplacingMergeTree({zoo_path}, '{{replica}}', {self.__version_column})"
 
 
 class SummingMergeTree(MergeTree):
     def _get_engine_type(self, cluster: ClickhouseCluster, table_name: str) -> str:
-        database_name = cluster.get_database()
         if cluster.is_single_node():
             return "SummingMergeTree()"
-        elif self._unsharded is True:
-            return f"SummingMergeTree('/clickhouse/tables/{self._storage_set_value}/all/{database_name}/{table_name}', '{{replica}}')"
         else:
-            return f"ReplicatedSummingMergeTree('/clickhouse/tables/{self._storage_set_value}/{{shard}}/{database_name}/{table_name}', '{{replica}}')"
+            zoo_path = self._get_zookeeper_path(cluster, table_name)
+            return f"ReplicatedSummingMergeTree({zoo_path}, '{{replica}}')"
 
 
 class AggregatingMergeTree(MergeTree):
     def _get_engine_type(self, cluster: ClickhouseCluster, table_name: str) -> str:
-        database_name = cluster.get_database()
         if cluster.is_single_node():
             return "AggregatingMergeTree()"
-        elif self._unsharded is True:
-            return f"ReplicatedAggregatingMergeTree('/clickhouse/tables/{self._storage_set_value}/all/{database_name}/{table_name}', '{{replica}}')"
         else:
-            return f"ReplicatedAggregatingMergeTree('/clickhouse/tables/{self._storage_set_value}/{{shard}}/{database_name}/{table_name}', '{{replica}}')"
+            zoo_path = self._get_zookeeper_path(cluster, table_name)
+            return f"ReplicatedAggregatingMergeTree({zoo_path}, '{{replica}}')"
 
 
 class Distributed(TableEngine):
