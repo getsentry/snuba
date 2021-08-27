@@ -8,7 +8,7 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 class Migration(migration.ClickhouseNodeMigration):
     """
-    Add trace_id to merge table
+    Add span_id to merge table
     """
 
     blocking = False
