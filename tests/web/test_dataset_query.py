@@ -10,45 +10,12 @@ def test_dataset_query() -> None:
 
     query_str = """MATCH (discover)
     SELECT
-        contexts[trace.trace_id]
+        contexts[trace.span_id]
     WHERE
         timestamp >= toDateTime('2021-07-25T15:02:10') AND
         timestamp < toDateTime('2021-07-26T15:02:10') AND
         project_id IN tuple(5492900)
     """
-
-    q = """SELECT
-  arrayElement(
-    contexts.value,
-    indexOf(
-      contexts.key,
-      'trace.span_id'
-    )
-  ) AS `_snuba_contexts[trace.span_id]` |> contexts[trace.span_id]
-FROM
-  Table(discover_local)
-
-
-WHERE
-  and(
-    greaterOrEquals(
-      timestamp AS `_snuba_timestamp`,
-      datetime(2021-07-25T15:02:10)
-    ),
-    and(
-      less(
-        timestamp AS `_snuba_timestamp`,
-        datetime(2021-07-26T15:02:10)
-      ),
-      in(
-        project_id AS `_snuba_project_id`,
-        tuple(
-          5492900
-        )
-      )
-    )
-  )
-  LIMIT 1000"""
 
     q = dataset_query(
         dataset=get_dataset("discover"),
