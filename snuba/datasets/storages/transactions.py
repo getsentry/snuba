@@ -115,22 +115,12 @@ storage = WritableTableStorage(
         ),
         UUIDColumnProcessor(set(["event_id", "trace_id"])),
         HexIntColumnProcessor({"span_id"}),
-        # purely tech debt, should not be here there is too much that depends on it now
         EventsBooleanContextsProcessor(),
-        # complicated af, takes tags expression in a condition and replaces them with
-        # a condition over the tags hashset
         MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
-        # turns an expression like ifnull(tags.key) into has(tags.key) -> uses the bloom filter
         EmptyTagConditionProcessor(),
-        # product wants to enumerate all tag key,value and aggregate by them and count them
-        # instead of doing two array joins over key,value
-        # zip the tag key and val column
-        # run an array filter to exclude the ones we don't care about (pre-filter)
-        # run the array join on the rest
         ArrayJoinKeyValueOptimizer("tags"),
         ArrayJoinKeyValueOptimizer("measurements"),
         ArrayJoinKeyValueOptimizer("span_op_breakdowns"),
-        # finds conditions on those columns and runs the search on them
         PrewhereProcessor(
             [
                 "event_id",

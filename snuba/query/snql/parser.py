@@ -823,7 +823,7 @@ def parse_snql_query_initial(
         raise ParsingException(message)
 
     assert isinstance(parsed, (CompositeQuery, LogicalQuery))  # mypy
-    fuck = repr(parsed)
+
     # Add these defaults here to avoid them getting applied to subqueries
     limit = parsed.get_limit()
     if limit is None:

@@ -14,8 +14,6 @@ class UUIDColumnProcessor(BaseTypeConverter):
             raise ColumnTypeError("Not a valid UUID string", report=False)
 
     def _process_expressions(self, exp: Expression) -> Expression:
-        # this is what the users want:
-        # trace_id - > replaceAll(toString(trace_id), "-", "")
         if isinstance(exp, Column) and exp.column_name in self.columns:
             return FunctionCall(
                 exp.alias,
