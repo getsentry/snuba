@@ -136,7 +136,7 @@ def test_build_request(
         granularity=60,
     )
 
-    assert request.settings.referrer == "my_request"
+    assert request.referrer == "my_request"
     assert dict(request.body) == body
     status, differences = request.query.equals(expected_query)
     assert status == True, f"Query mismatch: {differences}"

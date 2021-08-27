@@ -25,3 +25,7 @@ class Request:
     body: Mapping[str, Any]
     query: Union[Query, CompositeQuery[Entity]]
     settings: RequestSettings  # settings provided by the request
+
+    @property
+    def referrer(self) -> str:
+        return self.settings.referrer

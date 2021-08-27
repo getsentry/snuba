@@ -141,7 +141,7 @@ class SubscriptionWorker(
                     body=copy.deepcopy(request.body),
                     query=copy.deepcopy(request.query),
                     settings=SubscriptionRequestSettings(
-                        referrer=request.settings.referrer, consistent=True
+                        referrer=request.referrer, consistent=True
                     ),
                 )
 
@@ -161,7 +161,7 @@ class SubscriptionWorker(
                     body=copy.deepcopy(request.body),
                     query=copy.deepcopy(request.query),
                     settings=SubscriptionRequestSettings(
-                        referrer=request.settings.referrer, consistent=False
+                        referrer=request.referrer, consistent=False
                     ),
                 )
 

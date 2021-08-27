@@ -30,7 +30,7 @@ def record_query(
         state.record_query(query_metadata.to_dict())
 
         final = str(request.query.get_final())
-        referrer = request.settings.referrer or "none"
+        referrer = request.referrer or "none"
         timer.send_metrics_to(
             metrics,
             tags={
