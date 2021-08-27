@@ -57,6 +57,7 @@ columns = ColumnSet(
         ("_tags_hash_map", Array(UInt(64))),
         ("contexts", Nested([("key", String()), ("value", String())])),
         ("trace_id", UUID(Modifiers(nullable=True))),
+        ("span_id", UInt(64, Modifiers(nullable=True))),
         ("deleted", UInt(8)),
     ]
 )
@@ -82,7 +83,7 @@ storage = ReadableTableStorage(
                     "sentry:dist": "dist",
                     "sentry:user": "user",
                 },
-                "contexts": {"trace.trace_id": "trace_id"},
+                "contexts": {"trace.trace_id": "trace_id", "trace.span_id": "span_id"},
             }
         ),
         MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
