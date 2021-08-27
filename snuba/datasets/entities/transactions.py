@@ -32,7 +32,6 @@ from snuba.query.project_extension import ProjectExtension
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.query.validation.validators import EntityRequiredColumnValidator
 
-# mapping between logical and physical data model
 transaction_translator = TranslationMappers(
     columns=[
         ColumnToFunction(
