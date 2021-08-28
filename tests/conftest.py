@@ -44,13 +44,18 @@ def run_migrations() -> Iterator[None]:
     for storage_key in STORAGES:
         storage = get_storage(storage_key)
         cluster = storage.get_cluster()
-        connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
         database = cluster.get_database()
 
         schema = storage.get_schema()
         if isinstance(schema, WritableTableSchema):
             table_name = schema.get_local_table_name()
-            connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
+
+            nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
+            for node in nodes:
+                connection = cluster.get_node_connection(
+                    ClickhouseClientSettings.MIGRATE, node
+                )
+                connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
 
     redis_client.flushdb()
 
