@@ -15,7 +15,7 @@ class RequestSettings(ABC):
     the formation of the query for projects, but it doesn't appear in the SQL statement.
     """
 
-    def __init__(self, referrer: str):
+    def __init__(self, referrer: str) -> None:
         self.referrer = referrer
 
     @abstractmethod
