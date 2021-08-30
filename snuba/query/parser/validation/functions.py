@@ -1,6 +1,5 @@
 import logging
-from collections import ChainMap
-from typing import Mapping, Optional
+from typing import List, Mapping
 
 from snuba.clickhouse.columns import Array, String
 from snuba.datasets.entities.factory import get_entity
@@ -14,6 +13,7 @@ from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.parser.validation import ExpressionValidator
 from snuba.query.validation import FunctionCallValidator, InvalidFunctionCall
+from snuba.query.validation.functions import AllowedFunctionValidator
 from snuba.query.validation.signature import Any, Column, SignatureValidator
 
 logger = logging.getLogger(__name__)
@@ -27,11 +27,12 @@ default_validators: Mapping[str, FunctionCallValidator] = {
     "like": SignatureValidator([Column({Array, String}), Any()]),
     "notLike": SignatureValidator([Column({Array, String}), Any()]),
 }
+global_validators: List[FunctionCallValidator] = [AllowedFunctionValidator()]
 
 
 class QueryEntityFinder(
-    DataSourceVisitor[Optional[QueryEntity], QueryEntity],
-    JoinVisitor[Optional[QueryEntity], QueryEntity],
+    DataSourceVisitor[List[QueryEntity], QueryEntity],
+    JoinVisitor[List[QueryEntity], QueryEntity],
 ):
     """
     Finds the QueryEntity from the data source. The QueryEntity is passed
@@ -59,32 +60,29 @@ class QueryEntityFinder(
     a single QueryEntity.
     """
 
-    def _visit_simple_source(self, data_source: QueryEntity) -> QueryEntity:
-        return data_source
+    def _visit_simple_source(self, data_source: QueryEntity) -> List[QueryEntity]:
+        return [data_source]
 
-    def _visit_join(
-        self, data_source: JoinClause[QueryEntity]
-    ) -> Optional[QueryEntity]:
+    def _visit_join(self, data_source: JoinClause[QueryEntity]) -> List[QueryEntity]:
         return self.visit_join_clause(data_source)
 
     def _visit_simple_query(
         self, data_source: ProcessableQuery[QueryEntity]
-    ) -> Optional[QueryEntity]:
+    ) -> List[QueryEntity]:
         return self.visit(data_source.get_from_clause())
 
     def _visit_composite_query(
         self, data_source: CompositeQuery[QueryEntity]
-    ) -> Optional[QueryEntity]:
-        return None
+    ) -> List[QueryEntity]:
+        return []
 
     def visit_individual_node(
         self, node: IndividualNode[QueryEntity]
-    ) -> Optional[QueryEntity]:
+    ) -> List[QueryEntity]:
         return self.visit(node.data_source)
 
-    def visit_join_clause(self, node: JoinClause[QueryEntity]) -> Optional[QueryEntity]:
-        # Just returns one entity for now, later return both entities
-        return node.right_node.accept(self)
+    def visit_join_clause(self, node: JoinClause[QueryEntity]) -> List[QueryEntity]:
+        return node.right_node.accept(self) + node.left_node.accept(self)
 
 
 class FunctionCallsValidator(ExpressionValidator):
@@ -103,34 +101,41 @@ class FunctionCallsValidator(ExpressionValidator):
         ):
             return
 
-        entity_validators: Mapping[str, FunctionCallValidator] = {}
-        entity = None
-
-        query_entity = QueryEntityFinder().visit(data_source)
-        if query_entity:
-            entity = get_entity(query_entity.key)
-            entity_validators = entity.get_function_call_validators()
-
-        common_function_validators = (
-            entity_validators.keys() & default_validators.keys()
-        )
-        if common_function_validators:
-            logger.warning(
-                "Dataset validators are overlapping with default ones. Entity: %s. Overlap %r",
-                entity,
-                common_function_validators,
-                exc_info=True,
-            )
-
-        validators = ChainMap(default_validators, entity_validators)
+        # First do global validation, independent of entities
         try:
-            # TODO: Decide whether these validators should exist at the Dataset or Entity level
-            validator = validators.get(exp.function_name)
-            if validator is not None:
-                validator.validate(exp.parameters, data_source)
+            for validator in global_validators:
+                validator.validate(exp.function_name, exp.parameters, data_source)
         except InvalidFunctionCall as exception:
             raise InvalidExpressionException(
                 exp,
                 f"Illegal call to function {exp.function_name}: {str(exception)}",
                 report=False,
             ) from exception
+
+        # Then do entity specific validation, if there are any
+        entity = None
+        query_entities = QueryEntityFinder().visit(data_source)
+
+        for query_entity in query_entities:
+            entity = get_entity(query_entity.key)
+
+            # TODO(meredith): If there are multiple entities but no
+            # entity validators, this will call the default validator
+            # multiple times.
+            entity_validator = entity.get_function_call_validators().get(
+                exp.function_name
+            ) or default_validators.get(exp.function_name)
+
+            if not entity_validator:
+                return
+
+            try:
+                entity_validator.validate(
+                    exp.function_name, exp.parameters, data_source
+                )
+            except InvalidFunctionCall as exception:
+                raise InvalidExpressionException(
+                    exp,
+                    f"Illegal call to function {exp.function_name}: {str(exception)}",
+                    report=False,
+                ) from exception
