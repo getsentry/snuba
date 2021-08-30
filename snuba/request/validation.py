@@ -81,10 +81,10 @@ def build_request(
                 }
                 settings_obj: Union[
                     HTTPRequestSettings, SubscriptionRequestSettings
-                ] = settings_class(**settings)
+                ] = settings_class(referrer=referrer, **settings)
             elif settings_class == SubscriptionRequestSettings:
                 settings_obj = settings_class(
-                    consistent=_consistent_override(True, referrer)
+                    referrer=referrer, consistent=_consistent_override(True, referrer),
                 )
 
             query = parser(request_parts, settings_obj, dataset)
@@ -106,7 +106,6 @@ def build_request(
                 ChainMap(request_parts.query, *request_parts.extensions.values()),
                 query,
                 settings_obj,
-                referrer,
             )
         except (InvalidJsonRequestException, InvalidQueryException) as exception:
             record_invalid_request(timer, referrer)

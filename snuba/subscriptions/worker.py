@@ -140,8 +140,9 @@ class SubscriptionWorker(
                     id=request.id,
                     body=copy.deepcopy(request.body),
                     query=copy.deepcopy(request.query),
-                    settings=SubscriptionRequestSettings(consistent=True),
-                    referrer=request.referrer,
+                    settings=SubscriptionRequestSettings(
+                        referrer=request.referrer, consistent=True
+                    ),
                 )
 
                 return parse_and_run_query(
@@ -159,8 +160,9 @@ class SubscriptionWorker(
                     id=request.id,
                     body=copy.deepcopy(request.body),
                     query=copy.deepcopy(request.query),
-                    settings=SubscriptionRequestSettings(consistent=False),
-                    referrer=request.referrer,
+                    settings=SubscriptionRequestSettings(
+                        referrer=request.referrer, consistent=False
+                    ),
                 )
 
                 return parse_and_run_query(
