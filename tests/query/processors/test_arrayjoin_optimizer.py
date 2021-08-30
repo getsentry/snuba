@@ -333,7 +333,7 @@ test_data = [
 def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     dataset = get_dataset("transactions")
     query = parse_query(query_body, dataset)
-    request = Request("a", query_body, query, HTTPRequestSettings(), "r")
+    request = Request("a", query_body, query, HTTPRequestSettings(referrer="r"))
     entity = get_entity(query.get_from_clause().key)
     storage = entity.get_writable_storage()
     assert storage is not None

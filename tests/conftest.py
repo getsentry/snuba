@@ -5,8 +5,7 @@ import pytest
 from snuba_sdk.legacy import json_to_snql
 
 from snuba import settings, state
-from snuba.clickhouse.native import ClickhousePool
-from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.factory import STORAGES, get_storage
 from snuba.environment import setup_sentry
@@ -25,12 +24,33 @@ def pytest_configure() -> None:
     setup_sentry()
 
     for cluster in settings.CLUSTERS:
-        connection = ClickhousePool(
-            cluster["host"], cluster["port"], "default", "", "default",
+        clickhouse_cluster = ClickhouseCluster(
+            host=cluster["host"],
+            port=cluster["port"],
+            user="default",
+            password="",
+            database="default",
+            http_port=cluster["http_port"],
+            storage_sets=cluster["storage_sets"],
+            single_node=cluster["single_node"],
+            cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
+            distributed_cluster_name=cluster["distributed_cluster_name"]
+            if "distributed_cluster_name" in cluster
+            else None,
         )
+
         database_name = cluster["database"]
-        connection.execute(f"DROP DATABASE IF EXISTS {database_name};")
-        connection.execute(f"CREATE DATABASE {database_name};")
+        nodes = [
+            *clickhouse_cluster.get_local_nodes(),
+            *clickhouse_cluster.get_distributed_nodes(),
+        ]
+
+        for node in nodes:
+            connection = clickhouse_cluster.get_node_connection(
+                ClickhouseClientSettings.MIGRATE, node
+            )
+            connection.execute(f"DROP DATABASE IF EXISTS {database_name};")
+            connection.execute(f"CREATE DATABASE {database_name};")
 
 
 @pytest.fixture(autouse=True)
