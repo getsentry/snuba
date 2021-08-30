@@ -1,4 +1,3 @@
-from snuba.request.schema import apply_query_extensions
 import time
 import uuid
 from datetime import datetime, timedelta
@@ -15,6 +14,7 @@ from snuba.query.logical import Query
 from snuba.reader import Column as MetaColumn
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
+from snuba.request.schema import apply_query_extensions
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import parse_and_run_query
 from tests.helpers import write_unprocessed_events
@@ -70,7 +70,7 @@ def test_transform_column_names() -> None:
             ),
         ],
     )
-    query_settings = HTTPRequestSettings()
+    query_settings = HTTPRequestSettings(referrer="asd")
     apply_query_extensions(
         query,
         {
@@ -93,9 +93,7 @@ def test_transform_column_names() -> None:
 
     result = parse_and_run_query(
         dataset,
-        Request(
-            id="asd", body={}, query=query, settings=query_settings, referrer="asd",
-        ),
+        Request(id="asd", body={}, query=query, settings=query_settings),
         timer,
     )
 

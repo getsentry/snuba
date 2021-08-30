@@ -61,9 +61,9 @@ def test() -> None:
     )
 
     with cv:
-        request_settings = HTTPRequestSettings()
+        request_settings = HTTPRequestSettings(referrer="ref")
         delegator.build_execution_pipeline(
-            Request("", query_body, query, request_settings, "ref",), mock_query_runner,
+            Request("", query_body, query, request_settings), mock_query_runner,
         ).execute()
         cv.wait(timeout=5)
 

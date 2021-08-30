@@ -38,7 +38,10 @@ def test_simple() -> None:
     )
 
     request = Request(
-        uuid.UUID("a" * 32).hex, request_body, query, HTTPRequestSettings(), "search",
+        uuid.UUID("a" * 32).hex,
+        request_body,
+        query,
+        HTTPRequestSettings(referrer="search"),
     )
 
     time = TestingClock()
@@ -137,7 +140,10 @@ def test_missing_fields() -> None:
     )
 
     request = Request(
-        uuid.UUID("a" * 32).hex, request_body, query, HTTPRequestSettings(), "search",
+        uuid.UUID("a" * 32).hex,
+        request_body,
+        query,
+        HTTPRequestSettings(referrer="search"),
     )
 
     time = TestingClock()
