@@ -24,6 +24,9 @@ from snuba.query.processors.empty_tag_condition_processor import (
 from snuba.query.processors.mapping_optimizer import MappingOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.type_converters.hexint_column_processor import (
+    HexIntColumnProcessor,
+)
 from snuba.query.processors.type_converters.uuid_column_processor import (
     UUIDColumnProcessor,
 )
@@ -90,6 +93,7 @@ storage = ReadableTableStorage(
         EmptyTagConditionProcessor(),
         ArrayJoinKeyValueOptimizer("tags"),
         UUIDColumnProcessor(set(["event_id", "trace_id"])),
+        HexIntColumnProcessor(set(["span_id"])),
         EventsBooleanContextsProcessor(),
         PrewhereProcessor(
             [
