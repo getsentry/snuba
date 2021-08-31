@@ -258,7 +258,6 @@ EVENTS_COLUMNS = ColumnSet(
 
 TRANSACTIONS_COLUMNS = ColumnSet(
     [
-        ("span_id", UInt(64, Modifiers(nullable=True))),
         ("transaction_hash", UInt(64, Modifiers(nullable=True))),
         ("transaction_op", String(Modifiers(nullable=True))),
         ("transaction_status", UInt(8, Modifiers(nullable=True))),
@@ -429,6 +428,7 @@ class DiscoverEntity(Entity):
                 ("tags", Nested([("key", String()), ("value", String())])),
                 ("contexts", Nested([("key", String()), ("value", String())])),
                 ("trace_id", String(Modifiers(nullable=True))),
+                ("span_id", UInt(64, Modifiers(nullable=True))),
             ]
         )
         self.__events_columns = EVENTS_COLUMNS

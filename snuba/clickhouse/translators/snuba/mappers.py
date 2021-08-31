@@ -24,6 +24,7 @@ from snuba.query.matchers import (
     String,
 )
 
+
 # This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
 @dataclass(frozen=True)
 class _ColumnToExpression:
