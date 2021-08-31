@@ -134,10 +134,11 @@ def test_like_validator(
             ]
         ),
     )
+    func_name = "like"
     validator = SignatureValidator(expected_types, extra_param)
 
     if should_raise:
         with pytest.raises(InvalidFunctionCall):
-            validator.validate(expressions, entity)
+            validator.validate(func_name, expressions, entity)
     else:
-        validator.validate(expressions, entity)
+        validator.validate(func_name, expressions, entity)
