@@ -174,7 +174,7 @@ jobs:
           pip install --upgrade pip wheel
           # We cannot execute actions that are not placed under .github of the main repo
           mkdir -p .github/actions
-          cp sentry/.github/actions/* .github/actions
+          cp -r sentry/.github/actions/* .github/actions
 
       - name: Setup Sentry
         id: setup-sentry
