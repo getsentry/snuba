@@ -83,7 +83,7 @@ storage = ReadableTableStorage(
                     "sentry:dist": "dist",
                     "sentry:user": "user",
                 },
-                "contexts": {"trace.trace_id": "trace_id"},
+                "contexts": {"trace.trace_id": "trace_id", "trace.span_id": "span_id"},
             }
         ),
         MappingOptimizer("tags", "_tags_hash_map", "tags_hash_map_enabled"),
