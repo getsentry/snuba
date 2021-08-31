@@ -26,7 +26,7 @@ def test_sessions_processing() -> None:
 
     sessions = get_dataset("sessions")
     query = parse_query(query_body, sessions)
-    request = Request("", query_body, query, HTTPRequestSettings(), "")
+    request = Request("", query_body, query, HTTPRequestSettings(referrer=""))
 
     def query_runner(
         query: Query, settings: RequestSettings, reader: Reader
@@ -127,7 +127,7 @@ def test_select_storage(
 ) -> None:
     sessions = get_dataset("sessions")
     query = parse_query(query_body, sessions)
-    request = Request("", query_body, query, HTTPRequestSettings(), "")
+    request = Request("", query_body, query, HTTPRequestSettings(referrer=""))
 
     def query_runner(
         query: Query, settings: RequestSettings, reader: Reader
