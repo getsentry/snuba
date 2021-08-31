@@ -31,6 +31,10 @@ class RequestSettings(ABC):
         pass
 
     @abstractmethod
+    def get_parent_api(self) -> str:
+        pass
+
+    @abstractmethod
     def get_dry_run(self) -> bool:
         pass
 
@@ -60,6 +64,7 @@ class HTTPRequestSettings(RequestSettings):
         turbo: bool = False,
         consistent: bool = False,
         debug: bool = False,
+        parent_api: str = "<unknown>",
         dry_run: bool = False,
         legacy: bool = False,
     ) -> None:
@@ -67,6 +72,7 @@ class HTTPRequestSettings(RequestSettings):
         self.__turbo = turbo
         self.__consistent = consistent
         self.__debug = debug
+        self.__parent_api = parent_api
         self.__dry_run = dry_run
         self.__legacy = legacy
         self.__rate_limit_params = [get_global_rate_limit_params()]
@@ -79,6 +85,9 @@ class HTTPRequestSettings(RequestSettings):
 
     def get_debug(self) -> bool:
         return self.__debug
+
+    def get_parent_api(self) -> str:
+        return self.__parent_api
 
     def get_dry_run(self) -> bool:
         return self.__dry_run
@@ -111,6 +120,9 @@ class SubscriptionRequestSettings(RequestSettings):
 
     def get_debug(self) -> bool:
         return False
+
+    def get_parent_api(self) -> str:
+        return "subscription"
 
     def get_dry_run(self) -> bool:
         return False
