@@ -56,3 +56,58 @@ def test_events_processing() -> None:
     events_entity.get_query_pipeline_builder().build_execution_pipeline(
         request, query_runner
     ).execute()
+
+
+def test_discover_thing() -> None:
+    from functools import partial
+    from snuba.request.validation import parse_snql_query, build_request
+    from snuba.request.schema import RequestSchema
+    from snuba.request import Language
+    from snuba.utils.metrics.timer import Timer
+
+    query_str = """MATCH (discover)
+    SELECT
+        contexts[trace.span_id]
+    WHERE
+        timestamp >= toDateTime('2021-07-25T15:02:10') AND
+        timestamp < toDateTime('2021-07-26T15:02:10') AND
+        project_id IN tuple(5492900)
+    """
+
+    query_body = {
+        "query": query_str,
+        "debug": True,
+        "dataset": "discover",
+        "turbo": False,
+        "consistent": False,
+    }
+
+    discover = get_dataset("discover")
+    discover_entity = discover.get_default_entity()
+    parser = partial(parse_snql_query, [])
+
+    schema = RequestSchema.build_with_extensions(
+        discover_entity.get_extensions(), HTTPRequestSettings, Language.SNQL,
+    )
+
+    request = build_request(
+        query_body,
+        parser,
+        HTTPRequestSettings,
+        schema,
+        discover,
+        Timer(name="bloop"),
+        "some_referrer",
+    )
+
+    def query_runner(
+        query: Query, settings: RequestSettings, reader: Reader
+    ) -> QueryResult:
+        print(query)
+        import pdb
+
+        pdb.set_trace()
+
+    discover_entity.get_query_pipeline_builder().build_execution_pipeline(
+        request, query_runner
+    ).execute()
