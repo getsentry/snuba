@@ -22,44 +22,37 @@ span_id_as_uint64 = int(span_id_hex, 16)
 
 
 @pytest.mark.parametrize(
-    "dataset_name, query_str, entity, expected_table_name",
+    "entity, expected_table_name",
     [
-        pytest.param(
-            "discover",
-            f"""MATCH (discover)
-            SELECT
-                contexts[trace.span_id]
-            WHERE
-                timestamp >= toDateTime('2021-07-25T15:02:10') AND
-                timestamp < toDateTime('2021-07-26T15:02:10') AND
-                contexts[trace.span_id] = '{span_id_hex}' AND
-                project_id IN tuple(5492900)
-            """,
-            get_entity(EntityKey.DISCOVER),
-            "discover_local",
-            id="discover",
-        ),
-        pytest.param(
-            "discover",
-            f"""MATCH (discover)
-            SELECT
-                contexts[trace.span_id]
-            WHERE
-                timestamp >= toDateTime('2021-07-25T15:02:10') AND
-                timestamp < toDateTime('2021-07-26T15:02:10') AND
-                contexts[trace.span_id] = '{span_id_hex}' AND
-                project_id IN tuple(5492900) AND
-                group_id IN tuple(1234)
-            """,
-            get_entity(EntityKey.EVENTS),
-            "errors_local",
-            id="events",
-        ),
+        pytest.param(get_entity(EntityKey.DISCOVER), "discover_local", id="discover",),
+        pytest.param(get_entity(EntityKey.EVENTS), "errors_local", id="events",),
     ],
 )
-def test_span_id_promotion(
-    dataset_name: str, query_str: str, entity: Entity, expected_table_name: str
-) -> None:
+def test_span_id_promotion(entity: Entity, expected_table_name: str) -> None:
+    """In order to save space in the contexts column and provide faster query
+    performance, we promote span_id to a proper column and don't store it in the
+    actual contexts object in the DB.
+
+    The client however, still queries by `contexts[trace.span_id]` and expects that
+    it is a hex string rather than a 64 bit uint (which is what we store it as)
+
+    This test makes sure that our query pipeline will do the proper column promotion and conversion
+    """
+
+    dataset_name = "discover"
+
+    # The client queries by contexts[trace.span_id] even though that's not how we store it
+    query_str = f"""MATCH (discover)
+    SELECT
+        contexts[trace.span_id]
+    WHERE
+        timestamp >= toDateTime('2021-07-25T15:02:10') AND
+        timestamp < toDateTime('2021-07-26T15:02:10') AND
+        contexts[trace.span_id] = '{span_id_hex}' AND
+        project_id IN tuple(5492900)
+    """
+
+    # ----- create the request object as if it came in through our API -----
     query_body = {
         "query": query_str,
         "debug": True,
@@ -84,6 +77,7 @@ def test_span_id_promotion(
         Timer(name="bloop"),
         "some_referrer",
     )
+    # ----- create the request object as if it came in through our API -----
 
     def query_verifier(
         query: Query, settings: RequestSettings, reader: Reader
