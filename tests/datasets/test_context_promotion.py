@@ -77,7 +77,7 @@ def test_span_id_promotion(entity: Entity, expected_table_name: str) -> None:
         Timer(name="bloop"),
         "some_referrer",
     )
-    # ----- create the request object as if it came in through our API -----
+    # --------------------------------------------------------------------
 
     def query_verifier(
         query: Query, settings: RequestSettings, reader: Reader
@@ -86,6 +86,7 @@ def test_span_id_promotion(entity: Entity, expected_table_name: str) -> None:
         assert query.get_selected_columns() == [
             SelectedExpression(
                 name="contexts[trace.span_id]",
+                # the select converts the span_id into a lowecase hex string
                 expression=FunctionCall(
                     "_snuba_contexts[trace.span_id]",
                     "lower",
@@ -94,6 +95,9 @@ def test_span_id_promotion(entity: Entity, expected_table_name: str) -> None:
             )
         ]
 
+        # The only reason this extends StringifyVisitor is because it has all the other
+        # visit methods implemented. Really all we care about is the equality comparison
+        # to span_id
         class SpanIdVerifier(StringifyVisitor):
             def __init__(self) -> None:
                 self.found_span_condition = False
@@ -104,6 +108,8 @@ def test_span_id_promotion(entity: Entity, expected_table_name: str) -> None:
                     None, None, "span_id"
                 ):
                     self.found_span_condition = True
+                    # and here we can see that the hex string the client queried us with
+                    # has been converted to the correct uint64
                     assert exp.parameters[1] == Literal(None, span_id_as_uint64)
                 return super().visit_function_call(exp)
 
