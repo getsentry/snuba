@@ -24,8 +24,8 @@ span_id_as_uint64 = int(span_id_hex, 16)
 @pytest.mark.parametrize(
     "entity, expected_table_name",
     [
-        pytest.param(get_entity(EntityKey.DISCOVER), "discover_local", id="discover",),
-        pytest.param(get_entity(EntityKey.EVENTS), "errors_local", id="events",),
+        pytest.param(get_entity(EntityKey.DISCOVER), "discover", id="discover",),
+        pytest.param(get_entity(EntityKey.EVENTS), "errors", id="events",),
     ],
 )
 def test_span_id_promotion(entity: Entity, expected_table_name: str) -> None:
@@ -82,7 +82,10 @@ def test_span_id_promotion(entity: Entity, expected_table_name: str) -> None:
     def query_verifier(
         query: Query, settings: RequestSettings, reader: Reader
     ) -> QueryResult:
-        assert query.get_from_clause().table_name == expected_table_name
+        # in local and CI there's a table name difference
+        # errors_local vs errors_dist and discover_local vs discover_dist
+        # so we check using `in` instead of `==`
+        assert expected_table_name in query.get_from_clause().table_name
         assert query.get_selected_columns() == [
             SelectedExpression(
                 name="contexts[trace.span_id]",
