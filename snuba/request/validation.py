@@ -81,7 +81,11 @@ def build_request(
                 }
                 settings_obj: Union[
                     HTTPRequestSettings, SubscriptionRequestSettings
-                ] = settings_class(referrer=referrer, **settings)
+                ] = settings_class(
+                    referrer=referrer,
+                    parent_api=request_parts.query["parent_api"],
+                    **settings
+                )
             elif settings_class == SubscriptionRequestSettings:
                 settings_obj = settings_class(
                     referrer=referrer, consistent=_consistent_override(True, referrer),

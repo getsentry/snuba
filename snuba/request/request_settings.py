@@ -108,7 +108,9 @@ class SubscriptionRequestSettings(RequestSettings):
     parameters and skips all rate limiting.
     """
 
-    def __init__(self, referrer: str, consistent: bool = True) -> None:
+    def __init__(
+        self, referrer: str, consistent: bool = True, parent_api: str = "subscription"
+    ) -> None:
         super().__init__(referrer=referrer)
         self.__consistent = consistent
 
