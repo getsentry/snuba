@@ -1,6 +1,7 @@
 from typing import Any, MutableMapping
 
 import pytest
+
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.factory import get_dataset
 from snuba.query.parser import parse_query
@@ -121,8 +122,8 @@ test_data = [
     ),
     # # No conditions, other referenced columns
     ({"selected_columns": ["group_id"]}, EntityKey.DISCOVER_EVENTS),
-    ({"selected_columns": ["span_id"]}, EntityKey.DISCOVER_TRANSACTIONS),
-    ({"selected_columns": ["group_id", "span_id"]}, EntityKey.DISCOVER),
+    ({"selected_columns": ["span_id"]}, EntityKey.DISCOVER),
+    ({"selected_columns": ["group_id", "span_id"]}, EntityKey.DISCOVER_EVENTS),
     (
         {"aggregations": [["max", "duration", "max_duration"]]},
         EntityKey.DISCOVER_TRANSACTIONS,
