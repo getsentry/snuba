@@ -76,6 +76,10 @@ class ReplacementContext:
 
 
 class Replacement(ReplacementBase):
+    # TODO: add type here
+
+    replacement_type: str
+
     @abstractmethod
     def get_query_time_flags(self) -> Optional[QueryTimeFlags]:
         raise NotImplementedError()
@@ -117,6 +121,7 @@ class LegacyReplacement(Replacement):
     insert_query_template: Optional[str]
     query_args: Mapping[str, Any]
     query_time_flags: LegacyQueryTimeFlags
+    replacement_type: str
 
     def get_project_id(self) -> int:
         return self.query_time_flags[1]
@@ -157,6 +162,8 @@ def set_project_exclude_groups(
     """Add {group_id: now, ...} to the ZSET for each `group_id` to exclude,
     remove outdated entries based on `settings.REPLACER_KEY_TTL`, and expire
     the entire ZSET incase it's rarely touched."""
+
+    # TODO: Set new key for type?
 
     now = time.time()
     key = get_project_exclude_groups_key(project_id, state_name)
@@ -263,7 +270,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
 
     def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
         type_ = message.action_type
-        event = message.data
+        # event = message.data
 
         if type_ in REPLACEMENT_EVENT_TYPES:
             metrics.increment("process", 1, tags={"type": type_})
@@ -277,20 +284,20 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         ):
             return None
         elif type_ == "end_delete_groups":
-            processed = process_delete_groups(event, self.__required_columns)
+            processed = process_delete_groups(message, self.__required_columns)
         elif type_ == "end_merge":
-            processed = process_merge(event, self.__all_columns)
+            processed = process_merge(message, self.__all_columns)
         elif type_ == "end_unmerge":
             processed = UnmergeGroupsReplacement.parse_message(
-                event, self.__replacement_context
+                message, self.__replacement_context
             )
         elif type_ == "end_unmerge_hierarchical":
             processed = process_unmerge_hierarchical(
-                event, self.__all_columns, self.__state_name
+                message, self.__all_columns, self.__state_name
             )
         elif type_ == "end_delete_tag":
             processed = process_delete_tag(
-                event,
+                message,
                 self.__all_columns,
                 self.__tag_column_map,
                 self.__promoted_tags,
@@ -299,15 +306,15 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             )
         elif type_ == "tombstone_events":
             processed = process_tombstone_events(
-                event, self.__required_columns, self.__state_name
+                message, self.__required_columns, self.__state_name
             )
         elif type_ == "replace_group":
             processed = process_replace_group(
-                event, self.__all_columns, self.__state_name
+                message, self.__all_columns, self.__state_name
             )
         elif type_ == "exclude_groups":
             processed = ExcludeGroupsReplacement.parse_message(
-                event, self.__replacement_context
+                message, self.__replacement_context
             )
         else:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
@@ -331,6 +338,8 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                     set_project_needs_final(project_id, None)
                 set_project_needs_final(project_id, self.__state_name)
 
+            # TODO: Figure out sending type to setter
+
             elif isinstance(query_time_flags, ExcludeGroups):
                 if compatibility_double_write:
                     set_project_exclude_groups(
@@ -347,7 +356,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
 
 
 def _build_event_tombstone_replacement(
-    message: Mapping[str, Any],
+    message: ReplacementMessage,
     required_columns: Sequence[str],
     where: str,
     query_args: Mapping[str, str],
@@ -374,19 +383,22 @@ def _build_event_tombstone_replacement(
     final_query_args = {
         "required_columns": ", ".join(required_columns),
         "select_columns": ", ".join(select_columns),
-        "project_id": message["project_id"],
+        "project_id": message.data["project_id"],
     }
     final_query_args.update(query_args)
 
     return LegacyReplacement(
-        count_query_template, insert_query_template, final_query_args, query_time_flags
+        count_query_template,
+        insert_query_template,
+        final_query_args,
+        query_time_flags,
+        replacement_type=message.action_type,
     )
 
 
 def _build_group_replacement(
-    txn: Optional[str],
+    message: ReplacementMessage,
     project_id: int,
-    new_group_id: str,
     where: str,
     query_args: Mapping[str, str],
     query_time_flags: LegacyQueryTimeFlags,
@@ -394,6 +406,7 @@ def _build_group_replacement(
 ) -> Optional[Replacement]:
     # HACK: We were sending duplicates of the `end_merge` message from Sentry,
     # this is only for performance of the backlog.
+    txn = message.data.get("transaction_id")
     if txn:
         if txn in SEEN_MERGE_TXN_CACHE:
             return None
@@ -402,7 +415,8 @@ def _build_group_replacement(
 
     all_column_names = [c.escaped for c in all_columns]
     select_columns = map(
-        lambda i: i if i != "group_id" else str(new_group_id), all_column_names,
+        lambda i: i if i != "group_id" else str(message.data["new_group_id"]),
+        all_column_names,
     )
 
     count_query_template = (
@@ -430,7 +444,11 @@ def _build_group_replacement(
     final_query_args.update(query_args)
 
     return LegacyReplacement(
-        count_query_template, insert_query_template, final_query_args, query_time_flags
+        count_query_template,
+        insert_query_template,
+        final_query_args,
+        query_time_flags,
+        replacement_type=message.action_type,
     )
 
 
@@ -482,7 +500,7 @@ def _build_event_set_filter(
 
 
 def process_replace_group(
-    message: Mapping[str, Any],
+    message: ReplacementMessage,
     all_columns: Sequence[FlattenedColumn],
     state_name: ReplacerState,
 ) -> Optional[Replacement]:
@@ -497,40 +515,36 @@ def process_replace_group(
     how the merging was done.
     """
 
-    event_ids = message["event_ids"]
+    event_ids = message.data["event_ids"]
     if not event_ids:
         return None
 
-    event_set_filter = _build_event_set_filter(message, state_name)
+    event_set_filter = _build_event_set_filter(message.data, state_name)
     if event_set_filter is None:
         return None
 
     prewhere, where, query_args = event_set_filter
 
     full_where = f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
-    project_id: int = message["project_id"]
+    project_id: int = message.data["project_id"]
     query_time_flags = (None, project_id)
 
     return _build_group_replacement(
-        message.get("transaction_id"),
-        project_id,
-        message["new_group_id"],
-        full_where,
-        query_args,
-        query_time_flags,
-        all_columns,
+        message, project_id, full_where, query_args, query_time_flags, all_columns,
     )
 
 
 def process_delete_groups(
-    message: Mapping[str, Any], required_columns: Sequence[str]
+    message: ReplacementMessage, required_columns: Sequence[str]
 ) -> Optional[Replacement]:
-    group_ids = message["group_ids"]
+    group_ids = message.data["group_ids"]
     if not group_ids:
         return None
 
     assert all(isinstance(gid, int) for gid in group_ids)
-    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+    timestamp = datetime.strptime(
+        message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+    )
 
     where = """\
         PREWHERE group_id IN (%(group_ids)s)
@@ -544,7 +558,7 @@ def process_delete_groups(
         "timestamp": timestamp.strftime(DATETIME_FORMAT),
     }
 
-    query_time_flags = (EXCLUDE_GROUPS, message["project_id"], group_ids)
+    query_time_flags = (EXCLUDE_GROUPS, message.data["project_id"], group_ids)
 
     return _build_event_tombstone_replacement(
         message, required_columns, where, query_args, query_time_flags
@@ -552,15 +566,15 @@ def process_delete_groups(
 
 
 def process_tombstone_events(
-    message: Mapping[str, Any],
+    message: ReplacementMessage,
     required_columns: Sequence[str],
     state_name: ReplacerState,
 ) -> Optional[Replacement]:
-    event_ids = message["event_ids"]
+    event_ids = message.data["event_ids"]
     if not event_ids:
         return None
 
-    old_primary_hash = message.get("old_primary_hash")
+    old_primary_hash = message.data.get("old_primary_hash")
 
     if old_primary_hash and state_name == ReplacerState.EVENTS:
         # old_primary_hash flag means the event is only tombstoned
@@ -570,7 +584,7 @@ def process_tombstone_events(
         # not.
         return None
 
-    event_set_filter = _build_event_set_filter(message, state_name)
+    event_set_filter = _build_event_set_filter(message.data, state_name)
     if event_set_filter is None:
         return None
 
@@ -585,7 +599,7 @@ def process_tombstone_events(
 
         prewhere.append("primary_hash = %(old_primary_hash)s")
 
-    query_time_flags = (None, message["project_id"])
+    query_time_flags = (None, message.data["project_id"])
 
     full_where = f"PREWHERE {' AND '.join(prewhere)} WHERE {' AND '.join(where)}"
 
@@ -614,15 +628,20 @@ class ExcludeGroupsReplacement(Replacement):
 
     project_id: int
     group_ids: Sequence[int]
+    replacement_type: str
 
     @classmethod
     def parse_message(
-        cls, message: Mapping[str, Any], context: ReplacementContext
+        cls, message: ReplacementMessage, context: ReplacementContext
     ) -> Optional[ExcludeGroupsReplacement]:
-        if not message["group_ids"]:
+        if not message.data["group_ids"]:
             return None
 
-        return cls(project_id=message["project_id"], group_ids=message["group_ids"])
+        return cls(
+            project_id=message.data["project_id"],
+            group_ids=message.data["group_ids"],
+            replacement_type=message.action_type,
+        )
 
     def get_project_id(self) -> int:
         return self.project_id
@@ -641,7 +660,7 @@ SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
 
 
 def process_merge(
-    message: Mapping[str, Any], all_columns: Sequence[FlattenedColumn]
+    message: ReplacementMessage, all_columns: Sequence[FlattenedColumn]
 ) -> Optional[Replacement]:
     """
     Merge all events of one group into another group.
@@ -662,30 +681,26 @@ def process_merge(
         AND NOT deleted
     """
 
-    previous_group_ids = message["previous_group_ids"]
+    previous_group_ids = message.data["previous_group_ids"]
     if not previous_group_ids:
         return None
 
     assert all(isinstance(gid, int) for gid in previous_group_ids)
 
-    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+    timestamp = datetime.strptime(
+        message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+    )
 
     query_args = {
         "previous_group_ids": ", ".join(str(gid) for gid in previous_group_ids),
         "timestamp": timestamp.strftime(DATETIME_FORMAT),
     }
 
-    project_id: int = message["project_id"]
+    project_id: int = message.data["project_id"]
     query_time_flags = (EXCLUDE_GROUPS, project_id, previous_group_ids)
 
     return _build_group_replacement(
-        message.get("transaction_id"),
-        project_id,
-        message["new_group_id"],
-        where,
-        query_args,
-        query_time_flags,
-        all_columns,
+        message, project_id, where, query_args, query_time_flags, all_columns,
     )
 
 
@@ -698,29 +713,31 @@ class UnmergeGroupsReplacement(Replacement):
     project_id: int
     previous_group_id: int
     new_group_id: int
+    replacement_type: str
 
     @classmethod
     def parse_message(
-        cls, message: Mapping[str, Any], context: ReplacementContext
+        cls, message: ReplacementMessage, context: ReplacementContext
     ) -> Optional["Replacement"]:
-        hashes = message["hashes"]
+        hashes = message.data["hashes"]
         if not hashes:
             return None
 
         assert all(isinstance(h, str) for h in hashes)
 
         timestamp = datetime.strptime(
-            message["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+            message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
         )
 
         return UnmergeGroupsReplacement(
             state_name=context.state_name,
             timestamp=timestamp,
             hashes=hashes,
-            project_id=message["project_id"],
-            previous_group_id=message["previous_group_id"],
-            new_group_id=message["new_group_id"],
+            project_id=message.data["project_id"],
+            previous_group_id=message.data["previous_group_id"],
+            new_group_id=message.data["new_group_id"],
             all_columns=context.all_columns,
+            replacement_type=message.action_type,
         )
 
     def get_project_id(self) -> int:
@@ -790,25 +807,25 @@ def _convert_hash(
 
 
 def process_unmerge_hierarchical(
-    message: Mapping[str, Any],
+    message: ReplacementMessage,
     all_columns: Sequence[FlattenedColumn],
     state_name: ReplacerState,
 ) -> Optional[Replacement]:
     all_column_names = [c.escaped for c in all_columns]
     select_columns = map(
-        lambda i: i if i != "group_id" else str(message["new_group_id"]),
+        lambda i: i if i != "group_id" else str(message.data["new_group_id"]),
         all_column_names,
     )
 
     try:
         timestamp = datetime.strptime(
-            message["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+            message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
         )
 
-        primary_hash = message["primary_hash"]
+        primary_hash = message.data["primary_hash"]
         assert isinstance(primary_hash, str)
 
-        hierarchical_hash = message["hierarchical_hash"]
+        hierarchical_hash = message.data["hierarchical_hash"]
         assert isinstance(hierarchical_hash, str)
 
         uuid.UUID(primary_hash)
@@ -849,8 +866,8 @@ def process_unmerge_hierarchical(
     query_args = {
         "all_columns": ", ".join(all_column_names),
         "select_columns": ", ".join(select_columns),
-        "previous_group_id": message["previous_group_id"],
-        "project_id": message["project_id"],
+        "previous_group_id": message.data["previous_group_id"],
+        "project_id": message.data["project_id"],
         "timestamp": timestamp.strftime(DATETIME_FORMAT),
         "primary_hash": _convert_hash(primary_hash, state_name),
         "hierarchical_hash": _convert_hash(
@@ -860,27 +877,33 @@ def process_unmerge_hierarchical(
 
     # Sentry is expected to send an `exclude_groups` message after unsplit is
     # done, and we can live with data inconsistencies while this is ongoing.
-    query_time_flags = (None, message["project_id"])
+    query_time_flags = (None, message.data["project_id"])
 
     return LegacyReplacement(
-        count_query_template, insert_query_template, query_args, query_time_flags
+        count_query_template,
+        insert_query_template,
+        query_args,
+        query_time_flags,
+        replacement_type=message.action_type,
     )
 
 
 def process_delete_tag(
-    message: Mapping[str, Any],
+    message: ReplacementMessage,
     all_columns: Sequence[FlattenedColumn],
     tag_column_map: Mapping[str, Mapping[str, str]],
     promoted_tags: Mapping[str, Sequence[str]],
     use_promoted_prewhere: bool,
     schema: WritableTableSchema,
 ) -> Optional[Replacement]:
-    tag = message["tag"]
+    tag = message.data["tag"]
     if not tag:
         return None
 
     assert isinstance(tag, str)
-    timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+    timestamp = datetime.strptime(
+        message.data["datetime"], settings.PAYLOAD_DATETIME_FORMAT
+    )
     tag_column_name = tag_column_map["tags"].get(tag, tag)
     is_promoted = tag in promoted_tags["tags"]
 
@@ -935,7 +958,7 @@ def process_delete_tag(
     query_args = {
         "all_columns": ", ".join(all_column_names),
         "select_columns": ", ".join(select_columns),
-        "project_id": message["project_id"],
+        "project_id": message.data["project_id"],
         "tag_str": escape_string(tag),
         "tag_column": escape_identifier(tag_column_name),
         "timestamp": timestamp.strftime(DATETIME_FORMAT),
@@ -950,8 +973,12 @@ def process_delete_tag(
         + where
     )
 
-    query_time_flags = (NEEDS_FINAL, message["project_id"])
+    query_time_flags = (NEEDS_FINAL, message.data["project_id"])
 
     return LegacyReplacement(
-        count_query_template, insert_query_template, query_args, query_time_flags
+        count_query_template,
+        insert_query_template,
+        query_args,
+        query_time_flags,
+        replacement_type=message.action_type,
     )
