@@ -2,7 +2,7 @@ import logging
 from dataclasses import replace
 from functools import partial
 from math import floor
-from typing import MutableMapping, Optional, Set, Union
+from typing import Callable, MutableMapping, Optional, Set, Union
 
 import sentry_sdk
 
@@ -24,6 +24,7 @@ from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
+from snuba.state.rate_limit import RateLimitStats
 from snuba.util import with_span
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
@@ -92,7 +93,73 @@ class ProjectsFinder(
 
 
 @with_span()
+def run_query_with_quota_control(
+    dataset: Dataset,
+    request: Request,
+    timer: Timer,
+    robust: bool = False,
+    concurrent_queries_gauge: Optional[Gauge] = None,
+) -> QueryResult:
+    def exec_query(
+        dataset: Dataset,
+        request: Request,
+        timer: Timer,
+        query_metadata: SnubaQueryMetadata,
+        robust: bool = False,
+        concurrent_queries_gauge: Optional[Gauge] = None,
+    ) -> QueryResult:
+        with dataset.get_quota_control_policy().acquire(request) as stats:
+            return _run_query_pipeline(
+                dataset=dataset,
+                request=request,
+                timer=timer,
+                query_metadata=query_metadata,
+                robust=robust,
+                concurrent_queries_gauge=concurrent_queries_gauge,
+                applied_quota_stats=stats,
+            )
+
+    return _parse_and_run_query(
+        exec_query, dataset, request, timer, robust, concurrent_queries_gauge
+    )
+
+
+@with_span()
 def parse_and_run_query(
+    dataset: Dataset,
+    request: Request,
+    timer: Timer,
+    robust: bool = False,
+    concurrent_queries_gauge: Optional[Gauge] = None,
+) -> QueryResult:
+    def exec_query(
+        dataset: Dataset,
+        request: Request,
+        timer: Timer,
+        query_metadata: SnubaQueryMetadata,
+        robust: bool = False,
+        concurrent_queries_gauge: Optional[Gauge] = None,
+    ) -> QueryResult:
+        return _run_query_pipeline(
+            dataset=dataset,
+            request=request,
+            timer=timer,
+            query_metadata=query_metadata,
+            robust=robust,
+            concurrent_queries_gauge=concurrent_queries_gauge,
+            applied_quota_stats=None,
+        )
+
+    return _parse_and_run_query(
+        exec_query, dataset, request, timer, robust, concurrent_queries_gauge
+    )
+
+
+def _parse_and_run_query(
+    executor: Callable[
+        [Dataset, Request, Timer, SnubaQueryMetadata, bool, Optional[Gauge]],
+        QueryResult,
+    ],
     dataset: Dataset,
     request: Request,
     timer: Timer,
@@ -111,13 +178,8 @@ def parse_and_run_query(
     )
 
     try:
-        result = _run_query_pipeline(
-            dataset=dataset,
-            request=request,
-            timer=timer,
-            query_metadata=query_metadata,
-            robust=robust,
-            concurrent_queries_gauge=concurrent_queries_gauge,
+        result = executor(
+            dataset, request, timer, query_metadata, robust, concurrent_queries_gauge,
         )
         if not request.settings.get_dry_run():
             record_query(request, timer, query_metadata, result.extra)
@@ -135,6 +197,7 @@ def _run_query_pipeline(
     query_metadata: SnubaQueryMetadata,
     robust: bool,
     concurrent_queries_gauge: Optional[Gauge],
+    applied_quota_stats: Optional[RateLimitStats] = None,
 ) -> QueryResult:
     """
     Runs the query processing and execution pipeline for a Snuba Query. This means it takes a Dataset
@@ -165,6 +228,7 @@ def _run_query_pipeline(
             request.referrer,
             robust,
             concurrent_queries_gauge,
+            applied_quota_stats,
         )
 
     return (
@@ -199,6 +263,7 @@ def _run_and_apply_column_names(
     referrer: str,
     robust: bool,
     concurrent_queries_gauge: Optional[Gauge],
+    applied_quota_stats: Optional[RateLimitStats],
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     request_settings: RequestSettings,
     reader: Reader,
@@ -221,6 +286,7 @@ def _run_and_apply_column_names(
         reader,
         robust,
         concurrent_queries_gauge,
+        applied_quota_stats,
     )
 
     alias_name_mapping: MutableMapping[str, str] = {}
@@ -263,6 +329,7 @@ def _format_storage_query_and_run(
     reader: Reader,
     robust: bool,
     concurrent_queries_gauge: Optional[Gauge] = None,
+    applied_quota_stats: Optional[RateLimitStats] = None,
 ) -> QueryResult:
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
@@ -307,6 +374,7 @@ def _format_storage_query_and_run(
                 stats,
                 span.trace_id,
                 robust=robust,
+                applied_quota_stats=applied_quota_stats,
             )
 
         if concurrent_queries_gauge is not None:

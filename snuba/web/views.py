@@ -62,7 +62,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException
 from snuba.web.converters import DatasetConverter
-from snuba.web.query import parse_and_run_query
+from snuba.web.query import run_query_with_quota_control
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 metrics = MetricsWrapper(environment.metrics, "api")
@@ -422,7 +422,7 @@ def dataset_query(
     )
 
     try:
-        result = parse_and_run_query(dataset, request, timer)
+        result = run_query_with_quota_control(dataset, request, timer)
     except QueryException as exception:
         status = 500
         details: Mapping[str, Any]

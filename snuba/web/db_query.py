@@ -36,8 +36,10 @@ from snuba.state.cache.redis.backend import RESULT_VALUE, RESULT_WAIT, RedisCach
 from snuba.state.rate_limit import (
     GLOBAL_RATE_LIMIT_NAME,
     PROJECT_RATE_LIMIT_NAME,
+    QUOTA_RATE_LIMIT_NAME,
     RateLimitAggregator,
     RateLimitExceeded,
+    RateLimitStats,
 )
 from snuba.util import force_bytes, with_span
 from snuba.utils.codecs import Codec
@@ -243,18 +245,34 @@ def execute_query_with_rate_limits(
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
     robust: bool,
+    applied_quota_stats: Optional[RateLimitStats],
 ) -> Result:
     # XXX: We should consider moving this that it applies to the logical query,
     # not the physical query.
     with RateLimitAggregator(
         request_settings.get_rate_limit_params()
     ) as rate_limit_stats_container:
-        stats.update(rate_limit_stats_container.to_dict())
         timer.mark("rate_limit")
 
-        project_rate_limit_stats = rate_limit_stats_container.get_stats(
-            PROJECT_RATE_LIMIT_NAME
-        )
+        if applied_quota_stats is not None:
+            project_rate_limit_stats: Optional[RateLimitStats] = applied_quota_stats
+            rate_limit_stats_container.add_stats(
+                QUOTA_RATE_LIMIT_NAME, applied_quota_stats
+            )
+        else:
+            project_rate_limit_stats = rate_limit_stats_container.get_stats(
+                PROJECT_RATE_LIMIT_NAME
+            )
+        stats.update(rate_limit_stats_container.to_dict())
+
+        if applied_quota_stats is not None and project_rate_limit_stats is not None:
+            logger.warning(
+                "Conflicting project rate limit configs",
+                extra={
+                    "quota": applied_quota_stats,
+                    "after_processing": project_rate_limit_stats,
+                },
+            )
 
         if (
             "max_threads" in query_settings
@@ -302,6 +320,7 @@ def execute_query_with_caching(
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
     robust: bool,
+    applied_quota_stats: Optional[RateLimitStats],
 ) -> Result:
     # XXX: ``uncompressed_cache_max_cols`` is used to control both the result
     # cache, as well as the uncompressed cache. These should be independent.
@@ -325,6 +344,7 @@ def execute_query_with_caching(
         stats,
         query_settings,
         robust=robust,
+        applied_quota_stats=applied_quota_stats,
     )
 
     with sentry_sdk.start_span(description="execute", op="db") as span:
@@ -356,6 +376,7 @@ def execute_query_with_readthrough_caching(
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
     robust: bool,
+    applied_quota_stats: Optional[RateLimitStats],
 ) -> Result:
     query_id = get_query_cache_key(formatted_query)
     query_settings["query_id"] = query_id
@@ -389,6 +410,7 @@ def execute_query_with_readthrough_caching(
             stats,
             query_settings,
             robust,
+            applied_quota_stats=applied_quota_stats,
         ),
         record_cache_hit_type=record_cache_hit_type,
         timeout=query_settings.get("max_execution_time", 30),
@@ -410,6 +432,7 @@ def raw_query(
     stats: MutableMapping[str, Any],
     trace_id: Optional[str] = None,
     robust: bool = False,
+    applied_quota_stats: Optional[RateLimitStats] = None,
 ) -> QueryResult:
     """
     Submits a raw SQL query to the DB and does some post-processing on it to
@@ -455,6 +478,7 @@ def raw_query(
             stats,
             query_settings,
             robust=robust,
+            applied_quota_stats=applied_quota_stats,
         )
     except Exception as cause:
         if isinstance(cause, RateLimitExceeded):
