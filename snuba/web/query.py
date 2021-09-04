@@ -12,7 +12,7 @@ from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import ProjectsFinder
 from snuba.clickhouse.query_inspector import TablesCollector
-from snuba.datasets.dataset import Dataset
+from snuba.datasets.dataset import Dataset, QuotaExceeded
 from snuba.datasets.factory import get_dataset_name
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
@@ -80,16 +80,21 @@ def run_query_with_quota_control(
         robust: bool = False,
         concurrent_queries_gauge: Optional[Gauge] = None,
     ) -> QueryResult:
-        with dataset.get_quota_control_policy().acquire(request) as stats:
-            return _run_query_pipeline(
-                dataset=dataset,
-                request=request,
-                timer=timer,
-                query_metadata=query_metadata,
-                robust=robust,
-                concurrent_queries_gauge=concurrent_queries_gauge,
-                applied_quota_stats=stats,
-            )
+        try:
+            with dataset.get_quota_control_policy().acquire(request) as stats:
+                return _run_query_pipeline(
+                    dataset=dataset,
+                    request=request,
+                    timer=timer,
+                    query_metadata=query_metadata,
+                    robust=robust,
+                    concurrent_queries_gauge=concurrent_queries_gauge,
+                    applied_quota_stats=stats,
+                )
+        except QuotaExceeded as error:
+            raise QueryException(
+                {"stats": {}, "sql": "", "experiments": request.query.get_experiments()}
+            ) from error
 
     return _parse_and_run_query(
         exec_query, dataset, request, timer, robust, concurrent_queries_gauge

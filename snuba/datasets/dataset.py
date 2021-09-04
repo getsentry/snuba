@@ -84,6 +84,12 @@ class DatasetQueryPipelineBuilder:
             return CompositeExecutionPipeline(request.query, request.settings, runner)
 
 
+class QuotaExceeded(Exception):
+    """
+    Exception thrown when the rate limit is exceeded
+    """
+
+
 class QuotaControlPolicy(ABC):
     """
     Enforces the request provided complies with the quota assigned to the

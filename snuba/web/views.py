@@ -34,7 +34,7 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.dataset import Dataset
+from snuba.datasets.dataset import Dataset, QuotaExceeded
 from snuba.datasets.factory import (
     InvalidDatasetError,
     enforce_table_writer,
@@ -428,7 +428,7 @@ def dataset_query(
         details: Mapping[str, Any]
 
         cause = exception.__cause__
-        if isinstance(cause, RateLimitExceeded):
+        if isinstance(cause, (RateLimitExceeded, QuotaExceeded)):
             status = 429
             details = {
                 "type": "rate-limited",
