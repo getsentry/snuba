@@ -1,3 +1,4 @@
+from abc import ABC
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Mapping, MutableSequence, Optional, Set
@@ -113,3 +114,13 @@ class SnubaQueryMetadata:
         # If we do not have any recorded query and we did not specifically log
         # invalid_query, we assume there was an error somewhere.
         return self.query_list[-1].status if self.query_list else QueryStatus.ERROR
+
+
+class FailedRequestMetadata(ABC, SnubaQueryMetadata):
+    pass
+
+
+class RateLimitedRequestMetadata(FailedRequestMetadata):
+    @property
+    def status(self) -> QueryStatus:
+        return QueryStatus.RATE_LIMITED

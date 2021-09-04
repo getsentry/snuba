@@ -20,7 +20,7 @@ from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Entity, Table
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.querylog import record_query
-from snuba.querylog.query_metadata import SnubaQueryMetadata
+from snuba.querylog.query_metadata import RateLimitedRequestMetadata, SnubaQueryMetadata
 from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
@@ -161,7 +161,18 @@ def _parse_and_run_query(
         if not request.settings.get_dry_run():
             record_query(request, timer, query_metadata, result.extra)
     except QueryException as error:
-        record_query(request, timer, query_metadata, error.extra)
+        if isinstance(error.__cause__, QuotaExceeded):
+            meta: SnubaQueryMetadata = RateLimitedRequestMetadata(
+                request=query_metadata.request,
+                dataset=query_metadata.dataset,
+                timer=query_metadata.timer,
+                query_list=[],
+                projects=query_metadata.projects,
+            )
+        else:
+            meta = query_metadata
+
+        record_query(request, timer, meta, error.extra)
         raise error
 
     return result
