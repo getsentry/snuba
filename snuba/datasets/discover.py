@@ -5,6 +5,7 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.discover import EVENTS_COLUMNS, TRANSACTIONS_COLUMNS
+from snuba.datasets.quota.project_quota_control import ProjectQuotaControl
 from snuba.query.conditions import (
     BINARY_OPERATORS,
     ConditionFunctions,
@@ -27,7 +28,9 @@ EVENTS_AND_TRANSACTIONS = EntityKey.DISCOVER
 
 class DiscoverDataset(Dataset):
     def __init__(self) -> None:
-        super().__init__(default_entity=EntityKey.DISCOVER)
+        super().__init__(
+            default_entity=EntityKey.DISCOVER, quota_control=ProjectQuotaControl()
+        )
 
     # XXX: This is temporary code that will eventually need to be ported to Sentry
     # since SnQL will require an entity to always be specified by the user.
