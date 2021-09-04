@@ -13,6 +13,7 @@ from snuba.redis import redis_client as rds
 
 logger = logging.getLogger("snuba.state.rate_limit")
 
+QUOTA_RATE_LIMIT_NAME = "quota"
 PROJECT_RATE_LIMIT_NAME = "project"
 GLOBAL_RATE_LIMIT_NAME = "global"
 TABLE_RATE_LIMIT_NAME = "table"

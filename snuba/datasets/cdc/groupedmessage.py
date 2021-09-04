@@ -7,5 +7,5 @@ class GroupedMessageDataset(Dataset):
     def __init__(self) -> None:
         super().__init__(
             default_entity=EntityKey.GROUPEDMESSAGES,
-            quota_control=ProjectQuotaControl(),
+            quota_control=ProjectQuotaControl("project_id"),
         )

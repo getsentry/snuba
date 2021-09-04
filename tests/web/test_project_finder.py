@@ -3,6 +3,7 @@ from typing import Set, Union
 import pytest
 
 from snuba.clickhouse.columns import UUID, ColumnSet, UInt
+from snuba.clickhouse.query_dsl.accessors import ProjectsFinder
 from snuba.datasets.entities import EntityKey
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
@@ -10,7 +11,6 @@ from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
-from snuba.web.query import ProjectsFinder
 
 ERRORS_SCHEMA = ColumnSet(
     [("event_id", UUID()), ("project_id", UInt(32)), ("group_id", UInt(32))]
@@ -54,5 +54,5 @@ TEST_CASES = [
 def test_count_columns(
     query: Union[Query, CompositeQuery[Entity]], expected_proj: Set[int],
 ) -> None:
-    project_finder = ProjectsFinder()
+    project_finder = ProjectsFinder("project_id")
     assert project_finder.visit(query) == expected_proj

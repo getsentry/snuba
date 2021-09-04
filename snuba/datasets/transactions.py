@@ -6,5 +6,6 @@ from snuba.datasets.quota.project_quota_control import ProjectQuotaControl
 class TransactionsDataset(Dataset):
     def __init__(self) -> None:
         super().__init__(
-            default_entity=EntityKey.TRANSACTIONS, quota_control=ProjectQuotaControl()
+            default_entity=EntityKey.TRANSACTIONS,
+            quota_control=ProjectQuotaControl("project_id"),
         )
