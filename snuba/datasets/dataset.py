@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC
 from contextlib import contextmanager
-from typing import Iterator, Sequence
+from typing import Iterator, Optional, Sequence
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -94,7 +94,7 @@ class QuotaControlPolicy(ABC):
     """
 
     @contextmanager
-    def acquire(self, request: Request) -> Iterator[RateLimitStats]:
+    def acquire(self, request: Request) -> Iterator[Optional[RateLimitStats]]:
         """
         If the request is within the quota assigned to the client this
         method succeeds and returns the current quota status.

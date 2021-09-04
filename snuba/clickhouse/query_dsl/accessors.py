@@ -3,6 +3,7 @@ from typing import Optional, Sequence, Set, Tuple, cast
 
 from snuba.query import ProcessableQuery
 from snuba.query import Query as AbstractQuery
+from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     BooleanFunctions,
@@ -10,7 +11,9 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
     is_in_condition_pattern,
 )
-from snuba.query.data_source.simple import Table
+from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
+from snuba.query.data_source.simple import Entity, Table
+from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
@@ -155,3 +158,34 @@ def get_time_range(
     lower_bound = lower[0] if lower else None
     upper_bound = upper[0] if upper else None
     return lower_bound, upper_bound
+
+
+class ProjectsFinder(
+    DataSourceVisitor[Set[int], Entity], JoinVisitor[Set[int], Entity]
+):
+    """
+    Traverses a query to find project_id conditions
+    """
+
+    def __init__(self, project_column: str) -> None:
+        self.__project_column = project_column
+
+    def _visit_simple_source(self, data_source: Entity) -> Set[int]:
+        return set()
+
+    def _visit_join(self, data_source: JoinClause[Entity]) -> Set[int]:
+        return self.visit_join_clause(data_source)
+
+    def _visit_simple_query(self, data_source: ProcessableQuery[Entity]) -> Set[int]:
+        return get_object_ids_in_query_ast(data_source, self.__project_column) or set()
+
+    def _visit_composite_query(self, data_source: CompositeQuery[Entity]) -> Set[int]:
+        return self.visit(data_source.get_from_clause())
+
+    def visit_individual_node(self, node: IndividualNode[Entity]) -> Set[int]:
+        return self.visit(node.data_source)
+
+    def visit_join_clause(self, node: JoinClause[Entity]) -> Set[int]:
+        left = node.left_node.accept(self)
+        right = node.right_node.accept(self)
+        return left | right

@@ -54,5 +54,5 @@ TEST_CASES = [
 def test_count_columns(
     query: Union[Query, CompositeQuery[Entity]], expected_proj: Set[int],
 ) -> None:
-    project_finder = ProjectsFinder()
+    project_finder = ProjectsFinder("project_id")
     assert project_finder.visit(query) == expected_proj

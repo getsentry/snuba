@@ -10,5 +10,6 @@ class OutcomesDataset(Dataset):
 
     def __init__(self) -> None:
         super().__init__(
-            default_entity=EntityKey.OUTCOMES, quota_control=ProjectQuotaControl()
+            default_entity=EntityKey.OUTCOMES,
+            quota_control=ProjectQuotaControl("project_id"),
         )

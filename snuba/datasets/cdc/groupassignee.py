@@ -14,5 +14,6 @@ class GroupAssigneeDataset(Dataset):
 
     def __init__(self) -> None:
         super().__init__(
-            default_entity=EntityKey.GROUPASSIGNEE, quota_control=ProjectQuotaControl()
+            default_entity=EntityKey.GROUPASSIGNEE,
+            quota_control=ProjectQuotaControl("project_id"),
         )

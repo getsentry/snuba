@@ -29,7 +29,8 @@ EVENTS_AND_TRANSACTIONS = EntityKey.DISCOVER
 class DiscoverDataset(Dataset):
     def __init__(self) -> None:
         super().__init__(
-            default_entity=EntityKey.DISCOVER, quota_control=ProjectQuotaControl()
+            default_entity=EntityKey.DISCOVER,
+            quota_control=ProjectQuotaControl("project_id"),
         )
 
     # XXX: This is temporary code that will eventually need to be ported to Sentry
