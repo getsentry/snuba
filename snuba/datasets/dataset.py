@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Sequence
+from abc import ABC
+from contextlib import contextmanager
+from typing import Iterator, Sequence
 
 from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -10,6 +12,7 @@ from snuba.pipeline.composite import CompositeExecutionPipeline
 from snuba.pipeline.query_pipeline import QueryExecutionPipeline
 from snuba.query.logical import Query
 from snuba.request import Request
+from snuba.state.rate_limit import RateLimitStats
 
 
 class Dataset:
@@ -40,8 +43,11 @@ class Dataset:
     manipulate the lower layer objects.
     """
 
-    def __init__(self, *, default_entity: EntityKey) -> None:
+    def __init__(
+        self, *, default_entity: EntityKey, quota_control: QuotaControlPolicy
+    ) -> None:
         self.__default_entity = default_entity
+        self.__quota_control = quota_control
 
     # TODO: Remove once entity selection moves to Sentry
     def select_entity(self, query: Query) -> EntityKey:
@@ -55,6 +61,9 @@ class Dataset:
 
     def get_query_pipeline_builder(self) -> DatasetQueryPipelineBuilder:
         return DatasetQueryPipelineBuilder()
+
+    def get_quota_control_policy(self) -> QuotaControlPolicy:
+        return self.__quota_control
 
 
 class DatasetQueryPipelineBuilder:
@@ -73,3 +82,26 @@ class DatasetQueryPipelineBuilder:
             )
         else:
             return CompositeExecutionPipeline(request.query, request.settings, runner)
+
+
+class QuotaControlPolicy(ABC):
+    """
+    Enforces the request provided complies with the quota assigned to the
+    customer before executing the query.
+
+    Each dataset implements its own quota system. As an example a dataset
+    may assign quota per project, others may assign it by organization.
+    """
+
+    @contextmanager
+    def acquire(self, request: Request) -> Iterator[RateLimitStats]:
+        """
+        If the request is within the quota assigned to the client this
+        method succeeds and returns the current quota status.
+        If the client is above the assigned quota a RateLimitExceeded
+        exception is raised when entering the context.
+
+        TODO: The idea is to move this before parsing to avoid using the
+        resources to build the AST. That will be the following step.
+        """
+        raise NotImplementedError
