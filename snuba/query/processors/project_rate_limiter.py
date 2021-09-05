@@ -1,8 +1,9 @@
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
+from snuba.datasets.quota.project_quota_control import QUOTA_ENFORCEMENT_ENABLED
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
 from snuba.request.request_settings import RequestSettings
-from snuba.state import get_configs
+from snuba.state import get_config, get_configs
 from snuba.state.rate_limit import PROJECT_RATE_LIMIT_NAME, RateLimitParameters
 
 
@@ -17,6 +18,10 @@ class ProjectRateLimiterProcessor(QueryProcessor):
         self.project_column = project_column
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+        quota_enforcement_enabled = get_config(QUOTA_ENFORCEMENT_ENABLED, False)
+        if quota_enforcement_enabled:
+            return
+
         # If the settings don't already have a project rate limit, add one
         existing = request_settings.get_rate_limit_params()
         for ex in existing:

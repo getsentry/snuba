@@ -18,6 +18,7 @@ from snuba.datasets.entities import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.events_processor_base import InsertEvent
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.quota.project_quota_control import QUOTA_ENFORCEMENT_ENABLED
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors import storage as errors_storage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
@@ -1403,6 +1404,7 @@ class TestApi(SimpleAPITest):
         )
         assert response.status_code == 200
 
+        state.set_config(QUOTA_ENFORCEMENT_ENABLED, 0)
         response = self.post(
             json.dumps(
                 {
@@ -1416,6 +1418,25 @@ class TestApi(SimpleAPITest):
             )
         )
         assert response.status_code == 429
+        data = json.loads(response.data)
+        assert data["error"]["message"] == "project concurrent of 1 exceeds limit of 0"
+
+        state.set_config(QUOTA_ENFORCEMENT_ENABLED, 1)
+        response = self.post(
+            json.dumps(
+                {
+                    "project": 1,
+                    "selected_columns": ["platform"],
+                    "from_date": self.base_time.isoformat(),
+                    "to_date": (
+                        self.base_time + timedelta(minutes=self.minutes)
+                    ).isoformat(),
+                }
+            )
+        )
+        assert response.status_code == 429
+        data = json.loads(response.data)
+        assert data["error"]["message"] == "quota concurrent of 1 exceeds limit of 0"
 
     def test_doesnt_select_deletions(self) -> None:
         query = {
