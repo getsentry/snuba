@@ -17,16 +17,25 @@ QUOTA_ENFORCEMENT_ENABLED = "quota_enforcement_enabled"
 
 
 class ProjectQuotaControl(QuotaControlPolicy):
+    """
+    Enforces a project specific quota.
+    The quota is defined as queries per second and concurrent queries.
+    The rate limiter based on Redis is used to enforce the quota.
+    The quota is defined per project in the runtime configuration.
+
+    If no suitable project condition is found in the query, the check
+    is bypassed.
+    """
+
     def __init__(self, project_column: str):
         self.__project_columns = project_column
 
     @contextmanager
     def acquire(self, request: Request) -> Iterator[Optional[RateLimitStats]]:
-        quota_enforcement_enabled = get_config(QUOTA_ENFORCEMENT_ENABLED, False)
+        quota_enforcement_enabled = get_config(QUOTA_ENFORCEMENT_ENABLED, 0)
         project_ids = ProjectsFinder(self.__project_columns).visit(request.query)
-        if not quota_enforcement_enabled or not project_ids:
-            yield None
-        else:
+        print(type(quota_enforcement_enabled))
+        if quota_enforcement_enabled and project_ids:
             # TODO: Use all the projects, not just one
             project_id = project_ids.pop()
 
@@ -54,3 +63,5 @@ class ProjectQuotaControl(QuotaControlPolicy):
                     yield stats
             except RateLimitExceeded as cause:
                 raise QuotaExceeded(str(cause)) from cause
+        else:
+            yield None
